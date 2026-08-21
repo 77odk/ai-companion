@@ -20,6 +20,7 @@ export default function Settings() {
   const [apiKey, setApiKey] = useState(initial.providers[initial.provider].apiKey)
   const [baseUrl, setBaseUrl] = useState(initial.providers[initial.provider].baseUrl)
   const [model, setModel] = useState(initial.providers[initial.provider].model)
+  const [advancedOpen, setAdvancedOpen] = useState(initial.provider === 'custom')
   const [saved, setSaved] = useState(false)
   const [testState, setTestState] = useState<TestState>('idle')
   const [testMsg, setTestMsg] = useState('')
@@ -32,6 +33,8 @@ export default function Settings() {
     setApiKey(cfg.apiKey)
     setBaseUrl(cfg.baseUrl || DEFAULT_SETTINGS[p].baseUrl)
     setModel(cfg.model || DEFAULT_SETTINGS[p].model)
+    // 自定义服务商必须填地址，自动展开高级设置
+    setAdvancedOpen(p === 'custom')
     setTestState('idle')
     setTestMsg('')
   }
@@ -87,55 +90,73 @@ export default function Settings() {
     <div className="page settings-page">
       <p className="page-desc">Key 只存你浏览器本地，不经过任何服务器。请放心填写。</p>
 
-      <ProviderSelect value={provider} onChange={handleProviderChange} />
+      {/* 服务商配置：服务商 + Key + 模型名 一体 */}
+      <div className="settings-card">
+        <h3 className="settings-card-title">服务商配置</h3>
 
-      <div className="field">
-        <label htmlFor="base-url">服务商地址 base_url</label>
-        <input
-          id="base-url"
-          className="input"
-          type="text"
-          placeholder="https://api.deepseek.com/v1"
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.target.value)}
-          autoComplete="off"
-        />
-        <p className="hint">OpenAI 兼容格式，一般以 /v1 结尾</p>
+        <div className="field">
+          <label htmlFor="provider">服务商</label>
+          <ProviderSelect value={provider} onChange={handleProviderChange} />
+        </div>
+
+        <div className="field">
+          <label htmlFor="api-key">API Key</label>
+          <input
+            id="api-key"
+            className="input"
+            type="password"
+            placeholder={apiKey ? 'sk-…' : '请填写 ' + PROVIDER_NAMES[provider] + ' 的 API Key'}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="model">模型名称</label>
+          <input
+            id="model"
+            className="input"
+            type="text"
+            placeholder="deepseek-chat"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            autoComplete="off"
+          />
+          <p className="hint">切换服务商时自动带出，一般不用改</p>
+        </div>
+
+        <button
+          type="button"
+          className="advanced-toggle"
+          onClick={() => setAdvancedOpen(!advancedOpen)}
+        >
+          {advancedOpen ? '收起高级设置 ▴' : '高级设置 ▾'}
+        </button>
+        {advancedOpen && (
+          <div className="field">
+            <label htmlFor="base-url">服务商地址 base_url</label>
+            <input
+              id="base-url"
+              className="input"
+              type="text"
+              placeholder="https://api.deepseek.com/v1"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              autoComplete="off"
+            />
+            <p className="hint">OpenAI 兼容格式，一般以 /v1 结尾</p>
+          </div>
+        )}
       </div>
 
-      <div className="field">
-        <label htmlFor="api-key">API Key</label>
-        <input
-          id="api-key"
-          className="input"
-          type="password"
-          placeholder={apiKey ? 'sk-…' : '请填写 ' + PROVIDER_NAMES[provider] + ' 的 API Key'}
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          autoComplete="off"
-        />
-        <p className="hint">切换服务商时互不影响，各存各的 Key</p>
-      </div>
-
-      <div className="field">
-        <label htmlFor="model">模型名称</label>
-        <input
-          id="model"
-          className="input"
-          type="text"
-          placeholder="deepseek-chat"
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          autoComplete="off"
-        />
-      </div>
-
-      <div className="field">
-        <label htmlFor="persona">专属人设（可选）</label>
+      {/* 专属人设 */}
+      <div className="settings-card">
+        <h3 className="settings-card-title">专属人设（可选）</h3>
         <textarea
           id="persona"
           className="input persona-input"
-          rows={5}
+          rows={4}
           placeholder={'它怎么称呼你？它是什么性格？你们是什么关系？\n有什么只有你们知道的梗？\n\n不填就用默认人设～'}
           value={persona}
           onChange={(e) => setPersona(e.target.value)}
