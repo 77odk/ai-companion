@@ -4,16 +4,27 @@ import Chat from './components/Chat'
 import Memory from './components/Memory'
 import Work from './components/Work'
 import Settings from './components/Settings'
+import AISpace from './components/AISpace'
 
-type View = 'welcome' | 'chat' | 'memory' | 'work' | 'settings'
+type View = 'welcome' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace'
 
 export default function App() {
   const [view, setView] = useState<View>('welcome')
+  const [spaceFrom, setSpaceFrom] = useState<View>('chat')
+
+  const openSpace = (from: View) => {
+    setSpaceFrom(from)
+    setView('aispace')
+  }
+
+  const backFromSpace = () => setView(spaceFrom)
 
   return (
     <div className="app">
       {view === 'welcome' ? (
         <Welcome onStart={() => setView('chat')} />
+      ) : view === 'aispace' ? (
+        <AISpace onBack={backFromSpace} />
       ) : (
         <>
           <header className="app-header">
@@ -22,10 +33,10 @@ export default function App() {
           </header>
 
           <main className="app-main">
-            {view === 'chat' && <Chat onGoSettings={() => setView('settings')} />}
+            {view === 'chat' && <Chat onGoSettings={() => setView('settings')} onOpenSpace={() => openSpace('chat')} />}
             {view === 'memory' && <Memory />}
             {view === 'work' && <Work />}
-            {view === 'settings' && <Settings />}
+            {view === 'settings' && <Settings onOpenSpace={() => openSpace('settings')} />}
           </main>
 
           <nav className="app-nav">

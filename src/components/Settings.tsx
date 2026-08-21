@@ -21,10 +21,14 @@ import { ChatError, testConnection } from '../lib/api'
 
 type TestState = 'idle' | 'testing' | 'success' | 'error'
 
+interface Props {
+  onOpenSpace?: () => void
+}
+
 const USER_AVATARS = ['😊', '😎', '🥰', '🤗', '🐱', '🐶', '🦊', '🐼', '🌸', '🌙', '⭐', '❤️']
 const AI_AVATARS = ['💛', '🌟', '💙', '💜', '🧡', '🦋', '🌈', '✨', '🌻', '🔥', '🐳', '🎧']
 
-export default function Settings() {
+export default function Settings({ onOpenSpace }: Props) {
   const [initial] = useState(loadSettings)
   const [provider, setProvider] = useState<Provider>(initial.provider)
   const [apiKey, setApiKey] = useState(initial.providers[initial.provider].apiKey)
@@ -149,6 +153,12 @@ export default function Settings() {
           <label>TA 的头像</label>
           <AvatarPicker options={AI_AVATARS} value={ai.avatar} onChange={(avatar) => setAI({ ...ai, avatar })} />
         </div>
+
+        {onOpenSpace && (
+          <button type="button" className="btn btn-ghost ai-space-entry" onClick={onOpenSpace}>
+            看看 TA 的生活 →
+          </button>
+        )}
 
         <div className="field">
           <label htmlFor="ai-nickname">TA 的名字</label>

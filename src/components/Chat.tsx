@@ -6,9 +6,10 @@ import { loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, t
 
 interface Props {
   onGoSettings: () => void
+  onOpenSpace: () => void
 }
 
-export default function Chat({ onGoSettings }: Props) {
+export default function Chat({ onGoSettings, onOpenSpace }: Props) {
   const [messages, setMessages] = useState<StoredMessage[]>(() => loadMessages())
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -120,6 +121,7 @@ export default function Chat({ onGoSettings }: Props) {
               key={i}
               message={m}
               typing={streaming && i === messages.length - 1 && m.role === 'assistant' && m.content === ''}
+              onAvatarClick={m.role === 'assistant' ? onOpenSpace : undefined}
             />
           ))
         )}
