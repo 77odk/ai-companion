@@ -812,3 +812,90 @@ textarea.persona-input {
   gap: 8px;
   align-items: stretch;
 }
+
+/* ========== 欢迎页（品牌入口，未来升级为登录页） ========== */
+.welcome-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  text-align: center;
+  padding: 24px 20px;
+}
+
+.welcome-inner {
+  margin: auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.welcome-logo {
+  width: 88px;
+  height: 88px;
+  border-radius: 26px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-deep));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 24px rgba(255, 138, 92, 0.35);
+}
+
+.welcome-logo-mark {
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.welcome-name {
+  margin: 0 0 2px;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--color-text);
+}
+
+.welcome-en {
+  margin: 0 0 10px;
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  color: var(--color-text-muted);
+}
+
+.welcome-slogan {
+  margin: 0 0 22px;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  color: var(--color-text);
+}
+
+.welcome-features {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.welcome-feature {
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--color-primary);
+  background: rgba(255, 138, 92, 0.1);
+  border: 1px solid rgba(255, 138, 92, 0.25);
+}
+
+.welcome-start {
+  width: 100%;
+  max-width: 260px;
+  padding: 13px 0;
+  font-size: 16px;
+}
+
+.welcome-foot {
+  margin: 18px 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}

@@ -1,0 +1,35 @@
+interface Props {
+  onStart: () => void
+}
+
+const FEATURES = ['对话', '长期记忆', 'AI 编程']
+
+export default function Welcome({ onStart }: Props) {
+  return (
+    <div className="welcome-page">
+      <div className="welcome-inner">
+        <div className="welcome-logo" aria-hidden="true">
+          <span className="welcome-logo-mark">忆</span>
+        </div>
+
+        <h1 className="welcome-name">忆文</h1>
+        <p className="welcome-en">Eluvin</p>
+        <p className="welcome-slogan">忆过往，成文思</p>
+
+        <div className="welcome-features">
+          {FEATURES.map((f) => (
+            <span key={f} className="welcome-feature">
+              {f}
+            </span>
+          ))}
+        </div>
+
+        <button className="btn btn-primary welcome-start" onClick={onStart}>
+          开始使用
+        </button>
+
+        <p className="welcome-foot">它记得你说过的每句话 · 也能帮你写代码、跑任务</p>
+      </div>
+    </div>
+  )
+}
