@@ -488,3 +488,80 @@ textarea.persona-input {
   color: #b3261e;
   background: #fdecea;
 }
+
+/* ========== 主页（角色卡） ========== */
+.home-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 24px 20px;
+}
+
+.home-avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-deep));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+  box-shadow: 0 6px 20px rgba(255, 138, 92, 0.35);
+}
+
+.home-avatar svg {
+  width: 52px;
+  height: 52px;
+}
+
+.home-name {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.home-greeting {
+  margin: 0 0 24px;
+  font-size: 15px;
+  color: var(--color-text-muted);
+}
+
+.home-start {
+  min-width: 180px;
+  padding: 12px 0;
+  font-size: 16px;
+}
+
+.home-persona-note {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--color-primary-deep);
+}
+
+.home-links {
+  margin-top: 20px;
+}
+
+.link-btn {
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.home-tip {
+  position: absolute;
+  bottom: 84px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  opacity: 0.75;
+}

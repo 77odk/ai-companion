@@ -95,7 +95,6 @@ export default function Settings() {
         <h3 className="settings-card-title">服务商配置</h3>
 
         <div className="field">
-          <label htmlFor="provider">服务商</label>
           <ProviderSelect value={provider} onChange={handleProviderChange} />
         </div>
 
