@@ -29,6 +29,10 @@ export default function Welcome({ onStart }: Props) {
         </button>
 
         <p className="welcome-foot">记得住你，也帮得上你</p>
+
+        <p className="welcome-count">
+          已有 <span id="busuanzi_value_site_uv">0</span> 人访问
+        </p>
       </div>
     </div>
   )
