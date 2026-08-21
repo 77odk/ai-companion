@@ -28,7 +28,7 @@ export default function Welcome({ onStart }: Props) {
           开始使用
         </button>
 
-        <p className="welcome-foot">它记得你说过的每句话 · 也能帮你写代码、跑任务</p>
+        <p className="welcome-foot">记得住你，也帮得上你</p>
       </div>
     </div>
   )
