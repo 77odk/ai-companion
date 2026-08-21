@@ -103,7 +103,7 @@ export default function Chat({ onGoSettings }: Props) {
       <div className="message-list" ref={scrollRef}>
         {isEmpty ? (
           <div className="welcome">
-            <h2>你的 AI 伴侣在这里</h2>
+            <h2>你的 TA 在这里</h2>
             <p>想聊点什么？</p>
             {!hasKey && (
               <>

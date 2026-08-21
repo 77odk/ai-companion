@@ -173,7 +173,7 @@ export default function Settings() {
             value={persona}
             onChange={(e) => setPersona(e.target.value)}
           />
-          <p className="hint">填了之后，AI 会把你设定的当成真实的自己，聊天时就这么表现；不填就用默认人设</p>
+          <p className="hint">填了之后，TA 会把你设定的当成真实的自己，聊天时就这么表现；不填就用默认人设</p>
         </div>
       </div>
 

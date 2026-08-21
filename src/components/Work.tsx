@@ -23,7 +23,7 @@ export default function Work() {
     <div className="page work-page">
       <h2 className="work-title">AI 工作台</h2>
       <p className="page-desc">
-        上传文件，让 AI 帮你跑 Python：合并 Excel、清洗文本、批量打包，文件全程不出你的浏览器。
+        上传文件，让 TA 帮你跑 Python：合并 Excel、清洗文本、批量打包，文件全程不出你的浏览器。
       </p>
 
       {!unlocked ? (
@@ -54,7 +54,7 @@ function Showcase() {
     <div className="page work-page">
       <h2 className="work-title">AI 工作台</h2>
       <p className="page-desc">
-        不只是聊天——上传文件，让 AI 帮你跑 Python 处理。文件全程不出你的浏览器，即将开放。
+        不只是聊天——上传文件，让 TA 帮你跑 Python 处理。文件全程不出你的浏览器，即将开放。
       </p>
 
       {SHOWCASE_TASKS.map((t) => (

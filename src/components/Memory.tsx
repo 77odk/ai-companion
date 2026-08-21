@@ -19,7 +19,7 @@ export default function Memory() {
   return (
     <div className="page memory-page">
       <p className="page-desc">
-        AI 会把你说的重要的话记下来，下次见面还记得。
+        TA 会把你说的重要的话记下来，下次见面还记得。
         <br />
         这些记忆只存在你浏览器本地，不会上传。
       </p>
