@@ -12,7 +12,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['pwa-192.png', 'pwa-512.png', 'apple-touch-icon.png'],
       manifest: {
-        name: '忆文 Eluvin',
+        name: '忆文·Eluvin',
         short_name: '忆文',
         description: '忆过往，成文思。记得住你，也帮得上你。',
         lang: 'zh-CN',
