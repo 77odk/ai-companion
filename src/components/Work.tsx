@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { downloadResult, runWorkTask, type WorkFile, type WorkOptions, type WorkResult, type WorkTask } from '../lib/work'
 import { isUnlocked, saveUnlock } from '../lib/license'
 
@@ -42,11 +42,47 @@ export default function Work() {
 
 /* ---------------- 展示模式（仅展示，不开放） ---------------- */
 
-const SHOWCASE_TASKS: { icon: string; title: string; desc: string }[] = [
-  { icon: '📊', title: 'Excel 合并', desc: '多个表格合成一个，表头自动对齐，行数据全保留' },
-  { icon: '🧹', title: 'Excel 清洗去重', desc: '去重、去空行、去空列，脏数据一次理干净' },
-  { icon: '📝', title: '文本批量处理', desc: '批量替换、按规则提取、每行加前缀后缀' },
-  { icon: '📦', title: '批量重命名打包', desc: '批量改文件名，自动压成 zip 打包下载' },
+const SHOWCASE_TASKS: { icon: ReactNode; title: string; desc: string }[] = [
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <path d="M4 9.5h16" />
+        <path d="M9.5 4v16" />
+      </svg>
+    ),
+    title: 'Excel 合并',
+    desc: '多个表格合成一个，表头自动对齐，行数据全保留',
+  },
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 5h16l-6 7v6l-4 2v-8L4 5z" />
+      </svg>
+    ),
+    title: 'Excel 清洗去重',
+    desc: '去重、去空行、去空列，脏数据一次理干净',
+  },
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="5" y="3" width="14" height="18" rx="2" />
+        <path d="M8.5 8h7M8.5 12h7M8.5 16h4" />
+      </svg>
+    ),
+    title: '文本批量处理',
+    desc: '批量替换、按规则提取、每行加前缀后缀',
+  },
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 6h6l2 2h8a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a1 1 0 0 1 1-1z" />
+        <path d="M9 14.5h6" />
+      </svg>
+    ),
+    title: '批量重命名打包',
+    desc: '批量改文件名，自动压成 zip 打包下载',
+  },
 ]
 
 function Showcase() {
@@ -89,7 +125,7 @@ function LockCard({ onUnlock }: { onUnlock: () => void }) {
     <div className="settings-card work-lock">
       <h3 className="settings-card-title">干活中心 · 未解锁</h3>
       <p className="page-desc work-lock-desc">
-        干活能力需要激活码解锁。解锁后，你可以上传文件，让 AI 在浏览器里帮你跑 Python 处理
+        干活能力需要激活码解锁。解锁后，你可以上传文件，让 TA 在浏览器里帮你跑 Python 处理
         ——合并 Excel、清洗去重、批量处理文本、打包文件，数据全程不出你的浏览器。
       </p>
       <div className="field">

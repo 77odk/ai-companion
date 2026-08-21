@@ -258,7 +258,7 @@ export default function Settings({ onOpenSpace }: Props) {
 
       {testMsg && <p className={resultClass}>{testMsg}</p>}
 
-      <p className="version-tag">忆文 Eluvin v0.1.0 · 内测版</p>
+      <p className="version-tag">忆文 Eluvin v0.1.2 · 内测版</p>
     </div>
   )
 }

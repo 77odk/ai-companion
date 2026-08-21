@@ -198,7 +198,7 @@ export interface AIProfile {
 
 const AI_PROFILE_KEY = 'ai_companion_ai_profile'
 
-export const DEFAULT_AI_PROFILE: AIProfile = { nickname: 'AI 伴侣', avatar: '💛' }
+export const DEFAULT_AI_PROFILE: AIProfile = { nickname: 'TA', avatar: '💛' }
 
 export function loadAIProfile(): AIProfile {
   try {
@@ -206,7 +206,7 @@ export function loadAIProfile(): AIProfile {
     if (!raw) return DEFAULT_AI_PROFILE
     const p = JSON.parse(raw) as Partial<AIProfile>
     return {
-      nickname: typeof p.nickname === 'string' && p.nickname ? p.nickname : 'AI 伴侣',
+      nickname: typeof p.nickname === 'string' && p.nickname ? p.nickname : 'TA',
       avatar: typeof p.avatar === 'string' && p.avatar ? p.avatar : '💛',
     }
   } catch {

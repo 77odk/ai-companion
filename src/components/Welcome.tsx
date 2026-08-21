@@ -2,7 +2,7 @@ interface Props {
   onStart: () => void
 }
 
-const FEATURES = ['对话', '长期记忆', 'AI 编程']
+const FEATURES = ['对话', '长期记忆', '工作台']
 
 export default function Welcome({ onStart }: Props) {
   return (

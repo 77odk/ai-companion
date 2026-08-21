@@ -21,7 +21,7 @@ export default function Home({ onGoChat, onGoSettings }: Props) {
           </svg>
         </div>
 
-        <h2 className="home-name">你的 AI 伴侣</h2>
+        <h2 className="home-name">你的 TA</h2>
         <p className="home-greeting">我在呢，随时想聊就聊</p>
 
         <button className="btn btn-primary home-start" onClick={onGoChat}>

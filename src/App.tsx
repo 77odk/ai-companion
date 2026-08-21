@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Welcome from './components/Welcome'
 import Chat from './components/Chat'
 import Memory from './components/Memory'
@@ -8,9 +8,59 @@ import AISpace from './components/AISpace'
 
 type View = 'welcome' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace'
 
+// ---- 开机页判定：新会话或隔太久（>6 小时）才算重新开机 ----
+const BOOT_INTERVAL_MS = 6 * 60 * 60 * 1000
+const SESSION_BOOT_KEY = 'eluvin_boot_seen'
+const LAST_VISIT_KEY = 'eluvin_last_visit_at'
+
+function decideBoot(): boolean {
+  const now = Date.now()
+  try {
+    const seen = sessionStorage.getItem(SESSION_BOOT_KEY)
+    if (!seen) {
+      // 新会话（关过标签/浏览器再开）：这次算开机
+      sessionStorage.setItem(SESSION_BOOT_KEY, '1')
+      localStorage.setItem(LAST_VISIT_KEY, String(now))
+      return true
+    }
+    const last = Number(localStorage.getItem(LAST_VISIT_KEY) || 0)
+    if (last && now - last > BOOT_INTERVAL_MS) {
+      // 距上次访问超过 6 小时：也算重新开机
+      localStorage.setItem(LAST_VISIT_KEY, String(now))
+      return true
+    }
+    // 刷新、短时间来回：直接进主界面
+    localStorage.setItem(LAST_VISIT_KEY, String(now))
+    return false
+  } catch {
+    return true
+  }
+}
+
+// 模块加载时判一次开机页，保证先读标记再渲染，也不会被 StrictMode 的二次初始化干扰
+const bootWelcome = decideBoot()
+
+// ---- 连点 3 下强刷：清 PWA 缓存 + 注销 Service Worker + 重新加载 ----
+async function forceRefresh(): Promise<void> {
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys()
+      await Promise.all(keys.map((k) => caches.delete(k)))
+    }
+    if (navigator.serviceWorker?.getRegistrations) {
+      const regs = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(regs.map((r) => r.unregister()))
+    }
+  } catch {
+    // 兜底：没网或不支持时，能刷新就好
+  }
+  location.reload()
+}
+
 export default function App() {
-  const [view, setView] = useState<View>('welcome')
+  const [view, setView] = useState<View>(bootWelcome ? 'welcome' : 'chat')
   const [spaceFrom, setSpaceFrom] = useState<View>('chat')
+  const titleClicks = useRef<number[]>([])
 
   const openSpace = (from: View) => {
     setSpaceFrom(from)
@@ -18,6 +68,17 @@ export default function App() {
   }
 
   const backFromSpace = () => setView(spaceFrom)
+
+  const handleTitleClick = () => {
+    const now = Date.now()
+    const recent = titleClicks.current.filter((t) => now - t < 2000)
+    recent.push(now)
+    titleClicks.current = recent
+    if (recent.length >= 3) {
+      titleClicks.current = []
+      void forceRefresh()
+    }
+  }
 
   return (
     <div className="app">
@@ -28,12 +89,35 @@ export default function App() {
       ) : (
         <>
           <header className="app-header">
-            <h1 className="app-title">忆文</h1>
+            <button
+              type="button"
+              className="space-entry"
+              onClick={() => openSpace(view)}
+              aria-label="进入 TA 的空间"
+              title="TA 的空间"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 11.2 12 4.5l8 6.7" />
+                <path d="M6.2 9.8V19h11.6V9.8" />
+                <path d="M10 19v-4.2h4V19" />
+              </svg>
+            </button>
+            <h1 className="app-title" onClick={handleTitleClick}>
+              忆文
+            </h1>
             <p className="app-subtitle">忆过往，成文思</p>
           </header>
 
           <main className="app-main">
-            {view === 'chat' && <Chat onGoSettings={() => setView('settings')} onOpenSpace={() => openSpace('chat')} />}
+            {view === 'chat' && <Chat onGoSettings={() => setView('settings')} />}
             {view === 'memory' && <Memory />}
             {view === 'work' && <Work />}
             {view === 'settings' && <Settings onOpenSpace={() => openSpace('settings')} />}

@@ -6,10 +6,9 @@ import { loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, t
 
 interface Props {
   onGoSettings: () => void
-  onOpenSpace: () => void
 }
 
-export default function Chat({ onGoSettings, onOpenSpace }: Props) {
+export default function Chat({ onGoSettings }: Props) {
   const [messages, setMessages] = useState<StoredMessage[]>(() => loadMessages())
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -42,7 +41,7 @@ export default function Chat({ onGoSettings, onOpenSpace }: Props) {
 
     const settings = loadSettings()
     if (!settings.apiKey || !settings.baseUrl || !settings.model) {
-      setError('还没接上 AI 服务，去「我的」页填一下 API Key 就能聊了')
+      setError('还没接上 TA，去「我的」页填一下 API Key 就能聊了')
       return
     }
 
@@ -73,14 +72,14 @@ export default function Chat({ onGoSettings, onOpenSpace }: Props) {
 
     const finalize = () => {
       const raw = assistantText.current
-      // 解析回复里的「【记忆】xxx」标记行，自动存进记忆库（去重、带来源）
+      // 解析回复里的「【记忆】xxx」标记行，自动存进记忆库（去重、带来源、带主题）
       if (raw) {
         const memories = extractMemories(raw)
         if (memories.length > 0) {
           const source = userMsg.content.trim()
           const snippet = source.length > 20 ? `${source.slice(0, 20)}…` : source
           for (const mem of memories) {
-            upsertMemoryItem(mem, snippet)
+            upsertMemoryItem(mem.text, snippet, mem.topic)
           }
           notifyMemoryUpdated()
         }
@@ -138,7 +137,6 @@ export default function Chat({ onGoSettings, onOpenSpace }: Props) {
               key={i}
               message={m}
               typing={streaming && i === messages.length - 1 && m.role === 'assistant' && m.content === ''}
-              onAvatarClick={m.role === 'assistant' ? onOpenSpace : undefined}
             />
           ))
         )}

@@ -6,28 +6,22 @@ interface Props {
   message: StoredMessage
   /** 流式输出中且内容为空时显示"正在输入"动画 */
   typing?: boolean
-  /** 点头像触发（如进 AI 空间） */
-  onAvatarClick?: () => void
 }
 
-function Avatar({ value, className, onClick }: { value: string; className: string; onClick?: () => void }) {
+function Avatar({ value, className }: { value: string; className: string }) {
   const inner = value.startsWith('data:') ? (
     <img src={value} alt="" className="msg-avatar-img" />
   ) : (
     <span>{value}</span>
   )
-  return onClick ? (
-    <button type="button" className={`msg-avatar ${className} msg-avatar-btn`} onClick={onClick} aria-label="打开 TA 的空间">
-      {inner}
-    </button>
-  ) : (
+  return (
     <span className={`msg-avatar ${className}`} aria-hidden="true">
       {inner}
     </span>
   )
 }
 
-export default function MessageBubble({ message, typing = false, onAvatarClick }: Props) {
+export default function MessageBubble({ message, typing = false }: Props) {
   const isUser = message.role === 'user'
   const avatar = isUser ? loadUserProfile().avatar : loadAIProfile().avatar
   // 展示时把「【记忆】xxx」那行藏起来，不让用户看到标记（原文仍保存在存储里）
@@ -35,7 +29,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
   const hasMemory = !isUser && extractMemories(message.content).length > 0
   return (
     <div className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}>
-      {!isUser && <Avatar value={avatar} className="ai-avatar" onClick={onAvatarClick} />}
+      {!isUser && <Avatar value={avatar} className="ai-avatar" />}
       <div className="message-body">
         <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
           {typing ? (

@@ -50,12 +50,17 @@ export default function AISpace({ onBack }: Props) {
   return (
     <div className="page ai-space-page">
       <div className="ai-space-head">
-        <button type="button" className="link-btn ai-space-back" onClick={onBack}>
-          ‹ 返回
-        </button>
-        <span className="ai-space-avatar" aria-hidden="true">
+        <div className="ai-space-topbar">
+          <button type="button" className="link-btn ai-space-back" onClick={onBack}>
+            ‹ 返回
+          </button>
+          <h1 className="ai-space-title">TA 的空间</h1>
+          <span className="ai-space-topbar-spacer" aria-hidden="true" />
+        </div>
+
+        <div className="ai-space-avatar" aria-hidden="true">
           {ai.avatar.startsWith('data:') ? <img src={ai.avatar} alt="" /> : ai.avatar}
-        </span>
+        </div>
         <h2 className="ai-space-name">{ai.nickname}</h2>
         <p className="ai-space-bio">
           只属于{yourName}的 TA · 这里记录着 TA 的日常、想法，和没说出口的心事
