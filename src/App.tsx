@@ -89,27 +89,29 @@ export default function App() {
       ) : (
         <>
           <header className="app-header">
-            <button
-              type="button"
-              className="space-entry"
-              onClick={() => openSpace(view)}
-              aria-label="进入 TA 的空间"
-              title="TA 的空间"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+            {view === 'chat' && (
+              <button
+                type="button"
+                className="space-entry"
+                onClick={() => openSpace('chat')}
+                aria-label="进入 TA 的空间"
+                title="TA 的空间"
               >
-                <path d="M4 11.2 12 4.5l8 6.7" />
-                <path d="M6.2 9.8V19h11.6V9.8" />
-                <path d="M10 19v-4.2h4V19" />
-              </svg>
-            </button>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="5.5" />
+                  <path d="M6.8 8.2C4.6 7.2 3.2 7.6 2.6 9c-.6 1.4.6 3 2.6 3.6M15.4 7.4c1.8-1.4 3.4-1.5 4.2-.3.8 1.2-.2 3-2.6 4M10.4 15.8c-.6 2.2-.2 3.6 1.2 4.2 1.4.6 3-.6 3.6-2.6" />
+                  <circle cx="16.4" cy="5.8" r="0.7" fill="currentColor" stroke="none" />
+                </svg>
+              </button>
+            )}
             <h1 className="app-title" onClick={handleTitleClick}>
               忆文
             </h1>
