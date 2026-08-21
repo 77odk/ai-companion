@@ -159,6 +159,8 @@ export function savePersona(persona: string): void {
 }
 
 // ---- 我的资料（用户） ----
+// avatar 只存 dataURL（上传图片压缩后），空字符串 = 用默认头像
+// 旧版存的 emoji 头像已下线：读取时不是 dataURL 一律按默认头像处理
 
 export interface UserProfile {
   nickname: string
@@ -168,7 +170,7 @@ export interface UserProfile {
 
 const USER_PROFILE_KEY = 'ai_companion_user_profile'
 
-export const DEFAULT_USER_PROFILE: UserProfile = { nickname: '', avatar: '😊', bio: '' }
+export const DEFAULT_USER_PROFILE: UserProfile = { nickname: '', avatar: '', bio: '' }
 
 export function loadUserProfile(): UserProfile {
   try {
@@ -177,7 +179,7 @@ export function loadUserProfile(): UserProfile {
     const p = JSON.parse(raw) as Partial<UserProfile>
     return {
       nickname: typeof p.nickname === 'string' ? p.nickname : '',
-      avatar: typeof p.avatar === 'string' && p.avatar ? p.avatar : '😊',
+      avatar: typeof p.avatar === 'string' && p.avatar.startsWith('data:') ? p.avatar : '',
       bio: typeof p.bio === 'string' ? p.bio : '',
     }
   } catch {
@@ -198,7 +200,7 @@ export interface AIProfile {
 
 const AI_PROFILE_KEY = 'ai_companion_ai_profile'
 
-export const DEFAULT_AI_PROFILE: AIProfile = { nickname: 'TA', avatar: '💛' }
+export const DEFAULT_AI_PROFILE: AIProfile = { nickname: 'TA', avatar: '' }
 
 export function loadAIProfile(): AIProfile {
   try {
@@ -207,7 +209,7 @@ export function loadAIProfile(): AIProfile {
     const p = JSON.parse(raw) as Partial<AIProfile>
     return {
       nickname: typeof p.nickname === 'string' && p.nickname ? p.nickname : 'TA',
-      avatar: typeof p.avatar === 'string' && p.avatar ? p.avatar : '💛',
+      avatar: typeof p.avatar === 'string' && p.avatar.startsWith('data:') ? p.avatar : '',
     }
   } catch {
     return DEFAULT_AI_PROFILE

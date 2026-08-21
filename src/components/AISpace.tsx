@@ -1,4 +1,5 @@
 import { loadAIProfile, loadUserProfile } from '../lib/storage'
+import DefaultAvatar from './DefaultAvatar'
 
 interface Props {
   onBack: () => void
@@ -59,7 +60,11 @@ export default function AISpace({ onBack }: Props) {
         </div>
 
         <div className="ai-space-avatar" aria-hidden="true">
-          {ai.avatar.startsWith('data:') ? <img src={ai.avatar} alt="" /> : ai.avatar}
+          {ai.avatar.startsWith('data:') ? (
+            <img src={ai.avatar} alt="" />
+          ) : (
+            <DefaultAvatar kind="ai" className="avatar-default" />
+          )}
         </div>
         <h2 className="ai-space-name">{ai.nickname}</h2>
         <p className="ai-space-bio">

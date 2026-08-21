@@ -1,6 +1,7 @@
 import type { StoredMessage } from '../lib/storage'
 import { loadAIProfile, loadUserProfile } from '../lib/storage'
 import { extractMemories, stripMemoryMarkers } from '../lib/memory'
+import DefaultAvatar from './DefaultAvatar'
 
 interface Props {
   message: StoredMessage
@@ -8,15 +9,14 @@ interface Props {
   typing?: boolean
 }
 
-function Avatar({ value, className }: { value: string; className: string }) {
-  const inner = value.startsWith('data:') ? (
-    <img src={value} alt="" className="msg-avatar-img" />
-  ) : (
-    <span>{value}</span>
-  )
+function Avatar({ value, kind, className }: { value: string; kind: 'user' | 'ai'; className: string }) {
   return (
     <span className={`msg-avatar ${className}`} aria-hidden="true">
-      {inner}
+      {value.startsWith('data:') ? (
+        <img src={value} alt="" className="msg-avatar-img" />
+      ) : (
+        <DefaultAvatar kind={kind} className="avatar-default" />
+      )}
     </span>
   )
 }
@@ -29,7 +29,7 @@ export default function MessageBubble({ message, typing = false }: Props) {
   const hasMemory = !isUser && extractMemories(message.content).length > 0
   return (
     <div className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}>
-      {!isUser && <Avatar value={avatar} className="ai-avatar" />}
+      {!isUser && <Avatar value={avatar} kind="ai" className="ai-avatar" />}
       <div className="message-body">
         <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
           {typing ? (
@@ -44,7 +44,7 @@ export default function MessageBubble({ message, typing = false }: Props) {
         </div>
         {hasMemory && <span className="memory-remembered">已记住</span>}
       </div>
-      {isUser && <Avatar value={avatar} className="user-avatar" />}
+      {isUser && <Avatar value={avatar} kind="user" className="user-avatar" />}
     </div>
   )
 }

@@ -5,7 +5,7 @@ import { isUnlocked, saveUnlock } from '../lib/license'
 const MAX_FILE_BYTES = 20 * 1024 * 1024
 const XLS_ONLY_RE = /\.xls$/i
 
-// ★锁展示模式（2026-08-21 七七拍板）：内测期已有用户（疑似程序员），干活功能只展示不开放，
+// 锁展示模式（2026-08-21 七七拍板）：内测期已有用户（疑似程序员），干活功能只展示不开放，
 // 防止绕过前端校验白嫖 + 被人研究破解。引擎代码保留在 lib/work.ts + workers/workWorker.ts，
 // 正式卖码时把此开关翻成 false 即恢复完整功能。
 const SHOWCASE_MODE = true

@@ -1,14 +1,14 @@
 import { useRef, type ChangeEvent } from 'react'
 import { fileToAvatarDataUrl } from '../lib/avatar'
+import DefaultAvatar from './DefaultAvatar'
 
 interface Props {
-  options: string[]
   value: string
   onChange: (avatar: string) => void
 }
 
-/** 头像选择：emoji 一行 + 上传图片按钮。avatar 存 emoji 或 dataURL */
-export default function AvatarPicker({ options, value, onChange }: Props) {
+/** 头像选择：上传图片 + 默认头像兜底。avatar 存 dataURL（上传压缩后），空字符串表示用默认头像 */
+export default function AvatarPicker({ value, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const isImage = value.startsWith('data:')
 
@@ -26,36 +26,35 @@ export default function AvatarPicker({ options, value, onChange }: Props) {
   return (
     <div className="avatar-pick-area">
       <div className="avatar-preview">
-        {isImage ? <img src={value} alt="头像" /> : <span className="avatar-preview-emoji">{value}</span>}
+        {isImage ? (
+          <img src={value} alt="头像" />
+        ) : (
+          <DefaultAvatar kind="user" className="avatar-default" />
+        )}
       </div>
-      <div className="avatar-pick-row">
-        {options.map((a) => (
-          <button
-            key={a}
-            type="button"
-            className={`avatar-pick${!isImage && value === a ? ' active' : ''}`}
-            onClick={() => onChange(a)}
+      <div className="avatar-pick-actions">
+        <button type="button" className="btn btn-ghost avatar-upload-btn" onClick={() => inputRef.current?.click()}>
+          <svg
+            className="avatar-upload-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
           >
-            {a}
+            <path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+            <circle cx="12" cy="13.5" r="3.2" />
+          </svg>
+          上传图片
+        </button>
+        {isImage && (
+          <button type="button" className="btn btn-ghost avatar-upload-btn" onClick={() => onChange('')}>
+            恢复默认
           </button>
-        ))}
+        )}
       </div>
-      <button type="button" className="btn btn-ghost avatar-upload-btn" onClick={() => inputRef.current?.click()}>
-        <svg
-          className="avatar-upload-icon"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
-          <circle cx="12" cy="13.5" r="3.2" />
-        </svg>
-        上传图片
-      </button>
       <input
         ref={inputRef}
         type="file"

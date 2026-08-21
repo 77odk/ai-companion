@@ -120,7 +120,9 @@ export default function App() {
             {view === 'chat' && <Chat onGoSettings={() => setView('settings')} />}
             {view === 'memory' && <Memory />}
             {view === 'work' && <Work />}
-            {view === 'settings' && <Settings onOpenSpace={() => openSpace('settings')} />}
+            {view === 'settings' && (
+              <Settings onOpenSpace={() => openSpace('settings')} onGoWelcome={() => setView('welcome')} />
+            )}
           </main>
 
           <nav className="app-nav">
