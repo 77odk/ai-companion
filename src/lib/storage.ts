@@ -1,9 +1,16 @@
 // 设置项与本地存储读写（Key 只存浏览器 localStorage，不经过任何服务器）
+// v2: 每个服务商独立保存 key/base_url/model，切换服务商互不干扰
 
 export type Provider = 'deepseek' | 'zhipu' | 'custom'
 
 export interface ModelSettings {
   provider: Provider
+  apiKey: string
+  baseUrl: string
+  model: string
+}
+
+export interface ProviderConfig {
   apiKey: string
   baseUrl: string
   model: string
@@ -18,31 +25,86 @@ export const DEFAULT_SETTINGS: Record<Provider, { baseUrl: string; model: string
   custom: { baseUrl: '', model: 'gpt-4o-mini' },
 }
 
-function defaultSettings(): ModelSettings {
-  return { provider: 'deepseek', apiKey: '', ...DEFAULT_SETTINGS.deepseek }
+/** 服务商显示名（用于提示文案） */
+export const PROVIDER_NAMES: Record<Provider, string> = {
+  deepseek: 'DeepSeek',
+  zhipu: '智谱',
+  custom: '自定义',
 }
 
-export function loadSettings(): ModelSettings {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY)
-    if (!raw) return defaultSettings()
-    const parsed = JSON.parse(raw) as Partial<ModelSettings>
-    const provider: Provider =
-      parsed.provider === 'zhipu' || parsed.provider === 'custom' ? parsed.provider : 'deepseek'
-    const defaults = DEFAULT_SETTINGS[provider]
-    return {
-      provider,
-      apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : '',
-      baseUrl: typeof parsed.baseUrl === 'string' ? parsed.baseUrl : defaults.baseUrl,
-      model: typeof parsed.model === 'string' ? parsed.model : defaults.model,
-    }
-  } catch {
-    return defaultSettings()
+function defaultProviderConfig(p: Provider): ProviderConfig {
+  return { apiKey: '', ...DEFAULT_SETTINGS[p] }
+}
+
+function defaultProviders(): Record<Provider, ProviderConfig> {
+  return {
+    deepseek: defaultProviderConfig('deepseek'),
+    zhipu: defaultProviderConfig('zhipu'),
+    custom: defaultProviderConfig('custom'),
   }
 }
 
+function normalizeProviders(raw: unknown): Record<Provider, ProviderConfig> {
+  const base = defaultProviders()
+  if (raw == null || typeof raw !== 'object') return base
+  const r = raw as Record<string, Partial<ProviderConfig>>
+  for (const p of ['deepseek', 'zhipu', 'custom'] as Provider[]) {
+    const item = r[p]
+    if (item == null || typeof item !== 'object') continue
+    if (typeof item.apiKey === 'string') base[p].apiKey = item.apiKey
+    if (typeof item.baseUrl === 'string') base[p].baseUrl = item.baseUrl
+    if (typeof item.model === 'string') base[p].model = item.model
+  }
+  return base
+}
+
+/** 读取全部服务商的配置（含当前选中的服务商） */
+export function loadSettings(): ModelSettings & { providers: Record<Provider, ProviderConfig> } {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    if (!raw) return { provider: 'deepseek', ...defaultProviderConfig('deepseek'), providers: defaultProviders() }
+    const parsed = JSON.parse(raw) as {
+      provider?: string
+      providers?: unknown
+      // 旧格式字段（v1 单 key 结构，迁移用）
+      apiKey?: string
+      baseUrl?: string
+      model?: string
+    }
+    const provider: Provider =
+      parsed.provider === 'zhipu' || parsed.provider === 'custom' ? parsed.provider : 'deepseek'
+    const providers = normalizeProviders(parsed.providers)
+
+    // 旧格式迁移：v1 存的单 key 归到当时的 provider 名下
+    if (typeof parsed.apiKey === 'string' && parsed.apiKey && !providers[provider].apiKey) {
+      providers[provider].apiKey = parsed.apiKey
+    }
+    if (typeof parsed.baseUrl === 'string' && parsed.baseUrl) {
+      providers[provider].baseUrl = parsed.baseUrl
+    }
+    if (typeof parsed.model === 'string' && parsed.model) {
+      providers[provider].model = parsed.model
+    }
+
+    return { provider, ...providers[provider], providers }
+  } catch {
+    return { provider: 'deepseek', ...defaultProviderConfig('deepseek'), providers: defaultProviders() }
+  }
+}
+
+/** 保存当前服务商的配置（只更新当前槽位，其他服务商的 key 保留不动） */
 export function saveSettings(settings: ModelSettings): void {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+  const current = loadSettings()
+  const providers = { ...current.providers, [settings.provider]: { ...current.providers[settings.provider] } }
+  providers[settings.provider] = {
+    apiKey: settings.apiKey,
+    baseUrl: settings.baseUrl.trim() || DEFAULT_SETTINGS[settings.provider].baseUrl,
+    model: settings.model.trim() || DEFAULT_SETTINGS[settings.provider].model,
+  }
+  localStorage.setItem(
+    SETTINGS_KEY,
+    JSON.stringify({ provider: settings.provider, providers }),
+  )
 }
 
 // ---- 历史消息 ----

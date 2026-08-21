@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import ProviderSelect from './ProviderSelect'
-import { DEFAULT_SETTINGS, loadSettings, saveSettings, type ModelSettings, type Provider } from '../lib/storage'
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  saveSettings,
+  PROVIDER_NAMES,
+  type ModelSettings,
+  type Provider,
+} from '../lib/storage'
 import { ChatError, testConnection } from '../lib/api'
 
 type TestState = 'idle' | 'testing' | 'success' | 'error'
@@ -8,25 +15,27 @@ type TestState = 'idle' | 'testing' | 'success' | 'error'
 export default function Settings() {
   const [initial] = useState(loadSettings)
   const [provider, setProvider] = useState<Provider>(initial.provider)
-  const [apiKey, setApiKey] = useState(initial.apiKey)
-  const [baseUrl, setBaseUrl] = useState(initial.baseUrl)
-  const [model, setModel] = useState(initial.model)
+  const [apiKey, setApiKey] = useState(initial.providers[initial.provider].apiKey)
+  const [baseUrl, setBaseUrl] = useState(initial.providers[initial.provider].baseUrl)
+  const [model, setModel] = useState(initial.providers[initial.provider].model)
   const [saved, setSaved] = useState(false)
   const [testState, setTestState] = useState<TestState>('idle')
   const [testMsg, setTestMsg] = useState('')
 
   const handleProviderChange = (p: Provider) => {
     setProvider(p)
-    // 切换服务商时恢复默认 base_url 和模型
-    setBaseUrl(DEFAULT_SETTINGS[p].baseUrl)
-    setModel(DEFAULT_SETTINGS[p].model)
+    // 调出该服务商自己存过的配置；没存过就是空 key + 默认地址/模型
+    const cfg = initial.providers[p]
+    setApiKey(cfg.apiKey)
+    setBaseUrl(cfg.baseUrl || DEFAULT_SETTINGS[p].baseUrl)
+    setModel(cfg.model || DEFAULT_SETTINGS[p].model)
     setTestState('idle')
     setTestMsg('')
   }
 
   const currentSettings = (): ModelSettings => ({
     provider,
-    apiKey: apiKey.trim(),
+    apiKey,
     baseUrl: baseUrl.trim(),
     model: model.trim(),
   })
@@ -41,7 +50,7 @@ export default function Settings() {
     const s = currentSettings()
     if (!s.apiKey) {
       setTestState('error')
-      setTestMsg('请先填入 API Key')
+      setTestMsg('请先填入 ' + PROVIDER_NAMES[s.provider] + ' 的 API Key')
       return
     }
     if (!s.baseUrl) {
@@ -96,11 +105,12 @@ export default function Settings() {
           id="api-key"
           className="input"
           type="password"
-          placeholder="sk-…"
+          placeholder={apiKey ? 'sk-…' : '请填写 ' + PROVIDER_NAMES[provider] + ' 的 API Key'}
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           autoComplete="off"
         />
+        <p className="hint">切换服务商时互不影响，各存各的 Key</p>
       </div>
 
       <div className="field">
