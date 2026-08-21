@@ -905,3 +905,11 @@ textarea.persona-input {
   font-size: 12px;
   color: var(--color-text-muted);
 }
+
+.version-tag {
+  margin: 18px 0 0;
+  font-size: 11px;
+  text-align: center;
+  color: var(--color-text-muted);
+  opacity: 0.7;
+}

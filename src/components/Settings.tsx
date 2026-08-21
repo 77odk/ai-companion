@@ -247,6 +247,8 @@ export default function Settings() {
       </div>
 
       {testMsg && <p className={resultClass}>{testMsg}</p>}
+
+      <p className="version-tag">忆文 Eluvin v0.1.0 · 内测版</p>
     </div>
   )
 }
