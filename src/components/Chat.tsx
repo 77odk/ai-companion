@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildSystemPrompt, streamChat, type ApiMessage } from '../lib/api'
-import { loadMemory } from '../lib/memory'
+import { extractMemories, loadMemory, notifyMemoryUpdated, stripMemoryMarkers, upsertMemoryItem } from '../lib/memory'
 import { loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, type StoredMessage } from '../lib/storage'
 
 interface Props {
@@ -64,12 +64,29 @@ export default function Chat({ onGoSettings, onOpenSpace }: Props) {
         content: '关于对方你已经记住的事实：\n' + memory.map((m) => `- ${m.text}`).join('\n'),
       })
     }
-    const history: ApiMessage[] = base.slice(-20).map((m) => ({ role: m.role, content: m.content }))
+    // 发回给模型的助手消息去掉记忆标记行，免得模型看到一堆标记跟着模仿
+    const history: ApiMessage[] = base.slice(-20).map((m) => ({
+      role: m.role,
+      content: m.role === 'assistant' ? stripMemoryMarkers(m.content) : m.content,
+    }))
     apiMessages.push(...history)
 
     const finalize = () => {
-      const final: StoredMessage[] = assistantText.current
-        ? [...base, { role: 'assistant', content: assistantText.current, ts: assistantTs }]
+      const raw = assistantText.current
+      // 解析回复里的「【记忆】xxx」标记行，自动存进记忆库（去重、带来源）
+      if (raw) {
+        const memories = extractMemories(raw)
+        if (memories.length > 0) {
+          const source = userMsg.content.trim()
+          const snippet = source.length > 20 ? `${source.slice(0, 20)}…` : source
+          for (const mem of memories) {
+            upsertMemoryItem(mem, snippet)
+          }
+          notifyMemoryUpdated()
+        }
+      }
+      const final: StoredMessage[] = raw
+        ? [...base, { role: 'assistant', content: raw, ts: assistantTs }]
         : base
       saveMessages(final)
       setMessages(final)

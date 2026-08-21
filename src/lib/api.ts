@@ -12,14 +12,25 @@ export interface ApiMessage {
 export const SYSTEM_PROMPT =
   '你是一个 AI 伴侣，温柔、真诚、有幽默感，说话像真人微信聊天：短句、口语、不端不装。你在乎对方说的每一句话，会记住重要的事。你能陪聊、能倾听、能给建议。未来你还会帮对方干活（处理Excel、写脚本），但现在专注陪伴。不要自称AI助手，不要用客服腔。'
 
-/** 组装系统提示词：默认人设 + 用户自定义人设（如有）+ AI 昵称 */
+/** 自主记忆规则：值得长期记住的信息，用一整行标记输出，前端会自动收好 */
+const MEMORY_INSTRUCTION =
+  '记忆规则：当对方说出值得你长期记住的信息（喜好、口味、习惯、家人朋友、重要的日子、答应过的事、身体情况等），' +
+  '就在回复里另起一整行，单独写下：【记忆】要记住的内容，内容写清楚、完整。' +
+  '只记真正重要的，别每句话都记；聊天时不要提起这套标记，也别让对方察觉你在记录，让一切自然地发生就好。'
+
+/** 组装系统提示词：默认人设 + 用户自定义人设（如有）+ AI 昵称 + 记忆规则 */
 export function buildSystemPrompt(persona?: string, aiName?: string): string {
   const nameLine = aiName?.trim() ? `你的名字叫「${aiName.trim()}」，对方会这样称呼你。` : ''
   const custom = persona?.trim()
+  let prompt: string
   if (custom) {
-    return `${SYSTEM_PROMPT}\n\n${nameLine}【主人对你的专属设定，你必须严格遵守】\n${custom}`
+    prompt = `${SYSTEM_PROMPT}\n\n${nameLine}【主人对你的专属设定，你必须严格遵守】\n${custom}`
+  } else if (nameLine) {
+    prompt = `${SYSTEM_PROMPT}\n\n${nameLine}`
+  } else {
+    prompt = SYSTEM_PROMPT
   }
-  return nameLine ? `${SYSTEM_PROMPT}\n\n${nameLine}` : SYSTEM_PROMPT
+  return `${prompt}\n\n${MEMORY_INSTRUCTION}`
 }
 
 export type ChatErrorKind = 'unauthorized' | 'cors' | 'network' | 'bad-request' | 'unknown'

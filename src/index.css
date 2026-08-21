@@ -216,6 +216,30 @@ button {
   box-shadow: var(--shadow);
 }
 
+/* 消息正文区（气泡 + 下方小字提示） */
+.message-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 82%;
+}
+
+.message-body .bubble {
+  max-width: 100%;
+}
+
+.row-user .message-body {
+  align-items: flex-end;
+}
+
+/* TA 记住时，气泡下方的小字 */
+.memory-remembered {
+  padding-left: 4px;
+  font-size: 11px;
+  color: var(--color-primary-deep);
+  opacity: 0.8;
+}
+
 /* 正在输入动画 */
 .typing {
   display: inline-flex;
@@ -529,41 +553,97 @@ textarea.persona-input {
   flex: 1;
 }
 
+/* 空状态：有温度，不说"暂无记忆" */
 .memory-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 48px 24px;
   text-align: center;
-  color: var(--color-text-muted);
-  font-size: 14px;
-  padding: 32px 0;
 }
 
+.memory-empty-mark {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.memory-empty-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.memory-empty-sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--color-text-muted);
+}
+
+/* 记忆卡片列表 */
 .memory-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.memory-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.memory-card {
+  position: relative;
   background: var(--color-card);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  padding: 14px 48px 14px 16px;
   box-shadow: var(--shadow);
 }
 
-.memory-text {
-  font-size: 14px;
-  line-height: 1.5;
+.memory-card-text {
+  margin: 0 0 10px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.memory-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.memory-card-time {
+  white-space: nowrap;
+}
+
+.memory-card-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--color-primary-deep);
+  background: rgba(255, 138, 92, 0.12);
+  white-space: nowrap;
+}
+
+.memory-card-source {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .memory-delete {
   flex-shrink: 0;
+  position: absolute;
+  top: 10px;
+  right: 10px;
   border: none;
   background: transparent;
   color: var(--color-text-muted);

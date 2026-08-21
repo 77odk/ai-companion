@@ -1,5 +1,6 @@
 import type { StoredMessage } from '../lib/storage'
 import { loadAIProfile, loadUserProfile } from '../lib/storage'
+import { extractMemories, stripMemoryMarkers } from '../lib/memory'
 
 interface Props {
   message: StoredMessage
@@ -29,19 +30,25 @@ function Avatar({ value, className, onClick }: { value: string; className: strin
 export default function MessageBubble({ message, typing = false, onAvatarClick }: Props) {
   const isUser = message.role === 'user'
   const avatar = isUser ? loadUserProfile().avatar : loadAIProfile().avatar
+  // 展示时把「【记忆】xxx」那行藏起来，不让用户看到标记（原文仍保存在存储里）
+  const displayText = isUser ? message.content : stripMemoryMarkers(message.content)
+  const hasMemory = !isUser && extractMemories(message.content).length > 0
   return (
     <div className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}>
       {!isUser && <Avatar value={avatar} className="ai-avatar" onClick={onAvatarClick} />}
-      <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
-        {typing ? (
-          <span className="typing" aria-label="正在输入">
-            <i />
-            <i />
-            <i />
-          </span>
-        ) : (
-          <span className="bubble-text">{message.content}</span>
-        )}
+      <div className="message-body">
+        <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
+          {typing ? (
+            <span className="typing" aria-label="正在输入">
+              <i />
+              <i />
+              <i />
+            </span>
+          ) : (
+            <span className="bubble-text">{displayText}</span>
+          )}
+        </div>
+        {hasMemory && <span className="memory-remembered">已记住</span>}
       </div>
       {isUser && <Avatar value={avatar} className="user-avatar" />}
     </div>
