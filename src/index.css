@@ -1,0 +1,455 @@
+/* ========== 全局：AI 伴侣 · 暖色调 ========== */
+:root {
+  --color-primary: #ff8a5c;
+  --color-primary-soft: #ffd3b6;
+  --color-primary-deep: #e96f3e;
+  --color-bg: #fff8f3;
+  --color-card: #ffffff;
+  --color-text: #3d2c29;
+  --color-text-muted: #9a7d74;
+  --color-border: #f0dcd0;
+  --radius: 16px;
+  --radius-sm: 12px;
+  --shadow: 0 2px 14px rgba(61, 44, 41, 0.08);
+  --max-width: 480px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Segoe UI', Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ========== 应用外壳 ========== */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  background: var(--color-bg);
+}
+
+.app-header {
+  padding: 18px 16px 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-primary-deep);
+  letter-spacing: 1px;
+}
+
+.app-subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ========== 底部导航 ========== */
+.app-nav {
+  display: flex;
+  flex-shrink: 0;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-card);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  gap: 8px;
+}
+
+.nav-btn {
+  flex: 1;
+  padding: 10px 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nav-btn.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+  font-weight: 600;
+}
+
+/* ========== 聊天页 ========== */
+.chat-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.message-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: auto;
+}
+
+/* 空状态欢迎页 */
+.welcome {
+  margin: auto;
+  text-align: center;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.welcome h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--color-text);
+}
+
+.welcome p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.welcome-hint {
+  margin-top: 4px !important;
+}
+
+/* 消息气泡 */
+.message-row {
+  display: flex;
+}
+
+.row-user {
+  justify-content: flex-end;
+}
+
+.row-assistant {
+  justify-content: flex-start;
+}
+
+.bubble {
+  max-width: 82%;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bubble-user {
+  background: var(--color-primary);
+  color: #fff;
+  border-bottom-right-radius: 6px;
+}
+
+.bubble-assistant {
+  background: var(--color-card);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-bottom-left-radius: 6px;
+  box-shadow: var(--shadow);
+}
+
+/* 正在输入动画 */
+.typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px;
+}
+
+.typing i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  animation: typing-blink 1.2s infinite ease-in-out;
+}
+
+.typing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typing-blink {
+  0%,
+  60%,
+  100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+/* 错误提示条 */
+.chat-error {
+  margin: 0 14px 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: #fdecea;
+  color: #b3261e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* 输入区 */
+.composer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-border);
+  background: var(--color-card);
+}
+
+.composer-input {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 15px;
+  line-height: 1.5;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-bg);
+  outline: none;
+  max-height: 120px;
+}
+
+.composer-input:focus {
+  border-color: var(--color-primary);
+}
+
+/* 按钮 */
+.btn {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-deep);
+}
+
+.btn-ghost {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: #ffc7a6;
+}
+
+.btn-send {
+  background: var(--color-primary);
+  color: #fff;
+  padding: 10px 16px;
+}
+
+.btn-stop {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+  padding: 10px 16px;
+}
+
+/* ========== 通用页面（设置/记忆） ========== */
+.page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.input {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-card);
+  outline: none;
+  width: 100%;
+}
+
+.input:focus {
+  border-color: var(--color-primary);
+}
+
+select.input {
+  appearance: auto;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.settings-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.settings-actions .btn {
+  flex: 1;
+}
+
+.test-result {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.test-result.success {
+  background: #e9f7ec;
+  color: #1e7d3a;
+}
+
+.test-result.error {
+  background: #fdecea;
+  color: #b3261e;
+}
+
+/* 记忆页 */
+.memory-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.memory-input-row .input {
+  flex: 1;
+}
+
+.memory-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  padding: 32px 0;
+}
+
+.memory-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.memory-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+}
+
+.memory-text {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.memory-delete {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.memory-delete:hover {
+  color: #b3261e;
+  background: #fdecea;
+}
