@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import Home from './components/Home'
 import Chat from './components/Chat'
+import Work from './components/Work'
 import Memory from './components/Memory'
 import Settings from './components/Settings'
 
-type View = 'home' | 'chat' | 'memory' | 'settings'
+type View = 'home' | 'chat' | 'work' | 'memory' | 'settings'
 
 export default function App() {
   const [view, setView] = useState<View>('home')
@@ -17,8 +18,9 @@ export default function App() {
       </header>
 
       <main className="app-main">
-        {view === 'home' && <Home onGoChat={() => setView('chat')} onGoSettings={() => setView('settings')} />}
+        {view === 'home' && <Home onGoChat={() => setView('chat')} onGoWork={() => setView('work')} onGoSettings={() => setView('settings')} />}
         {view === 'chat' && <Chat onGoSettings={() => setView('settings')} />}
+        {view === 'work' && <Work />}
         {view === 'memory' && <Memory />}
         {view === 'settings' && <Settings />}
       </main>
@@ -35,6 +37,12 @@ export default function App() {
           onClick={() => setView('chat')}
         >
           聊天
+        </button>
+        <button
+          className={`nav-btn${view === 'work' ? ' active' : ''}`}
+          onClick={() => setView('work')}
+        >
+          工作台
         </button>
         <button
           className={`nav-btn${view === 'memory' ? ' active' : ''}`}

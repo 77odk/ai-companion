@@ -494,11 +494,18 @@ textarea.persona-input {
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   height: 100%;
+  overflow-y: auto;
   text-align: center;
   padding: 24px 20px;
+}
+
+.home-inner {
+  margin: auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .home-avatar {
@@ -564,4 +571,150 @@ textarea.persona-input {
   font-size: 12px;
   color: var(--color-text-muted);
   opacity: 0.75;
+}
+
+/* 主页：干活中心入口卡片 */
+.home-work-card {
+  margin-top: 24px;
+  width: 100%;
+  max-width: 320px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.home-work-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.home-work-desc {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.home-work-btn {
+  width: 100%;
+}
+
+/* ========== AI 工作台 ========== */
+.work-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.showcase-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.showcase-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.showcase-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.showcase-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--color-primary, #ff8a5c);
+  background: rgba(255, 138, 92, 0.12);
+  white-space: nowrap;
+}
+
+.work-lock-desc {
+  margin-bottom: 12px;
+}
+
+.work-file-pick {
+  margin-top: 4px;
+}
+
+.work-file-btn {
+  width: 100%;
+  padding: 12px;
+  background: var(--color-bg);
+  border: 1px dashed var(--color-border);
+}
+
+.work-files {
+  margin: 8px 0 0;
+  word-break: break-all;
+}
+
+.work-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.work-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.work-check input {
+  accent-color: var(--color-primary);
+}
+
+.work-regex {
+  margin-top: 8px;
+}
+
+.work-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.work-row .field {
+  flex: 1;
+}
+
+.work-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.work-actions .btn {
+  flex: 1;
+}
+
+.work-result-area {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.work-progress {
+  color: var(--color-primary-deep);
+}
+
+.work-done {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
 }
