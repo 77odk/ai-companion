@@ -178,6 +178,13 @@ button {
   font-size: 16px;
   background: var(--color-card);
   border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.msg-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .user-avatar {
@@ -428,6 +435,35 @@ textarea.persona-input {
 }
 
 /* 头像选择器 */
+.avatar-pick-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.avatar-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-border);
+  background: var(--color-card);
+}
+
+.avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-preview-emoji {
+  font-size: 32px;
+  line-height: 1;
+}
+
 .avatar-pick-row {
   display: flex;
   flex-wrap: wrap;
@@ -453,6 +489,10 @@ textarea.persona-input {
   border-color: var(--color-primary);
   transform: scale(1.12);
   background: rgba(255, 138, 92, 0.1);
+}
+
+.avatar-upload-btn {
+  align-self: flex-start;
 }
 
 .settings-actions .btn {

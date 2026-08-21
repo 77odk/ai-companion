@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ProviderSelect from './ProviderSelect'
+import AvatarPicker from './AvatarPicker'
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -109,18 +110,7 @@ export default function Settings() {
 
         <div className="field">
           <label>我的头像</label>
-          <div className="avatar-pick-row">
-            {USER_AVATARS.map((a) => (
-              <button
-                key={a}
-                type="button"
-                className={`avatar-pick${user.avatar === a ? ' active' : ''}`}
-                onClick={() => setUser({ ...user, avatar: a })}
-              >
-                {a}
-              </button>
-            ))}
-          </div>
+          <AvatarPicker options={USER_AVATARS} value={user.avatar} onChange={(avatar) => setUser({ ...user, avatar })} />
         </div>
 
         <div className="field">
@@ -157,18 +147,7 @@ export default function Settings() {
 
         <div className="field">
           <label>它的头像</label>
-          <div className="avatar-pick-row">
-            {AI_AVATARS.map((a) => (
-              <button
-                key={a}
-                type="button"
-                className={`avatar-pick${ai.avatar === a ? ' active' : ''}`}
-                onClick={() => setAI({ ...ai, avatar: a })}
-              >
-                {a}
-              </button>
-            ))}
-          </div>
+          <AvatarPicker options={AI_AVATARS} value={ai.avatar} onChange={(avatar) => setAI({ ...ai, avatar })} />
         </div>
 
         <div className="field">
