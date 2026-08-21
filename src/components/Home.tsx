@@ -2,11 +2,10 @@ import { loadPersona } from '../lib/storage'
 
 interface Props {
   onGoChat: () => void
-  onGoWork: () => void
   onGoSettings: () => void
 }
 
-export default function Home({ onGoChat, onGoWork, onGoSettings }: Props) {
+export default function Home({ onGoChat, onGoSettings }: Props) {
   const hasPersona = loadPersona().trim().length > 0
 
   return (
@@ -30,16 +29,6 @@ export default function Home({ onGoChat, onGoWork, onGoSettings }: Props) {
         </button>
 
         {hasPersona && <p className="home-persona-note">已按你的专属设定陪伴你</p>}
-
-        <div className="home-work-card">
-          <h3 className="home-work-title">还能帮你干活</h3>
-          <p className="home-work-desc">
-            上传文件，让 AI 帮你跑 Python：合并 Excel、清洗文本、批量打包，文件不出浏览器。
-          </p>
-          <button className="btn btn-ghost home-work-btn" onClick={onGoWork}>
-            去干活
-          </button>
-        </div>
 
         <div className="home-links">
           <button className="link-btn" onClick={onGoSettings}>

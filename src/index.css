@@ -611,6 +611,12 @@ textarea.persona-input {
   color: var(--color-text);
 }
 
+.work-memory {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
 .showcase-card {
   display: flex;
   flex-direction: column;
