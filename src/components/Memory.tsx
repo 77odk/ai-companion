@@ -28,7 +28,7 @@ export default function Memory() {
         <input
           className="input"
           type="text"
-          placeholder="想让它记住什么？比如：我叫小七"
+          placeholder="想让 TA 记住什么？比如：我叫小七"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {

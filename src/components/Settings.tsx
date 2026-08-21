@@ -106,7 +106,7 @@ export default function Settings() {
       {/* 我的资料 */}
       <div className="settings-card">
         <h3 className="settings-card-title">我的资料</h3>
-        <p className="hint">它怎么称呼你，就填什么昵称。</p>
+        <p className="hint">TA 怎么称呼你，就填什么昵称。</p>
 
         <div className="field">
           <label>我的头像</label>
@@ -119,7 +119,7 @@ export default function Settings() {
             id="user-nickname"
             className="input"
             type="text"
-            placeholder="你希望它怎么叫你？"
+            placeholder="你希望 TA 怎么叫你？"
             value={user.nickname}
             onChange={(e) => setUser({ ...user, nickname: e.target.value })}
             autoComplete="off"
@@ -143,20 +143,20 @@ export default function Settings() {
       {/* 我的 AI */}
       <div className="settings-card">
         <h3 className="settings-card-title">我的 AI</h3>
-        <p className="hint">给陪伴你的它起个名字、选个样子。</p>
+        <p className="hint">给陪伴你的 TA 起个名字、选个样子。</p>
 
         <div className="field">
-          <label>它的头像</label>
+          <label>TA 的头像</label>
           <AvatarPicker options={AI_AVATARS} value={ai.avatar} onChange={(avatar) => setAI({ ...ai, avatar })} />
         </div>
 
         <div className="field">
-          <label htmlFor="ai-nickname">它的名字</label>
+          <label htmlFor="ai-nickname">TA 的名字</label>
           <input
             id="ai-nickname"
             className="input"
             type="text"
-            placeholder="给它起个名字吧"
+            placeholder="给 TA 起个名字吧"
             value={ai.nickname}
             onChange={(e) => setAI({ ...ai, nickname: e.target.value })}
             autoComplete="off"
@@ -169,7 +169,7 @@ export default function Settings() {
             id="persona"
             className="input persona-input"
             rows={4}
-            placeholder={'它怎么称呼你？它是什么性格？你们是什么关系？\n有什么只有你们知道的梗？\n\n不填就用默认人设～'}
+            placeholder={'TA 怎么称呼你？TA 是什么性格？你们是什么关系？\n有什么只有你们知道的梗？\n\n不填就用默认人设～'}
             value={persona}
             onChange={(e) => setPersona(e.target.value)}
           />
