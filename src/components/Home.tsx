@@ -35,7 +35,7 @@ export default function Home({ onGoChat, onGoSettings }: Props) {
         </button>
       </div>
 
-      <p className="home-tip">它记得你说过的话 · 还能帮你干活</p>
+      <p className="home-tip">它记得你说过的话 · 不只是聊天</p>
     </div>
   )
 }
