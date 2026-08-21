@@ -3,7 +3,9 @@ import ProviderSelect from './ProviderSelect'
 import {
   DEFAULT_SETTINGS,
   loadSettings,
+  loadPersona,
   saveSettings,
+  savePersona,
   PROVIDER_NAMES,
   type ModelSettings,
   type Provider,
@@ -21,6 +23,7 @@ export default function Settings() {
   const [saved, setSaved] = useState(false)
   const [testState, setTestState] = useState<TestState>('idle')
   const [testMsg, setTestMsg] = useState('')
+  const [persona, setPersona] = useState(() => loadPersona())
 
   const handleProviderChange = (p: Provider) => {
     setProvider(p)
@@ -42,6 +45,7 @@ export default function Settings() {
 
   const handleSave = () => {
     saveSettings(currentSettings())
+    savePersona(persona)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -124,6 +128,19 @@ export default function Settings() {
           onChange={(e) => setModel(e.target.value)}
           autoComplete="off"
         />
+      </div>
+
+      <div className="field">
+        <label htmlFor="persona">专属人设（可选）</label>
+        <textarea
+          id="persona"
+          className="input persona-input"
+          rows={5}
+          placeholder={'它怎么称呼你？它是什么性格？你们是什么关系？\n有什么只有你们知道的梗？\n\n不填就用默认人设～'}
+          value={persona}
+          onChange={(e) => setPersona(e.target.value)}
+        />
+        <p className="hint">填了之后，AI 会严格按你的设定来演；不填就用默认人设</p>
       </div>
 
       <div className="settings-actions">

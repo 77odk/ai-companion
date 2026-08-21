@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { SYSTEM_PROMPT, streamChat, type ApiMessage } from '../lib/api'
+import { buildSystemPrompt, streamChat, type ApiMessage } from '../lib/api'
 import { loadMemory } from '../lib/memory'
-import { loadMessages, loadSettings, saveMessages, type StoredMessage } from '../lib/storage'
+import { loadMessages, loadPersona, loadSettings, saveMessages, type StoredMessage } from '../lib/storage'
 
 interface Props {
   onGoSettings: () => void
@@ -54,8 +54,8 @@ export default function Chat({ onGoSettings }: Props) {
     setError(null)
     setStreaming(true)
 
-    // 组装请求消息：系统提示词 + 记忆摘要（如有） + 最近 20 条历史
-    const apiMessages: ApiMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }]
+    // 组装请求消息：系统提示词（默认人设+专属人设） + 记忆摘要（如有） + 最近 20 条历史
+    const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(loadPersona()) }]
     const memory = loadMemory()
     if (memory.length > 0) {
       apiMessages.push({

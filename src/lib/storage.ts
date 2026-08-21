@@ -140,3 +140,20 @@ export function loadMessages(): StoredMessage[] {
 export function saveMessages(messages: StoredMessage[]): void {
   localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages.slice(-MESSAGE_LIMIT)))
 }
+
+// ---- 专属人设 ----
+
+const PERSONA_KEY = 'ai_companion_persona'
+
+/** 读取用户自定义人设（没设置过返回空字符串 = 用默认人设） */
+export function loadPersona(): string {
+  try {
+    return localStorage.getItem(PERSONA_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function savePersona(persona: string): void {
+  localStorage.setItem(PERSONA_KEY, persona)
+}

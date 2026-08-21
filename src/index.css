@@ -361,6 +361,12 @@ select.input {
   appearance: auto;
 }
 
+textarea.persona-input {
+  resize: vertical;
+  min-height: 100px;
+  line-height: 1.6;
+}
+
 .hint {
   margin: 0;
   font-size: 12px;
