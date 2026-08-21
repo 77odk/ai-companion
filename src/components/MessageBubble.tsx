@@ -1,4 +1,5 @@
 import type { StoredMessage } from '../lib/storage'
+import { loadAIProfile, loadUserProfile } from '../lib/storage'
 
 interface Props {
   message: StoredMessage
@@ -8,8 +9,14 @@ interface Props {
 
 export default function MessageBubble({ message, typing = false }: Props) {
   const isUser = message.role === 'user'
+  const avatar = isUser ? loadUserProfile().avatar : loadAIProfile().avatar
   return (
     <div className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}>
+      {!isUser && (
+        <span className="msg-avatar ai-avatar" aria-hidden="true">
+          {avatar}
+        </span>
+      )}
       <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
         {typing ? (
           <span className="typing" aria-label="正在输入">
@@ -21,6 +28,11 @@ export default function MessageBubble({ message, typing = false }: Props) {
           <span className="bubble-text">{message.content}</span>
         )}
       </div>
+      {isUser && (
+        <span className="msg-avatar user-avatar" aria-hidden="true">
+          {avatar}
+        </span>
+      )}
     </div>
   )
 }

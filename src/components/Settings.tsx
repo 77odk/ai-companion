@@ -4,15 +4,24 @@ import {
   DEFAULT_SETTINGS,
   loadSettings,
   loadPersona,
+  loadUserProfile,
+  loadAIProfile,
   saveSettings,
   savePersona,
+  saveUserProfile,
+  saveAIProfile,
   PROVIDER_NAMES,
   type ModelSettings,
   type Provider,
+  type UserProfile,
+  type AIProfile,
 } from '../lib/storage'
 import { ChatError, testConnection } from '../lib/api'
 
 type TestState = 'idle' | 'testing' | 'success' | 'error'
+
+const USER_AVATARS = ['😊', '😎', '🥰', '🤗', '🐱', '🐶', '🦊', '🐼', '🌸', '🌙', '⭐', '❤️']
+const AI_AVATARS = ['💛', '🌟', '💙', '💜', '🧡', '🦋', '🌈', '✨', '🌻', '🔥', '🐳', '🎧']
 
 export default function Settings() {
   const [initial] = useState(loadSettings)
@@ -25,6 +34,9 @@ export default function Settings() {
   const [testState, setTestState] = useState<TestState>('idle')
   const [testMsg, setTestMsg] = useState('')
   const [persona, setPersona] = useState(() => loadPersona())
+
+  const [user, setUser] = useState<UserProfile>(() => loadUserProfile())
+  const [ai, setAI] = useState<AIProfile>(() => loadAIProfile())
 
   const handleProviderChange = (p: Provider) => {
     setProvider(p)
@@ -49,6 +61,8 @@ export default function Settings() {
   const handleSave = () => {
     saveSettings(currentSettings())
     savePersona(persona)
+    saveUserProfile(user)
+    saveAIProfile(ai)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -88,11 +102,106 @@ export default function Settings() {
 
   return (
     <div className="page settings-page">
-      <p className="page-desc">Key 只存你浏览器本地，不经过任何服务器。请放心填写。</p>
+      {/* 我的资料 */}
+      <div className="settings-card">
+        <h3 className="settings-card-title">我的资料</h3>
+        <p className="hint">它怎么称呼你，就填什么昵称。</p>
+
+        <div className="field">
+          <label>我的头像</label>
+          <div className="avatar-pick-row">
+            {USER_AVATARS.map((a) => (
+              <button
+                key={a}
+                type="button"
+                className={`avatar-pick${user.avatar === a ? ' active' : ''}`}
+                onClick={() => setUser({ ...user, avatar: a })}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="user-nickname">我的昵称</label>
+          <input
+            id="user-nickname"
+            className="input"
+            type="text"
+            placeholder="你希望它怎么叫你？"
+            value={user.nickname}
+            onChange={(e) => setUser({ ...user, nickname: e.target.value })}
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="user-bio">个性签名</label>
+          <input
+            id="user-bio"
+            className="input"
+            type="text"
+            placeholder="一句话介绍自己（可选）"
+            value={user.bio}
+            onChange={(e) => setUser({ ...user, bio: e.target.value })}
+            autoComplete="off"
+          />
+        </div>
+      </div>
+
+      {/* 我的 AI */}
+      <div className="settings-card">
+        <h3 className="settings-card-title">我的 AI</h3>
+        <p className="hint">给陪伴你的它起个名字、选个样子。</p>
+
+        <div className="field">
+          <label>它的头像</label>
+          <div className="avatar-pick-row">
+            {AI_AVATARS.map((a) => (
+              <button
+                key={a}
+                type="button"
+                className={`avatar-pick${ai.avatar === a ? ' active' : ''}`}
+                onClick={() => setAI({ ...ai, avatar: a })}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="ai-nickname">它的名字</label>
+          <input
+            id="ai-nickname"
+            className="input"
+            type="text"
+            placeholder="给它起个名字吧"
+            value={ai.nickname}
+            onChange={(e) => setAI({ ...ai, nickname: e.target.value })}
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="persona">专属人设（可选）</label>
+          <textarea
+            id="persona"
+            className="input persona-input"
+            rows={4}
+            placeholder={'它怎么称呼你？它是什么性格？你们是什么关系？\n有什么只有你们知道的梗？\n\n不填就用默认人设～'}
+            value={persona}
+            onChange={(e) => setPersona(e.target.value)}
+          />
+          <p className="hint">填了之后，AI 会把你设定的当成真实的自己，聊天时就这么表现；不填就用默认人设</p>
+        </div>
+      </div>
 
       {/* 服务商配置：服务商 + Key + 模型名 一体 */}
       <div className="settings-card">
         <h3 className="settings-card-title">服务商配置</h3>
+        <p className="hint">Key 只存你浏览器本地，不经过任何服务器。请放心填写。</p>
 
         <div className="field">
           <ProviderSelect value={provider} onChange={handleProviderChange} />
@@ -147,20 +256,6 @@ export default function Settings() {
             <p className="hint">OpenAI 兼容格式，一般以 /v1 结尾</p>
           </div>
         )}
-      </div>
-
-      {/* 专属人设 */}
-      <div className="settings-card">
-        <h3 className="settings-card-title">专属人设（可选）</h3>
-        <textarea
-          id="persona"
-          className="input persona-input"
-          rows={4}
-          placeholder={'它怎么称呼你？它是什么性格？你们是什么关系？\n有什么只有你们知道的梗？\n\n不填就用默认人设～'}
-          value={persona}
-          onChange={(e) => setPersona(e.target.value)}
-        />
-        <p className="hint">填了之后，AI 会把你设定的当成真实的自己，聊天时就这么表现；不填就用默认人设</p>
       </div>
 
       <div className="settings-actions">

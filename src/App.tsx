@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import Home from './components/Home'
 import Chat from './components/Chat'
+import Memory from './components/Memory'
 import Work from './components/Work'
 import Settings from './components/Settings'
 
-type View = 'home' | 'chat' | 'work' | 'settings'
+type View = 'chat' | 'memory' | 'work' | 'settings'
 
 export default function App() {
-  const [view, setView] = useState<View>('home')
+  const [view, setView] = useState<View>('chat')
 
   return (
     <div className="app">
@@ -17,24 +17,24 @@ export default function App() {
       </header>
 
       <main className="app-main">
-        {view === 'home' && <Home onGoChat={() => setView('chat')} onGoSettings={() => setView('settings')} />}
         {view === 'chat' && <Chat onGoSettings={() => setView('settings')} />}
+        {view === 'memory' && <Memory />}
         {view === 'work' && <Work />}
         {view === 'settings' && <Settings />}
       </main>
 
       <nav className="app-nav">
         <button
-          className={`nav-btn${view === 'home' ? ' active' : ''}`}
-          onClick={() => setView('home')}
-        >
-          主页
-        </button>
-        <button
           className={`nav-btn${view === 'chat' ? ' active' : ''}`}
           onClick={() => setView('chat')}
         >
           聊天
+        </button>
+        <button
+          className={`nav-btn${view === 'memory' ? ' active' : ''}`}
+          onClick={() => setView('memory')}
+        >
+          记忆
         </button>
         <button
           className={`nav-btn${view === 'work' ? ' active' : ''}`}
@@ -46,7 +46,7 @@ export default function App() {
           className={`nav-btn${view === 'settings' ? ' active' : ''}`}
           onClick={() => setView('settings')}
         >
-          设置
+          我的
         </button>
       </nav>
     </div>

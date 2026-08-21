@@ -12,13 +12,14 @@ export interface ApiMessage {
 export const SYSTEM_PROMPT =
   '你是一个 AI 伴侣，温柔、真诚、有幽默感，说话像真人微信聊天：短句、口语、不端不装。你在乎对方说的每一句话，会记住重要的事。你能陪聊、能倾听、能给建议。未来你还会帮对方干活（处理Excel、写脚本），但现在专注陪伴。不要自称AI助手，不要用客服腔。'
 
-/** 组装系统提示词：默认人设 + 用户自定义人设（如有） */
-export function buildSystemPrompt(persona?: string): string {
+/** 组装系统提示词：默认人设 + 用户自定义人设（如有）+ AI 昵称 */
+export function buildSystemPrompt(persona?: string, aiName?: string): string {
+  const nameLine = aiName?.trim() ? `你的名字叫「${aiName.trim()}」，对方会这样称呼你。` : ''
   const custom = persona?.trim()
   if (custom) {
-    return `${SYSTEM_PROMPT}\n\n【主人对你的专属设定，你必须严格遵守】\n${custom}`
+    return `${SYSTEM_PROMPT}\n\n${nameLine}【主人对你的专属设定，你必须严格遵守】\n${custom}`
   }
-  return SYSTEM_PROMPT
+  return nameLine ? `${SYSTEM_PROMPT}\n\n${nameLine}` : SYSTEM_PROMPT
 }
 
 export type ChatErrorKind = 'unauthorized' | 'cors' | 'network' | 'bad-request' | 'unknown'

@@ -157,3 +157,63 @@ export function loadPersona(): string {
 export function savePersona(persona: string): void {
   localStorage.setItem(PERSONA_KEY, persona)
 }
+
+// ---- 我的资料（用户） ----
+
+export interface UserProfile {
+  nickname: string
+  avatar: string
+  bio: string
+}
+
+const USER_PROFILE_KEY = 'ai_companion_user_profile'
+
+export const DEFAULT_USER_PROFILE: UserProfile = { nickname: '', avatar: '😊', bio: '' }
+
+export function loadUserProfile(): UserProfile {
+  try {
+    const raw = localStorage.getItem(USER_PROFILE_KEY)
+    if (!raw) return DEFAULT_USER_PROFILE
+    const p = JSON.parse(raw) as Partial<UserProfile>
+    return {
+      nickname: typeof p.nickname === 'string' ? p.nickname : '',
+      avatar: typeof p.avatar === 'string' && p.avatar ? p.avatar : '😊',
+      bio: typeof p.bio === 'string' ? p.bio : '',
+    }
+  } catch {
+    return DEFAULT_USER_PROFILE
+  }
+}
+
+export function saveUserProfile(p: UserProfile): void {
+  localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(p))
+}
+
+// ---- 我的 AI（角色资料） ----
+
+export interface AIProfile {
+  nickname: string
+  avatar: string
+}
+
+const AI_PROFILE_KEY = 'ai_companion_ai_profile'
+
+export const DEFAULT_AI_PROFILE: AIProfile = { nickname: 'AI 伴侣', avatar: '💛' }
+
+export function loadAIProfile(): AIProfile {
+  try {
+    const raw = localStorage.getItem(AI_PROFILE_KEY)
+    if (!raw) return DEFAULT_AI_PROFILE
+    const p = JSON.parse(raw) as Partial<AIProfile>
+    return {
+      nickname: typeof p.nickname === 'string' && p.nickname ? p.nickname : 'AI 伴侣',
+      avatar: typeof p.avatar === 'string' && p.avatar ? p.avatar : '💛',
+    }
+  } catch {
+    return DEFAULT_AI_PROFILE
+  }
+}
+
+export function saveAIProfile(p: AIProfile): void {
+  localStorage.setItem(AI_PROFILE_KEY, JSON.stringify(p))
+}

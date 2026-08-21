@@ -1,5 +1,4 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import Memory from './Memory'
 import { downloadResult, runWorkTask, type WorkFile, type WorkOptions, type WorkResult, type WorkTask } from '../lib/work'
 import { isUnlocked, saveUnlock } from '../lib/license'
 
@@ -53,11 +52,6 @@ const SHOWCASE_TASKS: { icon: string; title: string; desc: string }[] = [
 function Showcase() {
   return (
     <div className="page work-page">
-      {/* 记忆：单独一项，放最上面——主打永久记忆 */}
-      <section className="work-memory">
-        <Memory />
-      </section>
-
       <h2 className="work-title">AI 工作台</h2>
       <p className="page-desc">
         不只是聊天——上传文件，让 AI 帮你跑 Python 处理。文件全程不出你的浏览器，即将开放。
