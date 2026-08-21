@@ -13,7 +13,7 @@ export default defineConfig({
       includeAssets: ['pwa-192.png', 'pwa-512.png', 'apple-touch-icon.png'],
       manifest: {
         name: '忆文·Eluvin',
-        short_name: '忆文',
+        short_name: '忆文·Eluvin',
         description: '忆过往，成文思。记得住你，也帮得上你。',
         lang: 'zh-CN',
         theme_color: '#FF8A5C',
