@@ -45,7 +45,7 @@ export default function Work() {
 const SHOWCASE_TASKS: { icon: string; title: string; desc: string }[] = [
   { icon: '📊', title: 'Excel 合并', desc: '多个表格合成一个，表头自动对齐，行数据全保留' },
   { icon: '🧹', title: 'Excel 清洗去重', desc: '去重、去空行、去空列，脏数据一次理干净' },
-  { icon: '📝', title: '文本批量处理', desc: '批量替换、正则提取、行首行尾加内容' },
+  { icon: '📝', title: '文本批量处理', desc: '批量替换、按规则提取、每行加前缀后缀' },
   { icon: '📦', title: '批量重命名打包', desc: '批量改文件名，自动压成 zip 打包下载' },
 ]
 
@@ -54,7 +54,7 @@ function Showcase() {
     <div className="page work-page">
       <h2 className="work-title">AI 工作台</h2>
       <p className="page-desc">
-        不只是聊天——上传文件，让 TA 帮你跑 Python 处理。文件全程不出你的浏览器，即将开放。
+        不只是聊天——上传文件，让 TA 帮你处理：合并表格、清洗数据、批量整理，全程不出你的浏览器。
       </p>
 
       {SHOWCASE_TASKS.map((t) => (

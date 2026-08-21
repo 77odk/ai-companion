@@ -21,7 +21,7 @@ export default function Memory() {
       <p className="page-desc">
         TA 会把你说的重要的话记下来，下次见面还记得。
         <br />
-        这些记忆只存在你浏览器本地，不会上传。
+        这些记忆只留在你的浏览器里，不会传到任何地方。
       </p>
 
       <div className="memory-input-row">

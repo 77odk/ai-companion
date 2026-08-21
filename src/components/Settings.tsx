@@ -169,7 +169,7 @@ export default function Settings() {
             id="persona"
             className="input persona-input"
             rows={4}
-            placeholder={'TA 怎么称呼你？TA 是什么性格？你们是什么关系？\n有什么只有你们知道的梗？\n\n不填就用默认人设～'}
+            placeholder={'TA 怎么称呼你？TA 是什么性格？你们是什么关系？\n有什么只有你们知道的秘密？\n\n不填就用默认人设～'}
             value={persona}
             onChange={(e) => setPersona(e.target.value)}
           />

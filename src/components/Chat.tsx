@@ -41,7 +41,7 @@ export default function Chat({ onGoSettings }: Props) {
 
     const settings = loadSettings()
     if (!settings.apiKey || !settings.baseUrl || !settings.model) {
-      setError('还没配置 API Key，请先到「设置」页完成配置')
+      setError('还没接上 AI 服务，去「我的」页填一下 API Key 就能聊了')
       return
     }
 
