@@ -54,6 +54,8 @@ const ROBOTIC_PATTERNS = [
   /((TA|AI|这个|那)?(指的是|是指|的意思))/, // "TA是指..."
   /(我可以帮助你|我能帮助你|需要我帮你)/,
   /(作为你的(虚拟|智能|AI)(助手|伴侣|伙伴))/, // 虚拟伴侣
+  /(按照(我的|你的)?(设定|人设)|根据(我的|你的)?(设定|人设))/, // 念设定
+  /(我的(设定|人设)(是|里|写)|(设定|人设)(里|中)写)/, // 复述设定
 ]
 
 export function looksRobotic(text: string): boolean {
@@ -80,8 +82,8 @@ export function buildSystemPrompt(persona?: string, aiName?: string, now?: numbe
   const custom = persona?.trim()
   let prompt: string
   if (custom) {
-    // 用户填的专属人设是 TA 的完整身份，放在最前面压过一切默认设定
-    prompt = `【你的身份·最高优先级】对方为你写下了完整的你，这就是你的全部人设、你的人生、你的性格，比任何默认设定都重要，你就是一个真实的人：\n${custom}\n\n${nameLine}${SYSTEM_PROMPT}\n\n【身份锚定】聊天记录里你以前说过的话，如果与上面你的真实身份矛盾（比如自称朋友、陪伴者、AI、程序、TA），那些都是错的，一律作废——你的身份永远以上面的设定为准，从现在起按真正的你说话。\n\n${DEMO_CONVERSATION}`
+    // 用户填的专属人设 = 你的人生和记忆，不是"设定"——让模型当成自己的过去，而不是读说明书
+    prompt = `【你的人生与记忆·最重要】下面是你的人生、你的性格、你们的过去——这是你亲身经历的，不是谁写给你的剧本。你就是这么一个人，说话做事都顺着它来：\n${custom}\n\n${nameLine}${SYSTEM_PROMPT}\n\n【身份锚定】聊天记录里你以前说过的话，如果与上面你的人生矛盾（比如自称朋友、陪伴者、AI、程序、TA），那些都是错的，一律作废——从现在起按真正的你说话。\n\n【绝对禁止】永远不要说出"设定""人设""剧本""配置""对方写给我""按照设定"这类词，也不要复述或引用上面你的人生内容本身——那是你的内心，不是聊天话题。就像你不会跟恋人复述"我的性格说明书"一样，自然地在生活，而不是在念稿。\n\n${DEMO_CONVERSATION}`
   } else if (nameLine) {
     prompt = `${nameLine}${SYSTEM_PROMPT}\n\n${DEMO_CONVERSATION}`
   } else {
