@@ -5,6 +5,7 @@ import {
   loadMessages,
   loadPersona,
   loadUserProfile,
+  setSessionStart,
   type StoredMessage,
 } from '../lib/storage'
 import { loadMemory, stripMemoryMarkers, type MemoryItem } from '../lib/memory'
@@ -190,6 +191,8 @@ export default function AISpace({ onBack, onGoMine }: Props) {
   // 进空间先立即显示已有动态（不阻塞），需要补的新动态异步生成、写完自动追加
   const [posts, setPosts] = useState<SpacePost[]>(() => loadCurrentPosts())
   const [hint, setHint] = useState<string | null>(null)
+  // 刷新对话二次确认：true = 已展开确认面板，等用户确认
+  const [confirmRefresh, setConfirmRefresh] = useState(false)
   const [pendingLlm, setPendingLlm] = useState(false)
   const hintTimer = useRef<number | undefined>(undefined)
   const planRef = useRef<RefreshPlan | null>(null)
@@ -252,8 +255,14 @@ export default function AISpace({ onBack, onGoMine }: Props) {
     }
   }
 
-  // 「刷新对话」占位：M7-3 实现，本版先给提示
-  const handleRefreshChatsPlaceholder = () => flashHint('将在下一版生效')
+  // 「刷新对话」（M7-3）：仅刷新当前对话上下文——TA 忘了之前聊的重新开始，聊天记录一条不删
+  const handleRefreshChats = () => setConfirmRefresh(true)
+  const confirmDoRefresh = () => {
+    setSessionStart(Date.now())
+    setConfirmRefresh(false)
+    flashHint('已刷新，TA 从新的一页开始')
+  }
+  const cancelRefresh = () => setConfirmRefresh(false)
 
   const dayGroups = useMemo(() => groupMessagesByDay(messages), [messages])
   // 聊天记录搜索与日历（M7-2）：纯逻辑全在 aiSpaceDetail.ts
@@ -394,17 +403,37 @@ export default function AISpace({ onBack, onGoMine }: Props) {
             </button>
           </div>
 
-          {/* 刷新对话：底部独立一项，M7-3 生效 */}
-          <button type="button" className="ai-space-entry-row ai-space-entry-refresh" onClick={handleRefreshChatsPlaceholder}>
-            <span className="ai-space-entry-icon" aria-hidden="true">
-              <RefreshIcon />
-            </span>
-            <span className="ai-space-entry-main">
-              <span className="ai-space-entry-title">刷新对话</span>
-              <span className="ai-space-entry-sub">将在下一版生效</span>
-            </span>
-            <EntryChevron />
-          </button>
+          {/* 刷新对话：底部独立卡片，M7-3 生效（仅刷新上下文，聊天记录永不删除） */}
+          <div className="ai-space-refresh-card">
+            <button
+              type="button"
+              className="ai-space-entry-row ai-space-entry-refresh"
+              onClick={handleRefreshChats}
+              aria-expanded={confirmRefresh}
+            >
+              <span className="ai-space-entry-icon" aria-hidden="true">
+                <RefreshIcon />
+              </span>
+              <span className="ai-space-entry-main">
+                <span className="ai-space-entry-title">刷新对话</span>
+                <span className="ai-space-entry-sub">TA 忘了之前聊的，重新开始</span>
+              </span>
+              <EntryChevron open={confirmRefresh} />
+            </button>
+            {confirmRefresh && (
+              <div className="ai-space-refresh-confirm">
+                <p className="ai-space-refresh-confirm-text">刷新后 TA 会忘了之前聊的，聊天记录还在</p>
+                <div className="ai-space-refresh-confirm-actions">
+                  <button type="button" className="btn btn-ghost" onClick={cancelRefresh}>
+                    再想想
+                  </button>
+                  <button type="button" className="btn btn-primary" onClick={confirmDoRefresh}>
+                    确认刷新
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {hint && <p className="ai-space-hint">{hint}</p>}
         </div>

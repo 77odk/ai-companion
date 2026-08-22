@@ -164,6 +164,31 @@ export function saveMessages(messages: StoredMessage[]): void {
   localStorage.setItem(MESSAGES_KEY, JSON.stringify(kept.slice(-MESSAGE_LIMIT)))
 }
 
+// ---- 会话起点（刷新对话：TA 忘了之前聊的，聊天记录还在） ----
+
+const SESSION_START_KEY = 'ai_companion_session_start'
+
+/**
+ * 会话起点时间戳：刷新对话 = 把起点设为当前时间，聊天页只显示/只发送起点之后的消息。
+ * 没有设置过返回 0（= 不设起点，全部显示）。
+ * 只影响「当前对话」的显示与发送，不删任何聊天记录——
+ * 聊天记录页（TA 空间）读 loadMessages() 全量，不受 sessionStart 影响。
+ */
+export function getSessionStart(): number {
+  try {
+    const raw = localStorage.getItem(SESSION_START_KEY)
+    if (!raw) return 0
+    const n = Number(raw)
+    return Number.isFinite(n) && n > 0 ? n : 0
+  } catch {
+    return 0
+  }
+}
+
+export function setSessionStart(ts: number): void {
+  localStorage.setItem(SESSION_START_KEY, String(ts))
+}
+
 // ---- 专属人设 ----
 
 const PERSONA_KEY = 'ai_companion_persona'

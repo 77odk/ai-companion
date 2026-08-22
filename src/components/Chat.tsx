@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildSystemPrompt, chatCompletion, looksRobotic, streamChat, stripEmoji, type ApiMessage } from '../lib/api'
 import { extractMemories, loadMemory, notifyMemoryUpdated, recallRelevantMemories, stripMemoryMarkers, touchMemory, upsertMemoryItem } from '../lib/memory'
-import { loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, type StoredMessage } from '../lib/storage'
+import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, type StoredMessage } from '../lib/storage'
+import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
 
 interface Props {
@@ -16,6 +17,14 @@ export default function Chat({ onGoSettings }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [hasKey] = useState(() => Boolean(loadSettings().apiKey))
 
+  // 会话起点（M7-3 刷新对话）：setSessionStart 后聊天页只显示/只发送起点之后的消息；
+  // 聊天记录一条不删——messages 里仍是全量，过滤只发生在「显示」与「发给模型的上下文」两层
+  const sessionStart = useMemo(() => getSessionStart(), [])
+  const visibleMessages = useMemo(
+    () => filterSessionMessages(messages, sessionStart),
+    [messages, sessionStart],
+  )
+
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const controllerRef = useRef<AbortController | null>(null)
@@ -27,7 +36,7 @@ export default function Chat({ onGoSettings }: Props) {
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [messages])
+  }, [visibleMessages])
 
   // 输入框自适应高度（最多约 4 行）
   useEffect(() => {
@@ -48,10 +57,12 @@ export default function Chat({ onGoSettings }: Props) {
     }
 
     const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
-    const base = [...messages, userMsg]
+    // 发给模型的上下文只带刷新后的消息（base = 可见消息 + 新消息）
+    const base = [...visibleMessages, userMsg]
     const assistantTs = Date.now()
     assistantText.current = ''
-    setMessages([...base, { role: 'assistant', content: '', ts: assistantTs }])
+    // state 存全量（含刷新前的聊天记录，不删），显示仍只出可见部分
+    setMessages([...messages, userMsg, { role: 'assistant', content: '', ts: assistantTs }])
     setInput('')
     setError(null)
     setStreaming(true)
@@ -105,7 +116,7 @@ export default function Chat({ onGoSettings }: Props) {
       if (cleaned && looksRobotic(cleaned) && !retriedRef.current) {
         retriedRef.current = true
         setError(null)
-        setMessages([...base, { role: 'assistant', content: '…', ts: assistantTs }])
+        setMessages([...messages, userMsg, { role: 'assistant', content: '…', ts: assistantTs }])
         void chatCompletion(settings, [
           ...apiMessages,
           { role: 'assistant', content: cleaned },
@@ -120,11 +131,11 @@ export default function Chat({ onGoSettings }: Props) {
             if (!retryCleaned || looksRobotic(retryCleaned)) {
               // 重写还是人机味？就用示范语气兜底，别让用户看到AI腔
               const fallback = '嗯，我在。刚才没好好说话，重说一遍——我在呢。'
-              const final: StoredMessage[] = [...base, { role: 'assistant', content: fallback, ts: Date.now() }]
+              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: fallback, ts: Date.now() }]
               saveMessages(final)
               setMessages(final)
             } else {
-              const final: StoredMessage[] = [...base, { role: 'assistant', content: retryCleaned, ts: Date.now() }]
+              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: retryCleaned, ts: Date.now() }]
               saveMessages(final)
               setMessages(final)
             }
@@ -132,7 +143,7 @@ export default function Chat({ onGoSettings }: Props) {
             controllerRef.current = null
           })
           .catch(() => {
-            const final: StoredMessage[] = [...base, { role: 'assistant', content: cleaned, ts: assistantTs }]
+            const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: cleaned, ts: assistantTs }]
             saveMessages(final)
             setMessages(final)
             setStreaming(false)
@@ -141,8 +152,8 @@ export default function Chat({ onGoSettings }: Props) {
         return
       }
       const final: StoredMessage[] = cleaned
-        ? [...base, { role: 'assistant', content: cleaned, ts: assistantTs }]
-        : base
+        ? [...messages, userMsg, { role: 'assistant', content: cleaned, ts: assistantTs }]
+        : [...messages, userMsg]
       saveMessages(final)
       setMessages(final)
       setStreaming(false)
@@ -153,7 +164,7 @@ export default function Chat({ onGoSettings }: Props) {
     const controller = streamChat(settings, apiMessages, {
       onToken: (t) => {
         assistantText.current += t
-        setMessages([...base, { role: 'assistant', content: stripEmoji(assistantText.current), ts: assistantTs }])
+        setMessages([...messages, userMsg, { role: 'assistant', content: stripEmoji(assistantText.current), ts: assistantTs }])
       },
       onDone: finalize,
       onError: (err) => {
@@ -162,7 +173,7 @@ export default function Chat({ onGoSettings }: Props) {
       },
     })
     controllerRef.current = controller
-  }, [messages, streaming])
+  }, [messages, visibleMessages, streaming])
 
   // 工作台「跟 TA 说」带话进来：Chat 挂载时取走并直接发给 TA（StrictMode 双跑靠 take 清空去重）
   useEffect(() => {
@@ -177,29 +188,10 @@ export default function Chat({ onGoSettings }: Props) {
     finalizeRef.current()
   }
 
-  // 清空会话：清空本地历史 + 界面（下次 TA 就不会被旧对话污染人设）
-  const handleClear = () => {
-    if (streaming) handleStop()
-    retriedRef.current = false
-    saveMessages([])
-    setMessages([])
-    setError(null)
-  }
-
-  const isEmpty = messages.length === 0
+  const isEmpty = visibleMessages.length === 0
 
   return (
     <div className="chat-page">
-      {!isEmpty && (
-        <div className="chat-clear-row">
-          <button type="button" className="link-btn chat-clear-btn" onClick={handleClear}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="chat-clear-icon">
-              <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-            </svg>
-            清空对话
-          </button>
-        </div>
-      )}
       <div className="message-list" ref={scrollRef}>
         {isEmpty ? (
           <div className="welcome">
@@ -215,11 +207,11 @@ export default function Chat({ onGoSettings }: Props) {
             )}
           </div>
         ) : (
-          messages.map((m, i) => (
+          visibleMessages.map((m, i) => (
             <MessageBubble
               key={i}
               message={m}
-              typing={streaming && i === messages.length - 1 && m.role === 'assistant' && m.content === ''}
+              typing={streaming && i === visibleMessages.length - 1 && m.role === 'assistant' && m.content === ''}
             />
           ))
         )}

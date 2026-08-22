@@ -322,29 +322,6 @@ button {
   line-height: 1.5;
 }
 
-/* 清空对话按钮（消息列表右上） */
-.chat-clear-row {
-  display: flex;
-  justify-content: flex-end;
-  padding: 6px 14px 0;
-}
-.chat-clear-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-}
-.chat-clear-btn:active {
-  background: rgba(0, 0, 0, 0.05);
-}
-.chat-clear-icon {
-  width: 13px;
-  height: 13px;
-}
-
 /* 输入区 */
 .composer {
   flex-shrink: 0;
@@ -1965,12 +1942,35 @@ textarea.persona-input {
   transform: rotate(90deg);
 }
 
-/* 底部独立项：刷新对话（M7-3 生效） */
-.ai-space-entry-refresh {
+/* 底部独立卡片：刷新对话（M7-3 生效，展开二次确认） */
+.ai-space-refresh-card {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-card);
   box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.ai-space-refresh-card .ai-space-entry-refresh {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+.ai-space-refresh-confirm {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--color-border);
+}
+.ai-space-refresh-confirm-text {
+  margin: 12px 0 10px;
+  font-size: 13px;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+.ai-space-refresh-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+.ai-space-refresh-confirm-actions .btn {
+  font-size: 13px;
 }
 
 /* ========== TA 的详情页：相处数据 / 聊天记录 / TA 记得的 ========== */

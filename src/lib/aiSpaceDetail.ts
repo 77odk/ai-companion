@@ -81,6 +81,21 @@ export function groupMessagesByDay(messages: StoredMessage[], now: number = Date
   return groups
 }
 
+/**
+ * 按会话起点过滤消息（M7-3 刷新对话）：只保留 ts >= sessionStart 的消息，保留原排序。
+ * sessionStart <= 0（未刷新过）→ 原样返回，全部显示。
+ * 不修改输入数组。聊天记录页读的是全量 loadMessages()，不受本过滤影响。
+ */
+export function filterSessionMessages(
+  messages: StoredMessage[],
+  sessionStart: number,
+): StoredMessage[] {
+  if (!(sessionStart > 0)) return messages
+  return messages.filter(
+    (m) => m != null && typeof m.ts === 'number' && Number.isFinite(m.ts) && m.ts >= sessionStart,
+  )
+}
+
 /** 相处天数：按自然日差 +1，至少 1 天（今天认识的显示第 1 天） */
 export function computeDaysKnown(firstSeen: number, now: number = Date.now()): number {
   if (!Number.isFinite(firstSeen) || !Number.isFinite(now)) return 1
