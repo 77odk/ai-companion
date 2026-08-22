@@ -751,19 +751,112 @@ textarea.persona-input {
 .memory-delete {
   flex-shrink: 0;
   position: absolute;
-  top: 10px;
+  top: 8px;
   right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 12px;
-  padding: 4px 8px;
+  padding: 6px;
   border-radius: 8px;
+  opacity: 0.4;
 }
 
-.memory-delete:hover {
+.memory-delete svg {
+  width: 15px;
+  height: 15px;
+}
+
+.memory-delete:hover,
+.memory-delete:focus-visible {
+  opacity: 1;
   color: #b3261e;
   background: #fdecea;
+}
+
+/* 记忆页 v2 · 「TA 眼中的你」汇总卡（暖橘渐变大卡，页面的灵魂） */
+.memory-summary-card {
+  background: linear-gradient(135deg, #fff1e0 0%, #fff8f3 55%, #ffe7d0 100%);
+  border: 1px solid #f3dcc7;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  padding: 18px 18px 16px;
+}
+
+.memory-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.memory-summary-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-primary-deep);
+}
+
+.memory-summary-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-primary);
+}
+
+.memory-summary-stats {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text);
+}
+
+.memory-summary-stats strong {
+  color: var(--color-primary-deep);
+  font-weight: 700;
+}
+
+.memory-summary-top {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary-deep);
+}
+
+.memory-summary-llm {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--color-primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: rgba(255, 255, 255, 0.65);
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--color-text);
+}
+
+/* 主题卡：N 条小标 */
+.memory-topic-count {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+/* 主题卡：最新一条置顶加粗（最戳心的那句） */
+.memory-item-featured {
+  border-bottom: none;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.memory-item-featured .memory-item-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 /* ========== 主页（角色卡） ========== */
@@ -926,6 +1019,103 @@ textarea.persona-input {
   color: var(--color-primary, #ff8a5c);
   background: rgba(255, 138, 92, 0.12);
   white-space: nowrap;
+}
+
+/* 工作台 v2 · 点菜台（展示模式：主卖点 + 对话式入口 + 已会能力小块 + 底部钩子） */
+.work-hero {
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--color-text);
+}
+
+.work-ask-card {
+  background: linear-gradient(135deg, #fff1e0 0%, #ffffff 55%, #ffe7d0 100%);
+  border: 1px solid #f3dcc7;
+  box-shadow: var(--shadow);
+}
+
+.work-ask-desc {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text);
+}
+
+.work-ask-row {
+  display: flex;
+  gap: 8px;
+}
+
+.work-ask-row .input {
+  flex: 1;
+}
+
+.work-ask-btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.work-ask-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--color-primary-deep);
+}
+
+.work-known-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.work-known-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+}
+
+.work-known-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 2px;
+  font-size: 13px;
+  color: var(--color-text);
+  min-width: 0;
+}
+
+.work-known-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--color-primary-deep);
+  flex: none;
+}
+
+.work-known-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.work-known-name {
+  flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-known-item .showcase-badge {
+  margin-left: auto;
+}
+
+.work-foot-hook {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--color-text-muted);
+  text-align: center;
 }
 
 .work-lock-desc {

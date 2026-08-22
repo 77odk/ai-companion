@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildSystemPrompt, streamChat, type ApiMessage } from '../lib/api'
 import { extractMemories, loadMemory, notifyMemoryUpdated, stripMemoryMarkers, upsertMemoryItem } from '../lib/memory'
 import { loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, type StoredMessage } from '../lib/storage'
+import { takeChatMessage } from '../lib/chatInject'
 
 interface Props {
   onGoSettings: () => void
@@ -35,8 +36,8 @@ export default function Chat({ onGoSettings }: Props) {
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
   }, [input])
 
-  const handleSend = () => {
-    const text = input.trim()
+  const send = useCallback((raw: string) => {
+    const text = raw.trim()
     if (!text || streaming) return
 
     const settings = loadSettings()
@@ -106,7 +107,15 @@ export default function Chat({ onGoSettings }: Props) {
       },
     })
     controllerRef.current = controller
-  }
+  }, [messages, streaming])
+
+  // 工作台「跟 TA 说」带话进来：Chat 挂载时取走并直接发给 TA（StrictMode 双跑靠 take 清空去重）
+  useEffect(() => {
+    const injected = takeChatMessage()
+    if (injected) send(injected)
+  }, [send])
+
+  const handleSend = () => send(input)
 
   const handleStop = () => {
     controllerRef.current?.abort()

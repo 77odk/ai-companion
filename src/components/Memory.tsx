@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   addMemoryItem,
   inferTopic,
@@ -7,6 +7,16 @@ import {
   MEMORY_UPDATED_EVENT,
   type MemoryItem,
 } from '../lib/memory'
+import {
+  buildKnownSince,
+  buildSummaryMessages,
+  buildTopTopicLine,
+  cleanSummaryText,
+  formatFirstRememberedDate,
+  summarizeStats,
+} from '../lib/memorySummary'
+import { chatCompletion } from '../lib/api'
+import { loadAIProfile, loadPersona, loadSettings, loadUserProfile } from '../lib/storage'
 
 /** 主题色块：一组柔和配色，按主题名稳定取一个 */
 const TOPIC_SOFT = [
@@ -24,18 +34,26 @@ function topicColorClass(topic: string): string {
   return TOPIC_SOFT[h % TOPIC_SOFT.length]
 }
 
-/** 首次记住的那天：有温度的小字 */
-function firstDateLabel(ts: number): string {
-  const d = new Date(ts)
-  const md = `${d.getMonth() + 1} 月 ${d.getDate()} 日`
-  return d.getFullYear() === new Date().getFullYear()
-    ? `TA 从 ${md} 起记得`
-    : `TA 从 ${d.getFullYear()} 年 ${md} 起记得`
-}
-
 interface TopicGroup {
   topic: string
   items: MemoryItem[]
+}
+
+/** 条目上的轻量删除图标：细描边暖灰，hover 才明显 */
+function DeleteIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
+    </svg>
+  )
 }
 
 export default function Memory() {
@@ -43,6 +61,12 @@ export default function Memory() {
   const [text, setText] = useState('')
   const [topic, setTopic] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+
+  // 「TA 眼中的你」LLM 心里话：有配置才调，失败静默，同一批记忆只生成一次
+  const [summary, setSummary] = useState<string | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const generatedKeyRef = useRef('')
+  const summarySeqRef = useRef(0)
 
   // 数据变更自动刷新：聊天里 TA 刚记住的，切回记忆页（或别的页签）立刻能看到
   useEffect(() => {
@@ -55,6 +79,47 @@ export default function Memory() {
       window.removeEventListener('storage', refresh)
     }
   }, [])
+
+  // 汇总卡 LLM 区：记忆非空 + 有 key/base_url/模型 才调；失败静默，同一批记忆只生成一次。
+  // 用 seq 序号作废在飞的旧请求（换了一批记忆 / 清空时），StrictMode 双跑靠 generatedKeyRef 去重。
+  useEffect(() => {
+    if (items.length === 0) {
+      summarySeqRef.current++ // 作废在飞的请求
+      setSummary(null)
+      setSummaryLoading(false)
+      return
+    }
+    const settings = loadSettings()
+    if (!settings.apiKey?.trim() || !settings.baseUrl?.trim() || !settings.model?.trim()) {
+      summarySeqRef.current++
+      setSummaryLoading(false)
+      return
+    }
+
+    const key = items.map((m) => m.id).join('|')
+    if (key === generatedKeyRef.current) return
+    generatedKeyRef.current = key
+
+    const seq = ++summarySeqRef.current
+    setSummaryLoading(true)
+    const persona = loadPersona()
+    const ai = loadAIProfile()
+    const yourName = loadUserProfile().nickname || '你'
+    chatCompletion(settings, buildSummaryMessages(ai.nickname, yourName, persona, items), {
+      maxTokens: 200,
+      timeoutMs: 30000,
+    })
+      .then((raw) => {
+        if (seq !== summarySeqRef.current) return
+        setSummary(cleanSummaryText(raw))
+      })
+      .catch(() => {
+        // 失败静默：只留统计区
+      })
+      .finally(() => {
+        if (seq === summarySeqRef.current) setSummaryLoading(false)
+      })
+  }, [items])
 
   // 按主题动态分组：旧数据没主题就按关键词推断；组按最近添加时间排序，组内新的在前
   const groups = useMemo<TopicGroup[]>(() => {
@@ -69,6 +134,11 @@ export default function Memory() {
       .map(([t, list]) => ({ topic: t, items: [...list].sort((a, b) => b.createdAt - a.createdAt) }))
       .sort((a, b) => b.items[0].createdAt - a.items[0].createdAt)
   }, [items])
+
+  // 顶部汇总：统计 / 一句话点评 / 最早一条
+  const stats = useMemo(() => summarizeStats(items), [items])
+  const topTopicLine = useMemo(() => buildTopTopicLine(stats.topTopic), [stats.topTopic])
+  const knownSinceLine = stats.earliestTs != null ? buildKnownSince(stats.earliestTs) : ''
 
   const handleAdd = () => {
     const t = text.trim()
@@ -98,6 +168,21 @@ export default function Memory() {
         <br />
         这些记忆只留在你的浏览器里，不会传到任何地方。
       </p>
+
+      {stats.count > 0 && (
+        <section className="memory-summary-card">
+          <div className="memory-summary-head">
+            <h3 className="memory-summary-title">TA 眼中的你</h3>
+            {summaryLoading && <span className="memory-summary-hint">TA 正在回忆你…</span>}
+          </div>
+          <p className="memory-summary-stats">
+            TA 记得你 <strong>{stats.count}</strong> 件事 · 分布在 <strong>{stats.topicCount}</strong> 个主题
+            {knownSinceLine && <span> · {knownSinceLine}</span>}
+          </p>
+          {topTopicLine && <p className="memory-summary-top">{topTopicLine}</p>}
+          {summary && <p className="memory-summary-llm">{summary}</p>}
+        </section>
+      )}
 
       <div className="memory-input-row">
         <input
@@ -159,6 +244,7 @@ export default function Memory() {
                   aria-expanded={!isCollapsed}
                 >
                   <span className={`memory-topic-name ${topicColorClass(g.topic)}`}>{g.topic}</span>
+                  <span className="memory-topic-count">{g.items.length} 条</span>
                   <svg
                     className={`memory-topic-chevron${isCollapsed ? ' collapsed' : ''}`}
                     viewBox="0 0 24 24"
@@ -173,24 +259,46 @@ export default function Memory() {
                   </svg>
                 </button>
                 {!isCollapsed && (
-                  <ul className="memory-topic-items">
-                    {g.items.map((m) => (
-                      <li key={m.id} className="memory-item">
-                        <p className="memory-item-text">{m.text}</p>
+                  <div className="memory-topic-body">
+                    {g.items[0] && (
+                      <div className="memory-item memory-item-featured">
+                        <p className="memory-item-text">{g.items[0].text}</p>
                         <div className="memory-item-foot">
-                          <span className="memory-item-date">{firstDateLabel(m.createdAt)}</span>
-                          {m.source && <span className="memory-item-source">来自「{m.source}」</span>}
+                          <span className="memory-item-date">{formatFirstRememberedDate(g.items[0].createdAt)}</span>
+                          {g.items[0].source && (
+                            <span className="memory-item-source">来自「{g.items[0].source}」</span>
+                          )}
                         </div>
                         <button
                           className="memory-delete"
-                          onClick={() => handleRemove(m.id)}
+                          onClick={() => handleRemove(g.items[0].id)}
                           aria-label="删除这条记忆"
                         >
-                          删除
+                          <DeleteIcon />
                         </button>
-                      </li>
-                    ))}
-                  </ul>
+                      </div>
+                    )}
+                    {g.items.length > 1 && (
+                      <ul className="memory-topic-items">
+                        {g.items.slice(1).map((m) => (
+                          <li key={m.id} className="memory-item">
+                            <p className="memory-item-text">{m.text}</p>
+                            <div className="memory-item-foot">
+                              <span className="memory-item-date">{formatFirstRememberedDate(m.createdAt)}</span>
+                              {m.source && <span className="memory-item-source">来自「{m.source}」</span>}
+                            </div>
+                            <button
+                              className="memory-delete"
+                              onClick={() => handleRemove(m.id)}
+                              aria-label="删除这条记忆"
+                            >
+                              <DeleteIcon />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 )}
               </section>
             )

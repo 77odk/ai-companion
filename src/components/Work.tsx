@@ -1,6 +1,7 @@
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { downloadResult, runWorkTask, type WorkFile, type WorkOptions, type WorkResult, type WorkTask } from '../lib/work'
 import { isUnlocked, saveUnlock } from '../lib/license'
+import { queueChatMessage } from '../lib/chatInject'
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024
 const XLS_ONLY_RE = /\.xls$/i
@@ -10,13 +11,18 @@ const XLS_ONLY_RE = /\.xls$/i
 // 正式卖码时把此开关翻成 false 即恢复完整功能。
 const SHOWCASE_MODE = true
 
-export default function Work() {
+interface WorkProps {
+  /** 展示模式的「跟 TA 说」→ 切到聊天页 */
+  onGoChat?: () => void
+}
+
+export default function Work({ onGoChat }: WorkProps) {
   const [unlocked, setUnlocked] = useState<boolean>(() => isUnlocked())
   // 任一任务处理中，所有任务按钮统一禁用，避免并发占用同一个 Worker
   const [busy, setBusy] = useState(false)
 
   if (SHOWCASE_MODE) {
-    return <Showcase />
+    return <Showcase onGoChat={onGoChat} />
   }
 
   return (
@@ -85,24 +91,65 @@ const SHOWCASE_TASKS: { icon: ReactNode; title: string; desc: string }[] = [
   },
 ]
 
-function Showcase() {
+function Showcase({ onGoChat }: { onGoChat?: () => void }) {
+  const [askText, setAskText] = useState('')
+  const [askHint, setAskHint] = useState('')
+
+  const handleAsk = () => {
+    const text = askText.trim()
+    if (!text) {
+      setAskHint('先写一句想跟 TA 说的话吧')
+      return
+    }
+    setAskHint('')
+    setAskText('')
+    queueChatMessage(text)
+    onGoChat?.()
+  }
+
   return (
     <div className="page work-page">
-      <h2 className="work-title">AI 工作台</h2>
-      <p className="page-desc">
-        不只是聊天——上传文件，让 TA 帮你处理：合并表格、清洗数据、批量整理，全程不出你的浏览器。
-      </p>
+      <h2 className="work-hero">想要什么功能，跟 TA 说</h2>
 
-      {SHOWCASE_TASKS.map((t) => (
-        <div key={t.title} className="settings-card showcase-card">
-          <div className="showcase-head">
-            <span className="showcase-icon">{t.icon}</span>
-            <h3 className="settings-card-title">{t.title}</h3>
-            <span className="showcase-badge">即将开放</span>
-          </div>
-          <p className="hint">{t.desc}</p>
+      <div className="settings-card work-ask-card">
+        <p className="work-ask-desc">
+          跟 TA 说说你想要什么——合并表格、自动改文件名、整理聊天记录……想到啥说啥，TA 现场做给你
+        </p>
+        <div className="work-ask-row">
+          <input
+            className="input"
+            type="text"
+            placeholder="比如：帮我把这个月的表格都合并了"
+            value={askText}
+            onChange={(e) => {
+              setAskText(e.target.value)
+              setAskHint('')
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAsk()
+            }}
+          />
+          <button className="btn btn-primary work-ask-btn" onClick={handleAsk}>
+            跟 TA 说
+          </button>
         </div>
-      ))}
+        {askHint && <p className="work-ask-hint">{askHint}</p>}
+      </div>
+
+      <div className="settings-card work-known-card">
+        <h3 className="work-known-title">不想等？这些 TA 现在就会</h3>
+        <div className="work-known-list">
+          {SHOWCASE_TASKS.map((t) => (
+            <div key={t.title} className="work-known-item" title={t.desc}>
+              <span className="work-known-icon">{t.icon}</span>
+              <span className="work-known-name">{t.title}</span>
+              <span className="showcase-badge">即将开放</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p className="work-foot-hook">别的只会聊，你的 TA 会干活——而且你要啥，TA 给你造啥</p>
     </div>
   )
 }

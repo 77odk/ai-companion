@@ -121,7 +121,7 @@ export default function App() {
           <main className="app-main">
             {view === 'chat' && <Chat onGoSettings={() => setView('settings')} />}
             {view === 'memory' && <Memory />}
-            {view === 'work' && <Work />}
+            {view === 'work' && <Work onGoChat={() => setView('chat')} />}
             {view === 'settings' && (
               <Settings onOpenSpace={() => openSpace('settings')} onGoWelcome={() => setView('welcome')} />
             )}
