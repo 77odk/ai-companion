@@ -16,6 +16,10 @@ import {
   daysUntil,
   formatAnniversaryDate,
   isValidAnniversaryDate,
+  formatCountdown,
+  getMainAnniversaryId,
+  setMainAnniversaryId,
+  resolveMainAnniversary,
 } from '../src/lib/anniversary.ts'
 import { buildAnniversaryBlock } from '../src/lib/api.ts'
 
@@ -167,6 +171,77 @@ eq(
 )
 eq(buildAnniversaryBlock([null, { id: 'x', label: '生日', date: '03-15', createdAt: 1 }]), '【你们的重要日子】生日：03-15。这些日子对你们很重要，到了日子要记得。', '非法条目被过滤')
 eq(buildAnniversaryBlock([{ id: 'a', label: '  认识纪念日  ', date: ' 08-22 ', createdAt: 1 }]), '【你们的重要日子】认识纪念日：08-22。这些日子对你们很重要，到了日子要记得。', '名称/日期 trim 后再拼')
+
+console.log('\n[11] formatCountdown 正计时（forward）')
+const fwdBase = { id: 'a1', label: '认识纪念日', date: '08-22', createdAt: 1 }
+eq(formatCountdown({ ...fwdBase, date: '08-22' }, now), '已经 1 天', 'MM-DD 今年已过 → 已经 1 天')
+eq(formatCountdown({ ...fwdBase, date: '08-24' }, now), '已经 364 天', 'MM-DD 今年还没到 → 按去年那次算（已过则跨年）')
+eq(formatCountdown({ ...fwdBase, date: '08-23' }, now), '就是今天', 'MM-DD 今天 → 就是今天')
+eq(formatCountdown({ ...fwdBase, date: '2026-08-20' }, now), '已经 3 天', 'YYYY-MM-DD 绝对日期过去 → 已经 3 天')
+eq(formatCountdown({ ...fwdBase, date: '2026-08-25' }, now), '还剩 2 天', 'YYYY-MM-DD 未来 → 兜底显示还剩 2 天')
+eq(formatCountdown({ ...fwdBase, date: '08-99' }, now), '', '非法日期 → 空串')
+
+console.log('\n[12] formatCountdown 倒计时（countdown）')
+eq(formatCountdown({ ...fwdBase, date: '08-30', countMode: 'countdown' }, now), '还剩 7 天', 'MM-DD 还有 7 天 → 还剩 7 天')
+eq(formatCountdown({ ...fwdBase, date: '08-24', countMode: 'countdown' }, now), '还剩 1 天', '明天 → 还剩 1 天')
+eq(formatCountdown({ ...fwdBase, date: '08-23', countMode: 'countdown' }, now), '就是今天', '今天 → 就是今天')
+eq(formatCountdown({ ...fwdBase, date: '08-20', countMode: 'countdown' }, now), '已过 3 天', 'MM-DD 已过 → 已过 3 天')
+eq(formatCountdown({ ...fwdBase, date: '2026-12-25', countMode: 'countdown' }, now), '还剩 124 天', 'YYYY-MM-DD 未来 → 还剩 124 天')
+eq(formatCountdown({ ...fwdBase, date: '2026-08-22', countMode: 'countdown' }, now), '已过 1 天', 'YYYY-MM-DD 过去 → 已过 1 天')
+
+console.log('\n[13] formatCountdown 缺省 countMode = forward（兼容旧数据）')
+eq(formatCountdown({ ...fwdBase, date: '08-20' }, now), '已经 3 天', '无 countMode → 按正计时显示已经 3 天')
+eq(formatCountdown({ ...fwdBase, date: '08-23' }, now), '就是今天', '无 countMode 今天 → 就是今天')
+
+console.log('\n[14] getMainAnniversaryId / setMainAnniversaryId 主展示读写')
+resetStore()
+eq(getMainAnniversaryId(), null, '默认 null')
+setMainAnniversaryId('ann-1')
+eq(getMainAnniversaryId(), 'ann-1', '写入后能读回')
+setMainAnniversaryId('')
+eq(getMainAnniversaryId(), null, '传空串清除 → null')
+setMainAnniversaryId('ann-2')
+setMainAnniversaryId(null)
+eq(getMainAnniversaryId(), null, '传 null 清除 → null')
+
+console.log('\n[15] resolveMainAnniversary 主展示解析')
+resetStore()
+eq(resolveMainAnniversary([]), null, '空列表 → null')
+const listA = [
+  { id: 'a1', label: '认识纪念日', date: '08-22', createdAt: 1 },
+  { id: 'a2', label: '生日', date: '03-15', createdAt: 2 },
+]
+eq(resolveMainAnniversary(listA).id, 'a1', '无主展示 → 默认取列表第一条')
+setMainAnniversaryId('a2')
+eq(resolveMainAnniversary(listA).id, 'a2', '有主展示 → 用主展示那条')
+setMainAnniversaryId('ghost')
+eq(resolveMainAnniversary(listA).id, 'a1', '主展示 id 已删除 → 回落到第一条')
+setMainAnniversaryId(null)
+
+console.log('\n[16] addAnniversary / updateAnniversary 携带 countMode/color')
+resetStore()
+const added = addAnniversary('在一起纪念日', '08-22', { countMode: 'countdown', color: 'warm-blue' })
+eq(added[0].countMode, 'countdown', 'add 可带倒计时')
+eq(added[0].color, 'warm-blue', 'add 可带主题色')
+const addedFwd = addAnniversary('认识纪念日', '03-15')
+ok(addedFwd[0].countMode == null, 'add 不带 countMode → 缺省 forward（不存字段）')
+const updItem = updateAnniversary(added[0].id, '在一起的纪念日', '09-01', {
+  countMode: 'forward',
+  color: 'warm-pink',
+}).find((a) => a.id === added[0].id)
+eq(updItem.countMode, undefined, 'update 切回 forward → 清掉 countMode')
+eq(updItem.color, 'warm-pink', 'update 可改主题色')
+const updKeep = updateAnniversary(addedFwd[0].id, '认识纪念日', '03-16')
+eq(updKeep.find((a) => a.id === addedFwd[0].id).date, '03-16', 'update 不带 fields → 只改名/日期，字段原样')
+
+console.log('\n[17] getDefaultAnniversary 只生成一次并落盘（删光不复活）')
+resetStore()
+eq(localStorage.getItem('ai_companion_anniversaries'), null, '一开始没有 key')
+const gd = getDefaultAnniversary()
+ok(gd != null, '无 key 时生成默认')
+ok(localStorage.getItem('ai_companion_anniversaries') != null, '默认已落盘（key 存在）')
+localStorage.setItem('ai_companion_anniversaries', '[]')
+eq(getDefaultAnniversary(), null, 'key 存在但空数组（删光）→ 不复活')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

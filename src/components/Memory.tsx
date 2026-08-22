@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  addAnniversary,
-  daysUntil,
-  formatAnniversaryDate,
+  anniversaryColorIndex,
+  formatCountdown,
   getDefaultAnniversary,
-  isValidAnniversaryDate,
   loadAnniversaries,
-  removeAnniversary,
-  updateAnniversary,
+  resolveMainAnniversary,
   type Anniversary,
 } from '../lib/anniversary'
 import {
@@ -104,41 +101,6 @@ function CalendarIcon() {
   )
 }
 
-/** 纪念日行内编辑的铅笔图标：细描边线条 */
-function EditIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
-    </svg>
-  )
-}
-
-/** 「添加纪念日」按钮的加号图标：细描边线条 */
-function PlusIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  )
-}
-
 /** 双源信任来源小标记：用户明说的「你说的」（暖橘）/ TA 推断的「TA 记得的」（暖灰），低调小字 */
 function SourceTag({ explicit }: { explicit?: boolean }) {
   return explicit === true ? (
@@ -167,13 +129,18 @@ function newestCreatedAt(items: MemoryItem[]): number {
   return max
 }
 
-export default function Memory() {
+interface MemoryProps {
+  /** 点纪念日小卡片 → 进纪念日管理页 */
+  onOpenAnniversary?: () => void
+}
+
+export default function Memory({ onOpenAnniversary }: MemoryProps) {
   const [items, setItems] = useState<MemoryItem[]>(() => loadMemory())
   const [text, setText] = useState('')
   const [topic, setTopic] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
-  // 纪念日：用户亲手填的「重要的日子」，倒计时展示 + 行内编辑，聊天时注入让 TA 记得。
+  // 纪念日：用户亲手填的「重要的日子」，主展示计时显示在小卡片上，聊天时注入让 TA 记得。
   // 首次进入一条都没有时，用 getFirstSeen() 生成默认「认识纪念日」（只在没发过默认时给一次，删光了不复活）。
   const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() => {
     const list = loadAnniversaries()
@@ -183,12 +150,9 @@ export default function Memory() {
     }
     return list
   })
-  const [adding, setAdding] = useState(false)
-  const [newLabel, setNewLabel] = useState('')
-  const [newDate, setNewDate] = useState('')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editLabel, setEditLabel] = useState('')
-  const [editDate, setEditDate] = useState('')
+
+  // 主展示纪念日：记忆页小卡片上显示的那个（管理页可切换，null 默认取列表第一条）
+  const mainAnniversary = useMemo(() => resolveMainAnniversary(anniversaries), [anniversaries])
 
   // 「TA 眼中的你」LLM 心里话：有配置才调，失败静默，同一批记忆只生成一次
   const [summary, setSummary] = useState<string | null>(null)
@@ -308,41 +272,6 @@ export default function Memory() {
     })
   }
 
-  // ---- 纪念日：添加 / 行内编辑 / 删除 ----
-
-  const handleAddAnniversary = () => {
-    const label = newLabel.trim()
-    const date = newDate.trim()
-    if (!label || !isValidAnniversaryDate(date)) return
-    setAnniversaries(addAnniversary(label, date))
-    setNewLabel('')
-    setNewDate('')
-    setAdding(false)
-  }
-
-  const handleRemoveAnniversary = (id: string) => {
-    setAnniversaries(removeAnniversary(id))
-  }
-
-  const startEditAnniversary = (a: Anniversary) => {
-    setEditingId(a.id)
-    setEditLabel(a.label)
-    setEditDate(a.date)
-  }
-
-  const cancelEditAnniversary = () => {
-    setEditingId(null)
-  }
-
-  const handleSaveEditAnniversary = () => {
-    if (editingId == null) return
-    const label = editLabel.trim()
-    const date = editDate.trim()
-    if (!label || !isValidAnniversaryDate(date)) return
-    setAnniversaries(updateAnniversary(editingId, label, date))
-    setEditingId(null)
-  }
-
   return (
     <div className="page memory-page">
       <p className="page-desc">
@@ -369,130 +298,28 @@ export default function Memory() {
         </section>
       )}
 
-      {/* 纪念日：重要的日子卡片，倒计时 + 行内编辑，聊天时注入让 TA 记得 */}
-      <section className="anniversary-card">
-        <div className="anniversary-head">
-          <h3 className="anniversary-title">
-            <span className="anniversary-title-icon">
-              <CalendarIcon />
-            </span>
-            纪念日
-          </h3>
-        </div>
-
-        {anniversaries.length === 0 ? (
-          <div className="anniversary-empty">
-            <p className="anniversary-empty-text">记下你们重要的日子，TA 会记得</p>
-            <button type="button" className="anniversary-add-trigger" onClick={() => setAdding(true)}>
-              <PlusIcon />
-              添加纪念日
-            </button>
-          </div>
-        ) : (
-          <>
-            <ul className="anniversary-list">
-              {anniversaries.map((a) => (
-                <li key={a.id} className="anniversary-item">
-                  {editingId === a.id ? (
-                    <div className="anniversary-edit">
-                      <input
-                        className="input anniversary-edit-label"
-                        type="text"
-                        value={editLabel}
-                        onChange={(e) => setEditLabel(e.target.value)}
-                        placeholder="名称"
-                      />
-                      <input
-                        className="input anniversary-edit-date"
-                        type="text"
-                        value={editDate}
-                        onChange={(e) => setEditDate(e.target.value)}
-                        placeholder="如 08-22（每年）或 2026-08-22（一次）"
-                      />
-                      <div className="anniversary-edit-actions">
-                        <button type="button" className="btn btn-primary btn-sm" onClick={handleSaveEditAnniversary}>
-                          保存
-                        </button>
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={cancelEditAnniversary}>
-                          取消
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="anniversary-info">
-                        <span className="anniversary-label">{a.label}</span>
-                        <span className="anniversary-date">{formatAnniversaryDate(a.date)}</span>
-                      </div>
-                      <div className="anniversary-side">
-                        <span className="anniversary-countdown">{daysUntil(a.date)}</span>
-                        <button
-                          type="button"
-                          className="anniversary-edit-btn"
-                          onClick={() => startEditAnniversary(a)}
-                          aria-label="编辑这个纪念日"
-                        >
-                          <EditIcon />
-                        </button>
-                        <button
-                          type="button"
-                          className="anniversary-delete"
-                          onClick={() => handleRemoveAnniversary(a.id)}
-                          aria-label="删除这个纪念日"
-                        >
-                          <DeleteIcon />
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
-
-            {adding ? (
-              <div className="anniversary-add">
-                <div className="anniversary-add-row">
-                  <input
-                    className="input anniversary-add-label"
-                    type="text"
-                    value={newLabel}
-                    onChange={(e) => setNewLabel(e.target.value)}
-                    placeholder="名称，如 在一起纪念日"
-                  />
-                  <input
-                    className="input anniversary-add-date"
-                    type="text"
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    placeholder="如 08-22（每年）或 2026-08-22（一次）"
-                  />
-                </div>
-                <div className="anniversary-add-actions">
-                  <button type="button" className="btn btn-primary btn-sm" onClick={handleAddAnniversary}>
-                    保存
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => {
-                      setAdding(false)
-                      setNewLabel('')
-                      setNewDate('')
-                    }}
-                  >
-                    取消
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button type="button" className="anniversary-add-trigger" onClick={() => setAdding(true)}>
-                <PlusIcon />
-                添加纪念日
-              </button>
-            )}
-          </>
-        )}
-      </section>
+      {/* 纪念日小卡片：一行高度（像笺的大小），显示主纪念日计时；点任意处进管理页添加/编辑/切换 */}
+      <button type="button" className="anniversary-strip" onClick={onOpenAnniversary}>
+        <span className="anniversary-strip-icon" aria-hidden="true">
+          <CalendarIcon />
+        </span>
+        <span className="anniversary-strip-title">纪念日</span>
+        <span className="anniversary-strip-main">
+          {mainAnniversary ? (
+            <>
+              <span className={`anniversary-strip-count ann-color-${anniversaryColorIndex(mainAnniversary.color)}`}>
+                {formatCountdown(mainAnniversary)}
+              </span>
+              <span className="anniversary-strip-label">{mainAnniversary.label}</span>
+            </>
+          ) : (
+            <span className="anniversary-strip-empty">记下你们重要的日子</span>
+          )}
+        </span>
+        <span className="anniversary-strip-arrow" aria-hidden="true">
+          ›
+        </span>
+      </button>
 
       <div className="memory-input-row">
         <input

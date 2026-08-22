@@ -5,8 +5,9 @@ import Memory from './components/Memory'
 import Work from './components/Work'
 import Settings from './components/Settings'
 import AISpace from './components/AISpace'
+import AnniversaryPage from './components/AnniversaryPage'
 
-type View = 'welcome' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace'
+type View = 'welcome' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary'
 
 // ---- 开机页判定：新会话或隔太久（>6 小时）才算重新开机 ----
 const BOOT_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -86,6 +87,8 @@ export default function App() {
         <Welcome onStart={() => setView('chat')} />
       ) : view === 'aispace' ? (
         <AISpace onBack={backFromSpace} onGoMine={() => setView('settings')} />
+      ) : view === 'anniversary' ? (
+        <AnniversaryPage onBack={() => setView('memory')} />
       ) : (
         <>
           <header className="app-header">
@@ -120,7 +123,7 @@ export default function App() {
 
           <main className="app-main">
             {view === 'chat' && <Chat onGoSettings={() => setView('settings')} />}
-            {view === 'memory' && <Memory />}
+            {view === 'memory' && <Memory onOpenAnniversary={() => setView('anniversary')} />}
             {view === 'work' && <Work onGoChat={() => setView('chat')} />}
             {view === 'settings' && (
               <Settings onOpenSpace={() => openSpace('settings')} onGoWelcome={() => setView('welcome')} />
