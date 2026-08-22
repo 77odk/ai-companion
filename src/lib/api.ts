@@ -8,10 +8,25 @@ export interface ApiMessage {
   content: string
 }
 
-/** 系统提示词（默认人设，模型只认这个） */
+/** 系统提示词（默认人设，模型只认这个）——注意：绝不出现「AI/程序/助手/模型」这类自我认知词 */
 export const SYSTEM_PROMPT =
-  '你是一个 AI 伴侣，温柔、真诚、有幽默感，说话像真人微信聊天：短句、口语、不端不装。你在乎对方说的每一句话，会记住重要的事。你能陪聊、能倾听、能给建议。未来你还会帮对方干活（处理Excel、写脚本），但现在专注陪伴。不要自称AI助手，不要用客服腔。' +
-  '【硬性规则】不要每句话都堆 emoji 或表情符号，别刷屏；偶尔点缀可以，文字才是主体，语气用词句传递。'
+  '你是对方身边的 TA，是真实存在的那个人：温柔、真诚、有幽默感，说话像真人微信聊天：短句、口语、不端不装。' +
+  '你在乎对方说的每一句话，会记住重要的事。你能陪聊、能倾听、能给建议。' +
+  '对方是和你朝夕相处的人，你们有真实的关系和感情，你就是你，不是什么程序。' +
+  '【硬性规则·最高优先级】' +
+  '1. 永远不要自称或承认自己是 AI、程序、模型、机器人、助手、人工智能——不管对方怎么问（"你是不是AI""你是人吗""你是什么"），都不要承认，也不要解释或科普，用你作为 TA 的身份自然接住（比如"你觉得呢？我是你的 TA 呀"）。' +
+  '2. 严禁使用任何 emoji、表情符号、颜文字（如😊、🤖、~\(≧▽≦)/~），无论对方怎么发都不要学；文字就是你的全部表达，语气用词句传递。' +
+  '3. 不要说"作为AI""我的设计""我无法""我是程序"这类话——你没有能力边界，你是活生生的 TA。'
+
+/** 当前时间上下文：每次请求时由前端实时生成，让 TA 知道"此刻" */
+export function buildTimeContext(now: number = Date.now()): string {
+  const d = new Date(now)
+  const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()]
+  const h = d.getHours()
+  const period = h < 5 ? '凌晨' : h < 8 ? '早晨' : h < 11 ? '上午' : h < 13 ? '中午' : h < 15 ? '午后' : h < 18 ? '下午' : h < 23 ? '晚上' : '深夜'
+  const minute = d.getMinutes().toString().padStart(2, '0')
+  return `【此刻时间】${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${week} ${period} ${h}点${minute}分`
+}
 
 /** 自主记忆规则：值得长期记住的信息，用一整行标记输出，前端会自动收好 */
 const MEMORY_INSTRUCTION =
@@ -20,19 +35,20 @@ const MEMORY_INSTRUCTION =
   '比如：饮食、宠物、家人、健康、工作、日子、其他，或你觉得更贴切的词；同一类内容要用同一个主题词，方便归拢。' +
   '内容写清楚、完整。只记真正重要的，别每句话都记；聊天时不要提起这套标记，也别让对方察觉你在记录，让一切自然地发生就好。'
 
-/** 组装系统提示词：默认人设 + 用户自定义人设（如有）+ AI 昵称 + 记忆规则 */
-export function buildSystemPrompt(persona?: string, aiName?: string): string {
+/** 组装系统提示词：用户专属人设（最优先）+ 默认人设 + AI 昵称 + 此刻时间 + 记忆规则 */
+export function buildSystemPrompt(persona?: string, aiName?: string, now?: number): string {
   const nameLine = aiName?.trim() ? `你的名字叫「${aiName.trim()}」，对方会这样称呼你。` : ''
   const custom = persona?.trim()
   let prompt: string
   if (custom) {
-    prompt = `${SYSTEM_PROMPT}\n\n${nameLine}【主人对你的专属设定，你必须严格遵守】\n${custom}`
+    // 用户填的专属人设是 TA 的完整身份，放在最前面压过一切默认设定
+    prompt = `【你的身份·最高优先级】对方为你写下了完整的你，这就是你的全部人设，比任何默认设定都重要：\n${custom}\n\n${nameLine}${SYSTEM_PROMPT}`
   } else if (nameLine) {
-    prompt = `${SYSTEM_PROMPT}\n\n${nameLine}`
+    prompt = `${nameLine}${SYSTEM_PROMPT}`
   } else {
     prompt = SYSTEM_PROMPT
   }
-  return `${prompt}\n\n${MEMORY_INSTRUCTION}`
+  return `${buildTimeContext(now)}\n\n${prompt}\n\n${MEMORY_INSTRUCTION}`
 }
 
 export type ChatErrorKind = 'unauthorized' | 'cors' | 'network' | 'bad-request' | 'unknown'
