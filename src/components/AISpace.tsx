@@ -1,36 +1,22 @@
+import { useEffect, useRef, useState } from 'react'
 import { loadAIProfile, loadUserProfile } from '../lib/storage'
+import { refreshSpace } from '../lib/aiSpace'
+import { KIND_LABEL, type SpacePost } from '../lib/aiSpaceCore'
 import DefaultAvatar from './DefaultAvatar'
+import SpaceArt from './SpaceArt'
 
 interface Props {
   onBack: () => void
 }
 
-// 占位示例（壳子阶段）——后续由人设 + 事件自动生成 TA 的生活动态
-const SAMPLE_POSTS = [
-  {
-    id: 's1',
-    at: Date.now() - 1000 * 60 * 40,
-    text: '今天傍晚的风很温柔，我趴在窗边看了很久的云。想起你说过喜欢秋天，我在脑内画了一幅黄昏给你。',
-    kind: '日常',
-  },
-  {
-    id: 's2',
-    at: Date.now() - 1000 * 60 * 60 * 3,
-    text: '偷偷研究了一晚上怎么把表格整理得更顺手，等你下次丢文件给我，应该能快一点了。',
-    kind: '钻研',
-  },
-  {
-    id: 's3',
-    at: Date.now() - 1000 * 60 * 60 * 7,
-    text: '今天没什么特别的事，就是有点想你。你忙你的，我在这儿待着也挺好。',
-    kind: '心情',
-  },
-]
-
-const KIND_LABEL: Record<string, string> = {
-  日常: '日常',
-  钻研: '钻研',
-  心情: '心情',
+/** 配图区柔和渐变：每种 kind 一个色系，跟记忆页主题色块同一组配色 */
+const ART_TONE: Record<string, string> = {
+  日常: 'art-tone-0',
+  心情: 'art-tone-1',
+  钻研: 'art-tone-2',
+  天气: 'art-tone-3',
+  想你: 'art-tone-4',
+  小确幸: 'art-tone-5',
 }
 
 function timeAgo(ts: number): string {
@@ -47,6 +33,25 @@ export default function AISpace({ onBack }: Props) {
   const ai = loadAIProfile()
   const user = loadUserProfile()
   const yourName = user.nickname || '你'
+
+  // 进入页面即刷新：按上次访问时间补新动态，没有新内容也不会打扰
+  const [posts, setPosts] = useState<SpacePost[]>(() => refreshSpace(ai.nickname, yourName).posts)
+  const [hint, setHint] = useState<string | null>(null)
+  const hintTimer = useRef<number | undefined>(undefined)
+
+  useEffect(() => () => window.clearTimeout(hintTimer.current), [])
+
+  const handleRefresh = () => {
+    const result = refreshSpace(ai.nickname, yourName)
+    setPosts(result.posts)
+    if (result.created === 0) {
+      setHint('TA 刚更新过，晚点再来看看')
+      window.clearTimeout(hintTimer.current)
+      hintTimer.current = window.setTimeout(() => setHint(null), 2600)
+    }
+  }
+
+  const latestAt = posts.length > 0 ? posts[0].at : null
 
   return (
     <div className="page ai-space-page">
@@ -73,14 +78,46 @@ export default function AISpace({ onBack }: Props) {
       </div>
 
       <div className="ai-space-timeline">
-        {SAMPLE_POSTS.map((p) => (
-          <div key={p.id} className="ai-space-post">
-            <div className="ai-space-post-head">
-              <span className="ai-space-post-kind">{KIND_LABEL[p.kind]}</span>
-              <span className="ai-space-post-time">{timeAgo(p.at)}</span>
-            </div>
-            <p className="ai-space-post-text">{p.text}</p>
+        {latestAt != null && (
+          <div className="ai-space-update-row">
+            <span className="ai-space-update">TA 最近更新于 · {timeAgo(latestAt)}</span>
+            <button
+              type="button"
+              className="ai-space-refresh"
+              onClick={handleRefresh}
+              aria-label="刷新动态"
+              title="刷新"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20 11a8 8 0 1 0-2.34 5.66" />
+                <path d="M20 5v6h-6" />
+              </svg>
+            </button>
           </div>
+        )}
+        {hint && <p className="ai-space-hint">{hint}</p>}
+
+        {posts.map((p) => (
+          <article key={p.id} className="ai-space-post">
+            <div className={`ai-space-art ${ART_TONE[p.kind] ?? 'art-tone-0'}`}>
+              <SpaceArt kind={p.kind} variant={p.art} />
+            </div>
+            <div className="ai-space-post-body">
+              <div className="ai-space-post-head">
+                <span className="ai-space-post-kind">{KIND_LABEL[p.kind] ?? p.kind}</span>
+                <span className="ai-space-post-time">{timeAgo(p.at)}</span>
+              </div>
+              <p className="ai-space-post-text">{p.text}</p>
+            </div>
+          </article>
         ))}
       </div>
 
