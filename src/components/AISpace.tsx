@@ -133,23 +133,6 @@ const SparkleIcon = () => (
   </svg>
 )
 
-const BarChartIcon = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M4 20V10" />
-    <path d="M10 20V4" />
-    <path d="M16 20v-7" />
-    <path d="M22 20H2" />
-  </svg>
-)
-
 const RefreshIcon = () => (
   <svg
     viewBox="0 0 24 24"
@@ -196,8 +179,6 @@ export default function AISpace({ onBack, onGoMine }: Props) {
   const [page, setPage] = useState<'home' | 'chats' | 'memories' | 'life'>('home')
   // 聊天记录二级视图：非 null 表示正在看某一天的完整消息
   const [logDayKey, setLogDayKey] = useState<string | null>(null)
-  // 相处数据行：默认展开直接展示，点击收起/展开
-  const [statsOpen, setStatsOpen] = useState(true)
   // 聊天记录子页（M7-2）：搜索关键词 / 日历当前月份 / 目录折叠（null = 默认展开最近 3 天）
   const [chatSearch, setChatSearch] = useState('')
   const [calYear, setCalYear] = useState<number>(() => new Date().getFullYear())
@@ -348,29 +329,36 @@ export default function AISpace({ onBack, onGoMine }: Props) {
           <p className="ai-space-bio">
             只属于{yourName}的 TA · 这里记录着 TA 的日常、想法，和没说出口的心事
           </p>
-        </div>
 
-        <div className="ai-space-timeline">
+          {/* 相处数据：固定展示在大头像下面，一眼可见 */}
+          <div className="ai-space-stats">
+            <div className="ai-space-stat">
+              <span className="ai-space-stat-icon" aria-hidden="true">
+                <CalendarIcon />
+              </span>
+              <span className="ai-space-stat-num">第 {daysKnown} 天</span>
+              <span className="ai-space-stat-label">认识</span>
+            </div>
+            <div className="ai-space-stat">
+              <span className="ai-space-stat-icon" aria-hidden="true">
+                <ChatIcon />
+              </span>
+              <span className="ai-space-stat-num">{messages.length} 条</span>
+              <span className="ai-space-stat-label">聊过</span>
+            </div>
+            <div className="ai-space-stat">
+              <span className="ai-space-stat-icon" aria-hidden="true">
+                <HeartIcon />
+              </span>
+              <span className="ai-space-stat-num">{memories.length} 件</span>
+              <span className="ai-space-stat-label">TA 记得</span>
+            </div>
+          </div>
+          </div>
+
+          <div className="ai-space-timeline">
           {/* 功能入口列表：微信式资料页 */}
           <div className="ai-space-entry-list">
-            <button
-              type="button"
-              className="ai-space-entry-row"
-              onClick={() => setStatsOpen((v) => !v)}
-              aria-expanded={statsOpen}
-            >
-              <span className="ai-space-entry-icon" aria-hidden="true">
-                <BarChartIcon />
-              </span>
-              <span className="ai-space-entry-main">
-                <span className="ai-space-entry-title">相处数据</span>
-                <span className="ai-space-entry-sub">
-                  认识 {daysKnown} 天 · 聊过 {messages.length} 条 · 记得 {memories.length} 件
-                </span>
-              </span>
-              <EntryChevron open={statsOpen} />
-            </button>
-
             <button type="button" className="ai-space-entry-row" onClick={() => setPage('chats')}>
               <span className="ai-space-entry-icon" aria-hidden="true">
                 <ChatIcon />
@@ -406,33 +394,6 @@ export default function AISpace({ onBack, onGoMine }: Props) {
               <EntryChevron />
             </button>
           </div>
-
-          {/* 相处数据：数据就三行，直接展示在入口下方 */}
-          {statsOpen && (
-            <div className="ai-space-stats">
-              <div className="ai-space-stat">
-                <span className="ai-space-stat-icon" aria-hidden="true">
-                  <CalendarIcon />
-                </span>
-                <span className="ai-space-stat-num">第 {daysKnown} 天</span>
-                <span className="ai-space-stat-label">认识</span>
-              </div>
-              <div className="ai-space-stat">
-                <span className="ai-space-stat-icon" aria-hidden="true">
-                  <ChatIcon />
-                </span>
-                <span className="ai-space-stat-num">{messages.length} 条</span>
-                <span className="ai-space-stat-label">聊过</span>
-              </div>
-              <div className="ai-space-stat">
-                <span className="ai-space-stat-icon" aria-hidden="true">
-                  <HeartIcon />
-                </span>
-                <span className="ai-space-stat-num">{memories.length} 件</span>
-                <span className="ai-space-stat-label">TA 记得</span>
-              </div>
-            </div>
-          )}
 
           {/* 刷新对话：底部独立一项，M7-3 生效 */}
           <button type="button" className="ai-space-entry-row ai-space-entry-refresh" onClick={handleRefreshChatsPlaceholder}>
