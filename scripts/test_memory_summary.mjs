@@ -33,7 +33,7 @@ function eq(actual, expected, name) {
   ok(a === b, `${name}（得 ${a}，期望 ${b}）`)
 }
 
-// 固定一个「今天」：2026-08-22
+// 固定一个「今天」：2026-08-22（summarizeStats 的相处天数按这个基准算，保证确定性）
 const today = new Date(2026, 7, 22, 12, 0).getTime()
 const tsSame = new Date(2026, 7, 20, 10, 30).getTime() // 2026-08-20（同年）
 const tsOld = new Date(2025, 0, 5, 9, 0).getTime() // 2025-01-05（跨年）
@@ -48,77 +48,77 @@ const M = (id, text, topic, ts, pinned) => ({
 })
 
 console.log('\n[1] summarizeStats 空 / 非法 / 单条')
-eq(summarizeStats([]), { count: 0, topicCount: 0, topTopic: null, earliestTs: null, daysKnown: 1, pinnedCount: 0 }, '空数组')
-eq(summarizeStats(null), { count: 0, topicCount: 0, topTopic: null, earliestTs: null, daysKnown: 1, pinnedCount: 0 }, 'null 兜底为空统计')
-eq(summarizeStats([null, undefined, { id: 'x' }]), { count: 0, topicCount: 0, topTopic: null, earliestTs: null, daysKnown: 1, pinnedCount: 0 }, '字段非法被过滤')
+eq(summarizeStats([], today), { count: 0, topicCount: 0, topTopic: null, earliestTs: null, daysKnown: 1, pinnedCount: 0 }, '空数组')
+eq(summarizeStats(null, today), { count: 0, topicCount: 0, topTopic: null, earliestTs: null, daysKnown: 1, pinnedCount: 0 }, 'null 兜底为空统计')
+eq(summarizeStats([null, undefined, { id: 'x' }], today), { count: 0, topicCount: 0, topTopic: null, earliestTs: null, daysKnown: 1, pinnedCount: 0 }, '字段非法被过滤')
 eq(
-  summarizeStats([M('a', '爱吃辣', '饮食', tsSame)]),
+  summarizeStats([M('a', '爱吃辣', '饮食', tsSame)], today),
   { count: 1, topicCount: 1, topTopic: null, earliestTs: tsSame, daysKnown: 3, pinnedCount: 0 },
   '单条：不足 2 条不点评',
 )
 eq(
-  summarizeStats([M('a', '爱吃辣', undefined, tsSame)]),
+  summarizeStats([M('a', '爱吃辣', undefined, tsSame)], today),
   { count: 1, topicCount: 1, topTopic: null, earliestTs: tsSame, daysKnown: 3, pinnedCount: 0 },
   '无主题按关键词推断为饮食（仍不足 2 条 → 不点评）',
 )
 
 console.log('\n[2] 主题统计 / 并列')
 eq(
-  summarizeStats([M('a', '爱吃辣', '饮食', tsSame), M('b', '爱喝奶茶', '饮食', tsSame)]),
+  summarizeStats([M('a', '爱吃辣', '饮食', tsSame), M('b', '爱喝奶茶', '饮食', tsSame)], today),
   { count: 2, topicCount: 1, topTopic: '饮食', earliestTs: tsSame, daysKnown: 3, pinnedCount: 0 },
   '两条同主题 → 最常惦记饮食',
 )
 eq(
-  summarizeStats([M('a', '爱吃辣', '饮食', tsSame), M('b', '养了只猫', '宠物', tsSame)]),
+  summarizeStats([M('a', '爱吃辣', '饮食', tsSame), M('b', '养了只猫', '宠物', tsSame)], today),
   { count: 2, topicCount: 2, topTopic: null, earliestTs: tsSame, daysKnown: 3, pinnedCount: 0 },
   '两条不同主题各 1 条 → 不点评',
 )
 eq(
-  summarizeStats([M('a', '爱吃辣', '饮食', tsSame), M('b', '爱喝奶茶', '饮食', tsSame), M('c', '养了只猫', '宠物', tsSame)]),
+  summarizeStats([M('a', '爱吃辣', '饮食', tsSame), M('b', '爱喝奶茶', '饮食', tsSame), M('c', '养了只猫', '宠物', tsSame)], today),
   { count: 3, topicCount: 2, topTopic: '饮食', earliestTs: tsSame, daysKnown: 3, pinnedCount: 0 },
   '饮食 2 条 > 宠物 1 条 → 点评饮食',
 )
 eq(
-  summarizeStats([M('a', '爱吃辣', '饮食', tsSame), M('b', '养了只猫', '宠物', tsSame), M('c', '爱喝奶茶', '饮食', tsSame), M('d', '猫叫小白', '宠物', tsSame)]),
+  summarizeStats([M('a', '爱吃辣', '饮食', tsSame), M('b', '养了只猫', '宠物', tsSame), M('c', '爱喝奶茶', '饮食', tsSame), M('d', '猫叫小白', '宠物', tsSame)], today),
   { count: 4, topicCount: 2, topTopic: '饮食', earliestTs: tsSame, daysKnown: 3, pinnedCount: 0 },
   '并列 2:2 取最先出现的（饮食在前）',
 )
 eq(
-  summarizeStats([M('a', '养了只猫', '宠物', tsSame), M('b', '爱吃辣', '饮食', tsSame), M('c', '猫叫小白', '宠物', tsSame), M('d', '爱喝奶茶', '饮食', tsSame)]),
+  summarizeStats([M('a', '养了只猫', '宠物', tsSame), M('b', '爱吃辣', '饮食', tsSame), M('c', '猫叫小白', '宠物', tsSame), M('d', '爱喝奶茶', '饮食', tsSame)], today),
   { count: 4, topicCount: 2, topTopic: '宠物', earliestTs: tsSame, daysKnown: 3, pinnedCount: 0 },
   '并列 2:2 取最先出现的（宠物在前）',
 )
 
 console.log('\n[3] 最早时间')
 eq(
-  summarizeStats([M('a', '爱吃辣', '饮食', tsSame), M('b', '养了只猫', '宠物', tsOld)]),
+  summarizeStats([M('a', '爱吃辣', '饮食', tsSame), M('b', '养了只猫', '宠物', tsOld)], today),
   { count: 2, topicCount: 2, topTopic: null, earliestTs: tsOld, daysKnown: computeKnownDays(tsOld, today), pinnedCount: 0 },
   '多条取最早时间戳',
 )
 eq(
-  summarizeStats([M('a', '爱吃辣', '饮食', NaN), M('b', '养了只猫', '宠物', tsSame)]),
+  summarizeStats([M('a', '爱吃辣', '饮食', NaN), M('b', '养了只猫', '宠物', tsSame)], today),
   { count: 2, topicCount: 2, topTopic: null, earliestTs: tsSame, daysKnown: 3, pinnedCount: 0 },
   '非法时间戳被忽略',
 )
 eq(
-  summarizeStats([M('a', '爱吃辣', '饮食')]),
+  summarizeStats([M('a', '爱吃辣', '饮食')], today),
   { count: 1, topicCount: 1, topTopic: null, earliestTs: null, daysKnown: 1, pinnedCount: 0 },
   '没有时间戳 → earliestTs null、天数 1',
 )
 
 console.log('\n[3.5] 重要记忆（置顶）计数')
 eq(
-  summarizeStats([M('a', '爱吃辣', '饮食', tsSame, true), M('b', '养了只猫', '宠物', tsSame)]),
+  summarizeStats([M('a', '爱吃辣', '饮食', tsSame, true), M('b', '养了只猫', '宠物', tsSame)], today),
   { count: 2, topicCount: 2, topTopic: null, earliestTs: tsSame, daysKnown: 3, pinnedCount: 1 },
   '1 条置顶 → pinnedCount 1',
 )
 eq(
-  summarizeStats([M('a', '爱吃辣', '饮食', tsSame, true), M('b', '养了只猫', '宠物', tsSame, true), M('c', '怕黑', '生活', tsSame)]),
+  summarizeStats([M('a', '爱吃辣', '饮食', tsSame, true), M('b', '养了只猫', '宠物', tsSame, true), M('c', '怕黑', '生活', tsSame)], today),
   { count: 3, topicCount: 3, topTopic: null, earliestTs: tsSame, daysKnown: 3, pinnedCount: 2 },
   '2 条置顶 → pinnedCount 2',
 )
 eq(
-  summarizeStats([M('a', '爱吃辣', '饮食', tsSame, false)]),
+  summarizeStats([M('a', '爱吃辣', '饮食', tsSame, false)], today),
   { count: 1, topicCount: 1, topTopic: null, earliestTs: tsSame, daysKnown: 3, pinnedCount: 0 },
   'pinned: false 不算置顶',
 )

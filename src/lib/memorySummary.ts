@@ -32,8 +32,11 @@ export function computeKnownDays(firstTs: number, now: number = Date.now()): num
   return Math.max(1, diff + 1)
 }
 
-/** 汇总记忆：总条数 / 主题数 / 最常惦记的主题 / 最早一条 / 相处天数 / 重要（置顶）条数 */
-export function summarizeStats(items: MemoryItem[]): MemoryStats {
+/**
+ * 汇总记忆：总条数 / 主题数 / 最常惦记的主题 / 最早一条 / 相处天数 / 重要（置顶）条数。
+ * now 可选（默认当前时刻），测试可传固定值保证确定性——相处天数按自然日算。
+ */
+export function summarizeStats(items: MemoryItem[], now: number = Date.now()): MemoryStats {
   const valid = (Array.isArray(items) ? items : []).filter(
     (m): m is MemoryItem => m != null && typeof m.text === 'string',
   )
@@ -76,7 +79,7 @@ export function summarizeStats(items: MemoryItem[]): MemoryStats {
     topicCount: order.length,
     topTopic,
     earliestTs,
-    daysKnown: earliestTs != null ? computeKnownDays(earliestTs) : 1,
+    daysKnown: earliestTs != null ? computeKnownDays(earliestTs, now) : 1,
     pinnedCount,
   }
 }

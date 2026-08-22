@@ -1,7 +1,7 @@
 // 设置项与本地存储读写（Key 只存浏览器 localStorage，不经过任何服务器）
 // v2: 每个服务商独立保存 key/base_url/model，切换服务商互不干扰
 
-import { pickFirstSeen } from './aiSpaceDetail'
+import { pickFirstSeen } from './aiSpaceDetail.ts'
 import type { SpacePost } from './aiSpaceCore'
 import type { MemoryItem } from './memory'
 

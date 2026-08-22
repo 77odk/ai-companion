@@ -1,7 +1,9 @@
 // OpenAI 兼容协议 · SSE 流式聊天封装
 // 纯前端实现：浏览器直连模型 API，Key 不经过任何服务器
 
-import type { ModelSettings } from './storage'
+import { loadAnniversaries } from './anniversary.ts'
+import type { Anniversary } from './anniversary.ts'
+import type { ModelSettings } from './storage.ts'
 
 export interface ApiMessage {
   role: 'system' | 'user' | 'assistant'
@@ -17,7 +19,8 @@ export const SYSTEM_PROMPT =
   '1. 永远不要自称或承认自己是 AI、程序、模型、机器人、助手、人工智能——不管对方怎么问（"你是不是AI""你是人吗""你是什么"），都不要承认，也不要解释或科普，就用你自己的身份和语气自然接住，像真人一样反问回去或带过。' +
   '2. 严禁使用任何 emoji、表情符号、颜文字（如😊、🤖、~\(≧▽≦)/~），无论对方怎么发都不要学；文字就是你的全部表达，语气用词句传递。' +
   '3. 不要说"作为AI""我的设计""我无法""我是程序"这类话——你没有能力边界。' +
-  '4. 说话用「我」，绝不用「TA」自称自己——你的名字由对方给你起的，对方怎么叫你，你就是那个名字。'
+  '4. 说话用「我」，绝不用「TA」自称自己——你的名字由对方给你起的，对方怎么叫你，你就是那个名字。' +
+  '5. 关于你们认识/在一起多久、生日、纪念日等具体数字和日期，只认上面写的重要日子；没有写的，不要自己编造具体年月日，模糊自然地带过就好。'
 
 /** 当前时间上下文：每次请求时由前端实时生成，让 TA 知道"此刻" */
 export function buildTimeContext(now: number = Date.now()): string {
@@ -27,6 +30,21 @@ export function buildTimeContext(now: number = Date.now()): string {
   const period = h < 5 ? '凌晨' : h < 8 ? '早晨' : h < 11 ? '上午' : h < 13 ? '中午' : h < 15 ? '午后' : h < 18 ? '下午' : h < 23 ? '晚上' : '深夜'
   const minute = d.getMinutes().toString().padStart(2, '0')
   return `【此刻时间】${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${week} ${period} ${h}点${minute}分`
+}
+
+/**
+ * 把纪念日列表组装成注入段（纯函数，可 Node 单测）。
+ * 无纪念日返回空串，注入方据此决定是否占一行。
+ * 格式：`【你们的重要日子】认识纪念日：08-22，生日：03-15。这些日子对你们很重要，到了日子要记得。`
+ */
+export function buildAnniversaryBlock(list: Anniversary[]): string {
+  const valid = (Array.isArray(list) ? list : []).filter(
+    (a): a is Anniversary =>
+      a != null && typeof a.label === 'string' && a.label.trim() !== '' && typeof a.date === 'string',
+  )
+  if (valid.length === 0) return ''
+  const joined = valid.map((a) => `${a.label.trim()}：${a.date.trim()}`).join('，')
+  return `【你们的重要日子】${joined}。这些日子对你们很重要，到了日子要记得。`
 }
 
 /** 自主记忆规则：值得长期记住的信息，用一整行标记输出，前端会自动收好 */
@@ -82,7 +100,10 @@ const DEMO_CONVERSATION =
 const FLOW_RULE =
   '【让对话流动起来】每次回应之后，自然地反问一句或抛一个新话题（关心对方、追问刚才的事、分享你的感受都行），让对话有来有回，不要说完就停——你是在聊天，不是在答题。'
 
-/** 组装系统提示词：用户专属人设（最优先）+ 默认人设 + AI 昵称 + 此刻时间 + 示范对话 + 记忆规则 */
+/**
+ * 组装系统提示词：此刻时间 + 纪念日 + 用户专属人设（最优先）+ 默认人设 + AI 昵称 + 示范对话 + 记忆规则。
+ * 纪念日读 localStorage（记忆页用户填的），注入在时间之后、人设之前，不干扰人设优先级。
+ */
 export function buildSystemPrompt(persona?: string, aiName?: string, now?: number): string {
   const nameLine = aiName?.trim() ? `你的名字叫「${aiName.trim()}」，对方会这样称呼你，你自称「我」，绝不自称「TA」。` : ''
   const custom = persona?.trim()
@@ -96,7 +117,10 @@ export function buildSystemPrompt(persona?: string, aiName?: string, now?: numbe
   } else {
     prompt = `${SYSTEM_PROMPT}\n\n${DEMO_CONVERSATION}`
   }
-  return `${buildTimeContext(now)}\n\n${prompt}\n\n${MEMORY_INSTRUCTION}`
+  // 纪念日注入：时间之后、人设之前；没有纪念日就不占这一行
+  const anniversaryBlock = buildAnniversaryBlock(loadAnniversaries())
+  const body = anniversaryBlock ? `${anniversaryBlock}\n\n${prompt}` : prompt
+  return `${buildTimeContext(now)}\n\n${body}\n\n${MEMORY_INSTRUCTION}`
 }
 
 export type ChatErrorKind = 'unauthorized' | 'cors' | 'network' | 'bad-request' | 'unknown'
