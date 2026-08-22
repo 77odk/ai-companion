@@ -218,6 +218,11 @@ export interface AdvanceResult {
   created: number
 }
 
+/** 把新生成的动态合并进现有列表：按时间倒序，裁到上限（LLM 异步补动态后追加用） */
+export function mergeNewPosts(existing: SpacePost[], incoming: SpacePost[]): SpacePost[] {
+  return [...existing, ...incoming].sort((a, b) => b.at - a.at).slice(0, MAX_POSTS)
+}
+
 /** 时间轴推进（纯函数）：按规则补新动态，更新 lastVisit，去重记录，裁到上限 */
 export function advanceTimeline(
   prev: SpaceState,

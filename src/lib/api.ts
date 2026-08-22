@@ -134,6 +134,62 @@ export async function testConnection(settings: ModelSettings): Promise<void> {
   }
 }
 
+export interface ChatCompletionOpts {
+  maxTokens?: number
+  temperature?: number
+  timeoutMs?: number
+}
+
+/** 非流式补全：一次性拿完整回复（TA 空间 LLM 生成动态用）。失败抛 ChatError。 */
+export async function chatCompletion(
+  settings: ModelSettings,
+  messages: ApiMessage[],
+  opts: ChatCompletionOpts = {},
+): Promise<string> {
+  const maxTokens = opts.maxTokens ?? 200
+  const temperature = opts.temperature ?? 0.9
+  const timeoutMs = opts.timeoutMs ?? 30000
+  const url = buildUrl(settings, '/chat/completions')
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  let resp: Response
+  try {
+    resp = await fetchOrThrow(url, {
+      method: 'POST',
+      headers: buildHeaders(settings),
+      body: JSON.stringify({
+        model: settings.model,
+        messages,
+        stream: false,
+        max_tokens: maxTokens,
+        temperature,
+      }),
+      signal: controller.signal,
+    })
+  } catch (e) {
+    if (e instanceof ChatError) throw e
+    if (controller.signal.aborted) throw new ChatError('bad-request', '请求超时，请稍后重试')
+    throw new ChatError('unknown', '出错了，请稍后重试')
+  } finally {
+    clearTimeout(timer)
+  }
+
+  if (!resp.ok) throw mapHttpError(resp.status)
+
+  try {
+    const data = await resp.json()
+    const content = data?.choices?.[0]?.message?.content
+    if (typeof content !== 'string' || !content.trim()) {
+      throw new ChatError('bad-request', '服务商返回了异常数据')
+    }
+    return content
+  } catch (e) {
+    if (e instanceof ChatError) throw e
+    throw new ChatError('bad-request', '服务商返回了无法解析的内容')
+  }
+}
+
 export interface StreamHandlers {
   onToken: (text: string) => void
   onDone: () => void

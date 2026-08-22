@@ -85,7 +85,7 @@ export default function App() {
       {view === 'welcome' ? (
         <Welcome onStart={() => setView('chat')} />
       ) : view === 'aispace' ? (
-        <AISpace onBack={backFromSpace} />
+        <AISpace onBack={backFromSpace} onGoMine={() => setView('settings')} />
       ) : (
         <>
           <header className="app-header">

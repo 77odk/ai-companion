@@ -1,6 +1,10 @@
 // 设置项与本地存储读写（Key 只存浏览器 localStorage，不经过任何服务器）
 // v2: 每个服务商独立保存 key/base_url/model，切换服务商互不干扰
 
+import { pickFirstSeen } from './aiSpaceDetail'
+import type { SpacePost } from './aiSpaceCore'
+import type { MemoryItem } from './memory'
+
 export type Provider = 'deepseek' | 'zhipu' | 'custom'
 
 export interface ModelSettings {
@@ -117,8 +121,15 @@ export interface StoredMessage {
 
 const MESSAGES_KEY = 'ai_companion_messages'
 
-/** 历史消息上限，超出丢最旧 */
-export const MESSAGE_LIMIT = 50
+/**
+ * 历史消息保留窗口（免费版）：60 天。
+ * 商业化钩子：超过窗口的旧聊天记录会被裁剪，付费会员（9月云端同步上线后）=长期记忆+聊天记录永久保存。
+ * 现在纯前端本地存储，所以只做时间窗口裁剪，不删本地已有数据（换设备/清缓存会丢，那是云同步的付费点）。
+ */
+export const MESSAGE_WINDOW_DAYS = 60
+
+/** 历史消息条数硬上限，防止 localStorage 被撑爆（60天窗口内正常聊不到这个量） */
+export const MESSAGE_LIMIT = 8000
 
 export function loadMessages(): StoredMessage[] {
   try {
@@ -138,7 +149,10 @@ export function loadMessages(): StoredMessage[] {
 }
 
 export function saveMessages(messages: StoredMessage[]): void {
-  localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages.slice(-MESSAGE_LIMIT)))
+  // 时间窗口裁剪：只保留最近 60 天的消息；超上限再丢最旧（双保险，防止 localStorage 撑爆）
+  const cutoff = Date.now() - MESSAGE_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  const kept = messages.filter((m) => m.ts >= cutoff)
+  localStorage.setItem(MESSAGES_KEY, JSON.stringify(kept.slice(-MESSAGE_LIMIT)))
 }
 
 // ---- 专属人设 ----
@@ -218,4 +232,56 @@ export function loadAIProfile(): AIProfile {
 
 export function saveAIProfile(p: AIProfile): void {
   localStorage.setItem(AI_PROFILE_KEY, JSON.stringify(p))
+}
+
+// ---- TA 的详情页 · firstSeen（认识 TA 的第一天） ----
+
+const FIRST_SEEN_KEY = 'ai_companion_first_seen'
+
+/**
+ * 认识 TA 的第一天（时间戳）。
+ * 取值顺序：已有缓存 → 本地最老聊天记录 ts → 最老记忆 createdAt → 最老生活动态 at → 当前时间。
+ * 一旦算出就缓存到 localStorage，之后不再覆盖，保证「认识第几天」只增不减
+ * （哪怕旧聊天记录被 60 天窗口裁掉，firstSeen 也不会往前跳）。
+ */
+export function getFirstSeen(): number {
+  try {
+    const cached = localStorage.getItem(FIRST_SEEN_KEY)
+    if (cached) {
+      const n = Number(cached)
+      if (Number.isFinite(n) && n > 0) return n
+    }
+  } catch {
+    // 读不到缓存按首次处理
+  }
+
+  let memories: MemoryItem[] = []
+  let posts: SpacePost[] = []
+  try {
+    const rawMem = localStorage.getItem('ai_companion_memory')
+    if (rawMem) {
+      const arr = JSON.parse(rawMem)
+      if (Array.isArray(arr)) memories = arr as MemoryItem[]
+    }
+  } catch {
+    // 记忆读坏不影响 firstSeen
+  }
+  try {
+    const rawPosts = localStorage.getItem('ai_space_posts')
+    if (rawPosts) {
+      const arr = JSON.parse(rawPosts)
+      if (Array.isArray(arr)) posts = arr as SpacePost[]
+    }
+  } catch {
+    // 动态读坏不影响 firstSeen
+  }
+
+  const first = pickFirstSeen({ messages: loadMessages(), memories, posts })
+  const value = first ?? Date.now()
+  try {
+    localStorage.setItem(FIRST_SEEN_KEY, String(value))
+  } catch {
+    // 存不下也不影响展示
+  }
+  return value
 }
