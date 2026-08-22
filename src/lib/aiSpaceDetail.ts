@@ -121,3 +121,136 @@ export function formatMemoryDate(ts: number, now: number = Date.now()): string {
   const md = `${d.getMonth() + 1}月${d.getDate()}日`
   return d.getFullYear() === new Date(now).getFullYear() ? `记于 ${md}` : `记于 ${d.getFullYear()}年${md}`
 }
+
+/* ---- 聊天记录搜索（纯逻辑，只读） ---- */
+
+export interface SearchHit {
+  /** 命中的消息（原文，展示时再清洗） */
+  msg: StoredMessage
+  /** 该消息所在日期 key：YYYY-MM-DD */
+  dayKey: string
+  /** 该消息所在日期标题：今天 / 昨天 / 8月22日 */
+  dayLabel: string
+  /** 时间轴上紧挨着的前一条消息（可能跨天）；没有则为 null */
+  prev: StoredMessage | null
+  /** 时间轴上紧挨着的后一条消息（可能跨天）；没有则为 null */
+  next: StoredMessage | null
+}
+
+/**
+ * 在全部消息里搜关键词：命中 content 含关键词的消息，按时间倒序返回。
+ * 关键词忽略英文大小写、首尾空白；空关键词返回空数组。
+ * 每条命中带出时间轴上前后各一条消息，方便展示命中上下文。
+ */
+export function searchMessages(
+  messages: StoredMessage[],
+  keyword: string,
+  now: number = Date.now(),
+): SearchHit[] {
+  const kw = String(keyword ?? '').trim().toLowerCase()
+  if (!kw) return []
+  const valid: StoredMessage[] = messages.filter(
+    (m) => m != null && typeof m.content === 'string' && typeof m.ts === 'number' && Number.isFinite(m.ts),
+  )
+  const hits: SearchHit[] = []
+  for (let i = 0; i < valid.length; i++) {
+    const m = valid[i]
+    if (m.content.toLowerCase().includes(kw)) {
+      const k = dayKey(m.ts)
+      hits.push({
+        msg: m,
+        dayKey: k,
+        dayLabel: formatDayLabel(k, now),
+        prev: i > 0 ? valid[i - 1] : null,
+        next: i + 1 < valid.length ? valid[i + 1] : null,
+      })
+    }
+  }
+  hits.sort((a, b) => b.msg.ts - a.msg.ts)
+  return hits
+}
+
+/* ---- 日历纯逻辑（当月网格 / 高亮日期集合 / 切月） ---- */
+
+export interface CalendarCell {
+  /** 本地日期 key：YYYY-MM-DD */
+  key: string
+  /** 几号：1-31 */
+  day: number
+  year: number
+  /** 0-11（JS 月份约定） */
+  month: number
+}
+
+/**
+ * 某个月的日历网格：按周分组，每周 7 格（周一为一周第一天）。
+ * 月首前的空位与月末后的补位用 null 表示。
+ */
+export function getCalendarMonth(year: number, month: number): (CalendarCell | null)[][] {
+  const first = new Date(year, month, 1)
+  const startDow = (first.getDay() + 6) % 7 // 周一=0 … 周日=6
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const weeks: (CalendarCell | null)[][] = []
+  let cells: (CalendarCell | null)[] = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) {
+    const t = new Date(year, month, d).getTime()
+    cells.push({ key: dayKey(t), day: d, year, month })
+    if (cells.length === 7) {
+      weeks.push(cells)
+      cells = []
+    }
+  }
+  if (cells.length > 0) {
+    while (cells.length < 7) cells.push(null)
+    weeks.push(cells)
+  }
+  return weeks
+}
+
+/** 有聊天记录的日期 key 集合（升序），用于日历圆点高亮 */
+export function highlightDayKeys(messages: StoredMessage[]): string[] {
+  const set = new Set<string>()
+  for (const m of messages) {
+    if (m == null || typeof m.ts !== 'number' || !Number.isFinite(m.ts)) continue
+    set.add(dayKey(m.ts))
+  }
+  return [...set].sort()
+}
+
+/** 切月：delta 为 ±1（可负数跨年），返回新 {year, month} */
+export function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
+  const total = year * 12 + month + delta
+  return { year: Math.floor(total / 12), month: ((total % 12) + 12) % 12 }
+}
+
+/** 月份标题：2026年8月 */
+export function monthLabel(year: number, month: number): string {
+  return `${year}年${month + 1}月`
+}
+
+/**
+ * 日历可翻范围：最早有聊天记录的月份 ~ 当前月。
+ * 聊天记录数据本身就在 60 天窗口内（storage 裁剪过），所以最早消息月即可覆盖窗口。
+ */
+export function calendarMonthRange(
+  messages: StoredMessage[],
+  now: number = Date.now(),
+): { minYear: number; minMonth: number; maxYear: number; maxMonth: number } {
+  const d = new Date(now)
+  const maxYear = d.getFullYear()
+  const maxMonth = d.getMonth()
+  let minYear = maxYear
+  let minMonth = maxMonth
+  for (const m of messages) {
+    if (m == null || typeof m.ts !== 'number' || !Number.isFinite(m.ts)) continue
+    const md = new Date(m.ts)
+    const y = md.getFullYear()
+    const mo = md.getMonth()
+    if (y < minYear || (y === minYear && mo < minMonth)) {
+      minYear = y
+      minMonth = mo
+    }
+  }
+  return { minYear, minMonth, maxYear, maxMonth }
+}

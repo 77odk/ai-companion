@@ -1874,6 +1874,99 @@ textarea.persona-input {
   margin-bottom: 12px;
 }
 
+/* 微信式资料页 · 功能入口列表：圆角卡片一组，每条=线条图标+标题+副标题+右箭头 */
+.ai-space-entry-list {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.ai-space-entry-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--color-text);
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.ai-space-entry-row + .ai-space-entry-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.ai-space-entry-row:hover {
+  background: rgba(255, 138, 92, 0.05);
+}
+
+.ai-space-entry-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(255, 138, 92, 0.1);
+  color: var(--color-primary-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.ai-space-entry-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ai-space-entry-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ai-space-entry-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.ai-space-entry-sub {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-space-entry-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+  flex: none;
+  transition: transform 0.2s ease;
+}
+
+.ai-space-entry-chevron-open {
+  transform: rotate(90deg);
+}
+
+/* 底部独立项：刷新对话（M7-3 生效） */
+.ai-space-entry-refresh {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  box-shadow: var(--shadow);
+}
+
 /* ========== TA 的详情页：相处数据 / 聊天记录 / TA 记得的 ========== */
 
 /* 相处数据卡：一行三个数字 */
@@ -2034,6 +2127,450 @@ textarea.persona-input {
   flex: none;
 }
 
+/* 聊天记录子页（M7-2）：搜索框 */
+.ai-space-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+}
+
+.ai-space-search-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+  flex: none;
+}
+
+.ai-space-search-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ai-space-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.ai-space-search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.ai-space-search-clear {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: none;
+  border-radius: 50%;
+  background: rgba(154, 125, 116, 0.15);
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.ai-space-search-clear:hover {
+  color: var(--color-primary-deep);
+  background: rgba(255, 138, 92, 0.15);
+}
+
+.ai-space-search-clear svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* 搜索结果：日期 + 摘要 + 前后上下文 */
+.ai-space-search-results {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.ai-space-search-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--color-text);
+  transition: background 0.15s;
+}
+
+.ai-space-search-item + .ai-space-search-item {
+  border-top: 1px solid var(--color-border);
+}
+
+.ai-space-search-item:hover {
+  background: rgba(255, 138, 92, 0.05);
+}
+
+.ai-space-search-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ai-space-search-day {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary-deep);
+}
+
+.ai-space-search-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.ai-space-search-ctx {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 4px;
+}
+
+.ai-space-search-ctx-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-space-search-ctx-tag {
+  flex: none;
+  font-size: 11px;
+  color: var(--color-primary-deep);
+  opacity: 0.75;
+}
+
+/* 日历：简洁网格，暖橘高亮今天，圆点标记有记录的天 */
+.ai-space-cal {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  padding: 12px 12px 10px;
+}
+
+.ai-space-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ai-space-cal-nav {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.ai-space-cal-nav svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ai-space-cal-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.ai-space-cal-nav:not(:disabled):hover {
+  color: var(--color-primary-deep);
+  background: rgba(255, 138, 92, 0.1);
+}
+
+.ai-space-cal-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.ai-space-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.ai-space-cal-dow {
+  padding: 4px 0 6px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.ai-space-cal-cell {
+  position: relative;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--color-text);
+  transition: background 0.15s;
+}
+
+.ai-space-cal-cell:disabled {
+  cursor: default;
+}
+
+.ai-space-cal-cell:not(:disabled):hover {
+  background: rgba(255, 138, 92, 0.1);
+}
+
+.ai-space-cal-cell:disabled .ai-space-cal-day {
+  color: var(--color-text-muted);
+  opacity: 0.55;
+}
+
+.ai-space-cal-blank {
+  cursor: default;
+}
+
+.ai-space-cal-day {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* 今天：暖橘色块高亮（不管有没有记录都看得见） */
+.ai-space-cal-today {
+  background: rgba(255, 138, 92, 0.12);
+}
+
+.ai-space-cal-today:not(:disabled):hover {
+  background: rgba(255, 138, 92, 0.22);
+}
+
+.ai-space-cal-today .ai-space-cal-day {
+  color: var(--color-primary-deep);
+  font-weight: 700;
+}
+
+.ai-space-cal-dot {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+/* 按天折叠目录 */
+.ai-space-day-dir {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-space-dir-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.ai-space-dir-tool {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.ai-space-dir-tool:hover {
+  color: var(--color-primary-deep);
+  background: rgba(255, 138, 92, 0.08);
+}
+
+.ai-space-dir-tool-sep {
+  width: 1px;
+  height: 12px;
+  background: var(--color-border);
+}
+
+.ai-space-dir-day {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.ai-space-dir-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--color-text);
+  transition: background 0.15s;
+}
+
+.ai-space-dir-head:hover {
+  background: rgba(255, 138, 92, 0.05);
+}
+
+.ai-space-dir-name {
+  flex: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ai-space-dir-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.ai-space-dir-count {
+  flex: none;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.ai-space-dir-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--color-text-muted);
+  flex: none;
+  transition: transform 0.2s ease;
+}
+
+.ai-space-dir-day-open .ai-space-dir-chevron {
+  transform: rotate(90deg);
+}
+
+.ai-space-dir-body {
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-space-dir-msg {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 14px;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--color-text);
+  transition: background 0.15s;
+}
+
+.ai-space-dir-msg:first-child {
+  border-top: none;
+}
+
+.ai-space-dir-msg:hover {
+  background: rgba(255, 138, 92, 0.05);
+}
+
+.ai-space-dir-msg-role {
+  flex: none;
+  font-size: 11px;
+  color: var(--color-primary-deep);
+  opacity: 0.8;
+  min-width: 34px;
+}
+
+.ai-space-dir-msg-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.ai-space-dir-open {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 9px 14px;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--color-primary-deep);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ai-space-dir-open:hover {
+  background: rgba(255, 138, 92, 0.06);
+}
+
+.ai-space-dir-open-chevron {
+  width: 12px;
+  height: 12px;
+}
+
 /* TA 记得的：记忆时间线 */
 .ai-space-memory-list {
   display: flex;
@@ -2123,6 +2660,29 @@ textarea.persona-input {
 
 .ai-space-log-foot .btn {
   width: 100%;
+}
+
+/* TA 空间的子页面（聊天记录 / TA 记得的 / TA 的生活）：顶部 ‹ 返回 + 标题，页面内滚动 */
+.ai-space-page-sub {
+  padding: 0;
+}
+
+.ai-space-sub-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin-bottom: 0;
+  padding: 12px 14px;
+  flex-shrink: 0;
+  background: var(--color-card);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ai-space-sub-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
 }
 
 /* ========== 我的页 · 个人中心 ========== */
