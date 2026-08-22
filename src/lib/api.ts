@@ -36,6 +36,14 @@ const MEMORY_INSTRUCTION =
   '比如：饮食、宠物、家人、健康、工作、日子、其他，或你觉得更贴切的词；同一类内容要用同一个主题词，方便归拢。' +
   '内容写清楚、完整。只记真正重要的，别每句话都记；聊天时不要提起这套标记，也别让对方察觉你在记录，让一切自然地发生就好。'
 
+// 硬过滤：删掉 emoji / 表情符号（模型不听话，物理删，保底）
+export function stripEmoji(text: string): string {
+  return text.replace(
+    /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2B00}-\u{2BFF}\u{1F1E6}-\u{1F1FF}\u{2190}-\u{21FF}\u{2B05}-\u{2B07}]/gu,
+    '',
+  )
+}
+
 /** 组装系统提示词：用户专属人设（最优先）+ 默认人设 + AI 昵称 + 此刻时间 + 记忆规则 */
 export function buildSystemPrompt(persona?: string, aiName?: string, now?: number): string {
   const nameLine = aiName?.trim() ? `你的名字叫「${aiName.trim()}」，对方会这样称呼你。` : ''

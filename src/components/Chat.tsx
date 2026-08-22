@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildSystemPrompt, streamChat, type ApiMessage } from '../lib/api'
+import { buildSystemPrompt, streamChat, stripEmoji, type ApiMessage } from '../lib/api'
 import { extractMemories, loadMemory, notifyMemoryUpdated, recallRelevantMemories, stripMemoryMarkers, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, type StoredMessage } from '../lib/storage'
 import { takeChatMessage } from '../lib/chatInject'
@@ -100,7 +100,7 @@ export default function Chat({ onGoSettings }: Props) {
         }
       }
       const final: StoredMessage[] = raw
-        ? [...base, { role: 'assistant', content: raw, ts: assistantTs }]
+        ? [...base, { role: 'assistant', content: stripEmoji(raw), ts: assistantTs }]
         : base
       saveMessages(final)
       setMessages(final)
@@ -112,7 +112,7 @@ export default function Chat({ onGoSettings }: Props) {
     const controller = streamChat(settings, apiMessages, {
       onToken: (t) => {
         assistantText.current += t
-        setMessages([...base, { role: 'assistant', content: assistantText.current, ts: assistantTs }])
+        setMessages([...base, { role: 'assistant', content: stripEmoji(assistantText.current), ts: assistantTs }])
       },
       onDone: finalize,
       onError: (err) => {

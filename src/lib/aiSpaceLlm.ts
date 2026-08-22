@@ -74,6 +74,11 @@ export function buildLlmMessages(ctx: LlmContext): ApiMessage[] {
 export function cleanLlmText(text: string): string | null {
   let t = String(text ?? '').trim()
   if (!t) return null
+  // 硬过滤：删掉所有 emoji / 表情符号（提示词拦不住，物理删）
+  t = t.replace(
+    /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2B00}-\u{2BFF}\u{1F1E6}-\u{1F1FF}\u{2190}-\u{21FF}\u{2B05}-\u{2B07}]/gu,
+    '',
+  )
   const pairs: Array<[string, string]> = [
     ['"', '"'],
     ['“', '”'],
