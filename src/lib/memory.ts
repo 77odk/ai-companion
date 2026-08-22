@@ -12,6 +12,12 @@ export interface MemoryItem {
   source?: string
   /** 兼容旧数据：旧版本去重更新时刷新过的时间，现在不再使用 */
   updatedAt?: number
+  /** 重要记忆：用户在记忆页置顶标记，注入时永远排最前、永不进入遗忘/淡化逻辑（旧数据没有 = 不置顶） */
+  pinned?: boolean
+  /** 最近一次被「想起/提起」的时间戳：很久没提的活跃度低，注入排序时自然沉底，但条目永不被删除（旧数据没有 = 从未被提起过） */
+  lastMentionedAt?: number
+  /** 双源信任：true=用户亲口明说的（手动添加），注入排序时优先；缺省/缺失=TA 从聊天里推断的、或旧数据（优先级低） */
+  explicit?: boolean
 }
 
 const MEMORY_KEY = 'ai_companion_memory'
@@ -47,8 +53,12 @@ function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-/** 手动添加一条记忆：可填主题，留空默认「其他」 */
-export function addMemoryItem(text: string, topic?: string): MemoryItem[] {
+/**
+ * 手动添加一条记忆：可填主题，留空默认「其他」。
+ * explicit 表示是否用户明说——手动输入框添加的是用户亲口说的，应传 true；
+ * 缺省按 false（推断）处理，与聊天里 TA 自动提取的一致。
+ */
+export function addMemoryItem(text: string, topic?: string, explicit?: boolean): MemoryItem[] {
   const t = text.trim()
   if (!t) return loadMemory()
   const item: MemoryItem = {
@@ -56,14 +66,51 @@ export function addMemoryItem(text: string, topic?: string): MemoryItem[] {
     text: t,
     createdAt: Date.now(),
     topic: topic?.trim() || '其他',
+    ...(explicit === true ? { explicit: true } : {}),
   }
   const next = [item, ...loadMemory()]
   saveMemory(next)
   return next
 }
 
+/**
+ * 切换一条记忆的来源标记：explicit=true 记为「用户明说」，explicit=false 记为「TA 推断」。
+ * 返回更新后的全部记忆，并广播记忆变更事件（与 togglePinMemory 一致）。
+ */
+export function setMemoryExplicit(id: string, explicit: boolean): MemoryItem[] {
+  const next = loadMemory().map((m) => {
+    if (m.id !== id) return m
+    if (explicit) return { ...m, explicit: true }
+    const { explicit: _drop, ...rest } = m
+    return rest
+  })
+  saveMemory(next)
+  notifyMemoryUpdated()
+  return next
+}
+
 export function removeMemoryItem(id: string): MemoryItem[] {
   const next = loadMemory().filter((m) => m.id !== id)
+  saveMemory(next)
+  return next
+}
+
+/** 切换一条记忆的「重要」标记（置顶/取消置顶），返回更新后的全部记忆 */
+export function togglePinMemory(id: string): MemoryItem[] {
+  const next = loadMemory().map((m) => (m.id === id ? { ...m, pinned: !m.pinned } : m))
+  saveMemory(next)
+  notifyMemoryUpdated()
+  return next
+}
+
+/**
+ * 刷新一条记忆的「最近提起」活跃度：把 lastMentionedAt 更新为 now
+ * （用户提起相关话题、或注入对话时调用）。
+ * 不广播 MEMORY_UPDATED_EVENT——这个调用比较频繁，广播会让记忆页跟着频繁刷新；
+ * 只更新数据 + localStorage。返回更新后的全部记忆。
+ */
+export function touchMemory(id: string, now: number = Date.now()): MemoryItem[] {
+  const next = loadMemory().map((m) => (m.id === id ? { ...m, lastMentionedAt: now } : m))
   saveMemory(next)
   return next
 }
@@ -171,4 +218,174 @@ export function stripMemoryMarkers(text: string): string {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+// ---- 记忆活跃度：最近提起的靠前，很久没提的沉底，但永不删除 ----
+
+/** 一条记忆的活跃度时间戳：有最近提起用最近提起，否则用首次记录兜底；两者都没有的按最旧沉底 */
+function recencyOf(m: MemoryItem, now: number): number {
+  const t =
+    typeof m.lastMentionedAt === 'number' && Number.isFinite(m.lastMentionedAt)
+      ? m.lastMentionedAt
+      : typeof m.createdAt === 'number' && Number.isFinite(m.createdAt)
+        ? m.createdAt
+        : -Infinity
+  // 未来时间戳（时钟漂移等）钳到 now，避免一条异常数据插到最前
+  return t === -Infinity ? -Infinity : Math.min(t, now)
+}
+
+/**
+ * 记忆「活跃度」排序（纯函数，可 Node 单测）：
+ * - 重要记忆（pinned）恒排最前，组内保持原顺序（没有 pinned 时间，用原序）
+ * - 其余按 lastMentionedAt 降序：最近被提起/想起的靠前；没有 lastMentionedAt 的按 createdAt 降序兜底
+ * - 很久没提的自动沉底，但条目本身绝不被删除；用户一提起相关话题，这条又会排到前面去
+ */
+export function getMemoryRecencyRank(items: MemoryItem[], now: number = Date.now()): MemoryItem[] {
+  const valid = (Array.isArray(items) ? items : []).filter(
+    (m): m is MemoryItem => m != null && typeof m.text === 'string',
+  )
+  const pinned: MemoryItem[] = []
+  const rest: MemoryItem[] = []
+  for (const m of valid) {
+    if (m.pinned === true) pinned.push(m)
+    else rest.push(m)
+  }
+  rest.sort((a, b) => recencyOf(b, now) - recencyOf(a, now))
+  return [...pinned, ...rest]
+}
+
+/**
+ * 双源信任排序（仅对话注入用）：重要（pinned）恒最前 → 用户明说的（explicit）次之 → 其余按活跃度。
+ * 与 getMemoryRecencyRank 的区别只在 explicit 一档：用户亲口说的信任优先级高于 TA 自己推断的。
+ * 纯函数，不修改输入数组；组内稳定排序（活跃度相同保持输入顺序）。
+ */
+function rankDualSource(items: MemoryItem[], now: number): MemoryItem[] {
+  const pinned: MemoryItem[] = []
+  const explicit: MemoryItem[] = []
+  const rest: MemoryItem[] = []
+  for (const m of items) {
+    if (m.pinned === true) pinned.push(m)
+    else if (m.explicit === true) explicit.push(m)
+    else rest.push(m)
+  }
+  const byRecency = (list: MemoryItem[]) =>
+    list.slice().sort((a, b) => recencyOf(b, now) - recencyOf(a, now))
+  return [...pinned, ...byRecency(explicit), ...byRecency(rest)]
+}
+
+// ---- 按需召回：只带与当前话题相关的记忆进对话，省 token、不稀释注意力 ----
+
+/** 常见单字虚词/代词/助词：不算实词关键词（避免「我/你/的/了」到处命中） */
+const STOP_CHARS = new Set(
+  '的了是在有和与跟也都就不很好吧吗呢啊呀哦嗯我你他她它们这那个谁什么要会能可去来到上下着过被让把对又再还只才最更太真却向从为因于以及'.split(''),
+)
+
+/**
+ * 抽候选关键词：
+ * - 连续汉字块 ≥2 字：整块 + 逐字拆出的 2 字窗口都算词（长句里能捞到「火锅」「生日」这类词）
+ * - 单独出现的单字实词（长度恰为 1 且非助词/代词）算词（如「猫」）
+ * - 英文/数字词（≥2 字符）小写算词
+ */
+function extractKeywords(text: string): { multi: Set<string>; singles: Set<string> } {
+  const multi = new Set<string>()
+  const singles = new Set<string>()
+  const t = String(text ?? '')
+  for (const seg of t.split(/[^\p{L}\p{N}]+/u)) {
+    if (!seg) continue
+    if (/^[一-鿿]+$/.test(seg)) {
+      if (seg.length === 1) {
+        if (!STOP_CHARS.has(seg)) singles.add(seg)
+      } else {
+        multi.add(seg)
+        for (let i = 0; i < seg.length - 1; i++) multi.add(seg.slice(i, i + 2))
+      }
+    } else if (seg.length >= 2) {
+      multi.add(seg.toLowerCase())
+    }
+  }
+  return { multi, singles }
+}
+
+/** 记忆 text 与 contextText 是否有共同实词：2 字以上词有交集，或任一侧的单字实词出现在另一侧文本里 */
+function hasCommonKeyword(
+  memText: string,
+  ctxRaw: string,
+  ctxMulti: Set<string>,
+  ctxSingles: Set<string>,
+): boolean {
+  const mem = extractKeywords(memText)
+  for (const k of mem.multi) if (ctxMulti.has(k)) return true
+  for (const s of mem.singles) if (ctxRaw.includes(s)) return true
+  for (const s of ctxSingles) if (memText.includes(s)) return true
+  return false
+}
+
+export interface RecallOptions {
+  /** 兜底条数：无任何命中时取最活跃的前 N 条，默认 5 */
+  fallbackCount?: number
+  /** 排序基准时间（测试可传固定值），默认 Date.now() */
+  now?: number
+}
+
+/**
+ * 按需召回：对话注入时只带与当前话题相关的记忆 + 重要记忆，其余省略。
+ * 匹配规则（简单可靠）：
+ * 1. pinned 恒全量包含（重要记忆永远带）
+ * 2. 主题命中：contextText 出现某个主题词（吃/猫/家人…）→ 该主题全部记忆带上
+ *    （旧数据无 topic 字段的按 inferTopic 推断，避免「养猫」这类记忆落空）
+ * 3. 关键词命中：记忆 text 与 contextText 有 ≥1 个共同实词（长度 ≥2 的字/词，单独的单字实词也算）
+ * 4. 其余（不相关的非 pinned）不注入
+ * 兜底：一条都没命中（context 太短/太泛）→ 退化为最活跃的前 fallbackCount 条（含全部 pinned）
+ * 返回排序（双源信任）：pinned 恒最前 → 用户明说的（explicit）次之 → 其余按活跃度。
+ * 纯函数，不修改输入数组。
+ */
+export function recallRelevantMemories(
+  items: MemoryItem[],
+  contextText: string,
+  opts: RecallOptions = {},
+): MemoryItem[] {
+  const now = opts.now ?? Date.now()
+  const fallbackCount = opts.fallbackCount ?? 5
+  const valid = (Array.isArray(items) ? items : []).filter(
+    (m): m is MemoryItem => m != null && typeof m.text === 'string',
+  )
+  if (valid.length === 0) return []
+
+  const pinned = valid.filter((m) => m.pinned === true)
+  const rest = valid.filter((m) => m.pinned !== true)
+
+  const ctxRaw = String(contextText ?? '')
+  const ctxKw = extractKeywords(ctxRaw)
+
+  // 主题命中：context 里出现主题词表里的词 → 该主题全部记忆带上
+  const hitTopics = new Set<string>()
+  for (const [re, topic] of TOPIC_RULES) {
+    if (re.test(ctxRaw)) hitTopics.add(topic)
+  }
+
+  const matched: MemoryItem[] = []
+  const seen = new Set<string>()
+  for (const m of rest) {
+    const topic = m.topic?.trim() || inferTopic(m.text)
+    if (hitTopics.has(topic)) {
+      seen.add(m.id)
+      matched.push(m)
+      continue
+    }
+    if (seen.has(m.id)) continue
+    if (hasCommonKeyword(m.text, ctxRaw, ctxKw.multi, ctxKw.singles)) {
+      seen.add(m.id)
+      matched.push(m)
+    }
+  }
+
+  // 一条都没命中 → 兜底最活跃前 N（pinned 恒全量，其余按活跃度补到 N 条）
+  if (matched.length === 0) {
+    const ranked = rankDualSource(valid, now)
+    const pin = ranked.filter((m) => m.pinned === true)
+    const others = ranked.filter((m) => m.pinned !== true)
+    return [...pin, ...others.slice(0, Math.max(0, fallbackCount - pin.length))]
+  }
+
+  return rankDualSource([...pinned, ...matched], now)
 }

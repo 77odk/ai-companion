@@ -17,6 +17,8 @@ export interface MemoryStats {
   earliestTs: number | null
   /** 从最早一条算起的相处天数（自然日差 +1，至少 1） */
   daysKnown: number
+  /** 重要记忆（用户置顶）条数 */
+  pinnedCount: number
 }
 
 /** 相处天数：按自然日差 +1，至少 1 天（今天算第 1 天） */
@@ -30,20 +32,22 @@ export function computeKnownDays(firstTs: number, now: number = Date.now()): num
   return Math.max(1, diff + 1)
 }
 
-/** 汇总记忆：总条数 / 主题数 / 最常惦记的主题 / 最早一条 / 相处天数 */
+/** 汇总记忆：总条数 / 主题数 / 最常惦记的主题 / 最早一条 / 相处天数 / 重要（置顶）条数 */
 export function summarizeStats(items: MemoryItem[]): MemoryStats {
   const valid = (Array.isArray(items) ? items : []).filter(
     (m): m is MemoryItem => m != null && typeof m.text === 'string',
   )
   if (valid.length === 0) {
-    return { count: 0, topicCount: 0, topTopic: null, earliestTs: null, daysKnown: 1 }
+    return { count: 0, topicCount: 0, topTopic: null, earliestTs: null, daysKnown: 1, pinnedCount: 0 }
   }
 
   const counts = new Map<string, number>()
   const order: string[] = []
   let earliestTs: number | null = null
+  let pinnedCount = 0
 
   for (const m of valid) {
+    if (m.pinned === true) pinnedCount++
     const t = m.topic?.trim() || inferTopic(m.text)
     if (!counts.has(t)) {
       counts.set(t, 0)
@@ -73,6 +77,7 @@ export function summarizeStats(items: MemoryItem[]): MemoryStats {
     topTopic,
     earliestTs,
     daysKnown: earliestTs != null ? computeKnownDays(earliestTs) : 1,
+    pinnedCount,
   }
 }
 

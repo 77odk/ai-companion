@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   addMemoryItem,
+  getMemoryRecencyRank,
   inferTopic,
   loadMemory,
   removeMemoryItem,
+  togglePinMemory,
   MEMORY_UPDATED_EVENT,
   type MemoryItem,
 } from '../lib/memory'
@@ -54,6 +56,51 @@ function DeleteIcon() {
       <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
     </svg>
   )
+}
+
+/** 「重要」标记按钮的星星图标：未标记空心、已标记实心（暖橘由 CSS currentColor 控制） */
+function PinIcon({ pinned }: { pinned: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill={pinned ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
+    </svg>
+  )
+}
+
+/** 双源信任来源小标记：用户明说的「你说的」（暖橘）/ TA 推断的「TA 记得的」（暖灰），低调小字 */
+function SourceTag({ explicit }: { explicit?: boolean }) {
+  return explicit === true ? (
+    <span className="memory-source-tag memory-source-user">你说的</span>
+  ) : (
+    <span className="memory-source-tag memory-source-ta">TA 记得的</span>
+  )
+}
+
+/** 超过这么多天没被提起就算「很久没提起」（展示小字，低调提示） */
+const STALE_DAYS = 30
+const STALE_MS = STALE_DAYS * 86400000
+
+/** 很久没被提起：非重要 + 最近一次提起距今超过 30 天（没有 lastMentionedAt 的不算——可能是刚记的新鲜事） */
+function isStaleMemory(m: MemoryItem, now: number): boolean {
+  if (m.pinned === true) return false
+  return typeof m.lastMentionedAt === 'number' && Number.isFinite(m.lastMentionedAt) && now - m.lastMentionedAt > STALE_MS
+}
+
+/** 组内最新一条的首次记录时间（组间排序用，保持「最近添加的组在前」的旧行为） */
+function newestCreatedAt(items: MemoryItem[]): number {
+  let max = 0
+  for (const m of items) {
+    if (typeof m.createdAt === 'number' && m.createdAt > max) max = m.createdAt
+  }
+  return max
 }
 
 export default function Memory() {
@@ -121,8 +168,9 @@ export default function Memory() {
       })
   }, [items])
 
-  // 按主题动态分组：旧数据没主题就按关键词推断；组按最近添加时间排序，组内新的在前
+  // 按主题动态分组：旧数据没主题就按关键词推断；组按最近添加时间排序，组内按「活跃度」排序
   const groups = useMemo<TopicGroup[]>(() => {
+    const now = Date.now()
     const map = new Map<string, MemoryItem[]>()
     for (const m of items) {
       const t = m.topic?.trim() || inferTopic(m.text)
@@ -131,8 +179,12 @@ export default function Memory() {
       map.set(t, list)
     }
     return Array.from(map.entries())
-      .map(([t, list]) => ({ topic: t, items: [...list].sort((a, b) => b.createdAt - a.createdAt) }))
-      .sort((a, b) => b.items[0].createdAt - a.items[0].createdAt)
+      .map(([t, list]) => ({
+        topic: t,
+        // 组内按「活跃度」排序：重要记忆恒排最前，其余按最近提起/想起的靠前，没有的按首次记录时间兜底（与对话注入一致）
+        items: getMemoryRecencyRank(list, now),
+      }))
+      .sort((a, b) => newestCreatedAt(b.items) - newestCreatedAt(a.items))
   }, [items])
 
   // 顶部汇总：统计 / 一句话点评 / 最早一条
@@ -140,16 +192,24 @@ export default function Memory() {
   const topTopicLine = useMemo(() => buildTopTopicLine(stats.topTopic), [stats.topTopic])
   const knownSinceLine = stats.earliestTs != null ? buildKnownSince(stats.earliestTs) : ''
 
+  // 「很久没提起」小字标签的判断基准：当前时刻（30 天窗口，渲染时取一次即可）
+  const now = Date.now()
+
   const handleAdd = () => {
     const t = text.trim()
     if (!t) return
-    setItems(addMemoryItem(t, topic))
+    // 手动输入框添加 = 用户亲口说的 → explicit=true（双源信任：用户明说优先）
+    setItems(addMemoryItem(t, topic, true))
     setText('')
     setTopic('')
   }
 
   const handleRemove = (id: string) => {
     setItems(removeMemoryItem(id))
+  }
+
+  const handleTogglePin = (id: string) => {
+    setItems(togglePinMemory(id))
   }
 
   const toggleTopic = (t: string) => {
@@ -177,6 +237,9 @@ export default function Memory() {
           </div>
           <p className="memory-summary-stats">
             TA 记得你 <strong>{stats.count}</strong> 件事 · 分布在 <strong>{stats.topicCount}</strong> 个主题
+            {stats.pinnedCount > 0 && (
+              <span> · 其中 <strong>{stats.pinnedCount}</strong> 件是重要的</span>
+            )}
             {knownSinceLine && <span> · {knownSinceLine}</span>}
           </p>
           {topTopicLine && <p className="memory-summary-top">{topTopicLine}</p>}
@@ -264,18 +327,32 @@ export default function Memory() {
                       <div className="memory-item memory-item-featured">
                         <p className="memory-item-text">{g.items[0].text}</p>
                         <div className="memory-item-foot">
+                          <SourceTag explicit={g.items[0].explicit} />
                           <span className="memory-item-date">{formatFirstRememberedDate(g.items[0].createdAt)}</span>
                           {g.items[0].source && (
                             <span className="memory-item-source">来自「{g.items[0].source}」</span>
                           )}
+                          {isStaleMemory(g.items[0], now) && <span className="memory-item-stale">很久没提起</span>}
                         </div>
-                        <button
-                          className="memory-delete"
-                          onClick={() => handleRemove(g.items[0].id)}
-                          aria-label="删除这条记忆"
-                        >
-                          <DeleteIcon />
-                        </button>
+                        <div className="memory-item-actions">
+                          <button
+                            type="button"
+                            className={`memory-pin${g.items[0].pinned ? ' pinned' : ''}`}
+                            onClick={() => handleTogglePin(g.items[0].id)}
+                            aria-label={g.items[0].pinned ? '取消重要标记' : '标记为重要'}
+                            aria-pressed={Boolean(g.items[0].pinned)}
+                          >
+                            <PinIcon pinned={Boolean(g.items[0].pinned)} />
+                            {g.items[0].pinned && <span className="memory-pin-label">重要</span>}
+                          </button>
+                          <button
+                            className="memory-delete"
+                            onClick={() => handleRemove(g.items[0].id)}
+                            aria-label="删除这条记忆"
+                          >
+                            <DeleteIcon />
+                          </button>
+                        </div>
                       </div>
                     )}
                     {g.items.length > 1 && (
@@ -284,16 +361,30 @@ export default function Memory() {
                           <li key={m.id} className="memory-item">
                             <p className="memory-item-text">{m.text}</p>
                             <div className="memory-item-foot">
+                              <SourceTag explicit={m.explicit} />
                               <span className="memory-item-date">{formatFirstRememberedDate(m.createdAt)}</span>
                               {m.source && <span className="memory-item-source">来自「{m.source}」</span>}
+                              {isStaleMemory(m, now) && <span className="memory-item-stale">很久没提起</span>}
                             </div>
-                            <button
-                              className="memory-delete"
-                              onClick={() => handleRemove(m.id)}
-                              aria-label="删除这条记忆"
-                            >
-                              <DeleteIcon />
-                            </button>
+                            <div className="memory-item-actions">
+                              <button
+                                type="button"
+                                className={`memory-pin${m.pinned ? ' pinned' : ''}`}
+                                onClick={() => handleTogglePin(m.id)}
+                                aria-label={m.pinned ? '取消重要标记' : '标记为重要'}
+                                aria-pressed={Boolean(m.pinned)}
+                              >
+                                <PinIcon pinned={Boolean(m.pinned)} />
+                                {m.pinned && <span className="memory-pin-label">重要</span>}
+                              </button>
+                              <button
+                                className="memory-delete"
+                                onClick={() => handleRemove(m.id)}
+                                aria-label="删除这条记忆"
+                              >
+                                <DeleteIcon />
+                              </button>
+                            </div>
                           </li>
                         ))}
                       </ul>

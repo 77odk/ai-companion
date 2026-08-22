@@ -710,7 +710,7 @@ textarea.persona-input {
 
 .memory-item {
   position: relative;
-  padding: 12px 48px 12px 16px;
+  padding: 12px 104px 12px 16px;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -748,6 +748,38 @@ textarea.persona-input {
   max-width: 100%;
 }
 
+/* 很久没提起：低调小字标签，别喧宾夺主 */
+.memory-item-stale {
+  flex: none;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+  opacity: 0.65;
+  background: var(--color-bg);
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+
+/* 双源信任来源小标记：用户明说的「你说的」（暖橘）/ TA 推断的「TA 记得的」（暖灰），都低调 */
+.memory-source-tag {
+  flex: none;
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+
+.memory-source-tag.memory-source-user {
+  color: var(--color-primary-deep);
+  background: rgba(255, 138, 92, 0.14);
+}
+
+.memory-source-tag.memory-source-ta {
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  opacity: 0.85;
+}
+
 .memory-delete {
   flex-shrink: 0;
   position: absolute;
@@ -774,6 +806,59 @@ textarea.persona-input {
   opacity: 1;
   color: #b3261e;
   background: #fdecea;
+}
+
+/* 记忆条右上操作区：置顶「重要」按钮 + 删除按钮排在一起 */
+.memory-item-actions {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.memory-item-actions .memory-delete {
+  position: static;
+}
+
+/* 「重要」置顶按钮：线条星星，暖灰 → 点亮后暖橘 */
+.memory-pin {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 6px;
+  border-radius: 8px;
+  opacity: 0.4;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.memory-pin svg {
+  width: 15px;
+  height: 15px;
+}
+
+.memory-pin:hover,
+.memory-pin:focus-visible {
+  opacity: 1;
+  color: var(--color-primary);
+  background: rgba(255, 138, 92, 0.12);
+}
+
+.memory-pin.pinned {
+  opacity: 1;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.memory-pin-label {
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 /* 记忆页 v2 · 「TA 眼中的你」汇总卡（暖橘渐变大卡，页面的灵魂） */

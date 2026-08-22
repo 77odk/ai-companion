@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildSystemPrompt, streamChat, type ApiMessage } from '../lib/api'
-import { extractMemories, loadMemory, notifyMemoryUpdated, stripMemoryMarkers, upsertMemoryItem } from '../lib/memory'
+import { extractMemories, loadMemory, notifyMemoryUpdated, recallRelevantMemories, stripMemoryMarkers, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, type StoredMessage } from '../lib/storage'
 import { takeChatMessage } from '../lib/chatInject'
 
@@ -57,12 +57,26 @@ export default function Chat({ onGoSettings }: Props) {
 
     // 组装请求消息：系统提示词（默认人设+专属人设+AI昵称） + 记忆摘要（如有） + 最近 20 条历史
     const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(loadPersona(), loadAIProfile().nickname) }]
-    const memory = loadMemory()
+    // 注入记忆改为「按需召回」：重要记忆（pinned）恒带 + 与当前话题相关的记忆（主题/关键词命中），其余省略；
+    // 一条都没命中时兜底为最活跃的前 5 条，保证 TA 至少有记忆可依。
+    // 排序（双源信任，M5-4）：pinned 恒最前 → 用户明说的（explicit）次之 → 其余按活跃度。
+    // 注入格式保持纯文本「- xxx」，不给 explicit 条目加「[你说的]」前缀——怕模型学样在回复里输出类似标记，
+    // 双源信任只体现在排序优先级上，来源标签放在记忆页展示。
+    const contextText = base
+      .slice(-6)
+      .map((m) => (m.role === 'assistant' ? stripMemoryMarkers(m.content) : m.content))
+      .join('\n')
+    const memory = recallRelevantMemories(loadMemory(), contextText)
     if (memory.length > 0) {
       apiMessages.push({
         role: 'system',
         content: '关于对方你已经记住的事实：\n' + memory.map((m) => `- ${m.text}`).join('\n'),
       })
+      // 这次注入 = 提起了这些记忆：非重要条目刷新「最近提起」活跃度；不广播（频繁调用会让记忆页跟着刷新）
+      const now = Date.now()
+      for (const m of memory) {
+        if (!m.pinned) touchMemory(m.id, now)
+      }
     }
     // 发回给模型的助手消息去掉记忆标记行，免得模型看到一堆标记跟着模仿
     const history: ApiMessage[] = base.slice(-20).map((m) => ({
