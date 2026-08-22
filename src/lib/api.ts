@@ -120,24 +120,35 @@ async function isServerReachable(url: string): Promise<boolean> {
 }
 
 async function fetchOrThrow(url: string, init: RequestInit): Promise<Response> {
-  try {
-    return await fetch(url, init)
-  } catch (e) {
-    if (e instanceof TypeError) {
-      const reachable = await isServerReachable(url)
-      if (reachable) {
+  // 429 限流自动重试：等 2.5s/5s 各重试一次（免费模型高峰期常限流，用户无感恢复）
+  let lastResp: Response | null = null
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const resp = await fetch(url, init)
+      if (resp.status === 429 && attempt < 2) {
+        lastResp = resp
+        await new Promise((r) => setTimeout(r, 2500 * (attempt + 1)))
+        continue
+      }
+      return resp
+    } catch (e) {
+      if (e instanceof TypeError) {
+        const reachable = await isServerReachable(url)
+        if (reachable) {
+          throw new ChatError(
+            'cors',
+            '这个服务商不支持浏览器直连（跨域被拦）。建议换 DeepSeek 或智谱，或检查中转站是否开了跨域。',
+          )
+        }
         throw new ChatError(
-          'cors',
-          '这个服务商不支持浏览器直连（跨域被拦）。建议换 DeepSeek 或智谱，或检查中转站是否开了跨域。',
+          'network',
+          '网络不通，连不上模型服务。检查一下网络，如果用的是 OpenAI 官方地址，需要代理（梯子）。',
         )
       }
-      throw new ChatError(
-        'network',
-        '网络不通，连不上模型服务。检查一下网络，如果用的是 OpenAI 官方地址，需要代理（梯子）。',
-      )
+      throw e
     }
-    throw e
   }
+  return lastResp as Response
 }
 
 function mapHttpError(status: number): ChatError {
