@@ -5,7 +5,7 @@ import { pickFirstSeen } from './aiSpaceDetail'
 import type { SpacePost } from './aiSpaceCore'
 import type { MemoryItem } from './memory'
 
-export type Provider = 'deepseek' | 'zhipu' | 'custom'
+export type Provider = 'deepseek' | 'zhipu' | 'openai' | 'custom'
 
 export interface ModelSettings {
   provider: Provider
@@ -26,6 +26,7 @@ const SETTINGS_KEY = 'ai_companion_settings'
 export const DEFAULT_SETTINGS: Record<Provider, { baseUrl: string; model: string }> = {
   deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
   zhipu: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   custom: { baseUrl: '', model: 'gpt-4o-mini' },
 }
 
@@ -33,6 +34,7 @@ export const DEFAULT_SETTINGS: Record<Provider, { baseUrl: string; model: string
 export const PROVIDER_NAMES: Record<Provider, string> = {
   deepseek: 'DeepSeek',
   zhipu: '智谱',
+  openai: 'OpenAI',
   custom: '自定义',
 }
 
@@ -44,6 +46,7 @@ function defaultProviders(): Record<Provider, ProviderConfig> {
   return {
     deepseek: defaultProviderConfig('deepseek'),
     zhipu: defaultProviderConfig('zhipu'),
+    openai: defaultProviderConfig('openai'),
     custom: defaultProviderConfig('custom'),
   }
 }
@@ -52,7 +55,7 @@ function normalizeProviders(raw: unknown): Record<Provider, ProviderConfig> {
   const base = defaultProviders()
   if (raw == null || typeof raw !== 'object') return base
   const r = raw as Record<string, Partial<ProviderConfig>>
-  for (const p of ['deepseek', 'zhipu', 'custom'] as Provider[]) {
+  for (const p of ['deepseek', 'zhipu', 'openai', 'custom'] as Provider[]) {
     const item = r[p]
     if (item == null || typeof item !== 'object') continue
     if (typeof item.apiKey === 'string') base[p].apiKey = item.apiKey
@@ -76,7 +79,9 @@ export function loadSettings(): ModelSettings & { providers: Record<Provider, Pr
       model?: string
     }
     const provider: Provider =
-      parsed.provider === 'zhipu' || parsed.provider === 'custom' ? parsed.provider : 'deepseek'
+      parsed.provider === 'zhipu' || parsed.provider === 'openai' || parsed.provider === 'custom'
+        ? parsed.provider
+        : 'deepseek'
     const providers = normalizeProviders(parsed.providers)
 
     // 旧格式迁移：v1 存的单 key 归到当时的 provider 名下
