@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildSystemPrompt, streamChat, stripEmoji, type ApiMessage } from '../lib/api'
+import { buildSystemPrompt, chatCompletion, looksRobotic, streamChat, stripEmoji, type ApiMessage } from '../lib/api'
 import { extractMemories, loadMemory, notifyMemoryUpdated, recallRelevantMemories, stripMemoryMarkers, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, type StoredMessage } from '../lib/storage'
 import { takeChatMessage } from '../lib/chatInject'
@@ -20,6 +20,7 @@ export default function Chat({ onGoSettings }: Props) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const controllerRef = useRef<AbortController | null>(null)
   const finalizeRef = useRef<() => void>(() => {})
+  const retriedRef = useRef(false)
   const assistantText = useRef('')
 
   // 新消息时自动滚到底部
@@ -99,8 +100,48 @@ export default function Chat({ onGoSettings }: Props) {
           notifyMemoryUpdated()
         }
       }
-      const final: StoredMessage[] = raw
-        ? [...base, { role: 'assistant', content: stripEmoji(raw), ts: assistantTs }]
+      // 人机味质检：这轮回复像客服/程序（"我是AI""TA是指""有什么可以帮你的吗"），自动重写一次
+      const cleaned = stripEmoji(raw)
+      if (cleaned && looksRobotic(cleaned) && !retriedRef.current) {
+        retriedRef.current = true
+        setError(null)
+        setMessages([...base, { role: 'assistant', content: '…', ts: assistantTs }])
+        void chatCompletion(settings, [
+          ...apiMessages,
+          { role: 'assistant', content: cleaned },
+          {
+            role: 'user',
+            content:
+              '你刚才的回复太像客服/程序了。忘掉那句，用你真实的身份、像真人一样重新回答一遍，简短自然。',
+          },
+        ])
+          .then((retry) => {
+            const retryCleaned = stripEmoji(retry)
+            if (!retryCleaned || looksRobotic(retryCleaned)) {
+              // 重写还是人机味？就用示范语气兜底，别让用户看到AI腔
+              const fallback = '嗯，我在。刚才没好好说话，重说一遍——我在呢。'
+              const final: StoredMessage[] = [...base, { role: 'assistant', content: fallback, ts: Date.now() }]
+              saveMessages(final)
+              setMessages(final)
+            } else {
+              const final: StoredMessage[] = [...base, { role: 'assistant', content: retryCleaned, ts: Date.now() }]
+              saveMessages(final)
+              setMessages(final)
+            }
+            setStreaming(false)
+            controllerRef.current = null
+          })
+          .catch(() => {
+            const final: StoredMessage[] = [...base, { role: 'assistant', content: cleaned, ts: assistantTs }]
+            saveMessages(final)
+            setMessages(final)
+            setStreaming(false)
+            controllerRef.current = null
+          })
+        return
+      }
+      const final: StoredMessage[] = cleaned
+        ? [...base, { role: 'assistant', content: cleaned, ts: assistantTs }]
         : base
       saveMessages(final)
       setMessages(final)
@@ -139,6 +180,7 @@ export default function Chat({ onGoSettings }: Props) {
   // 清空会话：清空本地历史 + 界面（下次 TA 就不会被旧对话污染人设）
   const handleClear = () => {
     if (streaming) handleStop()
+    retriedRef.current = false
     saveMessages([])
     setMessages([])
     setError(null)
