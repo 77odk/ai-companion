@@ -329,8 +329,10 @@ export default function AISpace({ onBack, onGoMine }: Props) {
           <p className="ai-space-bio">
             只属于{yourName}的 TA · 这里记录着 TA 的日常、想法，和没说出口的心事
           </p>
+        </div>
 
-          {/* 相处数据：固定展示在大头像下面，一眼可见 */}
+        <div className="ai-space-timeline">
+          {/* 相处数据：v0.2.0 原版——在头部下方、timeline 顶部，紧贴入口列表 */}
           <div className="ai-space-stats">
             <div className="ai-space-stat">
               <span className="ai-space-stat-icon" aria-hidden="true">
@@ -354,9 +356,6 @@ export default function AISpace({ onBack, onGoMine }: Props) {
               <span className="ai-space-stat-label">TA 记得</span>
             </div>
           </div>
-          </div>
-
-          <div className="ai-space-timeline">
           {/* 功能入口列表：微信式资料页 */}
           <div className="ai-space-entry-list">
             <button type="button" className="ai-space-entry-row" onClick={() => setPage('chats')}>
