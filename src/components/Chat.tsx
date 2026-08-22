@@ -136,10 +136,28 @@ export default function Chat({ onGoSettings }: Props) {
     finalizeRef.current()
   }
 
+  // 清空会话：清空本地历史 + 界面（下次 TA 就不会被旧对话污染人设）
+  const handleClear = () => {
+    if (streaming) handleStop()
+    saveMessages([])
+    setMessages([])
+    setError(null)
+  }
+
   const isEmpty = messages.length === 0
 
   return (
     <div className="chat-page">
+      {!isEmpty && (
+        <div className="chat-clear-row">
+          <button type="button" className="link-btn chat-clear-btn" onClick={handleClear}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="chat-clear-icon">
+              <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+            </svg>
+            清空对话
+          </button>
+        </div>
+      )}
       <div className="message-list" ref={scrollRef}>
         {isEmpty ? (
           <div className="welcome">

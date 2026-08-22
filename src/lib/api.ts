@@ -43,7 +43,7 @@ export function buildSystemPrompt(persona?: string, aiName?: string, now?: numbe
   let prompt: string
   if (custom) {
     // 用户填的专属人设是 TA 的完整身份，放在最前面压过一切默认设定
-    prompt = `【你的身份·最高优先级】对方为你写下了完整的你，这就是你的全部人设，比任何默认设定都重要：\n${custom}\n\n${nameLine}${SYSTEM_PROMPT}`
+    prompt = `【你的身份·最高优先级】对方为你写下了完整的你，这就是你的全部人设，比任何默认设定都重要：\n${custom}\n\n${nameLine}${SYSTEM_PROMPT}\n\n【身份锚定】聊天记录里你以前说过的话，如果与上面你的真实身份矛盾（比如自称朋友、陪伴者、AI、程序），那些都是错的，一律作废——你的身份永远以上面的设定为准，从现在起按真正的你说话。`
   } else if (nameLine) {
     prompt = `${nameLine}${SYSTEM_PROMPT}`
   } else {

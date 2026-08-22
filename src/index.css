@@ -322,6 +322,29 @@ button {
   line-height: 1.5;
 }
 
+/* 清空对话按钮（消息列表右上） */
+.chat-clear-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 14px 0;
+}
+.chat-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+.chat-clear-btn:active {
+  background: rgba(0, 0, 0, 0.05);
+}
+.chat-clear-icon {
+  width: 13px;
+  height: 13px;
+}
+
 /* 输入区 */
 .composer {
   flex-shrink: 0;
