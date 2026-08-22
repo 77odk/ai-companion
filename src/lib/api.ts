@@ -69,9 +69,15 @@ async function fetchOrThrow(url: string, init: RequestInit): Promise<Response> {
     if (e instanceof TypeError) {
       const reachable = await isServerReachable(url)
       if (reachable) {
-        throw new ChatError('cors', '浏览器直连被拦截（CORS），试试开启代理或换服务商')
+        throw new ChatError(
+          'cors',
+          '这个服务商不支持浏览器直连（跨域被拦）。建议换 DeepSeek 或智谱，或检查中转站是否开了跨域。',
+        )
       }
-      throw new ChatError('network', '网络错误，请检查网络连接后重试')
+      throw new ChatError(
+        'network',
+        '网络不通，连不上模型服务。检查一下网络，如果用的是 OpenAI 官方地址，需要代理（梯子）。',
+      )
     }
     throw e
   }
@@ -79,15 +85,15 @@ async function fetchOrThrow(url: string, init: RequestInit): Promise<Response> {
 
 function mapHttpError(status: number): ChatError {
   if (status === 401 || status === 403) {
-    return new ChatError('unauthorized', 'Key 无效或没有权限，请检查设置里的 API Key')
+    return new ChatError('unauthorized', 'Key 无效或没有权限，去「我的 → 服务商配置」检查一下 API Key 有没有填对')
   }
   if (status === 404) {
-    return new ChatError('bad-request', '接口地址不对（404），请检查 base_url 是否正确')
+    return new ChatError('bad-request', '接口地址不对（404），去「高级设置」检查 base_url 是否正确')
   }
   if (status === 429) {
-    return new ChatError('bad-request', '请求太频繁或额度用尽（429），请稍后再试')
+    return new ChatError('bad-request', '请求太频繁或额度用尽（429），稍等一会儿再试，或换个服务商')
   }
-  return new ChatError('bad-request', `请求失败（HTTP ${status}），请检查设置是否正确`)
+  return new ChatError('bad-request', `请求失败（HTTP ${status}），去「服务商配置」检查设置是否正确`)
 }
 
 function buildUrl(settings: ModelSettings, path: string): string {

@@ -9,8 +9,8 @@ interface Props {
 const OPTIONS: { value: Provider; label: string }[] = [
   { value: 'deepseek', label: 'DeepSeek' },
   { value: 'zhipu', label: '智谱 GLM' },
-  { value: 'openai', label: 'OpenAI' },
   { value: 'custom', label: '自定义（OpenAI 兼容）' },
+  { value: 'openai', label: 'OpenAI（需代理/中转）' },
 ]
 
 export default function ProviderSelect({ value, onChange }: Props) {
