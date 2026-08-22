@@ -25,7 +25,7 @@ const SETTINGS_KEY = 'ai_companion_settings'
 /** 各服务商默认 base_url 与模型 */
 export const DEFAULT_SETTINGS: Record<Provider, { baseUrl: string; model: string }> = {
   deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-  zhipu: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+  zhipu: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4.7-flash' },
   openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   custom: { baseUrl: '', model: 'gpt-4o-mini' },
 }
@@ -61,6 +61,10 @@ function normalizeProviders(raw: unknown): Record<Provider, ProviderConfig> {
     if (typeof item.apiKey === 'string') base[p].apiKey = item.apiKey
     if (typeof item.baseUrl === 'string') base[p].baseUrl = item.baseUrl
     if (typeof item.model === 'string') base[p].model = item.model
+    // 模型迁移：智谱旧免费模型 glm-4-flash → glm-4.7-flash（新模型守人设、执行能力强）
+    if (p === 'zhipu' && base[p].model === 'glm-4-flash') {
+      base[p].model = 'glm-4.7-flash'
+    }
   }
   return base
 }

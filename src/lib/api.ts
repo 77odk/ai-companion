@@ -198,6 +198,11 @@ export async function testConnection(settings: ModelSettings): Promise<void> {
   }
 }
 
+/** 智谱 GLM 思考模型（glm-4.5+/4.7+）默认开启思考，内容会跑进 reasoning 导致 content 空；统一关掉 */
+function zhipuThinking(settings: ModelSettings): Record<string, unknown> | undefined {
+  return settings.baseUrl.includes('bigmodel.cn') ? { thinking: { type: 'disabled' } } : undefined
+}
+
 export interface ChatCompletionOpts {
   maxTokens?: number
   temperature?: number
@@ -228,6 +233,7 @@ export async function chatCompletion(
         stream: false,
         max_tokens: maxTokens,
         temperature,
+        ...zhipuThinking(settings),
       }),
       signal: controller.signal,
     })
@@ -275,7 +281,7 @@ export function streamChat(
       resp = await fetchOrThrow(url, {
         method: 'POST',
         headers: buildHeaders(settings),
-        body: JSON.stringify({ model: settings.model, messages, stream: true }),
+        body: JSON.stringify({ model: settings.model, messages, stream: true, ...zhipuThinking(settings) }),
         signal: controller.signal,
       })
     } catch (e) {
