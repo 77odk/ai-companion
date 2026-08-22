@@ -1538,3 +1538,157 @@ textarea.persona-input {
   cursor: pointer;
   opacity: 0.8;
 }
+
+/* ========== 使用指南 ========== */
+.guide-scroll {
+  padding: 8px 0 24px;
+}
+
+.guide-section {
+  margin-bottom: 18px;
+}
+
+.guide-title {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.guide-text {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--color-text);
+}
+
+.guide-card {
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.guide-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.guide-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.guide-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 999px;
+  flex: none;
+}
+
+.chip-free {
+  background: rgba(255, 138, 92, 0.14);
+  color: var(--color-primary-deep);
+}
+
+.chip-paid {
+  background: rgba(154, 125, 116, 0.14);
+  color: var(--color-text-muted);
+}
+
+.guide-card-note {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary-deep);
+}
+
+.guide-card .guide-text {
+  margin-bottom: 6px;
+}
+
+.guide-fit {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.guide-quote {
+  padding: 10px 14px;
+  background: rgba(255, 138, 92, 0.08);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.7;
+  color: var(--color-primary-deep);
+  text-align: center;
+}
+
+.guide-list {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--color-text);
+}
+
+.guide-list li {
+  margin-bottom: 4px;
+}
+
+.guide-step {
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.guide-step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.guide-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-deep));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.guide-step-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.guide-ol {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--color-text);
+}
+
+.guide-ol li {
+  margin-bottom: 3px;
+}
+
+.guide-cta {
+  width: 100%;
+  margin-top: 6px;
+}

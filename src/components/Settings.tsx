@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from 'react'
 import ProviderSelect from './ProviderSelect'
 import AvatarPicker from './AvatarPicker'
 import DefaultAvatar from './DefaultAvatar'
+import GuideDetail from './Guide'
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -21,7 +22,7 @@ import {
 import { ChatError, testConnection } from '../lib/api'
 
 type TestState = 'idle' | 'testing' | 'success' | 'error'
-type Page = 'main' | 'ai' | 'provider' | 'about'
+type Page = 'main' | 'ai' | 'provider' | 'guide' | 'about'
 
 interface Props {
   onOpenSpace?: () => void
@@ -37,10 +38,20 @@ export default function Settings({ onOpenSpace, onGoWelcome }: Props) {
   if (page === 'provider') {
     return <ProviderDetail onBack={() => setPage('main')} />
   }
+  if (page === 'guide') {
+    return <GuideDetail onBack={() => setPage('main')} onGoProvider={() => setPage('provider')} />
+  }
   if (page === 'about') {
     return <AboutDetail onBack={() => setPage('main')} onGoWelcome={onGoWelcome} />
   }
-  return <MainCenter onOpenAI={() => setPage('ai')} onOpenProvider={() => setPage('provider')} onOpenAbout={() => setPage('about')} />
+  return (
+    <MainCenter
+      onOpenAI={() => setPage('ai')}
+      onOpenProvider={() => setPage('provider')}
+      onOpenGuide={() => setPage('guide')}
+      onOpenAbout={() => setPage('about')}
+    />
+  )
 }
 
 /* ---------------- 详情页通用：左上角返回 ---------------- */
@@ -73,10 +84,12 @@ function DetailHeader({ title, onBack }: { title: string; onBack: () => void }) 
 function MainCenter({
   onOpenAI,
   onOpenProvider,
+  onOpenGuide,
   onOpenAbout,
 }: {
   onOpenAI: () => void
   onOpenProvider: () => void
+  onOpenGuide: () => void
   onOpenAbout: () => void
 }) {
   const [user, setUser] = useState<UserProfile>(() => loadUserProfile())
@@ -150,6 +163,7 @@ function MainCenter({
 
       <ProfileGroup title="设置">
         <EntryRow icon={<KeyIcon />} label="服务商配置" onClick={onOpenProvider} />
+        <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
       </ProfileGroup>
 
       <ProfileGroup title="关于忆文">
@@ -212,6 +226,13 @@ const InfoIcon = () => (
     <circle cx="12" cy="12" r="9" />
     <path d="M12 8h.01" />
     <path d="M11 12h1v4h1" />
+  </svg>
+)
+
+const BookIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
   </svg>
 )
 
