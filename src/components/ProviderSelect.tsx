@@ -32,6 +32,7 @@ export default function ProviderSelect({ value, onChange }: Props) {
       {value !== 'custom' && (
         <p className="hint">
           默认模型 {DEFAULT_SETTINGS[value].model} · 地址 {DEFAULT_SETTINGS[value].baseUrl}
+          {value === 'openai' && ' · 官方地址国内直连不稳，连不上请用中转站地址（高级设置里改）'}
         </p>
       )}
     </div>

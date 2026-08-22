@@ -312,7 +312,7 @@ function ProviderDetail({ onBack }: { onBack: () => void }) {
   const [apiKey, setApiKey] = useState(initial.providers[initial.provider].apiKey)
   const [baseUrl, setBaseUrl] = useState(initial.providers[initial.provider].baseUrl)
   const [model, setModel] = useState(initial.providers[initial.provider].model)
-  const [advancedOpen, setAdvancedOpen] = useState(initial.provider === 'custom')
+  const [advancedOpen, setAdvancedOpen] = useState(initial.provider === 'custom' || initial.provider === 'openai')
   const [saved, setSaved] = useState(false)
   const [testState, setTestState] = useState<TestState>('idle')
   const [testMsg, setTestMsg] = useState('')
@@ -324,8 +324,8 @@ function ProviderDetail({ onBack }: { onBack: () => void }) {
     setApiKey(cfg.apiKey)
     setBaseUrl(cfg.baseUrl || DEFAULT_SETTINGS[p].baseUrl)
     setModel(cfg.model || DEFAULT_SETTINGS[p].model)
-    // 自定义服务商必须填地址，自动展开高级设置
-    setAdvancedOpen(p === 'custom')
+    // 自定义/OpenAI 必须填地址（OpenAI 官方地址国内直连不稳，需填中转站或挂代理），自动展开高级设置
+    setAdvancedOpen(p === 'custom' || p === 'openai')
     setTestState('idle')
     setTestMsg('')
   }
