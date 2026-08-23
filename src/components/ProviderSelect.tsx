@@ -16,8 +16,8 @@ const GROUPS: { label: string; options: Option[] }[] = [
   {
     label: '免费',
     options: [
-      { value: 'zhipu', label: '智谱 GLM（免费·推荐）' },
-      { value: 'volcengine', label: '火山豆包（免费）' },
+      { value: 'volcengine', label: '火山豆包（免费·推荐）' },
+      { value: 'zhipu', label: '智谱 GLM（免费）' },
     ],
   },
   {
@@ -50,15 +50,15 @@ export default function ProviderSelect({ value, onChange }: Props) {
           </optgroup>
         ))}
       </select>
-      {value === 'zhipu' ? (
+      {value === 'volcengine' ? (
         <p className="hint">
-          免费 · 默认推荐：注册就送免费额度，日常聊天不用花一分钱。默认模型 {DEFAULT_SETTINGS.zhipu.model} · 地址{' '}
-          {DEFAULT_SETTINGS.zhipu.baseUrl}
-        </p>
-      ) : value === 'volcengine' ? (
-        <p className="hint">
-          免费 · 每天 200 万 token 额度（次日返还），实名开通即可用。默认模型 doubao-seed-character · 地址{' '}
+          免费 · 推荐：每天 200 万 token 额度（次日返还），实名开通即可用，聊天稳定不挤。默认模型 doubao-seed-character · 地址{' '}
           {DEFAULT_SETTINGS.volcengine.baseUrl}
+        </p>
+      ) : value === 'zhipu' ? (
+        <p className="hint">
+          免费 · 注册就送免费额度，日常聊天不用花一分钱。默认模型 {DEFAULT_SETTINGS.zhipu.model} · 地址{' '}
+          {DEFAULT_SETTINGS.zhipu.baseUrl}
         </p>
       ) : value !== 'custom' ? (
         <p className="hint">
