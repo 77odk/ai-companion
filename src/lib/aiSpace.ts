@@ -29,6 +29,7 @@ import {
   buildLlmPost,
 } from './aiSpaceLlm'
 import { chatCompletion } from './api'
+import { notifyDataChanged } from './dataChange'
 import { loadPersona, loadSettings } from './storage'
 
 const POSTS_KEY = 'ai_space_posts'
@@ -70,6 +71,7 @@ function saveState(state: SpaceState): void {
   localStorage.setItem(POSTS_KEY, JSON.stringify(state.posts))
   localStorage.setItem(LAST_VISIT_KEY, String(state.lastVisit ?? ''))
   localStorage.setItem(USED_KEY, JSON.stringify(state.used))
+  notifyDataChanged()
 }
 
 /** 只读地拿当前已落盘的动态列表（进空间先显示，不阻塞） */

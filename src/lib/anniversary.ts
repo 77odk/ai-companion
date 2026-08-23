@@ -6,6 +6,7 @@
 // 不碰 localStorage，可被 Node 脚本直接跑单测；读写与广播才依赖浏览器。
 
 import { MEMORY_UPDATED_EVENT } from './memory.ts'
+import { notifyDataChanged } from './dataChange.ts'
 import { getFirstSeen } from './storage.ts'
 
 /** 计时模式：正计时（已经 X 天）| 倒计时（还剩 X 天） */
@@ -81,6 +82,7 @@ export function loadAnniversaries(): Anniversary[] {
 /** 保存全部纪念日（调用方负责广播） */
 export function saveAnniversaries(list: Anniversary[]): void {
   localStorage.setItem(ANNIVERSARIES_KEY, JSON.stringify(list))
+  notifyDataChanged()
 }
 
 /** 新增一条纪念日：新条目放最前，保存并广播，返回更新后的全部纪念日 */
@@ -162,6 +164,7 @@ export function setMainAnniversaryId(id: string | null): void {
     // 存不下不影响功能：主展示缺省取第一条
   }
   broadcastAnniversariesUpdated()
+  notifyDataChanged()
 }
 
 /** 解析主展示纪念日：有主展示 id 且还在列表里 → 用那条；否则（含 id 指向已删除条目）取列表第一条；空列表 → null */

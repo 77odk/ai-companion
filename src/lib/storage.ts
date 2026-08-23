@@ -2,6 +2,7 @@
 // v2: 每个服务商独立保存 key/base_url/model，切换服务商互不干扰
 
 import { pickFirstSeen } from './aiSpaceDetail.ts'
+import { notifyDataChanged } from './dataChange.ts'
 import type { SpacePost } from './aiSpaceCore'
 import type { MemoryItem } from './memory'
 
@@ -118,6 +119,7 @@ export function saveSettings(settings: ModelSettings): void {
     SETTINGS_KEY,
     JSON.stringify({ provider: settings.provider, providers }),
   )
+  notifyDataChanged()
 }
 
 // ---- 历史消息 ----
@@ -162,6 +164,7 @@ export function saveMessages(messages: StoredMessage[]): void {
   const cutoff = Date.now() - MESSAGE_WINDOW_DAYS * 24 * 60 * 60 * 1000
   const kept = messages.filter((m) => m.ts >= cutoff)
   localStorage.setItem(MESSAGES_KEY, JSON.stringify(kept.slice(-MESSAGE_LIMIT)))
+  notifyDataChanged()
 }
 
 // ---- 会话起点（刷新对话：TA 忘了之前聊的，聊天记录还在） ----
@@ -204,6 +207,7 @@ export function loadPersona(): string {
 
 export function savePersona(persona: string): void {
   localStorage.setItem(PERSONA_KEY, persona)
+  notifyDataChanged()
 }
 
 // ---- 我的资料（用户） ----
@@ -237,6 +241,7 @@ export function loadUserProfile(): UserProfile {
 
 export function saveUserProfile(p: UserProfile): void {
   localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(p))
+  notifyDataChanged()
 }
 
 // ---- 我的 AI（角色资料） ----
@@ -266,6 +271,7 @@ export function loadAIProfile(): AIProfile {
 
 export function saveAIProfile(p: AIProfile): void {
   localStorage.setItem(AI_PROFILE_KEY, JSON.stringify(p))
+  notifyDataChanged()
 }
 
 // ---- TA 的详情页 · firstSeen（认识 TA 的第一天） ----

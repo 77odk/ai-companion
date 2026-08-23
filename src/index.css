@@ -558,6 +558,29 @@ textarea.persona-input {
   flex: 1;
 }
 
+/* 账号与同步 */
+.account-email {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  word-break: break-all;
+}
+
+.account-toggle {
+  margin-top: 14px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.account-toggle:hover {
+  color: var(--color-primary-deep);
+}
+
 .test-result {
   margin: 0;
   padding: 10px 12px;
@@ -3099,6 +3122,16 @@ textarea.persona-input {
   height: 16px;
   color: var(--color-text-muted);
   flex: none;
+}
+
+.entry-status {
+  flex: none;
+  max-width: 44%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--color-text-muted);
 }
 
 /* 详情页通用头部 */

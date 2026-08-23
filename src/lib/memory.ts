@@ -1,6 +1,8 @@
 // 记忆（记住的事实）读写，localStorage 存储
 // 既有字段保持兼容：id / text / createdAt / source；新加的 topic / updatedAt 都是可选字段
 
+import { notifyDataChanged } from './dataChange.ts'
+
 export interface MemoryItem {
   id: string
   text: string
@@ -27,6 +29,7 @@ export const MEMORY_UPDATED_EVENT = 'memory-updated'
 
 /** 广播"记忆有变化"：同页签内跨组件通知（storage 事件同页签不触发，所以用自定义事件） */
 export function notifyMemoryUpdated(): void {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return
   window.dispatchEvent(new Event(MEMORY_UPDATED_EVENT))
 }
 
@@ -47,6 +50,7 @@ export function loadMemory(): MemoryItem[] {
 
 export function saveMemory(items: MemoryItem[]): void {
   localStorage.setItem(MEMORY_KEY, JSON.stringify(items))
+  notifyDataChanged()
 }
 
 function newId(): string {

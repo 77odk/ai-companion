@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && node postbuild.cjs",
+    "test": "node --test scripts/test_*.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "deploy": "vite build && gh-pages -d dist"

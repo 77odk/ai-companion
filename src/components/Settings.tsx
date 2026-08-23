@@ -3,6 +3,7 @@ import ProviderSelect from './ProviderSelect'
 import AvatarPicker from './AvatarPicker'
 import DefaultAvatar from './DefaultAvatar'
 import GuideDetail from './Guide'
+import Account from './Account'
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -19,10 +20,11 @@ import {
   type UserProfile,
   type AIProfile,
 } from '../lib/storage'
+import { getAccount } from '../lib/sync'
 import { ChatError, testConnection } from '../lib/api'
 
 type TestState = 'idle' | 'testing' | 'success' | 'error'
-type Page = 'main' | 'ai' | 'provider' | 'guide' | 'about'
+type Page = 'main' | 'ai' | 'provider' | 'guide' | 'about' | 'account'
 
 interface Props {
   onOpenSpace?: () => void
@@ -44,8 +46,12 @@ export default function Settings({ onOpenSpace, onGoWelcome }: Props) {
   if (page === 'about') {
     return <AboutDetail onBack={() => setPage('main')} onGoWelcome={onGoWelcome} />
   }
+  if (page === 'account') {
+    return <Account onBack={() => setPage('main')} />
+  }
   return (
     <MainCenter
+      onOpenAccount={() => setPage('account')}
       onOpenAI={() => setPage('ai')}
       onOpenProvider={() => setPage('provider')}
       onOpenGuide={() => setPage('guide')}
@@ -82,11 +88,13 @@ function DetailHeader({ title, onBack }: { title: string; onBack: () => void }) 
 /* ---------------- 主页面：顶部资料卡 + 分组入口 ---------------- */
 
 function MainCenter({
+  onOpenAccount,
   onOpenAI,
   onOpenProvider,
   onOpenGuide,
   onOpenAbout,
 }: {
+  onOpenAccount: () => void
   onOpenAI: () => void
   onOpenProvider: () => void
   onOpenGuide: () => void
@@ -94,6 +102,8 @@ function MainCenter({
 }) {
   const [user, setUser] = useState<UserProfile>(() => loadUserProfile())
   const [picking, setPicking] = useState(false)
+  // 登录状态：只在进「我的」页时读一次；去账号页登录/退出回来会重新挂载，读到最新值
+  const accountEmail = getAccount()?.email ?? null
 
   const updateUser = (patch: Partial<UserProfile>) => {
     const next = { ...user, ...patch }
@@ -157,6 +167,15 @@ function MainCenter({
         )}
       </div>
 
+      <ProfileGroup title="账号">
+        <EntryRow
+          icon={<CloudSyncIcon />}
+          label="账号与同步"
+          onClick={onOpenAccount}
+          status={accountEmail ?? '未登录'}
+        />
+      </ProfileGroup>
+
       <ProfileGroup title="我的 AI">
         <EntryRow icon={<PortraitIcon />} label="TA 的资料" onClick={onOpenAI} />
       </ProfileGroup>
@@ -182,11 +201,22 @@ function ProfileGroup({ title, children }: { title: string; children: ReactNode 
   )
 }
 
-function EntryRow({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+function EntryRow({
+  icon,
+  label,
+  onClick,
+  status,
+}: {
+  icon: ReactNode
+  label: string
+  onClick: () => void
+  status?: string
+}) {
   return (
     <button type="button" className="entry-row" onClick={onClick}>
       <span className="entry-icon">{icon}</span>
       <span className="entry-label">{label}</span>
+      {status && <span className="entry-status">{status}</span>}
       <svg
         className="entry-chevron"
         viewBox="0 0 24 24"
@@ -204,6 +234,14 @@ function EntryRow({ icon, label, onClick }: { icon: ReactNode; label: string; on
 }
 
 /* ---------------- 分组入口的小图标（线条 SVG） ---------------- */
+
+const CloudSyncIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.7-1.5A4 4 0 0 1 17 18H7z" />
+    <path d="M12 9.5v6" />
+    <path d="M9.5 13l2.5 2.5 2.5-2.5" />
+  </svg>
+)
 
 const PortraitIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
