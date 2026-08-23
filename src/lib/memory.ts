@@ -224,6 +224,23 @@ export function stripMemoryMarkers(text: string): string {
     .trim()
 }
 
+// ---- 记忆注入视角转换：用户说的「我」转成「对方」，防止模型把用户的"我"当成自己的"我" ----
+
+/**
+ * 记忆注入前的人称转换：用户聊天里的「我」是用户视角，直接喂给模型会被当成 TA 自己的「我」
+ * （豆包 character 这类角色扮演模型尤其敏感）。统一转成「对方」：
+ *   「我老公是李贝贝」→「对方老公是李贝贝」
+ *   「我的生日是…」 →「对方的生日是…」
+ * 「我们」原样保留（是双方的共同语境）。
+ */
+export function toPromptPerspective(text: string): string {
+  return text
+    .replace(/我们/g, '\u0000')
+    .replace(/我的/g, '对方的')
+    .replace(/我/g, '对方')
+    .replace(/\u0000/g, '我们')
+}
+
 // ---- 记忆活跃度：最近提起的靠前，很久没提的沉底，但永不删除 ----
 
 /** 一条记忆的活跃度时间戳：有最近提起用最近提起，否则用首次记录兜底；两者都没有的按最旧沉底 */
@@ -349,7 +366,7 @@ export function recallRelevantMemories(
   opts: RecallOptions = {},
 ): MemoryItem[] {
   const now = opts.now ?? Date.now()
-  const fallbackCount = opts.fallbackCount ?? 5
+  const fallbackCount = opts.fallbackCount ?? 10
   const valid = (Array.isArray(items) ? items : []).filter(
     (m): m is MemoryItem => m != null && typeof m.text === 'string',
   )
@@ -383,12 +400,15 @@ export function recallRelevantMemories(
     }
   }
 
-  // 一条都没命中 → 兜底最活跃前 N（pinned 恒全量，其余按活跃度补到 N 条）
+  // 一条都没命中 → 兜底：pinned 全量 + explicit（用户明说）全量 + 其余按活跃度补到 fallbackCount。
+  // 刷新对话/无上下文时走这里：保证关键事实（置顶的、用户亲口说的）永远在 TA 的脑子里。
   if (matched.length === 0) {
     const ranked = rankDualSource(valid, now)
     const pin = ranked.filter((m) => m.pinned === true)
-    const others = ranked.filter((m) => m.pinned !== true)
-    return [...pin, ...others.slice(0, Math.max(0, fallbackCount - pin.length))]
+    const explicit = ranked.filter((m) => m.explicit === true && m.pinned !== true)
+    const others = ranked.filter((m) => m.pinned !== true && m.explicit !== true)
+    const restCount = Math.max(0, fallbackCount - pin.length - explicit.length)
+    return [...pin, ...explicit, ...others.slice(0, restCount)]
   }
 
   return rankDualSource([...pinned, ...matched], now)

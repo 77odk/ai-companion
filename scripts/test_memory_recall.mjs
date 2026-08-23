@@ -109,7 +109,7 @@ const six = [
   M('f', '睡觉', tRecent, { topic: '其他' }),
 ]
 const res6 = recallRelevantMemories(six, '好的呀', { now })
-eq(ids(res6), ['c', 'e', 'f', 'b', 'a'], '一条没命中 → 取最活跃前 5（最旧的 d 被裁掉）')
+eq(ids(res6), ['c', 'e', 'f', 'b', 'a', 'd'], '一条没命中 → 默认兜底 10 条（6 条全带）')
 const res6b = recallRelevantMemories(six, '好的呀', { now, fallbackCount: 2 })
 eq(ids(res6b), ['c', 'e'], 'fallbackCount 可配置')
 

@@ -62,6 +62,19 @@ export function stripEmoji(text: string): string {
   )
 }
 
+/**
+ * 硬过滤：删掉角色扮演式的动作旁白（*摸头*、（转身看向窗外）这类），像真人打字一样说话。
+ * 豆包 character 这类模型聊久了会滑回 RP 训练习惯，动作括号越来越多——物理删，保底。
+ */
+export function stripActionMarkers(text: string): string {
+  return text
+    .replace(/\*[^*]*\*/g, '')
+    .replace(/（[^（）]*）/g, '')
+    .replace(/\([^()]*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 // 人机味关键词：命中说明这轮回复像客服/程序，需要重写
 const ROBOTIC_PATTERNS = [
   /(作为(一个)?(AI|人工智能|程序|助手|模型|机器人))/,

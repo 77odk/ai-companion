@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildSystemPrompt, chatCompletion, looksRobotic, streamChat, stripEmoji, type ApiMessage } from '../lib/api'
-import { extractMemories, loadMemory, notifyMemoryUpdated, recallRelevantMemories, stripMemoryMarkers, touchMemory, upsertMemoryItem } from '../lib/memory'
+import { buildSystemPrompt, chatCompletion, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage } from '../lib/api'
+import { extractMemories, loadMemory, notifyMemoryUpdated, recallRelevantMemories, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
@@ -85,7 +85,8 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     if (memory.length > 0) {
       apiMessages.push({
         role: 'system',
-        content: '关于对方你已经记住的事实：\n' + memory.map((m) => `- ${m.text}`).join('\n'),
+        content:
+          '关于对方你已经记住的事实：\n' + memory.map((m) => `- ${toPromptPerspective(m.text)}`).join('\n'),
       })
       // 这次注入 = 提起了这些记忆：非重要条目刷新「最近提起」活跃度；不广播（频繁调用会让记忆页跟着刷新）
       const now = Date.now()
@@ -115,7 +116,7 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
         }
       }
       // 人机味质检：这轮回复像客服/程序（"我是AI""TA是指""有什么可以帮你的吗"），自动重写一次
-      const cleaned = stripEmoji(raw)
+      const cleaned = stripActionMarkers(stripEmoji(raw))
       if (cleaned && looksRobotic(cleaned) && !retriedRef.current) {
         retriedRef.current = true
         setError(null)
@@ -130,7 +131,7 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
           },
         ])
           .then((retry) => {
-            const retryCleaned = stripEmoji(retry)
+            const retryCleaned = stripActionMarkers(stripEmoji(retry))
             if (!retryCleaned || looksRobotic(retryCleaned)) {
               // 重写还是人机味？就用示范语气兜底，别让用户看到AI腔
               const fallback = '嗯，我在。刚才没好好说话，重说一遍——我在呢。'
@@ -167,7 +168,7 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     const controller = streamChat(settings, apiMessages, {
       onToken: (t) => {
         assistantText.current += t
-        setMessages([...messages, userMsg, { role: 'assistant', content: stripEmoji(assistantText.current), ts: assistantTs }])
+        setMessages([...messages, userMsg, { role: 'assistant', content: stripActionMarkers(stripEmoji(assistantText.current)), ts: assistantTs }])
       },
       onDone: finalize,
       onError: (err) => {
