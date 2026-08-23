@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildSystemPrompt, chatCompletion, looksRobotic, streamChat, stripEmoji, type ApiMessage } from '../lib/api'
 import { extractMemories, loadMemory, notifyMemoryUpdated, recallRelevantMemories, stripMemoryMarkers, touchMemory, upsertMemoryItem } from '../lib/memory'
-import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, type StoredMessage } from '../lib/storage'
+import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
 
@@ -16,6 +16,8 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // 发送失败的那条消息：429 切换豆包后填回输入框，不丢内容不重复
+  const [failedText, setFailedText] = useState<string | null>(null)
   const [hasKey] = useState(() => Boolean(loadSettings().apiKey))
 
   // 会话起点（M7-3 刷新对话）：setSessionStart 后聊天页只显示/只发送起点之后的消息；
@@ -171,6 +173,7 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
       onError: (err) => {
         finalize()
         setError(err.message)
+        setFailedText(userMsg.content)
       },
     })
     controllerRef.current = controller
@@ -223,7 +226,30 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
         )}
       </div>
 
-      {error && <div className="chat-error">{error}</div>}
+      {error && (
+        <div className="chat-error-wrap">
+          <div className="chat-error">{error}</div>
+          {isRateLimitError(error) && (
+            <RateLimitFallback
+              hasDoubao={Boolean(loadSettings().providers.volcengine?.apiKey)}
+              onSwitch={() => {
+                const s = loadSettings()
+                const doubao = s.providers.volcengine
+                if (!doubao.apiKey) return
+                saveSettings({
+                  provider: 'volcengine',
+                  apiKey: doubao.apiKey,
+                  baseUrl: doubao.baseUrl,
+                  model: doubao.model,
+                })
+                setError(null)
+                if (failedText) setInput(failedText)
+              }}
+              onGoSettings={onGoSettings}
+            />
+          )}
+        </div>
+      )}
 
       <div className="composer">
         <textarea
@@ -250,6 +276,41 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+/** 判断是否是限流/繁忙类错误（智谱高峰 429 等） */
+function isRateLimitError(message: string): boolean {
+  return message.includes('429') || message.includes('太频繁') || message.includes('访问量过大')
+}
+
+/** 429 时的小字提示 + 切换按钮（放在错误提示下面，不打断聊天） */
+function RateLimitFallback({
+  hasDoubao,
+  onSwitch,
+  onGoSettings,
+}: {
+  hasDoubao: boolean
+  onSwitch: () => void
+  onGoSettings: () => void
+}) {
+  if (hasDoubao) {
+    return (
+      <div className="rate-fallback">
+        <span className="rate-fallback-text">智谱现在太挤了，切到豆包不排队。</span>
+        <button type="button" className="rate-fallback-btn" onClick={onSwitch}>
+          切到豆包
+        </button>
+      </div>
+    )
+  }
+  return (
+    <div className="rate-fallback">
+      <span className="rate-fallback-text">智谱现在太挤了，去配个豆包（免费）不排队。</span>
+      <button type="button" className="rate-fallback-btn" onClick={onGoSettings}>
+        去配置豆包
+      </button>
     </div>
   )
 }

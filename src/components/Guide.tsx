@@ -48,22 +48,22 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
 
           <div className="guide-card">
             <div className="guide-card-head">
-              <span className="guide-card-name">🧠 智谱（免费）</span>
-            </div>
-            <p className="guide-text">
-              注册就送 2000 万免费额度，日常聊天、倾诉、问问题随便用，不用花一分钱。还有免费模型一直能用——等于不花钱也能聊。
-            </p>
-            <p className="guide-fit">适合：先试试、日常聊天</p>
-          </div>
-
-          <div className="guide-card">
-            <div className="guide-card-head">
               <span className="guide-card-name">🧠 火山方舟（豆包）</span>
             </div>
             <p className="guide-text">
               每日自动刷新免费额度，日常聊天完全够用，有专为角色扮演设计的模型，更贴人设。
             </p>
             <p className="guide-fit">适合：对人设贴合度要求高，沉浸式对话</p>
+          </div>
+
+          <div className="guide-card">
+            <div className="guide-card-head">
+              <span className="guide-card-name">🧠 智谱（免费）</span>
+            </div>
+            <p className="guide-text">
+              注册就送 2000 万免费额度，日常聊天、倾诉、问问题随便用，不用花一分钱。还有免费模型一直能用——等于不花钱也能聊。
+            </p>
+            <p className="guide-fit">适合：先试试、日常聊天</p>
           </div>
 
           <div className="guide-card">
@@ -130,20 +130,20 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
               <span className="guide-step-name">领免费通行证</span>
             </div>
 
-            <p className="guide-text"><b>智谱（推荐，不用实名）：</b></p>
-            <ol className="guide-ol">
-              <li>手机浏览器打开：bigmodel.cn（智谱开放平台）</li>
-              <li>手机号注册、登录</li>
-              <li>左边菜单点「API 密钥」→「创建 API Key」</li>
-              <li>弹出的一整串字符，马上全选复制保存到自己手机上</li>
-            </ol>
-
-            <p className="guide-text"><b>豆包（备选，实名后更稳定）：</b></p>
+            <p className="guide-text"><b>豆包（推荐，稳定不挤）：</b></p>
             <ol className="guide-ol">
               <li>手机浏览器打开 console.volcengine.com，手机号注册</li>
               <li>实名认证（身份证+人脸，1 分钟）</li>
               <li>进「火山方舟」→「API Key 管理」→ 创建 API Key → 复制（ark- 开头）</li>
               <li>「开通管理」→ 开通 doubao-seed-character-260628</li>
+            </ol>
+
+            <p className="guide-text"><b>智谱（备选，不用实名）：</b></p>
+            <ol className="guide-ol">
+              <li>手机浏览器打开：bigmodel.cn（智谱开放平台）</li>
+              <li>手机号注册、登录</li>
+              <li>左边菜单点「API 密钥」→「创建 API Key」</li>
+              <li>弹出的一整串字符，马上全选复制保存到自己手机上</li>
             </ol>
 
             <p className="guide-text">提示：通行证需保密，别发给别人</p>
@@ -157,7 +157,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
             <ol className="guide-ol">
               <li>打开忆文 → 点「开始使用」</li>
               <li>底部「我的」→「服务商配置」</li>
-              <li>服务商选「智谱 GLM」（领了豆包的通行证就选「火山豆包」）</li>
+              <li>服务商选「火山豆包」（领了智谱的通行证就选「智谱 GLM」）</li>
               <li>把通行证粘进「API Key」一栏</li>
               <li>其他不用动，点「测试连接」→ 显示「连接成功」就对</li>
               <li>点「保存」</li>
