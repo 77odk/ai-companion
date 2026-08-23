@@ -133,8 +133,8 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
           .then((retry) => {
             const retryCleaned = stripActionMarkers(stripEmoji(retry))
             if (!retryCleaned || looksRobotic(retryCleaned) || looksFabricated(retryCleaned)) {
-              // 重写还是有问题？就用兜底话，别让用户看到AI腔/编造
-              const fallback = '这个我说不好，你提醒我一下吧。'
+              // 重写还是有问题？就用兜底话，自然带过但不编造
+              const fallback = '这个我还真没头绪，你跟我说说呗。'
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: fallback, ts: Date.now() }]
               saveMessages(final)
               setMessages(final)
