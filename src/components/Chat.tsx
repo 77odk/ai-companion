@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildSystemPrompt, chatCompletion, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage } from '../lib/api'
+import { buildSystemPrompt, chatCompletion, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage } from '../lib/api'
 import { extractMemories, loadMemory, notifyMemoryUpdated, recallRelevantMemories, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
@@ -115,9 +115,9 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
           notifyMemoryUpdated()
         }
       }
-      // 人机味质检：这轮回复像客服/程序（"我是AI""TA是指""有什么可以帮你的吗"），自动重写一次
+      // 人机味/编造质检：回复像客服（"我是AI"）或编造共同经历（"我们之前一起…"）→ 自动重写一次
       const cleaned = stripActionMarkers(stripEmoji(raw))
-      if (cleaned && looksRobotic(cleaned) && !retriedRef.current) {
+      if (cleaned && (looksRobotic(cleaned) || looksFabricated(cleaned)) && !retriedRef.current) {
         retriedRef.current = true
         setError(null)
         setMessages([...messages, userMsg, { role: 'assistant', content: '…', ts: assistantTs }])
@@ -127,14 +127,14 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
           {
             role: 'user',
             content:
-              '你刚才的回复太像客服/程序了。忘掉那句，用你真实的身份、像真人一样重新回答一遍，简短自然。',
+              '你刚才的回复有问题（像客服/程序，或者说了没有依据的话、编造了我们共同经历）。忘掉那句，重新回答：说话要有依据，不知道的事就说不知道、让对方提醒你，别编造、别圆场、别装熟。像真人一样简短自然。',
           },
         ])
           .then((retry) => {
             const retryCleaned = stripActionMarkers(stripEmoji(retry))
-            if (!retryCleaned || looksRobotic(retryCleaned)) {
-              // 重写还是人机味？就用示范语气兜底，别让用户看到AI腔
-              const fallback = '嗯，我在。刚才没好好说话，重说一遍——我在呢。'
+            if (!retryCleaned || looksRobotic(retryCleaned) || looksFabricated(retryCleaned)) {
+              // 重写还是有问题？就用兜底话，别让用户看到AI腔/编造
+              const fallback = '这个我说不好，你提醒我一下吧。'
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: fallback, ts: Date.now() }]
               saveMessages(final)
               setMessages(final)
