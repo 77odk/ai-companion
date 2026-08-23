@@ -220,6 +220,7 @@ export async function testConnection(settings: ModelSettings): Promise<void> {
         messages: [{ role: 'user', content: '你好，请只回复四个字：连接成功' }],
         max_tokens: 10,
         stream: false,
+        ...zhipuThinking(settings),
       }),
     })
   } catch (e) {
