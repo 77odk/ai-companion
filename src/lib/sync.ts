@@ -68,7 +68,7 @@ const ANNIVERSARIES_KEY = 'ai_companion_anniversaries'
 const MAIN_ANNIVERSARY_KEY = 'ai_companion_main_anniversary'
 const SPACE_POSTS_KEY = 'ai_space_posts'
 
-const ALL_PROVIDERS: Provider[] = ['deepseek', 'zhipu', 'openai', 'custom']
+const ALL_PROVIDERS: Provider[] = ['deepseek', 'zhipu', 'openai', 'custom', 'volcengine']
 
 // ---- 账号（localStorage key 'ai_companion_account'） ----
 

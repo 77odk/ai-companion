@@ -6,7 +6,7 @@ import { notifyDataChanged } from './dataChange.ts'
 import type { SpacePost } from './aiSpaceCore'
 import type { MemoryItem } from './memory'
 
-export type Provider = 'deepseek' | 'zhipu' | 'openai' | 'custom'
+export type Provider = 'deepseek' | 'zhipu' | 'openai' | 'custom' | 'volcengine'
 
 export interface ModelSettings {
   provider: Provider
@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS: Record<Provider, { baseUrl: string; model: string
   zhipu: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4.7-flash' },
   openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   custom: { baseUrl: '', model: 'gpt-4o-mini' },
+  volcengine: { baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seed-character-260628' },
 }
 
 /** 服务商显示名（用于提示文案） */
@@ -37,6 +38,7 @@ export const PROVIDER_NAMES: Record<Provider, string> = {
   zhipu: '智谱',
   openai: 'OpenAI',
   custom: '自定义',
+  volcengine: '火山豆包',
 }
 
 function defaultProviderConfig(p: Provider): ProviderConfig {
@@ -49,6 +51,7 @@ function defaultProviders(): Record<Provider, ProviderConfig> {
     zhipu: defaultProviderConfig('zhipu'),
     openai: defaultProviderConfig('openai'),
     custom: defaultProviderConfig('custom'),
+    volcengine: defaultProviderConfig('volcengine'),
   }
 }
 
@@ -56,7 +59,7 @@ function normalizeProviders(raw: unknown): Record<Provider, ProviderConfig> {
   const base = defaultProviders()
   if (raw == null || typeof raw !== 'object') return base
   const r = raw as Record<string, Partial<ProviderConfig>>
-  for (const p of ['deepseek', 'zhipu', 'openai', 'custom'] as Provider[]) {
+  for (const p of ['deepseek', 'zhipu', 'openai', 'custom', 'volcengine'] as Provider[]) {
     const item = r[p]
     if (item == null || typeof item !== 'object') continue
     if (typeof item.apiKey === 'string') base[p].apiKey = item.apiKey
@@ -88,7 +91,8 @@ export function loadSettings(): ModelSettings & { providers: Record<Provider, Pr
       parsed.provider === 'zhipu' ||
       parsed.provider === 'openai' ||
       parsed.provider === 'custom' ||
-      parsed.provider === 'deepseek'
+      parsed.provider === 'deepseek' ||
+      parsed.provider === 'volcengine'
         ? parsed.provider
         : 'zhipu'
     const providers = normalizeProviders(parsed.providers)

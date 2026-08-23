@@ -5,13 +5,13 @@
 
 import type { Provider } from './storage'
 
-export function keyFormatHint(provider: Provider, apiKey: string): string | null {
+export function keyFormatHint(provider: Provider, apiKey: string | null): string | null {
   const key = (apiKey ?? '').trim()
   if (!key) return null
 
   if (provider === 'zhipu') {
-    if (key.startsWith('sk-')) {
-      return '这个 key 看着像 DeepSeek/OpenAI 的，智谱的 key 是数字开头的，是不是服务商选错了？'
+    if (key.startsWith('sk-') || key.startsWith('ark-')) {
+      return '这个 key 看着像别的平台的，智谱的 key 是数字开头的，是不是服务商选错了？'
     }
     return null
   }
@@ -19,6 +19,13 @@ export function keyFormatHint(provider: Provider, apiKey: string): string | null
   if (provider === 'deepseek') {
     if (!key.startsWith('sk-')) {
       return 'DeepSeek 的 key 一般以 sk- 开头，确认没选错服务商？'
+    }
+    return null
+  }
+
+  if (provider === 'volcengine') {
+    if (!key.startsWith('ark-')) {
+      return '火山豆包的 key 以 ark- 开头（在火山方舟控制台 API Key 管理里创建），确认没选错服务商？'
     }
     return null
   }

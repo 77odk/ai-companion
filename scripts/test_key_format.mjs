@@ -25,10 +25,11 @@ function eq(actual, expected, name) {
   ok(a === b, `${name}（得 ${a}，期望 ${b}）`)
 }
 
-console.log('\n[1] 智谱：sk- 开头的 key 提示选错服务商')
+console.log('\n[1] 智谱：sk- / ark- 开头的 key 提示选错服务商')
 const zhipuHint = keyFormatHint('zhipu', 'sk-abc123')
-eq(zhipuHint, '这个 key 看着像 DeepSeek/OpenAI 的，智谱的 key 是数字开头的，是不是服务商选错了？', 'sk- 开头 → 返回智谱提示')
+eq(zhipuHint, '这个 key 看着像别的平台的，智谱的 key 是数字开头的，是不是服务商选错了？', 'sk- 开头 → 返回智谱提示')
 ok(typeof zhipuHint === 'string' && zhipuHint.includes('选错'), '提示文案包含「选错」')
+eq(keyFormatHint('zhipu', 'ark-xxx'), zhipuHint, 'ark- 开头 → 同样提示')
 
 console.log('\n[2] 智谱：数字格式的 key 通过（不提示）')
 eq(keyFormatHint('zhipu', '1234567890.abcdef'), null, '数字.数字 格式 → null')
@@ -45,6 +46,12 @@ eq(keyFormatHint('deepseek', 'sk-abc123'), null, 'sk- 开头 → null')
 console.log('\n[5] OpenAI / 自定义：不检测')
 eq(keyFormatHint('openai', 'anything-here'), null, 'openai 任何 key → null')
 eq(keyFormatHint('custom', 'anything-here'), null, 'custom 任何 key → null')
+
+console.log('\n[5b] 火山豆包：ark- 开头通过，非 ark- 提示')
+eq(keyFormatHint('volcengine', 'ark-4a958eb6-xxx'), null, 'ark- 开头 → null')
+const vHint = keyFormatHint('volcengine', 'sk-abc')
+ok(typeof vHint === 'string' && vHint.includes('ark-'), '非 ark- → 提示包含 ark-')
+eq(keyFormatHint('volcengine', ''), null, '空串 → null')
 
 console.log('\n[6] 空 key / 纯空白：不提示')
 eq(keyFormatHint('zhipu', ''), null, '空串 → null')
