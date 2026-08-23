@@ -24,7 +24,7 @@ import { loadMemory, type MemoryItem } from './memory.ts'
 import { loadAnniversaries, getMainAnniversaryId, type Anniversary } from './anniversary.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
 
-const API_BASE = 'http://106.55.2.38:8787'
+const API_BASE = 'https://vertex-confidentiality-kidney-starsmerchant.trycloudflare.com'
 
 export interface Account {
   token: string
