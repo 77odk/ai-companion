@@ -251,7 +251,7 @@ export function formatAnniversaryDate(date: string): string {
  * - forward（正计时）：「已经 X 天」——X = 从最近一次 a.date 到 now 的天数。
  *   日期 'MM-DD'（每年循环）按今年算，今年还没到就按去年那次算（已过则跨年）；
  *   'YYYY-MM-DD'（一次性）按绝对日期算，未来的兜底显示「还剩 N 天」。
- * - countdown（倒计时）：「还剩 X 天」，日期计算与 daysUntil 一致；已过的显示「已过 N 天」。
+ * - countdown（倒计时）：「还剩 X 天」——永远指向「下一次」这个日子：日期已过（含带年份的生日）自动顺延到明年同月日。
  * - 今天（差 0 天）统一显示「就是今天」。
  * 无 countMode 按 forward 兼容旧数据。日期非法返回空串。
  */
@@ -263,11 +263,15 @@ export function formatCountdown(a: Anniversary, now: number = Date.now()): strin
   const today = dayNumber(d.getFullYear(), d.getMonth() + 1, d.getDate())
 
   if (mode === 'countdown') {
-    const year = parsed.year ?? d.getFullYear()
-    const diff = dayNumber(year, parsed.month, parsed.day) - today
+    let y = parsed.year ?? d.getFullYear()
+    let diff = dayNumber(y, parsed.month, parsed.day) - today
+    if (diff < 0) {
+      // 今年的这个日子已过 → 顺延到明年同月日：倒计时永远指向「下一次」（生日/纪念日每年都要过）
+      y = d.getFullYear() + 1
+      diff = dayNumber(y, parsed.month, parsed.day) - today
+    }
     if (diff === 0) return '就是今天'
-    if (diff > 0) return `还剩 ${diff} 天`
-    return `已过 ${-diff} 天`
+    return `还剩 ${diff} 天`
   }
 
   // 正计时
