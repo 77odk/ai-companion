@@ -122,7 +122,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
         </section>
 
         <section className="guide-section">
-          <h3 className="guide-title">怎么开始？三步：（首推豆包）</h3>
+          <h3 className="guide-title">怎么开始？三步：</h3>
 
           <div className="guide-step">
             <div className="guide-step-head">
@@ -130,10 +130,10 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
               <span className="guide-step-name">领免费通行证</span>
             </div>
             <ol className="guide-ol">
-              <li>手机浏览器打开 console.volcengine.com，手机号注册</li>
-              <li>实名认证（身份证+人脸，1 分钟）</li>
-              <li>进「火山方舟」→「API Key 管理」→ 创建 API Key → 复制（ark- 开头）</li>
-              <li>「开通管理」→ 开通 doubao-seed-character-260628</li>
+              <li>手机浏览器打开：bigmodel.cn（智谱开放平台）</li>
+              <li>手机号注册、登录（不用实名）</li>
+              <li>左边菜单点「API 密钥」→「创建 API Key」</li>
+              <li>弹出的一整串字符，马上全选复制保存到自己手机上（只显示一次，关了就没了）</li>
               <li>这是你的通行证，别发给别人</li>
             </ol>
           </div>
@@ -146,7 +146,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
             <ol className="guide-ol">
               <li>打开忆文 → 点「开始使用」</li>
               <li>底部「我的」→「服务商配置」</li>
-              <li>服务商选「火山豆包」</li>
+              <li>服务商选「智谱 GLM」</li>
               <li>把通行证粘进「API Key」一栏</li>
               <li>其他不用动，点「测试连接」→ 显示「连接成功」就对</li>
               <li>点「保存」</li>
@@ -159,8 +159,8 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
               <span className="guide-step-name">开聊！</span>
             </div>
             <p className="guide-text">
-              随便说句「你好」，TA 就会回你。以后想试花钱版，处理更多更难的问题，同一个地方换选「DeepSeek」或者其他自己有的模型
-              API 就行，随时能换。
+              随便说句「你好」，TA 就会回你。想用豆包？火山方舟注册实名后也能用，聊天更稳定；以后想试花钱版，同一个地方换选
+              「DeepSeek」或者其他自己有的模型 API 就行，随时能换。
             </p>
           </div>
 
