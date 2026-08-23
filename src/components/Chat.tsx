@@ -8,9 +8,10 @@ import { takeChatMessage } from '../lib/chatInject'
 
 interface Props {
   onGoSettings: () => void
+  onGoGuide: () => void
 }
 
-export default function Chat({ onGoSettings }: Props) {
+export default function Chat({ onGoSettings, onGoGuide }: Props) {
   const [messages, setMessages] = useState<StoredMessage[]>(() => loadMessages())
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -198,12 +199,17 @@ export default function Chat({ onGoSettings }: Props) {
             <h2>你的 TA 在这里</h2>
             <p>想聊点什么？</p>
             {!hasKey && (
-              <>
-                <p className="welcome-hint">还没配 API Key，先去设置一下吧。</p>
-                <button className="btn btn-primary" onClick={onGoSettings}>
-                  去设置
-                </button>
-              </>
+              <div className="welcome-guide">
+                <p className="welcome-hint">TA 还没接通大脑，30 秒就能开聊。</p>
+                <div className="welcome-actions">
+                  <button className="btn btn-primary" onClick={onGoSettings}>
+                    现在就去配置
+                  </button>
+                  <button className="btn btn-ghost" onClick={onGoGuide}>
+                    先看使用指南
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         ) : (

@@ -1,10 +1,11 @@
 interface Props {
   onStart: () => void
+  onGoGuide: () => void
 }
 
 const FEATURES = ['对话', '长期记忆', 'AI 编程']
 
-export default function Welcome({ onStart }: Props) {
+export default function Welcome({ onStart, onGoGuide }: Props) {
   return (
     <div className="welcome-page">
       <div className="welcome-inner">
@@ -26,6 +27,10 @@ export default function Welcome({ onStart }: Props) {
 
         <button className="btn btn-primary welcome-start" onClick={onStart}>
           开始使用
+        </button>
+
+        <button type="button" className="welcome-guide-link" onClick={onGoGuide}>
+          第一次来？先花 30 秒看看教程
         </button>
 
         <p className="welcome-foot">记得住你，也帮得上你</p>

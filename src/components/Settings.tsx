@@ -30,16 +30,18 @@ type Page = 'main' | 'ai' | 'provider' | 'guide' | 'about' | 'account'
 interface Props {
   onOpenSpace?: () => void
   onGoWelcome?: () => void
+  /** 进入设置页时打开的子页（欢迎页/聊天页的引导入口会带 'guide'） */
+  initialPage?: Page
 }
 
-export default function Settings({ onOpenSpace, onGoWelcome }: Props) {
-  const [page, setPage] = useState<Page>('main')
+export default function Settings({ onOpenSpace, onGoWelcome, initialPage }: Props) {
+  const [page, setPage] = useState<Page>(initialPage ?? 'main')
 
   if (page === 'ai') {
     return <AIDetail onBack={() => setPage('main')} onOpenSpace={onOpenSpace} />
   }
   if (page === 'provider') {
-    return <ProviderDetail onBack={() => setPage('main')} />
+    return <ProviderDetail onBack={() => setPage('main')} onGoGuide={() => setPage('guide')} />
   }
   if (page === 'guide') {
     return <GuideDetail onBack={() => setPage('main')} onGoProvider={() => setPage('provider')} />
@@ -345,7 +347,7 @@ function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSpace?: (
 
 /* ---------------- 详情页：服务商配置 ---------------- */
 
-function ProviderDetail({ onBack }: { onBack: () => void }) {
+function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?: () => void }) {
   const [initial] = useState(loadSettings)
   const [provider, setProvider] = useState<Provider>(initial.provider)
   const [apiKey, setApiKey] = useState(initial.providers[initial.provider].apiKey)
@@ -427,6 +429,11 @@ function ProviderDetail({ onBack }: { onBack: () => void }) {
 
       <div className="settings-card">
         <p className="hint">Key 只存你浏览器本地，不经过任何服务器。请放心填写。</p>
+        {onGoGuide && (
+          <button type="button" className="provider-guide-link" onClick={onGoGuide}>
+            不会配？先看使用指南（30 秒看懂）
+          </button>
+        )}
 
         <div className="field">
           <ProviderSelect value={provider} onChange={handleProviderChange} />

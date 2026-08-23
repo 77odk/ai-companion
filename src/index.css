@@ -181,6 +181,54 @@ button {
   margin-top: 4px !important;
 }
 
+/* 聊天页空状态引导卡（没配 key 时） */
+.welcome-guide {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.welcome-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* 欢迎页「先看教程」小链接 */
+.welcome-guide-link {
+  margin-top: 14px;
+  background: none;
+  border: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.welcome-guide-link:hover {
+  color: var(--color-primary);
+}
+
+/* 服务商配置页「不会配？看指南」链接 */
+.provider-guide-link {
+  display: block;
+  width: 100%;
+  margin-bottom: 12px;
+  background: none;
+  border: none;
+  padding: 6px 0;
+  font-size: 13px;
+  text-align: center;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* 消息气泡 */
 .message-row {
   display: flex;

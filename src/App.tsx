@@ -61,7 +61,13 @@ async function forceRefresh(): Promise<void> {
 export default function App() {
   const [view, setView] = useState<View>(bootWelcome ? 'welcome' : 'chat')
   const [spaceFrom, setSpaceFrom] = useState<View>('chat')
+  const [settingsTarget, setSettingsTarget] = useState<'main' | 'guide'>('main')
   const titleClicks = useRef<number[]>([])
+
+  const openSettings = (target: 'main' | 'guide') => {
+    setSettingsTarget(target)
+    setView('settings')
+  }
 
   const openSpace = (from: View) => {
     setSpaceFrom(from)
@@ -84,7 +90,7 @@ export default function App() {
   return (
     <div className="app">
       {view === 'welcome' ? (
-        <Welcome onStart={() => setView('chat')} />
+        <Welcome onStart={() => setView('chat')} onGoGuide={() => openSettings('guide')} />
       ) : view === 'aispace' ? (
         <AISpace onBack={backFromSpace} onGoMine={() => setView('settings')} />
       ) : view === 'anniversary' ? (
@@ -122,11 +128,20 @@ export default function App() {
           </header>
 
           <main className="app-main">
-            {view === 'chat' && <Chat onGoSettings={() => setView('settings')} />}
+            {view === 'chat' && (
+              <Chat
+                onGoSettings={() => openSettings('main')}
+                onGoGuide={() => openSettings('guide')}
+              />
+            )}
             {view === 'memory' && <Memory onOpenAnniversary={() => setView('anniversary')} />}
             {view === 'work' && <Work onGoChat={() => setView('chat')} />}
             {view === 'settings' && (
-              <Settings onOpenSpace={() => openSpace('settings')} onGoWelcome={() => setView('welcome')} />
+              <Settings
+                initialPage={settingsTarget}
+                onOpenSpace={() => openSpace('settings')}
+                onGoWelcome={() => setView('welcome')}
+              />
             )}
           </main>
 
