@@ -109,6 +109,13 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
         </section>
 
         <section className="guide-section">
+          <h3 className="guide-title">账号与同步</h3>
+          <p className="guide-text">
+            「我的」→「账号与同步」→ 邮箱注册登录。换设备登录同一账号，聊天记录、记忆、人设自动同步，不丢。
+          </p>
+        </section>
+
+        <section className="guide-section">
           <h3 className="guide-title">怎么开始？三步：</h3>
 
           <div className="guide-step">
