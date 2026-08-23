@@ -129,13 +129,24 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
               <span className="guide-step-num">1</span>
               <span className="guide-step-name">领免费通行证</span>
             </div>
+
+            <p className="guide-text"><b>智谱（推荐，不用实名）：</b></p>
             <ol className="guide-ol">
               <li>手机浏览器打开：bigmodel.cn（智谱开放平台）</li>
-              <li>手机号注册、登录（不用实名）</li>
+              <li>手机号注册、登录</li>
               <li>左边菜单点「API 密钥」→「创建 API Key」</li>
-              <li>弹出的一整串字符，马上全选复制保存到自己手机上（只显示一次，关了就没了）</li>
-              <li>这是你的通行证，别发给别人</li>
+              <li>弹出的一整串字符，马上全选复制保存到自己手机上</li>
             </ol>
+
+            <p className="guide-text"><b>豆包（备选，实名后更稳定）：</b></p>
+            <ol className="guide-ol">
+              <li>手机浏览器打开 console.volcengine.com，手机号注册</li>
+              <li>实名认证（身份证+人脸，1 分钟）</li>
+              <li>进「火山方舟」→「API Key 管理」→ 创建 API Key → 复制（ark- 开头）</li>
+              <li>「开通管理」→ 开通 doubao-seed-character-260628</li>
+            </ol>
+
+            <p className="guide-text">提示：通行证需保密，别发给别人</p>
           </div>
 
           <div className="guide-step">
@@ -146,7 +157,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
             <ol className="guide-ol">
               <li>打开忆文 → 点「开始使用」</li>
               <li>底部「我的」→「服务商配置」</li>
-              <li>服务商选「智谱 GLM」</li>
+              <li>服务商选「智谱 GLM」（领了豆包的通行证就选「火山豆包」）</li>
               <li>把通行证粘进「API Key」一栏</li>
               <li>其他不用动，点「测试连接」→ 显示「连接成功」就对</li>
               <li>点「保存」</li>
@@ -159,8 +170,8 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
               <span className="guide-step-name">开聊！</span>
             </div>
             <p className="guide-text">
-              随便说句「你好」，TA 就会回你。想用豆包？火山方舟注册实名后也能用，聊天更稳定；以后想试花钱版，同一个地方换选
-              「DeepSeek」或者其他自己有的模型 API 就行，随时能换。
+              随便说句「你好」，TA 就会回你。以后想试花钱版，处理更多更难的问题，同一个地方换选「DeepSeek」或者其他自有的模型
+              API 就行，随时能换。
             </p>
           </div>
 
