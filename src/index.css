@@ -459,6 +459,14 @@ textarea.persona-input {
   color: var(--color-text-muted);
 }
 
+/* key 格式不对时输入框下方的红色小字（帮用户发现选错服务商） */
+.key-format-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #b3261e;
+}
+
 .settings-actions {
   display: flex;
   gap: 10px;

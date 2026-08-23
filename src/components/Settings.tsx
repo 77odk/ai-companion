@@ -22,6 +22,7 @@ import {
 } from '../lib/storage'
 import { getAccount } from '../lib/sync'
 import { ChatError, testConnection } from '../lib/api'
+import { keyFormatHint } from '../lib/keyFormat'
 
 type TestState = 'idle' | 'testing' | 'success' | 'error'
 type Page = 'main' | 'ai' | 'provider' | 'guide' | 'about' | 'account'
@@ -350,6 +351,9 @@ function ProviderDetail({ onBack }: { onBack: () => void }) {
   const [apiKey, setApiKey] = useState(initial.providers[initial.provider].apiKey)
   const [baseUrl, setBaseUrl] = useState(initial.providers[initial.provider].baseUrl)
   const [model, setModel] = useState(initial.providers[initial.provider].model)
+  const [keyHint, setKeyHint] = useState<string | null>(() =>
+    keyFormatHint(initial.provider, initial.providers[initial.provider].apiKey),
+  )
   const [advancedOpen, setAdvancedOpen] = useState(initial.provider === 'custom' || initial.provider === 'openai')
   const [saved, setSaved] = useState(false)
   const [testState, setTestState] = useState<TestState>('idle')
@@ -366,6 +370,7 @@ function ProviderDetail({ onBack }: { onBack: () => void }) {
     setAdvancedOpen(p === 'custom' || p === 'openai')
     setTestState('idle')
     setTestMsg('')
+    setKeyHint(keyFormatHint(p, cfg.apiKey))
   }
 
   const currentSettings = (): ModelSettings => ({
@@ -383,6 +388,8 @@ function ProviderDetail({ onBack }: { onBack: () => void }) {
 
   const handleTest = async () => {
     const s = currentSettings()
+    // 点「测试连接」也做一次 key 格式检测，帮用户发现选错服务商
+    setKeyHint(keyFormatHint(s.provider, s.apiKey))
     if (!s.apiKey) {
       setTestState('error')
       setTestMsg('请先填入 ' + PROVIDER_NAMES[s.provider] + ' 的 API Key')
@@ -433,9 +440,13 @@ function ProviderDetail({ onBack }: { onBack: () => void }) {
             type="password"
             placeholder={apiKey ? 'sk-…' : '请填写 ' + PROVIDER_NAMES[provider] + ' 的 API Key'}
             value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
+            onChange={(e) => {
+              setApiKey(e.target.value)
+              setKeyHint(keyFormatHint(provider, e.target.value))
+            }}
             autoComplete="off"
           />
+          {keyHint && <p className="key-format-hint">{keyHint}</p>}
         </div>
 
         <div className="field">
@@ -444,7 +455,7 @@ function ProviderDetail({ onBack }: { onBack: () => void }) {
             id="model"
             className="input"
             type="text"
-            placeholder="deepseek-chat"
+            placeholder="glm-4.7-flash"
             value={model}
             onChange={(e) => setModel(e.target.value)}
             autoComplete="off"

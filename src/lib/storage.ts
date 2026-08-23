@@ -74,7 +74,7 @@ function normalizeProviders(raw: unknown): Record<Provider, ProviderConfig> {
 export function loadSettings(): ModelSettings & { providers: Record<Provider, ProviderConfig> } {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
-    if (!raw) return { provider: 'deepseek', ...defaultProviderConfig('deepseek'), providers: defaultProviders() }
+    if (!raw) return { provider: 'zhipu', ...defaultProviderConfig('zhipu'), providers: defaultProviders() }
     const parsed = JSON.parse(raw) as {
       provider?: string
       providers?: unknown
@@ -83,10 +83,14 @@ export function loadSettings(): ModelSettings & { providers: Record<Provider, Pr
       baseUrl?: string
       model?: string
     }
+    // 已有设置的旧用户保持原选择（含 deepseek）；只有存的是非法值时兜底到默认智谱
     const provider: Provider =
-      parsed.provider === 'zhipu' || parsed.provider === 'openai' || parsed.provider === 'custom'
+      parsed.provider === 'zhipu' ||
+      parsed.provider === 'openai' ||
+      parsed.provider === 'custom' ||
+      parsed.provider === 'deepseek'
         ? parsed.provider
-        : 'deepseek'
+        : 'zhipu'
     const providers = normalizeProviders(parsed.providers)
 
     // 旧格式迁移：v1 存的单 key 归到当时的 provider 名下
@@ -102,7 +106,7 @@ export function loadSettings(): ModelSettings & { providers: Record<Provider, Pr
 
     return { provider, ...providers[provider], providers }
   } catch {
-    return { provider: 'deepseek', ...defaultProviderConfig('deepseek'), providers: defaultProviders() }
+    return { provider: 'zhipu', ...defaultProviderConfig('zhipu'), providers: defaultProviders() }
   }
 }
 
