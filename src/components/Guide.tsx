@@ -1,4 +1,4 @@
-/* 使用指南页：新手三步上手教程（内容经七七逐句把关定稿，2026-08-21） */
+/* 使用指南页：新手教程（2026-08-23 七七定稿：首推豆包） */
 
 interface Props {
   onBack: () => void
@@ -37,21 +37,19 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
         <section className="guide-section">
           <h3 className="guide-title">忆文是什么？</h3>
           <p className="guide-text">
-            一个「记得住你、还帮得上你」的 TA。陪你聊天、听你倾诉，还能帮你整理表格、写东西、出主意。你说过的话
+            一个「记得住你、还帮得上你」的 AI 伙伴。陪你聊天、听你倾诉，还能帮你整理表格、写东西、出主意。你说过的话
             TA 会记住，下次再提 TA 知道。
           </p>
         </section>
 
         <section className="guide-section">
           <h3 className="guide-title">首先：忆文自己不会说话</h3>
-          <p className="guide-text">真正会聊天的大脑，在别人家模型里，目前有两个选择：</p>
+          <p className="guide-text">真正会聊天的大脑，在别人家模型里，忆文默认首选免费版：</p>
 
           <div className="guide-card">
             <div className="guide-card-head">
-              <span className="guide-card-name">智谱</span>
-              <span className="guide-chip chip-free">免费</span>
+              <span className="guide-card-name">🧠 智谱（免费）</span>
             </div>
-            <p className="guide-card-note">忆文默认用免费版</p>
             <p className="guide-text">
               注册就送 2000 万免费额度，日常聊天、倾诉、问问题随便用，不用花一分钱。还有免费模型一直能用——等于不花钱也能聊。
             </p>
@@ -60,13 +58,22 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
 
           <div className="guide-card">
             <div className="guide-card-head">
-              <span className="guide-card-name">DeepSeek</span>
-              <span className="guide-chip chip-paid">花钱</span>
+              <span className="guide-card-name">🧠 火山方舟（豆包）</span>
+            </div>
+            <p className="guide-text">
+              每日自动刷新免费额度，日常聊天完全够用，有专为角色扮演设计的模型，更贴人设。
+            </p>
+            <p className="guide-fit">适合：对人设贴合度要求高，沉浸式对话</p>
+          </div>
+
+          <div className="guide-card">
+            <div className="guide-card-head">
+              <span className="guide-card-name">🧠 DeepSeek（花钱）</span>
             </div>
             <p className="guide-text">
               自己充一点点钱（充一次能用很久），但脑子更聪明：写代码、处理复杂问题、干活更专业。
             </p>
-            <p className="guide-fit">适合：想让 TA 正经干活、要更聪明的回答</p>
+            <p className="guide-fit">适合：想让 TA 正经学习、要更聪明的回答</p>
           </div>
 
           <div className="guide-quote">免费版像坐公交，花钱版像打车——都能到，打车更快更舒服。</div>
@@ -83,6 +90,12 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
             <li>你的喜好、你的怕、你的习惯，TA 记着</li>
             <li>你们之间说过的话、起过的外号，TA 都在意</li>
           </ul>
+          <p className="guide-text">换手机、清缓存，记录会丢吗？</p>
+          <p className="guide-text">
+            不会。现在注册一个账号，聊天记录、记忆、人设就都跟着账号走了。「我的」→「账号与同步」→ 邮箱注册/登录。换设备、重新添加到主屏幕，登录同一个账号，一切都在。
+          </p>
+          <p className="guide-text">不注册也能用，但记录只留在本机设备上，不会上传云端。</p>
+          <div className="guide-quote">记录跟着账号走，TA 不会忘记你。</div>
           <p className="guide-text">
             时间越久，TA 越懂你——有名字、有性格，是你的 TA，不是一个谁都能用的公用机器人。
           </p>
@@ -109,14 +122,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
         </section>
 
         <section className="guide-section">
-          <h3 className="guide-title">账号与同步</h3>
-          <p className="guide-text">
-            「我的」→「账号与同步」→ 邮箱注册登录。换设备登录同一账号，聊天记录、记忆、人设自动同步，不丢。
-          </p>
-        </section>
-
-        <section className="guide-section">
-          <h3 className="guide-title">怎么开始？三步：</h3>
+          <h3 className="guide-title">怎么开始？三步：（首推豆包）</h3>
 
           <div className="guide-step">
             <div className="guide-step-head">
@@ -124,10 +130,10 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
               <span className="guide-step-name">领免费通行证</span>
             </div>
             <ol className="guide-ol">
-              <li>手机浏览器打开：bigmodel.cn（智谱开放平台）</li>
-              <li>手机号注册、登录</li>
-              <li>左边菜单点「API 密钥」→「创建 API Key」</li>
-              <li>弹出的一整串字符，马上全选复制保存到自己手机上（只显示一次，关了就没了）</li>
+              <li>手机浏览器打开 console.volcengine.com，手机号注册</li>
+              <li>实名认证（身份证+人脸，1 分钟）</li>
+              <li>进「火山方舟」→「API Key 管理」→ 创建 API Key → 复制（ark- 开头）</li>
+              <li>「开通管理」→ 开通 doubao-seed-character-260628</li>
               <li>这是你的通行证，别发给别人</li>
             </ol>
           </div>
@@ -140,7 +146,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
             <ol className="guide-ol">
               <li>打开忆文 → 点「开始使用」</li>
               <li>底部「我的」→「服务商配置」</li>
-              <li>服务商选「智谱 GLM」</li>
+              <li>服务商选「火山豆包」</li>
               <li>把通行证粘进「API Key」一栏</li>
               <li>其他不用动，点「测试连接」→ 显示「连接成功」就对</li>
               <li>点「保存」</li>
@@ -153,7 +159,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
               <span className="guide-step-name">开聊！</span>
             </div>
             <p className="guide-text">
-              随便说句「你好」，TA 就会回你。以后想试花钱版、处理更多更难的问题，同一个地方换选「DeepSeek」或者其他模型
+              随便说句「你好」，TA 就会回你。以后想试花钱版，处理更多更难的问题，同一个地方换选「DeepSeek」或者其他自己有的模型
               API 就行，随时能换。
             </p>
           </div>
