@@ -132,17 +132,45 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
 
             <p className="guide-text"><b>豆包（推荐，稳定不挤）：</b></p>
             <ol className="guide-ol">
-              <li>手机浏览器打开 console.volcengine.com，手机号注册</li>
+              <li>手机浏览器打开{' '}
+                <a className="guide-link" href="https://console.volcengine.com/ark" target="_blank" rel="noopener noreferrer">
+                  火山引擎官网注册登录
+                </a>{' '}
+                （手机号）
+              </li>
               <li>实名认证（身份证+人脸，1 分钟）</li>
-              <li>进「火山方舟」→「API Key 管理」→ 创建 API Key → 复制（ark- 开头）</li>
-              <li>「开通管理」→ 开通 doubao-seed-character-260628</li>
+              <li>
+                创建 API Key：
+                <a className="guide-link" href="https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey" target="_blank" rel="noopener noreferrer">
+                  点这里直达「API Key 管理」
+                </a>{' '}
+                → 创建 API Key → 复制（ark- 开头）
+              </li>
+              <li>
+                开通模型：
+                <a className="guide-link" href="https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement" target="_blank" rel="noopener noreferrer">
+                  点这里直达「开通管理」
+                </a>{' '}
+                → 开通 doubao-seed-character-260628
+              </li>
             </ol>
 
             <p className="guide-text"><b>智谱（备选，不用实名）：</b></p>
             <ol className="guide-ol">
-              <li>手机浏览器打开：bigmodel.cn（智谱开放平台）</li>
+              <li>手机浏览器打开{' '}
+                <a className="guide-link" href="https://bigmodel.cn" target="_blank" rel="noopener noreferrer">
+                  bigmodel.cn
+                </a>{' '}
+                （智谱开放平台）
+              </li>
               <li>手机号注册、登录</li>
-              <li>左边菜单点「API 密钥」→「创建 API Key」</li>
+              <li>
+                左边菜单点「API 密钥」→「创建 API Key」（或{' '}
+                <a className="guide-link" href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener noreferrer">
+                  点这里直达密钥页
+                </a>
+                ）
+              </li>
               <li>弹出的一整串字符，马上全选复制保存到自己手机上</li>
             </ol>
 

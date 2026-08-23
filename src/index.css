@@ -262,6 +262,18 @@ button {
   opacity: 0.8;
 }
 
+/* 指南里的直达链接（手机点击跳官方页面） */
+.guide-link {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  word-break: break-all;
+}
+
+.guide-link:hover {
+  opacity: 0.8;
+}
+
 /* 消息气泡 */
 .message-row {
   display: flex;
