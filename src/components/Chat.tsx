@@ -110,6 +110,14 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
   }, [input])
 
+  // 切换会话（B3 侧边栏）：activeSessionId 变化时立即切到新会话的本地缓存，
+  // 别让旧会话的消息还挂在屏幕上；会话详情拉回后再合并更新（下面那个 effect）。
+  // 切到无会话（游客/过渡）则退回全局 localStorage 流程。
+  useEffect(() => {
+    setMessages(activeSessionId ? getMessagesCache(activeSessionId) : loadMessages())
+    setActiveSession(null)
+  }, [activeSessionId])
+
   // 会话模式挂载：本地缓存秒开 → 后台拉后端会话详情 → 按 ts 合并补最新 → 写缓存。
   // 同一时机拉该会话的记忆列表填缓存（B2c-3 记忆注入来源），后端权威、缓存保留增强字段。
   // 全新会话且会话人设带开场白 → 插入第一句（沿用开场白机制，不调 API、不耗 key）

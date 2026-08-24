@@ -1,13 +1,16 @@
-// 老数据一键迁移纯逻辑自测（B2d）
+// 老数据一键迁移纯逻辑自测（B2d / B3 手动导入）
 // 直接导入纯逻辑 TS（Node 22+ 原生类型剥离），不依赖任何构建工具。
 // 跑法：npm test（node --test）或直接 node src/lib/migrateLocal.test.ts
 // 覆盖：hasLocalLegacyData（全空 false / 任一非空 true）/ buildMigrationPayload（升序、role/content 过滤、ts 过滤、
-//       上限 2000 只迁最近）/ 迁移标记 set/has 往返
+//       上限 2000 只迁最近）/ 迁移标记 set/has 往返 / nextMigrationTitle 重名编号 /
+//       runLocalMigration（建会话 + 传消息/记忆，createSession 失败 → ok:false）
 
 import {
   buildMigrationPayload,
   hasLocalLegacyData,
   hasMigratedFlag,
+  nextMigrationTitle,
+  runLocalMigration,
   setLocalMigratedFlag,
   MAX_MIGRATE_MESSAGES,
 } from './migrateLocal.ts'
@@ -48,6 +51,23 @@ globalThis.localStorage = {
 
 function resetStore(): void {
   store.clear()
+}
+
+// fetch mock：runLocalMigration 上传测试用
+let fetchCalls: Array<{ url: string; method: string; body: unknown }> = []
+let fetchHandler: ((url: string, init: RequestInit) => Response) | null = null
+globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  fetchCalls.push({ url: String(url), method: init?.method ?? 'GET', body: init?.body ?? null })
+  if (!fetchHandler) throw new TypeError('测试未配置 fetch 响应')
+  return fetchHandler(String(url), init ?? {})
+}) as typeof fetch
+
+function resetFetch(handler: (url: string, init: RequestInit) => Response): void {
+  fetchCalls = []
+  fetchHandler = handler
+}
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
 // 各数据 key 与 migrateLocal/storage/memory 一致
@@ -139,6 +159,51 @@ setLocalMigratedFlag()
 ok(hasMigratedFlag() === true, '重复设置幂等')
 localStorage.removeItem('ai_companion_migrated')
 ok(hasMigratedFlag() === false, '移除后 → false')
+
+console.log('\n[5] nextMigrationTitle：避免「我们的开始」重名')
+eq(nextMigrationTitle([]), '我们的开始', '无重名 → 基础名')
+eq(nextMigrationTitle(['我们的开始']), '我们的开始 2', '已有基础名 → 2')
+eq(nextMigrationTitle(['我们的开始', '我们的开始 2']), '我们的开始 3', '已有 1/2 → 3')
+eq(nextMigrationTitle(['别的会话', '我们的开始 3']), '我们的开始', '无基础名 → 基础名')
+eq(nextMigrationTitle(['我们的开始', '我们的开始 3']), '我们的开始 2', '空档补位 2')
+eq(nextMigrationTitle(null as never), '我们的开始', '非数组 → 基础名')
+
+console.log('\n[6] runLocalMigration：建会话 + 传消息/记忆')
+resetStore()
+localStorage.setItem(PERSONA_KEY, '  人设  ')
+localStorage.setItem(
+  MESSAGES_KEY,
+  JSON.stringify([
+    { role: 'user', content: 'hi', ts: 1 },
+    { role: 'assistant', content: 'hey', ts: 2 },
+  ]),
+)
+localStorage.setItem(MEMORY_KEY, JSON.stringify([{ id: '1', text: '对方喜欢猫', createdAt: 1 }]))
+resetFetch((url, init) => {
+  if (url.endsWith('/api/sessions') && init?.method === 'POST') {
+    return jsonResponse(
+      { id: 55, title: '我们的开始', persona: '  人设  ', created_at: '2026-08-24T00:00:00.000Z', updatedAt: '2026-08-24T00:00:00.000Z' },
+      200,
+    )
+  }
+  if (url.endsWith('/api/sessions/55/messages') && init?.method === 'POST') {
+    const body = JSON.parse(String(init.body)) as { role: string; content: string }
+    return jsonResponse({ id: 1, role: body.role, content: body.content, createdAt: '2026-08-24T00:00:00.000Z' }, 200)
+  }
+  if (url.endsWith('/api/sessions/55/memories') && init?.method === 'POST') {
+    return jsonResponse({ id: 2, content: '对方喜欢猫', createdAt: '2026-08-24T00:00:00.000Z' }, 200)
+  }
+  throw new Error('unexpected: ' + (init?.method ?? 'GET') + ' ' + url)
+})
+const r = await runLocalMigration('tok-1', '我们的开始')
+ok(r.ok && r.sessionId === 55, '成功返回新会话 id')
+eq(fetchCalls.length, 4, 'create + 2 条消息 + memory 各发一次')
+
+resetStore()
+resetFetch(() => jsonResponse({ error: '服务器忙' }, 500))
+const fail = await runLocalMigration('tok-1', '我们的开始')
+ok(!fail.ok, 'createSession 失败 → ok:false')
+eq(fetchCalls.length, 1, '建会话失败不再发消息/记忆')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) throw new Error(`${failed} 个用例失败`)

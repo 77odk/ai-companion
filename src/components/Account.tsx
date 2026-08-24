@@ -5,14 +5,55 @@
 
 import { useState } from 'react'
 import { getAccount, syncNow, type Account } from '../lib/sync'
-import { logout } from '../lib/auth'
+import { getToken, logout } from '../lib/auth'
 import LoginForm from './LoginForm'
+import { hasLocalLegacyData, nextMigrationTitle, runLocalMigration, setLocalMigratedFlag } from '../lib/migrateLocal'
+import { listSessions } from '../lib/sessionApi'
+import { setActiveSessionId, setSessionsCache } from '../lib/sessionStore'
 
 export default function AccountPage({ onBack }: { onBack: () => void }) {
   const [account, setAccount] = useState<Account | null>(() => getAccount())
   const [syncing, setSyncing] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+
+  // 手动把本地旧记录（B2c 前的 persona/聊天/记忆）带过来：用户主动触发，不检查云端会话数。
+  // 只要本地有旧数据就建一个新会话搬过去；与 B2d 共用 migrateLocal 的逻辑，不重复实现。
+  const handleImportLegacy = async () => {
+    if (importing) return
+    setError(null)
+    setInfo(null)
+    if (!hasLocalLegacyData()) {
+      setInfo('没有找到本地旧记录')
+      return
+    }
+    const token = getToken()
+    if (!token) return
+    setImporting(true)
+    try {
+      // 查一下现有会话标题，避免「我们的开始」重名
+      let existingTitles: string[] = []
+      const list = await listSessions(token)
+      if (list.ok) existingTitles = list.data.sessions.map((s) => s.title)
+      const title = nextMigrationTitle(existingTitles)
+      const result = await runLocalMigration(token, title)
+      if (!result.ok) {
+        setError(result.message)
+        return
+      }
+      setActiveSessionId(String(result.sessionId))
+      setLocalMigratedFlag()
+      setInfo('旧记录已带过来')
+      // 刷新会话列表缓存，侧边栏/会话列表能直接看到新会话
+      const refreshed = await listSessions(token)
+      if (refreshed.ok) setSessionsCache(refreshed.data.sessions)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '导入失败，请稍后重试')
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const handleSync = async () => {
     if (syncing) return
@@ -57,6 +98,15 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
               退出登录
             </button>
           </div>
+
+          <button
+            type="button"
+            className="btn btn-ghost import-legacy-btn"
+            onClick={() => void handleImportLegacy()}
+            disabled={importing}
+          >
+            {importing ? '正在带过来…' : '把本地旧记录带过来'}
+          </button>
 
           {info && <p className="test-result success">{info}</p>}
           {error && <p className="test-result error">{error}</p>}

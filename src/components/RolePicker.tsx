@@ -5,7 +5,7 @@ import { buildCustomPersona } from '../lib/customPersona'
 import { getToken, isLoggedIn } from '../lib/auth'
 import { createSession, patchSession } from '../lib/sessionApi'
 import { getActiveSessionId, setActiveSessionId } from '../lib/sessionStore'
-import type { RolePickMode } from '../lib/sessionFlow'
+import { resolveSessionTitle, type RolePickMode } from '../lib/sessionFlow'
 
 interface Props {
   /** 选角色页用途：first=首次/游客新建；current=换个TA·当前会话换人设；new=换个TA·开新会话换TA */
@@ -87,13 +87,13 @@ export default function RolePicker({ mode, onDone, onBack }: Props) {
             if (!res.ok) throw new Error(res.message)
           } else {
             // 极端情况：没有当前会话 → 直接走② 开个新会话换 TA
-            const res = await createSession(getToken(), { persona })
+            const res = await createSession(getToken(), { persona, title: resolveSessionTitle(selected, persona) })
             if (!res.ok) throw new Error(res.message)
             setActiveSessionId(String(res.data.id))
           }
         } else {
           // mode 'first' 或 'new'：新建会话进聊天（旧会话完整保留）
-          const res = await createSession(getToken(), { persona })
+          const res = await createSession(getToken(), { persona, title: resolveSessionTitle(selected, persona) })
           if (!res.ok) throw new Error(res.message)
           setActiveSessionId(String(res.data.id))
         }

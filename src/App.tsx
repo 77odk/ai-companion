@@ -9,12 +9,20 @@ import AISpace from './components/AISpace'
 import AnniversaryPage from './components/AnniversaryPage'
 import GuideDetail from './components/Guide'
 import LoginGate from './components/LoginGate'
+import SessionSidebar from './components/SessionSidebar'
 import { loadMessages, loadPersona } from './lib/storage'
 import { getToken, isLoggedIn, isPublicView } from './lib/auth'
-import { createSession, listSessions, postMemory, postMessage } from './lib/sessionApi'
-import { getActiveSessionId, setActiveSessionId } from './lib/sessionStore'
-import { buildMigrationPayload, hasLocalLegacyData, hasMigratedFlag, setLocalMigratedFlag } from './lib/migrateLocal'
-import { decideLoginTarget, pickMostRecentSession, type RolePickMode } from './lib/sessionFlow'
+import { deleteSession, listSessions, type Session } from './lib/sessionApi'
+import {
+  clearMemoriesCache,
+  clearMessagesCache,
+  getActiveSessionId,
+  getSessionsCache,
+  setActiveSessionId,
+  setSessionsCache,
+} from './lib/sessionStore'
+import { hasLocalLegacyData, hasMigratedFlag, runLocalMigration, setLocalMigratedFlag } from './lib/migrateLocal'
+import { decideLoginTarget, pickMostRecentSession, pickNextSessionAfterDelete, type RolePickMode } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 
 type View = 'welcome' | 'role' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary' | 'guide' | 'loading'
@@ -113,35 +121,23 @@ export default function App() {
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
+  // 会话侧边栏（B3）：面板开关 + 会话列表（缓存初始化，打开时从后端刷新）
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sessions, setSessions] = useState<Session[]>(() => getSessionsCache())
+  const [deleting, setDeleting] = useState(false)
 
-  // 老数据一键迁移：建云端会话 → 按升序传消息 → 传记忆（单条失败跳过不中断，统计失败数）→
+  // 老数据一键迁移：建云端会话 → 按升序传消息 → 传记忆（单条失败跳过不中断）→
   // 置位 → 进聊天。本地数据只读不删（红线）；createSession 失败才算整个迁移失败（不置位，可重试）。
   const runMigration = useCallback(async (token: string) => {
-    const payload = buildMigrationPayload()
-    try {
-      const created = await createSession(token, { persona: payload.persona, title: '我们的开始' })
-      if (!created.ok) {
-        setMigration('failed')
-        return
-      }
-      const sid = created.data.id
-      let failedCount = 0
-      for (const m of payload.messages) {
-        const r = await postMessage(token, sid, { role: m.role, content: m.content })
-        if (!r.ok) failedCount++
-      }
-      for (const mem of payload.memories) {
-        const r = await postMemory(token, sid, { content: mem.content })
-        if (!r.ok) failedCount++
-      }
-      setActiveSessionId(String(sid))
-      setLocalMigratedFlag()
-      setMigration('idle')
-      setView('chat')
-    } catch {
-      // 网络等整体失败：本地数据绝不删，下次登录有旧数据还会再迁
+    const result = await runLocalMigration(token, '我们的开始')
+    if (!result.ok) {
       setMigration('failed')
+      return
     }
+    setActiveSessionId(String(result.sessionId))
+    setLocalMigratedFlag()
+    setMigration('idle')
+    setView('chat')
   }, [])
 
   // 迁移失败后的「重试」：重新走一遍迁移（本地旧数据仍在）
@@ -292,6 +288,72 @@ export default function App() {
     }
   }
 
+  // ---- 会话侧边栏（B3） ----
+
+  // 打开侧边栏：先拉后端会话列表刷新缓存，再展示（拉取失败用本地缓存兜底）
+  const refreshSessions = useCallback(async () => {
+    const token = getToken()
+    if (!token) return
+    const res = await listSessions(token)
+    if (res.ok) {
+      setSessionsCache(res.data.sessions)
+      setSessions(res.data.sessions)
+    }
+  }, [])
+
+  const openSidebar = () => {
+    setSidebarOpen(true)
+    void refreshSessions()
+  }
+
+  // 切换会话：整套环境跟着切（消息/记忆/人设），Chat 挂载/激活后按新 id 拉数据
+  const handleSwitchSession = (id: string) => {
+    setActiveSessionId(id)
+    setSidebarOpen(false)
+    setView('chat')
+  }
+
+  // 新建会话：关侧边栏 → 选角色页（first=新建）
+  const handleNewSession = () => {
+    setSidebarOpen(false)
+    setRoleMode('first')
+    setView('role')
+  }
+
+  // 删除会话：后端级联删 → 清该会话消息/记忆缓存 → 刷新列表 →
+  // 删的是当前会话时：剩>0 切最近一个，无会话进选角色页；删失败提示、列表不刷新（401 走登录墙）
+  const handleDeleteSession = async (id: string) => {
+    const token = getToken()
+    if (!token) return
+    setDeleting(true)
+    try {
+      const res = await deleteSession(token, id)
+      if (!res.ok) {
+        window.alert('没删掉，网络开小差了，稍后再试试。')
+        return
+      }
+      clearMessagesCache(id)
+      clearMemoriesCache(id)
+      const remaining = sessions.filter((s) => String(s.id) !== id)
+      setSessionsCache(remaining)
+      setSessions(remaining)
+      setSidebarOpen(false)
+      if (getActiveSessionId() === id) {
+        const next = pickNextSessionAfterDelete(remaining, id)
+        if (next) {
+          setActiveSessionId(String(next.id))
+          setView('chat')
+        } else {
+          setActiveSessionId('')
+          setRoleMode('first')
+          setView('role')
+        }
+      }
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   // 已登录用户首次挂载（initialView='loading'）时拉会话分流；开机欢迎页时等「开始使用」再分流。
   // redirectBySessions 内部已置位 redirectStarted，这里只需判重。
   useEffect(() => {
@@ -346,6 +408,29 @@ export default function App() {
       ) : (
         <>
           <header className="app-header">
+            {view === 'chat' && loggedIn && (
+              <button
+                type="button"
+                className="session-list-entry"
+                onClick={openSidebar}
+                aria-label="会话列表"
+                title="会话"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 6h16" />
+                  <path d="M4 12h16" />
+                  <path d="M4 18h10" />
+                </svg>
+              </button>
+            )}
             {view === 'chat' && (
               <button
                 type="button"
@@ -425,6 +510,19 @@ export default function App() {
             </button>
           </nav>
         </>
+      )}
+
+      {loggedIn && sidebarOpen && (
+        <SessionSidebar
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          sessions={sessions}
+          activeId={getActiveSessionId()}
+          onSwitch={handleSwitchSession}
+          onNew={handleNewSession}
+          onDelete={(id) => void handleDeleteSession(id)}
+          deleting={deleting}
+        />
       )}
     </div>
   )
