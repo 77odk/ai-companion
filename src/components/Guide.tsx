@@ -8,7 +8,7 @@ interface Props {
 function GuideHeader({ title, onBack }: { title: string; onBack: () => void }) {
   return (
     <div className="detail-header">
-      <button type="button" className="detail-back" onClick={onBack} aria-label="返回「我的」">
+      <button type="button" className="detail-back" onClick={onBack} aria-label="返回">
         <svg
           viewBox="0 0 24 24"
           fill="none"

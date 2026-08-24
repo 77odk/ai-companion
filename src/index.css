@@ -560,6 +560,14 @@ textarea.persona-input {
   color: #b3261e;
 }
 
+/* 账号输入框下边的即时格式提示（B2a 三标识：手机号/邮箱/用户名） */
+.account-format-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #b3261e;
+}
+
 .settings-actions {
   display: flex;
   gap: 10px;
@@ -3757,4 +3765,98 @@ textarea.persona-input {
   border-radius: 6px;
   padding: 1px 6px;
   margin-left: 6px;
+}
+
+/* ========== 登录墙 LoginGate（B2b 游客登录门禁） ========== */
+.login-gate {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px 20px 28px;
+  background: var(--color-bg);
+}
+
+.login-gate-header {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.login-gate-inner {
+  margin: auto;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.login-gate-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-deep));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  box-shadow: 0 6px 18px rgba(255, 138, 92, 0.35);
+}
+
+.login-gate-logo span {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.login-gate-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-text);
+  text-align: center;
+}
+
+.login-gate-sub {
+  margin: 0 0 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.login-gate-card {
+  width: 100%;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.login-gate-guide {
+  margin-top: 18px;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--color-primary-deep);
+  cursor: pointer;
+}
+
+.login-gate-guide:hover {
+  text-decoration: underline;
+}
+
+/* 「我的」页退出登录按钮（仅登录状态显示） */
+.logout-btn {
+  width: 100%;
+  padding: 12px 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  color: #b3261e;
+  font-size: 14px;
+  font-weight: 500;
 }

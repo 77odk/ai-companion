@@ -1,15 +1,19 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Welcome from './components/Welcome'
 import RolePicker from './components/RolePicker'
 import Chat from './components/Chat'
 import Memory from './components/Memory'
 import Work from './components/Work'
-import Settings from './components/Settings'
+import Settings, { type SettingsPage } from './components/Settings'
 import AISpace from './components/AISpace'
 import AnniversaryPage from './components/AnniversaryPage'
+import GuideDetail from './components/Guide'
+import LoginGate from './components/LoginGate'
 import { loadMessages, loadPersona } from './lib/storage'
+import { isLoggedIn, isPublicView } from './lib/auth'
+import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 
-type View = 'welcome' | 'role' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary'
+type View = 'welcome' | 'role' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary' | 'guide'
 
 // ---- 开机页判定：新会话或隔太久（>6 小时）才算重新开机 ----
 const BOOT_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -51,8 +55,8 @@ function needsRolePick(): boolean {
 
 // 模块加载时判一次开机页，保证先读标记再渲染，也不会被 StrictMode 的二次初始化干扰
 const bootWelcome = decideBoot()
-// 优先级：开机页 > 角色选择 > 聊天
-const initialView: View = bootWelcome ? 'welcome' : needsRolePick() ? 'role' : 'chat'
+// 优先级：开机页 > 游客先看欢迎页（逛展示内容）> 角色选择 > 聊天
+const initialView: View = bootWelcome ? 'welcome' : !isLoggedIn() ? 'welcome' : needsRolePick() ? 'role' : 'chat'
 
 // ---- 连点 3 下强刷：清 PWA 缓存 + 注销 Service Worker + 重新加载 ----
 async function forceRefresh(): Promise<void> {
@@ -71,23 +75,97 @@ async function forceRefresh(): Promise<void> {
   location.reload()
 }
 
+// ---- 监听登录状态变化：登录/登出后重算登录墙与已登录态 ----
+function useAuthState(): boolean {
+  const [loggedIn, setLoggedIn] = useState<boolean>(() => isLoggedIn())
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return
+    const onChange = () => setLoggedIn(isLoggedIn())
+    window.addEventListener(ELUVIN_AUTH_CHANGE, onChange)
+    return () => window.removeEventListener(ELUVIN_AUTH_CHANGE, onChange)
+  }, [])
+  return loggedIn
+}
+
 export default function App() {
   const [view, setView] = useState<View>(initialView)
   const [spaceFrom, setSpaceFrom] = useState<View>('chat')
-  const [settingsTarget, setSettingsTarget] = useState<'main' | 'guide'>('main')
+  const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
+  // 游客想进需登录页时记下的目标 view：登录墙展示 + 登录成功回跳用
+  const [gateTarget, setGateTarget] = useState<View | null>(null)
+  // 从登录墙去逛指南时，暂时收起来的回跳目标（指南返回时放回登录墙）
+  const [pendingTarget, setPendingTarget] = useState<View | null>(null)
+  // 使用指南独立 view：返回时回到来源（欢迎页 / 我的 / 登录墙）
+  const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate'>('welcome')
   const titleClicks = useRef<number[]>([])
+  const loggedIn = useAuthState()
 
-  const openSettings = (target: 'main' | 'guide') => {
+  // 访问门禁：需登录 view 且未登录 → 记下目标交给登录墙；游客可看的直接进
+  const navigate = (v: View) => {
+    if (!isPublicView(v) && !loggedIn) {
+      setGateTarget(v)
+      return
+    }
+    if (isPublicView(v)) {
+      setGateTarget(null) // 回到公开页 = 取消待登录的目标
+      setPendingTarget(null)
+    }
+    setView(v)
+  }
+
+  const openSettings = (target: SettingsPage) => {
     setSettingsTarget(target)
-    setView('settings')
+    navigate('settings')
   }
 
   const openSpace = (from: View) => {
     setSpaceFrom(from)
-    setView('aispace')
+    navigate('aispace')
   }
 
-  const backFromSpace = () => setView(spaceFrom)
+  const backFromSpace = () => navigate(spaceFrom)
+
+  const openGuide = (from: 'welcome' | 'settings' | 'gate') => {
+    if (from === 'gate') {
+      // 登录墙 → 指南：把回跳目标收起来，返回时再放回登录墙
+      setPendingTarget(gateTarget ?? (!isPublicView(view) ? view : null))
+      setGateTarget(null)
+    }
+    setGuideBack(from)
+    setView('guide')
+  }
+
+  const handleGuideBack = () => {
+    if (guideBack === 'gate') {
+      const target = pendingTarget
+      setPendingTarget(null)
+      if (target) {
+        setGateTarget(target)
+        setView(target)
+      } else {
+        setView('welcome')
+      }
+      return
+    }
+    navigate(guideBack)
+  }
+
+  // 登录墙登录成功：回跳目标 view
+  const handleGateDone = () => {
+    if (gateTarget) {
+      setView(gateTarget)
+      setGateTarget(null)
+    }
+    setPendingTarget(null)
+    // gateTarget 为空（从已登录页退出、落在需登录 view）时，view 就是目标页，登录后自然显示
+  }
+
+  // 登录墙返回：不登录，回欢迎页继续逛展示内容
+  const handleGateBack = () => {
+    setGateTarget(null)
+    setPendingTarget(null)
+    setView('welcome')
+  }
 
   const handleTitleClick = () => {
     const now = Date.now()
@@ -100,19 +178,26 @@ export default function App() {
     }
   }
 
+  // 登录墙是否展示：正在请求需登录 view 且未登录；或已登录页退出后落在需登录 view
+  const gateShown = (gateTarget !== null || !isPublicView(view)) && !loggedIn
+
   return (
     <div className="app">
-      {view === 'welcome' ? (
+      {gateShown ? (
+        <LoginGate onDone={handleGateDone} onGoGuide={() => openGuide('gate')} onBack={handleGateBack} />
+      ) : view === 'guide' ? (
+        <GuideDetail onBack={handleGuideBack} onGoProvider={() => openSettings('provider')} />
+      ) : view === 'welcome' ? (
         <Welcome
-          onStart={() => setView(needsRolePick() ? 'role' : 'chat')}
-          onGoGuide={() => openSettings('guide')}
+          onStart={() => navigate(needsRolePick() ? 'role' : 'chat')}
+          onGoGuide={() => openGuide('welcome')}
         />
       ) : view === 'role' ? (
-        <RolePicker onDone={() => setView('chat')} />
+        <RolePicker onDone={() => navigate('chat')} />
       ) : view === 'aispace' ? (
-        <AISpace onBack={backFromSpace} onGoMine={() => setView('settings')} />
+        <AISpace onBack={backFromSpace} onGoMine={() => navigate('settings')} />
       ) : view === 'anniversary' ? (
-        <AnniversaryPage onBack={() => setView('memory')} />
+        <AnniversaryPage onBack={() => navigate('memory')} />
       ) : (
         <>
           <header className="app-header">
@@ -149,17 +234,18 @@ export default function App() {
             {view === 'chat' && (
               <Chat
                 onGoSettings={() => openSettings('main')}
-                onGoGuide={() => openSettings('guide')}
+                onGoGuide={() => openGuide('settings')}
               />
             )}
-            {view === 'memory' && <Memory onOpenAnniversary={() => setView('anniversary')} />}
-            {view === 'work' && <Work onGoChat={() => setView('chat')} />}
+            {view === 'memory' && <Memory onOpenAnniversary={() => navigate('anniversary')} />}
+            {view === 'work' && <Work onGoChat={() => navigate('chat')} />}
             {view === 'settings' && (
               <Settings
                 initialPage={settingsTarget}
                 onOpenSpace={() => openSpace('settings')}
-                onGoWelcome={() => setView('welcome')}
-                onSwitchRole={() => setView('role')}
+                onGoWelcome={() => navigate('welcome')}
+                onSwitchRole={() => navigate('role')}
+                onGoGuide={() => openGuide('settings')}
               />
             )}
           </main>
@@ -167,25 +253,25 @@ export default function App() {
           <nav className="app-nav">
             <button
               className={`nav-btn${view === 'chat' ? ' active' : ''}`}
-              onClick={() => setView('chat')}
+              onClick={() => navigate('chat')}
             >
               聊天
             </button>
             <button
               className={`nav-btn${view === 'memory' ? ' active' : ''}`}
-              onClick={() => setView('memory')}
+              onClick={() => navigate('memory')}
             >
               记忆
             </button>
             <button
               className={`nav-btn${view === 'work' ? ' active' : ''}`}
-              onClick={() => setView('work')}
+              onClick={() => navigate('work')}
             >
               工作台
             </button>
             <button
               className={`nav-btn${view === 'settings' ? ' active' : ''}`}
-              onClick={() => setView('settings')}
+              onClick={() => navigate('settings')}
             >
               我的
             </button>

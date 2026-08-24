@@ -2,7 +2,6 @@ import { useRef, useState, type ReactNode } from 'react'
 import ProviderSelect from './ProviderSelect'
 import AvatarPicker from './AvatarPicker'
 import DefaultAvatar from './DefaultAvatar'
-import GuideDetail from './Guide'
 import Account from './Account'
 import {
   DEFAULT_SETTINGS,
@@ -21,32 +20,34 @@ import {
   type AIProfile,
 } from '../lib/storage'
 import { getAccount } from '../lib/sync'
+import { isLoggedIn, logout } from '../lib/auth'
 import { ChatError, testConnection } from '../lib/api'
 import { keyFormatHint } from '../lib/keyFormat'
 
 type TestState = 'idle' | 'testing' | 'success' | 'error'
-type Page = 'main' | 'ai' | 'provider' | 'guide' | 'about' | 'account'
+
+/** 设置页子页：使用指南已抽成 App 独立 view（guide），不再嵌在这里 */
+export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account'
 
 interface Props {
   onOpenSpace?: () => void
   onGoWelcome?: () => void
   /** 「换个 TA」回调：清空人设后由 App 跳到选角色页 */
   onSwitchRole?: () => void
-  /** 进入设置页时打开的子页（欢迎页/聊天页的引导入口会带 'guide'） */
-  initialPage?: Page
+  /** 「使用指南」入口：由 App 切到独立 guide view（游客也可看） */
+  onGoGuide?: () => void
+  /** 进入设置页时打开的子页 */
+  initialPage?: SettingsPage
 }
 
-export default function Settings({ onOpenSpace, onGoWelcome, onSwitchRole, initialPage }: Props) {
-  const [page, setPage] = useState<Page>(initialPage ?? 'main')
+export default function Settings({ onOpenSpace, onGoWelcome, onSwitchRole, onGoGuide, initialPage }: Props) {
+  const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
 
   if (page === 'ai') {
     return <AIDetail onBack={() => setPage('main')} onOpenSpace={onOpenSpace} onSwitchRole={onSwitchRole} />
   }
   if (page === 'provider') {
-    return <ProviderDetail onBack={() => setPage('main')} onGoGuide={() => setPage('guide')} />
-  }
-  if (page === 'guide') {
-    return <GuideDetail onBack={() => setPage('main')} onGoProvider={() => setPage('provider')} />
+    return <ProviderDetail onBack={() => setPage('main')} onGoGuide={onGoGuide} />
   }
   if (page === 'about') {
     return <AboutDetail onBack={() => setPage('main')} onGoWelcome={onGoWelcome} />
@@ -59,8 +60,9 @@ export default function Settings({ onOpenSpace, onGoWelcome, onSwitchRole, initi
       onOpenAccount={() => setPage('account')}
       onOpenAI={() => setPage('ai')}
       onOpenProvider={() => setPage('provider')}
-      onOpenGuide={() => setPage('guide')}
+      onOpenGuide={() => onGoGuide?.()}
       onOpenAbout={() => setPage('about')}
+      onGoWelcome={onGoWelcome}
     />
   )
 }
@@ -98,22 +100,31 @@ function MainCenter({
   onOpenProvider,
   onOpenGuide,
   onOpenAbout,
+  onGoWelcome,
 }: {
   onOpenAccount: () => void
   onOpenAI: () => void
   onOpenProvider: () => void
   onOpenGuide: () => void
   onOpenAbout: () => void
+  onGoWelcome?: () => void
 }) {
   const [user, setUser] = useState<UserProfile>(() => loadUserProfile())
   const [picking, setPicking] = useState(false)
   // 登录状态：只在进「我的」页时读一次；去账号页登录/退出回来会重新挂载，读到最新值
-  const accountEmail = getAccount()?.email ?? null
+  const accountLabel = getAccount()?.account ?? null
+  const loggedIn = isLoggedIn()
 
   const updateUser = (patch: Partial<UserProfile>) => {
     const next = { ...user, ...patch }
     setUser(next)
     saveUserProfile(next)
+  }
+
+  const handleLogout = () => {
+    if (!window.confirm('退出登录后，本地记录不会丢；下次登录同一账号就能找回来。确定退出吗？')) return
+    logout()
+    onGoWelcome?.()
   }
 
   return (
@@ -177,7 +188,7 @@ function MainCenter({
           icon={<CloudSyncIcon />}
           label="账号与同步"
           onClick={onOpenAccount}
-          status={accountEmail ?? '未登录'}
+          status={accountLabel ?? '未登录'}
         />
       </ProfileGroup>
 
@@ -193,6 +204,12 @@ function MainCenter({
       <ProfileGroup title="关于忆文">
         <EntryRow icon={<InfoIcon />} label="关于" onClick={onOpenAbout} />
       </ProfileGroup>
+
+      {loggedIn && (
+        <button type="button" className="btn logout-btn" onClick={handleLogout}>
+          退出登录
+        </button>
+      )}
     </div>
   )
 }
@@ -346,7 +363,7 @@ function AIDetail({
             id="persona"
             className="input persona-input"
             rows={4}
-            placeholder={'想让它是什么都可以——包括你的编程搭子、工作助理'}
+            placeholder={'想让 TA 是什么都可以——包括你的编程搭子、工作助理'}
             value={persona}
             onChange={(e) => setPersona(e.target.value)}
           />

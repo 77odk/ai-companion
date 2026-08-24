@@ -91,11 +91,11 @@ const T3 = new Date(2026, 7, 22, 10, 0).getTime()
 console.log('\n[1] 账号存取')
 resetStore()
 eq(getAccount(), null, '无账号 → null')
-setAccount({ token: 'tok', email: 'a@b.com' })
-eq(getAccount(), { token: 'tok', email: 'a@b.com' }, '写入后读回相同')
+setAccount({ token: 'tok', account: 'a@b.com' })
+eq(getAccount(), { token: 'tok', account: 'a@b.com' }, '写入后读回相同')
 localStorage.setItem('ai_companion_account', 'not-json')
 eq(getAccount(), null, '损坏 JSON → null')
-localStorage.setItem('ai_companion_account', JSON.stringify({ token: '', email: 'a@b.com' }))
+localStorage.setItem('ai_companion_account', JSON.stringify({ token: '', account: 'a@b.com' }))
 eq(getAccount(), null, '空 token → null')
 clearAccount()
 eq(getAccount(), null, '清除后 → null')
@@ -240,35 +240,35 @@ resetFetch((url, init) => {
   const body = JSON.parse(init.body)
   if (url.endsWith('/api/login')) {
     if (body.email === 'a@b.com' && body.password === '123456') {
-      return jsonResponse({ token: 't1', email: 'a@b.com', createdAt: 1 })
+      return jsonResponse({ token: 't1', account: 'a@b.com', createdAt: 1 })
     }
-    return jsonResponse({ error: '邮箱或密码不对' }, 401)
+    return jsonResponse({ error: '账号或密码不对' }, 401)
   }
   if (url.endsWith('/api/register')) {
     if (body.email === 'new@b.com') {
-      return jsonResponse({ token: 't2', email: 'new@b.com', createdAt: 1 })
+      return jsonResponse({ token: 't2', account: 'new@b.com', createdAt: 1 })
     }
-    return jsonResponse({ error: '这个邮箱已经注册过了' }, 409)
+    return jsonResponse({ error: '这个账号已经注册过了' }, 409)
   }
   throw new Error('unexpected fetch: ' + url)
 })
 const acct = await login('a@b.com', '123456')
-eq(acct.email, 'a@b.com', '登录成功返回账号')
-eq(getAccount().email, 'a@b.com', '登录后账号已存 localStorage')
+eq(acct.account, 'a@b.com', '登录成功返回账号')
+eq(getAccount().account, 'a@b.com', '登录后账号已存 localStorage')
 try {
   await login('a@b.com', 'wrong')
   ok(false, '错密码应抛错')
 } catch (e) {
-  eq(e.message, '邮箱或密码不对', '登录失败抛后端 error 文案')
+  eq(e.message, '账号或密码不对', '登录失败抛后端 error 文案')
 }
 const reg = await register('new@b.com', '123456')
-eq(reg.email, 'new@b.com', '注册成功返回账号')
-eq(getAccount().email, 'new@b.com', '注册后账号已存 localStorage')
+eq(reg.account, 'new@b.com', '注册成功返回账号')
+eq(getAccount().account, 'new@b.com', '注册后账号已存 localStorage')
 try {
   await register('taken@b.com', '123456')
   ok(false, '重复注册应抛错')
 } catch (e) {
-  eq(e.message, '这个邮箱已经注册过了', '注册冲突抛后端 error 文案')
+  eq(e.message, '这个账号已经注册过了', '注册冲突抛后端 error 文案')
 }
 
 console.log('\n[9] 网络失败抛网络兜底（不抛底层 TypeError）')
@@ -285,7 +285,7 @@ try {
 
 console.log('\n[10] syncNow：先拉云端合并到本地，再全量上传')
 resetStore()
-setAccount({ token: 'tok', email: 'a@b.com' })
+setAccount({ token: 'tok', account: 'a@b.com' })
 localStorage.setItem('ai_companion_persona', '本地人设')
 localStorage.setItem('ai_companion_messages', JSON.stringify([{ role: 'user', content: '本地消息', ts: T2 }]))
 const cloudData = {
@@ -318,7 +318,7 @@ clearAccount()
 resetFetch(() => jsonResponse({ ok: true }, 200))
 await syncNow()
 eq(fetchCalls.length, 0, '未登录 syncNow 不发请求')
-setAccount({ token: 'tok', email: 'a@b.com' })
+setAccount({ token: 'tok', account: 'a@b.com' })
 resetFetch(() => jsonResponse({ error: '登录已失效，请重新登录' }, 401))
 try {
   await syncNow()
@@ -344,7 +344,7 @@ try {
   window.dispatchEvent(new Event(ELUVIN_DATA_CHANGE))
   eq(fetchCalls.length, 0, '未登录时数据变更不触发上传')
 
-  setAccount({ token: 'tok', email: 'a@b.com' })
+  setAccount({ token: 'tok', account: 'a@b.com' })
   window.dispatchEvent(new Event(ELUVIN_DATA_CHANGE))
   await new Promise((r) => setImmediate(r))
   ok(fetchCalls.length >= 1, '已登录数据变更防抖后自动上传')

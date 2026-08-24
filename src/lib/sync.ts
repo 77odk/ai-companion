@@ -1,13 +1,13 @@
-// 账号与云端同步（邮箱 + 密码）
+// 账号与云端同步（登录标识：邮箱 / 手机号 / 用户名 + 密码）
 // 后端 API（已实测可用）：
-//   POST /api/register {email,password} → {token,email,createdAt}
-//   POST /api/login    {email,password} → {token,email,createdAt}
+//   POST /api/register {email,password} → {token,account,createdAt}
+//   POST /api/login    {email,password} → {token,account,createdAt}
 //   POST /api/sync     Bearer <token>, body {data} → {ok,updatedAt}  全量上传
 //   GET  /api/sync     Bearer <token>                → {data,updatedAt}  全量拉取（无数据 data=null）
 // 错误统一返回 {error: '...'}，HTTP 400/401/409。
 // 纯逻辑（合并/清洗/账户读写）都放在可被 Node 单测的导出函数里；网络失败静默，不打断用户。
 
-import { ELUVIN_DATA_CHANGE } from './dataChange.ts'
+import { ELUVIN_DATA_CHANGE, notifyAuthChanged } from './dataChange.ts'
 import {
   loadSettings,
   loadMessages,
@@ -28,7 +28,8 @@ const API_BASE = 'https://refresh-contractors-stage-amongst.trycloudflare.com'
 
 export interface Account {
   token: string
-  email: string
+  /** 登录标识：邮箱 / 手机号 / 用户名（用户填的原始内容，trim 后） */
+  account: string
 }
 
 /** 云端同步的设置结构：apiKey 绝不上云，每个服务商只留 baseUrl/model */
@@ -77,8 +78,8 @@ export function getAccount(): Account | null {
     const raw = localStorage.getItem(ACCOUNT_KEY)
     if (!raw) return null
     const p = JSON.parse(raw) as Partial<Account>
-    if (p != null && typeof p.token === 'string' && p.token && typeof p.email === 'string') {
-      return { token: p.token, email: p.email }
+    if (p != null && typeof p.token === 'string' && p.token && typeof p.account === 'string') {
+      return { token: p.token, account: p.account }
     }
     return null
   } catch {
@@ -87,7 +88,7 @@ export function getAccount(): Account | null {
 }
 
 export function setAccount(account: Account): void {
-  localStorage.setItem(ACCOUNT_KEY, JSON.stringify({ token: account.token, email: account.email }))
+  localStorage.setItem(ACCOUNT_KEY, JSON.stringify({ token: account.token, account: account.account }))
 }
 
 export function clearAccount(): void {
@@ -106,33 +107,35 @@ async function errorMessage(resp: Response): Promise<string> {
   return `操作失败（HTTP ${resp.status}）`
 }
 
-async function postAuth(path: string, email: string, password: string): Promise<Account> {
+async function postAuth(path: string, account: string, password: string): Promise<Account> {
   let resp: Response
   try {
     resp = await fetch(`${API_BASE}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim(), password }),
+      body: JSON.stringify({ email: account.trim(), password }),
     })
   } catch {
     throw new Error('网络不通，连不上服务器，请检查网络后重试')
   }
   if (!resp.ok) throw new Error(await errorMessage(resp))
   const body = (await resp.json().catch(() => null)) as Partial<Account> | null
-  if (body != null && typeof body.token === 'string' && typeof body.email === 'string') {
-    const account: Account = { token: body.token, email: body.email }
-    setAccount(account)
-    return account
+  if (body != null && typeof body.token === 'string' && typeof body.account === 'string') {
+    const acct: Account = { token: body.token, account: body.account }
+    setAccount(acct)
+    // 登录状态变化广播：App 监听后关闭登录墙 / 刷新「我的」页状态
+    notifyAuthChanged()
+    return acct
   }
   throw new Error('服务器返回异常，请稍后重试')
 }
 
-export function register(email: string, password: string): Promise<Account> {
-  return postAuth('/api/register', email, password)
+export function register(account: string, password: string): Promise<Account> {
+  return postAuth('/api/register', account, password)
 }
 
-export function login(email: string, password: string): Promise<Account> {
-  return postAuth('/api/login', email, password)
+export function login(account: string, password: string): Promise<Account> {
+  return postAuth('/api/login', account, password)
 }
 
 // ---- 数据打包（collectData）/ 应用（applyData） ----
