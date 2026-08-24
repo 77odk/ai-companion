@@ -11,12 +11,16 @@ import GuideDetail from './components/Guide'
 import LoginGate from './components/LoginGate'
 import { loadMessages, loadPersona } from './lib/storage'
 import { getToken, isLoggedIn, isPublicView } from './lib/auth'
-import { listSessions } from './lib/sessionApi'
+import { createSession, listSessions, postMemory, postMessage } from './lib/sessionApi'
 import { getActiveSessionId, setActiveSessionId } from './lib/sessionStore'
+import { buildMigrationPayload, hasLocalLegacyData, hasMigratedFlag, setLocalMigratedFlag } from './lib/migrateLocal'
 import { decideLoginTarget, pickMostRecentSession, type RolePickMode } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 
 type View = 'welcome' | 'role' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary' | 'guide' | 'loading'
+
+// 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
+type MigrationState = 'idle' | 'running' | 'failed'
 
 // ---- 开机页判定：新会话或隔太久（>6 小时）才算重新开机 ----
 const BOOT_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -103,12 +107,63 @@ export default function App() {
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate'>('welcome')
   // 选角色页的用途：first=首次/游客新建；current=换个TA·当前会话换人设；new=换个TA·开新会话换TA
   const [roleMode, setRoleMode] = useState<RolePickMode>('first')
+  // 老数据一键迁移状态（无云端会话 + 本地有旧数据时触发，见 redirectBySessions）
+  const [migration, setMigration] = useState<MigrationState>('idle')
   // 已登录用户首次拉会话列表只做一次（StrictMode 双跑防重）
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
 
-  // 登录用户分流：拉会话列表 → 有会话进最近会话聊天，没有进选角色页新建。
+  // 老数据一键迁移：建云端会话 → 按升序传消息 → 传记忆（单条失败跳过不中断，统计失败数）→
+  // 置位 → 进聊天。本地数据只读不删（红线）；createSession 失败才算整个迁移失败（不置位，可重试）。
+  const runMigration = useCallback(async (token: string) => {
+    const payload = buildMigrationPayload()
+    try {
+      const created = await createSession(token, { persona: payload.persona, title: '我们的开始' })
+      if (!created.ok) {
+        setMigration('failed')
+        return
+      }
+      const sid = created.data.id
+      let failedCount = 0
+      for (const m of payload.messages) {
+        const r = await postMessage(token, sid, { role: m.role, content: m.content })
+        if (!r.ok) failedCount++
+      }
+      for (const mem of payload.memories) {
+        const r = await postMemory(token, sid, { content: mem.content })
+        if (!r.ok) failedCount++
+      }
+      setActiveSessionId(String(sid))
+      setLocalMigratedFlag()
+      setMigration('idle')
+      setView('chat')
+    } catch {
+      // 网络等整体失败：本地数据绝不删，下次登录有旧数据还会再迁
+      setMigration('failed')
+    }
+  }, [])
+
+  // 迁移失败后的「重试」：重新走一遍迁移（本地旧数据仍在）
+  const retryMigration = () => {
+    const token = getToken()
+    if (!token) {
+      setView('welcome')
+      return
+    }
+    setMigration('running')
+    void runMigration(token)
+  }
+
+  // 迁移失败后的「先跳过，直接新建」：进选角色页，不置位——下次登录有旧数据还会再迁
+  const skipMigration = () => {
+    setMigration('idle')
+    setRoleMode('first')
+    setView('role')
+  }
+
+  // 登录用户分流：拉会话列表 → 有会话进最近会话聊天；没有但有本地旧数据（且没迁过）→ 自动迁移；
+  // 没有也没数据 → 进选角色页新建。
   // 拉列表失败（断网等）走本地兜底：有缓存的当前会话进聊天，否则按本地记录判断。
   // 这里就把 redirectStarted 置位，避免 view 切到 loading 后下面的挂载 effect 再触发一次重复拉取。
   const redirectBySessions = useCallback(async () => {
@@ -121,13 +176,27 @@ export default function App() {
     }
     const res = await listSessions(token)
     if (res.ok) {
-      const latest = pickMostRecentSession(res.data.sessions)
-      if (latest) setActiveSessionId(String(latest.id))
-      else setActiveSessionId('')
-      // 无会话进选角色页时，重置为「首次新建」用途（上次「换个 TA」留下的 current/new 不该带到这）
-      const target = decideLoginTarget(res.data.sessions)
-      if (target === 'role') setRoleMode('first')
-      setView(target)
+      const sessions = res.data.sessions
+      const latest = pickMostRecentSession(sessions)
+      if (latest) {
+        // 有云端会话 → 正常进聊天
+        setActiveSessionId(String(latest.id))
+        setMigration('idle')
+        setView('chat')
+      } else if (!hasMigratedFlag() && hasLocalLegacyData()) {
+        // 无云端会话 + 本地有旧数据 + 没迁过 → 自动把本地数据搬成第一个会话
+        setActiveSessionId('')
+        setRoleMode('first')
+        setMigration('running')
+        await runMigration(token)
+      } else {
+        // 无云端会话且无本地数据（或已迁过）→ 正常进选角色页新建
+        setActiveSessionId('')
+        setMigration('idle')
+        const target = decideLoginTarget(sessions)
+        if (target === 'role') setRoleMode('first')
+        setView(target)
+      }
     } else if (getActiveSessionId()) {
       setView('chat')
     } else if (needsRolePick()) {
@@ -136,7 +205,7 @@ export default function App() {
     } else {
       setView('chat')
     }
-  }, [])
+  }, [runMigration])
 
   // 访问门禁：需登录 view 且未登录 → 记下目标交给登录墙；游客可看的直接进
   const navigate = (v: View) => {
@@ -245,14 +314,34 @@ export default function App() {
           onGoGuide={() => openGuide('welcome')}
         />
       ) : view === 'role' ? (
-        <RolePicker mode={roleMode} onDone={() => navigate('chat')} />
+        <RolePicker
+          mode={roleMode}
+          onDone={() => navigate('chat')}
+          onBack={() => navigate(roleMode === 'first' ? 'welcome' : 'settings')}
+        />
       ) : view === 'aispace' ? (
         <AISpace onBack={backFromSpace} onGoMine={() => navigate('settings')} />
       ) : view === 'anniversary' ? (
         <AnniversaryPage onBack={() => navigate('memory')} />
       ) : view === 'loading' ? (
         <div className="session-loading">
-          <p>正在打开记忆…</p>
+          {migration === 'failed' ? (
+            <>
+              <p>记录没带完，点重试再试一次。</p>
+              <div className="migrate-actions">
+                <button type="button" className="btn btn-primary" onClick={retryMigration}>
+                  重试
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={skipMigration}>
+                  先跳过，直接新建
+                </button>
+              </div>
+            </>
+          ) : migration === 'running' ? (
+            <p>正在把你的记录带过来…</p>
+          ) : (
+            <p>正在打开记忆…</p>
+          )}
         </div>
       ) : (
         <>

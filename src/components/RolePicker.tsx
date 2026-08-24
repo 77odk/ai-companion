@@ -12,6 +12,8 @@ interface Props {
   mode: RolePickMode
   /** 会话已建好/换好后调用，由 App 跳进聊天页（游客则触发登录墙） */
   onDone: () => void
+  /** 返回上一页（换 TA 进来退回原页；首次进来退回欢迎页）；不传则不显示返回键 */
+  onBack?: () => void
 }
 
 /** 自定义人设表单字段（对应结构化表单的四项，全是文本，不做字符上限） */
@@ -39,7 +41,7 @@ function customMarker(form: CustomFormState): string {
   return p.length > 8 ? `${p.slice(0, 8)}…` : p
 }
 
-export default function RolePicker({ mode, onDone }: Props) {
+export default function RolePicker({ mode, onDone, onBack }: Props) {
   // 选中的角色：模板 id 或 'custom'；没选中时【开始】置灰
   const [selected, setSelected] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -115,6 +117,14 @@ export default function RolePicker({ mode, onDone }: Props) {
   return (
     <div className="role-page">
       <div className="role-inner">
+        {onBack && (
+          <div className="role-topbar">
+            <button type="button" className="link-btn ai-space-back" onClick={onBack}>
+              ‹ 返回
+            </button>
+            <span aria-hidden="true" />
+          </div>
+        )}
         <h1 className="role-title">先选一个 TA，再开始聊</h1>
         <p className="role-sub">仅更换人设性格，历史聊天与记忆不会清除</p>
 
