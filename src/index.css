@@ -3645,7 +3645,9 @@ textarea.persona-input {
   margin-top: auto;
   padding: 14px 0 8px;
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
   background: linear-gradient(180deg, rgba(255, 248, 243, 0) 0%, var(--color-bg) 32%);
 }
 
@@ -3653,6 +3655,12 @@ textarea.persona-input {
   min-width: 104px;
   padding: 12px 24px;
   font-size: 15px;
+}
+
+/* 「开始」失败时的小字错误提示（建会话失败留在本页重试） */
+.role-start-error {
+  margin: 0;
+  font-size: 13px;
 }
 
 /* ========== 自定义角色 · 全屏弹窗 ========== */
@@ -3859,4 +3867,107 @@ textarea.persona-input {
   color: #b3261e;
   font-size: 14px;
   font-weight: 500;
+}
+
+/* ========== 「换个 TA」二选一弹窗（B2c-2） ========== */
+.switch-role-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(61, 44, 41, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.switch-role-card {
+  width: 100%;
+  max-width: 340px;
+  background: var(--color-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  padding: 18px 16px 16px;
+}
+
+.switch-role-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.switch-role-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.switch-role-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.switch-role-close:hover {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+}
+
+.switch-role-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.switch-role-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-card);
+  text-align: left;
+  cursor: pointer;
+}
+
+.switch-role-option:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.switch-role-option-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.switch-role-option-desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+/* ========== 已登录用户拉会话分流时的过渡页（不白屏） ========== */
+.session-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 14px;
 }

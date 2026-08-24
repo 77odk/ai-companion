@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Welcome from './components/Welcome'
 import RolePicker from './components/RolePicker'
 import Chat from './components/Chat'
@@ -10,10 +10,13 @@ import AnniversaryPage from './components/AnniversaryPage'
 import GuideDetail from './components/Guide'
 import LoginGate from './components/LoginGate'
 import { loadMessages, loadPersona } from './lib/storage'
-import { isLoggedIn, isPublicView } from './lib/auth'
+import { getToken, isLoggedIn, isPublicView } from './lib/auth'
+import { listSessions } from './lib/sessionApi'
+import { getActiveSessionId, setActiveSessionId } from './lib/sessionStore'
+import { decideLoginTarget, pickMostRecentSession, type RolePickMode } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 
-type View = 'welcome' | 'role' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary' | 'guide'
+type View = 'welcome' | 'role' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary' | 'guide' | 'loading'
 
 // ---- 开机页判定：新会话或隔太久（>6 小时）才算重新开机 ----
 const BOOT_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -55,8 +58,9 @@ function needsRolePick(): boolean {
 
 // 模块加载时判一次开机页，保证先读标记再渲染，也不会被 StrictMode 的二次初始化干扰
 const bootWelcome = decideBoot()
-// 优先级：开机页 > 游客先看欢迎页（逛展示内容）> 角色选择 > 聊天
-const initialView: View = bootWelcome ? 'welcome' : !isLoggedIn() ? 'welcome' : needsRolePick() ? 'role' : 'chat'
+// 优先级：开机页 > 游客先看欢迎页（逛展示内容）> 已登录用户异步拉会话分流（loading 过渡，不白屏）
+// 已登录不再用 needsRolePick 判初始页：有没有会话由云端 sessions 决定，拉回结果后再进聊天/选角色
+const initialView: View = bootWelcome ? 'welcome' : !isLoggedIn() ? 'welcome' : 'loading'
 
 // ---- 连点 3 下强刷：清 PWA 缓存 + 注销 Service Worker + 重新加载 ----
 async function forceRefresh(): Promise<void> {
@@ -91,14 +95,48 @@ export default function App() {
   const [view, setView] = useState<View>(initialView)
   const [spaceFrom, setSpaceFrom] = useState<View>('chat')
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
-  // 游客想进需登录页时记下的目标 view：登录墙展示 + 登录成功回跳用
+  // 游客想进需登录页时记下的目标 view：仅登录墙展示用（登录成功后改为按云端会话分流，不再硬回跳）
   const [gateTarget, setGateTarget] = useState<View | null>(null)
   // 从登录墙去逛指南时，暂时收起来的回跳目标（指南返回时放回登录墙）
   const [pendingTarget, setPendingTarget] = useState<View | null>(null)
   // 使用指南独立 view：返回时回到来源（欢迎页 / 我的 / 登录墙）
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate'>('welcome')
+  // 选角色页的用途：first=首次/游客新建；current=换个TA·当前会话换人设；new=换个TA·开新会话换TA
+  const [roleMode, setRoleMode] = useState<RolePickMode>('first')
+  // 已登录用户首次拉会话列表只做一次（StrictMode 双跑防重）
+  const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
+
+  // 登录用户分流：拉会话列表 → 有会话进最近会话聊天，没有进选角色页新建。
+  // 拉列表失败（断网等）走本地兜底：有缓存的当前会话进聊天，否则按本地记录判断。
+  // 这里就把 redirectStarted 置位，避免 view 切到 loading 后下面的挂载 effect 再触发一次重复拉取。
+  const redirectBySessions = useCallback(async () => {
+    redirectStarted.current = true
+    setView('loading')
+    const token = getToken()
+    if (!token) {
+      setView('welcome')
+      return
+    }
+    const res = await listSessions(token)
+    if (res.ok) {
+      const latest = pickMostRecentSession(res.data.sessions)
+      if (latest) setActiveSessionId(String(latest.id))
+      else setActiveSessionId('')
+      // 无会话进选角色页时，重置为「首次新建」用途（上次「换个 TA」留下的 current/new 不该带到这）
+      const target = decideLoginTarget(res.data.sessions)
+      if (target === 'role') setRoleMode('first')
+      setView(target)
+    } else if (getActiveSessionId()) {
+      setView('chat')
+    } else if (needsRolePick()) {
+      setRoleMode('first')
+      setView('role')
+    } else {
+      setView('chat')
+    }
+  }, [])
 
   // 访问门禁：需登录 view 且未登录 → 记下目标交给登录墙；游客可看的直接进
   const navigate = (v: View) => {
@@ -150,14 +188,21 @@ export default function App() {
     navigate(guideBack)
   }
 
-  // 登录墙登录成功：回跳目标 view
+  // 登录墙登录成功：按云端会话分流（有会话进聊天，无会话进选角色新建），
+  // 不再硬回登录前的 gateTarget——游客点聊天被拦，登录后也是"有会话的聊天"或"选角色"
   const handleGateDone = () => {
-    if (gateTarget) {
-      setView(gateTarget)
-      setGateTarget(null)
-    }
+    setGateTarget(null)
     setPendingTarget(null)
-    // gateTarget 为空（从已登录页退出、落在需登录 view）时，view 就是目标页，登录后自然显示
+    void redirectBySessions()
+  }
+
+  // 欢迎页「开始使用」：登录用户按云端会话分流；游客维持原流程（选角色或直接聊天）
+  const handleWelcomeStart = () => {
+    if (isLoggedIn()) {
+      void redirectBySessions()
+    } else {
+      navigate(needsRolePick() ? 'role' : 'chat')
+    }
   }
 
   // 登录墙返回：不登录，回欢迎页继续逛展示内容
@@ -178,6 +223,13 @@ export default function App() {
     }
   }
 
+  // 已登录用户首次挂载（initialView='loading'）时拉会话分流；开机欢迎页时等「开始使用」再分流。
+  // redirectBySessions 内部已置位 redirectStarted，这里只需判重。
+  useEffect(() => {
+    if (!loggedIn || redirectStarted.current || view !== 'loading') return
+    void redirectBySessions()
+  }, [loggedIn, view, redirectBySessions])
+
   // 登录墙是否展示：正在请求需登录 view 且未登录；或已登录页退出后落在需登录 view
   const gateShown = (gateTarget !== null || !isPublicView(view)) && !loggedIn
 
@@ -189,15 +241,19 @@ export default function App() {
         <GuideDetail onBack={handleGuideBack} onGoProvider={() => openSettings('provider')} />
       ) : view === 'welcome' ? (
         <Welcome
-          onStart={() => navigate(needsRolePick() ? 'role' : 'chat')}
+          onStart={handleWelcomeStart}
           onGoGuide={() => openGuide('welcome')}
         />
       ) : view === 'role' ? (
-        <RolePicker onDone={() => navigate('chat')} />
+        <RolePicker mode={roleMode} onDone={() => navigate('chat')} />
       ) : view === 'aispace' ? (
         <AISpace onBack={backFromSpace} onGoMine={() => navigate('settings')} />
       ) : view === 'anniversary' ? (
         <AnniversaryPage onBack={() => navigate('memory')} />
+      ) : view === 'loading' ? (
+        <div className="session-loading">
+          <p>正在打开记忆…</p>
+        </div>
       ) : (
         <>
           <header className="app-header">
@@ -244,7 +300,10 @@ export default function App() {
                 initialPage={settingsTarget}
                 onOpenSpace={() => openSpace('settings')}
                 onGoWelcome={() => navigate('welcome')}
-                onSwitchRole={() => navigate('role')}
+                onSwitchRole={(mode) => {
+                  setRoleMode(mode)
+                  navigate('role')
+                }}
                 onGoGuide={() => openGuide('settings')}
               />
             )}

@@ -166,6 +166,9 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     const text = raw.trim()
     if (!text || streaming) return
 
+    // 每轮新对话重置质检重写标记：上一轮触发过重写不影响本轮
+    retriedRef.current = false
+
     const settings = loadSettings()
     if (!settings.apiKey || !settings.baseUrl || !settings.model) {
       setError('还没接上 TA，去「我的」页填一下 API Key 就能聊了')
@@ -289,7 +292,9 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     const controller = streamChat(settings, apiMessages, {
       onToken: (t) => {
         assistantText.current += t
-        setMessages([...messages, userMsg, { role: 'assistant', content: stripActionMarkers(stripEmoji(assistantText.current)), ts: assistantTs }])
+        // 流式过程中直接追加原文，不做清洗——避免每个 token 都对全文跑两次正则（O(n²) 卡顿）。
+        // 最终清洗在 finalize 里统一做一次，用户看到的最终结果是干净的。
+        setMessages([...messages, userMsg, { role: 'assistant', content: assistantText.current, ts: assistantTs }])
       },
       onDone: finalize,
       onError: (err) => {

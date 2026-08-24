@@ -6,6 +6,10 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   // GitHub Pages 相对路径部署
   base: './',
+  build: {
+    // 关闭 sourcemap：生产环境不暴露源码，配合混淆降低逆向可读性
+    sourcemap: false,
+  },
   plugins: [
     react(),
     VitePWA({

@@ -17,13 +17,16 @@ for (const f of readdirSync(dir)) {
   const out = obfuscate(code, {
     compact: true,
     simplify: true,
+    // 温和档：不开 controlFlowFlattening / selfDefending（那俩体积涨 20-30% 且拖慢首屏）
+    // 只开死代码注入 + 字符串数组（不编码），体积增幅控制在 ~12% 以内
     controlFlowFlattening: false,
-    deadCodeInjection: false,
+    deadCodeInjection: true,
+    deadCodeInjectionThreshold: 0.2,
     identifierNamesGenerator: 'hexadecimal',
     renameGlobals: false,
     selfDefending: false,
     stringArray: true,
-    stringArrayThreshold: 0.5,
+    stringArrayThreshold: 0.8,
     splitStrings: false,
   }).getObfuscatedCode()
   writeFileSync(path, out)

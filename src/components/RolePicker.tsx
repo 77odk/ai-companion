@@ -2,9 +2,15 @@ import { useState } from 'react'
 import { ROLE_TEMPLATES, type RoleTemplate } from '../lib/personaTemplates'
 import { savePersona } from '../lib/storage'
 import { buildCustomPersona } from '../lib/customPersona'
+import { getToken, isLoggedIn } from '../lib/auth'
+import { createSession, patchSession } from '../lib/sessionApi'
+import { getActiveSessionId, setActiveSessionId } from '../lib/sessionStore'
+import type { RolePickMode } from '../lib/sessionFlow'
 
 interface Props {
-  /** 选定角色（模板或自定义）后调用，由 App 跳进聊天页 */
+  /** 选角色页用途：first=首次/游客新建；current=换个TA·当前会话换人设；new=换个TA·开新会话换TA */
+  mode: RolePickMode
+  /** 会话已建好/换好后调用，由 App 跳进聊天页（游客则触发登录墙） */
   onDone: () => void
 }
 
@@ -33,7 +39,7 @@ function customMarker(form: CustomFormState): string {
   return p.length > 8 ? `${p.slice(0, 8)}…` : p
 }
 
-export default function RolePicker({ onDone }: Props) {
+export default function RolePicker({ mode, onDone }: Props) {
   // 选中的角色：模板 id 或 'custom'；没选中时【开始】置灰
   const [selected, setSelected] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -41,6 +47,9 @@ export default function RolePicker({ onDone }: Props) {
   // 自定义已确认的完整 persona；customFromAdvanced 标记它来自高级编辑（表单与高级编辑各管各的）
   const [customPersona, setCustomPersona] = useState('')
   const [customFromAdvanced, setCustomFromAdvanced] = useState(false)
+  // 建/换会话的进行中状态与错误提示（登录用户点「开始」后先建后端会话再进聊天）
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const pickTemplate = (t: RoleTemplate) => {
     setSelected(t.id)
@@ -48,16 +57,51 @@ export default function RolePicker({ onDone }: Props) {
 
   const openCustom = () => setModalOpen(true)
 
-  /** 统一「开始」：把选中的角色写进 persona 再进聊天 */
-  const start = () => {
-    if (!selected) return
-    if (selected === 'custom') {
-      savePersona(customPersona || buildCustomPersona(customForm))
-    } else {
-      const t = ROLE_TEMPLATES.find((x) => x.id === selected)
-      if (t) savePersona(t.persona)
+  /** 选中的完整 persona：自定义优先用高级编辑确认稿，否则表单拼接；模板直接用模板文案 */
+  const resolvePersona = (): string => {
+    if (selected === 'custom') return customPersona || buildCustomPersona(customForm)
+    const t = ROLE_TEMPLATES.find((x) => x.id === selected)
+    return t ? t.persona : ''
+  }
+
+  /**
+   * 统一「开始」：全局 persona 仍写一份（兼容过渡期兜底），后续会话以 session.persona 为准。
+   * 登录用户按用途建/换会话：current 换当前会话人设（无当前会话则兜底开新会话），first/new 新建会话；
+   * 游客不建会话，交给 App 触发登录墙。
+   */
+  const start = async () => {
+    if (!selected || submitting) return
+    const persona = resolvePersona()
+    if (!persona) return
+    setSubmitting(true)
+    setSubmitError(null)
+    savePersona(persona)
+    try {
+      if (isLoggedIn()) {
+        if (mode === 'current') {
+          const sid = getActiveSessionId()
+          if (sid) {
+            const res = await patchSession(getToken(), sid, { persona })
+            if (!res.ok) throw new Error(res.message)
+          } else {
+            // 极端情况：没有当前会话 → 直接走② 开个新会话换 TA
+            const res = await createSession(getToken(), { persona })
+            if (!res.ok) throw new Error(res.message)
+            setActiveSessionId(String(res.data.id))
+          }
+        } else {
+          // mode 'first' 或 'new'：新建会话进聊天（旧会话完整保留）
+          const res = await createSession(getToken(), { persona })
+          if (!res.ok) throw new Error(res.message)
+          setActiveSessionId(String(res.data.id))
+        }
+      }
+      onDone()
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : '创建会话失败，请稍后重试')
+    } finally {
+      setSubmitting(false)
     }
-    onDone()
   }
 
   const handleCustomConfirm = (form: CustomFormState, persona: string, fromAdvanced: boolean) => {
@@ -101,8 +145,14 @@ export default function RolePicker({ onDone }: Props) {
       </div>
 
       <div className="role-start-bar">
-        <button type="button" className="btn btn-primary role-start-btn" onClick={start} disabled={!selected}>
-          开始
+        {submitError && <p className="test-result error role-start-error">{submitError}</p>}
+        <button
+          type="button"
+          className="btn btn-primary role-start-btn"
+          onClick={start}
+          disabled={!selected || submitting}
+        >
+          {submitting ? '正在创建…' : '开始'}
         </button>
       </div>
 

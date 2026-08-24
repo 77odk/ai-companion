@@ -251,7 +251,7 @@ function mergeSettings(localRaw: string | null, cloud: SyncSettings | undefined)
       const cp = cloud.providers?.[p]
       providers[p] = { apiKey: '', baseUrl: cp?.baseUrl ?? '', model: cp?.model ?? '' }
     }
-    return JSON.stringify({ provider: cloud.provider || 'deepseek', providers })
+    return JSON.stringify({ provider: cloud.provider || 'zhipu', providers })
   }
   return null
 }

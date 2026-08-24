@@ -3,6 +3,7 @@ import ProviderSelect from './ProviderSelect'
 import AvatarPicker from './AvatarPicker'
 import DefaultAvatar from './DefaultAvatar'
 import Account from './Account'
+import SwitchRoleModal from './SwitchRoleModal'
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -32,8 +33,8 @@ export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account'
 interface Props {
   onOpenSpace?: () => void
   onGoWelcome?: () => void
-  /** 「换个 TA」回调：清空人设后由 App 跳到选角色页 */
-  onSwitchRole?: () => void
+  /** 「换个 TA」回调：弹二选一后带上方向（current=当前会话换人设 / new=开新会话换TA）由 App 跳选角色页 */
+  onSwitchRole?: (mode: 'current' | 'new') => void
   /** 「使用指南」入口：由 App 切到独立 guide view（游客也可看） */
   onGoGuide?: () => void
   /** 进入设置页时打开的子页 */
@@ -305,11 +306,13 @@ function AIDetail({
 }: {
   onBack: () => void
   onOpenSpace?: () => void
-  onSwitchRole?: () => void
+  onSwitchRole?: (mode: 'current' | 'new') => void
 }) {
   const [ai, setAI] = useState<AIProfile>(() => loadAIProfile())
   const [persona, setPersona] = useState(() => loadPersona())
   const [saved, setSaved] = useState(false)
+  // 「换个 TA」二选一弹窗是否展示
+  const [showSwitchRole, setShowSwitchRole] = useState(false)
 
   const handleSave = () => {
     saveAIProfile(ai)
@@ -318,12 +321,10 @@ function AIDetail({
     setTimeout(() => setSaved(false), 2000)
   }
 
-  // 换个 TA：二次确认后只清人设，绝不动聊天记录和记忆；跳回选角色页
+  // 换个 TA：先弹二选一（当前会话换人设 / 开新会话换 TA），两个方向都不删任何数据
   const handleSwitchRole = () => {
     if (!onSwitchRole) return
-    if (!window.confirm('换掉现在的 TA 吗？历史记忆不会清除')) return
-    savePersona('')
-    onSwitchRole()
+    setShowSwitchRole(true)
   }
 
   return (
@@ -381,6 +382,16 @@ function AIDetail({
           )}
         </div>
       </div>
+
+      {showSwitchRole && onSwitchRole && (
+        <SwitchRoleModal
+          onClose={() => setShowSwitchRole(false)}
+          onChoose={(mode) => {
+            setShowSwitchRole(false)
+            onSwitchRole(mode)
+          }}
+        />
+      )}
     </div>
   )
 }
