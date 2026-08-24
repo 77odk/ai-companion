@@ -84,7 +84,7 @@ export function pickMostRecentSession(sessions: Session[]): Session | null {
   return sessions.reduce((best, s) => (sessionTimestamp(s) > sessionTimestamp(best) ? s : best))
 }
 
-/** 登录后分流：有会话 → chat；空 → role（选角色新建） */
-export function decideLoginTarget(sessions: Session[]): 'chat' | 'role' {
-  return Array.isArray(sessions) && sessions.length > 0 ? 'chat' : 'role'
+/** 登录后分流（微信式主页）：有会话 → roles（会话列表主页）；空 → role（选角色新建） */
+export function decideLoginTarget(sessions: Session[]): 'roles' | 'role' {
+  return Array.isArray(sessions) && sessions.length > 0 ? 'roles' : 'role'
 }

@@ -16,16 +16,13 @@ import { getToken, isLoggedIn, isPublicView } from './lib/auth'
 import { listSessions } from './lib/sessionApi'
 import {
   getActiveSessionId,
-  getSessionsCache,
   setActiveSessionId,
   setSessionsCache,
 } from './lib/sessionStore'
 import { hasLocalLegacyData, hasMigratedFlag, runLocalMigration, setLocalMigratedFlag } from './lib/migrateLocal'
 import {
   decideLoginTarget,
-  displaySessionName,
   pickMostRecentSession,
-  resolveSessionName,
   type RolePickMode,
 } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
@@ -128,8 +125,6 @@ export default function App() {
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
-  // 刚新建会话的标题：列表还没拉回时，头部入口先显示它（兜底解析）
-  const [createdTitle, setCreatedTitle] = useState('')
 
   // 老数据一键迁移：建云端会话 → 按升序传消息 → 传记忆（单条失败跳过不中断）→
   // 置位 → 进聊天。本地数据只读不删（红线）；createSession 失败才算整个迁移失败（不置位，可重试）。
@@ -183,10 +178,10 @@ export default function App() {
       setSessionsCache(sessions)
       const latest = pickMostRecentSession(sessions)
       if (latest) {
-        // 有云端会话 → 正常进聊天
+        // 有云端会话 → 进会话列表主页（微信式：从列表点人进聊天）
         setActiveSessionId(String(latest.id))
         setMigration('idle')
-        setView('chat')
+        setView('roles')
       } else if (!hasMigratedFlag() && hasLocalLegacyData()) {
         // 无云端会话 + 本地有旧数据 + 没迁过 → 自动把本地数据搬成第一个会话
         setActiveSessionId('')
@@ -300,8 +295,8 @@ export default function App() {
     }
   }
 
-  // ---- 会话列表（S2 全屏角色列表页） ----
-  // 侧边栏已删除：会话列表搬到全屏角色列表页（RolesPage），改名/删除/切换都由那页自持，
+  // ---- 会话列表（微信式主页：底部导航「聊天」tab 内容） ----
+  // 会话列表嵌在 main 里（带底部导航），改名/删除/切换都由 RolesPage 自持，
   // App 只保留「拉列表刷新缓存」（新建会话后用）和三个导航回调（返回/新建/切完回聊天）。
 
   // 拉后端会话列表刷新缓存（角色列表页新建会话后用，让聊天页头部入口显示最新角色名）
@@ -320,11 +315,6 @@ export default function App() {
     setRoleMode('first')
     setView('role')
   }
-
-  // 头部入口显示当前角色名：缓存里找当前会话 → 占位标题从 persona 兜底 → 刚新建的标题 → 全局解析
-  const currentSession = getSessionsCache().find((s) => String(s.id) === getActiveSessionId())
-  const headerName =
-    (currentSession ? displaySessionName(currentSession) : '') || createdTitle || resolveSessionName(loadPersona()) || 'TA'
 
   // 已登录用户首次挂载（initialView='loading'）时拉会话分流；开机欢迎页时等「开始使用」再分流。
   // redirectBySessions 内部已置位 redirectStarted，这里只需判重。
@@ -350,19 +340,12 @@ export default function App() {
       ) : view === 'role' ? (
         <RolePicker
           mode={roleMode}
-          onDone={(info) => {
-            if (info?.title) setCreatedTitle(info.title)
+          onDone={() => {
             navigate('chat')
             // 新建会话后顺手拉一次列表：角色列表/头部入口都能立刻显示新角色名
             void refreshSessions()
           }}
           onBack={() => navigate(roleBack)}
-        />
-      ) : view === 'roles' ? (
-        <RolesPage
-          onBack={() => setView('chat')}
-          onNew={handleRolesNew}
-          onSwitch={() => setView('chat')}
         />
       ) : view === 'aispace' ? (
         <AISpace onBack={backFromSpace} onGoMine={() => navigate('settings')} />
@@ -398,8 +381,8 @@ export default function App() {
                 type="button"
                 className="session-list-entry"
                 onClick={() => navigate('roles')}
-                aria-label="角色列表"
-                title="角色列表"
+                aria-label="返回会话列表"
+                title="返回会话列表"
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -410,11 +393,8 @@ export default function App() {
                   strokeLinejoin="round"
                   aria-hidden="true"
                 >
-                  <path d="M4 6h16" />
-                  <path d="M4 12h16" />
-                  <path d="M4 18h10" />
+                  <path d="M15 18l-6-6 6-6" />
                 </svg>
-                <span className="session-list-entry-name">{headerName}</span>
               </button>
             )}
             {view === 'chat' && (
@@ -447,6 +427,14 @@ export default function App() {
           </header>
 
           <main className="app-main">
+            {view === 'roles' && (
+              <RolesPage
+                onBack={() => navigate('chat')}
+                onNew={handleRolesNew}
+                onSwitch={() => setView('chat')}
+                standalone={false}
+              />
+            )}
             {view === 'chat' && (
               <Chat
                 onGoSettings={() => openSettings('main')}
@@ -477,8 +465,8 @@ export default function App() {
 
           <nav className="app-nav">
             <button
-              className={`nav-btn${view === 'chat' ? ' active' : ''}`}
-              onClick={() => navigate('chat')}
+              className={`nav-btn${view === 'chat' || view === 'roles' ? ' active' : ''}`}
+              onClick={() => navigate('roles')}
             >
               聊天
             </button>

@@ -1,7 +1,7 @@
 // 会话流程纯逻辑自测（B2c-2 / B3）
 // 直接导入纯逻辑 TS（Node 22+ 原生类型剥离），不依赖任何构建工具。
 // 跑法：npm test（node --test）或直接 node src/lib/sessionFlow.test.ts
-// 覆盖：登录后分流（有会话→chat / 空→role）/ 挑最近会话（updatedAt 优先 / created_at 兜底）/ 时间戳兜底 /
+// 覆盖：登录后分流（有会话→roles 列表主页 / 空→role）/ 挑最近会话（updatedAt 优先 / created_at 兜底）/ 时间戳兜底 /
 //       B3 删会话后选下一个 / 会话标题（模板名 / 自定义摘要 / 兜底「新会话」）
 
 import {
@@ -39,10 +39,10 @@ function makeSession(partial: Partial<Session>): Session {
   return { id: 1, title: '', persona: '', created_at: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', ...partial }
 }
 
-console.log('\n[1] decideLoginTarget：有会话→chat，空→role')
+console.log('\n[1] decideLoginTarget：有会话→roles（列表主页），空→role')
 eq(decideLoginTarget([]), 'role', '空列表 → role')
-eq(decideLoginTarget([makeSession({ id: 1 })]), 'chat', '有一条 → chat')
-eq(decideLoginTarget([makeSession({ id: 1 }), makeSession({ id: 2 })]), 'chat', '有多条 → chat')
+eq(decideLoginTarget([makeSession({ id: 1 })]), 'roles', '有一条 → roles')
+eq(decideLoginTarget([makeSession({ id: 1 }), makeSession({ id: 2 })]), 'roles', '有多条 → roles')
 eq(decideLoginTarget(null as never), 'role', '非数组 → role（兜底去选角色）')
 
 console.log('\n[2] sessionTimestamp：updatedAt 优先，缺省用 created_at')

@@ -25,12 +25,14 @@ import { timeAgo } from '../lib/time'
 import type { StoredMessage } from '../lib/storage'
 
 interface Props {
-  /** 返回聊天页 */
+  /** 返回聊天页（主页化 standalone=false 时不渲染返回按钮，保留接口兼容） */
   onBack: () => void
   /** 新建角色：App 跳选角色页（roleMode='first'） */
   onNew: () => void
   /** 会话已切换（本页已 setActiveSessionId），App 回聊天页 */
   onSwitch: () => void
+  /** 主页化（微信式）：嵌在底部导航「聊天」tab 里，无返回按钮；默认 true=全屏页带返回 */
+  standalone?: boolean
 }
 
 /** 某会话最近一条消息（按 ts 取最新；空内容不算） */
@@ -40,7 +42,7 @@ function lastMessage(sessionId: string): StoredMessage | null {
   return msgs.reduce<StoredMessage | null>((best, m) => (!best || m.ts > best.ts ? m : best), null)
 }
 
-export default function RolesPage({ onBack, onNew, onSwitch }: Props) {
+export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }: Props) {
   // 列表自持：进页面先用缓存秒开，再拉后端刷新（拉取失败用缓存兜底）
   const [sessions, setSessions] = useState<Session[]>(() => getSessionsCache())
   // 「···」动作菜单开在哪个会话上（null = 收起）
@@ -138,20 +140,22 @@ export default function RolesPage({ onBack, onNew, onSwitch }: Props) {
   return (
     <div className="roles-page">
       <div className="detail-header roles-header">
-        <button type="button" className="detail-back" onClick={onBack} aria-label="返回">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-        <h1 className="detail-title">角色</h1>
+        {standalone && (
+          <button type="button" className="detail-back" onClick={onBack} aria-label="返回">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        )}
+        <h1 className="detail-title">{standalone ? '角色' : '聊天'}</h1>
         <button type="button" className="roles-new" onClick={handleNew} aria-label="新建角色">
           <svg
             viewBox="0 0 24 24"
