@@ -108,13 +108,13 @@ async function errorMessage(resp: Response): Promise<string> {
   return `操作失败（HTTP ${resp.status}）`
 }
 
-async function postAuth(path: string, account: string, password: string): Promise<Account> {
+async function postAuth(path: string, account: string, password: string, extra: Record<string, string> = {}): Promise<Account> {
   let resp: Response
   try {
     resp = await fetch(`${API_BASE}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: account.trim(), password }),
+      body: JSON.stringify({ email: account.trim(), password, ...extra }),
     })
   } catch {
     throw new Error('网络不通，连不上服务器，请检查网络后重试')
@@ -131,12 +131,90 @@ async function postAuth(path: string, account: string, password: string): Promis
   throw new Error('服务器返回异常，请稍后重试')
 }
 
-export function register(account: string, password: string): Promise<Account> {
-  return postAuth('/api/register', account, password)
+export function register(account: string, password: string, bindEmail?: string, bindPhone?: string): Promise<Account> {
+  const extra: Record<string, string> = {}
+  if (bindEmail && bindEmail.trim()) extra.bindEmail = bindEmail.trim()
+  if (bindPhone && bindPhone.trim()) extra.bindPhone = bindPhone.trim()
+  return postAuth('/api/register', account, password, extra)
 }
 
 export function login(account: string, password: string): Promise<Account> {
   return postAuth('/api/login', account, password)
+}
+
+// ---- B2e：找回密码 + 账号绑定 ----
+
+export interface Identity {
+  type: 'email' | 'phone' | 'username'
+  value: string
+}
+
+/** 发找回密码验证码（发到账号绑定的邮箱），成功返回脱敏邮箱 */
+export async function verifySend(account: string): Promise<string> {
+  let resp: Response
+  try {
+    resp = await fetch(`${API_BASE}/api/verify/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account: account.trim() }),
+    })
+  } catch {
+    throw new Error('网络不通，连不上服务器，请检查网络后重试')
+  }
+  if (!resp.ok) throw new Error(await errorMessage(resp))
+  const body = (await resp.json().catch(() => null)) as { sentTo?: string } | null
+  if (body && typeof body.sentTo === 'string') return body.sentTo
+  throw new Error('发送失败，请稍后再试')
+}
+
+/** 用验证码重置密码 */
+export async function resetPassword(account: string, code: string, newPassword: string): Promise<void> {
+  let resp: Response
+  try {
+    resp = await fetch(`${API_BASE}/api/password/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account: account.trim(), code: code.trim(), newPassword }),
+    })
+  } catch {
+    throw new Error('网络不通，连不上服务器，请检查网络后重试')
+  }
+  if (!resp.ok) throw new Error(await errorMessage(resp))
+}
+
+/** 登录后绑定新标识（邮箱/手机号） */
+export async function bindIdentity(type: 'email' | 'phone', value: string): Promise<void> {
+  const token = getAccount()?.token
+  if (!token) throw new Error('还没登录')
+  let resp: Response
+  try {
+    resp = await fetch(`${API_BASE}/api/account/bind`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ type, value: value.trim() }),
+    })
+  } catch {
+    throw new Error('网络不通，连不上服务器，请检查网络后重试')
+  }
+  if (!resp.ok) throw new Error(await errorMessage(resp))
+}
+
+/** 当前账号所有登录标识 */
+export async function getIdentities(): Promise<Identity[]> {
+  const token = getAccount()?.token
+  if (!token) throw new Error('还没登录')
+  let resp: Response
+  try {
+    resp = await fetch(`${API_BASE}/api/account/identities`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  } catch {
+    throw new Error('网络不通，连不上服务器，请检查网络后重试')
+  }
+  if (!resp.ok) throw new Error(await errorMessage(resp))
+  const body = (await resp.json().catch(() => null)) as { identities?: Identity[] } | null
+  if (body && Array.isArray(body.identities)) return body.identities
+  throw new Error('获取失败，请稍后再试')
 }
 
 // ---- 数据打包（collectData）/ 应用（applyData） ----

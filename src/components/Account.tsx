@@ -3,8 +3,8 @@
 // 登录表单与登录墙 LoginGate 共用一套（LoginForm.tsx）。
 // 登录状态不影响聊天：未登录照常用本地，登录只是多一层同步。
 
-import { useState } from 'react'
-import { getAccount, syncNow, type Account } from '../lib/sync'
+import { useEffect, useState } from 'react'
+import { getAccount, syncNow, bindIdentity, getIdentities, type Account, type Identity } from '../lib/sync'
 import { getToken, logout } from '../lib/auth'
 import LoginForm from './LoginForm'
 import { hasLocalLegacyData, nextMigrationTitle, runLocalMigration, setLocalMigratedFlag } from '../lib/migrateLocal'
@@ -17,6 +17,10 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  const [identities, setIdentities] = useState<Identity[]>([])
+  const [bindType, setBindType] = useState<'email' | 'phone'>('email')
+  const [bindValue, setBindValue] = useState('')
+  const [binding, setBinding] = useState(false)
 
   // 手动把本地旧记录（B2c 前的 persona/聊天/记忆）带过来：用户主动触发，不检查云端会话数。
   // 只要本地有旧数据就建一个新会话搬过去；与 B2d 共用 migrateLocal 的逻辑，不重复实现。
@@ -70,6 +74,38 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
     }
   }
 
+  useEffect(() => {
+    if (!account) return
+    let alive = true
+    getIdentities()
+      .then((list) => { if (alive) setIdentities(list) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [account])
+
+  const handleBind = async () => {
+    if (binding) return
+    const v = bindValue.trim()
+    if (!v) {
+      setError('填一下要绑定的邮箱或手机号')
+      return
+    }
+    setBinding(true)
+    setError(null)
+    setInfo(null)
+    try {
+      await bindIdentity(bindType, v)
+      const list = await getIdentities()
+      setIdentities(list)
+      setBindValue('')
+      setInfo(bindType === 'email' ? '邮箱已绑定' : '手机号已绑定')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '绑定失败，请稍后重试')
+    } finally {
+      setBinding(false)
+    }
+  }
+
   const handleLogout = () => {
     logout()
     setAccount(null)
@@ -88,6 +124,49 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
           <div className="field">
             <label>当前登录</label>
             <p className="account-email">{account.account}</p>
+          </div>
+
+          <div className="field">
+            <label>已绑定的账号</label>
+            <div className="identities-list">
+              {identities.length === 0 ? (
+                <p className="account-format-hint">加载中…</p>
+              ) : (
+                identities.map((id) => (
+                  <span key={id.type + id.value} className="identity-chip">
+                    {id.type === 'email' ? '邮箱' : id.type === 'phone' ? '手机号' : '用户名'} · {id.value}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="field">
+            <label>再绑一个（换绑/多方式登录）</label>
+            <div className="bind-row">
+              <select
+                className="input bind-select"
+                value={bindType}
+                onChange={(e) => setBindType(e.target.value as 'email' | 'phone')}
+                aria-label="绑定类型"
+              >
+                <option value="email">邮箱</option>
+                <option value="phone">手机号</option>
+              </select>
+              <input
+                className="input"
+                type={bindType === 'email' ? 'text' : 'tel'}
+                placeholder={bindType === 'email' ? '邮箱地址' : '手机号'}
+                value={bindValue}
+                onChange={(e) =>
+                  setBindValue(bindType === 'phone' ? e.target.value.replace(/\D/g, '').slice(0, 11) : e.target.value)
+                }
+              />
+              <button type="button" className="btn btn-ghost" onClick={handleBind} disabled={binding}>
+                {binding ? '绑定中…' : '绑定'}
+              </button>
+            </div>
+            <p className="account-format-hint">绑定后也能用这个方式登录，忘了密码还能收验证码找回。</p>
           </div>
 
           <div className="settings-actions">
