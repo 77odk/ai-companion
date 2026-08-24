@@ -25,7 +25,7 @@ import { loadAnniversaries, getMainAnniversaryId, type Anniversary } from './ann
 import type { SpacePost } from './aiSpaceCore.ts'
 
 /** 后端服务地址（本地写死一个出口常量：同步接口与会话接口共用，别各自写死） */
-export const API_BASE = 'https://refresh-contractors-stage-amongst.trycloudflare.com'
+export const API_BASE = 'https://texas-division-trivia-stars.trycloudflare.com'
 
 export interface Account {
   token: string
