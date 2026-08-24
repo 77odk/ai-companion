@@ -3,6 +3,20 @@ import MessageBubble from './MessageBubble'
 import { buildSystemPrompt, chatCompletion, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage } from '../lib/api'
 import { extractMemories, loadMemory, notifyMemoryUpdated, recallRelevantMemories, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
+import { getToken } from '../lib/auth'
+import { getSession, postMessage, type Session } from '../lib/sessionApi'
+import {
+  addPendingOp,
+  confirmMessageInCache,
+  flushPendingOps,
+  getActiveSessionId,
+  getMessagesCache,
+  mergeSessionMessages,
+  newPendingOpId,
+  removePendingOp,
+  saveMessagesCache,
+  type PendingOp,
+} from '../lib/sessionStore'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
@@ -13,17 +27,25 @@ interface Props {
 }
 
 export default function Chat({ onGoSettings, onGoGuide }: Props) {
-  const [messages, setMessages] = useState<StoredMessage[]>(() => loadMessages())
+  // B2c-1 会话模式：有 activeSessionId → 会话数据走后端（本地缓存秒开，后端权威）；
+  // 没有 → 走现有 localStorage 流程（B2c 过渡期，等 B2c-2 选角色新建会话对接）
+  const activeSessionId = getActiveSessionId()
+
+  const [messages, setMessages] = useState<StoredMessage[]>(() =>
+    activeSessionId ? getMessagesCache(activeSessionId) : loadMessages(),
+  )
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // 发送失败的那条消息：429 切换豆包后填回输入框，不丢内容不重复
   const [failedText, setFailedText] = useState<string | null>(null)
   const [hasKey] = useState(() => Boolean(loadSettings().apiKey))
+  // 当前会话对象（后台拉会话详情后才有）：persona 从这里读，兜底读全局 ai_companion_persona
+  const [activeSession, setActiveSession] = useState<Session | null>(null)
+  const persona = activeSession?.persona ?? loadPersona()
 
-  // 会话起点（M7-3 刷新对话）：setSessionStart 后聊天页只显示/只发送起点之后的消息；
-  // 聊天记录一条不删——messages 里仍是全量，过滤只发生在「显示」与「发给模型的上下文」两层
-  const sessionStart = useMemo(() => getSessionStart(), [])
+  // 会话起点（M7-3 刷新对话）：会话模式下不套全局起点（每会话消息全量显示），遗留流程照旧
+  const sessionStart = useMemo(() => (activeSessionId ? 0 : getSessionStart()), [activeSessionId])
   const visibleMessages = useMemo(
     () => filterSessionMessages(messages, sessionStart),
     [messages, sessionStart],
@@ -35,6 +57,36 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
   const finalizeRef = useRef<() => void>(() => {})
   const retriedRef = useRef(false)
   const assistantText = useRef('')
+
+  // 数据落盘：会话模式写该会话缓存，遗留模式写全局 ai_companion_messages（保留原有裁剪逻辑）
+  const persistMessages = useCallback((msgs: StoredMessage[]) => {
+    const sid = getActiveSessionId()
+    if (sid) saveMessagesCache(sid, msgs)
+    else saveMessages(msgs)
+  }, [])
+
+  // 乐观上传：先入 pendingSync 队列（本地不丢），再异步 postMessage 上传；
+  // 成功移出队列并把缓存里的乐观条目对账成服务端版本（ts 换成 createdAt），失败留在队列联网补传
+  const uploadMessage = useCallback((msg: StoredMessage) => {
+    const sid = getActiveSessionId()
+    const token = getToken()
+    if (!sid || !token) return
+    const op: PendingOp = {
+      id: newPendingOpId(),
+      type: 'message',
+      sessionId: sid,
+      payload: { role: msg.role, content: msg.content },
+      ts: msg.ts,
+    }
+    addPendingOp(op)
+    postMessage(token, sid, { role: msg.role, content: msg.content }).then((res) => {
+      if (res.ok) {
+        removePendingOp(op.id)
+        confirmMessageInCache(sid, op, res.data)
+      }
+      // res.ok=false：留在队列，联网自动补传（flushPendingOps），聊天不卡
+    })
+  }, [])
 
   // 新消息时自动滚到底部
   useEffect(() => {
@@ -50,11 +102,56 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
   }, [input])
 
-  // 开场白机制：全新开始（没有任何聊天记录）且人设里写了「初次见面开场白」→
+  // 会话模式挂载：本地缓存秒开 → 后台拉后端会话详情 → 按 ts 合并补最新 → 写缓存。
+  // 全新会话且会话人设带开场白 → 插入第一句（沿用开场白机制，不调 API、不耗 key）
+  useEffect(() => {
+    if (!activeSessionId) return
+    const token = getToken()
+    if (!token) return
+    let cancelled = false
+    getSession(token, activeSessionId).then((res) => {
+      if (cancelled || !res.ok) return
+      setActiveSession(res.data.session)
+      const cloud: StoredMessage[] = res.data.messages
+        .map((m) => ({ role: m.role, content: m.content, ts: Date.parse(m.createdAt) }))
+        .filter((m) => Number.isFinite(m.ts))
+      const merged = mergeSessionMessages(getMessagesCache(activeSessionId), cloud)
+      saveMessagesCache(activeSessionId, merged)
+      setMessages(merged)
+      if (merged.length === 0) {
+        const opening = extractOpeningLine(res.data.session.persona)
+        if (opening) {
+          const firstMsg: StoredMessage = { role: 'assistant', content: opening, ts: Date.now() }
+          saveMessagesCache(activeSessionId, [firstMsg])
+          setMessages([firstMsg])
+        }
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [activeSessionId])
+
+  // 联网自动补传：挂载时 + 网络恢复时重试 pendingSync 队列（上传失败的本地消息/记忆补上云）
+  useEffect(() => {
+    if (!activeSessionId) return
+    const token = getToken()
+    if (token) void flushPendingOps(token)
+    const onOnline = () => {
+      const t = getToken()
+      if (t) void flushPendingOps(t)
+    }
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+  }, [activeSessionId])
+
+  // 开场白机制（遗留 localStorage 流程）：全新开始（没有任何聊天记录）且人设里写了「初次见面开场白」→
   // 把 TA 的见面第一句话插进来当第一条 assistant 消息。不调 API、不耗 key，
   // 模型后续也能看到这句历史，衔接自然。只在无聊天记录时插入；
   // 老用户换人设（已有聊天记录）不插。StrictMode 双跑靠读 localStorage 去重。
+  // 会话模式的开场白在会话详情拉回后处理（上面那个 effect），这里只管遗留流程。
   useEffect(() => {
+    if (activeSessionId) return
     const existing = loadMessages()
     if (existing.length > 0) return
     const opening = extractOpeningLine(loadPersona())
@@ -63,7 +160,7 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     const next = [...existing, firstMsg]
     saveMessages(next)
     setMessages(next)
-  }, [])
+  }, [activeSessionId])
 
   const send = useCallback((raw: string) => {
     const text = raw.trim()
@@ -86,8 +183,14 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     setError(null)
     setStreaming(true)
 
+    // 乐观写入：用户消息先落本地缓存再异步上传后端（失败进 pendingSync 队列，联网补传）
+    if (activeSessionId) {
+      persistMessages([...messages, userMsg])
+      uploadMessage(userMsg)
+    }
+
     // 组装请求消息：系统提示词（默认人设+专属人设+AI昵称） + 记忆摘要（如有） + 最近 20 条历史
-    const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(loadPersona(), loadAIProfile().nickname) }]
+    const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(persona, loadAIProfile().nickname) }]
     // 注入记忆改为「按需召回」：重要记忆（pinned）恒带 + 与当前话题相关的记忆（主题/关键词命中），其余省略；
     // 一条都没命中时兜底为最活跃的前 5 条，保证 TA 至少有记忆可依。
     // 排序（双源信任，M5-4）：pinned 恒最前 → 用户明说的（explicit）次之 → 其余按活跃度。
@@ -116,6 +219,18 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
       content: m.role === 'assistant' ? stripMemoryMarkers(m.content) : m.content,
     }))
     apiMessages.push(...history)
+
+    // 收尾统一走这里：落盘 + 上屏 + 异步上传助手消息 + 结束流式态
+    const commitFinal = (final: StoredMessage[]) => {
+      persistMessages(final)
+      setMessages(final)
+      const last = final[final.length - 1]
+      if (last && last.role === 'assistant') {
+        uploadMessage(last)
+      }
+      setStreaming(false)
+      controllerRef.current = null
+    }
 
     const finalize = () => {
       const raw = assistantText.current
@@ -152,32 +267,22 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
               // 重写还是有问题？就用兜底话，自然带过但不编造
               const fallback = '这个我还真没头绪，你跟我说说呗。'
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: fallback, ts: Date.now() }]
-              saveMessages(final)
-              setMessages(final)
+              commitFinal(final)
             } else {
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: retryCleaned, ts: Date.now() }]
-              saveMessages(final)
-              setMessages(final)
+              commitFinal(final)
             }
-            setStreaming(false)
-            controllerRef.current = null
           })
           .catch(() => {
             const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: cleaned, ts: assistantTs }]
-            saveMessages(final)
-            setMessages(final)
-            setStreaming(false)
-            controllerRef.current = null
+            commitFinal(final)
           })
         return
       }
       const final: StoredMessage[] = cleaned
         ? [...messages, userMsg, { role: 'assistant', content: cleaned, ts: assistantTs }]
         : [...messages, userMsg]
-      saveMessages(final)
-      setMessages(final)
-      setStreaming(false)
-      controllerRef.current = null
+      commitFinal(final)
     }
     finalizeRef.current = finalize
 
@@ -194,7 +299,7 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
       },
     })
     controllerRef.current = controller
-  }, [messages, visibleMessages, streaming])
+  }, [messages, visibleMessages, streaming, persona, activeSessionId, persistMessages, uploadMessage])
 
   // 工作台「跟 TA 说」带话进来：Chat 挂载时取走并直接发给 TA（StrictMode 双跑靠 take 清空去重）
   useEffect(() => {

@@ -24,7 +24,8 @@ import { loadMemory, type MemoryItem } from './memory.ts'
 import { loadAnniversaries, getMainAnniversaryId, type Anniversary } from './anniversary.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
 
-const API_BASE = 'https://refresh-contractors-stage-amongst.trycloudflare.com'
+/** 后端服务地址（本地写死一个出口常量：同步接口与会话接口共用，别各自写死） */
+export const API_BASE = 'https://refresh-contractors-stage-amongst.trycloudflare.com'
 
 export interface Account {
   token: string
