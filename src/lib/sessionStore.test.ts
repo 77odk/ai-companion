@@ -12,6 +12,16 @@ import {
   getMessagesCache,
   saveMessagesCache,
   clearMessagesCache,
+  getMemoriesCache,
+  saveMemoriesCache,
+  clearMemoriesCache,
+  mergeSessionMemories,
+  sessionMemoryToItem,
+  reconcileMemoryCacheId,
+  addMemoryCacheItem,
+  upsertMemoryCache,
+  touchMemoryCache,
+  recallSessionMemories,
   getPendingOps,
   addPendingOp,
   removePendingOp,
@@ -21,6 +31,7 @@ import {
   flushPendingOps,
 } from './sessionStore.ts'
 import type { StoredMessage } from './storage.ts'
+import type { MemoryItem } from './memory.ts'
 
 let passed = 0
 let failed = 0
@@ -177,6 +188,91 @@ addPendingOp({ id: 'c', type: 'message' as const, sessionId: '7', payload: { rol
 resetFetch(() => jsonResponse({ error: '服务器忙' }, 500))
 await flushPendingOps('tok-1')
 eq(getPendingOps().length, 1, '上传失败留在队列')
+
+console.log('\n[8] 记忆缓存按会话分 key（B2c-3）')
+resetStore()
+saveMemoriesCache('7', [{ id: 'a', text: '对方喜欢猫', createdAt: 1, topic: '宠物' }])
+eq(getMemoriesCache('7').length, 1, '会话 7 读回')
+eq(getMemoriesCache('8').length, 0, '会话 8 读不到 7 的记忆')
+saveMemoriesCache('7', [
+  { id: 'a', text: '对方喜欢猫', createdAt: 1 },
+  { id: 'b', text: '对方不吃辣', createdAt: 2 },
+])
+eq(getMemoriesCache('7').length, 2, '覆盖写')
+clearMemoriesCache('7')
+eq(getMemoriesCache('7').length, 0, '清除后为空')
+localStorage.setItem('ai_companion_mem_9', '[{"id":"x","text":"hi","createdAt":5}]')
+eq(getMemoriesCache('9').length, 1, '手动塞的数据也能读')
+saveMemoriesCache('7', 'bad' as never)
+eq(getMemoriesCache('7').length, 0, '写入非法值 → 读回 []')
+localStorage.setItem('ai_companion_mem_7', '[{"id":1,"text":1}]')
+eq(getMemoriesCache('7').length, 0, '非法条目被过滤（id/text 必须是字符串）')
+
+console.log('\n[9] sessionMemoryToItem / mergeSessionMemories')
+const cloudItems: MemoryItem[] = [
+  { id: '1', text: '云端猫', createdAt: 100 },
+  { id: '2', text: '云端辣', createdAt: 200 },
+]
+const cacheItems: MemoryItem[] = [
+  { id: '1', text: '缓存旧内容', createdAt: 10, topic: '宠物', pinned: true },
+  { id: 'local', text: '乐观新增', createdAt: 50 },
+]
+const mergedMem = mergeSessionMemories(cacheItems, cloudItems)
+eq(mergedMem.length, 3, '合并后条数 = 后端 2 条 + 乐观 1 条')
+eq(mergedMem[0].id, 'local', '乐观条目排最前')
+const b1 = mergedMem.find((m) => m.id === '1')!
+eq(b1.text, '云端猫', '同 id 后端内容权威')
+eq(b1.topic, '宠物', '本地增强字段 topic 保留')
+eq(b1.pinned, true, '本地增强字段 pinned 保留')
+eq(mergeSessionMemories([], []), [], '空输入 → 空')
+const item1 = sessionMemoryToItem({ id: 5, content: 'hi', createdAt: '2026-08-24T00:00:00.000Z' })
+eq(item1.id, '5', '后端 id 转字符串')
+eq(item1.text, 'hi', 'text=content')
+eq(item1.createdAt, Date.parse('2026-08-24T00:00:00.000Z'), 'createdAt 解析 ISO')
+eq(sessionMemoryToItem({ id: 5, content: 'x', createdAt: 'bad' }).createdAt, 0, 'createdAt 解析失败 → 0')
+
+console.log('\n[10] reconcileMemoryCacheId：上传成功把本地 id 换成后端 id')
+resetStore()
+saveMemoriesCache('7', [{ id: 'loc', text: 'memo', createdAt: 1 }])
+reconcileMemoryCacheId('7', 'loc', 42)
+eq(getMemoriesCache('7')[0].id, '42', 'id 换成后端 id 字符串')
+reconcileMemoryCacheId('7', 'nope', 99)
+eq(getMemoriesCache('7').length, 1, '找不到本地条目不改')
+reconcileMemoryCacheId('7', '42', 43)
+eq(getMemoriesCache('7')[0].id, '43', '已对账的条目再对账也正常')
+
+console.log('\n[11] 会话缓存记忆写入：add / upsert（去重）/ touch')
+resetStore()
+const added = addMemoryCacheItem('7', ' 对方喜欢猫 ', '宠物', true)
+ok(added != null && getMemoriesCache('7').length === 1, 'addMemoryCacheItem 新增一条')
+eq(getMemoriesCache('7')[0].topic, '宠物', 'topic 写入')
+eq(getMemoriesCache('7')[0].explicit, true, '手动添加 explicit=true')
+eq(addMemoryCacheItem('7', '   '), null, '空文本不新增')
+const upserted = upsertMemoryCache('7', '对方喜欢猫', '来源', '宠物')
+eq(upserted, null, '高度相似内容 upsert 去重不新增')
+eq(getMemoriesCache('7').length, 1, '去重后仍是一条')
+const upserted2 = upsertMemoryCache('7', '对方喜欢狗', '来源', '宠物')
+ok(upserted2 != null && getMemoriesCache('7').length === 2, '不同内容 upsert 新增')
+touchMemoryCache('7', upserted2!.id, 500)
+eq(getMemoriesCache('7').find((m) => m.id === upserted2!.id)!.lastMentionedAt, 500, 'touch 更新最近提起')
+
+console.log('\n[12] recallSessionMemories：有会话读缓存，无会话兜底本地')
+resetStore()
+saveMemoriesCache('7', [
+  { id: '1', text: '对方喜欢猫', createdAt: 1, topic: '宠物' },
+  { id: '2', text: '对方的工作是程序员', createdAt: 2, topic: '工作' },
+])
+const withSession = recallSessionMemories('7', '我家的猫好可爱', { now: 1000 })
+eq(withSession.length, 1, '有会话：只从会话缓存召回相关的')
+eq(withSession[0].id, '1', '命中主题「宠物」')
+const withoutSessionEmpty = recallSessionMemories('', '我家的猫好可爱', { now: 1000 })
+eq(withoutSessionEmpty.length, 0, '无会话且本地空 → 召回空')
+localStorage.setItem('ai_companion_memory', JSON.stringify([{ id: 'loc', text: '对方不吃辣', createdAt: 1, topic: '饮食' }]))
+const withoutSession = recallSessionMemories('', '这家店好辣', { now: 1000 })
+eq(withoutSession.length, 1, '无会话：兜底本地记忆')
+eq(withoutSession[0].id, 'loc', '本地记忆命中')
+const otherSession = recallSessionMemories('8', '我家的猫好可爱', { now: 1000 })
+eq(otherSession.length, 0, '会话 8 缓存空 → 读不到会话 7 的记忆')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) throw new Error(`${failed} 个用例失败`)

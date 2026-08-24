@@ -6,11 +6,13 @@
 import { notifyDataChanged } from './dataChange.ts'
 import { postMessage, postMemory, type Session } from './sessionApi.ts'
 import type { StoredMessage } from './storage.ts'
+import { isSimilarMemory, loadMemory, newMemoryItemId, recallRelevantMemories, type MemoryItem, type RecallOptions } from './memory.ts'
 
 const ACTIVE_SESSION_KEY = 'ai_companion_active_session_id'
 const SESSIONS_CACHE_KEY = 'ai_companion_sessions_cache'
 const PENDING_OPS_KEY = 'ai_companion_pending_ops'
 const msgsKey = (sessionId: string) => `ai_companion_msgs_${sessionId}`
+const memsKey = (sessionId: string) => `ai_companion_mem_${sessionId}`
 
 /** 待补传操作：上传失败先落队列，联网后按序重试 */
 export interface PendingOp {
@@ -103,6 +105,157 @@ export function clearMessagesCache(sessionId: string): void {
   } catch {
     // ignore
   }
+}
+
+// ---- 记忆乐观缓存（key 带 sessionId，各会话独立，B2c-3） ----
+// 与消息缓存同一模式：localStorage 只做页面缓存，后端是权威数据源。
+// 记忆量小，不走 pendingOps 队列：直接乐观缓存 + 调用方异步 postMemory 上传，失败提示重试即可。
+// 注意 saveMemoriesCache 不广播 dataChange——记忆写入不进 legacy 账号同步（/api/sync 全量上传），
+// 避免同一批记忆被 postMemory 和账号同步重复上传。
+
+/** 某会话的记忆缓存（后端记忆 + 本地乐观新增条目；会话间按 key 隔离） */
+export function getMemoriesCache(sessionId: string): MemoryItem[] {
+  try {
+    const raw = localStorage.getItem(memsKey(sessionId))
+    if (!raw) return []
+    const arr = JSON.parse(raw)
+    if (!Array.isArray(arr)) return []
+    return arr.filter(
+      (m): m is MemoryItem => m != null && typeof m.id === 'string' && typeof m.text === 'string',
+    )
+  } catch {
+    return []
+  }
+}
+
+/** 写入某会话的记忆缓存 */
+export function saveMemoriesCache(sessionId: string, items: MemoryItem[]): void {
+  try {
+    localStorage.setItem(memsKey(sessionId), JSON.stringify(Array.isArray(items) ? items : []))
+  } catch {
+    // 存不下（localStorage 满）不弹窗不打断
+  }
+}
+
+/** 删除会话时同步清该会话的记忆缓存 */
+export function clearMemoriesCache(sessionId: string): void {
+  try {
+    localStorage.removeItem(memsKey(sessionId))
+  } catch {
+    // ignore
+  }
+}
+
+// ---- 后端记忆 ↔ 缓存对账（后端权威，缓存保留增强字段） ----
+
+/** 后端记忆 → 缓存条目：id 用后端数字 id 的字符串形式，text=content，createdAt 解析 ISO */
+export function sessionMemoryToItem(mem: { id: number; content: string; createdAt: string }): MemoryItem {
+  const ts = Date.parse(mem.createdAt)
+  return {
+    id: String(mem.id),
+    text: mem.content,
+    createdAt: Number.isFinite(ts) ? ts : 0,
+  }
+}
+
+/**
+ * 后端记忆列表与本地缓存合并（挂载拉回后端后填充缓存）：
+ * - 同 id（后端 id 转字符串）以后端内容为准（权威），但保留本地缓存的增强字段（topic/source/pinned/explicit/lastMentionedAt）
+ * - 缓存里后端还没有的乐观条目（刚新增、上传未成功）保留在列表最前，不丢
+ */
+export function mergeSessionMemories(cache: MemoryItem[], cloud: MemoryItem[]): MemoryItem[] {
+  const cacheList = Array.isArray(cache) ? cache : []
+  const out: MemoryItem[] = []
+  const cloudIds = new Set<string>()
+  for (const cm of cloud ?? []) {
+    if (cm == null || typeof cm.id !== 'string' || !cm.id) continue
+    cloudIds.add(cm.id)
+    const local = cacheList.find((m) => m?.id === cm.id)
+    out.push(
+      local
+        ? {
+            ...cm,
+            topic: local.topic,
+            source: local.source,
+            pinned: local.pinned,
+            explicit: local.explicit,
+            lastMentionedAt: local.lastMentionedAt,
+          }
+        : cm,
+    )
+  }
+  const optimistic = cacheList.filter((m) => m != null && m.id && !cloudIds.has(m.id))
+  return [...optimistic, ...out]
+}
+
+/** 上传成功对账：把缓存里乐观条目的本地 id 换成后端 id，下次「缓存+后端」合并不重复 */
+export function reconcileMemoryCacheId(sessionId: string, localId: string, backendId: number | string): void {
+  const list = getMemoriesCache(sessionId)
+  const idx = list.findIndex((m) => m.id === localId)
+  if (idx < 0) return
+  list[idx] = { ...list[idx], id: String(backendId) }
+  saveMemoriesCache(sessionId, list)
+}
+
+// ---- 会话缓存记忆写入（乐观；异步上传由调用方做） ----
+
+/** 手动添加一条记忆到某会话缓存（与本地 addMemoryItem 对齐：不判重，用户明说 explicit=true） */
+export function addMemoryCacheItem(
+  sessionId: string,
+  text: string,
+  topic?: string,
+  explicit?: boolean,
+): MemoryItem | null {
+  const t = text.trim()
+  if (!t) return null
+  const item: MemoryItem = {
+    id: newMemoryItemId(),
+    text: t,
+    createdAt: Date.now(),
+    topic: topic?.trim() || '其他',
+    ...(explicit === true ? { explicit: true } : {}),
+  }
+  saveMemoriesCache(sessionId, [item, ...getMemoriesCache(sessionId)])
+  return item
+}
+
+/** TA 自主记住一条到某会话缓存：与本地 upsertMemoryItem 一致先判重，新增条目带来源和主题 */
+export function upsertMemoryCache(sessionId: string, text: string, source?: string, topic?: string): MemoryItem | null {
+  const trimmed = text.trim()
+  if (!trimmed) return null
+  if (isSimilarMemory(getMemoriesCache(sessionId), trimmed)) return null
+  const item: MemoryItem = {
+    id: newMemoryItemId(),
+    text: trimmed,
+    createdAt: Date.now(),
+    source,
+    ...(topic?.trim() ? { topic: topic.trim() } : {}),
+  }
+  saveMemoriesCache(sessionId, [item, ...getMemoriesCache(sessionId)])
+  return item
+}
+
+/** 刷新某会话缓存里一条记忆的「最近提起」活跃度（对话注入时调用，只更新缓存，不上传） */
+export function touchMemoryCache(sessionId: string, id: string, now: number = Date.now()): void {
+  const list = getMemoriesCache(sessionId)
+  const idx = list.findIndex((m) => m.id === id)
+  if (idx < 0) return
+  list[idx] = { ...list[idx], lastMentionedAt: now }
+  saveMemoriesCache(sessionId, list)
+}
+
+/**
+ * 对话注入的记忆来源 + 召回（B2c-3）：
+ * 有会话 → 读当前会话的记忆缓存（后端填充）；无会话（游客/过渡态）→ 兜底本地 ai_companion_memory。
+ * 召回逻辑（recallRelevantMemories：pinned 恒带 / 主题命中 / 关键词命中 / 活跃兜底）不变，只换数据来源。
+ */
+export function recallSessionMemories(
+  activeSessionId: string,
+  contextText: string,
+  opts: RecallOptions = {},
+): MemoryItem[] {
+  const items = activeSessionId ? getMemoriesCache(activeSessionId) : loadMemory()
+  return recallRelevantMemories(items, contextText, opts)
 }
 
 // ---- pendingSync 队列（上传失败的本地暂存，联网重试） ----

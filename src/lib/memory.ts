@@ -57,6 +57,11 @@ function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+/** 生成一条新记忆的本地 id（本地库与会话缓存共用；后端记忆用后端数字 id 的字符串形式，不走这里） */
+export function newMemoryItemId(): string {
+  return newId()
+}
+
 /**
  * 手动添加一条记忆：可填主题，留空默认「其他」。
  * explicit 表示是否用户明说——手动输入框添加的是用户亲口说的，应传 true；
@@ -96,6 +101,19 @@ export function setMemoryExplicit(id: string, explicit: boolean): MemoryItem[] {
 export function removeMemoryItem(id: string): MemoryItem[] {
   const next = loadMemory().filter((m) => m.id !== id)
   saveMemory(next)
+  return next
+}
+
+/**
+ * 编辑一条记忆的文字内容（手动改），返回更新后的全部记忆。
+ * 只改 text，不动 createdAt/topic/source/pinned 等字段；找不到原条目则原样返回。
+ */
+export function updateMemoryItemContent(id: string, text: string): MemoryItem[] {
+  const t = text.trim()
+  if (!t) return loadMemory()
+  const next = loadMemory().map((m) => (m.id === id ? { ...m, text: t } : m))
+  saveMemory(next)
+  notifyMemoryUpdated()
   return next
 }
 
@@ -172,6 +190,13 @@ export function upsertMemoryItem(text: string, source?: string, topic?: string):
   const next = [item, ...items]
   saveMemory(next)
   return next
+}
+
+/** 新内容是否与已有记忆高度相似（去重用；本地库与会话缓存共用同一套判断） */
+export function isSimilarMemory(items: MemoryItem[], text: string): boolean {
+  const norm = normalize(String(text ?? '').trim())
+  if (!norm) return false
+  return items.some((m) => m != null && typeof m.text === 'string' && isSimilar(normalize(m.text), norm))
 }
 
 // ---- 记忆主题推断（旧数据没有 topic 时展示用） ----

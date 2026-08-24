@@ -1,20 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildSystemPrompt, chatCompletion, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage } from '../lib/api'
-import { extractMemories, loadMemory, notifyMemoryUpdated, recallRelevantMemories, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
+import { extractMemories, notifyMemoryUpdated, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { getToken } from '../lib/auth'
-import { getSession, postMessage, type Session } from '../lib/sessionApi'
+import { getSession, listMemories, postMemory, postMessage, type Session } from '../lib/sessionApi'
 import {
   addPendingOp,
   confirmMessageInCache,
   flushPendingOps,
   getActiveSessionId,
+  getMemoriesCache,
   getMessagesCache,
+  mergeSessionMemories,
   mergeSessionMessages,
   newPendingOpId,
+  recallSessionMemories,
+  reconcileMemoryCacheId,
   removePendingOp,
+  saveMemoriesCache,
   saveMessagesCache,
+  sessionMemoryToItem,
+  touchMemoryCache,
+  upsertMemoryCache,
   type PendingOp,
 } from '../lib/sessionStore'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
@@ -103,6 +111,7 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
   }, [input])
 
   // 会话模式挂载：本地缓存秒开 → 后台拉后端会话详情 → 按 ts 合并补最新 → 写缓存。
+  // 同一时机拉该会话的记忆列表填缓存（B2c-3 记忆注入来源），后端权威、缓存保留增强字段。
   // 全新会话且会话人设带开场白 → 插入第一句（沿用开场白机制，不调 API、不耗 key）
   useEffect(() => {
     if (!activeSessionId) return
@@ -126,6 +135,12 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
           setMessages([firstMsg])
         }
       }
+    })
+    listMemories(token, activeSessionId).then((res) => {
+      if (cancelled || !res.ok) return
+      const cloudMem = res.data.memories.map(sessionMemoryToItem)
+      const mergedMem = mergeSessionMemories(getMemoriesCache(activeSessionId), cloudMem)
+      saveMemoriesCache(activeSessionId, mergedMem)
     })
     return () => {
       cancelled = true
@@ -203,17 +218,21 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
       .slice(-6)
       .map((m) => (m.role === 'assistant' ? stripMemoryMarkers(m.content) : m.content))
       .join('\n')
-    const memory = recallRelevantMemories(loadMemory(), contextText)
+    // 记忆来源（B2c-3）：有会话读当前会话记忆缓存（后端填充），无会话兜底本地记忆；召回逻辑不变
+    const memory = recallSessionMemories(activeSessionId, contextText)
     if (memory.length > 0) {
       apiMessages.push({
         role: 'system',
         content:
           '关于对方你已经记住的事实：\n' + memory.map((m) => `- ${toPromptPerspective(m.text)}`).join('\n'),
       })
-      // 这次注入 = 提起了这些记忆：非重要条目刷新「最近提起」活跃度；不广播（频繁调用会让记忆页跟着刷新）
+      // 这次注入 = 提起了这些记忆：非重要条目刷新「最近提起」活跃度；不广播（频繁调用会让记忆页跟着刷新）。
+      // 有会话刷新会话缓存里的活跃度，无会话刷新本地记忆。
       const now = Date.now()
       for (const m of memory) {
-        if (!m.pinned) touchMemory(m.id, now)
+        if (m.pinned) continue
+        if (activeSessionId) touchMemoryCache(activeSessionId, m.id, now)
+        else touchMemory(m.id, now)
       }
     }
     // 发回给模型的助手消息去掉记忆标记行，免得模型看到一堆标记跟着模仿
@@ -237,14 +256,29 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
 
     const finalize = () => {
       const raw = assistantText.current
-      // 解析回复里的「【记忆】xxx」标记行，自动存进记忆库（去重、带来源、带主题）
+      // 解析回复里的「【记忆】xxx」标记行，自动存进记忆库（去重、带来源、带主题）。
+      // 有会话：写进当前会话记忆缓存（去重）+ 异步 postMemory 上传，失败留缓存不丢；
+      // 无会话：写本地记忆库（原逻辑）
       if (raw) {
         const memories = extractMemories(raw)
         if (memories.length > 0) {
           const source = userMsg.content.trim()
           const snippet = source.length > 20 ? `${source.slice(0, 20)}…` : source
-          for (const mem of memories) {
-            upsertMemoryItem(mem.text, snippet, mem.topic)
+          if (activeSessionId) {
+            const token = getToken()
+            for (const mem of memories) {
+              const item = upsertMemoryCache(activeSessionId, mem.text, snippet, mem.topic)
+              if (item && token) {
+                postMemory(token, activeSessionId, { content: mem.text }).then((res) => {
+                  if (res.ok) reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
+                  // 上传失败：记忆留在缓存（本地不丢），不打断聊天；记忆页能看到这条待上传的记忆
+                })
+              }
+            }
+          } else {
+            for (const mem of memories) {
+              upsertMemoryItem(mem.text, snippet, mem.topic)
+            }
           }
           notifyMemoryUpdated()
         }

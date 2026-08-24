@@ -14,6 +14,7 @@ import {
   loadMemory,
   removeMemoryItem,
   togglePinMemory,
+  updateMemoryItemContent,
   MEMORY_UPDATED_EVENT,
   type MemoryItem,
 } from '../lib/memory'
@@ -26,6 +27,17 @@ import {
   summarizeStats,
 } from '../lib/memorySummary'
 import { chatCompletion } from '../lib/api'
+import { getToken } from '../lib/auth'
+import { deleteMemory, listMemories, patchMemory, postMemory } from '../lib/sessionApi'
+import {
+  addMemoryCacheItem,
+  getActiveSessionId,
+  getMemoriesCache,
+  mergeSessionMemories,
+  reconcileMemoryCacheId,
+  saveMemoriesCache,
+  sessionMemoryToItem,
+} from '../lib/sessionStore'
 import { loadAIProfile, loadPersona, loadSettings, loadUserProfile } from '../lib/storage'
 
 /** 主题色块：一组柔和配色，按主题名稳定取一个 */
@@ -62,6 +74,23 @@ function DeleteIcon() {
       aria-hidden="true"
     >
       <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
+    </svg>
+  )
+}
+
+/** 编辑按钮的铅笔图标：细描边暖灰，hover 才明显（与删除图标同一档位） */
+function EditIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
     </svg>
   )
 }
@@ -129,16 +158,86 @@ function newestCreatedAt(items: MemoryItem[]): number {
   return max
 }
 
+/** 条目正文：编辑中显示内联输入框 + 保存/取消，平时显示原文 */
+function MemoryItemTextEdit({
+  m,
+  editingId,
+  editText,
+  onEditChange,
+  onEditSave,
+  onEditCancel,
+}: {
+  m: MemoryItem
+  editingId: string | null
+  editText: string
+  onEditChange: (v: string) => void
+  onEditSave: () => void
+  onEditCancel: () => void
+}) {
+  if (editingId !== m.id) return <p className="memory-item-text">{m.text}</p>
+  return (
+    <div className="memory-item-edit">
+      <input
+        className="input"
+        value={editText}
+        onChange={(e) => onEditChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onEditSave()
+          else if (e.key === 'Escape') onEditCancel()
+        }}
+        autoFocus
+      />
+      <div className="memory-item-edit-actions">
+        <button type="button" className="btn btn-ghost memory-edit-save" onClick={onEditSave}>
+          保存
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={onEditCancel}>
+          取消
+        </button>
+      </div>
+    </div>
+  )
+}
+
 interface MemoryProps {
   /** 点纪念日小卡片 → 进纪念日管理页 */
   onOpenAnniversary?: () => void
 }
 
 export default function Memory({ onOpenAnniversary }: MemoryProps) {
-  const [items, setItems] = useState<MemoryItem[]>(() => loadMemory())
+  // B2c-3 会话模式：有 activeSessionId → 记忆读当前会话缓存（后台拉后端填充，后端权威）；
+  // 无会话（过渡态）→ 读本地 ai_companion_memory（原逻辑）
+  const activeSessionId = getActiveSessionId()
+  const [items, setItems] = useState<MemoryItem[]>(() =>
+    activeSessionId ? getMemoriesCache(activeSessionId) : loadMemory(),
+  )
   const [text, setText] = useState('')
   const [topic, setTopic] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  // 内容编辑：editingId = 正在编辑的条目 id；editText = 编辑框草稿
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
+  // 会话模式上传/删除失败提示（成功后清除；本地模式不涉及，本地不会丢）
+  const [memError, setMemError] = useState<string | null>(null)
+
+  // 会话模式挂载：后台拉该会话记忆列表 → 与本地缓存合并（后端权威、缓存保留增强字段）→ 写缓存 + 上屏
+  useEffect(() => {
+    const sid = getActiveSessionId()
+    if (!sid) return
+    const token = getToken()
+    if (!token) return
+    let cancelled = false
+    listMemories(token, sid).then((res) => {
+      if (cancelled || !res.ok) return
+      const cloud = res.data.memories.map(sessionMemoryToItem)
+      const merged = mergeSessionMemories(getMemoriesCache(sid), cloud)
+      saveMemoriesCache(sid, merged)
+      setItems(merged)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // 纪念日：用户亲手填的「重要的日子」，主展示计时显示在小卡片上，聊天时注入让 TA 记得。
   // 首次进入一条都没有时，用 getFirstSeen() 生成默认「认识纪念日」（只在没发过默认时给一次，删光了不复活）。
@@ -160,10 +259,13 @@ export default function Memory({ onOpenAnniversary }: MemoryProps) {
   const generatedKeyRef = useRef('')
   const summarySeqRef = useRef(0)
 
-  // 数据变更自动刷新：聊天里 TA 刚记住的，切回记忆页（或别的页签）立刻能看到
-  // 纪念日增删改也会广播同一个事件，这里一并刷新
+  // 数据变更自动刷新：聊天里 TA 刚记住的，切回记忆页（或别的页签）立刻能看到。
+  // 会话模式读当前会话缓存，本地模式读本地记忆库；纪念日增删改也广播同一事件，这里一并刷新。
   useEffect(() => {
-    const refresh = () => setItems(loadMemory())
+    const refresh = () => {
+      const sid = getActiveSessionId()
+      setItems(sid ? getMemoriesCache(sid) : loadMemory())
+    }
     const refreshAnniversaries = () => setAnniversaries(loadAnniversaries())
     window.addEventListener(MEMORY_UPDATED_EVENT, refresh)
     window.addEventListener(MEMORY_UPDATED_EVENT, refreshAnniversaries)
@@ -249,18 +351,122 @@ export default function Memory({ onOpenAnniversary }: MemoryProps) {
   const handleAdd = () => {
     const t = text.trim()
     if (!t) return
-    // 手动输入框添加 = 用户亲口说的 → explicit=true（双源信任：用户明说优先）
-    setItems(addMemoryItem(t, topic, true))
+    const sid = getActiveSessionId()
+    if (sid) {
+      // 会话模式：乐观写当前会话缓存（手动添加 = 用户明说 explicit=true），再异步 postMemory 上传
+      const item = addMemoryCacheItem(sid, t, topic, true)
+      setItems(getMemoriesCache(sid))
+      const token = getToken()
+      if (item && token) {
+        postMemory(token, sid, { content: t }).then((res) => {
+          if (res.ok) {
+            reconcileMemoryCacheId(sid, item.id, res.data.id)
+            setItems(getMemoriesCache(sid))
+            setMemError(null)
+          } else {
+            // 失败提示 + 保留本地缓存（不丢），稍后编辑该条会重新上传
+            setMemError('这条记忆没能上传，已留在本地，稍后可再试')
+          }
+        })
+      }
+    } else {
+      setItems(addMemoryItem(t, topic, true))
+    }
     setText('')
     setTopic('')
   }
 
   const handleRemove = (id: string) => {
-    setItems(removeMemoryItem(id))
+    const sid = getActiveSessionId()
+    if (sid) {
+      const list = getMemoriesCache(sid)
+      const item = list.find((m) => m.id === id)
+      // 乐观先删缓存；有后端 id 的条目（纯数字 id）再异步 deleteMemory，失败回滚保留本地
+      saveMemoriesCache(sid, list.filter((m) => m.id !== id))
+      setItems(getMemoriesCache(sid))
+      const token = getToken()
+      if (item && token && /^\d+$/.test(item.id)) {
+        deleteMemory(token, item.id).then((res) => {
+          if (res.ok) {
+            setMemError(null)
+            return
+          }
+          const cur = getMemoriesCache(sid)
+          if (!cur.some((m) => m.id === item.id)) {
+            saveMemoriesCache(sid, [item, ...cur])
+            setItems(getMemoriesCache(sid))
+          }
+          setMemError('删除没成功，这条记忆留在了本地')
+        })
+      }
+    } else {
+      setItems(removeMemoryItem(id))
+    }
   }
 
   const handleTogglePin = (id: string) => {
-    setItems(togglePinMemory(id))
+    const sid = getActiveSessionId()
+    if (sid) {
+      // pinned 是本地增强字段，后端不存：会话模式只更新缓存
+      const next = getMemoriesCache(sid).map((m) => (m.id === id ? { ...m, pinned: !m.pinned } : m))
+      saveMemoriesCache(sid, next)
+      setItems(next)
+    } else {
+      setItems(togglePinMemory(id))
+    }
+  }
+
+  const handleEditStart = (m: MemoryItem) => {
+    setEditingId(m.id)
+    setEditText(m.text)
+  }
+
+  const handleEditCancel = () => {
+    setEditingId(null)
+    setEditText('')
+  }
+
+  const handleEditSave = () => {
+    const t = editText.trim()
+    if (!t || !editingId) return
+    const sid = getActiveSessionId()
+    if (sid) {
+      const list = getMemoriesCache(sid)
+      const item = list.find((m) => m.id === editingId)
+      // 乐观更新缓存文本；后端已有该条（纯数字 id）→ patchMemory，失败回滚原文；
+      // 还没上传成功的条目 → 编辑等同重新上传（失败提示，本地不丢）
+      const next = list.map((m) => (m.id === editingId ? { ...m, text: t } : m))
+      saveMemoriesCache(sid, next)
+      setItems(next)
+      const token = getToken()
+      if (item && token) {
+        if (/^\d+$/.test(item.id)) {
+          patchMemory(token, item.id, { content: t }).then((res) => {
+            if (res.ok) {
+              setMemError(null)
+              return
+            }
+            const rollback = getMemoriesCache(sid).map((m) => (m.id === editingId ? { ...m, text: item.text } : m))
+            saveMemoriesCache(sid, rollback)
+            setItems(rollback)
+            setMemError('修改没保存成功，已恢复原文')
+          })
+        } else {
+          postMemory(token, sid, { content: t }).then((res) => {
+            if (res.ok) {
+              reconcileMemoryCacheId(sid, editingId, res.data.id)
+              setMemError(null)
+            } else {
+              setMemError('这条记忆没能上传，已留在本地，稍后可再试')
+            }
+          })
+        }
+      }
+    } else {
+      setItems(updateMemoryItemContent(editingId, t))
+    }
+    setEditingId(null)
+    setEditText('')
   }
 
   const toggleTopic = (t: string) => {
@@ -277,8 +483,19 @@ export default function Memory({ onOpenAnniversary }: MemoryProps) {
       <p className="page-desc">
         TA 会把你放在心上的一句话记下来，下次见面还记得。
         <br />
-        这些记忆只留在你的浏览器里，不会传到任何地方。
+        {activeSessionId
+          ? '记忆会跟着你的账号走，每个 TA 分开记。'
+          : '这些记忆只留在你的浏览器里，不会传到任何地方。'}
       </p>
+
+      {!activeSessionId && (
+        <div className="memory-session-guide">
+          <p>当前还没在会话里，记忆只存在这台设备上。</p>
+          <p>选好 TA 开始聊之后，记忆会跟着账号走，每个 TA 分开记。</p>
+        </div>
+      )}
+
+      {memError && <p className="memory-error">{memError}</p>}
 
       {stats.count > 0 && (
         <section className="memory-summary-card">
@@ -399,7 +616,14 @@ export default function Memory({ onOpenAnniversary }: MemoryProps) {
                   <div className="memory-topic-body">
                     {g.items[0] && (
                       <div className="memory-item memory-item-featured">
-                        <p className="memory-item-text">{g.items[0].text}</p>
+                        <MemoryItemTextEdit
+                          m={g.items[0]}
+                          editingId={editingId}
+                          editText={editText}
+                          onEditChange={setEditText}
+                          onEditSave={handleEditSave}
+                          onEditCancel={handleEditCancel}
+                        />
                         <div className="memory-item-foot">
                           <SourceTag explicit={g.items[0].explicit} />
                           <span className="memory-item-date">{formatFirstRememberedDate(g.items[0].createdAt)}</span>
@@ -409,6 +633,14 @@ export default function Memory({ onOpenAnniversary }: MemoryProps) {
                           {isStaleMemory(g.items[0], now) && <span className="memory-item-stale">很久没提起</span>}
                         </div>
                         <div className="memory-item-actions">
+                          <button
+                            type="button"
+                            className="memory-edit"
+                            onClick={() => handleEditStart(g.items[0])}
+                            aria-label="编辑这条记忆"
+                          >
+                            <EditIcon />
+                          </button>
                           <button
                             type="button"
                             className={`memory-pin${g.items[0].pinned ? ' pinned' : ''}`}
@@ -433,7 +665,14 @@ export default function Memory({ onOpenAnniversary }: MemoryProps) {
                       <ul className="memory-topic-items">
                         {g.items.slice(1).map((m) => (
                           <li key={m.id} className="memory-item">
-                            <p className="memory-item-text">{m.text}</p>
+                            <MemoryItemTextEdit
+                              m={m}
+                              editingId={editingId}
+                              editText={editText}
+                              onEditChange={setEditText}
+                              onEditSave={handleEditSave}
+                              onEditCancel={handleEditCancel}
+                            />
                             <div className="memory-item-foot">
                               <SourceTag explicit={m.explicit} />
                               <span className="memory-item-date">{formatFirstRememberedDate(m.createdAt)}</span>
@@ -441,6 +680,14 @@ export default function Memory({ onOpenAnniversary }: MemoryProps) {
                               {isStaleMemory(m, now) && <span className="memory-item-stale">很久没提起</span>}
                             </div>
                             <div className="memory-item-actions">
+                              <button
+                                type="button"
+                                className="memory-edit"
+                                onClick={() => handleEditStart(m)}
+                                aria-label="编辑这条记忆"
+                              >
+                                <EditIcon />
+                              </button>
                               <button
                                 type="button"
                                 className={`memory-pin${m.pinned ? ' pinned' : ''}`}
