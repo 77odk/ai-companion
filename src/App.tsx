@@ -1,13 +1,15 @@
 import { useRef, useState } from 'react'
 import Welcome from './components/Welcome'
+import RolePicker from './components/RolePicker'
 import Chat from './components/Chat'
 import Memory from './components/Memory'
 import Work from './components/Work'
 import Settings from './components/Settings'
 import AISpace from './components/AISpace'
 import AnniversaryPage from './components/AnniversaryPage'
+import { loadMessages, loadPersona } from './lib/storage'
 
-type View = 'welcome' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary'
+type View = 'welcome' | 'role' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary'
 
 // ---- 开机页判定：新会话或隔太久（>6 小时）才算重新开机 ----
 const BOOT_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -38,8 +40,19 @@ function decideBoot(): boolean {
   }
 }
 
+// 是否需要先选角色：没有专属人设且没有聊天记录 = 全新用户，进聊天前必须选一个 TA
+function needsRolePick(): boolean {
+  try {
+    return loadPersona().trim() === '' && loadMessages().length === 0
+  } catch {
+    return false
+  }
+}
+
 // 模块加载时判一次开机页，保证先读标记再渲染，也不会被 StrictMode 的二次初始化干扰
 const bootWelcome = decideBoot()
+// 优先级：开机页 > 角色选择 > 聊天
+const initialView: View = bootWelcome ? 'welcome' : needsRolePick() ? 'role' : 'chat'
 
 // ---- 连点 3 下强刷：清 PWA 缓存 + 注销 Service Worker + 重新加载 ----
 async function forceRefresh(): Promise<void> {
@@ -59,7 +72,7 @@ async function forceRefresh(): Promise<void> {
 }
 
 export default function App() {
-  const [view, setView] = useState<View>(bootWelcome ? 'welcome' : 'chat')
+  const [view, setView] = useState<View>(initialView)
   const [spaceFrom, setSpaceFrom] = useState<View>('chat')
   const [settingsTarget, setSettingsTarget] = useState<'main' | 'guide'>('main')
   const titleClicks = useRef<number[]>([])
@@ -90,7 +103,12 @@ export default function App() {
   return (
     <div className="app">
       {view === 'welcome' ? (
-        <Welcome onStart={() => setView('chat')} onGoGuide={() => openSettings('guide')} />
+        <Welcome
+          onStart={() => setView(needsRolePick() ? 'role' : 'chat')}
+          onGoGuide={() => openSettings('guide')}
+        />
+      ) : view === 'role' ? (
+        <RolePicker onDone={() => setView('chat')} />
       ) : view === 'aispace' ? (
         <AISpace onBack={backFromSpace} onGoMine={() => setView('settings')} />
       ) : view === 'anniversary' ? (
@@ -141,6 +159,7 @@ export default function App() {
                 initialPage={settingsTarget}
                 onOpenSpace={() => openSpace('settings')}
                 onGoWelcome={() => setView('welcome')}
+                onSwitchRole={() => setView('role')}
               />
             )}
           </main>

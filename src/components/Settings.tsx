@@ -30,15 +30,17 @@ type Page = 'main' | 'ai' | 'provider' | 'guide' | 'about' | 'account'
 interface Props {
   onOpenSpace?: () => void
   onGoWelcome?: () => void
+  /** 「换个 TA」回调：清空人设后由 App 跳到选角色页 */
+  onSwitchRole?: () => void
   /** 进入设置页时打开的子页（欢迎页/聊天页的引导入口会带 'guide'） */
   initialPage?: Page
 }
 
-export default function Settings({ onOpenSpace, onGoWelcome, initialPage }: Props) {
+export default function Settings({ onOpenSpace, onGoWelcome, onSwitchRole, initialPage }: Props) {
   const [page, setPage] = useState<Page>(initialPage ?? 'main')
 
   if (page === 'ai') {
-    return <AIDetail onBack={() => setPage('main')} onOpenSpace={onOpenSpace} />
+    return <AIDetail onBack={() => setPage('main')} onOpenSpace={onOpenSpace} onSwitchRole={onSwitchRole} />
   }
   if (page === 'provider') {
     return <ProviderDetail onBack={() => setPage('main')} onGoGuide={() => setPage('guide')} />
@@ -279,7 +281,15 @@ const BookIcon = () => (
 
 /* ---------------- 详情页：TA 的资料 ---------------- */
 
-function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSpace?: () => void }) {
+function AIDetail({
+  onBack,
+  onOpenSpace,
+  onSwitchRole,
+}: {
+  onBack: () => void
+  onOpenSpace?: () => void
+  onSwitchRole?: () => void
+}) {
   const [ai, setAI] = useState<AIProfile>(() => loadAIProfile())
   const [persona, setPersona] = useState(() => loadPersona())
   const [saved, setSaved] = useState(false)
@@ -289,6 +299,14 @@ function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSpace?: (
     savePersona(persona)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  // 换个 TA：二次确认后只清人设，绝不动聊天记录和记忆；跳回选角色页
+  const handleSwitchRole = () => {
+    if (!onSwitchRole) return
+    if (!window.confirm('换掉现在的 TA 吗？历史记忆不会清除')) return
+    savePersona('')
+    onSwitchRole()
   }
 
   return (
@@ -328,7 +346,7 @@ function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSpace?: (
             id="persona"
             className="input persona-input"
             rows={4}
-            placeholder={'TA 怎么称呼你？TA 是什么性格？你们是什么关系？\n有什么只有你们知道的秘密？\n\n不填就用默认人设～'}
+            placeholder={'想让它是什么都可以——包括你的编程搭子、工作助理'}
             value={persona}
             onChange={(e) => setPersona(e.target.value)}
           />
@@ -339,6 +357,11 @@ function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSpace?: (
           <button className="btn btn-primary" onClick={handleSave}>
             {saved ? '已保存' : '保存'}
           </button>
+          {onSwitchRole && (
+            <button type="button" className="btn btn-ghost" onClick={handleSwitchRole}>
+              换个 TA
+            </button>
+          )}
         </div>
       </div>
     </div>
