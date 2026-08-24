@@ -4,7 +4,7 @@
 // 覆盖：无设置 → 默认智谱 / 已有设置保持原选择（deepseek、zhipu、custom、openai）/
 //       非法 provider 值兜底智谱 / 损坏 JSON 兜底智谱 / v1 单 key 迁移
 
-import { loadSettings, DEFAULT_SETTINGS } from '../src/lib/storage.ts'
+import { isSlowLetterMode, loadSettings, setSlowLetterMode, DEFAULT_SETTINGS } from '../src/lib/storage.ts'
 
 let passed = 0
 let failed = 0
@@ -91,6 +91,23 @@ resetStore()
 localStorage.setItem('ai_companion_settings', 'not-json{')
 eq(loadSettings().provider, 'zhipu', '损坏 JSON → 兜底 zhipu')
 eq(loadSettings().baseUrl, DEFAULT_SETTINGS.zhipu.baseUrl, '损坏 JSON 时配置也用智谱默认')
+
+console.log('\n[5b] 全局慢信笔友模式开关读写')
+resetStore()
+eq(isSlowLetterMode(), false, '默认（未设置）→ 关闭')
+setSlowLetterMode(true)
+eq(isSlowLetterMode(), true, '开启 → true')
+eq(localStorage.getItem('ai_companion_slow_letter_mode'), '1', '写入值为 1')
+setSlowLetterMode(false)
+eq(isSlowLetterMode(), false, '关闭 → false')
+eq(localStorage.getItem('ai_companion_slow_letter_mode'), '0', '写入值为 0')
+resetStore()
+localStorage.setItem('ai_companion_slow_letter_mode', '1')
+eq(isSlowLetterMode(), true, '直接写入 1 → 读回开启')
+localStorage.setItem('ai_companion_slow_letter_mode', '0')
+eq(isSlowLetterMode(), false, '直接写入 0 → 读回关闭')
+localStorage.setItem('ai_companion_slow_letter_mode', 'other')
+eq(isSlowLetterMode(), false, '非法值 → 关闭')
 
 console.log('\n[5] v1 旧格式：单 key 归到所选服务商名下')
 resetStore()

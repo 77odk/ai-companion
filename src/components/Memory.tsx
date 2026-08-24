@@ -524,7 +524,7 @@ export default function Memory({ onOpenAnniversary, onOpenWeekly }: MemoryProps)
           </span>
           <span className="anniversary-strip-title">TA 的周记</span>
           <span className="anniversary-strip-main">
-            <span className="anniversary-strip-label">TA 每周写一篇「我们这周」，你可以批注</span>
+            <span className="anniversary-strip-label">TA每周最多写下一篇周记，记录自己的生活与心绪，你可以阅读并留下感想</span>
           </span>
           <span className="anniversary-strip-arrow" aria-hidden="true">
             ›

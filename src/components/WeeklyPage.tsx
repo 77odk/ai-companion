@@ -1,22 +1,38 @@
 import { useMemo, useState } from 'react'
 import {
+  WEEKLY_REPLY_SYSTEM_PROMPT,
   WEEKLY_SYSTEM_PROMPT,
+  answerPendingReplies,
   buildWeeklyPrompt,
-  extractTitle,
+  cooldownInfo,
   formatMessageLine,
+  getPendingReplies,
   getWeekRange,
   getWeeklyReviews,
   newWeeklyReviewId,
+  parseWeeklyOutput,
   saveWeeklyReviews,
-  shouldGenerateWeekly,
-  stripTitleLine,
   type WeeklyReview,
 } from '../lib/weeklyReview'
 import { getKnownDays } from '../lib/milestone'
-import { getFirstSeen, loadMessages, loadPersona, loadSettings } from '../lib/storage'
+import { getFirstSeen, isSlowLetterMode, loadMessages, loadPersona, loadSettings } from '../lib/storage'
 import { chatCompletion } from '../lib/api'
 import { getActiveSessionId, getMemoriesCache, getMessagesCache, getSessionsCache } from '../lib/sessionStore'
 import { loadMemory } from '../lib/memory'
+
+/* ---- 定稿文案（一字不改） ---- */
+
+const REPLY_PLACEHOLDER = '写下读完这篇周记你的感想'
+const OPTION_IMMEDIATE = '✉️ 立即得到 TA 简短回复（默认）'
+const OPTION_SEALED = '📨 封存留言，等 TA 更新下一篇周记再完整回信'
+const SEALED_NOTE = '封存模拟书信，不会立刻答复；TA 每周仅会产出一篇周记。'
+const SUCCESS_IMMEDIATE = '留言已送达✨ TA 读完写下了简短回复，展示在本条批阅下方。'
+const SUCCESS_SEALED = '留言已封存 TA 暂时不会回复。TA 每周只会写一篇周记，下一篇周记更新时，你会收到完整回信。'
+const REPLY_FAILED = 'TA 暂时没回上，下周周记会提到'
+const EMPTY_STATE = 'TA 还没有写下周记，TA 每周最多产出一篇，请耐心等待。'
+const TOOLTIP_TEXT = '周记：TA 自主记录内心与生活，每周最多一篇，你可以阅读留言，体验慢书信互动。'
+const BANNER_REPLIED = '📬 TA 更新了新周记！同时拆开了你之前封存的留言，一并写下回信。'
+const SLOW_LETTER_NOTE = '开启后，所有批阅强制封存，关闭即时回复，全部等待 TA 下一篇周记回信。'
 
 /* ---- 线条图标（去 emoji，跟全站同一种描边风格） ---- */
 
@@ -31,6 +47,39 @@ const BackIcon = () => (
     aria-hidden="true"
   >
     <path d="M15 18l-6-6 6-6" />
+  </svg>
+)
+
+/** 列表页头部小问号：点开看周记说明 */
+const QuestionIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.2 9a2.8 2.8 0 0 1 5.5 1c0 1.7-2.7 2.3-2.7 3.6" />
+    <path d="M12 16.8h.01" />
+  </svg>
+)
+
+/** 封存留言「待回信」的信封图标：线条 SVG（红线：图标禁 emoji） */
+const EnvelopeIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="M3 7.5l9 6 9-6" />
   </svg>
 )
 
@@ -50,10 +99,26 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   // 批注编辑：editingReply = 正在改批注；replyText = 批注草稿
   const [editingReply, setEditingReply] = useState(false)
   const [replyText, setReplyText] = useState('')
+  // 批阅模式：immediate 立即简短回复 / sealed 封存慢信（全局慢信开启时强制封存）
+  const [replyMode, setReplyMode] = useState<'immediate' | 'sealed'>('immediate')
+  // 全局慢信开关只在设置页改，进周记页读一次即可
+  const slowLetter = isSlowLetterMode()
+  // 提交成功提示（按模式）
+  const [hint, setHint] = useState<string | null>(null)
+  // 立即回复：TA 正在写简短回复
+  const [taReplying, setTaReplying] = useState(false)
+  // 列表页头部 tooltip
+  const [showTooltip, setShowTooltip] = useState(false)
+  // 生成成功且存在封存留言 → 新周记详情页顶部的「已回信」横幅
+  const [justReplied, setJustReplied] = useState(false)
 
   const settings = loadSettings()
   const hasKey = Boolean(settings.apiKey?.trim() && settings.baseUrl?.trim() && settings.model?.trim())
-  const canGenerate = shouldGenerateWeekly(Date.now())
+  const cooldown = cooldownInfo(Date.now())
+  const canGenerate = cooldown.canGenerate
+
+  // 批阅实际生效模式：全局慢信开启时强制封存
+  const effectiveMode = slowLetter ? 'sealed' : replyMode
 
   // 详情选中的那篇：从 reviews 里现找，批注保存后能立刻反映
   const selectedReview = useMemo(
@@ -72,12 +137,19 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     setSelectedId(r.id)
     setEditingReply(false)
     setReplyText('')
+    setReplyMode('immediate')
+    setHint(null)
+    setTaReplying(false)
+    setShowTooltip(false)
+    setJustReplied(false)
     setView('detail')
   }
 
-  // 生成本周周记：调用户 key 非流式（复用 chatCompletion），成功后保存 + 跳详情；429 走现有重试逻辑
+  // 生成本周周记：调用户 key 非流式（复用 chatCompletion），成功后保存 + 跳详情；429 走现有重试逻辑。
+  // 冷却期直接拦截：canGenerate=false 时不进入（UI 也禁用了按钮），零 token。
   const handleGenerate = async () => {
     if (generating) return
+    if (!cooldownInfo().canGenerate) return
     const s = loadSettings()
     if (!s.apiKey?.trim() || !s.baseUrl?.trim() || !s.model?.trim()) {
       setGenError('还没接上大脑，去「我的」页填一下 API Key 就能写周记了')
@@ -85,6 +157,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     }
     setGenerating(true)
     setGenError(null)
+    setJustReplied(false)
     try {
       const ts = Date.now()
       const week = getWeekRange(ts, getFirstSeen())
@@ -101,6 +174,9 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         .map((m) => m.text)
       const curReviews = getWeeklyReviews()
       const lastReply = curReviews[0]?.myReply?.content
+      // 封存留言：下一篇周记生成时一并完整回信
+      const pending = getPendingReplies(curReviews)
+      const pendingTexts = pending.map((p) => p.content)
 
       const raw = await chatCompletion(
         s,
@@ -114,28 +190,34 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
               newMemories,
               daysKnown: getKnownDays(ts),
               ...(lastReply?.trim() ? { lastReply: lastReply.trim() } : {}),
+              ...(pendingTexts.length > 0 ? { pendingReplies: pendingTexts } : {}),
               ...(persona ? { persona } : {}),
             }),
           },
         ],
-        { maxTokens: 600, timeoutMs: 60000 },
+        { maxTokens: 1200, timeoutMs: 90000 },
       )
 
-      const title = extractTitle(raw, `第 ${week.weekNumber} 周`)
-      const content = stripTitleLine(raw)
-      if (!content) {
+      const parsed = parseWeeklyOutput(raw, `第 ${week.weekNumber} 周`)
+      if (!parsed.content) {
         setGenError('TA 这周没写出来，再试一次？')
         return
       }
       const review: WeeklyReview = {
         id: newWeeklyReviewId(),
         weekLabel: week.weekLabel,
-        title,
-        content,
+        title: parsed.title,
+        content: parsed.content,
         createdAt: ts,
         generatedFrom: { startTs: week.startTs, endTs: week.endTs },
       }
-      const next = [review, ...curReviews]
+      // 回信挂载：解析出的回信按顺序挂到封存留言上并标记已回信（信封标记消失）；没回上的保持待回信
+      let answered = curReviews
+      if (pending.length > 0) {
+        answered = answerPendingReplies(curReviews, pending, parsed.replies, ts)
+        setJustReplied(true)
+      }
+      const next = [review, ...answered]
       saveWeeklyReviews(next)
       setReviews(next)
       setSelectedId(review.id)
@@ -147,17 +229,66 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     }
   }
 
-  // 批注保存：纯本地（不调 API、不花钱），更新 localStorage + 上屏
-  const handleSaveReply = () => {
+  // 批注保存：按模式处理——立即回复保存 myReply + 调 key 生成一句简短回复；封存只入库不调模型
+  const handleSaveReply = async () => {
     const t = replyText.trim()
-    if (!t || !selectedReview) return
-    const next = reviews.map((r) =>
-      r.id === selectedReview.id ? { ...r, myReply: { content: t, repliedAt: Date.now() } } : r,
+    if (!t || !selectedReview || taReplying) return
+    const now = Date.now()
+    if (effectiveMode === 'sealed') {
+      const pending = { id: newWeeklyReviewId(), content: t, repliedAt: now }
+      const next = reviews.map((r) =>
+        r.id === selectedReview.id ? { ...r, replies: [...(r.replies ?? []), pending] } : r,
+      )
+      saveWeeklyReviews(next)
+      setReviews(next)
+      setHint(SUCCESS_SEALED)
+      setEditingReply(false)
+      setReplyText('')
+      return
+    }
+
+    // 立即回复模式：先保存批注（myReply），再调用户 key 非流式生成一句简短回复
+    const base = reviews.map((r) =>
+      r.id === selectedReview.id ? { ...r, myReply: { content: t, repliedAt: now } } : r,
     )
-    saveWeeklyReviews(next)
-    setReviews(next)
+    saveWeeklyReviews(base)
+    setReviews(base)
     setEditingReply(false)
     setReplyText('')
+    setHint(SUCCESS_IMMEDIATE)
+    setTaReplying(true)
+    try {
+      const s = loadSettings()
+      if (!s.apiKey?.trim() || !s.baseUrl?.trim() || !s.model?.trim()) throw new Error('no-key')
+      const reply = await chatCompletion(
+        s,
+        [
+          { role: 'system', content: WEEKLY_REPLY_SYSTEM_PROMPT },
+          { role: 'user', content: `我的批注：${t}` },
+        ],
+        { maxTokens: 100, timeoutMs: 30000 },
+      )
+      const clean = reply.trim()
+      if (!clean) throw new Error('empty')
+      const withReply = reviews.map((r) =>
+        r.id === selectedReview.id
+          ? { ...r, myReply: { content: t, repliedAt: now, taReply: clean, taReplyFailed: false } }
+          : r,
+      )
+      saveWeeklyReviews(withReply)
+      setReviews(withReply)
+    } catch {
+      // 无 key/429/网络 → 批注仍保存，回复区显示兜底文案，不阻塞
+      const failed = reviews.map((r) =>
+        r.id === selectedReview.id
+          ? { ...r, myReply: { content: t, repliedAt: now, taReplyFailed: true } }
+          : r,
+      )
+      saveWeeklyReviews(failed)
+      setReviews(failed)
+    } finally {
+      setTaReplying(false)
+    }
   }
 
   // ---- 列表视图 ----
@@ -168,8 +299,22 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
           <BackIcon />
         </button>
         <h2 className="detail-title">TA 的周记</h2>
-        <span className="detail-spacer" aria-hidden="true" />
+        <button
+          type="button"
+          className="weekly-tooltip-btn"
+          onClick={() => setShowTooltip((s) => !s)}
+          aria-expanded={showTooltip}
+          aria-label="周记说明"
+        >
+          <QuestionIcon />
+        </button>
       </div>
+
+      {showTooltip && (
+        <div className="weekly-tooltip" role="tooltip">
+          {TOOLTIP_TEXT}
+        </div>
+      )}
 
       {genError && <p className="weekly-error">{genError}</p>}
 
@@ -183,24 +328,19 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         </div>
       ) : canGenerate ? (
         <div className="weekly-guide-card">
-          <p className="weekly-guide-desc">{reviews.length === 0 ? 'TA 还没写过周记。' : '这周的周记还没写。'}</p>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleGenerate}
-            disabled={generating}
-          >
+          <p className="weekly-guide-desc">{reviews.length === 0 ? EMPTY_STATE : '这周的周记还没写。'}</p>
+          <button type="button" className="btn btn-primary" onClick={handleGenerate} disabled={generating}>
             {generating ? 'TA 正在写…' : '让 TA 写这周的周记'}
           </button>
         </div>
       ) : (
-        <div className="weekly-done-hint">
-          <p>TA 这周的周记已经写好了。</p>
-          {reviews[0] && (
-            <button type="button" className="link-btn" onClick={() => openDetail(reviews[0])}>
-              看看这周
-            </button>
-          )}
+        <div className="weekly-guide-card">
+          <p className="weekly-guide-desc">
+            ⏳ TA还在沉淀思绪 TA每周只能写下一篇周记，距离下一篇周记还有 {cooldown.remainText}。
+          </p>
+          <button type="button" className="btn btn-primary" disabled>
+            让 TA 写这周的周记
+          </button>
         </div>
       )}
 
@@ -213,6 +353,11 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                 <span className="weekly-card-foot">
                   <span className="weekly-card-label">{r.weekLabel}</span>
                   {r.myReply && <span className="weekly-card-reply">已批注</span>}
+                  {Array.isArray(r.replies) && r.replies.some((p) => !p.replied) && (
+                    <span className="weekly-card-reply weekly-card-reply-pending">
+                      <EnvelopeIcon /> 待回信
+                    </span>
+                  )}
                 </span>
               </button>
             </li>
@@ -244,6 +389,9 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
           <span className="detail-spacer" aria-hidden="true" />
         </div>
         <p className="weekly-detail-label">{r.weekLabel}</p>
+
+        {justReplied && <p className="weekly-banner">{BANNER_REPLIED}</p>}
+
         {r.content
           .split('\n')
           .map((p) => p.trim())
@@ -256,9 +404,18 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
 
         <div className="weekly-reply">
           <h3 className="weekly-reply-title">批注</h3>
+
+          {hint && <p className="weekly-reply-hint">{hint}</p>}
+
           {r.myReply && !editingReply ? (
             <div className="weekly-reply-show">
               <p className="weekly-reply-content">你的批注：{r.myReply.content}</p>
+              {taReplying && <p className="weekly-reply-ta">TA 正在写回复…</p>}
+              {r.myReply.taReply && <p className="weekly-reply-ta">TA 的回信：{r.myReply.taReply}</p>}
+              {!r.myReply.taReply && !r.myReply.taReplyFailed && !taReplying && (
+                <p className="weekly-reply-ta weekly-reply-ta-fail">{REPLY_FAILED}</p>
+              )}
+              {r.myReply.taReplyFailed && <p className="weekly-reply-ta weekly-reply-ta-fail">{REPLY_FAILED}</p>}
               <div className="weekly-reply-foot">
                 <span className="weekly-reply-meta">TA 下周会看到</span>
                 <button
@@ -267,6 +424,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                   onClick={() => {
                     setReplyText(r.myReply?.content ?? '')
                     setEditingReply(true)
+                    setHint(null)
                   }}
                 >
                   修改
@@ -278,19 +436,47 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
               <textarea
                 className="input weekly-reply-input"
                 rows={3}
-                placeholder="写点批注（TA 下周会看到）"
+                placeholder={REPLY_PLACEHOLDER}
                 value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
+                onChange={(e) => {
+                  setReplyText(e.target.value)
+                  setHint(null)
+                }}
                 autoFocus={editingReply}
               />
+              {slowLetter ? (
+                <p className="weekly-reply-mode-note">{SLOW_LETTER_NOTE}</p>
+              ) : (
+                <div className="weekly-reply-mode" role="radiogroup" aria-label="批阅方式">
+                  <label className={`weekly-reply-mode-option${effectiveMode === 'immediate' ? ' selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="weekly-reply-mode"
+                      checked={effectiveMode === 'immediate'}
+                      onChange={() => setReplyMode('immediate')}
+                    />
+                    <span>{OPTION_IMMEDIATE}</span>
+                  </label>
+                  <label className={`weekly-reply-mode-option${effectiveMode === 'sealed' ? ' selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="weekly-reply-mode"
+                      checked={effectiveMode === 'sealed'}
+                      onChange={() => setReplyMode('sealed')}
+                    />
+                    <span>{OPTION_SEALED}</span>
+                  </label>
+                  <p className="weekly-reply-mode-note">{SEALED_NOTE}</p>
+                </div>
+              )}
               <div className="weekly-reply-actions">
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
-                  onClick={handleSaveReply}
-                  disabled={!replyText.trim()}
+                  onClick={() => void handleSaveReply()}
+                  disabled={!replyText.trim() || taReplying}
                 >
-                  保存批注
+                  {effectiveMode === 'sealed' ? '封存留言' : '写下批注'}
                 </button>
                 {editingReply && (
                   <button
@@ -305,6 +491,25 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                   </button>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* 封存留言列表：回信后信封图标消失、展示 TA 的回信 */}
+          {Array.isArray(r.replies) && r.replies.length > 0 && (
+            <div className="weekly-reply-sealed-list">
+              {r.replies.map((p) => (
+                <div className="weekly-reply-sealed" key={p.id}>
+                  <p className="weekly-reply-content">你的批注：{p.content}</p>
+                  {p.replied ? (
+                    <p className="weekly-reply-ta">TA 的回信：{p.reply}</p>
+                  ) : (
+                    <span className="weekly-reply-pending">
+                      <EnvelopeIcon />
+                      待回信
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

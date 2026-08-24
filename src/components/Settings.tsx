@@ -6,6 +6,7 @@ import Account from './Account'
 import SwitchRoleModal from './SwitchRoleModal'
 import {
   DEFAULT_SETTINGS,
+  isSlowLetterMode,
   loadSettings,
   loadPersona,
   loadUserProfile,
@@ -14,6 +15,7 @@ import {
   savePersona,
   saveUserProfile,
   saveAIProfile,
+  setSlowLetterMode,
   PROVIDER_NAMES,
   type ModelSettings,
   type Provider,
@@ -112,6 +114,8 @@ function MainCenter({
 }) {
   const [user, setUser] = useState<UserProfile>(() => loadUserProfile())
   const [picking, setPicking] = useState(false)
+  // 全局慢信笔友模式开关（W1-2）：读一次，切换即存 localStorage
+  const [slowLetter, setSlowLetter] = useState<boolean>(() => isSlowLetterMode())
   // 登录状态：只在进「我的」页时读一次；去账号页登录/退出回来会重新挂载，读到最新值
   const accountLabel = getAccount()?.account ?? null
   const loggedIn = isLoggedIn()
@@ -200,6 +204,30 @@ function MainCenter({
       <ProfileGroup title="设置">
         <EntryRow icon={<KeyIcon />} label="服务商配置" onClick={onOpenProvider} />
         <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
+      </ProfileGroup>
+
+      <ProfileGroup title="周记">
+        <div className="slow-letter-row">
+          <div className="slow-letter-text">
+            <span className="slow-letter-title">开启全局慢信笔友模式</span>
+            <span className="slow-letter-desc">开启后，所有批阅强制封存，关闭即时回复，全部等待 TA 下一篇周记回信。</span>
+            <span className="slow-letter-hint">强书信拉扯体验，不推荐新用户开启。</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={slowLetter}
+            aria-label="开启全局慢信笔友模式"
+            className={`settings-switch${slowLetter ? ' on' : ''}`}
+            onClick={() => {
+              const next = !slowLetter
+              setSlowLetter(next)
+              setSlowLetterMode(next)
+            }}
+          >
+            <span className="settings-switch-thumb" />
+          </button>
+        </div>
       </ProfileGroup>
 
       <ProfileGroup title="关于忆文">

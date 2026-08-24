@@ -8,9 +8,13 @@ import {
   getWeeklyReviews,
   saveWeeklyReviews,
   shouldGenerateWeekly,
+  cooldownInfo,
   buildWeeklyPrompt,
   extractTitle,
   stripTitleLine,
+  parseWeeklyOutput,
+  getPendingReplies,
+  answerPendingReplies,
   buildWeekLabel,
   getWeekRange,
   getWeekNumber,
@@ -100,6 +104,84 @@ saveWeeklyReviews([
 ])
 ok(shouldGenerateWeekly(now) === true, '10 天前 → true')
 
+console.log('\n[3b] cooldownInfo 冷却信息')
+resetStore()
+{
+  const c0 = cooldownInfo(now)
+  eq(c0.canGenerate, true, '无周记 → canGenerate=true')
+  eq(c0.remainText, '', '无周记 → remainText 为空')
+}
+saveWeeklyReviews([
+  { id: 'a', weekLabel: '第 1 周', title: 'A', content: 'a', createdAt: now - 6 * DAY },
+])
+{
+  const c = cooldownInfo(now)
+  eq(c.canGenerate, false, '6 天前 → canGenerate=false')
+  eq(c.remainText, '1天0小时', '6 天前 → 剩 1天0小时（X天X小时 格式）')
+}
+saveWeeklyReviews([
+  { id: 'a', weekLabel: '第 1 周', title: 'A', content: 'a', createdAt: now - 7 * DAY },
+])
+{
+  const c = cooldownInfo(now)
+  eq(c.canGenerate, true, '满 7 天 → canGenerate=true')
+}
+saveWeeklyReviews([
+  { id: 'a', weekLabel: '第 1 周', title: 'A', content: 'a', createdAt: now - 6 * DAY - 23 * 3600000 },
+])
+{
+  const c = cooldownInfo(now)
+  eq(c.canGenerate, false, '还差 1 小时 → canGenerate=false')
+  eq(c.remainText, '1小时0分钟', '不足 1 天 → X小时X分钟 格式')
+}
+saveWeeklyReviews([
+  { id: 'a', weekLabel: '第 1 周', title: 'A', content: 'a', createdAt: now - 6 * DAY - 20 * 3600000 - 30 * 60000 },
+])
+{
+  const c = cooldownInfo(now)
+  eq(c.canGenerate, false, '还差 3.5 小时 → canGenerate=false')
+  eq(c.remainText, '3小时30分钟', '不足 1 天 → 3小时30分钟')
+}
+ok(shouldGenerateWeekly(now) === (cooldownInfo(now).canGenerate), 'cooldownInfo 与 shouldGenerateWeekly 判定一致')
+
+console.log('\n[3c] 封存留言存取（getPendingReplies / answerPendingReplies）')
+resetStore()
+const withReplies = [
+  { id: 'w1', weekLabel: '第 1 周', title: 'A', content: 'a', createdAt: now },
+  {
+    id: 'w0',
+    weekLabel: '第 0 周',
+    title: 'B',
+    content: 'b',
+    createdAt: now - DAY,
+    replies: [
+      { id: 'p1', content: '想你了', repliedAt: now - DAY },
+      { id: 'p2', content: '下周早睡', repliedAt: now - DAY },
+    ],
+  },
+]
+eq(getPendingReplies(withReplies).length, 2, '未回信封存留言全部收集')
+eq(getPendingReplies(withReplies)[0].content, '想你了', '按下标顺序返回')
+{
+  const marked = answerPendingReplies(withReplies, getPendingReplies(withReplies), ['回信一', '回信二'], now)
+  const w0 = marked.find((r) => r.id === 'w0')
+  ok(w0.replies[0].replied === true, '回信后标记 replied=true')
+  eq(w0.replies[0].reply, '回信一', '回信内容挂载到对应留言')
+  eq(w0.replies[1].reply, '回信二', '第二条回信挂载正确')
+  ok(w0.replies.length === 2, '回信后不删除，保留在数组里（绝不丢）')
+  eq(getPendingReplies(marked).length, 0, '全部回信后无 pending')
+}
+{
+  // 回信数少于留言数 → 未匹配的保持待回信
+  const marked = answerPendingReplies(withReplies, getPendingReplies(withReplies), ['只有一封'], now)
+  eq(getPendingReplies(marked).length, 1, '少一封回信 → 剩一封 pending（不丢）')
+  eq(getPendingReplies(marked)[0].id, 'p2', '剩下的那封是没被回到的')
+}
+{
+  const empty = answerPendingReplies(withReplies, [], [], now)
+  eq(getPendingReplies(empty).length, 2, '无回信 → 全部保持待回信')
+}
+
 console.log('\n[4] buildWeeklyPrompt 组装（含批注 / 不含）')
 const baseCtx = {
   weekLabel: '第 1 周 · 8月18日-8月24日',
@@ -128,6 +210,16 @@ ok(emptyCtx.includes('这周没有记住什么新的事。'), '无记忆 → 兜
 const personaCtx = buildWeeklyPrompt({ ...baseCtx, persona: '嘴硬心软，爱念叨人' })
 ok(personaCtx.includes('【你的性格】嘴硬心软，爱念叨人'), '带人设 → 注入【你的性格】')
 
+const pendingCtx = buildWeeklyPrompt({ ...baseCtx, pendingReplies: ['想你了', '下周早睡'] })
+ok(pendingCtx.includes('【封存留言·等你回信】'), '带封存留言 → 注入【封存留言·等你回信】段')
+ok(pendingCtx.includes('- 留言1：想你了'), '封存留言逐条列出（留言1）')
+ok(pendingCtx.includes('- 留言2：下周早睡'), '封存留言逐条列出（留言2）')
+ok(pendingCtx.includes('回信：'), '带封存留言 → 写作要求包含「回信：」输出格式')
+ok(pendingCtx.includes('---'), '带封存留言 → 写作要求包含「---」分隔')
+const noPending = buildWeeklyPrompt(baseCtx)
+ok(!noPending.includes('【封存留言·等你回信】'), '无封存留言 → 不带封存段')
+ok(noPending.includes('直接输出：第一行「标题」，下面接正文。'), '无封存留言 → 沿用直接输出格式')
+
 console.log('\n[5] extractTitle 标题解析')
 eq(extractTitle('「关于熬夜和米粉的一周」\n正文……', '第 1 周'), '关于熬夜和米粉的一周', '首行「」→ 取括号内')
 eq(extractTitle('《关于熬夜和米粉的一周》\n正文……', '第 1 周'), '关于熬夜和米粉的一周', '首行《》→ 取括号内')
@@ -142,6 +234,55 @@ eq(stripTitleLine('   \n「标题」\n正文\n'), '正文', '前导空行 + 标�
 eq(stripTitleLine('   \n正文\n'), '', '前导空行后只有一行 → 该行当标题，无正文')
 eq(stripTitleLine('只有标题行'), '', '没有正文 → 空串')
 eq(stripTitleLine(''), '', '空串 → 空串')
+
+console.log('\n[6b] parseWeeklyOutput 周记+回信解析')
+// 无回信段 → 整个当周记，replies 空
+{
+  const p = parseWeeklyOutput('「关于熬夜的一周」\n第一段\n第二段', '第 1 周')
+  eq(p.title, '关于熬夜的一周', '无回信段 → 解析标题')
+  eq(p.content, '第一段\n第二段', '无回信段 → 解析正文')
+  eq(p.replies, [], '无回信段 → replies 空数组')
+}
+{
+  const p = parseWeeklyOutput('正文只有一段\n没有标题', '第 1 周')
+  eq(p.title, '正文只有一段', '无标题括号 → 首行当标题')
+  eq(p.content, '没有标题', '首行标题外的内容当正文')
+  eq(p.replies, [], '无回信段 replies 空')
+}
+// 有回信段：标题+正文 + 回信列表
+{
+  const raw = [
+    '「关于熬夜的一周」',
+    '这周都在熬夜。',
+    '',
+    '回信：',
+    '封存留言：想你了',
+    '我也想你了，下周早点睡。',
+    '---',
+    '封存留言：别忘了喝水',
+    '记得的，你也一样。',
+  ].join('\n')
+  const p = parseWeeklyOutput(raw, '第 1 周')
+  eq(p.title, '关于熬夜的一周', '有回信段 → 标题取回信段之前')
+  eq(p.content, '这周都在熬夜。', '有回信段 → 正文取回信段之前')
+  ok(p.replies.length === 2, `有回信段 → 解析出 2 条回信（得 ${p.replies.length}）`)
+  ok(p.replies[0].includes('我也想你了'), '第一条回信内容保留')
+  ok(!p.replies[0].includes('封存留言'), '回信块首的「封存留言」标注行被摘掉')
+  ok(p.replies[1].includes('记得的'), '第二条回信内容保留')
+}
+{
+  // 无分隔线 → 整段当一条回信
+  const raw = ['「标题」', '正文', '', '回信：', '只有一封回信，没有分隔。'].join('\n')
+  const p = parseWeeklyOutput(raw, '第 1 周')
+  eq(p.replies.length, 1, '无分隔 → 整段一条回信')
+  ok(p.replies[0].includes('只有一封回信'), '回信内容完整')
+}
+{
+  // 空回信段 → replies 空
+  const raw = ['「标题」', '正文', '', '回信：', '   ', ''].join('\n')
+  const p = parseWeeklyOutput(raw, '第 1 周')
+  eq(p.replies, [], '回信段为空 → replies 空数组')
+}
 
 console.log('\n[7] getWeekRange / getWeekNumber / buildWeekLabel')
 // 今天 2026-08-24 周一；窗口 = 今天 0 点往前 6 天到今天 23:59:59 → 8月18日-8月24日

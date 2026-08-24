@@ -218,6 +218,25 @@ export function savePersona(persona: string): void {
   notifyDataChanged()
 }
 
+// ---- 全局慢信笔友模式 ----
+// 开启后：周记批阅强制封存，关闭即时回复，全部等 TA 下一篇周记回信（W1-2 定稿）。
+// localStorage：'1' 开启 / '0' 关闭；读不到默认关闭。
+
+export const SLOW_LETTER_KEY = 'ai_companion_slow_letter_mode'
+
+/** 是否开启全局慢信笔友模式 */
+export function isSlowLetterMode(): boolean {
+  try {
+    return localStorage.getItem(SLOW_LETTER_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function setSlowLetterMode(on: boolean): void {
+  localStorage.setItem(SLOW_LETTER_KEY, on ? '1' : '0')
+}
+
 // ---- 我的资料（用户） ----
 // avatar 只存 dataURL（上传图片压缩后），空字符串 = 用默认头像
 // 旧版存的 emoji 头像已下线：读取时不是 dataURL 一律按默认头像处理
