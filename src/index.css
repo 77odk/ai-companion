@@ -4360,3 +4360,252 @@ textarea.persona-input {
   width: 100%;
   margin-top: 12px;
 }
+
+/* ========== W1 周记页 ========== */
+.weekly-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(200, 80, 60, 0.08);
+  color: #b3503a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.weekly-guide-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 16px;
+  background: linear-gradient(180deg, rgba(255, 138, 92, 0.1), transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.weekly-guide-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.weekly-guide-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.weekly-done-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.weekly-done-hint p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.weekly-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.weekly-card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.weekly-card:hover,
+.weekly-card:focus-visible {
+  border-color: rgba(255, 138, 92, 0.45);
+  box-shadow: 0 2px 16px rgba(61, 44, 41, 0.12);
+}
+
+.weekly-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.weekly-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weekly-card-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.weekly-card-reply {
+  font-size: 11px;
+  color: var(--color-primary-deep);
+  background: rgba(255, 138, 92, 0.12);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.weekly-detail-label {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.weekly-detail-para {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.9;
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
+
+.weekly-reply {
+  margin-top: 8px;
+  padding: 14px 16px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.weekly-reply-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.weekly-reply-show {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.weekly-reply-content {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text);
+}
+
+.weekly-reply-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.weekly-reply-meta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.weekly-reply-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.weekly-reply-input {
+  width: 100%;
+  resize: vertical;
+}
+
+.weekly-reply-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ========== W1 相处里程碑纪念卡 ========== */
+.milestone-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(160deg, #ffd3b6 0%, #ff8a5c 55%, #e96f3e 100%);
+}
+
+.milestone-card {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 28px 32px;
+  text-align: center;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 28px;
+  box-shadow: 0 24px 60px rgba(120, 60, 30, 0.35);
+}
+
+.milestone-day {
+  margin: 0;
+  font-size: 88px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 2px;
+  color: #fff;
+  text-shadow: 0 4px 24px rgba(120, 60, 30, 0.25);
+}
+
+.milestone-caption {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.milestone-text {
+  margin: 14px 0 4px;
+  font-size: 16px;
+  line-height: 1.8;
+  color: #fff;
+}
+
+.milestone-close {
+  margin-top: 16px;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 32px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-primary-deep);
+  background: #fff;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.milestone-close:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(120, 60, 30, 0.3);
+}

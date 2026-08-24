@@ -7,6 +7,7 @@ import Work from './components/Work'
 import Settings, { type SettingsPage } from './components/Settings'
 import AISpace from './components/AISpace'
 import AnniversaryPage from './components/AnniversaryPage'
+import WeeklyPage from './components/WeeklyPage'
 import GuideDetail from './components/Guide'
 import LoginGate from './components/LoginGate'
 import SessionSidebar from './components/SessionSidebar'
@@ -25,7 +26,7 @@ import { hasLocalLegacyData, hasMigratedFlag, runLocalMigration, setLocalMigrate
 import { decideLoginTarget, pickMostRecentSession, pickNextSessionAfterDelete, type RolePickMode } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 
-type View = 'welcome' | 'role' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary' | 'guide' | 'loading'
+type View = 'welcome' | 'role' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary' | 'weekly' | 'guide' | 'loading'
 
 // 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
 type MigrationState = 'idle' | 'running' | 'failed'
@@ -385,6 +386,8 @@ export default function App() {
         <AISpace onBack={backFromSpace} onGoMine={() => navigate('settings')} />
       ) : view === 'anniversary' ? (
         <AnniversaryPage onBack={() => navigate('memory')} />
+      ) : view === 'weekly' ? (
+        <WeeklyPage onBack={() => navigate('memory')} onGoSettings={() => openSettings('provider')} />
       ) : view === 'loading' ? (
         <div className="session-loading">
           {migration === 'failed' ? (
@@ -467,7 +470,12 @@ export default function App() {
                 onGoGuide={() => openGuide('settings')}
               />
             )}
-            {view === 'memory' && <Memory onOpenAnniversary={() => navigate('anniversary')} />}
+            {view === 'memory' && (
+              <Memory
+                onOpenAnniversary={() => navigate('anniversary')}
+                onOpenWeekly={() => navigate('weekly')}
+              />
+            )}
             {view === 'work' && <Work onGoChat={() => navigate('chat')} />}
             {view === 'settings' && (
               <Settings

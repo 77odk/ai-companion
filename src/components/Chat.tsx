@@ -28,6 +28,8 @@ import {
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
+import { getMilestoneStatus, markMilestoneShown } from '../lib/milestone'
+import MilestoneCard from './MilestoneCard'
 
 interface Props {
   onGoSettings: () => void
@@ -51,6 +53,9 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
   // 当前会话对象（后台拉会话详情后才有）：persona 从这里读，兜底读全局 ai_companion_persona
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const persona = activeSession?.persona ?? loadPersona()
+  // 相处里程碑（W1）：打开忆文时检测，今天是里程碑日且没展示过 → 弹纪念卡；关闭即标记
+  const [milestone, setMilestone] = useState<{ day: number; hit: boolean; shown: boolean } | null>(null)
+  const [showMilestone, setShowMilestone] = useState(false)
 
   // 会话起点（M7-3 刷新对话）：会话模式下不套全局起点（每会话消息全量显示），遗留流程照旧
   const sessionStart = useMemo(() => (activeSessionId ? 0 : getSessionStart()), [activeSessionId])
@@ -184,6 +189,16 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     saveMessages(next)
     setMessages(next)
   }, [activeSessionId])
+
+  // 相处里程碑：打开忆文（chat 视图）时检测，今天是里程碑日且没展示过 → 弹纪念卡。
+  // 无 key 不依赖（纯模板）；StrictMode 双跑读 localStorage，幂等。
+  useEffect(() => {
+    const st = getMilestoneStatus()
+    if (st.hit && !st.shown) {
+      setMilestone(st)
+      setShowMilestone(true)
+    }
+  }, [])
 
   const send = useCallback((raw: string) => {
     const text = raw.trim()
@@ -361,6 +376,12 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     finalizeRef.current()
   }
 
+  // 关闭里程碑卡：标记已展示，之后不再弹
+  const closeMilestone = () => {
+    if (milestone) markMilestoneShown(milestone.day)
+    setShowMilestone(false)
+  }
+
   const isEmpty = visibleMessages.length === 0
 
   return (
@@ -445,6 +466,8 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
           </button>
         )}
       </div>
+
+      {showMilestone && milestone && <MilestoneCard day={milestone.day} onClose={closeMilestone} />}
     </div>
   )
 }

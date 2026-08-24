@@ -130,6 +130,25 @@ function CalendarIcon() {
   )
 }
 
+/** 「TA 的周记」卡片的本子图标：细描边线条，暖橘由 CSS currentColor 控制 */
+function NotebookIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 4h16v16H4z" />
+      <path d="M8 2v20" />
+      <path d="M11 8h5M11 12h5M11 16h5" />
+    </svg>
+  )
+}
+
 /** 双源信任来源小标记：用户明说的「你说的」（暖橘）/ TA 推断的「TA 记得的」（暖灰），低调小字 */
 function SourceTag({ explicit }: { explicit?: boolean }) {
   return explicit === true ? (
@@ -202,9 +221,11 @@ function MemoryItemTextEdit({
 interface MemoryProps {
   /** 点纪念日小卡片 → 进纪念日管理页 */
   onOpenAnniversary?: () => void
+  /** 点「TA 的周记」卡片 → 进周记页 */
+  onOpenWeekly?: () => void
 }
 
-export default function Memory({ onOpenAnniversary }: MemoryProps) {
+export default function Memory({ onOpenAnniversary, onOpenWeekly }: MemoryProps) {
   // B2c-3 会话模式：有 activeSessionId → 记忆读当前会话缓存（后台拉后端填充，后端权威）；
   // 无会话（过渡态）→ 读本地 ai_companion_memory（原逻辑）
   const activeSessionId = getActiveSessionId()
@@ -493,6 +514,22 @@ export default function Memory({ onOpenAnniversary }: MemoryProps) {
           <p>当前还没在会话里，记忆只存在这台设备上。</p>
           <p>选好 TA 开始聊之后，记忆会跟着账号走，每个 TA 分开记。</p>
         </div>
+      )}
+
+      {/* 「TA 的周记」入口卡片：跟纪念日小卡片同一档样式，点进周记页 */}
+      {onOpenWeekly && (
+        <button type="button" className="anniversary-strip" onClick={onOpenWeekly}>
+          <span className="anniversary-strip-icon" aria-hidden="true">
+            <NotebookIcon />
+          </span>
+          <span className="anniversary-strip-title">TA 的周记</span>
+          <span className="anniversary-strip-main">
+            <span className="anniversary-strip-label">TA 每周写一篇「我们这周」，你可以批注</span>
+          </span>
+          <span className="anniversary-strip-arrow" aria-hidden="true">
+            ›
+          </span>
+        </button>
       )}
 
       {memError && <p className="memory-error">{memError}</p>}
