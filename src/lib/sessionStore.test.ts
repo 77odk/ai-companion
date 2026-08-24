@@ -29,6 +29,9 @@ import {
   mergeSessionMessages,
   confirmMessageInCache,
   flushPendingOps,
+  getLastRead,
+  markRead,
+  getUnreadCount,
 } from './sessionStore.ts'
 import type { StoredMessage } from './storage.ts'
 import type { MemoryItem } from './memory.ts'
@@ -273,6 +276,29 @@ eq(withoutSession.length, 1, '无会话：兜底本地记忆')
 eq(withoutSession[0].id, 'loc', '本地记忆命中')
 const otherSession = recallSessionMemories('8', '我家的猫好可爱', { now: 1000 })
 eq(otherSession.length, 0, '会话 8 缓存空 → 读不到会话 7 的记忆')
+
+console.log('\n[13] 未读红点（S1）：getLastRead / markRead / getUnreadCount')
+resetStore()
+eq(getLastRead('7'), 0, '从没读过 → 0')
+markRead('7')
+ok(getLastRead('7') > 0, 'markRead 后 lastRead > 0')
+resetStore()
+eq(getUnreadCount({ id: '7' }, []), 0, '无消息 → 0')
+saveMessagesCache('7', [{ role: 'assistant', content: 'hi', ts: 100 }])
+eq(getUnreadCount({ id: '7' }), 1, '有消息且没读过（lastRead=0）→ 1')
+resetStore()
+saveMessagesCache('7', [
+  { role: 'user', content: '在吗', ts: 100 },
+  { role: 'assistant', content: '在呀', ts: 200 },
+])
+markRead('7')
+eq(getUnreadCount({ id: '7' }), 0, 'markRead 后归零（lastRead 晚于全部消息 ts）')
+resetStore()
+saveMessagesCache('7', Array.from({ length: 120 }, (_, i) => ({ role: 'assistant' as const, content: 'x', ts: 1000 + i })))
+eq(getUnreadCount({ id: '7' }), 99, '超过 99 条截断为 99')
+eq(getUnreadCount({ id: '7' }, [{ role: 'user' as const, content: 'y', ts: 5000 }]), 1, '显式传 messages 优先于缓存')
+eq(getUnreadCount({ id: '7' }, null as never), 0, '非法 messages → 0')
+eq(getUnreadCount({ id: '8' }, [{ role: 'user' as const, content: 'z', ts: 1 }]), 1, '不同会话 key 隔离（8 没读过）')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) throw new Error(`${failed} 个用例失败`)

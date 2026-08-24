@@ -32,6 +32,8 @@ import {
 } from '../lib/aiSpaceDetail'
 import DefaultAvatar from './DefaultAvatar'
 import SpaceArt from './SpaceArt'
+import { getActiveSessionId, getSessionsCache } from '../lib/sessionStore'
+import { displaySessionName } from '../lib/sessionFlow'
 
 interface Props {
   onBack: () => void
@@ -170,6 +172,14 @@ export default function AISpace({ onBack, onGoMine }: Props) {
   const user = loadUserProfile()
   const yourName = user.nickname || '你'
   const hasPersona = Boolean(loadPersona().trim())
+
+  // S1 空间角色化：有当前会话 → 标题/名字用当前角色名（如「阿叙的空间」）；无会话保持原样
+  const [spaceSessionName] = useState<string>(() => {
+    const sid = getActiveSessionId()
+    if (!sid) return ''
+    const s = getSessionsCache().find((x) => String(x.id) === sid)
+    return s ? displaySessionName(s) : ''
+  })
 
   // 详情页数据：进空间时读一次（消息/记忆/首次见面时间不会在空间内变化）
   const [messages] = useState<StoredMessage[]>(() => loadMessages())
@@ -323,7 +333,7 @@ export default function AISpace({ onBack, onGoMine }: Props) {
             <button type="button" className="link-btn ai-space-back" onClick={onBack}>
               ‹ 返回
             </button>
-            <h1 className="ai-space-title">TA 的空间</h1>
+            <h1 className="ai-space-title">{spaceSessionName ? `${spaceSessionName} 的空间` : 'TA 的空间'}</h1>
             <span className="ai-space-topbar-spacer" aria-hidden="true" />
           </div>
 
@@ -334,7 +344,7 @@ export default function AISpace({ onBack, onGoMine }: Props) {
               <DefaultAvatar kind="ai" className="avatar-default" />
             )}
           </div>
-          <h2 className="ai-space-name">{ai.nickname}</h2>
+          <h2 className="ai-space-name">{spaceSessionName || ai.nickname}</h2>
           <p className="ai-space-bio">
             只属于{yourName}的 TA · 这里记录着 TA 的日常、想法，和没说出口的心事
           </p>

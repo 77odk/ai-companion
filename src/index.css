@@ -4119,31 +4119,42 @@ textarea.persona-input {
 
 /* ========== 会话侧边栏（B3） ========== */
 /* 聊天页顶栏左侧：会话列表入口（与右侧「TA 的空间」对称） */
+/* 顶栏左上角：会话列表入口（当前角色名 + 列表图标，S1 做成一眼可见的胶囊按钮） */
 .session-list-entry {
   position: absolute;
   left: 12px;
   top: 12px;
-  width: 38px;
   height: 38px;
+  max-width: 38%;
   display: flex;
   align-items: center;
-  justify-content: center;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-card);
-  color: var(--color-text-muted);
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 138, 92, 0.45);
+  border-radius: 19px;
+  background: rgba(255, 138, 92, 0.1);
+  color: var(--color-primary-deep);
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
 .session-list-entry:hover {
   color: var(--color-primary-deep);
-  border-color: rgba(255, 138, 92, 0.4);
-  background: rgba(255, 138, 92, 0.06);
+  border-color: rgba(255, 138, 92, 0.7);
+  background: rgba(255, 138, 92, 0.16);
 }
 
 .session-list-entry svg {
-  width: 20px;
-  height: 20px;
+  flex: none;
+  width: 17px;
+  height: 17px;
+}
+
+.session-list-entry-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 /* 遮罩 + 左侧滑出面板 */
@@ -4250,17 +4261,19 @@ textarea.persona-input {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
+/* 列表项（S1 ling/微信式：头像 + 角色名大字 + 最近消息摘要 + 未读角标 + 操作） */
 .session-sidebar-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 10px;
+  padding: 10px 6px 10px 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-card);
-  overflow: hidden;
   transition: border-color 0.15s, background 0.15s;
 }
 
@@ -4273,15 +4286,38 @@ textarea.persona-input {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 12px 8px 12px 14px;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
   border: none;
   background: transparent;
   font-family: inherit;
   cursor: pointer;
   text-align: left;
+}
+
+/* 首字圆形头像（禁 emoji，线条 SVG 或首字均可） */
+.session-sidebar-avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+  font-size: 17px;
+  font-weight: 700;
+  overflow: hidden;
+}
+
+.session-sidebar-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .session-sidebar-item-title {
@@ -4298,42 +4334,148 @@ textarea.persona-input {
   color: var(--color-primary-deep);
 }
 
-.session-sidebar-item-time {
+.session-sidebar-item-summary {
+  width: 100%;
   font-size: 12px;
   color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.session-sidebar-delete {
+.session-sidebar-item-time {
+  flex: none;
+  align-self: flex-start;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* 未读数字角标（微信式红点，>99 显示 99+） */
+.session-sidebar-badge {
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 「···」操作按钮 */
+.session-sidebar-more {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  margin-right: 6px;
+  width: 28px;
+  height: 28px;
   border: none;
   border-radius: 8px;
   background: transparent;
   color: var(--color-text-muted);
-  opacity: 0.45;
   padding: 0;
-  transition: opacity 0.15s, color 0.15s, background 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 
-.session-sidebar-delete:hover:not(:disabled),
-.session-sidebar-delete:focus-visible:not(:disabled) {
-  opacity: 1;
+.session-sidebar-more:hover {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+}
+
+.session-sidebar-more svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 操作小菜单：改名 / 删除 */
+.session-sidebar-menu {
+  position: absolute;
+  right: 6px;
+  top: 44px;
+  z-index: 20;
+  min-width: 116px;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+.session-sidebar-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 14px;
+  color: var(--color-text);
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.session-sidebar-menu-item:hover:not(:disabled) {
+  background: var(--color-primary-soft);
+}
+
+.session-sidebar-menu-danger {
   color: #b3261e;
+}
+
+.session-sidebar-menu-danger:hover:not(:disabled) {
   background: #fdecea;
 }
 
-.session-sidebar-delete:disabled {
+.session-sidebar-menu-item:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.session-sidebar-delete svg {
-  width: 15px;
-  height: 15px;
+/* 改名弹窗 */
+.session-sidebar-rename-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 310;
+  background: rgba(61, 44, 41, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.session-sidebar-rename {
+  width: min(320px, 100%);
+  background: var(--color-card);
+  border-radius: var(--radius);
+  padding: 20px 18px 16px;
+  box-shadow: var(--shadow);
+}
+
+.session-sidebar-rename-title {
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.session-sidebar-rename-input {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.session-sidebar-rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 /* 空态：不说「暂无」，给个引导 + 按钮 */

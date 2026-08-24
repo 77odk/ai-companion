@@ -12,6 +12,8 @@ import {
   getActiveSessionId,
   getMemoriesCache,
   getMessagesCache,
+  getSessionsCache,
+  markRead,
   mergeSessionMemories,
   mergeSessionMessages,
   newPendingOpId,
@@ -71,11 +73,16 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
   const retriedRef = useRef(false)
   const assistantText = useRef('')
 
-  // 数据落盘：会话模式写该会话缓存，遗留模式写全局 ai_companion_messages（保留原有裁剪逻辑）
+  // 数据落盘：会话模式写该会话缓存，遗留模式写全局 ai_companion_messages（保留原有裁剪逻辑）。
+  // 会话模式下写消息 = 用户在会话内 = 已读（S1 未读红点即时消失，不会给自己新发的消息挂红点）
   const persistMessages = useCallback((msgs: StoredMessage[]) => {
     const sid = getActiveSessionId()
-    if (sid) saveMessagesCache(sid, msgs)
-    else saveMessages(msgs)
+    if (sid) {
+      saveMessagesCache(sid, msgs)
+      markRead(sid)
+    } else {
+      saveMessages(msgs)
+    }
   }, [])
 
   // 乐观上传：先入 pendingSync 队列（本地不丢），再异步 postMessage 上传；
@@ -117,10 +124,11 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
 
   // 切换会话（B3 侧边栏）：activeSessionId 变化时立即切到新会话的本地缓存，
   // 别让旧会话的消息还挂在屏幕上；会话详情拉回后再合并更新（下面那个 effect）。
-  // 切到无会话（游客/过渡）则退回全局 localStorage 流程。
+  // 切到无会话（游客/过渡）则退回全局 localStorage 流程。进入会话即已读（S1 红点消失）。
   useEffect(() => {
     setMessages(activeSessionId ? getMessagesCache(activeSessionId) : loadMessages())
     setActiveSession(null)
+    if (activeSessionId) markRead(activeSessionId)
   }, [activeSessionId])
 
   // 会话模式挂载：本地缓存秒开 → 后台拉后端会话详情 → 按 ts 合并补最新 → 写缓存。
@@ -140,12 +148,16 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
       const merged = mergeSessionMessages(getMessagesCache(activeSessionId), cloud)
       saveMessagesCache(activeSessionId, merged)
       setMessages(merged)
+      // 后端拉回的最新消息也在会话内 = 已读（别让刚打开就显示红点）
+      markRead(activeSessionId)
       if (merged.length === 0) {
         const opening = extractOpeningLine(res.data.session.persona)
         if (opening) {
           const firstMsg: StoredMessage = { role: 'assistant', content: opening, ts: Date.now() }
           saveMessagesCache(activeSessionId, [firstMsg])
           setMessages([firstMsg])
+          // 开场白是 TA 主动发的第一句，但用户就在会话里 = 已读，不给它挂红点
+          markRead(activeSessionId)
         }
       }
     })
@@ -231,7 +243,17 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     }
 
     // 组装请求消息：系统提示词（默认人设+专属人设+AI昵称） + 记忆摘要（如有） + 最近 20 条历史
-    const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(persona, loadAIProfile().nickname) }]
+    // S1 角色名注入身份：TA 自称当前会话的 title（新建即角色默认名/昵称），不再是全局「饺子」；
+    // 侧边栏改名后缓存已更新，兜底读缓存拿新名字；无会话或占位标题 → 全局昵称
+    const nameForPrompt = (() => {
+      if (!activeSessionId) return loadAIProfile().nickname
+      // 侧边栏改名后缓存即时更新，优先读缓存拿新名字；缓存没拉到（刚建会话）再退回会话详情的 title
+      const cached = getSessionsCache().find((s) => String(s.id) === activeSessionId)
+      const t = (cached?.title || activeSession?.title || '').trim()
+      if (!t || t === '新会话' || t === '我们的开始') return loadAIProfile().nickname
+      return t
+    })()
+    const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(persona, nameForPrompt) }]
     // 注入记忆改为「按需召回」：重要记忆（pinned）恒带 + 与当前话题相关的记忆（主题/关键词命中），其余省略；
     // 一条都没命中时兜底为最活跃的前 5 条，保证 TA 至少有记忆可依。
     // 排序（双源信任，M5-4）：pinned 恒最前 → 用户明说的（explicit）次之 → 其余按活跃度。
@@ -361,7 +383,7 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
       },
     })
     controllerRef.current = controller
-  }, [messages, visibleMessages, streaming, persona, activeSessionId, persistMessages, uploadMessage])
+  }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, persistMessages, uploadMessage])
 
   // 工作台「跟 TA 说」带话进来：Chat 挂载时取走并直接发给 TA（StrictMode 双跑靠 take 清空去重）
   useEffect(() => {

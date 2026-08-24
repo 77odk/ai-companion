@@ -13,7 +13,7 @@ import LoginGate from './components/LoginGate'
 import SessionSidebar from './components/SessionSidebar'
 import { loadMessages, loadPersona } from './lib/storage'
 import { getToken, isLoggedIn, isPublicView } from './lib/auth'
-import { deleteSession, listSessions, type Session } from './lib/sessionApi'
+import { deleteSession, listSessions, patchSession, type Session } from './lib/sessionApi'
 import {
   clearMemoriesCache,
   clearMessagesCache,
@@ -23,7 +23,14 @@ import {
   setSessionsCache,
 } from './lib/sessionStore'
 import { hasLocalLegacyData, hasMigratedFlag, runLocalMigration, setLocalMigratedFlag } from './lib/migrateLocal'
-import { decideLoginTarget, pickMostRecentSession, pickNextSessionAfterDelete, type RolePickMode } from './lib/sessionFlow'
+import {
+  decideLoginTarget,
+  displaySessionName,
+  pickMostRecentSession,
+  pickNextSessionAfterDelete,
+  resolveSessionName,
+  type RolePickMode,
+} from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 
 type View = 'welcome' | 'role' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary' | 'weekly' | 'guide' | 'loading'
@@ -122,10 +129,12 @@ export default function App() {
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
-  // 会话侧边栏（B3）：面板开关 + 会话列表（缓存初始化，打开时从后端刷新）
+  // 会话侧边栏（B3 + S1）：面板开关 + 会话列表（缓存初始化，打开时从后端刷新）
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sessions, setSessions] = useState<Session[]>(() => getSessionsCache())
   const [deleting, setDeleting] = useState(false)
+  // 刚新建会话的标题：列表还没拉回时，头部入口先显示它（兜底解析）
+  const [createdTitle, setCreatedTitle] = useState('')
 
   // 老数据一键迁移：建云端会话 → 按升序传消息 → 传记忆（单条失败跳过不中断）→
   // 置位 → 进聊天。本地数据只读不删（红线）；createSession 失败才算整个迁移失败（不置位，可重试）。
@@ -174,6 +183,9 @@ export default function App() {
     const res = await listSessions(token)
     if (res.ok) {
       const sessions = res.data.sessions
+      // S1 头部入口要显示当前角色名：列表直接落缓存，切换/重进不用等侧边栏打开
+      setSessionsCache(sessions)
+      setSessions(sessions)
       const latest = pickMostRecentSession(sessions)
       if (latest) {
         // 有云端会话 → 正常进聊天
@@ -355,6 +367,27 @@ export default function App() {
     }
   }
 
+  // 改名（S1 微信备注式）：PATCH title → 更新列表与缓存 → 头部入口即时显示新名字
+  const handleRenameSession = async (id: string, title: string) => {
+    const token = getToken()
+    const t = title.trim()
+    if (!token || !t) return
+    const res = await patchSession(token, id, { title: t })
+    if (!res.ok) {
+      window.alert('没改掉，网络开小差了，稍后再试试。')
+      return
+    }
+    const updated = sessions.map((s) => (String(s.id) === id ? { ...s, title: t } : s))
+    setSessionsCache(updated)
+    setSessions(updated)
+    if (getActiveSessionId() === id) setCreatedTitle(t)
+  }
+
+  // 头部入口显示当前角色名：列表里找当前会话 → 占位标题从 persona 兜底 → 刚新建的标题 → 全局解析
+  const currentSession = sessions.find((s) => String(s.id) === getActiveSessionId())
+  const headerName =
+    (currentSession ? displaySessionName(currentSession) : '') || createdTitle || resolveSessionName(loadPersona()) || 'TA'
+
   // 已登录用户首次挂载（initialView='loading'）时拉会话分流；开机欢迎页时等「开始使用」再分流。
   // redirectBySessions 内部已置位 redirectStarted，这里只需判重。
   useEffect(() => {
@@ -379,7 +412,12 @@ export default function App() {
       ) : view === 'role' ? (
         <RolePicker
           mode={roleMode}
-          onDone={() => navigate('chat')}
+          onDone={(info) => {
+            if (info?.title) setCreatedTitle(info.title)
+            navigate('chat')
+            // 新建会话后顺手拉一次列表：侧边栏/头部入口都能立刻显示新角色名
+            void refreshSessions()
+          }}
           onBack={() => navigate(roleMode === 'first' ? 'welcome' : 'settings')}
         />
       ) : view === 'aispace' ? (
@@ -417,7 +455,7 @@ export default function App() {
                 className="session-list-entry"
                 onClick={openSidebar}
                 aria-label="会话列表"
-                title="会话"
+                title="会话列表"
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -432,6 +470,7 @@ export default function App() {
                   <path d="M4 12h16" />
                   <path d="M4 18h10" />
                 </svg>
+                <span className="session-list-entry-name">{headerName}</span>
               </button>
             )}
             {view === 'chat' && (
@@ -529,6 +568,7 @@ export default function App() {
           onSwitch={handleSwitchSession}
           onNew={handleNewSession}
           onDelete={(id) => void handleDeleteSession(id)}
+          onRename={(id, title) => void handleRenameSession(id, title)}
           deleting={deleting}
         />
       )}

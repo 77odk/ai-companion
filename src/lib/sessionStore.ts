@@ -146,6 +146,51 @@ export function clearMemoriesCache(sessionId: string): void {
   }
 }
 
+// ---- 未读红点（S1，为「TA 主动发消息」预留） ----
+// lastRead 存 localStorage（ai_companion_read_<sid>，时间戳）。未读数 = 会话里 ts 晚于 lastRead 的消息条数。
+// 进入会话（切换/打开）时 markRead → 红点消失；当前会话里自己发完消息也在会话内 = 已读（persistMessages 时 markRead）。
+// 后续 TA 主动发消息更新某会话消息缓存后，未读自然出现——本批只通机制，不做主动消息。
+
+const READ_KEY_PREFIX = 'ai_companion_read_'
+const readKey = (sessionId: string) => `${READ_KEY_PREFIX}${sessionId}`
+
+/** 某会话最后已读时间戳（localStorage；从没读过返回 0） */
+export function getLastRead(sessionId: string): number {
+  try {
+    const v = Number(localStorage.getItem(readKey(sessionId)))
+    return Number.isFinite(v) && v > 0 ? v : 0
+  } catch {
+    return 0
+  }
+}
+
+/** 标记某会话已读：写当前时间戳（进入会话 / 在该会话内收到消息时调用） */
+export function markRead(sessionId: string): void {
+  try {
+    localStorage.setItem(readKey(sessionId), String(Date.now()))
+  } catch {
+    // 存不下不影响功能
+  }
+}
+
+/**
+ * 未读数：会话里 ts 晚于 lastRead 的消息条数；无消息 → 0；超过 99 截断为 99（UI 显示 99+）。
+ * messages 缺省读该会话消息缓存；纯函数可单测（显式传 messages 时不碰缓存）。
+ */
+export function getUnreadCount(
+  session: { id: number | string },
+  messages: StoredMessage[] = getMessagesCache(String(session.id)),
+): number {
+  const msgs = Array.isArray(messages) ? messages : []
+  if (msgs.length === 0) return 0
+  const lastRead = getLastRead(String(session.id))
+  let count = 0
+  for (const m of msgs) {
+    if (m != null && typeof m.ts === 'number' && Number.isFinite(m.ts) && m.ts > lastRead) count++
+  }
+  return count > 99 ? 99 : count
+}
+
 // ---- 后端记忆 ↔ 缓存对账（后端权威，缓存保留增强字段） ----
 
 /** 后端记忆 → 缓存条目：id 用后端数字 id 的字符串形式，text=content，createdAt 解析 ISO */

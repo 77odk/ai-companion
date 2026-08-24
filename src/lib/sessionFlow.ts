@@ -30,6 +30,40 @@ export function resolveSessionTitle(selected: string | null, persona: string): s
   return sessionTitleFromPersona(persona) || '新会话'
 }
 
+/**
+ * 会话人物名（S1 微信备注式）：模板 → 模板默认角色名 charName；
+ * 自定义表单填了 TA 昵称 → persona 里「角色昵称：xxx」行取 xxx；都没有 → 「TA」。
+ * 用作新建会话的 title 与「TA 自称」的名字。
+ */
+export function resolveSessionName(persona: string, templateId?: string): string {
+  // 模板会话：新建时能拿到模板 id 就用模板默认角色名
+  if (templateId && templateId !== 'custom') {
+    const t = ROLE_TEMPLATES.find((x) => x.id === templateId)
+    if (t?.charName) return t.charName
+  }
+  // persona 含「角色昵称：xxx」行 → 取 xxx（自定义表单/高级编辑都能命中）
+  const p = (persona ?? '').trim()
+  if (p) {
+    const m = p.match(/^\s*角色昵称：(.+)$/m)
+    if (m && m[1].trim()) return m[1].trim()
+  }
+  // 都没有 → TA
+  return 'TA'
+}
+
+/** 占位标题（旧会话默认名，不是角色名）：展示时从 persona 兜底解析出角色名 */
+const PLACEHOLDER_TITLES = new Set(['新会话', '我们的开始'])
+
+/**
+ * 会话展示名：title 不是占位标题时直接用 title（改名后的名字也在这里生效）；
+ * 占位标题（旧默认「新会话/我们的开始」）→ 从 persona 兜底解析角色名。
+ */
+export function displaySessionName(s: { title?: string; persona?: string }): string {
+  const t = (s?.title ?? '').trim()
+  if (t && !PLACEHOLDER_TITLES.has(t)) return t
+  return resolveSessionName(s?.persona ?? '') || 'TA'
+}
+
 /** 删除会话后选下一个：剩余 >0 取最近，无则返回 null（调用方进选角色页新建） */
 export function pickNextSessionAfterDelete(sessions: Session[], deletedId: string | number): Session | null {
   const rest = (Array.isArray(sessions) ? sessions : []).filter((s) => String(s.id) !== String(deletedId))

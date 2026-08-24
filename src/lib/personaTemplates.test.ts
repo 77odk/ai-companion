@@ -28,9 +28,27 @@ const ids = ROLE_TEMPLATES.map((t) => t.id)
 ok(new Set(ids).size === ids.length, 'id 唯一')
 ok(ids.every((id) => id.trim() !== ''), 'id 非空')
 
+console.log('\n[1b] charName（S1 角色默认名）唯一且非空')
+const charNames = ROLE_TEMPLATES.map((t) => t.charName)
+ok(new Set(charNames).size === charNames.length, 'charName 唯一')
+ok(charNames.every((n) => n.trim() !== ''), 'charName 非空')
+ok(charNames.every((n) => n.length <= 4), 'charName 是简短人名（≤4 字）')
+ok(charNames.every((n) => !/[AIai]/.test(n)), 'charName 不含「AI」字样')
+const expectedChars: Record<string, string> = {
+  'gentle-boyfriend': '阿叙',
+  bestie: '小满',
+  'growth-partner': '阿光',
+  'tsundere-cat': '阿凛',
+  'energetic-partner': '阳阳',
+}
+for (const t of ROLE_TEMPLATES) {
+  eq(t.charName, expectedChars[t.id], `${t.id}.charName = ${expectedChars[t.id]}`)
+}
+
 console.log('\n[2] 每项字段非空')
 for (const t of ROLE_TEMPLATES) {
   ok(t.name.trim() !== '', `${t.id}.name 非空`)
+  ok(t.charName.trim() !== '', `${t.id}.charName 非空`)
   ok(t.tagline.trim() !== '', `${t.id}.tagline 非空`)
   ok(t.persona.trim() !== '', `${t.id}.persona 非空`)
 }

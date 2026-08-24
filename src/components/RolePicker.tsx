@@ -5,13 +5,13 @@ import { buildCustomPersona } from '../lib/customPersona'
 import { getToken, isLoggedIn } from '../lib/auth'
 import { createSession, patchSession } from '../lib/sessionApi'
 import { getActiveSessionId, setActiveSessionId } from '../lib/sessionStore'
-import { resolveSessionTitle, type RolePickMode } from '../lib/sessionFlow'
+import { resolveSessionName, type RolePickMode } from '../lib/sessionFlow'
 
 interface Props {
   /** 选角色页用途：first=首次/游客新建；current=换个TA·当前会话换人设；new=换个TA·开新会话换TA */
   mode: RolePickMode
-  /** 会话已建好/换好后调用，由 App 跳进聊天页（游客则触发登录墙） */
-  onDone: () => void
+  /** 会话已建好/换好后调用，由 App 跳进聊天页（游客则触发登录墙）；新建会话时带上标题供 App 头部即时显示 */
+  onDone: (info?: { title?: string }) => void
   /** 返回上一页（换 TA 进来退回原页；首次进来退回欢迎页）；不传则不显示返回键 */
   onBack?: () => void
 }
@@ -79,6 +79,7 @@ export default function RolePicker({ mode, onDone, onBack }: Props) {
     setSubmitError(null)
     savePersona(persona)
     try {
+      let createdTitle: string | undefined
       if (isLoggedIn()) {
         if (mode === 'current') {
           const sid = getActiveSessionId()
@@ -86,19 +87,21 @@ export default function RolePicker({ mode, onDone, onBack }: Props) {
             const res = await patchSession(getToken(), sid, { persona })
             if (!res.ok) throw new Error(res.message)
           } else {
-            // 极端情况：没有当前会话 → 直接走② 开个新会话换 TA
-            const res = await createSession(getToken(), { persona, title: resolveSessionTitle(selected, persona) })
+            // 极端情况：没有当前会话 → 直接开个新会话换 TA
+            const res = await createSession(getToken(), { persona, title: resolveSessionName(persona, selected) })
             if (!res.ok) throw new Error(res.message)
             setActiveSessionId(String(res.data.id))
+            createdTitle = res.data.title
           }
         } else {
           // mode 'first' 或 'new'：新建会话进聊天（旧会话完整保留）
-          const res = await createSession(getToken(), { persona, title: resolveSessionTitle(selected, persona) })
+          const res = await createSession(getToken(), { persona, title: resolveSessionName(persona, selected) })
           if (!res.ok) throw new Error(res.message)
           setActiveSessionId(String(res.data.id))
+          createdTitle = res.data.title
         }
       }
-      onDone()
+      onDone(createdTitle ? { title: createdTitle } : undefined)
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : '创建会话失败，请稍后重试')
     } finally {
