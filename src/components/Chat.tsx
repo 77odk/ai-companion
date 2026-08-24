@@ -5,6 +5,7 @@ import { extractMemories, loadMemory, notifyMemoryUpdated, recallRelevantMemorie
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
+import { extractOpeningLine } from '../lib/customPersona'
 
 interface Props {
   onGoSettings: () => void
@@ -48,6 +49,21 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
   }, [input])
+
+  // 开场白机制：全新开始（没有任何聊天记录）且人设里写了「初次见面开场白」→
+  // 把 TA 的见面第一句话插进来当第一条 assistant 消息。不调 API、不耗 key，
+  // 模型后续也能看到这句历史，衔接自然。只在无聊天记录时插入；
+  // 老用户换人设（已有聊天记录）不插。StrictMode 双跑靠读 localStorage 去重。
+  useEffect(() => {
+    const existing = loadMessages()
+    if (existing.length > 0) return
+    const opening = extractOpeningLine(loadPersona())
+    if (!opening) return
+    const firstMsg: StoredMessage = { role: 'assistant', content: opening, ts: Date.now() }
+    const next = [...existing, firstMsg]
+    saveMessages(next)
+    setMessages(next)
+  }, [])
 
   const send = useCallback((raw: string) => {
     const text = raw.trim()
