@@ -667,6 +667,66 @@ textarea.persona-input {
   flex: 1;
 }
 
+/* S1-2 「TA 的资料」角色卡：首字圆形头像 + 角色名（跟当前会话角色走，不再是全局资料） */
+.ai-role-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ai-role-avatar {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+  font-size: 22px;
+  font-weight: 700;
+  overflow: hidden;
+}
+
+.ai-role-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ai-role-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-role-sub {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* 改名：输入框 + 按钮一行 */
+.ai-save-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.ai-save-row .input {
+  flex: 1;
+}
+
+.ai-save-btn {
+  flex: none;
+  width: 72px;
+  padding: 10px 0;
+}
+
 /* 账号与同步 */
 .account-email {
   margin: 0;

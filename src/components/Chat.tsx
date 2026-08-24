@@ -243,7 +243,7 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
     }
 
     // 组装请求消息：系统提示词（默认人设+专属人设+AI昵称） + 记忆摘要（如有） + 最近 20 条历史
-    // S1 角色名注入身份：TA 自称当前会话的 title（新建即角色默认名/昵称），不再是全局「饺子」；
+    // S1 角色名注入身份：TA 自称当前会话的 title（新建即角色默认名/昵称），不再用全局昵称；
     // 侧边栏改名后缓存已更新，兜底读缓存拿新名字；无会话或占位标题 → 全局昵称
     const nameForPrompt = (() => {
       if (!activeSessionId) return loadAIProfile().nickname
