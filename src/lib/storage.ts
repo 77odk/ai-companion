@@ -311,15 +311,49 @@ const FIRST_SEEN_KEY = 'ai_companion_first_seen'
  * 一旦算出就缓存到 localStorage，之后不再覆盖，保证「认识第几天」只增不减
  * （哪怕旧聊天记录被 60 天窗口裁掉，firstSeen 也不会往前跳）。
  */
-export function getFirstSeen(): number {
+export function getFirstSeen(sessionId?: string): number {
+  const cacheKey = sessionId ? `${FIRST_SEEN_KEY}_${sessionId}` : FIRST_SEEN_KEY
   try {
-    const cached = localStorage.getItem(FIRST_SEEN_KEY)
+    const cached = localStorage.getItem(cacheKey)
     if (cached) {
       const n = Number(cached)
       if (Number.isFinite(n) && n > 0) return n
     }
   } catch {
     // 读不到缓存按首次处理
+  }
+
+  // 按会话隔离：传了 sessionId 就只用该会话自己的最早消息/记忆算认识起点
+  //（新会话=刚认识，从今天开始；老会话保留自己的起点）——七七拍板：每个角色是独立的人，各自认识各自记
+  if (sessionId) {
+    let msgs: StoredMessage[] = []
+    let mems: MemoryItem[] = []
+    try {
+      const rawMsgs = localStorage.getItem(`ai_companion_msgs_${sessionId}`)
+      if (rawMsgs) {
+        const arr = JSON.parse(rawMsgs)
+        if (Array.isArray(arr)) msgs = arr as StoredMessage[]
+      }
+    } catch {
+      // 读坏不影响
+    }
+    try {
+      const rawMems = localStorage.getItem(`ai_companion_mem_${sessionId}`)
+      if (rawMems) {
+        const arr = JSON.parse(rawMems)
+        if (Array.isArray(arr)) mems = arr as MemoryItem[]
+      }
+    } catch {
+      // 读坏不影响
+    }
+    const first = pickFirstSeen({ messages: msgs, memories: mems, posts: [] })
+    const value = first ?? Date.now()
+    try {
+      localStorage.setItem(cacheKey, String(value))
+    } catch {
+      // 存不下也不影响展示
+    }
+    return value
   }
 
   let memories: MemoryItem[] = []
@@ -346,7 +380,7 @@ export function getFirstSeen(): number {
   const first = pickFirstSeen({ messages: loadMessages(), memories, posts })
   const value = first ?? Date.now()
   try {
-    localStorage.setItem(FIRST_SEEN_KEY, String(value))
+    localStorage.setItem(cacheKey, String(value))
   } catch {
     // 存不下也不影响展示
   }

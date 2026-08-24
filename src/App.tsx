@@ -10,13 +10,11 @@ import AnniversaryPage from './components/AnniversaryPage'
 import WeeklyPage from './components/WeeklyPage'
 import GuideDetail from './components/Guide'
 import LoginGate from './components/LoginGate'
-import SessionSidebar from './components/SessionSidebar'
+import RolesPage from './components/RolesPage'
 import { loadMessages, loadPersona } from './lib/storage'
 import { getToken, isLoggedIn, isPublicView } from './lib/auth'
-import { deleteSession, listSessions, patchSession, type Session } from './lib/sessionApi'
+import { listSessions } from './lib/sessionApi'
 import {
-  clearMemoriesCache,
-  clearMessagesCache,
   getActiveSessionId,
   getSessionsCache,
   setActiveSessionId,
@@ -27,13 +25,12 @@ import {
   decideLoginTarget,
   displaySessionName,
   pickMostRecentSession,
-  pickNextSessionAfterDelete,
   resolveSessionName,
   type RolePickMode,
 } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 
-type View = 'welcome' | 'role' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary' | 'weekly' | 'guide' | 'loading'
+type View = 'welcome' | 'role' | 'roles' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary' | 'weekly' | 'guide' | 'loading'
 
 // 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
 type MigrationState = 'idle' | 'running' | 'failed'
@@ -123,16 +120,14 @@ export default function App() {
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate'>('welcome')
   // 选角色页的用途：first=首次/游客新建；current=换个TA·当前会话换人设；new=换个TA·开新会话换TA
   const [roleMode, setRoleMode] = useState<RolePickMode>('first')
+  // 选角色页的返回去向：首次/游客/无会话回欢迎页，「换个 TA」回「我的」，角色列表页新建回角色列表
+  const [roleBack, setRoleBack] = useState<'welcome' | 'settings' | 'roles'>('welcome')
   // 老数据一键迁移状态（无云端会话 + 本地有旧数据时触发，见 redirectBySessions）
   const [migration, setMigration] = useState<MigrationState>('idle')
   // 已登录用户首次拉会话列表只做一次（StrictMode 双跑防重）
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
-  // 会话侧边栏（B3 + S1）：面板开关 + 会话列表（缓存初始化，打开时从后端刷新）
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [sessions, setSessions] = useState<Session[]>(() => getSessionsCache())
-  const [deleting, setDeleting] = useState(false)
   // 刚新建会话的标题：列表还没拉回时，头部入口先显示它（兜底解析）
   const [createdTitle, setCreatedTitle] = useState('')
 
@@ -165,6 +160,7 @@ export default function App() {
   const skipMigration = () => {
     setMigration('idle')
     setRoleMode('first')
+    setRoleBack('welcome')
     setView('role')
   }
 
@@ -183,9 +179,8 @@ export default function App() {
     const res = await listSessions(token)
     if (res.ok) {
       const sessions = res.data.sessions
-      // S1 头部入口要显示当前角色名：列表直接落缓存，切换/重进不用等侧边栏打开
+      // S1 头部入口要显示当前角色名：列表直接落缓存，切换/重进不用等角色列表页
       setSessionsCache(sessions)
-      setSessions(sessions)
       const latest = pickMostRecentSession(sessions)
       if (latest) {
         // 有云端会话 → 正常进聊天
@@ -203,13 +198,17 @@ export default function App() {
         setActiveSessionId('')
         setMigration('idle')
         const target = decideLoginTarget(sessions)
-        if (target === 'role') setRoleMode('first')
+        if (target === 'role') {
+          setRoleMode('first')
+          setRoleBack('welcome')
+        }
         setView(target)
       }
     } else if (getActiveSessionId()) {
       setView('chat')
     } else if (needsRolePick()) {
       setRoleMode('first')
+      setRoleBack('welcome')
       setView('role')
     } else {
       setView('chat')
@@ -301,90 +300,29 @@ export default function App() {
     }
   }
 
-  // ---- 会话侧边栏（B3） ----
+  // ---- 会话列表（S2 全屏角色列表页） ----
+  // 侧边栏已删除：会话列表搬到全屏角色列表页（RolesPage），改名/删除/切换都由那页自持，
+  // App 只保留「拉列表刷新缓存」（新建会话后用）和三个导航回调（返回/新建/切完回聊天）。
 
-  // 打开侧边栏：先拉后端会话列表刷新缓存，再展示（拉取失败用本地缓存兜底）
+  // 拉后端会话列表刷新缓存（角色列表页新建会话后用，让聊天页头部入口显示最新角色名）
   const refreshSessions = useCallback(async () => {
     const token = getToken()
     if (!token) return
     const res = await listSessions(token)
     if (res.ok) {
       setSessionsCache(res.data.sessions)
-      setSessions(res.data.sessions)
     }
   }, [])
 
-  const openSidebar = () => {
-    setSidebarOpen(true)
-    void refreshSessions()
-  }
-
-  // 切换会话：整套环境跟着切（消息/记忆/人设），Chat 挂载/激活后按新 id 拉数据
-  const handleSwitchSession = (id: string) => {
-    setActiveSessionId(id)
-    setSidebarOpen(false)
-    setView('chat')
-  }
-
-  // 新建会话：关侧边栏 → 选角色页（first=新建）
-  const handleNewSession = () => {
-    setSidebarOpen(false)
+  // 角色列表页「新建」：进选角色页（first=新建），返回时回角色列表页
+  const handleRolesNew = () => {
+    setRoleBack('roles')
     setRoleMode('first')
     setView('role')
   }
 
-  // 删除会话：后端级联删 → 清该会话消息/记忆缓存 → 刷新列表 →
-  // 删的是当前会话时：剩>0 切最近一个，无会话进选角色页；删失败提示、列表不刷新（401 走登录墙）
-  const handleDeleteSession = async (id: string) => {
-    const token = getToken()
-    if (!token) return
-    setDeleting(true)
-    try {
-      const res = await deleteSession(token, id)
-      if (!res.ok) {
-        window.alert('没删掉，网络开小差了，稍后再试试。')
-        return
-      }
-      clearMessagesCache(id)
-      clearMemoriesCache(id)
-      const remaining = sessions.filter((s) => String(s.id) !== id)
-      setSessionsCache(remaining)
-      setSessions(remaining)
-      setSidebarOpen(false)
-      if (getActiveSessionId() === id) {
-        const next = pickNextSessionAfterDelete(remaining, id)
-        if (next) {
-          setActiveSessionId(String(next.id))
-          setView('chat')
-        } else {
-          setActiveSessionId('')
-          setRoleMode('first')
-          setView('role')
-        }
-      }
-    } finally {
-      setDeleting(false)
-    }
-  }
-
-  // 改名（S1 微信备注式）：PATCH title → 更新列表与缓存 → 头部入口即时显示新名字
-  const handleRenameSession = async (id: string, title: string) => {
-    const token = getToken()
-    const t = title.trim()
-    if (!token || !t) return
-    const res = await patchSession(token, id, { title: t })
-    if (!res.ok) {
-      window.alert('没改掉，网络开小差了，稍后再试试。')
-      return
-    }
-    const updated = sessions.map((s) => (String(s.id) === id ? { ...s, title: t } : s))
-    setSessionsCache(updated)
-    setSessions(updated)
-    if (getActiveSessionId() === id) setCreatedTitle(t)
-  }
-
-  // 头部入口显示当前角色名：列表里找当前会话 → 占位标题从 persona 兜底 → 刚新建的标题 → 全局解析
-  const currentSession = sessions.find((s) => String(s.id) === getActiveSessionId())
+  // 头部入口显示当前角色名：缓存里找当前会话 → 占位标题从 persona 兜底 → 刚新建的标题 → 全局解析
+  const currentSession = getSessionsCache().find((s) => String(s.id) === getActiveSessionId())
   const headerName =
     (currentSession ? displaySessionName(currentSession) : '') || createdTitle || resolveSessionName(loadPersona()) || 'TA'
 
@@ -415,10 +353,16 @@ export default function App() {
           onDone={(info) => {
             if (info?.title) setCreatedTitle(info.title)
             navigate('chat')
-            // 新建会话后顺手拉一次列表：侧边栏/头部入口都能立刻显示新角色名
+            // 新建会话后顺手拉一次列表：角色列表/头部入口都能立刻显示新角色名
             void refreshSessions()
           }}
-          onBack={() => navigate(roleMode === 'first' ? 'welcome' : 'settings')}
+          onBack={() => navigate(roleBack)}
+        />
+      ) : view === 'roles' ? (
+        <RolesPage
+          onBack={() => setView('chat')}
+          onNew={handleRolesNew}
+          onSwitch={() => setView('chat')}
         />
       ) : view === 'aispace' ? (
         <AISpace onBack={backFromSpace} onGoMine={() => navigate('settings')} />
@@ -453,9 +397,9 @@ export default function App() {
               <button
                 type="button"
                 className="session-list-entry"
-                onClick={openSidebar}
-                aria-label="会话列表"
-                title="会话列表"
+                onClick={() => navigate('roles')}
+                aria-label="角色列表"
+                title="角色列表"
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -522,6 +466,7 @@ export default function App() {
                 onOpenSpace={() => openSpace('settings')}
                 onGoWelcome={() => navigate('welcome')}
                 onSwitchRole={(mode) => {
+                  setRoleBack('settings')
                   setRoleMode(mode)
                   navigate('role')
                 }}
@@ -557,20 +502,6 @@ export default function App() {
             </button>
           </nav>
         </>
-      )}
-
-      {loggedIn && sidebarOpen && (
-        <SessionSidebar
-          open={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-          sessions={sessions}
-          activeId={getActiveSessionId()}
-          onSwitch={handleSwitchSession}
-          onNew={handleNewSession}
-          onDelete={(id) => void handleDeleteSession(id)}
-          onRename={(id, title) => void handleRenameSession(id, title)}
-          deleting={deleting}
-        />
       )}
     </div>
   )

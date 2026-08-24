@@ -160,7 +160,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     setJustReplied(false)
     try {
       const ts = Date.now()
-      const week = getWeekRange(ts, getFirstSeen())
+      const week = getWeekRange(ts, getFirstSeen(getActiveSessionId() || undefined))
       const sid = getActiveSessionId()
       // 本周消息：落在本周窗口内，取最近 40 条按时间升序
       const weekMsgs = (sid ? getMessagesCache(sid) : loadMessages())
@@ -188,7 +188,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
               weekLabel: week.weekLabel,
               summaryLines,
               newMemories,
-              daysKnown: getKnownDays(ts),
+              daysKnown: getKnownDays(ts, sid),
               ...(lastReply?.trim() ? { lastReply: lastReply.trim() } : {}),
               ...(pendingTexts.length > 0 ? { pendingReplies: pendingTexts } : {}),
               ...(persona ? { persona } : {}),

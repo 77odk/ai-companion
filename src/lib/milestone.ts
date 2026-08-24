@@ -12,8 +12,8 @@ export type MilestoneDay = (typeof MILESTONE_DAYS)[number]
 const SHOWN_KEY_PREFIX = 'ai_companion_milestone_shown_'
 
 /** 认识第 N 天：firstSeen 当天算第 1 天（与 buildRelationshipBlock 一致），按本地日历日 */
-export function getKnownDays(now: number = Date.now()): number {
-  const first = getFirstSeen()
+export function getKnownDays(now: number = Date.now(), sessionId?: string): number {
+  const first = getFirstSeen(sessionId)
   const start = new Date(first)
   const today = new Date(now)
   const startDay = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()) / 86400000
@@ -45,8 +45,9 @@ export function markMilestoneShown(day: number): void {
 /** 里程碑状态：今天第几天、是否落在里程碑日、是否已展示过 */
 export function getMilestoneStatus(
   now: number = Date.now(),
+  sessionId?: string,
 ): { day: number; hit: boolean; shown: boolean } {
-  const day = getKnownDays(now)
+  const day = getKnownDays(now, sessionId)
   const hit = (MILESTONE_DAYS as readonly number[]).includes(day)
   return { day, hit, shown: hit ? readShown(day) : false }
 }

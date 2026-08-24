@@ -2104,6 +2104,14 @@ textarea.persona-input {
   object-fit: cover;
 }
 
+/* 空间角色头像：有会话时取角色名首字（S2，主色软底文字） */
+.ai-space-avatar-letter {
+  color: var(--color-primary-deep);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .ai-space-avatar .avatar-default {
   width: 55%;
   height: 55%;
@@ -4117,9 +4125,8 @@ textarea.persona-input {
   margin-bottom: 4px;
 }
 
-/* ========== 会话侧边栏（B3） ========== */
-/* 聊天页顶栏左侧：会话列表入口（与右侧「TA 的空间」对称） */
-/* 顶栏左上角：会话列表入口（当前角色名 + 列表图标，S1 做成一眼可见的胶囊按钮） */
+/* ========== 全屏角色列表页（S2） ========== */
+/* 聊天页顶栏左侧：角色列表入口（当前角色名 + 列表图标，S1 做成一眼可见的胶囊按钮） */
 .session-list-entry {
   position: absolute;
   left: 12px;
@@ -4153,141 +4160,88 @@ textarea.persona-input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-/* 遮罩 + 左侧滑出面板 */
-.session-sidebar-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 300;
-  background: rgba(61, 44, 41, 0.4);
-  display: flex;
-}
-
-.session-sidebar-panel {
-  width: min(300px, 85vw);
-  height: 100%;
-  background: var(--color-bg);
-  border-right: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-  box-shadow: 2px 0 18px rgba(61, 44, 41, 0.12);
-  animation: session-sidebar-in 0.2s ease-out;
-}
-
-@keyframes session-sidebar-in {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
-.session-sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 16px 8px;
-  flex-shrink: 0;
-}
-
-.session-sidebar-title {
-  margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
-  color: var(--color-text);
 }
 
-.session-sidebar-close {
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: background 0.15s, color 0.15s;
-}
-
-.session-sidebar-close:hover {
-  background: var(--color-primary-soft);
-  color: var(--color-primary-deep);
-}
-
-.session-sidebar-close svg {
-  width: 18px;
-  height: 18px;
-}
-
-.session-sidebar-new {
-  margin: 4px 16px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 11px 14px;
-  border: 1px dashed rgba(255, 138, 92, 0.5);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 138, 92, 0.06);
-  color: var(--color-primary-deep);
-  font-size: 14px;
-  font-weight: 600;
-  font-family: inherit;
-  flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.session-sidebar-new:hover {
-  background: rgba(255, 138, 92, 0.12);
-}
-
-.session-sidebar-new svg {
-  width: 16px;
-  height: 16px;
-}
-
-.session-sidebar-list {
-  list-style: none;
-  margin: 0;
-  padding: 4px 10px 16px;
-  overflow-y: auto;
+/* 全屏页容器：整页替换（跟 ai-space-page 同级），内容可滚动 */
+.roles-page {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  padding: 16px 16px 24px;
+  overflow-y: auto;
 }
 
-/* 列表项（S1 ling/微信式：头像 + 角色名大字 + 最近消息摘要 + 未读角标 + 操作） */
-.session-sidebar-item {
+.roles-header {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
+/* 顶部右侧「新建」按钮（与左侧返回对称的胶囊按钮） */
+.roles-new {
+  width: auto;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 138, 92, 0.45);
+  border-radius: 19px;
+  background: rgba(255, 138, 92, 0.1);
+  color: var(--color-primary-deep);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  flex: none;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.roles-new:hover {
+  color: var(--color-primary-deep);
+  border-color: rgba(255, 138, 92, 0.7);
+  background: rgba(255, 138, 92, 0.16);
+}
+
+.roles-new svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 列表：微信式一行一个角色 */
+.roles-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.roles-item {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 6px 10px 10px;
+  gap: 8px;
+  padding: 12px 10px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-card);
   transition: border-color 0.15s, background 0.15s;
 }
 
-.session-sidebar-item.active {
+.roles-item.active {
   border-color: rgba(255, 138, 92, 0.55);
   background: rgba(255, 138, 92, 0.08);
 }
 
-.session-sidebar-main {
+.roles-main {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 0;
   border: none;
   background: transparent;
@@ -4296,63 +4250,73 @@ textarea.persona-input {
   text-align: left;
 }
 
-/* 首字圆形头像（禁 emoji，线条 SVG 或首字均可） */
-.session-sidebar-avatar {
+/* 首字圆形头像（禁 emoji，主色软底，取角色名第一个字） */
+.roles-avatar {
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--color-primary-soft);
   color: var(--color-primary-deep);
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 700;
   overflow: hidden;
 }
 
-.session-sidebar-info {
+.roles-info {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
-.session-sidebar-item-title {
+.roles-item-title {
   width: 100%;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
   color: var(--color-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.session-sidebar-item.active .session-sidebar-item-title {
+.roles-item.active .roles-item-title {
   color: var(--color-primary-deep);
 }
 
-.session-sidebar-item-summary {
+.roles-item-summary {
   width: 100%;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.session-sidebar-item-time {
+/* 右侧：时间 + 未读角标 */
+.roles-side {
   flex: none;
-  align-self: flex-start;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.roles-item-time {
+  flex: none;
   font-size: 11px;
   color: var(--color-text-muted);
-  margin-top: 2px;
 }
 
 /* 未读数字角标（微信式红点，>99 显示 99+） */
-.session-sidebar-badge {
+.roles-badge {
   flex: none;
   min-width: 18px;
   height: 18px;
@@ -4368,13 +4332,13 @@ textarea.persona-input {
 }
 
 /* 「···」操作按钮 */
-.session-sidebar-more {
+.roles-more {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -4383,21 +4347,21 @@ textarea.persona-input {
   transition: background 0.15s, color 0.15s;
 }
 
-.session-sidebar-more:hover {
+.roles-more:hover {
   background: var(--color-primary-soft);
   color: var(--color-primary-deep);
 }
 
-.session-sidebar-more svg {
-  width: 16px;
-  height: 16px;
+.roles-more svg {
+  width: 17px;
+  height: 17px;
 }
 
 /* 操作小菜单：改名 / 删除 */
-.session-sidebar-menu {
+.roles-menu {
   position: absolute;
-  right: 6px;
-  top: 44px;
+  right: 8px;
+  top: 48px;
   z-index: 20;
   min-width: 116px;
   padding: 4px;
@@ -4409,7 +4373,7 @@ textarea.persona-input {
   flex-direction: column;
 }
 
-.session-sidebar-menu-item {
+.roles-menu-item {
   display: flex;
   align-items: center;
   padding: 10px 12px;
@@ -4423,25 +4387,32 @@ textarea.persona-input {
   transition: background 0.15s;
 }
 
-.session-sidebar-menu-item:hover:not(:disabled) {
+.roles-menu-item:hover:not(:disabled) {
   background: var(--color-primary-soft);
 }
 
-.session-sidebar-menu-danger {
+.roles-menu-danger {
   color: #b3261e;
 }
 
-.session-sidebar-menu-danger:hover:not(:disabled) {
+.roles-menu-danger:hover:not(:disabled) {
   background: #fdecea;
 }
 
-.session-sidebar-menu-item:disabled {
+.roles-menu-item:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
+/* 菜单展开时点其他位置收起 */
+.roles-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+}
+
 /* 改名弹窗 */
-.session-sidebar-rename-overlay {
+.roles-rename-overlay {
   position: fixed;
   inset: 0;
   z-index: 310;
@@ -4452,7 +4423,7 @@ textarea.persona-input {
   padding: 24px;
 }
 
-.session-sidebar-rename {
+.roles-rename {
   width: min(320px, 100%);
   background: var(--color-card);
   border-radius: var(--radius);
@@ -4460,26 +4431,26 @@ textarea.persona-input {
   box-shadow: var(--shadow);
 }
 
-.session-sidebar-rename-title {
+.roles-rename-title {
   margin: 0 0 14px;
   font-size: 16px;
   font-weight: 700;
   color: var(--color-text);
 }
 
-.session-sidebar-rename-input {
+.roles-rename-input {
   width: 100%;
   margin-bottom: 16px;
 }
 
-.session-sidebar-rename-actions {
+.roles-rename-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
 }
 
 /* 空态：不说「暂无」，给个引导 + 按钮 */
-.session-sidebar-empty {
+.roles-empty {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -4490,7 +4461,7 @@ textarea.persona-input {
   text-align: center;
 }
 
-.session-sidebar-empty-text {
+.roles-empty-text {
   margin: 0;
   font-size: 13px;
   line-height: 1.7;

@@ -138,10 +138,10 @@ const FLOW_RULE =
   '【让对话流动起来】每次回应之后，自然地反问一句或抛一个新话题（关心对方、追问刚才的事、分享你的感受都行），让对话有来有回，不要说完就停——你是在聊天，不是在答题。'
 
 /** 认识天数注入：从 getFirstSeen 算「认识第 N 天」，给 TA 一个真实事实锚点——答"认识多久"有依据，不用编 */
-export function buildRelationshipBlock(now: number = Date.now()): string {
+export function buildRelationshipBlock(now: number = Date.now(), sessionId?: string): string {
   try {
     if (typeof localStorage === 'undefined') return ''
-    const first = getFirstSeen()
+    const first = getFirstSeen(sessionId)
     if (!first || !Number.isFinite(first)) return ''
     const start = new Date(first)
     const today = new Date(now)
@@ -158,7 +158,7 @@ export function buildRelationshipBlock(now: number = Date.now()): string {
  * 组装系统提示词：此刻时间 + 认识天数 + 纪念日 + 用户专属人设（最优先）+ 默认人设 + AI 昵称 + 示范对话 + 记忆规则。
  * 认识天数/纪念日读 localStorage（真实数据），注入在时间之后、人设之前，不干扰人设优先级。
  */
-export function buildSystemPrompt(persona?: string, aiName?: string, now?: number): string {
+export function buildSystemPrompt(persona?: string, aiName?: string, now?: number, sessionId?: string): string {
   const nameLine = aiName?.trim() ? `你的名字叫「${aiName.trim()}」，对方会这样称呼你，你自称「我」，绝不自称「TA」。` : ''
   const custom = persona?.trim()
   let prompt: string
@@ -171,7 +171,7 @@ export function buildSystemPrompt(persona?: string, aiName?: string, now?: numbe
     prompt = `${nameLine}${DEFAULT_IDENTITY}\n\n${CORE_RULES}\n\n${DEMO_CONVERSATION}`
   }
   // 认识天数 + 纪念日注入：时间之后、人设之前；没有数据就不占这一行
-  const relationshipBlock = buildRelationshipBlock(now)
+  const relationshipBlock = buildRelationshipBlock(now, sessionId)
   const anniversaryBlock = buildAnniversaryBlock(loadAnniversaries())
   let body: string
   if (relationshipBlock && anniversaryBlock) body = `${relationshipBlock}\n${anniversaryBlock}\n\n${prompt}`

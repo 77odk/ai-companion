@@ -205,7 +205,7 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
   // 相处里程碑：打开忆文（chat 视图）时检测，今天是里程碑日且没展示过 → 弹纪念卡。
   // 无 key 不依赖（纯模板）；StrictMode 双跑读 localStorage，幂等。
   useEffect(() => {
-    const st = getMilestoneStatus()
+    const st = getMilestoneStatus(Date.now(), getActiveSessionId() || undefined)
     if (st.hit && !st.shown) {
       setMilestone(st)
       setShowMilestone(true)
@@ -253,7 +253,7 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
       if (!t || t === '新会话' || t === '我们的开始') return loadAIProfile().nickname
       return t
     })()
-    const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(persona, nameForPrompt) }]
+    const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined) }]
     // 注入记忆改为「按需召回」：重要记忆（pinned）恒带 + 与当前话题相关的记忆（主题/关键词命中），其余省略；
     // 一条都没命中时兜底为最活跃的前 5 条，保证 TA 至少有记忆可依。
     // 排序（双源信任，M5-4）：pinned 恒最前 → 用户明说的（explicit）次之 → 其余按活跃度。

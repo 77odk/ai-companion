@@ -32,7 +32,12 @@ import {
 } from '../lib/aiSpaceDetail'
 import DefaultAvatar from './DefaultAvatar'
 import SpaceArt from './SpaceArt'
-import { getActiveSessionId, getSessionsCache } from '../lib/sessionStore'
+import {
+  getActiveSessionId,
+  getMemoriesCache,
+  getMessagesCache,
+  getSessionsCache,
+} from '../lib/sessionStore'
 import { displaySessionName } from '../lib/sessionFlow'
 
 interface Props {
@@ -173,18 +178,21 @@ export default function AISpace({ onBack, onGoMine }: Props) {
   const yourName = user.nickname || '你'
   const hasPersona = Boolean(loadPersona().trim())
 
+  // 当前会话（S2 空间按角色独立）：有会话 → 消息/记忆/首次见面全用该会话数据，无会话兜底全局
+  const sessionId = getActiveSessionId()
+
   // S1 空间角色化：有当前会话 → 标题/名字用当前角色名（如「阿叙的空间」）；无会话保持原样
   const [spaceSessionName] = useState<string>(() => {
-    const sid = getActiveSessionId()
-    if (!sid) return ''
-    const s = getSessionsCache().find((x) => String(x.id) === sid)
+    if (!sessionId) return ''
+    const s = getSessionsCache().find((x) => String(x.id) === sessionId)
     return s ? displaySessionName(s) : ''
   })
 
-  // 详情页数据：进空间时读一次（消息/记忆/首次见面时间不会在空间内变化）
-  const [messages] = useState<StoredMessage[]>(() => loadMessages())
-  const [memories] = useState<MemoryItem[]>(() => loadMemory())
-  const [firstSeen] = useState<number>(() => getFirstSeen())
+  // 详情页数据：进空间时读一次（消息/记忆/首次见面时间不会在空间内变化）。
+  // 有会话读当前会话缓存（后端填充），无会话兜底全局 localStorage（游客/过渡态）
+  const [messages] = useState<StoredMessage[]>(() => (sessionId ? getMessagesCache(sessionId) : loadMessages()))
+  const [memories] = useState<MemoryItem[]>(() => (sessionId ? getMemoriesCache(sessionId) : loadMemory()))
+  const [firstSeen] = useState<number>(() => getFirstSeen(sessionId || undefined))
 
   // 子页面路由：home 资料页 / chats 聊天记录 / memories TA 记得的 / life TA 的生活
   const [page, setPage] = useState<'home' | 'chats' | 'memories' | 'life'>('home')
@@ -338,7 +346,9 @@ export default function AISpace({ onBack, onGoMine }: Props) {
           </div>
 
           <div className="ai-space-avatar" aria-hidden="true">
-            {ai.avatar.startsWith('data:') ? (
+            {spaceSessionName ? (
+              <span className="ai-space-avatar-letter">{spaceSessionName.slice(0, 1)}</span>
+            ) : ai.avatar.startsWith('data:') ? (
               <img src={ai.avatar} alt="" />
             ) : (
               <DefaultAvatar kind="ai" className="avatar-default" />
