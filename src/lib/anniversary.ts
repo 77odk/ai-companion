@@ -30,6 +30,8 @@ export interface Anniversary {
    * couple（双人纪念日）存角色 key。老数据缺省 = couple（都是双人）。
    */
   kind?: 'personal' | 'couple'
+  /** 姨妈周期专用：周期天数（如 28）。date 存「上次来潮日期」，展示时用周期估算下次来潮日 */
+  periodDays?: number
 }
 
 // TASK-UI2 角色隔离：按会话分 key（ai_companion_anniversaries_<sid>），无会话回落全局 key（兼容老逻辑）。
@@ -181,7 +183,7 @@ function storeKeyOf(id: string, sessionId?: string): string | null {
 export function addAnniversary(
   label: string,
   date: string,
-  fields?: { countMode?: CountMode; color?: string; kind?: 'personal' | 'couple' },
+  fields?: { countMode?: CountMode; color?: string; kind?: 'personal' | 'couple'; periodDays?: number },
   sessionId?: string,
 ): Anniversary[] {
   const l = label.trim()
@@ -197,6 +199,7 @@ export function addAnniversary(
     createdAt: Date.now(),
     ...(fields?.countMode === 'countdown' ? { countMode: 'countdown' as CountMode } : {}),
     ...(fields?.color?.trim() ? { color: fields.color.trim() } : {}),
+    ...(fields?.periodDays != null && fields.periodDays > 0 ? { periodDays: Math.round(fields.periodDays) } : {}),
     ...(kind === 'personal' ? { kind: 'personal' as const } : {}),
   }
   saveAnniversaries([item, ...readRaw(targetSid)], targetSid)
@@ -209,7 +212,7 @@ export function updateAnniversary(
   id: string,
   label: string,
   date: string,
-  fields?: { countMode?: CountMode; color?: string; kind?: 'personal' | 'couple' },
+  fields?: { countMode?: CountMode; color?: string; kind?: 'personal' | 'couple'; periodDays?: number },
   sessionId?: string,
 ): Anniversary[] {
   const l = label.trim()
@@ -232,6 +235,8 @@ export function updateAnniversary(
     else delete updated.countMode
     if (fields.color?.trim()) updated.color = fields.color.trim()
     else delete updated.color
+    if (fields.periodDays != null && fields.periodDays > 0) updated.periodDays = Math.round(fields.periodDays)
+    else delete updated.periodDays
   }
   if (newSid === currentSid) {
     list[idx] = updated
@@ -439,6 +444,40 @@ export function pickNextBigDay(list: Anniversary[], now: number = Date.now()): A
 }
 
 /**
+ * 姨妈周期专用：由「上次来潮日期」+ 周期天数估算「下次来潮日」文案。
+ * date 须为 'YYYY-MM-DD'（一次性绝对日期）；periodDays 缺省 28。
+ * 返回如「预计 9 月 2 日来」；日期非法返回空串。
+ */
+export function formatPeriodEstimate(a: Anniversary, now: number = Date.now()): string {
+  const parsed = parseAnniversaryDate(a?.date ?? '')
+  if (!parsed || parsed.year == null) return ''
+  const days = Number.isFinite(a.periodDays) && (a.periodDays ?? 0) > 0 ? Math.round(a.periodDays ?? 28) : 28
+  const last = new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day))
+  if (Number.isNaN(last.getTime())) return ''
+  const next = new Date(last.getTime() + days * 86400000)
+  // 下次已经过了：提醒该更新来潮日期
+  const todayStart = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate())
+  if (next.getTime() < todayStart) return '该更新啦'
+  return `预计 ${next.getUTCMonth() + 1} 月 ${next.getUTCDate()} 日来`
+}
+
+/**
+ * 姨妈周期专用：距下次来潮还差几天（数字，>=0）；日期非法返回 null。
+ */
+export function daysUntilPeriod(a: Anniversary, now: number = Date.now()): number | null {
+  const parsed = parseAnniversaryDate(a?.date ?? '')
+  if (!parsed || parsed.year == null) return null
+  const days = Number.isFinite(a.periodDays) && (a.periodDays ?? 0) > 0 ? Math.round(a.periodDays ?? 28) : 28
+  const last = new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day))
+  if (Number.isNaN(last.getTime())) return null
+  const next = last.getTime() + days * 86400000
+  const todayStart = new Date(Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate())).getTime()
+  const diff = Math.round((next - todayStart) / 86400000)
+  return diff >= 0 ? diff : 0
+}
+
+/**
+ * 纯函数：由 firstSeen 时间戳生成默认「认识纪念日」（date 取 MM-DD，每年循环）。/**
  * 纯函数：由 firstSeen 时间戳生成默认「认识纪念日」（date 取 MM-DD，每年循环）。
  * 与 getDefaultAnniversary 拆开，方便 Node 单测。
  */
@@ -457,7 +496,8 @@ export function buildDefaultAnniversary(firstSeen: number, now: number = Date.no
 /**
  * 首次进入（该 store 还没有任何纪念日、也从没存过纪念日数据）时，用 getFirstSeen() 生成并保存默认「认识纪念日」；
  * 只要 localStorage 里出现过该纪念日 key——哪怕是空数组（用户删光过）——就不再生成（删光了不自动复活）。
- * 无会话缺省写全局 key（老逻辑）；有会话时默认双人生成到会话 key。
+ * 无会话缺省写全局 key（老逻辑）；有会话时默认双人生成到会话 key，且认识日按该角色自己的 firstSeen 算
+ * （每个角色各自的认识日，2026-08-25 七七拍板：跟每个人都有自己的纪念日/里程碑）。
  */
 export function getDefaultAnniversary(sessionId?: string): Anniversary | null {
   try {
@@ -465,7 +505,7 @@ export function getDefaultAnniversary(sessionId?: string): Anniversary | null {
   } catch {
     // 读不到 key 按首次处理
   }
-  const a = buildDefaultAnniversary(getFirstSeen())
+  const a = buildDefaultAnniversary(getFirstSeen(sessionId))
   saveAnniversaries([a], sessionId)
   return a
 }

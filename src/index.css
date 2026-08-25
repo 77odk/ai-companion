@@ -5737,3 +5737,75 @@ textarea.persona-input {
   color: #b5a29b;
   font-weight: 600;
 }
+
+/* 关于我 · 添加日子表单（三类型：生日/姨妈周期/自定义，2026-08-25 v2） */
+.aboutme-form-types {
+  display: flex;
+  gap: 8px;
+}
+.aboutme-type-btn {
+  flex: 1;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  cursor: pointer;
+  font-family: inherit;
+}
+.aboutme-type-btn.is-active {
+  border-color: var(--color-primary);
+  color: var(--color-primary-deep);
+  background: var(--color-primary-soft);
+  font-weight: 600;
+}
+.aboutme-form-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+.aboutme-form-input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 42px;
+}
+.aboutme-period-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.aboutme-period-label {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  flex: none;
+}
+.aboutme-period-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 资料卡头像可点击换头像（2026-08-25） */
+.chatprofile-avatar-btn {
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+}
+.chatprofile-avatar-btn:active {
+  transform: scale(0.96);
+}
+.chatprofile-avatar-btn .ai-space-avatar-letter {
+  width: 100%;
+  height: 100%;
+}
+
+/* TA 的资料 · 角色卡头像图 */
+.ai-role-avatar-img {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+}

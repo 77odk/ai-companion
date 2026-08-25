@@ -1,8 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { loadAIProfile, loadUserProfile } from '../lib/storage'
 import { loadMemory, type MemoryItem } from '../lib/memory'
 import { formatMemoryDate } from '../lib/aiSpaceDetail'
-import { getAnniversaries, pickNextBigDay, formatCountdown, formatAnniversaryDate } from '../lib/anniversary'
+import {
+  getAnniversaries,
+  getDefaultAnniversary,
+  pickNextBigDay,
+  formatCountdown,
+  formatAnniversaryDate,
+  type Anniversary,
+} from '../lib/anniversary'
 import DefaultAvatar from './DefaultAvatar'
 import WeeklyPage from './WeeklyPage'
 import { getActiveSessionId, getMemoriesCache, getSessionsCache } from '../lib/sessionStore'
@@ -44,8 +51,15 @@ export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) 
     [memories],
   )
 
-  // 最近的大日子（Big day）：当前角色纪念日里「下一次」最近的那条；点卡片进纪念日页
-  const bigDay = useMemo(() => pickNextBigDay(getAnniversaries(sessionId || undefined)), [sessionId])
+  // 最近的大日子（Big day）：当前角色纪念日里「下一次」最近的那条；点卡片进纪念日页。
+  // 每个角色默认有一条「认识纪念日」（角色创建那天，getDefaultAnniversary 首次进空间时生成），
+  // 所以每个角色都有各自的 Big day，互不串（2026-08-25 七七拍板）。
+  const [bigDay, setBigDay] = useState<Anniversary | null>(null)
+  useEffect(() => {
+    const sid = sessionId || undefined
+    getDefaultAnniversary(sid)
+    setBigDay(pickNextBigDay(getAnniversaries(sid)))
+  }, [sessionId])
 
   const goHome = () => setPage('home')
 
@@ -65,10 +79,10 @@ export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) 
           </div>
 
           <div className="ai-space-avatar" aria-hidden="true">
-            {spaceSessionName ? (
-              <span className="ai-space-avatar-letter">{spaceSessionName.slice(0, 1)}</span>
-            ) : ai.avatar.startsWith('data:') ? (
+            {ai.avatar.startsWith('data:') ? (
               <img src={ai.avatar} alt="" />
+            ) : spaceSessionName ? (
+              <span className="ai-space-avatar-letter">{spaceSessionName.slice(0, 1)}</span>
             ) : (
               <DefaultAvatar kind="ai" className="avatar-default" />
             )}

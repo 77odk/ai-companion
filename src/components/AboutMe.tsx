@@ -1,8 +1,10 @@
-// 关于我（TASK-UI 2026-08-25 七七拍板）：
-// 忆览页「关于我」入口 → 这里只放「你自己的事」：
+// 关于我（TASK-UI 2026-08-25 七七拍板 v2）：
+// 忆览页「关于我」入口 → 这里只放「你自己的事」——所有角色同步共享（全局 key，不绑角色）：
 //   1) 我的资料头（头像/名字/签名）
-//   2) 我的重要日子（生日、姨妈周期等 personal 纪念日，标题右侧加号添加，正数/倒数）
-//   3) 想让 TA 记住你什么？（输入框 → explicit 记忆，=「我自己说的」）
+//   2) 我的重要日子：三种类型（生日 / 姨妈周期 / 自定义），标题右侧加号添加；
+//      生日=日期选择器（每年循环倒计时）；姨妈周期=上次来潮日期+周期天数（估算下次）；
+//      自定义=名称+日期+正数/倒数。
+//   3) 想让 TA 记住你什么？（输入框 → explicit 记忆，=「我自己说的」，所有角色共享）
 //   4) 我自己说的列表（explicit 记忆，可删）
 // 与 TA 相关的（AI 提炼的记忆、你们的日子）一律不进这页——TA 记得的去 TA 空间 TA所忆。
 
@@ -13,6 +15,7 @@ import {
   anniversaryColorIndex,
   formatAnniversaryDate,
   formatCountdown,
+  formatPeriodEstimate,
   getAnniversaries,
   isValidAnniversaryDate,
   removeAnniversary,
@@ -65,40 +68,49 @@ const DeleteIcon = () => (
   </svg>
 )
 
-/** 「我自己说的」里的显式记忆：用户主动输入框添加的（explicit=true） */
-function myExplicitMemories(sessionId: string | null): MemoryItem[] {
-  const all = sessionId ? getMemoriesCache(sessionId) : loadMemory()
-  return all.filter((m) => m.explicit === true)
+/** 「我自己说的」里的显式记忆：用户主动输入框添加的（explicit=true），全局共享（不按会话过滤） */
+function myExplicitMemories(): MemoryItem[] {
+  // 关于我是「你自己的事」：所有角色同步。explicit 记忆读全局库（手动添加都写全局）；
+  // 会话缓存的 explicit 条目也汇总进来（老数据可能在会话缓存里）
+  const global = loadMemory().filter((m) => m.explicit === true)
+  const sid = getActiveSessionId()
+  if (!sid) return global
+  const sessionOnes = getMemoriesCache(sid).filter((m) => m.explicit === true)
+  const seen = new Set(global.map((m) => m.id))
+  return [...global, ...sessionOnes.filter((m) => !seen.has(m.id))]
 }
+
+/** 表单类型：birthday 生日 / period 姨妈周期 / custom 自定义 */
+type DayType = 'birthday' | 'period' | 'custom'
 
 export default function AboutMe({ onBack }: Props) {
   const user = loadUserProfile()
   const yourName = user.nickname || '你'
 
-  // 我的重要日子：personal（自己的生日/节日）存全局 key，不绑任何角色
+  // 我的重要日子：personal（自己的生日/节日）存全局 key，不绑角色、所有 TA 同步
   const [days, setDays] = useState<Anniversary[]>(() =>
     getAnniversaries().filter((a) => a.kind === 'personal'),
   )
 
-  // 我自己说的：explicit 记忆（会话模式读当前会话缓存，无会话读全局）
-  const sid = getActiveSessionId() || null
-  const [memories, setMemories] = useState<MemoryItem[]>(() => myExplicitMemories(sid))
+  // 我自己说的：explicit 记忆（全局）
+  const [memories, setMemories] = useState<MemoryItem[]>(() => myExplicitMemories())
   const [text, setText] = useState('')
   const [memError, setMemError] = useState<string | null>(null)
 
-  // 添加纪念日表单
+  // 添加纪念日表单（三类型）
   const [formOpen, setFormOpen] = useState(false)
+  const [dayType, setDayType] = useState<DayType>('birthday')
   const [label, setLabel] = useState('')
   const [date, setDate] = useState('')
-  const [countMode, setCountMode] = useState<CountMode>('forward')
+  const [countMode, setCountMode] = useState<CountMode>('countdown')
   const [color, setColor] = useState('warm-orange')
+  const [periodDays, setPeriodDays] = useState('28')
 
   // 数据变更自动刷新
   useEffect(() => {
     const refresh = () => {
       setDays(getAnniversaries().filter((a) => a.kind === 'personal'))
-      const s = getActiveSessionId() || null
-      setMemories(myExplicitMemories(s))
+      setMemories(myExplicitMemories())
     }
     window.addEventListener(MEMORY_UPDATED_EVENT, refresh)
     window.addEventListener('storage', refresh)
@@ -110,17 +122,39 @@ export default function AboutMe({ onBack }: Props) {
 
   const closeForm = () => {
     setFormOpen(false)
+    setDayType('birthday')
     setLabel('')
     setDate('')
-    setCountMode('forward')
+    setCountMode('countdown')
     setColor('warm-orange')
+    setPeriodDays('28')
   }
 
   const handleAddDay = () => {
+    // 姨妈周期：label 固定「姨妈周期」，date=上次来潮日期，periodDays=周期天数，展示估算下次
+    if (dayType === 'period') {
+      const d = date.trim()
+      if (!d || !isValidAnniversaryDate(d)) return
+      const daysNum = Math.max(1, Math.min(90, Number(periodDays) || 28))
+      addAnniversary('姨妈周期', d, { kind: 'personal', color, periodDays: daysNum }, undefined)
+      setDays(getAnniversaries().filter((a) => a.kind === 'personal'))
+      closeForm()
+      return
+    }
+    // 生日：label 固定「我的生日」，倒计时（每年循环）
+    if (dayType === 'birthday') {
+      const d = date.trim()
+      if (!d || !isValidAnniversaryDate(d)) return
+      addAnniversary('我的生日', d, { kind: 'personal', countMode: 'countdown', color }, undefined)
+      setDays(getAnniversaries().filter((a) => a.kind === 'personal'))
+      closeForm()
+      return
+    }
+    // 自定义：名称 + 日期 + 正数/倒数
     const l = label.trim()
     const d = date.trim()
     if (!l || !isValidAnniversaryDate(d)) return
-    addAnniversary(l, d, { countMode, color, kind: 'personal' })
+    addAnniversary(l, d, { countMode, color, kind: 'personal' }, undefined)
     setDays(getAnniversaries().filter((a) => a.kind === 'personal'))
     closeForm()
   }
@@ -136,13 +170,13 @@ export default function AboutMe({ onBack }: Props) {
     const s = getActiveSessionId()
     if (s) {
       const item = addMemoryCacheItem(s, t, '其他', true)
-      setMemories(getMemoriesCache(s).filter((m) => m.explicit === true))
+      setMemories(myExplicitMemories())
       const token = getToken()
       if (item && token) {
         postMemory(token, s, { content: t }).then((res) => {
           if (res.ok) {
             reconcileMemoryCacheId(s, item.id, res.data.id)
-            setMemories(getMemoriesCache(s).filter((m) => m.explicit === true))
+            setMemories(myExplicitMemories())
             setMemError(null)
           } else {
             setMemError('这条没传上去，已留在本地，稍后可再试')
@@ -161,7 +195,7 @@ export default function AboutMe({ onBack }: Props) {
       const list = getMemoriesCache(s)
       const item = list.find((m) => m.id === id)
       saveMemoriesCache(s, list.filter((m) => m.id !== id))
-      setMemories(getMemoriesCache(s).filter((m) => m.explicit === true))
+      setMemories(myExplicitMemories())
       const token = getToken()
       if (item && token && /^\d+$/.test(item.id)) {
         deleteMemory(token, item.id).then((res) => {
@@ -169,7 +203,7 @@ export default function AboutMe({ onBack }: Props) {
             const cur = getMemoriesCache(s)
             if (!cur.some((m) => m.id === item.id)) {
               saveMemoriesCache(s, [item, ...cur])
-              setMemories(getMemoriesCache(s).filter((m) => m.explicit === true))
+              setMemories(myExplicitMemories())
             }
             setMemError('删除没成功，这条留在了本地')
           }
@@ -218,8 +252,15 @@ export default function AboutMe({ onBack }: Props) {
               <div key={a.id} className="aboutme-day-card">
                 <span className={`aboutme-day-dot ann-color-${anniversaryColorIndex(a.color)}`} aria-hidden="true" />
                 <div className="aboutme-day-label">{a.label}</div>
-                <div className="aboutme-day-count">{formatCountdown(a)}</div>
-                <div className="aboutme-day-date">{formatAnniversaryDate(a.date)}</div>
+                {/* 姨妈周期特殊显示：估算下次来潮日；其余显示正/倒计时 */}
+                <div className="aboutme-day-count">
+                  {a.periodDays ? formatPeriodEstimate(a) : formatCountdown(a)}
+                </div>
+                <div className="aboutme-day-date">
+                  {a.periodDays
+                    ? `${a.periodDays} 天周期 · ${formatAnniversaryDate(a.date)} 来`
+                    : formatAnniversaryDate(a.date)}
+                </div>
                 <button
                   type="button"
                   className="aboutme-day-del"
@@ -289,39 +330,107 @@ export default function AboutMe({ onBack }: Props) {
         <p className="aboutme-footnote">TA 自己从聊天里记住的，在 TA 的空间 → TA所忆 里</p>
       </div>
 
-      {/* 添加我的日子表单（弹出层） */}
+      {/* 添加我的日子表单（三类型） */}
       {formOpen && (
         <div className="aboutme-form-mask" onClick={closeForm}>
           <div className="aboutme-form" onClick={(e) => e.stopPropagation()}>
             <h3 className="aboutme-form-title">添加我的日子</h3>
-            <input
-              className="aboutme-form-input"
-              placeholder="名称，比如：我的生日 / 姨妈周期"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-            />
-            <input
-              className="aboutme-form-input"
-              placeholder="日期：MM-DD（每年）或 YYYY-MM-DD"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-            <div className="aboutme-form-mode">
+
+            {/* 类型选择：生日 / 姨妈周期 / 自定义 */}
+            <div className="aboutme-form-types">
               <button
                 type="button"
-                className={`aboutme-mode-btn${countMode === 'forward' ? ' is-active' : ''}`}
-                onClick={() => setCountMode('forward')}
+                className={`aboutme-type-btn${dayType === 'birthday' ? ' is-active' : ''}`}
+                onClick={() => setDayType('birthday')}
               >
-                正数（已经 X 天）
+                生日
               </button>
               <button
                 type="button"
-                className={`aboutme-mode-btn${countMode === 'countdown' ? ' is-active' : ''}`}
-                onClick={() => setCountMode('countdown')}
+                className={`aboutme-type-btn${dayType === 'period' ? ' is-active' : ''}`}
+                onClick={() => setDayType('period')}
               >
-                倒数（还剩 X 天）
+                姨妈周期
+              </button>
+              <button
+                type="button"
+                className={`aboutme-type-btn${dayType === 'custom' ? ' is-active' : ''}`}
+                onClick={() => setDayType('custom')}
+              >
+                自定义
               </button>
             </div>
+
+            {dayType === 'birthday' && (
+              <>
+                <p className="aboutme-form-hint">选你的生日，每年到了 TA 都会记得</p>
+                <input
+                  className="aboutme-form-input"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </>
+            )}
+
+            {dayType === 'period' && (
+              <>
+                <p className="aboutme-form-hint">上次来潮是哪天？周期大概多少天？TA 会帮你估算下次</p>
+                <input
+                  className="aboutme-form-input"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+                <div className="aboutme-period-row">
+                  <span className="aboutme-period-label">周期</span>
+                  <input
+                    className="aboutme-form-input aboutme-period-input"
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={periodDays}
+                    onChange={(e) => setPeriodDays(e.target.value)}
+                  />
+                  <span className="aboutme-period-label">天</span>
+                </div>
+                <p className="aboutme-form-hint">不太准也没关系，每次来潮更新一下日期，TA 重新估算</p>
+              </>
+            )}
+
+            {dayType === 'custom' && (
+              <>
+                <input
+                  className="aboutme-form-input"
+                  placeholder="名称，比如：体检日 / 交房租"
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                />
+                <input
+                  className="aboutme-form-input"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+                <div className="aboutme-form-mode">
+                  <button
+                    type="button"
+                    className={`aboutme-mode-btn${countMode === 'countdown' ? ' is-active' : ''}`}
+                    onClick={() => setCountMode('countdown')}
+                  >
+                    倒数（还剩 X 天）
+                  </button>
+                  <button
+                    type="button"
+                    className={`aboutme-mode-btn${countMode === 'forward' ? ' is-active' : ''}`}
+                    onClick={() => setCountMode('forward')}
+                  >
+                    正数（已经 X 天）
+                  </button>
+                </div>
+              </>
+            )}
+
             <div className="aboutme-form-colors">
               {ANNIVERSARY_COLORS.map((c) => (
                 <button
@@ -333,6 +442,7 @@ export default function AboutMe({ onBack }: Props) {
                 />
               ))}
             </div>
+
             <div className="aboutme-form-actions">
               <button type="button" className="btn btn-ghost" onClick={closeForm}>
                 取消
@@ -341,7 +451,7 @@ export default function AboutMe({ onBack }: Props) {
                 type="button"
                 className="btn btn-primary"
                 onClick={handleAddDay}
-                disabled={!label.trim() || !isValidAnniversaryDate(date.trim())}
+                disabled={!date.trim() || (dayType === 'custom' && !label.trim())}
               >
                 保存
               </button>

@@ -478,9 +478,13 @@ export function AIDetail({
 
       {hasSession ? (
         <div className="settings-card ai-role-card">
-          <span className="ai-role-avatar" aria-hidden="true">
-            {roleInitial(roleName)}
-          </span>
+          {ai.avatar.startsWith('data:') ? (
+            <img className="ai-role-avatar-img" src={ai.avatar} alt="" />
+          ) : (
+            <span className="ai-role-avatar" aria-hidden="true">
+              {roleInitial(roleName)}
+            </span>
+          )}
           <div className="ai-role-info">
             <span className="ai-role-name">{roleName}</span>
             <span className="ai-role-sub">这是 TA 的资料卡，名字和人设都跟这个角色走</span>

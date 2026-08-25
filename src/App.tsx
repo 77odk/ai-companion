@@ -351,10 +351,7 @@ export default function App() {
         <AISpace
           onBack={backFromSpace}
           onGoMine={() => navigate('settings')}
-          onOpenAnniversary={() => {
-            setSpaceFrom('aispace')
-            navigate('anniversary')
-          }}
+          onOpenAnniversary={() => navigate('anniversary')}
         />
       ) : view === 'chatprofile' ? (
         <ChatProfile
@@ -424,10 +421,10 @@ export default function App() {
                 aria-label="打开 TA 的资料卡"
                 title="TA 的资料卡"
               >
-                {headerRoleName ? (
-                  <span className="chat-header-avatar-letter">{headerRoleName.slice(0, 1)}</span>
-                ) : headerAi.avatar.startsWith('data:') ? (
+                {headerAi.avatar.startsWith('data:') ? (
                   <img src={headerAi.avatar} alt="" />
+                ) : headerRoleName ? (
+                  <span className="chat-header-avatar-letter">{headerRoleName.slice(0, 1)}</span>
                 ) : (
                   <DefaultAvatar kind="ai" className="avatar-default" />
                 )}

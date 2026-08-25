@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  addMemoryItem,
   getMemoryRecencyRank,
   inferTopic,
   loadMemory,
@@ -17,7 +16,6 @@ import {
 import { getToken } from '../lib/auth'
 import { deleteMemory, listMemories, patchMemory, postMemory, type Session } from '../lib/sessionApi'
 import {
-  addMemoryCacheItem,
   getActiveSessionId,
   getMemoriesCache,
   getMessagesCache,
@@ -222,8 +220,6 @@ export default function Memory({ onOpenAboutMe, onOpenSpaceForSession }: MemoryP
   const [items, setItems] = useState<MemoryItem[]>(() =>
     activeSessionId ? getMemoriesCache(activeSessionId) : loadMemory(),
   )
-  const [text, setText] = useState('')
-  const [topic, setTopic] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   // 内容编辑：editingId = 正在编辑的条目 id；editText = 编辑框草稿
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -287,34 +283,6 @@ export default function Memory({ onOpenAboutMe, onOpenSpaceForSession }: MemoryP
 
   // 「很久没提起」小字标签的判断基准：当前时刻（30 天窗口，渲染时取一次即可）
   const now = Date.now()
-
-  const handleAdd = () => {
-    const t = text.trim()
-    if (!t) return
-    const sid = getActiveSessionId()
-    if (sid) {
-      // 会话模式：乐观写当前会话缓存（手动添加 = 用户明说 explicit=true），再异步 postMemory 上传
-      const item = addMemoryCacheItem(sid, t, topic, true)
-      setItems(getMemoriesCache(sid))
-      const token = getToken()
-      if (item && token) {
-        postMemory(token, sid, { content: t }).then((res) => {
-          if (res.ok) {
-            reconcileMemoryCacheId(sid, item.id, res.data.id)
-            setItems(getMemoriesCache(sid))
-            setMemError(null)
-          } else {
-            // 失败提示 + 保留本地缓存（不丢），稍后编辑该条会重新上传
-            setMemError('这条记忆没能上传，已留在本地，稍后可再试')
-          }
-        })
-      }
-    } else {
-      setItems(addMemoryItem(t, topic, true))
-    }
-    setText('')
-    setTopic('')
-  }
 
   const handleRemove = (id: string) => {
     const sid = getActiveSessionId()
@@ -483,32 +451,6 @@ export default function Memory({ onOpenAboutMe, onOpenSpaceForSession }: MemoryP
 
       {memError && <p className="memory-error">{memError}</p>}
 
-      <div className="memory-input-row">
-        <input
-          className="input"
-          type="text"
-          placeholder="想让 TA 记住什么？比如：我叫小七"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleAdd()
-          }}
-        />
-        <input
-          className="input memory-topic-input"
-          type="text"
-          placeholder="主题"
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleAdd()
-          }}
-        />
-      </div>
-      <button className="btn btn-primary memory-add-btn" onClick={handleAdd}>
-        记住
-      </button>
-
       {groups.length === 0 ? (
         <div className="memory-empty">
           <svg
@@ -527,7 +469,7 @@ export default function Memory({ onOpenAboutMe, onOpenSpaceForSession }: MemoryP
           <p className="memory-empty-sub">
             聊天时随口说说你的喜欢、你的日子，
             <br />
-            或者在上面亲手写下一句，都好。
+            或去「关于我」亲手写下一句，都好。
           </p>
         </div>
       ) : (

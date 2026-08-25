@@ -102,15 +102,21 @@ export default function ChatProfile({ onClose, onGoMine, onSwitchRole }: Props) 
           <span className="ai-space-topbar-spacer" aria-hidden="true" />
         </div>
 
-        <div className="ai-space-avatar" aria-hidden="true">
-          {profileSessionName ? (
-            <span className="ai-space-avatar-letter">{profileSessionName.slice(0, 1)}</span>
-          ) : ai.avatar.startsWith('data:') ? (
+        <button
+          type="button"
+          className="ai-space-avatar chatprofile-avatar-btn"
+          onClick={() => setPage('profile')}
+          aria-label="更换 TA 的头像"
+          title="点这里换头像"
+        >
+          {ai.avatar.startsWith('data:') ? (
             <img src={ai.avatar} alt="" />
+          ) : profileSessionName ? (
+            <span className="ai-space-avatar-letter">{profileSessionName.slice(0, 1)}</span>
           ) : (
             <DefaultAvatar kind="ai" className="avatar-default" />
           )}
-        </div>
+        </button>
         <h2 className="ai-space-name">{profileSessionName || ai.nickname}</h2>
         {/* 相识天数大字：不带框，角色创建那天起算（文案固定） */}
         <p className="chatprofile-days">相识的第 {daysKnown} 天</p>
