@@ -68,6 +68,12 @@ export function setSessionsCache(list: Session[]): void {
   }
 }
 
+/** 默认角色（第一个会话）id：老全局数据迁移的目标角色；无会话返回空串 */
+export function getDefaultSessionId(): string {
+  const list = getSessionsCache()
+  return list.length > 0 ? String(list[0].id) : ''
+}
+
 // ---- 消息乐观缓存（key 带 sessionId，各会话独立） ----
 
 export function getMessagesCache(sessionId: string): StoredMessage[] {
@@ -297,16 +303,20 @@ export function touchMemoryCache(sessionId: string, id: string, now: number = Da
 }
 
 /**
- * 对话注入的记忆来源 + 召回（B2c-3）：
- * 有会话 → 读当前会话的记忆缓存（后端填充）；无会话（游客/过渡态）→ 兜底本地 ai_companion_memory。
- * 召回逻辑（recallRelevantMemories：pinned 恒带 / 主题命中 / 关键词命中 / 活跃兜底）不变，只换数据来源。
+ * 对话注入的记忆来源 + 召回（B2c-3 + TASK-UI2 组合读取）：
+ * 组合 = 我的忆录（全局 ai_companion_memory，所有角色共享）+ 当前角色 TA所忆（会话记忆缓存，有会话时）。
+ * - 有会话 → 全局记忆 + 当前会话记忆缓存合并召回（角色私有整套按会话切换，全局记忆所有角色保留）
+ * - 无会话（游客/过渡态）→ 只读全局记忆（老逻辑）
+ * 严禁串读：只读全局 + 当前会话，绝不读别的会话缓存。
+ * 召回逻辑（recallRelevantMemories：pinned 恒带 / 主题命中 / 关键词命中 / 活跃兜底）不变，只换数据来源组合。
  */
 export function recallSessionMemories(
   activeSessionId: string,
   contextText: string,
   opts: RecallOptions = {},
 ): MemoryItem[] {
-  const items = activeSessionId ? getMemoriesCache(activeSessionId) : loadMemory()
+  const global = loadMemory()
+  const items = activeSessionId ? [...global, ...getMemoriesCache(activeSessionId)] : global
   return recallRelevantMemories(items, contextText, opts)
 }
 

@@ -20,21 +20,51 @@ import {
   type SpaceState,
   type TemplateVar,
   type UsedTemplates,
-} from './aiSpaceCore'
+} from './aiSpaceCore.ts'
 import {
   canUseLlm,
   cleanLlmText,
   guessKind,
   buildLlmMessages,
   buildLlmPost,
-} from './aiSpaceLlm'
-import { chatCompletion } from './api'
-import { notifyDataChanged } from './dataChange'
-import { loadPersona, loadSettings } from './storage'
+} from './aiSpaceLlm.ts'
+import { chatCompletion } from './api.ts'
+import { notifyDataChanged } from './dataChange.ts'
+import { loadPersona, loadSettings } from './storage.ts'
+import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
+import { migrateGlobalToDefaultSession } from './roleData.ts'
 
 const POSTS_KEY = 'ai_space_posts'
 const LAST_VISIT_KEY = 'ai_space_last_visit'
 const USED_KEY = 'ai_space_used_templates'
+// TASK-UI2 角色隔离：按会话分 key（ai_space_posts_<sid> 等），无会话回落全局 key（兼容老逻辑）。
+const postsKey = (sessionId?: string) => (sessionId ? `${POSTS_KEY}_${sessionId}` : POSTS_KEY)
+const lastVisitKey = (sessionId?: string) => (sessionId ? `${LAST_VISIT_KEY}_${sessionId}` : LAST_VISIT_KEY)
+const usedKey = (sessionId?: string) => (sessionId ? `${USED_KEY}_${sessionId}` : USED_KEY)
+/** 老全局动态已迁移到默认角色 key 的标记（防重复迁移） */
+const SPACE_MIGRATED_KEY = 'ai_space_migrated'
+
+/** 首次按会话读取时，把老全局动态迁到「默认角色」名下（TASK-UI2）；lastVisit/used 跟着挪（挪完即空，天然幂等） */
+function ensureSessionSpaceData(sessionId?: string): void {
+  if (!sessionId) return
+  migrateGlobalToDefaultSession(POSTS_KEY, postsKey, SPACE_MIGRATED_KEY)
+  try {
+    const defSid = getDefaultSessionId()
+    if (!defSid) return
+    for (const pair of [
+      [LAST_VISIT_KEY, lastVisitKey],
+      [USED_KEY, usedKey],
+    ] as const) {
+      const raw = localStorage.getItem(pair[0])
+      if (raw != null && localStorage.getItem(pair[1](defSid)) == null) {
+        localStorage.setItem(pair[1](defSid), raw)
+        localStorage.removeItem(pair[0])
+      }
+    }
+  } catch {
+    // 迁移失败不阻塞：数据留在全局 key，遗留模式仍可读，下次再试
+  }
+}
 
 function isSpacePost(p: unknown): p is SpacePost {
   if (p == null || typeof p !== 'object') return false
@@ -49,13 +79,14 @@ function isSpacePost(p: unknown): p is SpacePost {
   )
 }
 
-function loadState(): SpaceState {
+function loadState(sessionId?: string): SpaceState {
+  if (sessionId) ensureSessionSpaceData(sessionId)
   try {
-    const rawPosts = localStorage.getItem(POSTS_KEY)
+    const rawPosts = localStorage.getItem(postsKey(sessionId))
     const posts = rawPosts ? (JSON.parse(rawPosts) as unknown[]) : []
-    const lastRaw = localStorage.getItem(LAST_VISIT_KEY)
+    const lastRaw = localStorage.getItem(lastVisitKey(sessionId))
     const lastVisit = lastRaw ? Number(lastRaw) : null
-    const rawUsed = localStorage.getItem(USED_KEY)
+    const rawUsed = localStorage.getItem(usedKey(sessionId))
     const used = rawUsed ? (JSON.parse(rawUsed) as Record<string, number>) : {}
     return {
       posts: Array.isArray(posts) ? posts.filter(isSpacePost) : [],
@@ -67,16 +98,31 @@ function loadState(): SpaceState {
   }
 }
 
-function saveState(state: SpaceState): void {
-  localStorage.setItem(POSTS_KEY, JSON.stringify(state.posts))
-  localStorage.setItem(LAST_VISIT_KEY, String(state.lastVisit ?? ''))
-  localStorage.setItem(USED_KEY, JSON.stringify(state.used))
+function saveState(state: SpaceState, sessionId?: string): void {
+  localStorage.setItem(postsKey(sessionId), JSON.stringify(state.posts))
+  localStorage.setItem(lastVisitKey(sessionId), String(state.lastVisit ?? ''))
+  localStorage.setItem(usedKey(sessionId), JSON.stringify(state.used))
   notifyDataChanged()
 }
 
-/** 只读地拿当前已落盘的动态列表（进空间先显示，不阻塞） */
-export function loadCurrentPosts(): SpacePost[] {
-  return loadState().posts
+/** 只读地拿当前已落盘的动态列表（进空间先显示，不阻塞）；会话感知 */
+export function loadCurrentPosts(sessionId?: string): SpacePost[] {
+  return loadState(sessionId).posts
+}
+
+/** 云端同步用：汇总全部角色的动态（全局 + 各会话），防角色隔离后云端丢数据 */
+export function collectAllSpacePosts(): SpacePost[] {
+  const out: SpacePost[] = []
+  const global = loadState(undefined).posts
+  if (global.length > 0) out.push(...global)
+  for (const s of getSessionsCache()) {
+    const sid = String(s.id)
+    if (sid) {
+      const posts = loadState(sid).posts
+      if (posts.length > 0) out.push(...posts)
+    }
+  }
+  return out
 }
 
 export type SpaceMode = 'llm' | 'template' | 'no-persona'
@@ -106,9 +152,14 @@ function buildVars(taName: string, yourName: string, now: number): TemplateVar {
   }
 }
 
-/** 每次进入 / 手动刷新 TA 的空间时调用：推进时间轴、返回最新列表与生成计划 */
-export function refreshSpace(taName: string, yourName: string, now: number = Date.now()): RefreshPlan {
-  const prev = loadState()
+/** 每次进入 / 手动刷新 TA 的空间时调用：推进时间轴、返回最新列表与生成计划（会话感知，按角色隔离） */
+export function refreshSpace(
+  taName: string,
+  yourName: string,
+  now: number = Date.now(),
+  sessionId?: string,
+): RefreshPlan {
+  const prev = loadState(sessionId)
   const vars = buildVars(taName, yourName, now)
   const persona = loadPersona()
   const settings = loadSettings()
@@ -127,20 +178,20 @@ export function refreshSpace(taName: string, yourName: string, now: number = Dat
       created = 1
     }
     const state: SpaceState = { posts: posts.slice(0, MAX_POSTS), lastVisit: now, used }
-    saveState(state)
+    saveState(state, sessionId)
     return { posts: state.posts, mode: 'no-persona', created, pending: [], used: state.used }
   }
 
   // 有人设 + 有 key：LLM 路径。先推进 lastVisit 占位防重复，新动态异步补
   if (canUseLlm(persona, settings)) {
     const state: SpaceState = { ...prev, lastVisit: now }
-    saveState(state)
+    saveState(state, sessionId)
     return { posts: state.posts, mode: 'llm', created: count, pending: timestamps, used: state.used }
   }
 
   // 有人设但没 key：降级模板，同步生成
   const { state, created } = advanceTimeline(prev, vars, now)
-  saveState(state)
+  saveState(state, sessionId)
   return { posts: state.posts, mode: 'template', created, pending: [], used: state.used }
 }
 
@@ -152,11 +203,12 @@ export interface GenerateResult {
   usedFallback: boolean
 }
 
-/** 异步生成 llm 模式待补的动态：LLM 优先，失败/空内容降级模板；完成后合并落盘 */
+/** 异步生成 llm 模式待补的动态（会话感知）：LLM 优先，失败/空内容降级模板；完成后合并落盘到该角色 key */
 export async function generatePendingPosts(
   plan: RefreshPlan,
   taName: string,
   yourName: string,
+  sessionId?: string,
   now: number = Date.now(),
   rand: () => number = Math.random,
 ): Promise<GenerateResult> {
@@ -206,9 +258,9 @@ export async function generatePendingPosts(
   }
 
   // 合并落盘：重新读一次当前状态，避免覆盖别处写入
-  const current = loadState()
+  const current = loadState(sessionId)
   const posts = mergeNewPosts(current.posts, newPosts)
   const state: SpaceState = { posts, lastVisit: current.lastVisit ?? now, used }
-  saveState(state)
+  saveState(state, sessionId)
   return { posts: state.posts, created: newPosts.length, usedFallback }
 }

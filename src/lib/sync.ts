@@ -21,7 +21,8 @@ import {
   type Provider,
 } from './storage.ts'
 import { loadMemory, type MemoryItem } from './memory.ts'
-import { loadAnniversaries, getMainAnniversaryId, type Anniversary } from './anniversary.ts'
+import { collectAllAnniversaries, loadAnniversaries, getMainAnniversaryId, type Anniversary } from './anniversary.ts'
+import { collectAllSpacePosts } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
 
 /** 后端服务地址（本地写死一个出口常量：同步接口与会话接口共用，别各自写死） */
@@ -240,7 +241,11 @@ function readSpacePosts(): SpacePost[] {
   }
 }
 
-/** 把本地 localStorage 全量打包成同步载荷：settings 剔除 apiKey（key 不上云） */
+/**
+ * 把本地 localStorage 全量打包成同步载荷：settings 剔除 apiKey（key 不上云）。
+ * TASK-UI2 角色隔离后：纪念日/空间动态按会话分 key 了，这里汇总全部角色的数据（全局个人 + 各会话双人），
+ * 防止上传时只带全局 key、把云端里别的角色的数据冲成空。
+ */
 export function collectData(): SyncData {
   return {
     messages: loadMessages(),
@@ -250,9 +255,9 @@ export function collectData(): SyncData {
     aiProfile: loadAIProfile(),
     settings: sanitizeSettings(),
     sessionStart: getSessionStart(),
-    anniversaries: loadAnniversaries(),
+    anniversaries: collectAllAnniversaries(),
     mainAnniversary: getMainAnniversaryId(),
-    spacePosts: readSpacePosts(),
+    spacePosts: collectAllSpacePosts(),
   }
 }
 
@@ -375,6 +380,9 @@ export function applyData(data: SyncData): void {
   localStorage.setItem(SESSION_START_KEY, String(localStart > 0 ? localStart : cloudStart))
 
   // 纪念日 / 主纪念日 / 空间动态：本地空且云端有才用云端
+  // TASK-UI2 取舍：同步仍是全局合并（新设备把云端汇总数据写进全局 key，首次按会话读取时按各设备自己的
+  // 迁移标记分发给默认角色；个人节日留在全局）。好处是绝不丢数据、不报错；代价是跨设备角色归属不完全精确，
+  // 云端汇总里的双人纪念日会被新设备认到「第一个会话」。角色级精确同步留到后续再做。
   if (loadAnniversaries().length === 0 && Array.isArray(d.anniversaries) && d.anniversaries.length > 0) {
     localStorage.setItem(ANNIVERSARIES_KEY, JSON.stringify(d.anniversaries))
   }

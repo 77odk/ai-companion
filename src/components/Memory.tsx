@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   anniversaryColorIndex,
   formatCountdown,
+  getAnniversaries,
   getDefaultAnniversary,
-  loadAnniversaries,
   resolveMainAnniversary,
   type Anniversary,
 } from '../lib/anniversary'
@@ -286,18 +286,23 @@ export default function Memory({ onOpenAnniversary, onOpenWeekly, onOpenSpaceFor
   }, [])
 
   // 纪念日：用户亲手填的「重要的日子」，主展示计时显示在小卡片上，聊天时注入让 TA 记得。
-  // 首次进入一条都没有时，用 getFirstSeen() 生成默认「认识纪念日」（只在没发过默认时给一次，删光了不复活）。
+  // 会话感知（TASK-UI2）：个人节日 + 当前角色双人节日并集；首次一条都没有时，
+  // 用 getFirstSeen() 生成默认「认识纪念日」（只在没发过默认时给一次，删光了不复活）。
+  const anniversarySid = activeSessionId || undefined
   const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() => {
-    const list = loadAnniversaries()
+    const list = getAnniversaries(anniversarySid)
     if (list.length === 0) {
-      const def = getDefaultAnniversary()
+      const def = getDefaultAnniversary(anniversarySid)
       if (def) return [def]
     }
     return list
   })
 
   // 主展示纪念日：记忆页小卡片上显示的那个（管理页可切换，null 默认取列表第一条）
-  const mainAnniversary = useMemo(() => resolveMainAnniversary(anniversaries), [anniversaries])
+  const mainAnniversary = useMemo(
+    () => resolveMainAnniversary(anniversaries, anniversarySid),
+    [anniversaries, anniversarySid],
+  )
 
   // 「TA 眼中的你」LLM 心里话：有配置才调，失败静默，同一批记忆只生成一次
   const [summary, setSummary] = useState<string | null>(null)
@@ -312,7 +317,7 @@ export default function Memory({ onOpenAnniversary, onOpenWeekly, onOpenSpaceFor
       const sid = getActiveSessionId()
       setItems(sid ? getMemoriesCache(sid) : loadMemory())
     }
-    const refreshAnniversaries = () => setAnniversaries(loadAnniversaries())
+    const refreshAnniversaries = () => setAnniversaries(getAnniversaries(getActiveSessionId() || undefined))
     window.addEventListener(MEMORY_UPDATED_EVENT, refresh)
     window.addEventListener(MEMORY_UPDATED_EVENT, refreshAnniversaries)
     // storage 事件跨页签才触发，同页签不触发，所以上面还得靠自定义事件

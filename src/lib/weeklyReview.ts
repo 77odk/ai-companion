@@ -5,6 +5,8 @@
 // 不依赖组件，可被 Node 脚本直接跑单测；localStorage 读写只在函数内。
 // 周记数据存 localStorage（一期不做后端）；生成走用户 key 非流式调用（调 API 在组件里做）。
 
+import { migrateGlobalToDefaultSession } from './roleData.ts'
+
 export interface WeeklyReply {
   content: string
   repliedAt: number
@@ -44,11 +46,22 @@ export interface WeeklyReview {
 }
 
 const WEEKLY_KEY = 'ai_companion_weekly_reviews'
+// TASK-UI2 角色隔离：按会话分 key（ai_companion_weekly_reviews_<sid>），无会话回落全局 key（兼容老逻辑）。
+const weeklyKey = (sessionId?: string) => (sessionId ? `${WEEKLY_KEY}_${sessionId}` : WEEKLY_KEY)
+/** 老全局周记已迁移到默认角色 key 的标记（防重复迁移） */
+const WEEKLY_MIGRATED_KEY = 'ai_companion_weekly_migrated'
 
-/** 读取全部周记：损坏/格式不对的条目被过滤；返回按 createdAt 降序 */
-export function getWeeklyReviews(): WeeklyReview[] {
+/** 首次按会话读取时，把老全局周记迁到「默认角色」名下（幂等，TASK-UI2） */
+function ensureSessionData(sessionId?: string): void {
+  if (!sessionId) return
+  migrateGlobalToDefaultSession(WEEKLY_KEY, weeklyKey, WEEKLY_MIGRATED_KEY)
+}
+
+/** 读取全部周记（会话感知）：有会话读角色 key（首次自动迁移老数据），无会话读全局 key。损坏/格式不对的条目被过滤；返回按 createdAt 降序 */
+export function getWeeklyReviews(sessionId?: string): WeeklyReview[] {
+  if (sessionId) ensureSessionData(sessionId)
   try {
-    const raw = localStorage.getItem(WEEKLY_KEY)
+    const raw = localStorage.getItem(weeklyKey(sessionId))
     if (!raw) return []
     const arr = JSON.parse(raw)
     if (!Array.isArray(arr)) return []
@@ -67,9 +80,9 @@ export function getWeeklyReviews(): WeeklyReview[] {
   }
 }
 
-/** 保存全部周记（纯本地，不进账号同步，所以不广播 dataChange） */
-export function saveWeeklyReviews(list: WeeklyReview[]): void {
-  localStorage.setItem(WEEKLY_KEY, JSON.stringify(Array.isArray(list) ? list : []))
+/** 保存全部周记到指定 store（缺省全局 key；纯本地，不进账号同步，所以不广播 dataChange） */
+export function saveWeeklyReviews(list: WeeklyReview[], sessionId?: string): void {
+  localStorage.setItem(weeklyKey(sessionId), JSON.stringify(Array.isArray(list) ? list : []))
 }
 
 /** 生成一条周记的本地 id */
@@ -80,20 +93,23 @@ export function newWeeklyReviewId(): string {
 /** 周记硬冷却：每 7 天周期 TA 仅产出 1 篇（冷却期零 token，时间没到不调模型） */
 export const WEEKLY_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000
 
-/** 是否需要生成新周记：没有周记 → true；最近一篇距今 ≥ 7 天 → true；否则 false */
-export function shouldGenerateWeekly(now: number = Date.now()): boolean {
-  const list = getWeeklyReviews()
+/** 是否需要生成新周记（会话感知）：没有周记 → true；最近一篇距今 ≥ 7 天 → true；否则 false */
+export function shouldGenerateWeekly(now: number = Date.now(), sessionId?: string): boolean {
+  const list = getWeeklyReviews(sessionId)
   if (list.length === 0) return true
   return now - list[0].createdAt >= WEEKLY_COOLDOWN_MS
 }
 
 /**
- * 冷却信息：能否生成 + 剩余时间文案。
+ * 冷却信息（会话感知）：能否生成 + 剩余时间文案。
  * 剩余时间格式「X天X小时」；不足 1 天显示「X小时X分钟」。
  * 与 shouldGenerateWeekly 判定一致（满 7 天 → canGenerate=true）。
  */
-export function cooldownInfo(now: number = Date.now()): { canGenerate: boolean; remainText: string } {
-  const list = getWeeklyReviews()
+export function cooldownInfo(
+  now: number = Date.now(),
+  sessionId?: string,
+): { canGenerate: boolean; remainText: string } {
+  const list = getWeeklyReviews(sessionId)
   if (list.length === 0) return { canGenerate: true, remainText: '' }
   const elapsed = now - list[0].createdAt
   if (elapsed >= WEEKLY_COOLDOWN_MS) return { canGenerate: true, remainText: '' }

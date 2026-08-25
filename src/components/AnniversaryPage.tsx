@@ -4,9 +4,9 @@ import {
   addAnniversary,
   anniversaryColorIndex,
   formatAnniversaryDate,
+  getAnniversaries,
   getMainAnniversaryId,
   isValidAnniversaryDate,
-  loadAnniversaries,
   removeAnniversary,
   resolveMainAnniversary,
   setMainAnniversaryId,
@@ -15,6 +15,7 @@ import {
   type CountMode,
 } from '../lib/anniversary'
 import { MEMORY_UPDATED_EVENT } from '../lib/memory'
+import { getActiveSessionId } from '../lib/sessionStore'
 
 /* ---- 线条图标（去 emoji，跟全站同一种描边风格） ---- */
 
@@ -66,9 +67,11 @@ interface Props {
   onBack: () => void
 }
 
-/** 纪念日管理页：主展示切换 + 添加/编辑/删除各种纪念日、生日 */
+/** 纪念日管理页：主展示切换 + 添加/编辑/删除各种纪念日、生日（TASK-UI2 会话感知 + 个人/双人） */
 export default function AnniversaryPage({ onBack }: Props) {
-  const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() => loadAnniversaries())
+  // 当前角色：个人节日存全局（不绑角色），双人节日存该角色 key；无会话回落全局（老逻辑）
+  const sid = getActiveSessionId() || undefined
+  const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() => getAnniversaries(sid))
 
   // 添加 / 编辑表单
   const [formMode, setFormMode] = useState<'idle' | 'add' | 'edit'>('idle')
@@ -77,16 +80,18 @@ export default function AnniversaryPage({ onBack }: Props) {
   const [date, setDate] = useState('')
   const [countMode, setCountMode] = useState<CountMode>('forward')
   const [color, setColor] = useState('warm-orange')
+  // 个人/双人：personal（自己的生日/节日，所有 TA 共享）→ 全局 key；couple（你们的日子）→ 当前角色 key
+  const [kind, setKind] = useState<'personal' | 'couple'>('couple')
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null)
 
   // 当前主展示：有主展示 id 用主展示，否则默认取列表第一条（跟记忆页小卡片一致）。
   // 每次渲染直接算：setMainAnniversaryId 广播后触发下面的事件刷新，重渲染即拿到最新主展示。
-  const mainDisplay = resolveMainAnniversary(anniversaries)
+  const mainDisplay = resolveMainAnniversary(anniversaries, sid)
 
-  // 数据变更自动刷新：记忆页/别处改了纪念日，进来立刻同步
+  // 数据变更自动刷新：记忆页/别处改了纪念日，进来立刻同步（会话感知）
   useEffect(() => {
     const refresh = () => {
-      setAnniversaries(loadAnniversaries())
+      setAnniversaries(getAnniversaries(getActiveSessionId() || undefined))
     }
     window.addEventListener(MEMORY_UPDATED_EVENT, refresh)
     window.addEventListener('storage', refresh)
@@ -103,12 +108,13 @@ export default function AnniversaryPage({ onBack }: Props) {
     setDate('')
     setCountMode('forward')
     setColor('warm-orange')
+    setKind('couple')
     setConfirmingDelete(null)
   }
 
   const handleSetMain = (id: string) => {
     if (mainDisplay?.id === id) return // 已经是主展示，不用重复设
-    setMainAnniversaryId(id)
+    setMainAnniversaryId(id, sid)
   }
 
   const startAdd = () => {
@@ -123,6 +129,7 @@ export default function AnniversaryPage({ onBack }: Props) {
     setDate(a.date)
     setCountMode(a.countMode ?? 'forward')
     setColor(a.color || 'warm-orange')
+    setKind(a.kind ?? 'couple')
     setFormMode('edit')
   }
 
@@ -131,13 +138,13 @@ export default function AnniversaryPage({ onBack }: Props) {
     const d = date.trim()
     if (!l || !isValidAnniversaryDate(d)) return
     if (formMode === 'edit' && editingId != null) {
-      setAnniversaries(updateAnniversary(editingId, l, d, { countMode, color }))
+      setAnniversaries(updateAnniversary(editingId, l, d, { countMode, color, kind }, sid))
     } else {
-      const next = addAnniversary(l, d, { countMode, color })
+      const next = addAnniversary(l, d, { countMode, color, kind }, sid)
       setAnniversaries(next)
       // 第一个纪念日：没设过主展示就自动设成主展示，小卡片直接能看到
-      if (getMainAnniversaryId() == null && next.length === 1) {
-        setMainAnniversaryId(next[0].id)
+      if (getMainAnniversaryId(sid) == null && next.length === 1) {
+        setMainAnniversaryId(next[0].id, sid)
       }
     }
     resetForm()
@@ -145,10 +152,10 @@ export default function AnniversaryPage({ onBack }: Props) {
 
   const handleDelete = (id: string) => {
     const wasMain = mainDisplay?.id === id
-    setAnniversaries(removeAnniversary(id))
+    setAnniversaries(removeAnniversary(id, sid))
     if (wasMain) {
       // 删的是主展示 → 清掉主展示 id，回落到默认取列表第一条
-      setMainAnniversaryId(null)
+      setMainAnniversaryId(null, sid)
     }
     setConfirmingDelete(null)
   }
@@ -220,6 +227,9 @@ export default function AnniversaryPage({ onBack }: Props) {
                       <span className="anniversary-page-date">{formatAnniversaryDate(a.date)}</span>
                       <span className={`anniversary-mode-tag${a.countMode === 'countdown' ? ' is-countdown' : ''}`}>
                         {a.countMode === 'countdown' ? '倒计时' : '正计时'}
+                      </span>
+                      <span className={`anniversary-kind-tag${a.kind === 'personal' ? ' is-personal' : ''}`}>
+                        {a.kind === 'personal' ? '个人' : '双人'}
                       </span>
                     </span>
                   </div>
@@ -315,6 +325,29 @@ export default function AnniversaryPage({ onBack }: Props) {
                     onChange={() => setCountMode('countdown')}
                   />
                   倒计时（还剩 X 天）
+                </label>
+              </div>
+            </div>
+            <div className="anniversary-form-mode">
+              <span className="anniversary-form-label">类型</span>
+              <div className="anniversary-mode-options">
+                <label className={`anniversary-mode-option${kind === 'couple' ? ' active' : ''}`}>
+                  <input
+                    type="radio"
+                    name="ann-kind"
+                    checked={kind === 'couple'}
+                    onChange={() => setKind('couple')}
+                  />
+                  双人（你们的日子，只属于当前 TA）
+                </label>
+                <label className={`anniversary-mode-option${kind === 'personal' ? ' active' : ''}`}>
+                  <input
+                    type="radio"
+                    name="ann-kind"
+                    checked={kind === 'personal'}
+                    onChange={() => setKind('personal')}
+                  />
+                  个人（自己的生日、节日，所有 TA 都知道）
                 </label>
               </div>
             </div>

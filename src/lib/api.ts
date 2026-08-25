@@ -1,7 +1,7 @@
 // OpenAI 兼容协议 · SSE 流式聊天封装
 // 纯前端实现：浏览器直连模型 API，Key 不经过任何服务器
 
-import { loadAnniversaries } from './anniversary.ts'
+import { getAnniversaries } from './anniversary.ts'
 import type { Anniversary } from './anniversary.ts'
 import { getFirstSeen } from './storage.ts'
 import type { ModelSettings } from './storage.ts'
@@ -176,8 +176,9 @@ export function buildSystemPrompt(persona?: string, aiName?: string, now?: numbe
     prompt = `${nameLine}${DEFAULT_IDENTITY}\n\n${CORE_RULES}\n\n${DEMO_CONVERSATION}`
   }
   // 认识天数 + 纪念日注入：时间之后、人设之前；没有数据就不占这一行
+  // 纪念日按当前角色读（TASK-UI2）：个人节日 + 该角色的双人节日，绝不串读别的角色
   const relationshipBlock = buildRelationshipBlock(now, sessionId)
-  const anniversaryBlock = buildAnniversaryBlock(loadAnniversaries())
+  const anniversaryBlock = buildAnniversaryBlock(getAnniversaries(sessionId))
   let body: string
   if (relationshipBlock && anniversaryBlock) body = `${relationshipBlock}\n${anniversaryBlock}\n\n${prompt}`
   else if (relationshipBlock) body = `${relationshipBlock}\n\n${prompt}`

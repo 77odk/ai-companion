@@ -206,8 +206,8 @@ export default function AISpace({ onBack, onGoMine }: Props) {
   // 今天（日历高亮用）：挂载时定一次即可，跨天可随重渲染刷新
   const [todayKey] = useState<string>(() => dayKey(Date.now()))
 
-  // 进空间先立即显示已有动态（不阻塞），需要补的新动态异步生成、写完自动追加
-  const [posts, setPosts] = useState<SpacePost[]>(() => loadCurrentPosts())
+  // 进空间先立即显示已有动态（不阻塞），需要补的新动态异步生成、写完自动追加（TASK-UI2 按角色隔离）
+  const [posts, setPosts] = useState<SpacePost[]>(() => loadCurrentPosts(sessionId || undefined))
   const [hint, setHint] = useState<string | null>(null)
   // 刷新对话二次确认：true = 已展开确认面板，等用户确认
   const [confirmRefresh, setConfirmRefresh] = useState(false)
@@ -236,7 +236,7 @@ export default function AISpace({ onBack, onGoMine }: Props) {
         plan.started = true
         generatingRef.current = true
         setPendingLlm(true)
-        void generatePendingPosts(plan, ai.nickname, yourName)
+        void generatePendingPosts(plan, ai.nickname, yourName, sessionId || undefined)
           .then((res) => {
             if (cancelledRef.current) return
             setPosts(res.posts)
@@ -249,14 +249,14 @@ export default function AISpace({ onBack, onGoMine }: Props) {
           })
       }
     },
-    [ai.nickname, yourName, flashHint],
+    [ai.nickname, yourName, flashHint, sessionId],
   )
 
   // 进入页面即刷新：已有动态立即显示，LLM 补的新动态异步追加
   useEffect(() => {
     cancelledRef.current = false
     if (!planRef.current) {
-      planRef.current = refreshSpace(ai.nickname, yourName)
+      planRef.current = refreshSpace(ai.nickname, yourName, Date.now(), sessionId || undefined)
     }
     applyPlan(planRef.current)
     return () => {
@@ -265,7 +265,7 @@ export default function AISpace({ onBack, onGoMine }: Props) {
   }, [applyPlan, ai.nickname, yourName])
 
   const handleRefresh = () => {
-    const plan = refreshSpace(ai.nickname, yourName)
+    const plan = refreshSpace(ai.nickname, yourName, Date.now(), sessionId || undefined)
     planRef.current = plan
     applyPlan(plan)
     if (plan.pending.length === 0 && plan.created === 0) {

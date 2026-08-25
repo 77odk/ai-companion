@@ -91,7 +91,9 @@ interface Props {
 }
 
 export default function WeeklyPage({ onBack, onGoSettings }: Props) {
-  const [reviews, setReviews] = useState<WeeklyReview[]>(() => getWeeklyReviews())
+  // TASK-UI2 会话感知：周记按当前角色隔离；无会话回落全局（老逻辑）
+  const sid = getActiveSessionId() || undefined
+  const [reviews, setReviews] = useState<WeeklyReview[]>(() => getWeeklyReviews(sid))
   const [view, setView] = useState<'list' | 'detail'>('list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -114,7 +116,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
 
   const settings = loadSettings()
   const hasKey = Boolean(settings.apiKey?.trim() && settings.baseUrl?.trim() && settings.model?.trim())
-  const cooldown = cooldownInfo(Date.now())
+  const cooldown = cooldownInfo(Date.now(), sid)
   const canGenerate = cooldown.canGenerate
 
   // 批阅实际生效模式：全局慢信开启时强制封存
@@ -149,7 +151,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   // 冷却期直接拦截：canGenerate=false 时不进入（UI 也禁用了按钮），零 token。
   const handleGenerate = async () => {
     if (generating) return
-    if (!cooldownInfo().canGenerate) return
+    if (!cooldownInfo(Date.now(), sid).canGenerate) return
     const s = loadSettings()
     if (!s.apiKey?.trim() || !s.baseUrl?.trim() || !s.model?.trim()) {
       setGenError('还没接上大脑，去「我的」页填一下 API Key 就能写周记了')
@@ -172,7 +174,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
       const newMemories = (sid ? getMemoriesCache(sid) : loadMemory())
         .filter((m) => m.createdAt >= week.startTs && m.createdAt <= week.endTs)
         .map((m) => m.text)
-      const curReviews = getWeeklyReviews()
+      const curReviews = getWeeklyReviews(sid)
       const lastReply = curReviews[0]?.myReply?.content
       // 封存留言：下一篇周记生成时一并完整回信
       const pending = getPendingReplies(curReviews)
@@ -218,7 +220,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         setJustReplied(true)
       }
       const next = [review, ...answered]
-      saveWeeklyReviews(next)
+      saveWeeklyReviews(next, sid)
       setReviews(next)
       setSelectedId(review.id)
       setView('detail')
@@ -239,7 +241,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
       const next = reviews.map((r) =>
         r.id === selectedReview.id ? { ...r, replies: [...(r.replies ?? []), pending] } : r,
       )
-      saveWeeklyReviews(next)
+      saveWeeklyReviews(next, sid)
       setReviews(next)
       setHint(SUCCESS_SEALED)
       setEditingReply(false)
@@ -251,7 +253,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     const base = reviews.map((r) =>
       r.id === selectedReview.id ? { ...r, myReply: { content: t, repliedAt: now } } : r,
     )
-    saveWeeklyReviews(base)
+    saveWeeklyReviews(base, sid)
     setReviews(base)
     setEditingReply(false)
     setReplyText('')
@@ -275,7 +277,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
           ? { ...r, myReply: { content: t, repliedAt: now, taReply: clean, taReplyFailed: false } }
           : r,
       )
-      saveWeeklyReviews(withReply)
+      saveWeeklyReviews(withReply, sid)
       setReviews(withReply)
     } catch {
       // 无 key/429/网络 → 批注仍保存，回复区显示兜底文案，不阻塞
@@ -284,7 +286,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
           ? { ...r, myReply: { content: t, repliedAt: now, taReplyFailed: true } }
           : r,
       )
-      saveWeeklyReviews(failed)
+      saveWeeklyReviews(failed, sid)
       setReviews(failed)
     } finally {
       setTaReplying(false)

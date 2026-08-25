@@ -31,6 +31,7 @@ import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
 import { getMilestoneStatus, markMilestoneShown } from '../lib/milestone'
+import { getWeeklyReviews } from '../lib/weeklyReview'
 import MilestoneCard from './MilestoneCard'
 
 interface Props {
@@ -306,13 +307,22 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
           '关于对方你已经记住的事实：\n' + memory.map((m) => `- ${toPromptPerspective(m.text)}`).join('\n'),
       })
       // 这次注入 = 提起了这些记忆：非重要条目刷新「最近提起」活跃度；不广播（频繁调用会让记忆页跟着刷新）。
-      // 有会话刷新会话缓存里的活跃度，无会话刷新本地记忆。
+      // 组合读取里既有全局记忆又有当前会话记忆：两个 store 都 touch 一遍（find 不到自然跳过，双源都不漏）。
       const now = Date.now()
       for (const m of memory) {
         if (m.pinned) continue
         if (activeSessionId) touchMemoryCache(activeSessionId, m.id, now)
-        else touchMemory(m.id, now)
+        touchMemory(m.id, now)
       }
+    }
+    // TASK-UI2 相与书注入：当前角色最近一篇周记（若有）给 TA 作「记忆里的信」——
+    // 只在聊天上下文里提一句标题+周数，不串读别的角色；无周记不占这一行。
+    const weeklyList = getWeeklyReviews(activeSessionId || undefined)
+    if (weeklyList.length > 0) {
+      apiMessages.push({
+        role: 'system',
+        content: `你最近写给对方的周记是「${weeklyList[0].title}」（${weeklyList[0].weekLabel}）。对方要是提起周记，就照这篇的语气和内容回应。`,
+      })
     }
     // TASK-LM1 显式指令/反问强化：追加系统消息让模型也输出记忆标记（与保底写入去重，不重复建条目）
     if (memInstr.isInstruction) {

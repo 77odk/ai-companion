@@ -8,6 +8,7 @@
 import { MEMORY_UPDATED_EVENT } from './memory.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { getFirstSeen } from './storage.ts'
+import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
 
 /** 计时模式：正计时（已经 X 天）| 倒计时（还剩 X 天） */
 export type CountMode = 'forward' | 'countdown'
@@ -24,11 +25,25 @@ export interface Anniversary {
   countMode?: CountMode
   /** 主题色（可选，管理页可设；缺省用默认暖橘） */
   color?: string
+  /**
+   * 个人 vs 双人：personal（用户生日/自身节日）存全局纪念日 key（不绑角色）；
+   * couple（双人纪念日）存角色 key。老数据缺省 = couple（都是双人）。
+   */
+  kind?: 'personal' | 'couple'
 }
 
+// TASK-UI2 角色隔离：按会话分 key（ai_companion_anniversaries_<sid>），无会话回落全局 key（兼容老逻辑）。
+// 全局 key 现在装「个人节日」（kind=personal）+ 尚未迁移的旧双人数据；会话 key 装该角色的双人纪念日。
 const ANNIVERSARIES_KEY = 'ai_companion_anniversaries'
 /** 主展示纪念日 id（记忆页小卡片显示哪个；null = 默认取列表第一条） */
 const MAIN_ANNIVERSARY_KEY = 'ai_companion_main_anniversary'
+/** 老全局数据已迁移到默认角色 key 的标记（防重复迁移） */
+const ANNIVERSARIES_MIGRATED_KEY = 'ai_companion_anniv_migrated'
+
+const anniversariesKey = (sessionId?: string) =>
+  sessionId ? `${ANNIVERSARIES_KEY}_${sessionId}` : ANNIVERSARIES_KEY
+const mainAnniversaryKey = (sessionId?: string) =>
+  sessionId ? `${MAIN_ANNIVERSARY_KEY}_${sessionId}` : MAIN_ANNIVERSARY_KEY
 
 /** 可选主题色：4-6 个柔和色块（暖橘/暖黄/暖粉/暖蓝/暖绿），跟记忆页 topic-soft 同色系 */
 export const ANNIVERSARY_COLORS: ReadonlyArray<{ key: string; label: string }> = [
@@ -63,10 +78,10 @@ function broadcastAnniversariesUpdated(): void {
   window.dispatchEvent(new Event(MEMORY_UPDATED_EVENT))
 }
 
-/** 读取全部纪念日；数据损坏/格式不对就返回空数组 */
-export function loadAnniversaries(): Anniversary[] {
+/** 内部原始读取：只读某一个 store（全局 或 某会话 key），不触发迁移、不并集 */
+function readRaw(sessionId?: string): Anniversary[] {
   try {
-    const raw = localStorage.getItem(ANNIVERSARIES_KEY)
+    const raw = localStorage.getItem(anniversariesKey(sessionId))
     if (!raw) return []
     const arr = JSON.parse(raw)
     if (!Array.isArray(arr)) return []
@@ -79,21 +94,102 @@ export function loadAnniversaries(): Anniversary[] {
   }
 }
 
-/** 保存全部纪念日（调用方负责广播） */
-export function saveAnniversaries(list: Anniversary[]): void {
-  localStorage.setItem(ANNIVERSARIES_KEY, JSON.stringify(list))
+/**
+ * 首次按会话读取时，把老全局数据迁到「默认角色」名下（TASK-UI2）。
+ * 按 kind 拆：personal（用户自己生日/节日）留在全局 key（所有角色共享）；
+ * couple / 无 kind 的旧数据（默认双人）整批迁到默认角色 key。
+ * 幂等：打过迁移标记 / 没有默认会话 → 直接跳过；全局没数据不打标记，云端同步下来的数据以后还能迁移。
+ */
+function ensureSessionData(sessionId?: string): void {
+  if (!sessionId) return
+  // 主展示纪念日 id 同样从老全局 key 挪到默认角色 key
+  try {
+    const rawMain = localStorage.getItem(MAIN_ANNIVERSARY_KEY)
+    if (rawMain != null) {
+      const defSid = getDefaultSessionId()
+      if (defSid && localStorage.getItem(mainAnniversaryKey(defSid)) == null) {
+        localStorage.setItem(mainAnniversaryKey(defSid), rawMain)
+      }
+    }
+  } catch {
+    // 迁移失败不阻塞
+  }
+  if (localStorage.getItem(ANNIVERSARIES_MIGRATED_KEY) != null) return
+  try {
+    const defaultSid = getDefaultSessionId()
+    if (!defaultSid) return
+    const globalList = readRaw(undefined)
+    if (globalList.length === 0) return // 全局没数据：不打标记，等云端数据同步下来再迁
+    const personal = globalList.filter((a) => a.kind === 'personal')
+    const couple = globalList.filter((a) => a.kind !== 'personal')
+    localStorage.setItem(ANNIVERSARIES_KEY, JSON.stringify(personal))
+    if (couple.length > 0) {
+      localStorage.setItem(anniversariesKey(defaultSid), JSON.stringify([...couple, ...readRaw(defaultSid)]))
+    }
+    localStorage.setItem(ANNIVERSARIES_MIGRATED_KEY, '1')
+  } catch {
+    // 迁移失败不阻塞：数据留在全局 key，遗留模式仍可读，下次再试
+  }
+}
+
+/**
+ * 读取全部纪念日（TASK-UI2 会话感知）：
+ * - 无 sessionId → 只读全局 key（老逻辑，兼容遗留模式/同步/测试）
+ * - 有 sessionId → 个人节日（全局 key）+ 当前角色双人节日（会话 key）并集，按 createdAt 倒序
+ * 数据损坏/格式不对就返回空数组。
+ */
+export function getAnniversaries(sessionId?: string): Anniversary[] {
+  if (sessionId) ensureSessionData(sessionId)
+  const global = readRaw(undefined)
+  if (!sessionId) return global
+  return [...global, ...readRaw(sessionId)].sort((a, b) => b.createdAt - a.createdAt)
+}
+
+/** 读取全部纪念日（无会话全局读取；保留旧名字，兼容老调用/同步/测试） */
+export function loadAnniversaries(): Anniversary[] {
+  return getAnniversaries()
+}
+
+/**
+ * 云端同步用：汇总全部角色的纪念日（全局个人 + 各会话双人），保证角色隔离后云端仍持有完整数据。
+ * 同步本身仍是全局合并（applyData 写全局 key），这里只是防止上传时把角色数据清空。
+ */
+export function collectAllAnniversaries(): Anniversary[] {
+  const out = [...readRaw(undefined)]
+  for (const s of getSessionsCache()) {
+    const sid = String(s.id)
+    if (sid) out.push(...readRaw(sid))
+  }
+  return out
+}
+
+/** 保存全部纪念日到指定 store（缺省全局 key；调用方负责广播） */
+export function saveAnniversaries(list: Anniversary[], sessionId?: string): void {
+  localStorage.setItem(anniversariesKey(sessionId), JSON.stringify(Array.isArray(list) ? list : []))
   notifyDataChanged()
 }
 
-/** 新增一条纪念日：新条目放最前，保存并广播，返回更新后的全部纪念日 */
+/** 某条纪念日所在的 store 的 key；找不到返回 null（null = 不存在，区别于全局 key） */
+function storeKeyOf(id: string, sessionId?: string): string | null {
+  if (sessionId && readRaw(sessionId).some((a) => a.id === id)) return anniversariesKey(sessionId)
+  if (readRaw(undefined).some((a) => a.id === id)) return ANNIVERSARIES_KEY
+  return null
+}
+
+/** 新增一条纪念日（TASK-UI2 路由）：kind=personal 存全局 key，couple 存会话 key（无会话回落全局）。
+ * 返回更新后的完整展示列表（个人 + 当前角色双人）。 */
 export function addAnniversary(
   label: string,
   date: string,
-  fields?: { countMode?: CountMode; color?: string },
+  fields?: { countMode?: CountMode; color?: string; kind?: 'personal' | 'couple' },
+  sessionId?: string,
 ): Anniversary[] {
   const l = label.trim()
   const d = date.trim()
-  if (!l || !isValidAnniversaryDate(d)) return loadAnniversaries()
+  if (!l || !isValidAnniversaryDate(d)) return getAnniversaries(sessionId)
+  const kind = fields?.kind ?? 'couple'
+  const targetSid = kind === 'personal' ? undefined : sessionId
+  // 双人（缺省）不写 kind 字段——老数据没这个字段，保持存储形状不变；只有个人节日显式标 kind=personal
   const item: Anniversary = {
     id: newId(),
     label: l,
@@ -101,65 +197,84 @@ export function addAnniversary(
     createdAt: Date.now(),
     ...(fields?.countMode === 'countdown' ? { countMode: 'countdown' as CountMode } : {}),
     ...(fields?.color?.trim() ? { color: fields.color.trim() } : {}),
+    ...(kind === 'personal' ? { kind: 'personal' as const } : {}),
   }
-  const next = [item, ...loadAnniversaries()]
-  saveAnniversaries(next)
+  saveAnniversaries([item, ...readRaw(targetSid)], targetSid)
   broadcastAnniversariesUpdated()
-  return next
+  return getAnniversaries(sessionId)
 }
 
-/** 更新一条纪念日的名称/日期/计时模式/主题色；找不到 id 就原样返回。保存并广播，返回更新后的全部纪念日 */
+/** 更新一条纪念日的名称/日期/计时模式/主题色；kind 变了会跨 store 挪动（个人 ⇄ 双人）。保存并广播，返回更新后的完整展示列表 */
 export function updateAnniversary(
   id: string,
   label: string,
   date: string,
-  fields?: { countMode?: CountMode; color?: string },
+  fields?: { countMode?: CountMode; color?: string; kind?: 'personal' | 'couple' },
+  sessionId?: string,
 ): Anniversary[] {
   const l = label.trim()
   const d = date.trim()
-  if (!l || !isValidAnniversaryDate(d)) return loadAnniversaries()
-  const next = loadAnniversaries().map((a) => {
-    if (a.id !== id) return a
-    if (fields == null) return { ...a, label: l, date: d }
-    const out: Anniversary = { ...a, label: l, date: d }
-    if (fields.countMode === 'countdown') out.countMode = 'countdown'
-    else delete out.countMode
-    if (fields.color?.trim()) out.color = fields.color.trim()
-    else delete out.color
-    return out
-  })
-  saveAnniversaries(next)
+  if (!l || !isValidAnniversaryDate(d)) return getAnniversaries(sessionId)
+  const currentKey = storeKeyOf(id, sessionId)
+  if (currentKey == null) return getAnniversaries(sessionId)
+  const currentSid = currentKey === ANNIVERSARIES_KEY ? undefined : sessionId
+  const list = readRaw(currentSid)
+  const idx = list.findIndex((a) => a.id === id)
+  if (idx < 0) return getAnniversaries(sessionId)
+  const newKind = fields?.kind ?? list[idx].kind ?? 'couple'
+  const newSid = newKind === 'personal' ? undefined : sessionId
+  const updated: Anniversary = { ...list[idx], label: l, date: d }
+  // 个人显式标 kind=personal；双人（含老数据无字段）不写 kind，保持存储形状兼容
+  if (newKind === 'personal') updated.kind = 'personal'
+  else delete updated.kind
+  if (fields != null) {
+    if (fields.countMode === 'countdown') updated.countMode = 'countdown'
+    else delete updated.countMode
+    if (fields.color?.trim()) updated.color = fields.color.trim()
+    else delete updated.color
+  }
+  if (newSid === currentSid) {
+    list[idx] = updated
+    saveAnniversaries(list, newSid)
+  } else {
+    // 个人 ⇄ 双人：从旧 store 移除，写入新 store
+    saveAnniversaries(list.filter((x) => x.id !== id), currentSid)
+    saveAnniversaries([updated, ...readRaw(newSid)], newSid)
+  }
   broadcastAnniversariesUpdated()
-  return next
+  return getAnniversaries(sessionId)
 }
 
-/** 删除一条纪念日；找不到 id 就原样返回。保存并广播，返回更新后的全部纪念日 */
-export function removeAnniversary(id: string): Anniversary[] {
-  const next = loadAnniversaries().filter((a) => a.id !== id)
-  saveAnniversaries(next)
-  broadcastAnniversariesUpdated()
-  return next
+/** 删除一条纪念日（按所在 store 定位）；找不到 id 就原样返回。保存并广播，返回更新后的完整展示列表 */
+export function removeAnniversary(id: string, sessionId?: string): Anniversary[] {
+  const currentKey = storeKeyOf(id, sessionId)
+  if (currentKey != null) {
+    const currentSid = currentKey === ANNIVERSARIES_KEY ? undefined : sessionId
+    saveAnniversaries(readRaw(currentSid).filter((a) => a.id !== id), currentSid)
+    broadcastAnniversariesUpdated()
+  }
+  return getAnniversaries(sessionId)
 }
 
 // ---- 主展示（记忆页小卡片上显示哪个纪念日） ----
 
 /**
- * 读取主展示纪念日 id：null = 未设置（默认取列表第一条）。
+ * 读取主展示纪念日 id（会话感知）：null = 未设置（默认取列表第一条）。
  * 读不到 / 存坏返回 null，不影响缺省行为。
  */
-export function getMainAnniversaryId(): string | null {
+export function getMainAnniversaryId(sessionId?: string): string | null {
   try {
-    return localStorage.getItem(MAIN_ANNIVERSARY_KEY) || null
+    return localStorage.getItem(mainAnniversaryKey(sessionId)) || null
   } catch {
     return null
   }
 }
 
-/** 设置主展示纪念日 id；传 null/空串清除（回到默认取列表第一条）。保存并广播，让记忆页小卡片跟着刷新。 */
-export function setMainAnniversaryId(id: string | null): void {
+/** 设置主展示纪念日 id（会话感知）；传 null/空串清除（回到默认取列表第一条）。保存并广播，让记忆页小卡片跟着刷新。 */
+export function setMainAnniversaryId(id: string | null, sessionId?: string): void {
   try {
-    if (id == null || id === '') localStorage.removeItem(MAIN_ANNIVERSARY_KEY)
-    else localStorage.setItem(MAIN_ANNIVERSARY_KEY, id)
+    if (id == null || id === '') localStorage.removeItem(mainAnniversaryKey(sessionId))
+    else localStorage.setItem(mainAnniversaryKey(sessionId), id)
   } catch {
     // 存不下不影响功能：主展示缺省取第一条
   }
@@ -167,10 +282,10 @@ export function setMainAnniversaryId(id: string | null): void {
   notifyDataChanged()
 }
 
-/** 解析主展示纪念日：有主展示 id 且还在列表里 → 用那条；否则（含 id 指向已删除条目）取列表第一条；空列表 → null */
-export function resolveMainAnniversary(list: Anniversary[]): Anniversary | null {
+/** 解析主展示纪念日（会话感知）：有主展示 id 且还在列表里 → 用那条；否则（含 id 指向已删除条目）取列表第一条；空列表 → null */
+export function resolveMainAnniversary(list: Anniversary[], sessionId?: string): Anniversary | null {
   if (!Array.isArray(list) || list.length === 0) return null
-  const mainId = getMainAnniversaryId()
+  const mainId = getMainAnniversaryId(sessionId)
   if (mainId) {
     const found = list.find((a) => a.id === mainId)
     if (found) return found
@@ -304,16 +419,17 @@ export function buildDefaultAnniversary(firstSeen: number, now: number = Date.no
 }
 
 /**
- * 首次进入（还没有任何纪念日、也从没存过纪念日数据）时，用 getFirstSeen() 生成并保存默认「认识纪念日」；
- * 只要 localStorage 里出现过纪念日 key——哪怕是空数组（用户删光过）——就不再生成（删光了不自动复活）。
+ * 首次进入（该 store 还没有任何纪念日、也从没存过纪念日数据）时，用 getFirstSeen() 生成并保存默认「认识纪念日」；
+ * 只要 localStorage 里出现过该纪念日 key——哪怕是空数组（用户删光过）——就不再生成（删光了不自动复活）。
+ * 无会话缺省写全局 key（老逻辑）；有会话时默认双人生成到会话 key。
  */
-export function getDefaultAnniversary(): Anniversary | null {
+export function getDefaultAnniversary(sessionId?: string): Anniversary | null {
   try {
-    if (localStorage.getItem(ANNIVERSARIES_KEY) != null) return null
+    if (localStorage.getItem(anniversariesKey(sessionId)) != null) return null
   } catch {
     // 读不到 key 按首次处理
   }
   const a = buildDefaultAnniversary(getFirstSeen())
-  saveAnniversaries([a])
+  saveAnniversaries([a], sessionId)
   return a
 }

@@ -259,23 +259,22 @@ ok(upserted2 != null && getMemoriesCache('7').length === 2, '不同内容 upsert
 touchMemoryCache('7', upserted2!.id, 500)
 eq(getMemoriesCache('7').find((m) => m.id === upserted2!.id)!.lastMentionedAt, 500, 'touch 更新最近提起')
 
-console.log('\n[12] recallSessionMemories：有会话读缓存，无会话兜底本地')
+console.log('\n[12] recallSessionMemories：组合读取（全局记忆 + 当前会话），绝不串读别的会话')
 resetStore()
 saveMemoriesCache('7', [
   { id: '1', text: '对方喜欢猫', createdAt: 1, topic: '宠物' },
   { id: '2', text: '对方的工作是程序员', createdAt: 2, topic: '工作' },
 ])
 const withSession = recallSessionMemories('7', '我家的猫好可爱', { now: 1000 })
-eq(withSession.length, 1, '有会话：只从会话缓存召回相关的')
-eq(withSession[0].id, '1', '命中主题「宠物」')
+eq(withSession.some((m) => m.id === '1'), true, '有会话：命中当前会话缓存「宠物」')
 const withoutSessionEmpty = recallSessionMemories('', '我家的猫好可爱', { now: 1000 })
 eq(withoutSessionEmpty.length, 0, '无会话且本地空 → 召回空')
 localStorage.setItem('ai_companion_memory', JSON.stringify([{ id: 'loc', text: '对方不吃辣', createdAt: 1, topic: '饮食' }]))
 const withoutSession = recallSessionMemories('', '这家店好辣', { now: 1000 })
-eq(withoutSession.length, 1, '无会话：兜底本地记忆')
-eq(withoutSession[0].id, 'loc', '本地记忆命中')
+eq(withoutSession.some((m) => m.id === 'loc'), true, '无会话：兜底本地记忆')
 const otherSession = recallSessionMemories('8', '我家的猫好可爱', { now: 1000 })
-eq(otherSession.length, 0, '会话 8 缓存空 → 读不到会话 7 的记忆')
+eq(otherSession.some((m) => m.id === '1'), false, '会话 8 读不到会话 7 的记忆（严禁串读）')
+eq(otherSession.some((m) => m.id === 'loc'), true, '会话 8 能看到全局记忆（组合读取）')
 
 console.log('\n[13] 未读红点（S1）：getLastRead / markRead / getUnreadCount')
 resetStore()
