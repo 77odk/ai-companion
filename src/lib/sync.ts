@@ -152,7 +152,7 @@ export interface Identity {
 }
 
 /** 发验证码（找回密码 reset / 注册 register），成功返回脱敏邮箱 */
-export async function verifySend(account: string, purpose: 'reset' | 'register' = 'reset'): Promise<string> {
+export async function verifySend(account: string, purpose: 'reset' | 'register' | 'verify' = 'reset'): Promise<string> {
   let resp: Response
   try {
     resp = await fetch(`${API_BASE}/api/verify/send`, {
@@ -184,8 +184,40 @@ export async function resetPassword(account: string, code: string, newPassword: 
   if (!resp.ok) throw new Error(await errorMessage(resp))
 }
 
-/** 登录后绑定新标识（邮箱/手机号） */
-export async function bindIdentity(type: 'email' | 'phone', value: string): Promise<void> {
+/** 老用户补验证邮箱：用验证码确认邮箱（2026-08-25） */
+export async function verifyConfirm(account: string, code: string): Promise<void> {
+  let resp: Response
+  try {
+    resp = await fetch(`${API_BASE}/api/verify/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account: account.trim(), code: code.trim() }),
+    })
+  } catch {
+    throw new Error('网络不通，连不上服务器，请检查网络后重试')
+  }
+  if (!resp.ok) throw new Error(await errorMessage(resp))
+}
+
+/** 查询当前账号邮箱验证状态（2026-08-25） */
+export async function getAccountStatus(): Promise<{ verified: boolean; email: string | null }> {
+  const token = getAccount()?.token
+  if (!token) throw new Error('还没登录')
+  let resp: Response
+  try {
+    resp = await fetch(`${API_BASE}/api/account/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  } catch {
+    throw new Error('网络不通，连不上服务器，请检查网络后重试')
+  }
+  if (!resp.ok) throw new Error(await errorMessage(resp))
+  const body = (await resp.json()) as { verified?: number; email?: string | null }
+  return { verified: !!body.verified, email: body.email ?? null }
+}
+
+/** 登录后绑定新标识（邮箱/手机号，需验证码） */
+export async function bindIdentity(type: 'email' | 'phone', value: string, code?: string): Promise<void> {
   const token = getAccount()?.token
   if (!token) throw new Error('还没登录')
   let resp: Response
@@ -193,7 +225,7 @@ export async function bindIdentity(type: 'email' | 'phone', value: string): Prom
     resp = await fetch(`${API_BASE}/api/account/bind`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ type, value: value.trim() }),
+      body: JSON.stringify({ type, value: value.trim(), code: (code || '').trim() }),
     })
   } catch {
     throw new Error('网络不通，连不上服务器，请检查网络后重试')

@@ -4,7 +4,7 @@
 // 登录状态不影响聊天：未登录照常用本地，登录只是多一层同步。
 
 import { useEffect, useState } from 'react'
-import { getAccount, syncNow, bindIdentity, getIdentities, type Account, type Identity } from '../lib/sync'
+import { getAccount, syncNow, bindIdentity, getIdentities, verifySend, verifyConfirm, getAccountStatus, type Account, type Identity } from '../lib/sync'
 import { getToken, logout } from '../lib/auth'
 import LoginForm from './LoginForm'
 import { hasLocalLegacyData, nextMigrationTitle, runLocalMigration, setLocalMigratedFlag } from '../lib/migrateLocal'
@@ -20,7 +20,13 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
   const [identities, setIdentities] = useState<Identity[]>([])
   const [bindType, setBindType] = useState<'email' | 'phone'>('email')
   const [bindValue, setBindValue] = useState('')
+  const [bindCode, setBindCode] = useState('')
   const [binding, setBinding] = useState(false)
+  const [verified, setVerified] = useState<boolean | null>(null)
+  const [verifyEmail, setVerifyEmail] = useState<string | null>(null)
+  const [verifyCode, setVerifyCode] = useState('')
+  const [sendingVerify, setSendingVerify] = useState(false)
+  const [confirmingVerify, setConfirmingVerify] = useState(false)
 
   // 手动把本地旧记录（B2c 前的 persona/聊天/记忆）带过来：用户主动触发，不检查云端会话数。
   // 只要本地有旧数据就建一个新会话搬过去；与 B2d 共用 migrateLocal 的逻辑，不重复实现。
@@ -80,6 +86,13 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
     getIdentities()
       .then((list) => { if (alive) setIdentities(list) })
       .catch(() => {})
+    getAccountStatus()
+      .then((st) => {
+        if (!alive) return
+        setVerified(st.verified)
+        setVerifyEmail(st.email)
+      })
+      .catch(() => {})
     return () => { alive = false }
   }, [account])
 
@@ -90,19 +103,62 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
       setError('填一下要绑定的邮箱或手机号')
       return
     }
+    if (bindType === 'email' && !bindCode.trim()) {
+      setError('绑定邮箱要先收验证码：点「发验证码」收邮件')
+      return
+    }
     setBinding(true)
     setError(null)
     setInfo(null)
     try {
-      await bindIdentity(bindType, v)
+      await bindIdentity(bindType, v, bindCode.trim())
       const list = await getIdentities()
       setIdentities(list)
       setBindValue('')
+      setBindCode('')
       setInfo(bindType === 'email' ? '邮箱已绑定' : '手机号已绑定')
     } catch (err) {
       setError(err instanceof Error ? err.message : '绑定失败，请稍后重试')
     } finally {
       setBinding(false)
+    }
+  }
+
+  const handleSendVerify = async () => {
+    if (sendingVerify) return
+    if (!verifyEmail && !account) return
+    // 用登录账号发补验证码（发到账号绑定的邮箱）
+    setSendingVerify(true)
+    setError(null)
+    setInfo(null)
+    try {
+      const sentTo = await verifySend(account!.account, 'verify')
+      setInfo(`验证码已发到 ${sentTo}，5 分钟内有效`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '发送失败，请稍后再试')
+    } finally {
+      setSendingVerify(false)
+    }
+  }
+
+  const handleConfirmVerify = async () => {
+    if (confirmingVerify) return
+    if (!verifyCode.trim()) {
+      setError('填一下邮件里的验证码')
+      return
+    }
+    setConfirmingVerify(true)
+    setError(null)
+    setInfo(null)
+    try {
+      await verifyConfirm(account!.account, verifyCode.trim())
+      setVerified(true)
+      setVerifyCode('')
+      setInfo('邮箱验证成功')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '验证失败，请稍后重试')
+    } finally {
+      setConfirmingVerify(false)
     }
   }
 
@@ -142,6 +198,34 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
           </div>
 
           <div className="field">
+            <label>邮箱验证</label>
+            {verified === null ? (
+              <p className="account-format-hint">检查中…</p>
+            ) : verified ? (
+              <p className="account-format-hint">✓ 邮箱已验证{verifyEmail ? `（${verifyEmail}）` : ''}</p>
+            ) : (
+              <div className="verify-row">
+                <input
+                  className="input"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="收邮件填 6 位验证码"
+                  value={verifyCode}
+                  onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ''))}
+                />
+                <button type="button" className="btn btn-ghost" onClick={handleSendVerify} disabled={sendingVerify}>
+                  {sendingVerify ? '发送中…' : '发验证码'}
+                </button>
+                <button type="button" className="btn btn-primary" onClick={handleConfirmVerify} disabled={confirmingVerify}>
+                  {confirmingVerify ? '验证中…' : '确认'}
+                </button>
+              </div>
+            )}
+            {verified === false && <p className="account-format-hint">验证一下邮箱，账号更安全，也证明是你本人。</p>}
+          </div>
+
+          <div className="field">
             <label>再绑一个（换绑/多方式登录）</label>
             <div className="bind-row">
               <select
@@ -162,11 +246,42 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
                   setBindValue(bindType === 'phone' ? e.target.value.replace(/\D/g, '').slice(0, 11) : e.target.value)
                 }
               />
+              {bindType === 'email' && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={sendingVerify}
+                  onClick={async () => {
+                    if (!bindValue.trim()) { setError('先填要绑定的邮箱'); return }
+                    setSendingVerify(true); setError(null); setInfo(null)
+                    try {
+                      const sentTo = await verifySend(bindValue.trim(), 'register')
+                      setInfo(`验证码已发到 ${sentTo}，5 分钟内有效`)
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : '发送失败，请稍后再试')
+                    } finally { setSendingVerify(false) }
+                  }}
+                >
+                  {sendingVerify ? '发送中…' : '发验证码'}
+                </button>
+              )}
               <button type="button" className="btn btn-ghost" onClick={handleBind} disabled={binding}>
                 {binding ? '绑定中…' : '绑定'}
               </button>
             </div>
-            <p className="account-format-hint">绑定后也能用这个方式登录，忘了密码还能收验证码找回。</p>
+            {bindType === 'email' && (
+              <input
+                className="input"
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="填绑定邮箱收到的验证码"
+                value={bindCode}
+                onChange={(e) => setBindCode(e.target.value.replace(/\D/g, ''))}
+                style={{ marginTop: 8 }}
+              />
+            )}
+            <p className="account-format-hint">绑定后也能用这个方式登录，忘了密码还能收验证码找回。绑邮箱要先收验证码。</p>
           </div>
 
           <div className="settings-actions">
