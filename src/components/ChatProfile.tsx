@@ -23,6 +23,7 @@ import { displaySessionName } from '../lib/sessionFlow'
 import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import DefaultAvatar from './DefaultAvatar'
 import SpaceChatLogs from './SpaceChatLogs'
+import ChatBgSetting from './ChatBgSetting'
 import SpaceLife from './SpaceLife'
 import { AIDetail } from './Settings'
 import { ChatIcon, EntryChevron, RefreshIcon, SparkleIcon } from './spaceIcons'
@@ -68,8 +69,8 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
   // 聊天记录子页数据：进资料卡时读一次（聊天页里消息不会在资料卡内变化）
   const [messages] = useState<StoredMessage[]>(() => (sessionId ? getMessagesCache(sessionId) : loadMessages()))
 
-  // 子页面路由：home 资料卡 / profile TA 的资料 / life TA 的生活 / chats 聊天记录
-  const [page, setPage] = useState<'home' | 'profile' | 'life' | 'chats'>('home')
+  // 子页面路由：home 资料卡 / profile TA 的资料 / life TA 的生活 / chats 聊天记录 / bg 聊天背景
+  const [page, setPage] = useState<'home' | 'profile' | 'life' | 'chats' | 'bg'>('home')
   const goHome = () => setPage('home')
 
   // 刷新对话：仅清当前对话上下文（TA 忘掉重来），聊天记录一条不删
@@ -86,6 +87,9 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
   // 子页面：整页替换（各自带返回条），资料卡 home 才是这层的主页
   if (page === 'profile') {
     return <AIDetail onBack={goHome} />
+  }
+  if (page === 'bg') {
+    return <ChatBgSetting sessionId={sessionId || undefined} onBack={goHome} />
   }
   if (page === 'chats') {
     return <SpaceChatLogs messages={messages} yourName={yourName} aiNickname={ai.nickname} onBack={goHome} />
@@ -180,6 +184,22 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
             <span className="ai-space-entry-main">
               <span className="ai-space-entry-title">聊天记录</span>
               <span className="ai-space-entry-sub">按日期归档，可回看</span>
+            </span>
+            <EntryChevron />
+          </button>
+
+          {/* 聊天背景（微信式全屏，2026-08-25 七七拍板） */}
+          <button type="button" className="ai-space-entry-row" onClick={() => setPage('bg')}>
+            <span className="ai-space-entry-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="2.5" />
+                <circle cx="9" cy="9" r="1.8" />
+                <path d="M4.5 18.5l5-5 3.5 3.5 3-3 3.5 3.5" />
+              </svg>
+            </span>
+            <span className="ai-space-entry-main">
+              <span className="ai-space-entry-title">聊天背景</span>
+              <span className="ai-space-entry-sub">换一张喜欢的图，全屏陪伴</span>
             </span>
             <EntryChevron />
           </button>

@@ -1,9 +1,10 @@
 // TA 的空间 · 动态生成引擎（纯逻辑核心）
 // 本文件零依赖、不碰 localStorage，方便被 Node 脚本直接跑单测。
-// 时间轴规则：
-//   首访（无 lastVisit）→ 预生成 3 条（往前推 40 分钟 / 3 小时 / 7 小时）
+// 时间轴规则（TASK_UI_BATCH2 限频后）：
+//   首访（无 lastVisit）→ 预生成 3 条（今天 2 条 + 昨天 1 条，保证每天 ≤2 条）
 //   距上次 ≥ 2 小时 → 补 1 条（时间戳=现在往前几分钟）
 //   距上次 ≥ 24 小时 → 补 2 条
+//   每天最多 2 条（自然日）：computeNewCount 按「今天已有条数」截断，advanceTimeline 兜底跳过多产日子
 //   总数上限 20 条，超出丢最旧
 // 模板去重：同一模板 30 天内不重复使用（按 kind 记录每个模板索引的最近使用时间）
 
@@ -20,6 +21,16 @@ export const KIND_LABEL: Record<SpaceKind, string> = {
   小确幸: '小确幸',
 }
 
+/** 动态下的一条评论（用户留言或 TA 回复） */
+export interface SpaceComment {
+  id: string
+  text: string
+  at: number
+  from: 'user' | 'ta'
+  /** TA 回复时指向所回的用户评论 id（TA 每条最多回 1 条，靠这个归属） */
+  replyTo?: string
+}
+
 export interface SpacePost {
   id: string
   at: number
@@ -27,6 +38,12 @@ export interface SpacePost {
   text: string
   /** 插画变体索引（生成时定好，保证每条动态配图固定） */
   art: number
+  /** 配图 dataURL（可选；纯文字动态不带） */
+  img?: string
+  /** 是否点过赞（可选，未点赞不存或 false） */
+  liked?: boolean
+  /** 评论列表（可选；无评论不存） */
+  comments?: SpaceComment[]
 }
 
 export interface TemplateVar {
@@ -58,7 +75,7 @@ export const TEMPLATES: Record<SpaceKind, string[]> = {
     '偷偷研究了一晚上怎么把表格整理得更顺手，等你下次丢文件给我，应该能快一点了。',
     '对着文档啃了半天，终于弄明白一个小细节，开心得想找人分享。第一个想到的就是{yourName}。',
     '{timeWord}把一堆资料从头理了一遍，越理越有意思。等有空了，把心得讲给{yourName}听。',
-    '写写划划了一下午，草稿纸都满了。干活的快乐，大概就是这种一点点靠近答案的踏实。',
+    '写写划划了一下午，草稿纸都满了。钻研的快乐，大概就是这种一点点靠近答案的踏实。',
     '卡在同一个问题上很久，放一放，回头再看，忽然就通了。想把这份轻松也分给{yourName}一点。',
   ],
   天气: [
@@ -89,6 +106,8 @@ export const MIN_INTERVAL_MS = 2 * 60 * 60 * 1000 // 2 小时
 export const DAY_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 小时
 export const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000 // 30 天
 export const MAX_POSTS = 20
+/** 每天最多发几条动态（TASK_UI_BATCH2 限频，对标朋友圈节奏） */
+export const MAX_POSTS_PER_DAY = 2
 
 // 每类插画变体数量（SpaceArt 里要有对应变体）
 export const ART_VARIANTS: Record<SpaceKind, number> = {
@@ -98,6 +117,23 @@ export const ART_VARIANTS: Record<SpaceKind, number> = {
   天气: 2,
   想你: 2,
   小确幸: 2,
+}
+
+/** 本地自然日 key：YYYY-MM-DD（跨天按本地时区分组） */
+export function dayKeyOf(ts: number): string {
+  const d = new Date(ts)
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
+/** 某一天已有的动态条数（限频用） */
+export function countPostsOnDay(posts: SpacePost[], day: string): number {
+  let n = 0
+  for (const p of posts) {
+    if (p && typeof p.at === 'number' && dayKeyOf(p.at) === day) n++
+  }
+  return n
 }
 
 /** 按月份算季节：3-5 春，6-8 夏，9-11 秋，12-2 冬 */
@@ -188,19 +224,38 @@ export function generatePost(
   return { post: { id, at: now, kind, text, art }, templateKey: `${kind}:${templateIndex}` }
 }
 
-/** 判定这次访问要补几条：首访 3 条，≥24h 补 2 条，≥2h 补 1 条，否则 0 条 */
-export function computeNewCount(lastVisit: number | null, now: number): number {
-  if (lastVisit == null) return 3
+/**
+ * 判定这次访问要补几条（TASK_UI_BATCH2 限频）：
+ *   首访 → 3 条（今天最多 2 + 昨天 1，时间戳由 newPostTimestamps 分散开）；
+ *   ≥24h → 最多 2 条，再被「今天已有条数」截断（每天最多 2 条）；
+ *   ≥2h  → 最多 1 条，同样截断；
+ *   否则 0 条。
+ * 传入已有 posts 才能算「今天已发几条」；不传按 0 计（老调用兼容）。
+ */
+export function computeNewCount(lastVisit: number | null, now: number, posts: SpacePost[] = []): number {
+  const today = countPostsOnDay(posts, dayKeyOf(now))
+  const remaining = Math.max(0, MAX_POSTS_PER_DAY - today)
+  if (lastVisit == null) {
+    // 首访：昨天 1 条 + 今天最多 2 条 = 1 + remaining
+    return 1 + remaining
+  }
   const elapsed = now - lastVisit
-  if (elapsed >= DAY_INTERVAL_MS) return 2
-  if (elapsed >= MIN_INTERVAL_MS) return 1
+  if (elapsed >= DAY_INTERVAL_MS) return Math.min(2, remaining)
+  if (elapsed >= MIN_INTERVAL_MS) return Math.min(1, remaining)
   return 0
 }
 
-/** 新动态的时间戳：首访往前推 40 分钟/3 小时/7 小时；补新的一律往前推几分钟 */
+/**
+ * 新动态的时间戳（从旧到新）。
+ * 首访：昨天 1 条 + 今天 (count-1) 条（最多 2），保证每天 ≤2 条；
+ * 补新的：一律往前推几分钟（落地在今天，配合限频截断）。
+ */
 export function newPostTimestamps(count: number, now: number, firstVisit: boolean): number[] {
   if (firstVisit) {
-    return [now - 40 * 60 * 1000, now - 3 * 60 * 60 * 1000, now - 7 * 60 * 60 * 1000]
+    const list = [now - 27 * 60 * 60 * 1000]
+    if (count >= 2) list.push(now - 40 * 60 * 1000)
+    if (count >= 3) list.push(now - 3 * 60 * 60 * 1000)
+    return list
   }
   if (count >= 2) return [now - 45 * 60 * 1000, now - 3 * 60 * 1000]
   if (count === 1) return [now - 3 * 60 * 1000]
@@ -231,7 +286,7 @@ export function advanceTimeline(
   rand: () => number = Math.random,
 ): AdvanceResult {
   const firstVisit = prev.lastVisit == null
-  const count = computeNewCount(prev.lastVisit, now)
+  const count = computeNewCount(prev.lastVisit, now, prev.posts)
   const timestamps = newPostTimestamps(count, now, firstVisit)
   const posts = [...prev.posts]
   const used = { ...prev.used }
@@ -239,10 +294,55 @@ export function advanceTimeline(
   // timestamps 是时间从旧到新，倒序 unshift 让数组保持最新在前
   for (let i = timestamps.length - 1; i >= 0; i--) {
     const ts = timestamps[i]
+    // 每天 ≤2 条兜底：目标日已满 2 条就跳过这条（首访/边缘情况保护）
+    if (countPostsOnDay(posts, dayKeyOf(ts)) >= MAX_POSTS_PER_DAY) continue
     const g = generatePost(vars, used, ts, rand)
     used[g.templateKey] = now
     posts.unshift(g.post)
     created++
   }
   return { state: { posts: posts.slice(0, MAX_POSTS), lastVisit: now, used }, created }
+}
+
+/* ---- TASK_UI_BATCH2 配图决策（纯逻辑；真正画 dataURL 在 aiSpaceImage.ts，浏览器才有） ---- */
+
+/** 是否给这条动态配图：约 1/3 概率 */
+export function pickHasImage(rand: () => number = Math.random): boolean {
+  return rand() < 1 / 3
+}
+
+/** 每种 kind 一张配图的候选文案（模板/兜底路径用；LLM 走 [配图] 标记自带描述） */
+export const KIND_IMAGE_CAPTIONS: Record<SpaceKind, string[]> = {
+  日常: ['今天的小日常', '窗边的时光', '慢一点也很好'],
+  心情: ['今日心情', '发了一会儿呆', '情绪的小角落'],
+  钻研: ['认真捣鼓', '一点点靠近答案', '今天也在研究'],
+  天气: ['今天的天气', '窗外', '风的样子'],
+  想你: ['在想你', '今天的想念', '把话留到见面'],
+  小确幸: ['小确幸', '开心的事', '生活的亮晶晶'],
+}
+
+/** 给一条动态挑配图文案：优先从正文里抠一句短的，否则按 kind 随机取 */
+export function imageCaptionForPost(
+  post: SpacePost,
+  rand: () => number = Math.random,
+): string {
+  const list = KIND_IMAGE_CAPTIONS[post.kind] ?? KIND_IMAGE_CAPTIONS.日常
+  return list[Math.floor(rand() * list.length) % list.length]
+}
+
+/* ---- TASK_UI_BATCH2 评论回复降级话术（无 key / LLM 失败时用，贴合动态的通用回应） ---- */
+
+export const REPLY_FALLBACKS: string[] = [
+  '哈哈是呀',
+  '被你发现了',
+  '嗯嗯，你懂我',
+  '嘿嘿，我也这么觉得',
+  '有道理，谢谢你',
+  '就是呀，说出来舒服多了',
+]
+
+/** 挑一句降级回复 */
+export function pickReplyFallback(rand: () => number = Math.random): string {
+  const list = REPLY_FALLBACKS
+  return list[Math.floor(rand() * list.length) % list.length]
 }

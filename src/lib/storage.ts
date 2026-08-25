@@ -207,6 +207,30 @@ export function setSessionStart(ts: number): void {
   localStorage.setItem(SESSION_START_KEY, String(ts))
 }
 
+// ---- 聊天背景（按会话隔离，2026-08-25 七七拍板：全屏对标微信） ----
+
+const CHAT_BG_KEY = 'ai_companion_chat_bg'
+
+function chatBgKey(sessionId?: string): string {
+  return sessionId ? `${CHAT_BG_KEY}_${sessionId}` : CHAT_BG_KEY
+}
+
+/** 当前会话的聊天背景 dataURL；没设置返回空字符串（= 默认背景） */
+export function loadChatBg(sessionId?: string): string {
+  try {
+    const raw = localStorage.getItem(chatBgKey(sessionId))
+    if (!raw) return ''
+    return raw.startsWith('data:image/') ? raw : ''
+  } catch {
+    return ''
+  }
+}
+
+export function saveChatBg(dataUrl: string, sessionId?: string): void {
+  localStorage.setItem(chatBgKey(sessionId), dataUrl)
+  notifyDataChanged()
+}
+
 // ---- 专属人设 ----
 
 const PERSONA_KEY = 'ai_companion_persona'

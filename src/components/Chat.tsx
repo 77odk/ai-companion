@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildSystemPrompt, chatCompletion, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage } from '../lib/api'
 import { detectMemoryInstruction, extractMemories, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
-import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
+import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { getToken } from '../lib/auth'
 import { getSession, listMemories, postMemory, postMessage, type Session } from '../lib/sessionApi'
 import {
@@ -464,9 +464,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   }
 
   const isEmpty = visibleMessages.length === 0
+  // 聊天背景（按会话）：有背景图就全屏铺，没有用默认
+  const chatBg = useMemo(() => loadChatBg(activeSessionId ?? undefined), [activeSessionId])
 
   return (
-    <div className="chat-page">
+    <div className="chat-page" style={chatBg ? { backgroundImage: `url(${chatBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' } : undefined}>
       <div className="message-list" ref={scrollRef}>
         {isEmpty ? (
           <div className="welcome">

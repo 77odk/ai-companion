@@ -5922,3 +5922,67 @@ textarea.persona-input {
   border-radius: 50%;
   object-fit: cover;
 }
+
+/* ---- 聊天背景设置（2026-08-25） ---- */
+.chatbg-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.chatbg-preview {
+  width: 100%;
+  aspect-ratio: 3 / 5;
+  border-radius: 14px;
+  background: var(--color-bg);
+  background-repeat: no-repeat;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+}
+.chatbg-preview-empty {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.chatbg-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.chatbg-upload-btn {
+  width: 100%;
+}
+.chatbg-zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.chatbg-zoom-label {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.chatbg-zoom-slider {
+  flex: 1;
+}
+.chatbg-zoom-value {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  min-width: 42px;
+  text-align: right;
+}
+.chatbg-btn-row {
+  display: flex;
+  gap: 10px;
+}
+.chatbg-btn-row .btn {
+  flex: 1;
+}
+.chatbg-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
