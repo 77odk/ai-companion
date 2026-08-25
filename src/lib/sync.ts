@@ -132,10 +132,11 @@ async function postAuth(path: string, account: string, password: string, extra: 
   throw new Error('服务器返回异常，请稍后重试')
 }
 
-export function register(account: string, password: string, bindEmail?: string, bindPhone?: string): Promise<Account> {
+export function register(account: string, password: string, bindEmail?: string, bindPhone?: string, code?: string): Promise<Account> {
   const extra: Record<string, string> = {}
   if (bindEmail && bindEmail.trim()) extra.bindEmail = bindEmail.trim()
   if (bindPhone && bindPhone.trim()) extra.bindPhone = bindPhone.trim()
+  if (code && code.trim()) extra.code = code.trim()
   return postAuth('/api/register', account, password, extra)
 }
 
@@ -150,14 +151,14 @@ export interface Identity {
   value: string
 }
 
-/** 发找回密码验证码（发到账号绑定的邮箱），成功返回脱敏邮箱 */
-export async function verifySend(account: string): Promise<string> {
+/** 发验证码（找回密码 reset / 注册 register），成功返回脱敏邮箱 */
+export async function verifySend(account: string, purpose: 'reset' | 'register' = 'reset'): Promise<string> {
   let resp: Response
   try {
     resp = await fetch(`${API_BASE}/api/verify/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ account: account.trim() }),
+      body: JSON.stringify({ account: account.trim(), purpose }),
     })
   } catch {
     throw new Error('网络不通，连不上服务器，请检查网络后重试')

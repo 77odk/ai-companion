@@ -68,7 +68,7 @@ export default function LoginForm({ onSuccess }: Props) {
       const acct =
         view === 'login'
           ? await login(acctValue, password)
-          : await register(acctValue, password, bindEmail, bindPhone)
+          : await register(acctValue, password, bindEmail, bindPhone, code)
       setAccountInput('')
       setPassword('')
       setBindEmail('')
@@ -91,15 +91,21 @@ export default function LoginForm({ onSuccess }: Props) {
 
   const handleSendCode = async () => {
     if (sending) return
-    if (!accountInput.trim()) {
-      setError('先填账号')
+    // 注册视图：发到要验证的邮箱（用户名注册发到绑定邮箱；邮箱注册发到账号本身）
+    const target =
+      view === 'register' && isUsernameLike(accountInput.trim())
+        ? (bindEmail && bindEmail.trim()) || ''
+        : accountInput.trim()
+    if (!target) {
+      setError(view === 'register' && isUsernameLike(accountInput.trim()) ? '先填绑定邮箱' : '先填账号')
       return
     }
     setSending(true)
     setError(null)
     setInfo(null)
     try {
-      const sentTo = await verifySend(accountInput)
+      const purpose = view === 'register' ? 'register' : 'reset'
+      const sentTo = await verifySend(target, purpose)
       setInfo(`验证码已发到 ${sentTo}，5 分钟内有效`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '发送失败，请稍后再试')
@@ -226,6 +232,28 @@ export default function LoginForm({ onSuccess }: Props) {
           autoComplete={view === 'login' ? 'current-password' : 'new-password'}
         />
       </div>
+
+      {view === 'register' && (
+        <div className="field">
+          <label htmlFor="reg-code">邮箱验证码</label>
+          <div className="forgot-code-row">
+            <input
+              id="reg-code"
+              className="input"
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="先点右侧发验证码，收邮件填 6 位数字"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+            />
+            <button type="button" className="btn btn-ghost" onClick={handleSendCode} disabled={sending}>
+              {sending ? '发送中…' : '发验证码'}
+            </button>
+          </div>
+          <p className="account-format-hint">验证码发到填的邮箱，收到才能注册成功（手机注册开通中）</p>
+        </div>
+      )}
 
       {needBind && (
         <>
