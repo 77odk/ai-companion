@@ -11,6 +11,7 @@ import DefaultAvatar from './DefaultAvatar'
 import AnniversaryPage from './AnniversaryPage'
 import SpaceChatLogs from './SpaceChatLogs'
 import SpaceLife from './SpaceLife'
+import { AIDetail } from './Settings'
 import { CalendarIcon, ChatIcon, EntryChevron, SparkleIcon } from './spaceIcons'
 
 interface Props {
@@ -18,9 +19,11 @@ interface Props {
   onClose: () => void
   /** 「去写人设」跳「我的」页（App 里即 settings 视图），透传给 TA 的生活引导卡 */
   onGoMine?: () => void
+  /** 「换个 TA」：current=当前会话换人设；new=开新会话换 TA（App 里跳选角色页） */
+  onSwitchRole?: (mode: 'current' | 'new') => void
 }
 
-export default function ChatProfile({ onClose, onGoMine }: Props) {
+export default function ChatProfile({ onClose, onGoMine, onSwitchRole }: Props) {
   const ai = loadAIProfile()
   const user = loadUserProfile()
   const yourName = user.nickname || '你'
@@ -37,7 +40,7 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
   const [messages] = useState<StoredMessage[]>(() => (sessionId ? getMessagesCache(sessionId) : loadMessages()))
 
   // 子页面路由：home 资料卡 / chats 聊天记录 / anniversary 相逢纪 / life TA 的生活
-  const [page, setPage] = useState<'home' | 'chats' | 'anniversary' | 'life'>('home')
+  const [page, setPage] = useState<'home' | 'chats' | 'anniversary' | 'life' | 'profile'>('home')
   const goHome = () => setPage('home')
 
   // 子页面：整页替换（各自带返回条），资料卡 home 才是这层的主页
@@ -58,6 +61,10 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
         onBack={goHome}
       />
     )
+  }
+
+  if (page === 'profile') {
+    return <AIDetail onBack={goHome} onSwitchRole={onSwitchRole} />
   }
 
   return (
@@ -105,6 +112,19 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
             <span className="ai-space-entry-main">
               <span className="ai-space-entry-title">相逢纪</span>
               <span className="ai-space-entry-sub">你们重要的日子</span>
+            </span>
+            <EntryChevron />
+          </button>
+          <button type="button" className="ai-space-entry-row" onClick={() => setPage('profile')}>
+            <span className="ai-space-entry-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="8" r="3.6" />
+                <path d="M5 20c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6" />
+              </svg>
+            </span>
+            <span className="ai-space-entry-main">
+              <span className="ai-space-entry-title">TA 的资料</span>
+              <span className="ai-space-entry-sub">名字、性格、换个 TA</span>
             </span>
             <EntryChevron />
           </button>

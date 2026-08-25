@@ -105,7 +105,7 @@ export default function App() {
   // 选角色页的用途：first=首次/游客新建；current=换个TA·当前会话换人设；new=换个TA·开新会话换TA
   const [roleMode, setRoleMode] = useState<RolePickMode>('first')
   // 选角色页的返回去向：首次/游客/无会话回欢迎页，「换个 TA」回「我的」，角色列表页新建回角色列表
-  const [roleBack, setRoleBack] = useState<'welcome' | 'settings' | 'roles'>('welcome')
+  const [roleBack, setRoleBack] = useState<'welcome' | 'settings' | 'roles' | 'chatprofile'>('welcome')
   // 老数据一键迁移状态（无云端会话 + 本地有旧数据时触发，见 redirectBySessions）
   const [migration, setMigration] = useState<MigrationState>('idle')
   // 已登录用户首次拉会话列表只做一次（StrictMode 双跑防重）
@@ -354,7 +354,15 @@ export default function App() {
       ) : view === 'aispace' ? (
         <AISpace onBack={backFromSpace} onGoMine={() => navigate('settings')} />
       ) : view === 'chatprofile' ? (
-        <ChatProfile onClose={() => navigate('chat')} onGoMine={() => navigate('settings')} />
+        <ChatProfile
+            onClose={() => navigate('chat')}
+            onGoMine={() => navigate('settings')}
+            onSwitchRole={(mode) => {
+              setRoleBack('chatprofile')
+              setRoleMode(mode)
+              navigate('role')
+            }}
+          />
       ) : view === 'anniversary' ? (
         <AnniversaryPage onBack={() => navigate('memory')} />
       ) : view === 'weekly' ? (
@@ -475,13 +483,7 @@ export default function App() {
             {view === 'settings' && (
               <Settings
                 initialPage={settingsTarget}
-                onOpenSpace={() => openSpace('settings')}
                 onGoWelcome={() => navigate('welcome')}
-                onSwitchRole={(mode) => {
-                  setRoleBack('settings')
-                  setRoleMode(mode)
-                  navigate('role')
-                }}
                 onGoGuide={() => openGuide('settings')}
                 onGoWorkChat={() => navigate('chat')}
               />

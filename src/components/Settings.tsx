@@ -42,10 +42,7 @@ type TestState = 'idle' | 'testing' | 'success' | 'error'
 export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work'
 
 interface Props {
-  onOpenSpace?: () => void
   onGoWelcome?: () => void
-  /** 「换个 TA」回调：弹二选一后带上方向（current=当前会话换人设 / new=开新会话换TA）由 App 跳选角色页 */
-  onSwitchRole?: (mode: 'current' | 'new') => void
   /** 「使用指南」入口：由 App 切到独立 guide view（游客也可看） */
   onGoGuide?: () => void
   /** 工作台「跟 TA 说」→ 切到聊天页（工作台展示模式用） */
@@ -54,12 +51,9 @@ interface Props {
   initialPage?: SettingsPage
 }
 
-export default function Settings({ onOpenSpace, onGoWelcome, onSwitchRole, onGoGuide, onGoWorkChat, initialPage }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, initialPage }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
 
-  if (page === 'ai') {
-    return <AIDetail onBack={() => setPage('main')} onOpenSpace={onOpenSpace} onSwitchRole={onSwitchRole} />
-  }
   if (page === 'provider') {
     return <ProviderDetail onBack={() => setPage('main')} onGoGuide={onGoGuide} />
   }
@@ -80,7 +74,6 @@ export default function Settings({ onOpenSpace, onGoWelcome, onSwitchRole, onGoG
   return (
     <MainCenter
       onOpenAccount={() => setPage('account')}
-      onOpenAI={() => setPage('ai')}
       onOpenProvider={() => setPage('provider')}
       onOpenGuide={() => onGoGuide?.()}
       onOpenAbout={() => setPage('about')}
@@ -119,7 +112,6 @@ function DetailHeader({ title, onBack }: { title: string; onBack: () => void }) 
 
 function MainCenter({
   onOpenAccount,
-  onOpenAI,
   onOpenProvider,
   onOpenGuide,
   onOpenAbout,
@@ -127,7 +119,6 @@ function MainCenter({
   onGoWelcome,
 }: {
   onOpenAccount: () => void
-  onOpenAI: () => void
   onOpenProvider: () => void
   onOpenGuide: () => void
   onOpenAbout: () => void
@@ -217,10 +208,6 @@ function MainCenter({
           onClick={onOpenAccount}
           status={accountLabel ?? '未登录'}
         />
-      </ProfileGroup>
-
-      <ProfileGroup title="我的 AI">
-        <EntryRow icon={<PortraitIcon />} label="TA 的资料" onClick={onOpenAI} />
       </ProfileGroup>
 
       <ProfileGroup title="设置">
@@ -317,12 +304,6 @@ const CloudSyncIcon = () => (
   </svg>
 )
 
-const PortraitIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="12" cy="8" r="4" />
-    <path d="M4 21v-1a7 7 0 0 1 7-7h2a7 7 0 0 1 7 7v1" />
-  </svg>
-)
 
 const KeyIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -358,7 +339,7 @@ const WorkIcon = () => (
 
 /* ---------------- 详情页：TA 的资料 ---------------- */
 
-function AIDetail({
+export function AIDetail({
   onBack,
   onOpenSpace,
   onSwitchRole,
