@@ -346,6 +346,7 @@ export default function App() {
             void refreshSessions()
           }}
           onBack={() => navigate(roleBack)}
+          onLogin={() => setGateTarget('chat')}
         />
       ) : view === 'aispace' ? (
         <AISpace onBack={backFromSpace} onGoMine={() => navigate('settings')} />

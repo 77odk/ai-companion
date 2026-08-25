@@ -14,6 +14,8 @@ interface Props {
   onDone: (info?: { title?: string }) => void
   /** 返回上一页（换 TA 进来退回原页；首次进来退回欢迎页）；不传则不显示返回键 */
   onBack?: () => void
+  /** 底部「已有账号直接登录」小字链接：游客点击弹登录墙（登录后按云端会话分流） */
+  onLogin?: () => void
 }
 
 /** 自定义人设表单字段（对应结构化表单的四项，全是文本，不做字符上限） */
@@ -41,7 +43,7 @@ function customMarker(form: CustomFormState): string {
   return p.length > 8 ? `${p.slice(0, 8)}…` : p
 }
 
-export default function RolePicker({ mode, onDone, onBack }: Props) {
+export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
   // 选中的角色：模板 id 或 'custom'；没选中时【开始】置灰
   const [selected, setSelected] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -167,6 +169,11 @@ export default function RolePicker({ mode, onDone, onBack }: Props) {
         >
           {submitting ? '正在创建…' : '开始'}
         </button>
+        {onLogin && !isLoggedIn() && (
+          <button type="button" className="role-login-link" onClick={onLogin}>
+            已有账号直接登录
+          </button>
+        )}
       </div>
 
       {modalOpen && (

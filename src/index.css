@@ -3857,6 +3857,21 @@ textarea.persona-input {
   font-size: 15px;
 }
 
+/* 选角色页底部「已有账号直接登录」小字链接（游客可见，点开登录墙） */
+.role-login-link {
+  border: none;
+  background: none;
+  padding: 6px 2px 2px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  align-self: center;
+}
+
+.role-login-link:active {
+  color: var(--color-primary-deep);
+}
+
 /* 「开始」失败时的小字错误提示（建会话失败留在本页重试） */
 .role-start-error {
   margin: 0;
