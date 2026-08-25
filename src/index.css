@@ -616,6 +616,42 @@ button {
   color: var(--color-text);
 }
 
+/* 性别三选一分段（男/女/未知）：设定弹窗与 TA 资料卡共用 */
+.gender-options {
+  display: flex;
+  gap: 8px;
+}
+.gender-option {
+  flex: 1;
+  padding: 10px 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-card);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.gender-option.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary-deep);
+  background: var(--color-primary-soft);
+  font-weight: 600;
+}
+
+/* 表单里「选填」的小标签（设定弹窗） */
+.optional-mark {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+
 .input {
   padding: 10px 12px;
   border: 1px solid var(--color-border);
@@ -815,6 +851,11 @@ textarea.persona-input {
 
 .ai-save-row .input {
   flex: 1;
+}
+
+/* 保存按钮靠右（TA 资料卡的性格/背景/开场白字段） */
+.ai-save-row-end {
+  justify-content: flex-end;
 }
 
 .ai-save-btn {
@@ -5693,6 +5734,27 @@ textarea.persona-input {
   color: var(--color-primary-deep);
   letter-spacing: 0.5px;
   text-align: center;
+}
+
+/* 资料卡名字下的小字行：性别 + 备注（TASK-UI1 设定卡扩展字段） */
+.chatprofile-meta {
+  margin: 8px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.chatprofile-meta-gender {
+  color: var(--color-primary-deep);
+  font-weight: 600;
+}
+.chatprofile-meta-remark {
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* TA 空间 · 最近的大日子卡（2026-08-25 七七拍板：卡片本身就是入口，点进纪念日页） */

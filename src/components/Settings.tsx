@@ -3,7 +3,7 @@ import ProviderSelect from './ProviderSelect'
 import AvatarPicker from './AvatarPicker'
 import DefaultAvatar from './DefaultAvatar'
 import Account from './Account'
-import SwitchRoleModal from './SwitchRoleModal'
+import GenderSelect from './GenderSelect'
 import Work from './Work'
 import {
   DEFAULT_SETTINGS,
@@ -12,12 +12,17 @@ import {
   loadPersona,
   loadUserProfile,
   loadAIProfile,
+  loadAIRemark,
+  loadAIGender,
   saveSettings,
   savePersona,
   saveUserProfile,
   saveAIProfile,
+  saveAIRemark,
+  saveAIGender,
   setSlowLetterMode,
   PROVIDER_NAMES,
+  type AIGender,
   type ModelSettings,
   type Provider,
   type UserProfile,
@@ -27,6 +32,7 @@ import { getAccount } from '../lib/sync'
 import { getToken, isLoggedIn, logout } from '../lib/auth'
 import { ChatError, testConnection } from '../lib/api'
 import { keyFormatHint } from '../lib/keyFormat'
+import { extractOpeningLine, extractPersonality, extractBackgroundLine, applyPersonaEdits } from '../lib/customPersona'
 import { listSessions, patchSession, type Session } from '../lib/sessionApi'
 import { getActiveSessionId, getSessionsCache, setSessionsCache } from '../lib/sessionStore'
 import {
@@ -339,29 +345,27 @@ const WorkIcon = () => (
 
 /* ---------------- 详情页：TA 的资料 ---------------- */
 
-export function AIDetail({
-  onBack,
-  onOpenSpace,
-  onSwitchRole,
-}: {
-  onBack: () => void
-  onOpenSpace?: () => void
-  onSwitchRole?: (mode: 'current' | 'new') => void
-}) {
-  // S1-2 角色化：资料卡跟当前会话角色走，不再是全局资料。
-  // 有 activeSessionId → 名字/人设都从会话取（改名/换人设 patchSession）；
-  // 无会话（游客/过渡态）→ 兜底全局昵称/人设，改名/人设写全局。
+/**
+ * TA 的资料 = 角色设定卡完整版（TASK-UI1）：
+ * 头像 / 姓名 / 备注 / 性别 / 性格特质 / 关系&背景 / 开场第一句，每项可改。
+ * 有会话（登录）→ 姓名/人设 patchSession 同步到当前角色；无会话 → 兜底写全局 key。
+ * 姓名/头像存 ai_companion_ai_profile，备注 ai_companion_ai_remark，性别 ai_companion_ai_gender，
+ * 性格/背景/开场白拼回 ai_companion_persona。
+ */
+export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSpace?: () => void }) {
   const [sessions, setSessions] = useState<Session[]>(() => getSessionsCache())
   const [ai, setAI] = useState<AIProfile>(() => loadAIProfile())
   const [globalPersona, setGlobalPersona] = useState(() => loadPersona())
-  // 输入框草稿：null = 还没动过，显示当前角色值（会话刷新后自动跟着变）；改过才进草稿
+  const [remark, setRemark] = useState(() => loadAIRemark())
+  const [gender, setGender] = useState<AIGender>(() => loadAIGender())
+  // 各字段草稿：null = 还没动过，显示当前值（会话刷新后自动跟着变）；改过才进草稿
   const [nameDraft, setNameDraft] = useState<string | null>(null)
-  const [personaDraft, setPersonaDraft] = useState<string | null>(null)
-  const [savedField, setSavedField] = useState<'name' | 'persona' | null>(null)
-  const [savingName, setSavingName] = useState(false)
-  const [savingPersona, setSavingPersona] = useState(false)
-  // 「换个 TA」二选一弹窗是否展示
-  const [showSwitchRole, setShowSwitchRole] = useState(false)
+  const [personalityDraft, setPersonalityDraft] = useState<string | null>(null)
+  const [backgroundDraft, setBackgroundDraft] = useState<string | null>(null)
+  const [openingDraft, setOpeningDraft] = useState<string | null>(null)
+  const [remarkDraft, setRemarkDraft] = useState<string | null>(null)
+  const [savedField, setSavedField] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const savedTimer = useRef<number | undefined>(undefined)
   // 本页已保存过改动：拉列表回来的旧数据别覆盖本地刚存的新值（防竞态）
   const dirtyRef = useRef(false)
@@ -372,7 +376,10 @@ export function AIDetail({
   const roleName = resolveRoleName(activeSessionId, sessions, ai.nickname)
   const rolePersona = resolveRolePersona(activeSessionId, sessions, globalPersona)
   const nameValue = nameDraft ?? roleName
-  const personaValue = personaDraft ?? rolePersona
+  const personalityValue = personalityDraft ?? extractPersonality(rolePersona)
+  const backgroundValue = backgroundDraft ?? extractBackgroundLine(rolePersona)
+  const openingValue = openingDraft ?? extractOpeningLine(rolePersona)
+  const remarkValue = remarkDraft ?? remark
 
   // 打开资料卡时拉一次会话列表：别处（角色列表/换 TA）改过之后，缓存同步成后端最新
   useEffect(() => {
@@ -391,7 +398,7 @@ export function AIDetail({
     }
   }, [])
 
-  const flashSaved = (field: 'name' | 'persona') => {
+  const flashSaved = (field: string) => {
     setSavedField(field)
     window.clearTimeout(savedTimer.current)
     savedTimer.current = window.setTimeout(() => setSavedField(null), 2000)
@@ -406,12 +413,12 @@ export function AIDetail({
     setSessionsCache(next)
   }
 
-  // 改名：有会话 patchSession title（列表/聊天顶/空间/资料卡全部更新，微信备注式）；无会话写全局昵称兜底
+  // 改名：有会话 patchSession title（列表/聊天顶/空间/资料卡全部更新，微信备注式）；全局 ai_profile.nickname 始终同步
   const handleSaveName = async () => {
     const t = nameValue.trim()
-    if (!t || savingName) return
+    if (!t || saving) return
     if (hasSession && !getToken()) return
-    setSavingName(true)
+    setSaving(true)
     try {
       if (hasSession) {
         const res = await patchSession(getToken(), activeSessionId, { title: t })
@@ -420,86 +427,103 @@ export function AIDetail({
           return
         }
         commitSessionChange({ title: t }, res.data)
-      } else {
-        const next = { ...ai, nickname: t }
-        setAI(next)
-        saveAIProfile(next)
       }
+      const next = { ...ai, nickname: t }
+      setAI(next)
+      saveAIProfile(next)
       dirtyRef.current = true
       setNameDraft(t)
       flashSaved('name')
     } finally {
-      setSavingName(false)
+      setSaving(false)
     }
   }
 
-  // 保存人设：有会话 patchSession persona（只影响当前角色）；无会话写全局人设兜底
-  const handleSavePersona = async () => {
-    const p = personaValue
-    if (savingPersona) return
-    if (hasSession && !getToken()) return
-    setSavingPersona(true)
-    try {
-      if (hasSession) {
-        const res = await patchSession(getToken(), activeSessionId, { persona: p })
-        if (!res.ok) {
-          window.alert('没改掉，网络开小差了，稍后再试试。')
-          return
-        }
-        commitSessionChange({ persona: p }, res.data)
-      } else {
-        setGlobalPersona(p)
-        savePersona(p)
-      }
-      dirtyRef.current = true
-      setPersonaDraft(p)
-      flashSaved('persona')
-    } finally {
-      setSavingPersona(false)
-    }
+  // 改备注：写 ai_companion_ai_remark
+  const handleSaveRemark = () => {
+    const v = remarkValue.trim()
+    setRemark(v)
+    saveAIRemark(v)
+    dirtyRef.current = true
+    setRemarkDraft(v)
+    flashSaved('remark')
   }
 
-  // 头像仍走全局机制（S1-2 只做名字/人设绑角色，头像后续跟角色）：改了即存
+  // 改性别：写 ai_companion_ai_gender
+  const handleSaveGender = (g: AIGender) => {
+    setGender(g)
+    saveAIGender(g)
+    dirtyRef.current = true
+    flashSaved('gender')
+  }
+
+  // 改头像：写 ai_companion_ai_profile.avatar
   const updateAvatar = (avatar: string) => {
     const next = { ...ai, avatar }
     setAI(next)
     saveAIProfile(next)
   }
 
-  // 换个 TA：先弹二选一（当前会话换人设 / 开新会话换 TA），两个方向都不删任何数据
-  const handleSwitchRole = () => {
-    if (!onSwitchRole) return
-    setShowSwitchRole(true)
+  /**
+   * 保存人设相关字段（性格/背景/开场白）：三个草稿一起拼成新 persona。
+   * 有会话 patchSession persona（只影响当前角色）；全局 ai_companion_persona 始终同步（设定卡对应 key）。
+   */
+  const handleSavePersonaField = async (field: 'personality' | 'background' | 'opening') => {
+    if (saving) return
+    if (hasSession && !getToken()) return
+    const edits = { personality: personalityValue, background: backgroundValue, opening: openingValue }
+    const nextPersona = applyPersonaEdits(rolePersona, edits)
+    setSaving(true)
+    try {
+      if (hasSession) {
+        const res = await patchSession(getToken(), activeSessionId, { persona: nextPersona })
+        if (!res.ok) {
+          window.alert('没改掉，网络开小差了，稍后再试试。')
+          return
+        }
+        commitSessionChange({ persona: nextPersona }, res.data)
+      }
+      setGlobalPersona(nextPersona)
+      savePersona(nextPersona)
+      dirtyRef.current = true
+      // 同步草稿，让其它字段显示跟着刚保存的整份人设走
+      setPersonalityDraft(personalityValue)
+      setBackgroundDraft(backgroundValue)
+      setOpeningDraft(openingValue)
+      flashSaved(field)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <div className="page settings-page">
       <DetailHeader title="TA 的资料" onBack={onBack} />
 
-      {hasSession ? (
-        <div className="settings-card ai-role-card">
-          {ai.avatar.startsWith('data:') ? (
-            <img className="ai-role-avatar-img" src={ai.avatar} alt="" />
-          ) : (
-            <span className="ai-role-avatar" aria-hidden="true">
-              {roleInitial(roleName)}
-            </span>
-          )}
-          <div className="ai-role-info">
-            <span className="ai-role-name">{roleName}</span>
-            <span className="ai-role-sub">这是 TA 的资料卡，名字和人设都跟这个角色走</span>
-          </div>
-        </div>
-      ) : (
+      {!hasSession && (
         <div className="settings-card">
           <p className="hint">登录并开始聊天后，这里就是 TA 的资料卡。</p>
         </div>
       )}
 
+      <div className="settings-card ai-role-card">
+        {ai.avatar.startsWith('data:') ? (
+          <img className="ai-role-avatar-img" src={ai.avatar} alt="" />
+        ) : (
+          <span className="ai-role-avatar" aria-hidden="true">
+            {roleInitial(roleName)}
+          </span>
+        )}
+        <div className="ai-role-info">
+          <span className="ai-role-name">{roleName}</span>
+          <span className="ai-role-sub">这是 TA 的资料卡，改动会存回本地并同步当前角色</span>
+        </div>
+      </div>
+
       <div className="settings-card">
         <div className="field">
           <label>TA 的头像</label>
-          <AvatarPicker value={ai.avatar} onChange={updateAvatar} />
+          <AvatarPicker value={ai.avatar} onChange={updateAvatar} kind="ai" />
         </div>
 
         {onOpenSpace && (
@@ -525,52 +549,106 @@ export function AIDetail({
               type="button"
               className="btn btn-primary ai-save-btn"
               onClick={() => void handleSaveName()}
-              disabled={!nameValue.trim() || savingName}
+              disabled={!nameValue.trim() || saving}
             >
-              {savedField === 'name' ? '已保存' : savingName ? '保存中…' : '改名'}
+              {savedField === 'name' ? '已保存' : saving ? '保存中…' : '改名'}
             </button>
           </div>
           <p className="hint">改名字会同步到聊天列表和 TA 的空间</p>
         </div>
 
         <div className="field">
-          <label htmlFor="persona">{hasSession ? `${roleName} 的人设（可选）` : '专属人设（可选）'}</label>
+          <label htmlFor="ai-remark">TA 备注</label>
+          <div className="ai-save-row">
+            <input
+              id="ai-remark"
+              className="input"
+              type="text"
+              placeholder="比如：TA 喜欢怎么被你称呼、你们之间的小约定"
+              value={remarkValue}
+              onChange={(e) => setRemarkDraft(e.target.value)}
+              autoComplete="off"
+              maxLength={60}
+            />
+            <button type="button" className="btn btn-primary ai-save-btn" onClick={handleSaveRemark} disabled={saving}>
+              {savedField === 'remark' ? '已保存' : '保存'}
+            </button>
+          </div>
+        </div>
+
+        <div className="field">
+          <label>性别</label>
+          <GenderSelect value={gender} onChange={handleSaveGender} />
+          {savedField === 'gender' && <p className="hint">已保存</p>}
+        </div>
+
+        <div className="field">
+          <label htmlFor="ai-personality">性格特质</label>
           <textarea
-            id="persona"
+            id="ai-personality"
             className="input persona-input"
             rows={4}
-            placeholder={'想让 TA 是什么都可以——包括你的编程搭子、工作助理'}
-            value={personaValue}
-            onChange={(e) => setPersonaDraft(e.target.value)}
+            placeholder="描述性格、说话习惯，例如：温柔理智、嘴硬心软"
+            value={personalityValue}
+            onChange={(e) => setPersonalityDraft(e.target.value)}
           />
-          <p className="hint">
-            {hasSession
-              ? `这是 ${roleName} 的人设，只影响 TA 这一个角色；不填就用默认人设`
-              : '填了之后，TA 会把你设定的当成真实的自己，聊天时就这么表现；不填就用默认人设'}
-          </p>
+          <div className="ai-save-row ai-save-row-end">
+            <button
+              type="button"
+              className="btn btn-primary ai-save-btn"
+              onClick={() => void handleSavePersonaField('personality')}
+              disabled={saving}
+            >
+              {savedField === 'personality' ? '已保存' : '保存性格'}
+            </button>
+          </div>
         </div>
 
-        <div className="settings-actions">
-          <button className="btn btn-primary" onClick={() => void handleSavePersona()} disabled={savingPersona}>
-            {savedField === 'persona' ? '已保存' : savingPersona ? '保存中…' : '保存人设'}
-          </button>
-          {onSwitchRole && (
-            <button type="button" className="btn btn-ghost" onClick={handleSwitchRole}>
-              换个 TA
+        <div className="field">
+          <label htmlFor="ai-background">关系&背景设定</label>
+          <textarea
+            id="ai-background"
+            className="input persona-input"
+            rows={3}
+            placeholder="你们是什么关系，TA的经历、相处细节"
+            value={backgroundValue}
+            onChange={(e) => setBackgroundDraft(e.target.value)}
+          />
+          <div className="ai-save-row ai-save-row-end">
+            <button
+              type="button"
+              className="btn btn-primary ai-save-btn"
+              onClick={() => void handleSavePersonaField('background')}
+              disabled={saving}
+            >
+              {savedField === 'background' ? '已保存' : '保存背景'}
             </button>
-          )}
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="ai-opening">开场第一句</label>
+          <input
+            id="ai-opening"
+            className="input"
+            type="text"
+            placeholder="TA初次和你见面说的第一句话"
+            value={openingValue}
+            onChange={(e) => setOpeningDraft(e.target.value)}
+            autoComplete="off"
+          />
+          <div className="ai-save-row ai-save-row-end">
+            <button
+              type="button"
+              className="btn btn-primary ai-save-btn"
+              onClick={() => void handleSavePersonaField('opening')}
+              disabled={saving}
+            >
+              {savedField === 'opening' ? '已保存' : '保存开场白'}
+            </button>
+          </div>
         </div>
       </div>
-
-      {showSwitchRole && onSwitchRole && (
-        <SwitchRoleModal
-          onClose={() => setShowSwitchRole(false)}
-          onChoose={(mode) => {
-            setShowSwitchRole(false)
-            onSwitchRole(mode)
-          }}
-        />
-      )}
     </div>
   )
 }

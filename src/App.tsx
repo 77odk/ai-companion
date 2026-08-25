@@ -345,15 +345,7 @@ export default function App() {
           onOpenAnniversary={() => navigate('anniversary')}
         />
       ) : view === 'chatprofile' ? (
-        <ChatProfile
-            onClose={() => navigate('chat')}
-            onGoMine={() => navigate('settings')}
-            onSwitchRole={(mode) => {
-              setRoleBack('chatprofile')
-              setRoleMode(mode)
-              navigate('role')
-            }}
-          />
+        <ChatProfile onClose={() => navigate('chat')} onGoMine={() => navigate('settings')} />
       ) : view === 'aboutme' ? (
         <AboutMe onBack={() => navigate('memory')} />
       ) : view === 'anniversary' ? (

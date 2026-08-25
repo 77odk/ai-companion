@@ -45,6 +45,19 @@ for (const t of ROLE_TEMPLATES) {
   eq(t.charName, expectedChars[t.id], `${t.id}.charName = ${expectedChars[t.id]}`)
 }
 
+console.log('\n[1c] 性别默认值（TASK-UI1）：温叙相伴/逐光同行/外冷内热/活力伙伴=男，挚友同频=女')
+const expectedGenders: Record<string, string> = {
+  'gentle-boyfriend': 'male',
+  bestie: 'female',
+  'growth-partner': 'male',
+  'tsundere-cat': 'male',
+  'energetic-partner': 'male',
+}
+for (const t of ROLE_TEMPLATES) {
+  eq(t.gender, expectedGenders[t.id], `${t.id}.gender = ${expectedGenders[t.id]}`)
+  ok(t.gender === 'male' || t.gender === 'female', `${t.id}.gender 是合法值`)
+}
+
 console.log('\n[2] 每项字段非空')
 for (const t of ROLE_TEMPLATES) {
   ok(t.name.trim() !== '', `${t.id}.name 非空`)

@@ -5,10 +5,12 @@ import DefaultAvatar from './DefaultAvatar'
 interface Props {
   value: string
   onChange: (avatar: string) => void
+  /** 默认头像样式：user=人形（我的头像），ai=心形（TA 的头像） */
+  kind?: 'user' | 'ai'
 }
 
 /** 头像选择：上传图片 + 默认头像兜底。avatar 存 dataURL（上传压缩后），空字符串表示用默认头像 */
-export default function AvatarPicker({ value, onChange }: Props) {
+export default function AvatarPicker({ value, onChange, kind = 'user' }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const isImage = value.startsWith('data:')
 
@@ -29,7 +31,7 @@ export default function AvatarPicker({ value, onChange }: Props) {
         {isImage ? (
           <img src={value} alt="头像" />
         ) : (
-          <DefaultAvatar kind="user" className="avatar-default" />
+          <DefaultAvatar kind={kind} className="avatar-default" />
         )}
       </div>
       <div className="avatar-pick-actions">

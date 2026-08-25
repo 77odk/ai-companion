@@ -308,6 +308,50 @@ export function saveAIProfile(p: AIProfile): void {
   notifyDataChanged()
 }
 
+// ---- TA 的性别 / 备注（TASK-UI1 角色设定，独立 key 存） ----
+
+export type AIGender = 'male' | 'female' | 'unknown'
+
+/** 性别显示文案（男/女/未知） */
+export const AIGENDER_LABELS: Record<AIGender, string> = {
+  male: '男',
+  female: '女',
+  unknown: '未知',
+}
+
+const AI_REMARK_KEY = 'ai_companion_ai_remark'
+const AI_GENDER_KEY = 'ai_companion_ai_gender'
+
+/** 读取 TA 备注（没设置过返回空串） */
+export function loadAIRemark(): string {
+  try {
+    const v = localStorage.getItem(AI_REMARK_KEY)
+    return typeof v === 'string' ? v : ''
+  } catch {
+    return ''
+  }
+}
+
+export function saveAIRemark(remark: string): void {
+  localStorage.setItem(AI_REMARK_KEY, remark)
+  notifyDataChanged()
+}
+
+/** 读取 TA 性别：'male' | 'female'，非法/未设置兜底 'unknown' */
+export function loadAIGender(): AIGender {
+  try {
+    const v = localStorage.getItem(AI_GENDER_KEY)
+    return v === 'male' || v === 'female' ? v : 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
+export function saveAIGender(gender: AIGender): void {
+  localStorage.setItem(AI_GENDER_KEY, gender)
+  notifyDataChanged()
+}
+
 // ---- TA 的详情页 · firstSeen（认识 TA 的第一天） ----
 
 const FIRST_SEEN_KEY = 'ai_companion_first_seen'
