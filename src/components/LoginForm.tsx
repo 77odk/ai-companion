@@ -154,7 +154,7 @@ export default function LoginForm({ onSuccess }: Props) {
             id="forgot-account"
             className="input"
             type="text"
-            placeholder="手机号 / 邮箱 / 用户名"
+            placeholder="邮箱"
             value={accountInput}
             onChange={(e) => setAccountInput(e.target.value)}
             autoComplete="username"
@@ -212,7 +212,7 @@ export default function LoginForm({ onSuccess }: Props) {
           id="account-email"
           className="input"
           type="text"
-          placeholder="手机号 / 邮箱 / 用户名"
+          placeholder="邮箱"
           value={accountInput}
           onChange={(e) => setAccountInput(e.target.value)}
           autoComplete="username"
@@ -257,9 +257,9 @@ export default function LoginForm({ onSuccess }: Props) {
 
       {needBind && (
         <>
-          <p className="account-mode-label">用户名注册需要绑一个联系方式，以后忘了密码能找回来</p>
+          <p className="account-mode-label">用户名注册需要绑一个邮箱，以后忘了密码能找回来</p>
           <div className="field">
-            <label htmlFor="bind-email">绑定邮箱（推荐）</label>
+            <label htmlFor="bind-email">绑定邮箱</label>
             <input
               id="bind-email"
               className="input"
@@ -268,18 +268,6 @@ export default function LoginForm({ onSuccess }: Props) {
               value={bindEmail}
               onChange={(e) => setBindEmail(e.target.value)}
               autoComplete="email"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="bind-phone">或者绑定手机号</label>
-            <input
-              id="bind-phone"
-              className="input"
-              type="tel"
-              placeholder="手机号"
-              value={bindPhone}
-              onChange={(e) => setBindPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
-              autoComplete="tel"
             />
           </div>
         </>

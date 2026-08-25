@@ -18,7 +18,6 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [identities, setIdentities] = useState<Identity[]>([])
-  const [bindType, setBindType] = useState<'email' | 'phone'>('email')
   const [bindValue, setBindValue] = useState('')
   const [bindCode, setBindCode] = useState('')
   const [binding, setBinding] = useState(false)
@@ -100,10 +99,10 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
     if (binding) return
     const v = bindValue.trim()
     if (!v) {
-      setError('填一下要绑定的邮箱或手机号')
+      setError('填一下要绑定的邮箱')
       return
     }
-    if (bindType === 'email' && !bindCode.trim()) {
+    if (!bindCode.trim()) {
       setError('绑定邮箱要先收验证码：点「发验证码」收邮件')
       return
     }
@@ -111,12 +110,12 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
     setError(null)
     setInfo(null)
     try {
-      await bindIdentity(bindType, v, bindCode.trim())
+      await bindIdentity('email', v, bindCode.trim())
       const list = await getIdentities()
       setIdentities(list)
       setBindValue('')
       setBindCode('')
-      setInfo(bindType === 'email' ? '邮箱已绑定' : '手机号已绑定')
+      setInfo('邮箱已绑定')
     } catch (err) {
       setError(err instanceof Error ? err.message : '绑定失败，请稍后重试')
     } finally {
@@ -226,62 +225,48 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
           </div>
 
           <div className="field">
-            <label>再绑一个（换绑/多方式登录）</label>
+            <label>再绑一个邮箱（换绑/多方式登录）</label>
             <div className="bind-row">
-              <select
-                className="input bind-select"
-                value={bindType}
-                onChange={(e) => setBindType(e.target.value as 'email' | 'phone')}
-                aria-label="绑定类型"
-              >
-                <option value="email">邮箱</option>
-                <option value="phone">手机号</option>
-              </select>
               <input
                 className="input"
-                type={bindType === 'email' ? 'text' : 'tel'}
-                placeholder={bindType === 'email' ? '邮箱地址' : '手机号'}
+                type="text"
+                placeholder="邮箱地址"
                 value={bindValue}
-                onChange={(e) =>
-                  setBindValue(bindType === 'phone' ? e.target.value.replace(/\D/g, '').slice(0, 11) : e.target.value)
-                }
+                onChange={(e) => setBindValue(e.target.value)}
+                autoComplete="email"
               />
-              {bindType === 'email' && (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  disabled={sendingVerify}
-                  onClick={async () => {
-                    if (!bindValue.trim()) { setError('先填要绑定的邮箱'); return }
-                    setSendingVerify(true); setError(null); setInfo(null)
-                    try {
-                      const sentTo = await verifySend(bindValue.trim(), 'register')
-                      setInfo(`验证码已发到 ${sentTo}，5 分钟内有效`)
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : '发送失败，请稍后再试')
-                    } finally { setSendingVerify(false) }
-                  }}
-                >
-                  {sendingVerify ? '发送中…' : '发验证码'}
-                </button>
-              )}
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={sendingVerify}
+                onClick={async () => {
+                  if (!bindValue.trim()) { setError('先填要绑定的邮箱'); return }
+                  setSendingVerify(true); setError(null); setInfo(null)
+                  try {
+                    const sentTo = await verifySend(bindValue.trim(), 'register')
+                    setInfo(`验证码已发到 ${sentTo}，5 分钟内有效`)
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : '发送失败，请稍后再试')
+                  } finally { setSendingVerify(false) }
+                }}
+              >
+                {sendingVerify ? '发送中…' : '发验证码'}
+              </button>
               <button type="button" className="btn btn-ghost" onClick={handleBind} disabled={binding}>
                 {binding ? '绑定中…' : '绑定'}
               </button>
             </div>
-            {bindType === 'email' && (
-              <input
-                className="input"
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                placeholder="填绑定邮箱收到的验证码"
-                value={bindCode}
-                onChange={(e) => setBindCode(e.target.value.replace(/\D/g, ''))}
-                style={{ marginTop: 8 }}
-              />
-            )}
-            <p className="account-format-hint">绑定后也能用这个方式登录，忘了密码还能收验证码找回。绑邮箱要先收验证码。</p>
+            <input
+              className="input"
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="填绑定邮箱收到的验证码"
+              value={bindCode}
+              onChange={(e) => setBindCode(e.target.value.replace(/\D/g, ''))}
+              style={{ marginTop: 8 }}
+            />
+            <p className="account-format-hint">绑定后也能用这个邮箱登录，忘了密码还能收验证码找回。绑邮箱要先收验证码。</p>
           </div>
 
           <div className="settings-actions">
