@@ -264,8 +264,14 @@ export function addMemoryCacheItem(
   return item
 }
 
-/** TA 自主记住一条到某会话缓存：与本地 upsertMemoryItem 一致先判重，新增条目带来源和主题 */
-export function upsertMemoryCache(sessionId: string, text: string, source?: string, topic?: string): MemoryItem | null {
+/** TA 自主记住一条到某会话缓存：与本地 upsertMemoryItem 一致先判重，新增条目带来源和主题；explicit=true 标用户明说（TASK-LM1） */
+export function upsertMemoryCache(
+  sessionId: string,
+  text: string,
+  source?: string,
+  topic?: string,
+  explicit?: boolean,
+): MemoryItem | null {
   const trimmed = text.trim()
   if (!trimmed) return null
   if (isSimilarMemory(getMemoriesCache(sessionId), trimmed)) return null
@@ -275,6 +281,7 @@ export function upsertMemoryCache(sessionId: string, text: string, source?: stri
     createdAt: Date.now(),
     source,
     ...(topic?.trim() ? { topic: topic.trim() } : {}),
+    ...(explicit === true ? { explicit: true } : {}),
   }
   saveMemoriesCache(sessionId, [item, ...getMemoriesCache(sessionId)])
   return item

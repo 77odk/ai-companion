@@ -367,6 +367,14 @@ button {
   opacity: 0.8;
 }
 
+/* 用户指令触发记忆写入时，用户气泡下方的小字反馈（与「已记住」同款浅色小字，右对齐贴气泡） */
+.memory-saved {
+  padding-right: 4px;
+  font-size: 11px;
+  color: var(--color-primary-deep);
+  opacity: 0.8;
+}
+
 /* 正在输入动画 */
 .typing {
   display: inline-flex;

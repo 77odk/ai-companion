@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildSystemPrompt, chatCompletion, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage } from '../lib/api'
-import { extractMemories, notifyMemoryUpdated, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
+import { detectMemoryInstruction, extractMemories, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { getToken } from '../lib/auth'
 import { getSession, listMemories, postMemory, postMessage, type Session } from '../lib/sessionApi'
@@ -225,7 +225,41 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
       return
     }
 
+    // TASK-LM1 记忆保底写入：有会话 → 会话记忆缓存 upsert + 异步 postMemory 上传（失败留缓存不丢）；
+    // 无会话 → 本地记忆库。走现有 upsert（isSimilarMemory 天然去重），与模型标记提取互不重复建条目。
+    const writeMemory = (content: string, opts: { source?: string; topic?: string; explicit?: boolean } = {}) => {
+      const trimmed = content.trim()
+      if (!trimmed) return
+      const src = opts.source?.trim()
+      const snippet = src && src.length > 20 ? `${src.slice(0, 20)}…` : src
+      if (activeSessionId) {
+        const token = getToken()
+        const item = upsertMemoryCache(activeSessionId, trimmed, snippet, opts.topic, opts.explicit)
+        if (item && token) {
+          postMemory(token, activeSessionId, { content: trimmed }).then((res) => {
+            if (res.ok) reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
+            // 上传失败：记忆留在缓存（本地不丢），不打断聊天；记忆页能看到这条待上传的记忆
+          })
+        }
+      } else {
+        upsertMemoryItem(trimmed, snippet, opts.topic, opts.explicit)
+      }
+      notifyMemoryUpdated()
+    }
+
     const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
+    // TASK-LM1 显式记忆指令：硬触发检测 + 保底写入（不依赖模型是否输出标记）
+    const memInstr = detectMemoryInstruction(text)
+    const isRetort = !memInstr.isInstruction && isMemoryRetort(text)
+    if (memInstr.isInstruction) {
+      // 保底写：fact 非空直接用；为空说明去掉关键词后太短、内容不可靠 → 交给模型提取兜底，
+      // 不写零碎记忆（避免单字记忆在 isSimilarMemory 里挡住更完整的事实）
+      const content = (memInstr.fact ?? stripMemoryKeyword(text)).trim()
+      if (content.length >= 4) {
+        writeMemory(content, { source: text, topic: inferTopic(content), explicit: true })
+        userMsg.memorySaved = true
+      }
+    }
     // 发给模型的上下文只带刷新后的消息（base = 可见消息 + 新消息）
     const base = [...visibleMessages, userMsg]
     const assistantTs = Date.now()
@@ -279,6 +313,19 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
         if (activeSessionId) touchMemoryCache(activeSessionId, m.id, now)
         else touchMemory(m.id, now)
       }
+    }
+    // TASK-LM1 显式指令/反问强化：追加系统消息让模型也输出记忆标记（与保底写入去重，不重复建条目）
+    if (memInstr.isInstruction) {
+      apiMessages.push({
+        role: 'system',
+        content: `用户刚要求你记住：${memInstr.fact ?? text}。请在回复末尾单独一行输出【记忆·主题】标记（主题词概括类别），内容写这条事实，并在回复里简短确认已经记下。`,
+      })
+    } else if (isRetort) {
+      apiMessages.push({
+        role: 'system',
+        content:
+          '用户刚才在提醒你记下之前提到的信息。从最近的对话里提取值得长期记住的事实（作息、喜好、身体情况、重要经历等），在回复末尾单独一行输出【记忆·主题】标记，并确认已经记下。',
+      })
     }
     // 发回给模型的助手消息去掉记忆标记行，免得模型看到一堆标记跟着模仿
     const history: ApiMessage[] = base.slice(-20).map((m) => ({

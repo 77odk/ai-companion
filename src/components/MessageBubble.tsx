@@ -1,5 +1,5 @@
 import type { StoredMessage } from '../lib/storage'
-import { loadAIProfile, loadUserProfile } from '../lib/storage'
+import { loadAIProfile, loadUserProfile, shouldShowMemorySaved } from '../lib/storage'
 import { extractMemories, stripMemoryMarkers } from '../lib/memory'
 import DefaultAvatar from './DefaultAvatar'
 
@@ -27,6 +27,8 @@ export default function MessageBubble({ message, typing = false }: Props) {
   // 展示时把「【记忆】xxx」那行藏起来，不让用户看到标记（原文仍保存在存储里）
   const displayText = isUser ? message.content : stripMemoryMarkers(message.content)
   const hasMemory = !isUser && extractMemories(message.content).length > 0
+  // 用户这条消息触发记忆写入时，气泡下方给个「已帮你记下」的反馈
+  const showMemorySaved = shouldShowMemorySaved(message)
   return (
     <div className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}>
       {!isUser && <Avatar value={avatar} kind="ai" className="ai-avatar" />}
@@ -43,6 +45,7 @@ export default function MessageBubble({ message, typing = false }: Props) {
           )}
         </div>
         {hasMemory && <span className="memory-remembered">已记住</span>}
+        {showMemorySaved && <span className="memory-saved">✅已帮你记下</span>}
       </div>
       {isUser && <Avatar value={avatar} kind="user" className="user-avatar" />}
     </div>

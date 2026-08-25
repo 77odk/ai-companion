@@ -172,7 +172,7 @@ function isSimilar(a: string, b: string): boolean {
  * 不新增、不改 createdAt、不刷日期、不累计次数（首次记住的时间永远不变）。
  * 真没有相同内容才新增一条。返回更新后的全部记忆。
  */
-export function upsertMemoryItem(text: string, source?: string, topic?: string): MemoryItem[] {
+export function upsertMemoryItem(text: string, source?: string, topic?: string, explicit?: boolean): MemoryItem[] {
   const trimmed = text.trim()
   if (!trimmed) return loadMemory()
   const items = loadMemory()
@@ -186,6 +186,7 @@ export function upsertMemoryItem(text: string, source?: string, topic?: string):
     createdAt: Date.now(),
     source,
     ...(topic?.trim() ? { topic: topic.trim() } : {}),
+    ...(explicit === true ? { explicit: true } : {}),
   }
   const next = [item, ...items]
   saveMemory(next)
@@ -247,6 +248,80 @@ export function stripMemoryMarkers(text: string): string {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+// ---- 显式记忆指令检测（TASK-LM1：用户明说"帮我记一下"等硬触发；反问修复） ----
+
+/** 显式指令关键词：命中任一即视为用户要求记住（导出供 Chat 与测试使用） */
+export const MEMORY_INSTRUCTION_KEYWORDS = [
+  '帮我记一下',
+  '帮我记',
+  '记一下',
+  '记住',
+  '记下来',
+  '别忘了',
+  '你要记住',
+  '你记着',
+  '你记住',
+]
+
+/** 反问/催促类：用户没直说"帮我记"但明显在要求记（关键词只是反问题里的片段，事实在上文） */
+const MEMORY_RETORT_PHRASES = [
+  '你不记一下吗',
+  '记一下啊',
+  '记住了吗',
+  '你记住了吗',
+  '你记住了没',
+  '你记着点',
+  '记着点',
+  '你记住了吧',
+  '记住了吧',
+]
+
+/**
+ * 匹配用关键词：导出列表 + 常见口语组合"帮我记住"（不然会被"帮我记"先命中，去掉后剩"住…"不干净），
+ * 按长度降序：优先命中更具体的词（"你要记住"先于"记住"，去掉后事实更完整）。
+ */
+const MEMORY_KEYWORDS_SORTED = [...new Set([...MEMORY_INSTRUCTION_KEYWORDS, '帮我记住'])].sort(
+  (a, b) => b.length - a.length,
+)
+
+/** 是否反问/催促（"你不记一下吗""记住了吗"这类）：是 → 事实在上文，交给模型从上下文提取 */
+export function isMemoryRetort(text: string): boolean {
+  const t = String(text ?? '').trim()
+  if (!t) return false
+  return MEMORY_RETORT_PHRASES.some((p) => t.includes(p))
+}
+
+/**
+ * 检测用户消息里的显式记忆指令（纯函数，可 Node 单测）：
+ * - 命中任一关键词 → isInstruction=true；fact = 去掉关键词后的剩余文本（trim）
+ * - 剩余为空或过短（中文 <4 字）→ fact=null（交给模型提取兜底）
+ * - 反问/催促优先：'记住了吗' 含 '记住' 但不是指令，isInstruction=false（事实在上文）
+ *   例：'帮我记一下我早班7:50-15:50上班' → { true, '我早班7:50-15:50上班' }
+ *       '今天天气不错' → { false, null }
+ */
+export function detectMemoryInstruction(text: string): { isInstruction: boolean; fact: string | null } {
+  const t = String(text ?? '').trim()
+  if (!t) return { isInstruction: false, fact: null }
+  if (isMemoryRetort(t)) return { isInstruction: false, fact: null }
+  for (const kw of MEMORY_KEYWORDS_SORTED) {
+    const idx = t.indexOf(kw)
+    if (idx < 0) continue
+    const fact = (t.slice(0, idx) + t.slice(idx + kw.length)).trim()
+    return { isInstruction: true, fact: fact.length >= 4 ? fact : null }
+  }
+  return { isInstruction: false, fact: null }
+}
+
+/** 去掉文本里的显式指令关键词（保底写入用）：返回剩余文本；无关键词原样返回 */
+export function stripMemoryKeyword(text: string): string {
+  const t = String(text ?? '').trim()
+  for (const kw of MEMORY_KEYWORDS_SORTED) {
+    const idx = t.indexOf(kw)
+    if (idx >= 0) return (t.slice(0, idx) + t.slice(idx + kw.length)).trim()
+  }
+  return t
 }
 
 // ---- 记忆注入视角转换：用户说的「我」转成「对方」，防止模型把用户的"我"当成自己的"我" ----

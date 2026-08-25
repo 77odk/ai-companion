@@ -136,6 +136,13 @@ export interface StoredMessage {
   role: 'user' | 'assistant'
   content: string
   ts: number
+  /** 用户这条消息是否触发了记忆写入（TASK-LM1：显式指令保底写入成功标记；旧数据没有 = 不标） */
+  memorySaved?: boolean
+}
+
+/** 用户气泡下「✅已帮你记下」反馈是否显示：仅用户消息且该条触发了记忆写入（TASK-LM2） */
+export function shouldShowMemorySaved(m: StoredMessage): boolean {
+  return m.role === 'user' && m.memorySaved === true
 }
 
 const MESSAGES_KEY = 'ai_companion_messages'
