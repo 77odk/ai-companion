@@ -22,6 +22,7 @@ import {
 import { stripMemoryMarkers } from '../lib/memory'
 import { truncatePreview } from '../lib/aiSpaceDetail'
 import { timeAgo } from '../lib/time'
+import { loadAIProfile } from '../lib/storage'
 import type { StoredMessage } from '../lib/storage'
 
 interface Props {
@@ -69,6 +70,8 @@ export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }
 
   const list = Array.isArray(sessions) ? sessions : []
   const activeId = getActiveSessionId()
+  // 会话列表头像：显示 TA 上传的头像图，没图用首字母（2026-08-25 七七拍板）
+  const aiAvatar = loadAIProfile().avatar
 
   const switchSession = (id: string) => {
     setMenuFor(null)
@@ -196,7 +199,11 @@ export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }
                   aria-label={`切换到角色：${displayName}`}
                 >
                   <span className="roles-avatar" aria-hidden="true">
-                    {displayName.slice(0, 1)}
+                    {aiAvatar.startsWith('data:') ? (
+                      <img src={aiAvatar} alt="" className="roles-avatar-img" />
+                    ) : (
+                      displayName.slice(0, 1)
+                    )}
                   </span>
                   <span className="roles-info">
                     <span className="roles-item-title">{displayName}</span>

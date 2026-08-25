@@ -13,7 +13,6 @@ import {
   searchMessages,
   shiftMonth,
   truncatePreview,
-  type DayGroup,
 } from '../lib/aiSpaceDetail'
 import { stripMemoryMarkers } from '../lib/memory'
 import type { StoredMessage } from '../lib/storage'
@@ -33,11 +32,10 @@ interface Props {
 export default function SpaceChatLogs({ messages, yourName, aiNickname, onBack }: Props) {
   // 聊天记录二级视图：非 null 表示正在看某一天的完整消息
   const [logDayKey, setLogDayKey] = useState<string | null>(null)
-  // 搜索关键词 / 日历当前月份 / 目录折叠（null = 默认展开最近 3 天）
+  // 搜索关键词 / 日历当前月份
   const [chatSearch, setChatSearch] = useState('')
   const [calYear, setCalYear] = useState<number>(() => new Date().getFullYear())
   const [calMonth, setCalMonth] = useState<number>(() => new Date().getMonth())
-  const [expandedDays, setExpandedDays] = useState<Set<string> | null>(null)
   // 今天（日历高亮用）：挂载时定一次即可，跨天可随重渲染刷新
   const [todayKey] = useState<string>(() => dayKey(Date.now()))
 
@@ -45,17 +43,6 @@ export default function SpaceChatLogs({ messages, yourName, aiNickname, onBack }
   const searchHits = useMemo(() => searchMessages(messages, chatSearch), [messages, chatSearch])
   const calHighlight = useMemo(() => new Set(highlightDayKeys(messages)), [messages])
   const calRange = useMemo(() => calendarMonthRange(messages), [messages])
-
-  // 目录折叠：默认展开最近 3 天（dayGroups 日期倒序，前 3 组即最近三天），其余折叠
-  const expandedSet = expandedDays ?? new Set(dayGroups.slice(0, 3).map((g) => g.key))
-  const toggleDay = (key: string) => {
-    const next = new Set(expandedSet)
-    if (next.has(key)) next.delete(key)
-    else next.add(key)
-    setExpandedDays(next)
-  }
-  const expandAllDays = () => setExpandedDays(new Set(dayGroups.map((g) => g.key)))
-  const collapseAllDays = () => setExpandedDays(new Set())
 
   // 日历切月：不早于最早聊天月、不晚于当前月
   const canPrevCal =
@@ -199,68 +186,6 @@ export default function SpaceChatLogs({ messages, yourName, aiNickname, onBack }
     )
   }
 
-  /** 目录里的一天：头部点击展开/收起，展开后看当天消息、可进完整回放 */
-  function renderDayGroup(g: DayGroup) {
-    const open = expandedSet.has(g.key)
-    const recent = g.messages.slice(-4)
-    return (
-      <div key={g.key} className={`ai-space-dir-day${open ? ' ai-space-dir-day-open' : ''}`}>
-        <button type="button" className="ai-space-dir-head" onClick={() => toggleDay(g.key)} aria-expanded={open}>
-          <span className="ai-space-dir-name">{g.label}</span>
-          <span className="ai-space-dir-preview">{g.preview || '…'}</span>
-          <span className="ai-space-dir-count">{g.messages.length} 条</span>
-          <svg
-            className="ai-space-dir-chevron"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M9 6l6 6-6 6" />
-          </svg>
-        </button>
-        {open && (
-          <div className="ai-space-dir-body">
-            {recent.map((m, i) => {
-              const isUser = m.role === 'user'
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  className="ai-space-dir-msg"
-                  onClick={() => setLogDayKey(g.key)}
-                >
-                  <span className="ai-space-dir-msg-role">{isUser ? yourName : aiNickname}</span>
-                  <span className="ai-space-dir-msg-text">
-                    {truncatePreview(stripMemoryMarkers(m.content), 24)}
-                  </span>
-                </button>
-              )
-            })}
-            <button type="button" className="ai-space-dir-open" onClick={() => setLogDayKey(g.key)}>
-              查看完整回放
-              <svg
-                className="ai-space-dir-open-chevron"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            </button>
-          </div>
-        )}
-      </div>
-    )
-  }
-
   /** 聊天记录子页 */
   function renderChatsPage() {
     const searchActive = chatSearch.trim().length > 0
@@ -314,19 +239,7 @@ export default function SpaceChatLogs({ messages, yourName, aiNickname, onBack }
           ) : dayGroups.length === 0 ? (
             <p className="ai-space-empty">还没聊过天，去和 TA 说说话吧</p>
           ) : (
-            <>
-              {renderCalendar()}
-              <div className="ai-space-dir-tools">
-                <button type="button" className="ai-space-dir-tool" onClick={expandAllDays}>
-                  全部展开
-                </button>
-                <span className="ai-space-dir-tool-sep" aria-hidden="true" />
-                <button type="button" className="ai-space-dir-tool" onClick={collapseAllDays}>
-                  全部收起
-                </button>
-              </div>
-              <div className="ai-space-day-dir">{dayGroups.map((g) => renderDayGroup(g))}</div>
-            </>
+            <>{renderCalendar()}</>
           )}
         </div>
       </>

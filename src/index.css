@@ -100,7 +100,36 @@ button {
   height: 20px;
 }
 
-/* 聊天页头部 TA 头像（TASK-UI3）：点它打开聊天头像资料卡，跟在空间入口左边 */
+/* 聊天页头部 TA 资料入口（2026-08-25：小星球图标，七七拍板替换头像） */
+.chat-header-planet {
+  position: absolute;
+  right: 58px;
+  top: 12px;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-card);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  padding: 0;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.chat-header-planet:hover {
+  color: var(--color-primary-deep);
+  border-color: rgba(255, 138, 92, 0.4);
+  background: rgba(255, 138, 92, 0.06);
+}
+
+.chat-header-planet svg {
+  width: 22px;
+  height: 22px;
+}
+
 .chat-header-avatar {
   position: absolute;
   right: 58px;
@@ -4593,6 +4622,12 @@ textarea.persona-input {
   font-size: 20px;
   font-weight: 700;
   overflow: hidden;
+}
+
+.roles-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .roles-info {

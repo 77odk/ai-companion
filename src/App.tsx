@@ -12,20 +12,18 @@ import WeeklyPage from './components/WeeklyPage'
 import GuideDetail from './components/Guide'
 import LoginGate from './components/LoginGate'
 import RolesPage from './components/RolesPage'
-import DefaultAvatar from './components/DefaultAvatar'
-import { loadAIProfile, loadMessages, loadPersona } from './lib/storage'
+import { PlanetIcon } from './components/spaceIcons'
+import { loadMessages, loadPersona } from './lib/storage'
 import { getToken, isLoggedIn, isPublicView } from './lib/auth'
 import { listSessions } from './lib/sessionApi'
 import {
   getActiveSessionId,
-  getSessionsCache,
   setActiveSessionId,
   setSessionsCache,
 } from './lib/sessionStore'
 import { hasLocalLegacyData, hasMigratedFlag, runLocalMigration, setLocalMigratedFlag } from './lib/migrateLocal'
 import {
   decideLoginTarget,
-  displaySessionName,
   pickMostRecentSession,
   type RolePickMode,
 } from './lib/sessionFlow'
@@ -114,14 +112,7 @@ export default function App() {
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
 
-  // 聊天页头部 TA 头像（TASK-UI3）：点它打开聊天头像资料卡。有会话取角色名首字，
-  // 无会话（遗留流程）回落 AI 头像/默认头像
-  const headerAi = loadAIProfile()
-  const activeSid = getActiveSessionId()
-  const headerSession = activeSid
-    ? getSessionsCache().find((s) => String(s.id) === activeSid) ?? null
-    : null
-  const headerRoleName = headerSession ? displaySessionName(headerSession) : ''
+  // 聊天页头部（TASK-UI3）：小星球图标点开 TA 资料卡；返回箭头回会话列表
 
   // 老数据一键迁移：建云端会话 → 按升序传消息 → 传记忆（单条失败跳过不中断）→
   // 置位 → 进聊天。本地数据只读不删（红线）；createSession 失败才算整个迁移失败（不置位，可重试）。
@@ -416,18 +407,12 @@ export default function App() {
             {view === 'chat' && (
               <button
                 type="button"
-                className="chat-header-avatar"
+                className="chat-header-planet"
                 onClick={() => setView('chatprofile')}
                 aria-label="打开 TA 的资料卡"
                 title="TA 的资料卡"
               >
-                {headerAi.avatar.startsWith('data:') ? (
-                  <img src={headerAi.avatar} alt="" />
-                ) : headerRoleName ? (
-                  <span className="chat-header-avatar-letter">{headerRoleName.slice(0, 1)}</span>
-                ) : (
-                  <DefaultAvatar kind="ai" className="avatar-default" />
-                )}
+                <PlanetIcon />
               </button>
             )}
             <h1 className="app-title" onClick={handleTitleClick}>
@@ -468,26 +453,28 @@ export default function App() {
             )}
           </main>
 
-          <nav className="app-nav">
-            <button
-              className={`nav-btn${view === 'chat' || view === 'roles' ? ' active' : ''}`}
-              onClick={() => navigate('roles')}
-            >
-              聊天
-            </button>
-            <button
-              className={`nav-btn${view === 'memory' ? ' active' : ''}`}
-              onClick={() => navigate('memory')}
-            >
-              忆览
-            </button>
-            <button
-              className={`nav-btn${view === 'settings' ? ' active' : ''}`}
-              onClick={() => navigate('settings')}
-            >
-              我的
-            </button>
-          </nav>
+          {view !== 'chat' && (
+            <nav className="app-nav">
+              <button
+                className={`nav-btn${view === 'roles' ? ' active' : ''}`}
+                onClick={() => navigate('roles')}
+              >
+                消息
+              </button>
+              <button
+                className={`nav-btn${view === 'memory' ? ' active' : ''}`}
+                onClick={() => navigate('memory')}
+              >
+                忆览
+              </button>
+              <button
+                className={`nav-btn${view === 'settings' ? ' active' : ''}`}
+                onClick={() => navigate('settings')}
+              >
+                我的
+              </button>
+            </nav>
+          )}
         </>
       )}
     </div>

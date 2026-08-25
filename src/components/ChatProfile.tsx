@@ -165,7 +165,7 @@ export default function ChatProfile({ onClose, onGoMine, onSwitchRole }: Props) 
             <EntryChevron />
           </button>
 
-          {/* 刷新对话：底部独立卡片（仅刷新上下文，聊天记录永不删除） */}
+          {/* 刷新对话：OOC 一键修复（仅刷新上下文，聊天记录永不删除） */}
           <div className="ai-space-refresh-card">
             <button
               type="button"
@@ -177,14 +177,14 @@ export default function ChatProfile({ onClose, onGoMine, onSwitchRole }: Props) 
                 <RefreshIcon />
               </span>
               <span className="ai-space-entry-main">
-                <span className="ai-space-entry-title">刷新对话</span>
-                <span className="ai-space-entry-sub">TA 忘掉重来，聊天记录不删</span>
+                <span className="ai-space-entry-title">好像 OOC 了？点击一下一键修复</span>
+                <span className="ai-space-entry-sub">刷新对话，聊天记录归档，不会丢放心刷</span>
               </span>
               <EntryChevron open={confirmRefresh} />
             </button>
             {confirmRefresh && (
               <div className="ai-space-refresh-confirm">
-                <p className="ai-space-refresh-confirm-text">刷新后 TA 会忘了之前聊的，聊天记录还在</p>
+                <p className="ai-space-refresh-confirm-text">刷新后聊天框内容清空，聊天记录内仍可查看</p>
                 <div className="ai-space-refresh-confirm-actions">
                   <button type="button" className="btn btn-ghost" onClick={() => setConfirmRefresh(false)}>
                     再想想
