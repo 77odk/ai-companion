@@ -5259,3 +5259,481 @@ textarea.persona-input {
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(120, 60, 30, 0.3);
 }
+
+/* ---- 关于我页（2026-08-25 七七拍板） ---- */
+.aboutme-page {
+  padding: 0;
+}
+
+.aboutme-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 16px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 我的资料头 */
+.aboutme-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0 4px;
+}
+.aboutme-avatar {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffd3b6, #ffb08c);
+  color: var(--color-primary-deep);
+  font-size: 30px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.aboutme-avatar-img {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.aboutme-name {
+  margin-top: 10px;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.aboutme-sig {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* 区块标题行（标题 + 右侧加号） */
+.aboutme-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+.aboutme-section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.aboutme-section-spacer {
+  width: 26px;
+}
+.aboutme-add-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  transition: transform 0.15s;
+}
+.aboutme-add-btn:active {
+  transform: scale(0.92);
+}
+.aboutme-add-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* 我的重要日子卡片（横向滚动） */
+.aboutme-days {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.aboutme-days-empty {
+  background: var(--color-card);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.aboutme-day-card {
+  position: relative;
+  min-width: 132px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 14px;
+  flex-shrink: 0;
+}
+.aboutme-day-dot {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ann-color, var(--color-primary));
+}
+.aboutme-day-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  padding-right: 18px;
+}
+.aboutme-day-count {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--color-primary-deep);
+  margin-top: 6px;
+}
+.aboutme-day-date {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+.aboutme-day-del {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #cfc2bc;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+.aboutme-day-del:hover {
+  color: var(--color-primary-deep);
+  background: var(--color-primary-soft);
+}
+.aboutme-day-del svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 想让 TA 记住 */
+.aboutme-input-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.aboutme-input-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.aboutme-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.aboutme-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-family: inherit;
+  outline: none;
+}
+.aboutme-input::placeholder {
+  color: #c4b3ac;
+}
+.aboutme-input:focus {
+  border-color: var(--color-primary);
+}
+.aboutme-input-btn {
+  flex: none;
+}
+
+/* 我自己说的列表 */
+.aboutme-mem-empty {
+  background: var(--color-card);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.aboutme-mem-list {
+  background: var(--color-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  padding: 4px 0;
+}
+.aboutme-mem-item {
+  display: flex;
+  align-items: center;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--color-border);
+  gap: 12px;
+}
+.aboutme-mem-item:last-child {
+  border-bottom: none;
+}
+.aboutme-mem-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  flex-shrink: 0;
+}
+.aboutme-mem-main {
+  flex: 1;
+  min-width: 0;
+}
+.aboutme-mem-text {
+  font-size: 14px;
+  color: var(--color-text);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.aboutme-mem-date {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+.aboutme-mem-del {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #cfc2bc;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.aboutme-mem-del:hover {
+  color: var(--color-primary-deep);
+  background: var(--color-primary-soft);
+}
+.aboutme-mem-del svg {
+  width: 15px;
+  height: 15px;
+}
+.aboutme-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-primary-deep);
+}
+.aboutme-footnote {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* 添加我的日子表单 */
+.aboutme-form-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(61, 44, 41, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 24px;
+}
+.aboutme-form {
+  width: 100%;
+  max-width: 340px;
+  background: var(--color-card);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 12px 40px rgba(61, 44, 41, 0.25);
+}
+.aboutme-form-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+  text-align: center;
+}
+.aboutme-form-input {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-family: inherit;
+  outline: none;
+}
+.aboutme-form-input:focus {
+  border-color: var(--color-primary);
+}
+.aboutme-form-mode {
+  display: flex;
+  gap: 8px;
+}
+.aboutme-mode-btn {
+  flex: 1;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  cursor: pointer;
+  font-family: inherit;
+}
+.aboutme-mode-btn.is-active {
+  border-color: var(--color-primary);
+  color: var(--color-primary-deep);
+  background: var(--color-primary-soft);
+  font-weight: 600;
+}
+.aboutme-form-colors {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.aboutme-color-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.aboutme-color-dot.is-active {
+  border-color: var(--color-text);
+}
+.aboutme-form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* 资料卡相识天数大字：不带框（2026-08-25 七七拍板，文案固定从角色创建计数） */
+.chatprofile-days {
+  margin: 10px 0 0;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--color-primary-deep);
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+
+/* TA 空间 · 最近的大日子卡（2026-08-25 七七拍板：卡片本身就是入口，点进纪念日页） */
+.ai-space-bigday {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin: 4px 0 12px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #fff3ec, #ffe4d3);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.ai-space-bigday-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ff8a5c, #e96f3e);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ai-space-bigday-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.ai-space-bigday-main {
+  flex: 1;
+  min-width: 0;
+}
+.ai-space-bigday-label {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.ai-space-bigday-count {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-primary-deep);
+  margin-top: 3px;
+}
+.ai-space-bigday-sub {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+.ai-space-bigday-arrow {
+  color: #cfc2bc;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+/* 纪念日页 · 最近的大日子卡（Big day，2026-08-25 倒数日式） */
+.anniversary-bigday {
+  padding: 20px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #ff8a5c, #e96f3e);
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(233, 111, 62, 0.3);
+}
+.anniversary-bigday-label {
+  font-size: 13px;
+  opacity: 0.9;
+}
+.anniversary-bigday-count {
+  font-size: 32px;
+  font-weight: 800;
+  margin-top: 6px;
+  letter-spacing: 1px;
+}
+.anniversary-bigday-sub {
+  font-size: 12px;
+  opacity: 0.85;
+  margin-top: 6px;
+}
+
+/* 纪念日列表项 · 计时文案（倒数日式） */
+.anniversary-count {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-primary-deep);
+}
+.anniversary-count.is-forward {
+  color: #b5a29b;
+  font-weight: 600;
+}

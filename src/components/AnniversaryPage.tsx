@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ANNIVERSARY_COLORS,
   addAnniversary,
   anniversaryColorIndex,
   formatAnniversaryDate,
+  formatCountdown,
   getAnniversaries,
   getMainAnniversaryId,
   isValidAnniversaryDate,
+  pickNextBigDay,
   removeAnniversary,
   resolveMainAnniversary,
   setMainAnniversaryId,
@@ -87,6 +89,8 @@ export default function AnniversaryPage({ onBack }: Props) {
   // 当前主展示：有主展示 id 用主展示，否则默认取列表第一条（跟记忆页小卡片一致）。
   // 每次渲染直接算：setMainAnniversaryId 广播后触发下面的事件刷新，重渲染即拿到最新主展示。
   const mainDisplay = resolveMainAnniversary(anniversaries, sid)
+  // 最近的大日子（Big day）：下一个最近的纪念日（倒数日式）
+  const bigDay = useMemo(() => pickNextBigDay(anniversaries), [anniversaries])
 
   // 数据变更自动刷新：记忆页/别处改了纪念日，进来立刻同步（会话感知）
   useEffect(() => {
@@ -166,11 +170,22 @@ export default function AnniversaryPage({ onBack }: Props) {
         <button type="button" className="link-btn ai-space-back" onClick={onBack}>
           ‹ 返回
         </button>
-        <h2 className="ai-space-sub-title">相逢纪</h2>
+        <h2 className="ai-space-sub-title">纪念日</h2>
         <span className="ai-space-topbar-spacer" aria-hidden="true" />
       </div>
 
       <div className="anniversary-page-body">
+        {/* 最近的大日子卡（Big day）：倒数日式，下一个最近的纪念日 */}
+        {bigDay && (
+          <div className="anniversary-bigday">
+            <div className="anniversary-bigday-label">最近的大日子</div>
+            <div className="anniversary-bigday-count">{formatCountdown(bigDay)}</div>
+            <div className="anniversary-bigday-sub">
+              {bigDay.label} · {formatAnniversaryDate(bigDay.date)}
+            </div>
+          </div>
+        )}
+
         {/* 主展示切换区：决定记忆页小卡片上显示哪个日子 */}
         {anniversaries.length > 0 && (
           <section className="anniversary-main-section">
@@ -225,11 +240,11 @@ export default function AnniversaryPage({ onBack }: Props) {
                     </span>
                     <span className="anniversary-page-meta">
                       <span className="anniversary-page-date">{formatAnniversaryDate(a.date)}</span>
-                      <span className={`anniversary-mode-tag${a.countMode === 'countdown' ? ' is-countdown' : ''}`}>
-                        {a.countMode === 'countdown' ? '倒计时' : '正计时'}
+                      <span className={`anniversary-count${a.countMode === 'countdown' ? '' : ' is-forward'}`}>
+                        {formatCountdown(a)}
                       </span>
                       <span className={`anniversary-kind-tag${a.kind === 'personal' ? ' is-personal' : ''}`}>
-                        {a.kind === 'personal' ? '个人' : '双人'}
+                        {a.kind === 'personal' ? '我的' : '双人'}
                       </span>
                     </span>
                   </div>

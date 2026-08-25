@@ -1,32 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  getFirstSeen,
-  loadAIProfile,
-  loadMessages,
-  loadUserProfile,
-  setSessionStart,
-  type StoredMessage,
-} from '../lib/storage'
+import { useMemo, useState } from 'react'
+import { loadAIProfile, loadUserProfile } from '../lib/storage'
 import { loadMemory, type MemoryItem } from '../lib/memory'
-import { computeDaysKnown, formatMemoryDate } from '../lib/aiSpaceDetail'
+import { formatMemoryDate } from '../lib/aiSpaceDetail'
+import { getAnniversaries, pickNextBigDay, formatCountdown, formatAnniversaryDate } from '../lib/anniversary'
 import DefaultAvatar from './DefaultAvatar'
 import WeeklyPage from './WeeklyPage'
-import {
-  getActiveSessionId,
-  getMemoriesCache,
-  getMessagesCache,
-  getSessionsCache,
-} from '../lib/sessionStore'
+import { getActiveSessionId, getMemoriesCache, getSessionsCache } from '../lib/sessionStore'
 import { displaySessionName } from '../lib/sessionFlow'
-import { CalendarIcon, ChatIcon, EntryChevron, HeartIcon, NotebookIcon, RefreshIcon } from './spaceIcons'
+import { EntryChevron, HeartIcon, NotebookIcon, SparkleIcon } from './spaceIcons'
 
 interface Props {
   onBack: () => void
   /** 引导「去写人设」/「去配置」跳「我的」页（App 里即 settings 视图） */
   onGoMine?: () => void
+  /** 点「最近的大日子」卡 → 进纪念日页 */
+  onOpenAnniversary?: () => void
 }
 
-export default function AISpace({ onBack, onGoMine }: Props) {
+export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) {
   const ai = loadAIProfile()
   const user = loadUserProfile()
   const yourName = user.nickname || '你'
@@ -41,49 +32,26 @@ export default function AISpace({ onBack, onGoMine }: Props) {
     return s ? displaySessionName(s) : ''
   })
 
-  // 详情页数据：进空间时读一次（消息/记忆/首次见面时间不会在空间内变化）。
+  // 详情页数据：进空间时读一次（记忆不会在空间内变化）。
   // 有会话读当前会话缓存（后端填充），无会话兜底全局 localStorage（游客/过渡态）
-  const [messages] = useState<StoredMessage[]>(() => (sessionId ? getMessagesCache(sessionId) : loadMessages()))
   const [memories] = useState<MemoryItem[]>(() => (sessionId ? getMemoriesCache(sessionId) : loadMemory()))
-  const [firstSeen] = useState<number>(() => getFirstSeen(sessionId || undefined))
 
-  // 子页面路由：home 资料页 / memories TA所忆 / weekly 相与书
-  // （P3 聊天记录 / TA 的生活已迁到聊天头像资料卡 ChatProfile）
-  const [page, setPage] = useState<'home' | 'memories' | 'weekly'>('home')
-
-  // 刷新对话二次确认：true = 已展开确认面板，等用户确认
-  const [confirmRefresh, setConfirmRefresh] = useState(false)
-  const [hint, setHint] = useState<string | null>(null)
-  const hintTimer = useRef<number | undefined>(undefined)
-
-  const flashHint = useCallback((msg: string) => {
-    setHint(msg)
-    window.clearTimeout(hintTimer.current)
-    hintTimer.current = window.setTimeout(() => setHint(null), 2600)
-  }, [])
-
-  useEffect(() => () => window.clearTimeout(hintTimer.current), [])
-
-  // 「刷新对话」（M7-3）：仅刷新当前对话上下文——TA 忘了之前聊的重新开始，聊天记录一条不删
-  const handleRefreshChats = () => setConfirmRefresh(true)
-  const confirmDoRefresh = () => {
-    setSessionStart(Date.now())
-    setConfirmRefresh(false)
-    flashHint('已刷新，TA 从新的一页开始')
-  }
-  const cancelRefresh = () => setConfirmRefresh(false)
+  // 子页面路由：home 资料页 / memories TA所忆 / events TA所记（大小事） / weekly TA所写（周记）
+  const [page, setPage] = useState<'home' | 'memories' | 'events' | 'weekly'>('home')
 
   const sortedMemories = useMemo(
     () => [...memories].sort((a, b) => b.createdAt - a.createdAt),
     [memories],
   )
-  const daysKnown = computeDaysKnown(firstSeen)
+
+  // 最近的大日子（Big day）：当前角色纪念日里「下一次」最近的那条；点卡片进纪念日页
+  const bigDay = useMemo(() => pickNextBigDay(getAnniversaries(sessionId || undefined)), [sessionId])
 
   const goHome = () => setPage('home')
 
   /* ---- 子页面渲染 ---- */
 
-  /** 资料页（home）：头部 + 功能入口列表 + 相处数据行 */
+  /** 资料页（home）：头部 + 最近的大日子卡 + 功能入口列表 */
   function renderHomePage() {
     return (
       <>
@@ -112,31 +80,26 @@ export default function AISpace({ onBack, onGoMine }: Props) {
         </div>
 
         <div className="ai-space-timeline">
-          {/* 相处数据：v0.2.0 原版——在头部下方、timeline 顶部，紧贴入口列表 */}
-          <div className="ai-space-stats">
-            <div className="ai-space-stat">
-              <span className="ai-space-stat-icon" aria-hidden="true">
-                <CalendarIcon />
-              </span>
-              <span className="ai-space-stat-num">第 {daysKnown} 天</span>
-              <span className="ai-space-stat-label">认识</span>
-            </div>
-            <div className="ai-space-stat">
-              <span className="ai-space-stat-icon" aria-hidden="true">
-                <ChatIcon />
-              </span>
-              <span className="ai-space-stat-num">{messages.length} 条</span>
-              <span className="ai-space-stat-label">聊过</span>
-            </div>
-            <div className="ai-space-stat">
-              <span className="ai-space-stat-icon" aria-hidden="true">
+          {/* 最近的大日子卡：点它进纪念日页（2026-08-25 七七拍板） */}
+          {bigDay && onOpenAnniversary && (
+            <button type="button" className="ai-space-bigday" onClick={onOpenAnniversary}>
+              <span className="ai-space-bigday-icon" aria-hidden="true">
                 <HeartIcon />
               </span>
-              <span className="ai-space-stat-num">{memories.length} 件</span>
-              <span className="ai-space-stat-label">TA所忆</span>
-            </div>
-          </div>
-          {/* 功能入口列表：微信式资料页（P3 只留 TA所忆 / 相与书） */}
+              <span className="ai-space-bigday-main">
+                <span className="ai-space-bigday-label">最近的大日子</span>
+                <span className="ai-space-bigday-count">{formatCountdown(bigDay)}</span>
+                <span className="ai-space-bigday-sub">
+                  {bigDay.label} · {formatAnniversaryDate(bigDay.date)}
+                </span>
+              </span>
+              <span className="ai-space-bigday-arrow" aria-hidden="true">
+                ›
+              </span>
+            </button>
+          )}
+
+          {/* 功能入口列表：TA所忆 / TA所记 / TA所写（2026-08-25 七七拍板，TA所X 系列） */}
           <div className="ai-space-entry-list">
             <button type="button" className="ai-space-entry-row" onClick={() => setPage('memories')}>
               <span className="ai-space-entry-icon" aria-hidden="true">
@@ -144,7 +107,18 @@ export default function AISpace({ onBack, onGoMine }: Props) {
               </span>
               <span className="ai-space-entry-main">
                 <span className="ai-space-entry-title">TA所忆</span>
-                <span className="ai-space-entry-sub">{memories.length} 件记忆 · 时间线</span>
+                <span className="ai-space-entry-sub">TA 记得的事 · {memories.length} 件记忆</span>
+              </span>
+              <EntryChevron />
+            </button>
+
+            <button type="button" className="ai-space-entry-row" onClick={() => setPage('events')}>
+              <span className="ai-space-entry-icon" aria-hidden="true">
+                <SparkleIcon />
+              </span>
+              <span className="ai-space-entry-main">
+                <span className="ai-space-entry-title">TA所记</span>
+                <span className="ai-space-entry-sub">你们的大小事</span>
               </span>
               <EntryChevron />
             </button>
@@ -154,46 +128,12 @@ export default function AISpace({ onBack, onGoMine }: Props) {
                 <NotebookIcon />
               </span>
               <span className="ai-space-entry-main">
-                <span className="ai-space-entry-title">相与书</span>
-                <span className="ai-space-entry-sub">TA 的周记 · 每周最多一篇</span>
+                <span className="ai-space-entry-title">TA所写</span>
+                <span className="ai-space-entry-sub">TA 写的周记 · 每周最多一篇</span>
               </span>
               <EntryChevron />
             </button>
           </div>
-
-          {/* 刷新对话：底部独立卡片，M7-3 生效（仅刷新上下文，聊天记录永不删除） */}
-          <div className="ai-space-refresh-card">
-            <button
-              type="button"
-              className="ai-space-entry-row ai-space-entry-refresh"
-              onClick={handleRefreshChats}
-              aria-expanded={confirmRefresh}
-            >
-              <span className="ai-space-entry-icon" aria-hidden="true">
-                <RefreshIcon />
-              </span>
-              <span className="ai-space-entry-main">
-                <span className="ai-space-entry-title">刷新对话</span>
-                <span className="ai-space-entry-sub">TA 忘了之前聊的，重新开始</span>
-              </span>
-              <EntryChevron open={confirmRefresh} />
-            </button>
-            {confirmRefresh && (
-              <div className="ai-space-refresh-confirm">
-                <p className="ai-space-refresh-confirm-text">刷新后 TA 会忘了之前聊的，聊天记录还在</p>
-                <div className="ai-space-refresh-confirm-actions">
-                  <button type="button" className="btn btn-ghost" onClick={cancelRefresh}>
-                    再想想
-                  </button>
-                  <button type="button" className="btn btn-primary" onClick={confirmDoRefresh}>
-                    确认刷新
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {hint && <p className="ai-space-hint">{hint}</p>}
         </div>
       </>
     )
@@ -229,12 +169,35 @@ export default function AISpace({ onBack, onGoMine }: Props) {
     )
   }
 
+  /** TA所记子页：你们的大小事（数据逻辑待定，先空态引导） */
+  function renderEventsPage() {
+    return (
+      <>
+        <div className="ai-space-topbar ai-space-sub-bar">
+          <button type="button" className="link-btn ai-space-back" onClick={() => setPage('home')}>
+            ‹ 返回
+          </button>
+          <h2 className="ai-space-sub-title">TA所记</h2>
+          <span className="ai-space-topbar-spacer" aria-hidden="true" />
+        </div>
+
+        <div className="ai-space-timeline">
+          <p className="ai-space-empty">你们一起经历的大小事，TA 会慢慢记在这里</p>
+        </div>
+      </>
+    )
+  }
+
   // 相与书子页：直接整页复用周记页（不套 ai-space 滚动容器，返回回空间资料页）
   if (page === 'weekly') {
     return <WeeklyPage onBack={goHome} onGoSettings={onGoMine ?? (() => {})} />
   }
 
-  const pageClass = `page ai-space-page${page === 'memories' ? ' ai-space-page-sub' : ''}`
+  const pageClass = `page ai-space-page${page === 'memories' || page === 'events' ? ' ai-space-page-sub' : ''}`
 
-  return <div className={pageClass}>{page === 'memories' ? renderMemoriesPage() : renderHomePage()}</div>
+  return (
+    <div className={pageClass}>
+      {page === 'memories' ? renderMemoriesPage() : page === 'events' ? renderEventsPage() : renderHomePage()}
+    </div>
+  )
 }

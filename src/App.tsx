@@ -6,6 +6,7 @@ import Memory from './components/Memory'
 import Settings, { type SettingsPage } from './components/Settings'
 import AISpace from './components/AISpace'
 import ChatProfile from './components/ChatProfile'
+import AboutMe from './components/AboutMe'
 import AnniversaryPage from './components/AnniversaryPage'
 import WeeklyPage from './components/WeeklyPage'
 import GuideDetail from './components/Guide'
@@ -31,7 +32,7 @@ import {
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh } from './lib/forceRefresh'
 
-type View = 'welcome' | 'role' | 'roles' | 'chat' | 'memory' | 'settings' | 'aispace' | 'chatprofile' | 'anniversary' | 'weekly' | 'guide' | 'loading'
+type View = 'welcome' | 'role' | 'roles' | 'chat' | 'memory' | 'settings' | 'aispace' | 'chatprofile' | 'aboutme' | 'anniversary' | 'weekly' | 'guide' | 'loading'
 
 // 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
 type MigrationState = 'idle' | 'running' | 'failed'
@@ -224,11 +225,6 @@ export default function App() {
     navigate('settings')
   }
 
-  const openSpace = (from: View) => {
-    setSpaceFrom(from)
-    navigate('aispace')
-  }
-
   // 忆览页「全部角色」卡片：切到该角色会话后进它的 TA 空间，返回时回忆览页
   const openSpaceForSession = (sessionId: string) => {
     setActiveSessionId(String(sessionId))
@@ -352,7 +348,14 @@ export default function App() {
           onLogin={() => setGateTarget('chat')}
         />
       ) : view === 'aispace' ? (
-        <AISpace onBack={backFromSpace} onGoMine={() => navigate('settings')} />
+        <AISpace
+          onBack={backFromSpace}
+          onGoMine={() => navigate('settings')}
+          onOpenAnniversary={() => {
+            setSpaceFrom('aispace')
+            navigate('anniversary')
+          }}
+        />
       ) : view === 'chatprofile' ? (
         <ChatProfile
             onClose={() => navigate('chat')}
@@ -363,8 +366,10 @@ export default function App() {
               navigate('role')
             }}
           />
+      ) : view === 'aboutme' ? (
+        <AboutMe onBack={() => navigate('memory')} />
       ) : view === 'anniversary' ? (
-        <AnniversaryPage onBack={() => navigate('memory')} />
+        <AnniversaryPage onBack={() => navigate('aispace')} />
       ) : view === 'weekly' ? (
         <WeeklyPage onBack={() => navigate('memory')} onGoSettings={() => openSettings('provider')} />
       ) : view === 'loading' ? (
@@ -428,29 +433,6 @@ export default function App() {
                 )}
               </button>
             )}
-            {view === 'chat' && (
-              <button
-                type="button"
-                className="space-entry"
-                onClick={() => openSpace('chat')}
-                aria-label="进入 TA 的空间"
-                title="TA 的空间"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="5.5" />
-                  <path d="M6.8 8.2C4.6 7.2 3.2 7.6 2.6 9c-.6 1.4.6 3 2.6 3.6M15.4 7.4c1.8-1.4 3.4-1.5 4.2-.3.8 1.2-.2 3-2.6 4M10.4 15.8c-.6 2.2-.2 3.6 1.2 4.2 1.4.6 3-.6 3.6-2.6" />
-                  <circle cx="16.4" cy="5.8" r="0.7" fill="currentColor" stroke="none" />
-                </svg>
-              </button>
-            )}
             <h1 className="app-title" onClick={handleTitleClick}>
               忆文
             </h1>
@@ -475,8 +457,7 @@ export default function App() {
             )}
             {view === 'memory' && (
               <Memory
-                onOpenAnniversary={() => navigate('anniversary')}
-                onOpenWeekly={() => navigate('weekly')}
+                onOpenAboutMe={() => navigate('aboutme')}
                 onOpenSpaceForSession={openSpaceForSession}
               />
             )}

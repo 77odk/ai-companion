@@ -1,12 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  anniversaryColorIndex,
-  formatCountdown,
-  getAnniversaries,
-  getDefaultAnniversary,
-  resolveMainAnniversary,
-  type Anniversary,
-} from '../lib/anniversary'
+import { useEffect, useMemo, useState } from 'react'
 import {
   addMemoryItem,
   getMemoryRecencyRank,
@@ -20,14 +12,8 @@ import {
   type MemoryItem,
 } from '../lib/memory'
 import {
-  buildKnownSince,
-  buildSummaryMessages,
-  buildTopTopicLine,
-  cleanSummaryText,
   formatFirstRememberedDate,
-  summarizeStats,
 } from '../lib/memorySummary'
-import { chatCompletion } from '../lib/api'
 import { getToken } from '../lib/auth'
 import { deleteMemory, listMemories, patchMemory, postMemory, type Session } from '../lib/sessionApi'
 import {
@@ -41,7 +27,7 @@ import {
   saveMemoriesCache,
   sessionMemoryToItem,
 } from '../lib/sessionStore'
-import { getFirstSeen, loadAIProfile, loadPersona, loadSettings, loadUserProfile, type StoredMessage } from '../lib/storage'
+import { getFirstSeen, type StoredMessage } from '../lib/storage'
 import { displaySessionName } from '../lib/sessionFlow'
 import { roleInitial } from '../lib/sessionProfile'
 import { computeDaysKnown, truncatePreview } from '../lib/aiSpaceDetail'
@@ -118,8 +104,8 @@ function PinIcon({ pinned }: { pinned: boolean }) {
   )
 }
 
-/** 纪念日卡片标题的日历图标：细描边线条（暖橘由 CSS currentColor 控制） */
-function CalendarIcon() {
+/** 「关于我」卡片的人物图标：细描边线条（暖橘由 CSS currentColor 控制） */
+function UserIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -130,27 +116,8 @@ function CalendarIcon() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <rect x="3" y="4" width="18" height="17" rx="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
-    </svg>
-  )
-}
-
-/** 「相与书」卡片的本子图标：细描边线条，暖橘由 CSS currentColor 控制 */
-function NotebookIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M4 4h16v16H4z" />
-      <path d="M8 2v20" />
-      <path d="M11 8h5M11 12h5M11 16h5" />
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M5 20c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6" />
     </svg>
   )
 }
@@ -240,15 +207,13 @@ function MemoryItemTextEdit({
 }
 
 interface MemoryProps {
-  /** 点纪念日小卡片 → 进纪念日管理页 */
-  onOpenAnniversary?: () => void
-  /** 点「相与书」卡片 → 进周记页 */
-  onOpenWeekly?: () => void
+  /** 点「关于我」卡片 → 进关于我页（我的重要日子 + 我说的） */
+  onOpenAboutMe?: () => void
   /** 忆览页「全部角色」画廊：点卡片 → 切会话并进该角色的 TA 空间 */
   onOpenSpaceForSession?: (sessionId: string) => void
 }
 
-export default function Memory({ onOpenAnniversary, onOpenWeekly, onOpenSpaceForSession }: MemoryProps) {
+export default function Memory({ onOpenAboutMe, onOpenSpaceForSession }: MemoryProps) {
   // B2c-3 会话模式：有 activeSessionId → 记忆读当前会话缓存（后台拉后端填充，后端权威）；
   // 无会话（过渡态）→ 读本地 ai_companion_memory（原逻辑）
   const activeSessionId = getActiveSessionId()
@@ -285,31 +250,6 @@ export default function Memory({ onOpenAnniversary, onOpenWeekly, onOpenSpaceFor
     }
   }, [])
 
-  // 纪念日：用户亲手填的「重要的日子」，主展示计时显示在小卡片上，聊天时注入让 TA 记得。
-  // 会话感知（TASK-UI2）：个人节日 + 当前角色双人节日并集；首次一条都没有时，
-  // 用 getFirstSeen() 生成默认「认识纪念日」（只在没发过默认时给一次，删光了不复活）。
-  const anniversarySid = activeSessionId || undefined
-  const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() => {
-    const list = getAnniversaries(anniversarySid)
-    if (list.length === 0) {
-      const def = getDefaultAnniversary(anniversarySid)
-      if (def) return [def]
-    }
-    return list
-  })
-
-  // 主展示纪念日：记忆页小卡片上显示的那个（管理页可切换，null 默认取列表第一条）
-  const mainAnniversary = useMemo(
-    () => resolveMainAnniversary(anniversaries, anniversarySid),
-    [anniversaries, anniversarySid],
-  )
-
-  // 「TA 眼中的你」LLM 心里话：有配置才调，失败静默，同一批记忆只生成一次
-  const [summary, setSummary] = useState<string | null>(null)
-  const [summaryLoading, setSummaryLoading] = useState(false)
-  const generatedKeyRef = useRef('')
-  const summarySeqRef = useRef(0)
-
   // 数据变更自动刷新：聊天里 TA 刚记住的，切回记忆页（或别的页签）立刻能看到。
   // 会话模式读当前会话缓存，本地模式读本地记忆库；纪念日增删改也广播同一事件，这里一并刷新。
   useEffect(() => {
@@ -317,60 +257,14 @@ export default function Memory({ onOpenAnniversary, onOpenWeekly, onOpenSpaceFor
       const sid = getActiveSessionId()
       setItems(sid ? getMemoriesCache(sid) : loadMemory())
     }
-    const refreshAnniversaries = () => setAnniversaries(getAnniversaries(getActiveSessionId() || undefined))
     window.addEventListener(MEMORY_UPDATED_EVENT, refresh)
-    window.addEventListener(MEMORY_UPDATED_EVENT, refreshAnniversaries)
     // storage 事件跨页签才触发，同页签不触发，所以上面还得靠自定义事件
     window.addEventListener('storage', refresh)
-    window.addEventListener('storage', refreshAnniversaries)
     return () => {
       window.removeEventListener(MEMORY_UPDATED_EVENT, refresh)
-      window.removeEventListener(MEMORY_UPDATED_EVENT, refreshAnniversaries)
       window.removeEventListener('storage', refresh)
-      window.removeEventListener('storage', refreshAnniversaries)
     }
   }, [])
-
-  // 汇总卡 LLM 区：记忆非空 + 有 key/base_url/模型 才调；失败静默，同一批记忆只生成一次。
-  // 用 seq 序号作废在飞的旧请求（换了一批记忆 / 清空时），StrictMode 双跑靠 generatedKeyRef 去重。
-  useEffect(() => {
-    if (items.length === 0) {
-      summarySeqRef.current++ // 作废在飞的请求
-      setSummary(null)
-      setSummaryLoading(false)
-      return
-    }
-    const settings = loadSettings()
-    if (!settings.apiKey?.trim() || !settings.baseUrl?.trim() || !settings.model?.trim()) {
-      summarySeqRef.current++
-      setSummaryLoading(false)
-      return
-    }
-
-    const key = items.map((m) => m.id).join('|')
-    if (key === generatedKeyRef.current) return
-    generatedKeyRef.current = key
-
-    const seq = ++summarySeqRef.current
-    setSummaryLoading(true)
-    const persona = loadPersona()
-    const ai = loadAIProfile()
-    const yourName = loadUserProfile().nickname || '你'
-    chatCompletion(settings, buildSummaryMessages(ai.nickname, yourName, persona, items), {
-      maxTokens: 200,
-      timeoutMs: 30000,
-    })
-      .then((raw) => {
-        if (seq !== summarySeqRef.current) return
-        setSummary(cleanSummaryText(raw))
-      })
-      .catch(() => {
-        // 失败静默：只留统计区
-      })
-      .finally(() => {
-        if (seq === summarySeqRef.current) setSummaryLoading(false)
-      })
-  }, [items])
 
   // 按主题动态分组：旧数据没主题就按关键词推断；组按最近添加时间排序，组内按「活跃度」排序
   const groups = useMemo<TopicGroup[]>(() => {
@@ -390,11 +284,6 @@ export default function Memory({ onOpenAnniversary, onOpenWeekly, onOpenSpaceFor
       }))
       .sort((a, b) => newestCreatedAt(b.items) - newestCreatedAt(a.items))
   }, [items])
-
-  // 顶部汇总：统计 / 一句话点评 / 最早一条
-  const stats = useMemo(() => summarizeStats(items), [items])
-  const topTopicLine = useMemo(() => buildTopTopicLine(stats.topTopic), [stats.topTopic])
-  const knownSinceLine = stats.earliestTs != null ? buildKnownSince(stats.earliestTs) : ''
 
   // 「很久没提起」小字标签的判断基准：当前时刻（30 天窗口，渲染时取一次即可）
   const now = Date.now()
@@ -576,15 +465,15 @@ export default function Memory({ onOpenAnniversary, onOpenWeekly, onOpenSpaceFor
         </section>
       )}
 
-      {/* 「相与书」入口卡片：跟纪念日小卡片同一档样式，点进周记页 */}
-      {onOpenWeekly && (
-        <button type="button" className="anniversary-strip" onClick={onOpenWeekly}>
+      {/* 「关于我」入口卡片：一行样式（跟原相逢纪同款），点进关于我页（我的重要日子 + 我说的） */}
+      {onOpenAboutMe && (
+        <button type="button" className="anniversary-strip" onClick={onOpenAboutMe}>
           <span className="anniversary-strip-icon" aria-hidden="true">
-            <NotebookIcon />
+            <UserIcon />
           </span>
-          <span className="anniversary-strip-title">相与书</span>
+          <span className="anniversary-strip-title">关于我</span>
           <span className="anniversary-strip-main">
-            <span className="anniversary-strip-label">TA每周最多写下一篇周记，记录自己的生活与心绪，你可以阅读并留下感想</span>
+            <span className="anniversary-strip-label">我的重要日子，和我想让 TA 记住的</span>
           </span>
           <span className="anniversary-strip-arrow" aria-hidden="true">
             ›
@@ -593,47 +482,6 @@ export default function Memory({ onOpenAnniversary, onOpenWeekly, onOpenSpaceFor
       )}
 
       {memError && <p className="memory-error">{memError}</p>}
-
-      {stats.count > 0 && (
-        <section className="memory-summary-card">
-          <div className="memory-summary-head">
-            <h3 className="memory-summary-title">TA 眼中的你</h3>
-            {summaryLoading && <span className="memory-summary-hint">TA 正在回忆你…</span>}
-          </div>
-          <p className="memory-summary-stats">
-            TA 记得你 <strong>{stats.count}</strong> 件事 · 分布在 <strong>{stats.topicCount}</strong> 个主题
-            {stats.pinnedCount > 0 && (
-              <span> · 其中 <strong>{stats.pinnedCount}</strong> 件是重要的</span>
-            )}
-            {knownSinceLine && <span> · {knownSinceLine}</span>}
-          </p>
-          {topTopicLine && <p className="memory-summary-top">{topTopicLine}</p>}
-          {summary && <p className="memory-summary-llm">{summary}</p>}
-        </section>
-      )}
-
-      {/* 纪念日小卡片：一行高度（像笺的大小），显示主纪念日计时；点任意处进管理页添加/编辑/切换 */}
-      <button type="button" className="anniversary-strip" onClick={onOpenAnniversary}>
-        <span className="anniversary-strip-icon" aria-hidden="true">
-          <CalendarIcon />
-        </span>
-        <span className="anniversary-strip-title">相逢纪</span>
-        <span className="anniversary-strip-main">
-          {mainAnniversary ? (
-            <>
-              <span className={`anniversary-strip-count ann-color-${anniversaryColorIndex(mainAnniversary.color)}`}>
-                {formatCountdown(mainAnniversary)}
-              </span>
-              <span className="anniversary-strip-label">{mainAnniversary.label}</span>
-            </>
-          ) : (
-            <span className="anniversary-strip-empty">记下你们重要的日子</span>
-          )}
-        </span>
-        <span className="anniversary-strip-arrow" aria-hidden="true">
-          ›
-        </span>
-      </button>
 
       <div className="memory-input-row">
         <input

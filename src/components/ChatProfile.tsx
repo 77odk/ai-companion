@@ -1,18 +1,20 @@
-// 聊天头像资料卡（TASK-UI3 P3 新组件）：
-// 聊天页点角色头像 → 打开资料卡。卡片内容 = 角色大头像 + 角色名 + 三个入口
-// （聊天记录 / 相逢纪 / TA 的生活），每个入口进子页面、返回回资料卡；资料卡关闭回聊天。
-// 子页面全部复用现有组件（SpaceChatLogs / AnniversaryPage / SpaceLife），不复制两份代码。
+// 聊天头像资料卡（2026-08-25 七七拍板改版）：
+// 聊天页点角色头像 → 打开资料卡。卡片 = 角色大头像 + 名字 + 「相识的第 N 天」大字（不带框）
+// + 入口列表（TA 的资料 / TA 的生活 / 聊天记录 / 刷新对话）。
+// 相识天数从「角色创建那天」开始自动计数（会话 created_at；无会话兜底 getFirstSeen）。
+// 子页面复用现有组件：AIDetail（TA 的资料=名字/备注/性格）、SpaceLife（TA 的生活）、
+// SpaceChatLogs（聊天记录）；刷新对话 = 设置会话起点（TA 忘掉重来，聊天记录一条不删）。
 
 import { useState } from 'react'
-import { loadAIProfile, loadMessages, loadPersona, loadUserProfile, type StoredMessage } from '../lib/storage'
+import { loadAIProfile, loadMessages, loadPersona, loadUserProfile, getFirstSeen, setSessionStart, type StoredMessage } from '../lib/storage'
 import { getActiveSessionId, getMessagesCache, getSessionsCache } from '../lib/sessionStore'
 import { displaySessionName } from '../lib/sessionFlow'
+import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import DefaultAvatar from './DefaultAvatar'
-import AnniversaryPage from './AnniversaryPage'
 import SpaceChatLogs from './SpaceChatLogs'
 import SpaceLife from './SpaceLife'
 import { AIDetail } from './Settings'
-import { CalendarIcon, ChatIcon, EntryChevron, SparkleIcon } from './spaceIcons'
+import { ChatIcon, EntryChevron, RefreshIcon, SparkleIcon } from './spaceIcons'
 
 interface Props {
   /** 关闭资料卡回聊天 */
@@ -21,6 +23,19 @@ interface Props {
   onGoMine?: () => void
   /** 「换个 TA」：current=当前会话换人设；new=开新会话换 TA（App 里跳选角色页） */
   onSwitchRole?: (mode: 'current' | 'new') => void
+}
+
+/** 相识天数：角色创建（会话 created_at）当天起算；无会话/读不到回落 getFirstSeen，至少 1 天 */
+function profileDaysKnown(sessionId: string | null): number {
+  if (sessionId) {
+    const s = getSessionsCache().find((x) => String(x.id) === sessionId)
+    if (s && typeof (s as { created_at?: string }).created_at === 'string') {
+      const t = Date.parse((s as { created_at: string }).created_at)
+      if (Number.isFinite(t) && t > 0) return computeDaysKnown(t)
+    }
+  }
+  // 无会话/旧会话没 created_at：回落最老消息/记忆时间
+  return computeDaysKnown(getFirstSeen(sessionId || undefined))
 }
 
 export default function ChatProfile({ onClose, onGoMine, onSwitchRole }: Props) {
@@ -36,19 +51,32 @@ export default function ChatProfile({ onClose, onGoMine, onSwitchRole }: Props) 
     const s = getSessionsCache().find((x) => String(x.id) === sessionId)
     return s ? displaySessionName(s) : ''
   })
+  // 相识天数：角色创建那天起算
+  const [daysKnown] = useState<number>(() => profileDaysKnown(sessionId || null))
   // 聊天记录子页数据：进资料卡时读一次（聊天页里消息不会在资料卡内变化）
   const [messages] = useState<StoredMessage[]>(() => (sessionId ? getMessagesCache(sessionId) : loadMessages()))
 
-  // 子页面路由：home 资料卡 / chats 聊天记录 / anniversary 相逢纪 / life TA 的生活
-  const [page, setPage] = useState<'home' | 'chats' | 'anniversary' | 'life' | 'profile'>('home')
+  // 子页面路由：home 资料卡 / profile TA 的资料 / life TA 的生活 / chats 聊天记录
+  const [page, setPage] = useState<'home' | 'profile' | 'life' | 'chats'>('home')
   const goHome = () => setPage('home')
 
+  // 刷新对话：仅清当前对话上下文（TA 忘掉重来），聊天记录一条不删
+  const [confirmRefresh, setConfirmRefresh] = useState(false)
+  const [hint, setHint] = useState<string | null>(null)
+
+  const doRefresh = () => {
+    setSessionStart(Date.now())
+    setConfirmRefresh(false)
+    setHint('已刷新，TA 从新的一页开始')
+    window.setTimeout(() => setHint(null), 2600)
+  }
+
   // 子页面：整页替换（各自带返回条），资料卡 home 才是这层的主页
+  if (page === 'profile') {
+    return <AIDetail onBack={goHome} onSwitchRole={onSwitchRole} />
+  }
   if (page === 'chats') {
     return <SpaceChatLogs messages={messages} yourName={yourName} aiNickname={ai.nickname} onBack={goHome} />
-  }
-  if (page === 'anniversary') {
-    return <AnniversaryPage onBack={goHome} />
   }
   if (page === 'life') {
     return (
@@ -61,10 +89,6 @@ export default function ChatProfile({ onClose, onGoMine, onSwitchRole }: Props) 
         onBack={goHome}
       />
     )
-  }
-
-  if (page === 'profile') {
-    return <AIDetail onBack={goHome} onSwitchRole={onSwitchRole} />
   }
 
   return (
@@ -88,33 +112,15 @@ export default function ChatProfile({ onClose, onGoMine, onSwitchRole }: Props) 
           )}
         </div>
         <h2 className="ai-space-name">{profileSessionName || ai.nickname}</h2>
+        {/* 相识天数大字：不带框，角色创建那天起算（文案固定） */}
+        <p className="chatprofile-days">相识的第 {daysKnown} 天</p>
         <p className="ai-space-bio">只属于{yourName}的 TA · 你们的聊天、日子和生活都在这里</p>
       </div>
 
       <div className="ai-space-timeline">
-        {/* 功能入口列表：微信式资料页，三个入口都是子页面 */}
+        {/* 功能入口列表：微信式资料页，每个入口都是子页面 */}
         <div className="ai-space-entry-list">
-          <button type="button" className="ai-space-entry-row" onClick={() => setPage('chats')}>
-            <span className="ai-space-entry-icon" aria-hidden="true">
-              <ChatIcon />
-            </span>
-            <span className="ai-space-entry-main">
-              <span className="ai-space-entry-title">聊天记录</span>
-              <span className="ai-space-entry-sub">60 天 · 按日期归档</span>
-            </span>
-            <EntryChevron />
-          </button>
-
-          <button type="button" className="ai-space-entry-row" onClick={() => setPage('anniversary')}>
-            <span className="ai-space-entry-icon" aria-hidden="true">
-              <CalendarIcon />
-            </span>
-            <span className="ai-space-entry-main">
-              <span className="ai-space-entry-title">相逢纪</span>
-              <span className="ai-space-entry-sub">你们重要的日子</span>
-            </span>
-            <EntryChevron />
-          </button>
+          {/* TA 的资料（最上面）：名字、备注、性格设定、换个 TA */}
           <button type="button" className="ai-space-entry-row" onClick={() => setPage('profile')}>
             <span className="ai-space-entry-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -124,11 +130,12 @@ export default function ChatProfile({ onClose, onGoMine, onSwitchRole }: Props) 
             </span>
             <span className="ai-space-entry-main">
               <span className="ai-space-entry-title">TA 的资料</span>
-              <span className="ai-space-entry-sub">名字、性格、换个 TA</span>
+              <span className="ai-space-entry-sub">名字、备注、性格设定</span>
             </span>
             <EntryChevron />
           </button>
 
+          {/* TA 的生活 */}
           <button type="button" className="ai-space-entry-row" onClick={() => setPage('life')}>
             <span className="ai-space-entry-icon" aria-hidden="true">
               <SparkleIcon />
@@ -139,7 +146,52 @@ export default function ChatProfile({ onClose, onGoMine, onSwitchRole }: Props) 
             </span>
             <EntryChevron />
           </button>
+
+          {/* 聊天记录 */}
+          <button type="button" className="ai-space-entry-row" onClick={() => setPage('chats')}>
+            <span className="ai-space-entry-icon" aria-hidden="true">
+              <ChatIcon />
+            </span>
+            <span className="ai-space-entry-main">
+              <span className="ai-space-entry-title">聊天记录</span>
+              <span className="ai-space-entry-sub">按日期归档，可回看</span>
+            </span>
+            <EntryChevron />
+          </button>
+
+          {/* 刷新对话：底部独立卡片（仅刷新上下文，聊天记录永不删除） */}
+          <div className="ai-space-refresh-card">
+            <button
+              type="button"
+              className="ai-space-entry-row ai-space-entry-refresh"
+              onClick={() => setConfirmRefresh(true)}
+              aria-expanded={confirmRefresh}
+            >
+              <span className="ai-space-entry-icon" aria-hidden="true">
+                <RefreshIcon />
+              </span>
+              <span className="ai-space-entry-main">
+                <span className="ai-space-entry-title">刷新对话</span>
+                <span className="ai-space-entry-sub">TA 忘掉重来，聊天记录不删</span>
+              </span>
+              <EntryChevron open={confirmRefresh} />
+            </button>
+            {confirmRefresh && (
+              <div className="ai-space-refresh-confirm">
+                <p className="ai-space-refresh-confirm-text">刷新后 TA 会忘了之前聊的，聊天记录还在</p>
+                <div className="ai-space-refresh-confirm-actions">
+                  <button type="button" className="btn btn-ghost" onClick={() => setConfirmRefresh(false)}>
+                    再想想
+                  </button>
+                  <button type="button" className="btn btn-primary" onClick={doRefresh}>
+                    确认刷新
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+        {hint && <p className="ai-space-hint">{hint}</p>}
       </div>
     </div>
   )

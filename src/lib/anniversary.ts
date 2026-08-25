@@ -403,6 +403,42 @@ export function formatCountdown(a: Anniversary, now: number = Date.now()): strin
 }
 
 /**
+ * 纯函数：倒计时模式下「下一次」还差多少天（数字）。
+ * 日期已过（含带年份的生日）自动顺延到明年同月日；日期非法返回 null。
+ */
+export function daysUntilNext(a: Anniversary, now: number = Date.now()): number | null {
+  const parsed = parseAnniversaryDate(a?.date ?? '')
+  if (!parsed) return null
+  const d = new Date(now)
+  const today = dayNumber(d.getFullYear(), d.getMonth() + 1, d.getDate())
+  let y = parsed.year ?? d.getFullYear()
+  let diff = dayNumber(y, parsed.month, parsed.day) - today
+  if (diff < 0) {
+    y = d.getFullYear() + 1
+    diff = dayNumber(y, parsed.month, parsed.day) - today
+  }
+  return diff
+}
+
+/**
+ * 纯函数：从纪念日列表里挑「最近的下一个大日子」（Big day）。
+ * 用 daysUntilNext 比较：>=0 里 diff 最小的那条；列表空/全过返回 null。
+ */
+export function pickNextBigDay(list: Anniversary[], now: number = Date.now()): Anniversary | null {
+  if (!Array.isArray(list) || list.length === 0) return null
+  let best: Anniversary | null = null
+  let bestDiff = Infinity
+  for (const a of list) {
+    const diff = daysUntilNext(a, now)
+    if (diff != null && diff >= 0 && diff < bestDiff) {
+      best = a
+      bestDiff = diff
+    }
+  }
+  return best
+}
+
+/**
  * 纯函数：由 firstSeen 时间戳生成默认「认识纪念日」（date 取 MM-DD，每年循环）。
  * 与 getDefaultAnniversary 拆开，方便 Node 单测。
  */
