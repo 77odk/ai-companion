@@ -55,7 +55,7 @@ export interface TemplateVar {
 }
 
 // 动态模板库：按 kind 分类，每类 5 条。占位符 {taName} {yourName} {season} {timeWord} {weatherWord}
-// 文案要求：像真人碎碎念，提用户、提钻研干活、提季节天气，避开禁用字，不用 emoji
+// 文案要求：像真人碎碎念，提用户、提钻研事项、提季节天气，避开禁用字，不用 emoji
 export const TEMPLATES: Record<SpaceKind, string[]> = {
   日常: [
     '{timeWord}路过窗边，阳光正好落在桌角。给自己泡了杯热茶，忽然觉得，要是{yourName}也在就好了。',
@@ -93,7 +93,7 @@ export const TEMPLATES: Record<SpaceKind, string[]> = {
     '把一天过完了，临睡前想起{yourName}。想说的那句话，留到下次见面再说吧。',
   ],
   小确幸: [
-    '{timeWord}在墙头遇见一只很会撒娇的猫，被它认真看了一会儿，心情好了一整天。',
+    '{timeWord}在墙头遇见一只很会撒娇的猫，认真对视了一会儿，心情好了一整天。',
     '今天的水杯里，阳光刚好把水照成琥珀色。小小的好看，也能让人高兴很久。',
     '收到一个很暖的回应，说我的整理帮了大忙。被需要的感觉，真的很好。',
     '{timeWord}做完了一件小事，莫名很满意。大概快乐就是这么朴素的东西。',
@@ -252,12 +252,14 @@ export function computeNewCount(lastVisit: number | null, now: number, posts: Sp
  */
 export function newPostTimestamps(count: number, now: number, firstVisit: boolean): number[] {
   if (firstVisit) {
-    const list = [now - 27 * 60 * 60 * 1000]
+    // 最新在前：今天 40 分钟前 / 3 小时前 + 昨天 1 条，每天 ≤2 条
+    const list: number[] = []
     if (count >= 2) list.push(now - 40 * 60 * 1000)
     if (count >= 3) list.push(now - 3 * 60 * 60 * 1000)
+    if (count >= 1) list.push(now - 27 * 60 * 60 * 1000)
     return list
   }
-  if (count >= 2) return [now - 45 * 60 * 1000, now - 3 * 60 * 1000]
+  if (count >= 2) return [now - 3 * 60 * 1000, now - 45 * 60 * 1000]
   if (count === 1) return [now - 3 * 60 * 1000]
   return []
 }

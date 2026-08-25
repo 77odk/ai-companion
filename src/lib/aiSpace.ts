@@ -14,10 +14,16 @@ import {
   pickWeatherWord,
   generatePost,
   mergeNewPosts,
-  KIND_KEYS,
+  dayKeyOf,
   MAX_POSTS,
+  MAX_POSTS_PER_DAY,
+  pickHasImage,
+  imageCaptionForPost,
+  pickReplyFallback,
+  KIND_KEYS,
   type SpacePost,
   type SpaceState,
+  type SpaceComment,
   type TemplateVar,
   type UsedTemplates,
 } from './aiSpaceCore.ts'
@@ -27,7 +33,11 @@ import {
   guessKind,
   buildLlmMessages,
   buildLlmPost,
+  buildReplyMessages,
+  extractImageCaption,
 } from './aiSpaceLlm.ts'
+import { createPostImageDataUrl } from './aiSpaceImage.ts'
+import { loadChatTopics } from './chatTopics.ts'
 import { chatCompletion } from './api.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { loadPersona, loadSettings } from './storage.ts'
@@ -66,6 +76,17 @@ function ensureSessionSpaceData(sessionId?: string): void {
   }
 }
 
+function isSpaceComment(c: unknown): c is SpaceComment {
+  if (c == null || typeof c !== 'object') return false
+  const o = c as Partial<SpaceComment>
+  return (
+    typeof o.id === 'string' &&
+    typeof o.text === 'string' &&
+    typeof o.at === 'number' &&
+    (o.from === 'user' || o.from === 'ta')
+  )
+}
+
 function isSpacePost(p: unknown): p is SpacePost {
   if (p == null || typeof p !== 'object') return false
   const o = p as Partial<SpacePost>
@@ -75,7 +96,10 @@ function isSpacePost(p: unknown): p is SpacePost {
     typeof o.kind === 'string' &&
     (KIND_KEYS as string[]).includes(o.kind) &&
     typeof o.text === 'string' &&
-    typeof o.art === 'number'
+    typeof o.art === 'number' &&
+    (o.img == null || typeof o.img === 'string') &&
+    (o.liked == null || typeof o.liked === 'boolean') &&
+    (o.comments == null || (Array.isArray(o.comments) && o.comments.every(isSpaceComment)))
   )
 }
 
@@ -152,6 +176,14 @@ function buildVars(taName: string, yourName: string, now: number): TemplateVar {
   }
 }
 
+/** 给一条动态按 ~1/3 概率配图（浏览器画 dataURL；没 canvas 环境原样返回） */
+function maybeAttachImage(post: SpacePost, rand: () => number = Math.random): SpacePost {
+  if (post.img) return post
+  if (!pickHasImage(rand)) return post
+  const img = createPostImageDataUrl(post.kind, imageCaptionForPost(post, rand))
+  return img ? { ...post, img } : post
+}
+
 /** 每次进入 / 手动刷新 TA 的空间时调用：推进时间轴、返回最新列表与生成计划（会话感知，按角色隔离） */
 export function refreshSpace(
   taName: string,
@@ -163,7 +195,8 @@ export function refreshSpace(
   const vars = buildVars(taName, yourName, now)
   const persona = loadPersona()
   const settings = loadSettings()
-  const count = computeNewCount(prev.lastVisit, now)
+  // TASK_UI_BATCH2 限频：按「今天已有条数」截断（每天最多 2 条）
+  const count = computeNewCount(prev.lastVisit, now, prev.posts)
   const timestamps = newPostTimestamps(count, now, prev.lastVisit == null)
 
   // 没人设：不调 LLM。空间为空时用模板兜底生成 1 条保证空间不空，其余交给「先写人设」引导
@@ -174,7 +207,7 @@ export function refreshSpace(
     if (prev.posts.length === 0) {
       const g = generatePost(vars, used, now - 3 * 60 * 1000)
       used[g.templateKey] = now
-      posts.unshift(g.post)
+      posts.unshift(maybeAttachImage(g.post))
       created = 1
     }
     const state: SpaceState = { posts: posts.slice(0, MAX_POSTS), lastVisit: now, used }
@@ -189,10 +222,11 @@ export function refreshSpace(
     return { posts: state.posts, mode: 'llm', created: count, pending: timestamps, used: state.used }
   }
 
-  // 有人设但没 key：降级模板，同步生成
+  // 有人设但没 key：降级模板，同步生成；新生成的动态按概率配图
   const { state, created } = advanceTimeline(prev, vars, now)
-  saveState(state, sessionId)
-  return { posts: state.posts, mode: 'template', created, pending: [], used: state.used }
+  const posts = state.posts.map((p, i) => (i < created ? maybeAttachImage(p) : p))
+  saveState({ ...state, posts }, sessionId)
+  return { posts, mode: 'template', created, pending: [], used: state.used }
 }
 
 export interface GenerateResult {
@@ -216,11 +250,22 @@ export async function generatePendingPosts(
   const settings = loadSettings()
   const vars = buildVars(taName, yourName, now)
   const recent = plan.posts.slice(0, 3).map((p) => p.text)
+  // TASK_UI_BATCH2 事件触发：最近聊天话题注入 LLM，让 TA 优先呼应最近聊到的事
+  const chatTopics = loadChatTopics(sessionId)
   const used = { ...plan.used }
   const newPosts: SpacePost[] = []
   let usedFallback = false
 
+  // 每天 ≤2 条兜底：按现有动态统计每天条数，跳过已满的日子（首访/边缘情况保护）
+  const dayCounts = new Map<string, number>()
+  for (const p of plan.posts) {
+    const k = dayKeyOf(p.at)
+    dayCounts.set(k, (dayCounts.get(k) ?? 0) + 1)
+  }
+
   for (const at of plan.pending) {
+    const dk = dayKeyOf(at)
+    if ((dayCounts.get(dk) ?? 0) >= MAX_POSTS_PER_DAY) continue
     let made: { post: SpacePost; templateKey?: string } | null = null
 
     if (canUseLlm(persona, settings)) {
@@ -232,12 +277,25 @@ export async function generatePendingPosts(
         timeWord: vars.timeWord,
         weatherWord: vars.weatherWord,
         recent,
+        chatTopics,
       })
       try {
         const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })
-        const text = cleanLlmText(raw)
-        if (text) {
-          made = { post: buildLlmPost(text, at, guessKind(text), rand) }
+        const cleaned = cleanLlmText(raw)
+        if (cleaned) {
+          // 拆配图标记：模型说配图就按描述画，没说走 ~1/3 兜底
+          const { text, caption } = extractImageCaption(cleaned)
+          if (text) {
+            const post = buildLlmPost(text, at, guessKind(text), rand)
+            if (caption) {
+              const img = createPostImageDataUrl(post.kind, caption)
+              if (img) post.img = img
+            } else if (pickHasImage(rand)) {
+              const img = createPostImageDataUrl(post.kind, imageCaptionForPost(post, rand))
+              if (img) post.img = img
+            }
+            made = { post }
+          }
         }
       } catch {
         made = null // 超时/报错/返回不可用 → 降级模板
@@ -247,11 +305,12 @@ export async function generatePendingPosts(
     if (!made) {
       const g = generatePost(vars, used, at, rand)
       used[g.templateKey] = now
-      made = { post: g.post, templateKey: g.templateKey }
+      made = { post: maybeAttachImage(g.post, rand), templateKey: g.templateKey }
       usedFallback = true
     }
 
     newPosts.push(made.post)
+    dayCounts.set(dk, (dayCounts.get(dk) ?? 0) + 1)
     // 把刚生成的动态纳入「最近 3 条」，避免下一条雷同
     recent.unshift(made.post.text)
     if (recent.length > 3) recent.pop()
@@ -263,4 +322,91 @@ export async function generatePendingPosts(
   const state: SpaceState = { posts, lastVisit: current.lastVisit ?? now, used }
   saveState(state, sessionId)
   return { posts: state.posts, created: newPosts.length, usedFallback }
+}
+
+/* ---- TASK_UI_BATCH2 点赞 + 评论（随 posts 一起存 localStorage，云端同步沿用 collectAllSpacePosts） ---- */
+
+/** 更新某条动态并落盘（点赞/评论通用）；返回更新后的完整列表 */
+export function updatePost(
+  postId: string,
+  updater: (p: SpacePost) => SpacePost,
+  sessionId?: string,
+): SpacePost[] {
+  const state = loadState(sessionId)
+  const posts = state.posts.map((p) => (p.id === postId ? updater(p) : p))
+  saveState({ ...state, posts }, sessionId)
+  return posts
+}
+
+/** 点赞开关：点一下变已赞，再点取消 */
+export function togglePostLike(postId: string, sessionId?: string): SpacePost[] {
+  return updatePost(postId, (p) => ({ ...p, liked: !p.liked }), sessionId)
+}
+
+/** 用户发一条评论；返回更新后的列表和刚加的评论（供 TA 回复用） */
+export function addUserComment(
+  postId: string,
+  text: string,
+  sessionId?: string,
+): { posts: SpacePost[]; comment: SpaceComment } {
+  const clean = String(text ?? '').trim().slice(0, 100)
+  const comment: SpaceComment = {
+    id: `c${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`,
+    text: clean,
+    at: Date.now(),
+    from: 'user',
+  }
+  const posts = updatePost(postId, (p) => ({ ...p, comments: [...(p.comments ?? []), comment] }), sessionId)
+  return { posts, comment }
+}
+
+/**
+ * TA 回复一条用户评论（每条评论最多回 1 条）：按「人设 + 那条动态」调 LLM 回；
+ * 没 key / 失败 / 空内容 → 降级模板话术。返回更新后的完整列表。
+ */
+export async function generateTaReply(
+  postId: string,
+  commentId: string,
+  taName: string,
+  yourName: string,
+  sessionId?: string,
+  now: number = Date.now(),
+  rand: () => number = Math.random,
+): Promise<SpacePost[]> {
+  const persona = loadPersona()
+  const settings = loadSettings()
+  const state = loadState(sessionId)
+  const post = state.posts.find((p) => p.id === postId)
+  if (!post) return state.posts
+  const comment = post.comments?.find((c) => c.id === commentId && c.from === 'user')
+  if (!comment) return state.posts
+  // 已回过这条评论就不再回（每条评论 TA 最多回 1 条，不形成聊天）
+  if ((post.comments ?? []).some((c) => c.replyTo === commentId)) return state.posts
+
+  let replyText: string | null = null
+  if (canUseLlm(persona, settings)) {
+    const messages = buildReplyMessages({
+      taName: taName || 'TA',
+      yourName: yourName || '你',
+      persona,
+      postText: post.text,
+      commentText: comment.text,
+    })
+    try {
+      const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })
+      replyText = cleanLlmText(raw)
+    } catch {
+      replyText = null // 超时/报错 → 降级模板
+    }
+  }
+  if (!replyText) replyText = pickReplyFallback(rand)
+
+  const reply: SpaceComment = {
+    id: `r${now.toString(36)}${Math.floor(rand() * 1e6).toString(36)}`,
+    text: replyText.slice(0, 100),
+    at: now,
+    from: 'ta',
+    replyTo: commentId,
+  }
+  return updatePost(postId, (p) => ({ ...p, comments: [...(p.comments ?? []), reply] }), sessionId)
 }

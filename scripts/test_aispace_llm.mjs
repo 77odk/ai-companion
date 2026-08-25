@@ -1,7 +1,8 @@
 // TA 的空间 · LLM 路径纯逻辑自测
 // 直接导入纯逻辑 TS（Node 22+ 原生类型剥离），不依赖任何构建工具。
 // 跑法：node scripts/test_aispace_llm.mjs
-// 覆盖：关键词猜 kind / LLM 返回清洗 / LLM 可用判断 / 提示词组装 / LLM 动态构造 / 合并列表
+// 覆盖：关键词猜 kind / LLM 返回清洗 / LLM 可用判断 / 提示词组装（含事件触发话题）/
+//       LLM 动态构造 / 配图标记拆解 / 评论回复提示词 / 合并列表
 
 import {
   cleanLlmText,
@@ -9,6 +10,8 @@ import {
   canUseLlm,
   buildLlmMessages,
   buildLlmPost,
+  extractImageCaption,
+  buildReplyMessages,
 } from '../src/lib/aiSpaceLlm.ts'
 import { mergeNewPosts, MAX_POSTS } from '../src/lib/aiSpaceCore.ts'
 
@@ -96,7 +99,49 @@ ok(msgs[1].content.includes('你是只猫，爱晒太阳'), 'user 含人设全�
 ok(msgs[1].content.includes('今天吃了小鱼干'), 'user 含最近动态')
 ok(!msgs[0].content.includes('{') && !msgs[1].content.includes('{'), '提示词无残留占位符')
 
-console.log('\n[5] buildLlmPost 构造动态')
+console.log('\n[4b] buildLlmMessages 事件触发话题（TASK_UI_BATCH2）')
+const msgsWithTopics = buildLlmMessages({
+  taName: '小忆',
+  yourName: '阿明',
+  persona: '你是只猫，爱晒太阳',
+  season: '夏',
+  timeWord: '午后',
+  weatherWord: '晴',
+  recent: [],
+  chatTopics: ['火锅', '周末爬山'],
+})
+eq(msgsWithTopics.length, 2, '有话题时仍是两段消息')
+ok(msgsWithTopics[1].content.includes('火锅'), 'user 含话题 1')
+ok(msgsWithTopics[1].content.includes('周末爬山'), 'user 含话题 2')
+ok(msgsWithTopics[1].content.includes('回应'), 'user 引导 TA 回应聊天内容')
+ok(msgsWithTopics[1].content.includes('刚跟朋友去吃了火锅'), 'user 给出呼应的示例句式')
+
+console.log('\n[5] extractImageCaption 配图标记拆解（TASK_UI_BATCH2）')
+eq(extractImageCaption('今天路过花店，买了一把。\n[配图]一束粉色花束'), {
+  text: '今天路过花店，买了一把。',
+  caption: '一束粉色花束',
+}, '拆出正文与配图描述')
+eq(extractImageCaption('窗外在下雨。\n[配图] 雨滴打在窗玻璃上'), {
+  text: '窗外在下雨。',
+  caption: '雨滴打在窗玻璃上',
+}, '支持 [配图] 后带空格')
+eq(extractImageCaption('刚做好的早饭\n[配图]：一碗热粥'), {
+  text: '刚做好的早饭',
+  caption: '一碗热粥',
+}, '支持 [配图]：中文冒号')
+eq(extractImageCaption('正文\n[配图]  '), { text: '正文', caption: null }, '配图描述为空 → 正文保留、caption null')
+eq(extractImageCaption('今天没有配图'), { text: '今天没有配图', caption: null }, '无标记 → 正文原样、caption null')
+eq(extractImageCaption('正文\n[配图]一二三四五六七八九十甲乙丙丁子丑寅卯辰巳午未申酉'), {
+  text: '正文',
+  caption: '一二三四五六七八九十甲乙丙丁子丑寅卯辰巳…',
+}, '配图描述超 20 字截断')
+eq(extractImageCaption('正文 [配图]图片与正文同行'), {
+  text: '正文',
+  caption: '图片与正文同行',
+}, '标记同行也拆干净')
+ok(!/[\u{1F000}-\u{1FAFF}]/u.test(extractImageCaption('正文\n[配图]阳光下的沙滩🏖️').caption ?? ''), '配图描述里 emoji 被删')
+
+console.log('\n[5b] buildLlmPost 构造动态')
 const post = buildLlmPost('今天天气很好', 1700000000000, '天气', seeded(1))
 eq(post.text, '今天天气很好', 'text 原样')
 eq(post.at, 1700000000000, 'at 用给定时间戳')
@@ -104,7 +149,23 @@ eq(post.kind, '天气', 'kind 用给定值')
 ok(typeof post.id === 'string' && post.id.length > 0, 'id 是合法字符串')
 ok(Number.isFinite(post.art) && post.art >= 0 && post.art < 2, 'art 在合法范围')
 
-console.log('\n[6] mergeNewPosts 合并列表')
+console.log('\n[6] buildReplyMessages 评论回复提示词（TASK_UI_BATCH2）')
+const replyMsgs = buildReplyMessages({
+  taName: '小忆',
+  yourName: '阿明',
+  persona: '你是只猫，爱晒太阳',
+  postText: '今天天气很好，出去走了走。',
+  commentText: '去哪走了呀',
+})
+eq(replyMsgs.length, 2, '两段消息：system + user')
+ok(replyMsgs[0].content.includes('小忆'), 'system 含 TA 昵称')
+ok(replyMsgs[0].content.includes('回完就收住'), 'system 要求回完就收住')
+ok(replyMsgs[1].content.includes('你是只猫，爱晒太阳'), 'user 含人设全文')
+ok(replyMsgs[1].content.includes('今天天气很好，出去走了走。'), 'user 含动态原文')
+ok(replyMsgs[1].content.includes('去哪走了呀'), 'user 含留言原文')
+ok(!replyMsgs[0].content.includes('{') && !replyMsgs[1].content.includes('{'), '回复提示词无残留占位符')
+
+console.log('\n[7] mergeNewPosts 合并列表')
 const HOUR = 60 * 60 * 1000
 const base = 2000000
 const old = [

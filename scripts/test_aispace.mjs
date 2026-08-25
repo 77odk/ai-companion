@@ -1,8 +1,8 @@
 // TA 的空间 · 动态引擎自测
 // 直接导入纯逻辑 TS（Node 22+ 原生类型剥离），不依赖任何构建工具。
 // 跑法：node scripts/test_aispace.mjs
-// 覆盖：首访 3 条 / 隔 2 小时补 1 条 / 隔 24 小时补 2 条 / 上限 20 条 / 模板 30 天不重复 /
-//        季节时段天气 / 占位替换 / 文案红线（无「演」字、无 emoji、每类 ≥4 条）
+// 覆盖：首访 3 条（今天 2 + 昨天 1）/ 隔 2 小时补 1 条 / 隔 24 小时补 2 条 / 每天最多 2 条限频 /
+//        上限 20 条 / 模板 30 天不重复 / 季节时段天气 / 占位替换 / 配图决策 / 降级回复文案红线
 
 import {
   KIND_KEYS,
@@ -15,6 +15,11 @@ import {
   pickTemplateIndex,
   buildPostText,
   advanceTimeline,
+  dayKeyOf,
+  pickHasImage,
+  imageCaptionForPost,
+  pickReplyFallback,
+  REPLY_FALLBACKS,
   MAX_POSTS,
   MIN_INTERVAL_MS,
   DAY_INTERVAL_MS,
@@ -53,7 +58,9 @@ const MINUTE = 60 * 1000
 const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 
-const now = Date.now()
+// 固定一个「今天」：2026-08-22 中午（限频按自然日，固定时间避免测试受跑测时刻影响）
+const now = new Date(2026, 7, 22, 12, 0).getTime()
+const nextDay = now + DAY
 
 console.log('\n[1] 模板库完整性')
 ok(KIND_KEYS.length >= 6, '至少有 6 个 kind')
@@ -62,6 +69,7 @@ for (const kind of KIND_KEYS) {
   ok(list.length >= 4, `${kind} 类模板 ${list.length} 条（≥4）`)
   for (const t of list) {
     ok(!t.includes('演'), `${kind} 模板无「演」字：${t.slice(0, 14)}…`)
+    ok(!t.includes('干活'), `${kind} 模板无「干活」二字：${t.slice(0, 14)}…`)
     ok(!/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/u.test(t), `${kind} 模板无 emoji：${t.slice(0, 14)}…`)
   }
 }
@@ -78,7 +86,7 @@ eq(getTimeWord(new Date(2026, 0, 1, 22).getTime()), '夜里', '22 点夜里')
 const w = pickWeatherWord(seeded(1))
 ok(['晴', '雨', '阴', '多云'].includes(w), `天气词合法（得 ${w}）`)
 
-console.log('\n[3] 时间轴推进条数')
+console.log('\n[3] 时间轴推进条数（不传 posts，按每天 0 条计）')
 eq(computeNewCount(null, now), 3, '首访补 3 条')
 eq(computeNewCount(now - 1 * HOUR, now), 0, '不到 2 小时不补')
 eq(computeNewCount(now - 2 * HOUR, now), 1, '正好 2 小时补 1 条')
@@ -87,70 +95,113 @@ eq(computeNewCount(now - 24 * HOUR, now), 2, '正好 24 小时补 2 条')
 eq(computeNewCount(now - 3 * DAY, now), 2, '超过 24 小时也补 2 条')
 eq(computeNewCount(now + 1000, now), 0, '时间倒挂不补')
 
-console.log('\n[4] 首访预生成时间戳')
-const firstTs = newPostTimestamps(3, now, true)
-eq(firstTs, [now - 40 * MINUTE, now - 3 * HOUR, now - 7 * HOUR], '首访三段时间偏移')
+console.log('\n[4] newPostTimestamps 时间戳')
+eq(newPostTimestamps(3, now, true), [now - 40 * MINUTE, now - 3 * HOUR, now - 27 * HOUR], '首访 3 条：今天 2 + 昨天 1（最新在前）')
+eq(newPostTimestamps(2, now, true), [now - 40 * MINUTE, now - 27 * HOUR], '首访今天已 1 条：今天 1 + 昨天 1')
+eq(newPostTimestamps(1, now, true), [now - 27 * HOUR], '首访今天已 2 条：只补昨天 1 条')
+eq(newPostTimestamps(2, now, false), [now - 3 * MINUTE, now - 45 * MINUTE], '补 2 条最新在前')
+eq(newPostTimestamps(1, now, false), [now - 3 * MINUTE], '补 1 条')
+eq(newPostTimestamps(0, now, false), [], '不补返回空')
 
-console.log('\n[5] advanceTimeline 首访生成 3 条，最新在前')
+console.log('\n[5] 每天最多 2 条（TASK_UI_BATCH2 限频）')
+const pToday = [
+  { id: 'a', at: now - 10 * MINUTE, kind: '日常', text: 'A', art: 0 },
+  { id: 'b', at: now - 50 * MINUTE, kind: '日常', text: 'B', art: 0 },
+]
+eq(computeNewCount(now - 2 * HOUR, now, pToday), 0, '今天已有 2 条：隔 2 小时补 0 条')
+eq(computeNewCount(now - 26 * HOUR, now, pToday), 0, '今天已有 2 条：隔 24 小时也补 0 条')
+eq(computeNewCount(now - 2 * HOUR, now, pToday.slice(0, 1)), 1, '今天已有 1 条：隔 2 小时补 1 条')
+eq(computeNewCount(now - 26 * HOUR, now, pToday.slice(0, 1)), 1, '今天已有 1 条：隔 24 小时只补 1 条（被截断）')
+eq(computeNewCount(null, now, []), 3, '首访无动态补 3 条')
+eq(computeNewCount(null, now, pToday.slice(0, 1)), 2, '首访今天已有 1 条：昨天1+今天1=2')
+eq(computeNewCount(null, now, pToday), 1, '首访今天已有 2 条：只补昨天 1 条')
+
+console.log('\n[6] advanceTimeline 首访生成 3 条，最新在前，每天 ≤2 条')
 const vars = { taName: 'TA', yourName: '小七', season: '夏', timeWord: '午后', weatherWord: '晴' }
 const first = advanceTimeline({ posts: [], lastVisit: null, used: {} }, vars, now, seeded(7))
 eq(first.created, 3, '首访创建 3 条')
 eq(first.state.posts.length, 3, '首访后共 3 条')
 ok(first.state.posts[0].at > first.state.posts[1].at && first.state.posts[1].at > first.state.posts[2].at, '按时间倒序（最新在前）')
 eq(first.state.lastVisit, now, 'lastVisit 更新为本次时间')
-ok(Number.isFinite(first.state.posts[0].at), '时间戳都是数字')
+const daysOfFirst = new Set(first.state.posts.map((p) => dayKeyOf(p.at)))
+ok([...daysOfFirst].length >= 2, '首访动态至少跨 2 天（不一天塞 3 条）')
+const firstDayCounts = {}
+for (const p of first.state.posts) firstDayCounts[dayKeyOf(p.at)] = (firstDayCounts[dayKeyOf(p.at)] ?? 0) + 1
+ok(Object.values(firstDayCounts).every((n) => n <= 2), '首访每天不超过 2 条')
 
-console.log('\n[6] 隔 2 小时补 1 条，隔 24 小时补 2 条')
-const twoH = advanceTimeline(
+console.log('\n[7] 限频场景：同一天已满不补，隔天补新')
+// 首访已把今天（8/22）塞满 2 条，同一天隔 2 小时再来 → 不补
+const sameDay = advanceTimeline(
   { posts: first.state.posts, lastVisit: now - 2 * HOUR, used: first.state.used },
   vars,
   now,
   seeded(8),
 )
-eq(twoH.created, 1, '隔 2 小时补 1 条')
-eq(twoH.state.posts.length, 4, '补 1 条后共 4 条')
-ok(twoH.state.posts[0].at > first.state.posts[0].at, '新动态排在最前')
+eq(sameDay.created, 0, '同一天已满 2 条：隔 2 小时也不补')
 
-const noNew = advanceTimeline(
-  { posts: twoH.state.posts, lastVisit: now - 30 * MINUTE, used: twoH.state.used },
+// 今天 0 条、隔 2 小时 → 补 1 条
+const yesterdayPost = { id: 'y1', at: now - 27 * HOUR, kind: '日常', text: 'Y', art: 0 }
+const twoH = advanceTimeline(
+  { posts: [yesterdayPost], lastVisit: now - 2 * HOUR, used: {} },
   vars,
   now,
   seeded(9),
 )
-eq(noNew.created, 0, '不足 2 小时不补')
+eq(twoH.created, 1, '今天 0 条：隔 2 小时补 1 条')
+eq(twoH.state.posts[0].at, now - 3 * MINUTE, '补的 1 条在现在往前几分钟')
 
-const day = advanceTimeline(
-  { posts: twoH.state.posts, lastVisit: now - 25 * HOUR, used: twoH.state.used },
+// 不足 2 小时不补
+const noNew = advanceTimeline(
+  { posts: [yesterdayPost], lastVisit: now - 30 * MINUTE, used: {} },
   vars,
   now,
   seeded(10),
 )
-eq(day.created, 2, '隔 24 小时以上补 2 条')
-eq(day.state.posts.length, 6, '补 2 条后共 6 条')
+eq(noNew.created, 0, '不足 2 小时不补')
 
-console.log('\n[7] 上限 20 条，超出丢最旧')
+// 今天 0 条、隔 24 小时以上 → 补 2 条
+const day = advanceTimeline(
+  { posts: [yesterdayPost], lastVisit: now - 26 * HOUR, used: {} },
+  vars,
+  now,
+  seeded(11),
+)
+eq(day.created, 2, '今天 0 条：隔 24 小时以上补 2 条')
+ok(day.state.posts[0].at > day.state.posts[1].at, '补的 2 条最新在前')
+
+// 今天已有 2 条、隔 24 小时 → 不补
+const dayCapped = advanceTimeline(
+  { posts: first.state.posts, lastVisit: now - 26 * HOUR, used: first.state.used },
+  vars,
+  now,
+  seeded(12),
+)
+eq(dayCapped.created, 0, '今天已有 2 条：隔 24 小时也不补')
+
+console.log('\n[8] 上限 20 条，超出丢最旧')
 let state = { posts: [], lastVisit: null, used: {} }
-let n = 0
-// 先首访 + 反复模拟隔天打开，把列表撑到上限附近
-state = advanceTimeline(state, vars, now, seeded(11)).state
+let dayNow = now
+state = advanceTimeline(state, vars, dayNow, seeded(13)).state
+// 每天推一天，每次隔一天打开补 2 条，把列表铺到上限附近
 while (state.posts.length < MAX_POSTS - 1) {
+  dayNow += DAY
   state = advanceTimeline(
-    { posts: state.posts, lastVisit: now - 2 * DAY, used: state.used },
+    { posts: state.posts, lastVisit: dayNow - DAY - MINUTE, used: state.used },
     vars,
-    now + n++,
-    seeded(n),
+    dayNow,
+    seeded(20 + state.posts.length),
   ).state
 }
 eq(state.posts.length, MAX_POSTS - 1, `先铺到 ${MAX_POSTS - 1} 条`)
 const overflow = advanceTimeline(
-  { posts: state.posts, lastVisit: now - 2 * DAY, used: state.used },
+  { posts: state.posts, lastVisit: dayNow - DAY, used: state.used },
   vars,
-  now,
+  dayNow + DAY,
   seeded(99),
 )
 eq(overflow.state.posts.length, MAX_POSTS, '超上限后被裁回 20 条')
 
-console.log('\n[8] 模板 30 天不重复')
+console.log('\n[9] 模板 30 天不重复')
 const kind = '日常'
 const used = {}
 // 除索引 2（31 天前用过）外，其余索引最近都刚用过
@@ -174,7 +225,7 @@ function findTemplateIndex(kindName, text, vars) {
   return -1
 }
 
-// 第一批：隔 2 天打开，生成 2 条并记入 used；第二批隔 2 天再打开，不应复用近 30 天用过的模板
+// 第一批：8/22 隔 2 天打开，生成 2 条并记入 used；第二批 8/23 隔天再打开，不应复用近 30 天用过的模板
 const batch1 = advanceTimeline(
   { posts: [], lastVisit: now - 2 * DAY, used: {} },
   vars,
@@ -187,7 +238,7 @@ ok(new Set(batch1.state.posts.map((p) => p.text)).size === batch1.state.posts.le
 const batch2 = advanceTimeline(
   { posts: batch1.state.posts, lastVisit: now - 2 * DAY, used: batch1.state.used },
   vars,
-  now + 1000,
+  nextDay,
   seeded(22),
 )
 eq(batch2.created, 2, '第二批补 2 条')
@@ -197,11 +248,11 @@ for (const p of batch2.state.posts.slice(0, batch2.created)) {
   ok(ti >= 0, `${p.kind} 的文案能反查出模板索引`)
   if (ti >= 0) {
     const last = batch1.state.used[`${p.kind}:${ti}`]
-    ok(last == null || now - last >= THIRTY_DAYS, `${p.kind} 未用近 30 天模板：${p.text.slice(0, 12)}…`)
+    ok(last == null || nextDay - last >= THIRTY_DAYS, `${p.kind} 未用近 30 天模板：${p.text.slice(0, 12)}…`)
   }
 }
 
-console.log('\n[9] 占位替换')
+console.log('\n[10] 占位替换')
 const built = buildPostText('日常', 0, {
   taName: '小忆',
   yourName: '阿明',
@@ -220,10 +271,29 @@ for (const list of Object.values(TEMPLATES)) {
   }
 }
 
-console.log('\n[10] 时间常量自洽')
+console.log('\n[11] 时间常量自洽')
 ok(MIN_INTERVAL_MS === 2 * HOUR, '2 小时常量正确')
 ok(DAY_INTERVAL_MS === 24 * HOUR, '24 小时常量正确')
 ok(MAX_POSTS === 20, '上限为 20')
+
+console.log('\n[12] TASK_UI_BATCH2 配图决策 + 降级回复')
+eq(dayKeyOf(new Date(2026, 7, 22, 23, 59).getTime()), '2026-08-22', 'dayKeyOf 本地日期')
+eq(dayKeyOf(new Date(2026, 0, 5, 0, 0).getTime()), '2026-01-05', 'dayKeyOf 补零')
+
+// pickHasImage 频率约 1/3
+let imgTrue = 0
+const s = seeded(7)
+for (let i = 0; i < 300; i++) if (pickHasImage(s)) imgTrue++
+ok(imgTrue >= 70 && imgTrue <= 130, `pickHasImage 频率约 1/3（得 ${imgTrue}/300）`)
+
+const cap = imageCaptionForPost({ id: 'x', at: now, kind: '日常', text: '今天路过花店', art: 0 }, seeded(1))
+ok(typeof cap === 'string' && cap.length > 0, 'imageCaptionForPost 返回非空文案')
+
+ok(REPLY_FALLBACKS.length >= 3, '降级回复至少 3 条')
+const fb = pickReplyFallback(seeded(2))
+ok(typeof fb === 'string' && fb.length > 0, 'pickReplyFallback 返回非空')
+ok(!REPLY_FALLBACKS.some((r) => /[AI它演干活]/.test(r)), '降级回复无禁用字（AI/它/演/干活）')
+ok(!/[\u{1F000}-\u{1FAFF}]/u.test(fb), '降级回复无 emoji')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

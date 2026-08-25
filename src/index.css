@@ -5986,3 +5986,212 @@ textarea.persona-input {
   color: var(--color-text-muted);
   line-height: 1.6;
 }
+
+/* ========== TA 的生活 · 朋友圈式动态（TASK_UI_BATCH2） ========== */
+
+.space-life-list {
+  gap: 20px;
+}
+
+.space-life-post {
+  /* 纯文字不套大卡片框，只有内容本身；配图/评论区才自带圆角背景 */
+}
+
+.space-life-post-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.space-life-avatar-img,
+.space-life-avatar-letter {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex: none;
+  object-fit: cover;
+}
+
+.space-life-avatar-letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(255, 138, 92, 0.28), rgba(255, 138, 92, 0.08));
+  color: var(--color-primary-deep);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.space-life-post-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.space-life-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.space-life-time {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.space-life-content {
+  margin-top: 8px;
+  padding-left: 50px;
+}
+
+.space-life-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.space-life-img {
+  display: block;
+  margin-top: 10px;
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+}
+
+/* 操作行：点赞 / 评论 */
+.space-life-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border);
+  padding-left: 50px;
+}
+
+.space-life-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.space-life-action svg {
+  width: 17px;
+  height: 17px;
+}
+
+.space-life-action:hover {
+  color: var(--color-primary-deep);
+  background: rgba(255, 138, 92, 0.08);
+}
+
+.space-life-action.is-liked {
+  color: #e05a5a;
+}
+
+/* 点赞 + 评论区：浅灰圆角一块（微信朋友圈样式） */
+.space-life-interactions {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(61, 44, 41, 0.045);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+
+.space-life-likes {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #e05a5a;
+  font-weight: 500;
+  padding-bottom: 6px;
+}
+
+.space-life-likes svg {
+  width: 13px;
+  height: 13px;
+}
+
+.space-life-comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.space-life-comment {
+  line-height: 1.55;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.space-life-comment-name {
+  color: var(--color-primary-deep);
+  font-weight: 500;
+}
+
+.space-life-comment-ta .space-life-comment-name {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.space-life-ta-typing {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* 评论输入行 */
+.space-life-comment-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-left: 50px;
+}
+
+.space-life-comment-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  outline: none;
+}
+
+.space-life-comment-input:focus {
+  border-color: rgba(255, 138, 92, 0.5);
+}
+
+.space-life-comment-send {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.space-life-comment-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

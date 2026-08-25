@@ -32,6 +32,7 @@ import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
 import { getMilestoneStatus, markMilestoneShown } from '../lib/milestone'
 import { getWeeklyReviews } from '../lib/weeklyReview'
+import { recordChatTopic } from '../lib/chatTopics'
 import MilestoneCard from './MilestoneCard'
 
 interface Props {
@@ -251,6 +252,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     }
 
     const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
+    // TASK_UI_BATCH2 事件触发：记录最近聊天话题，TA 的动态可呼应最近聊到的事
+    recordChatTopic(text, getActiveSessionId() || undefined)
     // TASK-LM1 显式记忆指令：硬触发检测 + 保底写入（不依赖模型是否输出标记）
     const memInstr = detectMemoryInstruction(text)
     const isRetort = !memInstr.isInstruction && isMemoryRetort(text)
