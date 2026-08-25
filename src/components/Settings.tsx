@@ -4,6 +4,7 @@ import AvatarPicker from './AvatarPicker'
 import DefaultAvatar from './DefaultAvatar'
 import Account from './Account'
 import SwitchRoleModal from './SwitchRoleModal'
+import Work from './Work'
 import {
   DEFAULT_SETTINGS,
   isSlowLetterMode,
@@ -38,7 +39,7 @@ import {
 type TestState = 'idle' | 'testing' | 'success' | 'error'
 
 /** 设置页子页：使用指南已抽成 App 独立 view（guide），不再嵌在这里 */
-export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account'
+export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work'
 
 interface Props {
   onOpenSpace?: () => void
@@ -47,11 +48,13 @@ interface Props {
   onSwitchRole?: (mode: 'current' | 'new') => void
   /** 「使用指南」入口：由 App 切到独立 guide view（游客也可看） */
   onGoGuide?: () => void
+  /** 工作台「跟 TA 说」→ 切到聊天页（工作台展示模式用） */
+  onGoWorkChat?: () => void
   /** 进入设置页时打开的子页 */
   initialPage?: SettingsPage
 }
 
-export default function Settings({ onOpenSpace, onGoWelcome, onSwitchRole, onGoGuide, initialPage }: Props) {
+export default function Settings({ onOpenSpace, onGoWelcome, onSwitchRole, onGoGuide, onGoWorkChat, initialPage }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
 
   if (page === 'ai') {
@@ -66,6 +69,14 @@ export default function Settings({ onOpenSpace, onGoWelcome, onSwitchRole, onGoG
   if (page === 'account') {
     return <Account onBack={() => setPage('main')} />
   }
+  if (page === 'work') {
+    return (
+      <div className="page settings-page work-subpage">
+        <DetailHeader title="工作台" onBack={() => setPage('main')} />
+        <Work onGoChat={onGoWorkChat} />
+      </div>
+    )
+  }
   return (
     <MainCenter
       onOpenAccount={() => setPage('account')}
@@ -73,6 +84,7 @@ export default function Settings({ onOpenSpace, onGoWelcome, onSwitchRole, onGoG
       onOpenProvider={() => setPage('provider')}
       onOpenGuide={() => onGoGuide?.()}
       onOpenAbout={() => setPage('about')}
+      onOpenWork={() => setPage('work')}
       onGoWelcome={onGoWelcome}
     />
   )
@@ -111,6 +123,7 @@ function MainCenter({
   onOpenProvider,
   onOpenGuide,
   onOpenAbout,
+  onOpenWork,
   onGoWelcome,
 }: {
   onOpenAccount: () => void
@@ -118,6 +131,7 @@ function MainCenter({
   onOpenProvider: () => void
   onOpenGuide: () => void
   onOpenAbout: () => void
+  onOpenWork: () => void
   onGoWelcome?: () => void
 }) {
   const [user, setUser] = useState<UserProfile>(() => loadUserProfile())
@@ -211,6 +225,7 @@ function MainCenter({
 
       <ProfileGroup title="设置">
         <EntryRow icon={<KeyIcon />} label="服务商配置" onClick={onOpenProvider} />
+        <EntryRow icon={<WorkIcon />} label="工作台" onClick={onOpenWork} />
         <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
       </ProfileGroup>
 
@@ -330,6 +345,14 @@ const BookIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+  </svg>
+)
+
+const WorkIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="7" width="18" height="13" rx="2" />
+    <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <path d="M3 12h18" />
   </svg>
 )
 

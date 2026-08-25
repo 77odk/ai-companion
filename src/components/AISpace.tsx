@@ -194,7 +194,7 @@ export default function AISpace({ onBack, onGoMine }: Props) {
   const [memories] = useState<MemoryItem[]>(() => (sessionId ? getMemoriesCache(sessionId) : loadMemory()))
   const [firstSeen] = useState<number>(() => getFirstSeen(sessionId || undefined))
 
-  // 子页面路由：home 资料页 / chats 聊天记录 / memories TA 记得的 / life TA 的生活
+  // 子页面路由：home 资料页 / chats 聊天记录 / memories TA所忆 / life TA 的生活
   const [page, setPage] = useState<'home' | 'chats' | 'memories' | 'life'>('home')
   // 聊天记录二级视图：非 null 表示正在看某一天的完整消息
   const [logDayKey, setLogDayKey] = useState<string | null>(null)
@@ -382,7 +382,7 @@ export default function AISpace({ onBack, onGoMine }: Props) {
                 <HeartIcon />
               </span>
               <span className="ai-space-stat-num">{memories.length} 件</span>
-              <span className="ai-space-stat-label">TA 记得</span>
+              <span className="ai-space-stat-label">TA所忆</span>
             </div>
           </div>
           {/* 功能入口列表：微信式资料页 */}
@@ -403,7 +403,7 @@ export default function AISpace({ onBack, onGoMine }: Props) {
                 <HeartIcon />
               </span>
               <span className="ai-space-entry-main">
-                <span className="ai-space-entry-title">TA 记得的</span>
+                <span className="ai-space-entry-title">TA所忆</span>
                 <span className="ai-space-entry-sub">{memories.length} 件记忆 · 时间线</span>
               </span>
               <EntryChevron />
@@ -755,7 +755,7 @@ export default function AISpace({ onBack, onGoMine }: Props) {
     )
   }
 
-  /** TA 记得的子页：记忆时间线（TA 口吻 + 日期） */
+  /** TA所忆子页：记忆时间线（TA 口吻 + 日期） */
   function renderMemoriesPage() {
     return (
       <>
@@ -763,7 +763,7 @@ export default function AISpace({ onBack, onGoMine }: Props) {
           <button type="button" className="link-btn ai-space-back" onClick={() => setPage('home')}>
             ‹ 返回
           </button>
-          <h2 className="ai-space-sub-title">TA 记得的</h2>
+          <h2 className="ai-space-sub-title">TA所忆</h2>
           <span className="ai-space-topbar-spacer" aria-hidden="true" />
         </div>
 

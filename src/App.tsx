@@ -3,7 +3,6 @@ import Welcome from './components/Welcome'
 import RolePicker from './components/RolePicker'
 import Chat from './components/Chat'
 import Memory from './components/Memory'
-import Work from './components/Work'
 import Settings, { type SettingsPage } from './components/Settings'
 import AISpace from './components/AISpace'
 import AnniversaryPage from './components/AnniversaryPage'
@@ -26,8 +25,9 @@ import {
   type RolePickMode,
 } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
+import { forceRefresh } from './lib/forceRefresh'
 
-type View = 'welcome' | 'role' | 'roles' | 'chat' | 'memory' | 'work' | 'settings' | 'aispace' | 'anniversary' | 'weekly' | 'guide' | 'loading'
+type View = 'welcome' | 'role' | 'roles' | 'chat' | 'memory' | 'settings' | 'aispace' | 'anniversary' | 'weekly' | 'guide' | 'loading'
 
 // 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
 type MigrationState = 'idle' | 'running' | 'failed'
@@ -75,23 +75,6 @@ const bootWelcome = decideBoot()
 // 优先级：开机页 > 游客先看欢迎页（逛展示内容）> 已登录用户异步拉会话分流（loading 过渡，不白屏）
 // 已登录不再用 needsRolePick 判初始页：有没有会话由云端 sessions 决定，拉回结果后再进聊天/选角色
 const initialView: View = bootWelcome ? 'welcome' : !isLoggedIn() ? 'welcome' : 'loading'
-
-// ---- 连点 3 下强刷：清 PWA 缓存 + 注销 Service Worker + 重新加载 ----
-async function forceRefresh(): Promise<void> {
-  try {
-    if ('caches' in window) {
-      const keys = await caches.keys()
-      await Promise.all(keys.map((k) => caches.delete(k)))
-    }
-    if (navigator.serviceWorker?.getRegistrations) {
-      const regs = await navigator.serviceWorker.getRegistrations()
-      await Promise.all(regs.map((r) => r.unregister()))
-    }
-  } catch {
-    // 兜底：没网或不支持时，能刷新就好
-  }
-  location.reload()
-}
 
 // ---- 监听登录状态变化：登录/登出后重算登录墙与已登录态 ----
 function useAuthState(): boolean {
@@ -230,6 +213,13 @@ export default function App() {
 
   const openSpace = (from: View) => {
     setSpaceFrom(from)
+    navigate('aispace')
+  }
+
+  // 忆览页「全部角色」卡片：切到该角色会话后进它的 TA 空间，返回时回忆览页
+  const openSpaceForSession = (sessionId: string) => {
+    setActiveSessionId(String(sessionId))
+    setSpaceFrom('memory')
     navigate('aispace')
   }
 
@@ -446,9 +436,9 @@ export default function App() {
               <Memory
                 onOpenAnniversary={() => navigate('anniversary')}
                 onOpenWeekly={() => navigate('weekly')}
+                onOpenSpaceForSession={openSpaceForSession}
               />
             )}
-            {view === 'work' && <Work onGoChat={() => navigate('chat')} />}
             {view === 'settings' && (
               <Settings
                 initialPage={settingsTarget}
@@ -460,6 +450,7 @@ export default function App() {
                   navigate('role')
                 }}
                 onGoGuide={() => openGuide('settings')}
+                onGoWorkChat={() => navigate('chat')}
               />
             )}
           </main>
@@ -475,13 +466,7 @@ export default function App() {
               className={`nav-btn${view === 'memory' ? ' active' : ''}`}
               onClick={() => navigate('memory')}
             >
-              记忆
-            </button>
-            <button
-              className={`nav-btn${view === 'work' ? ' active' : ''}`}
-              onClick={() => navigate('work')}
-            >
-              工作台
+              忆览
             </button>
             <button
               className={`nav-btn${view === 'settings' ? ' active' : ''}`}

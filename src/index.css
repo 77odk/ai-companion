@@ -857,6 +857,91 @@ textarea.persona-input {
   width: 100%;
 }
 
+/* 忆览页：顶部模块标题 + 全部角色卡片画廊 */
+.memory-page-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.memory-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memory-roles-title {
+  margin: 0 4px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: 0.04em;
+}
+
+.memory-roles-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+/* 角色卡片：首字圆形头像 + 角色名 + 摘要/相处天数小字（禁 emoji，主色软底） */
+.memory-role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  min-width: 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.memory-role-card:hover,
+.memory-role-card:focus-visible {
+  border-color: rgba(255, 138, 92, 0.45);
+  background: rgba(255, 138, 92, 0.06);
+}
+
+.memory-role-avatar {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+  font-size: 18px;
+  font-weight: 700;
+  overflow: hidden;
+}
+
+.memory-role-name {
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-role-sub {
+  max-width: 100%;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 空状态：有温度，不说"暂无记忆" */
 .memory-empty {
   display: flex;
@@ -1897,6 +1982,16 @@ textarea.persona-input {
   line-height: 1.5;
   text-align: center;
   color: var(--color-text);
+}
+
+/* 「我的」页里的工作台子页：避免 .page 双层内边距，工作台自身内容不再套一层 */
+.work-subpage {
+  gap: 8px;
+}
+
+.work-subpage .work-page {
+  padding: 0 0 8px;
+  overflow: visible;
 }
 
 .work-ask-card {
@@ -4026,6 +4121,8 @@ textarea.persona-input {
 .login-gate-logo {
   width: 64px;
   height: 64px;
+  border: none;
+  padding: 0;
   border-radius: 20px;
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-deep));
   color: #fff;
@@ -4034,6 +4131,7 @@ textarea.persona-input {
   justify-content: center;
   margin-bottom: 16px;
   box-shadow: 0 6px 18px rgba(255, 138, 92, 0.35);
+  font-family: inherit;
 }
 
 .login-gate-logo span {

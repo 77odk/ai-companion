@@ -13,6 +13,7 @@ import {
   inferTopic,
   loadMemory,
   removeMemoryItem,
+  stripMemoryMarkers,
   togglePinMemory,
   updateMemoryItemContent,
   MEMORY_UPDATED_EVENT,
@@ -28,17 +29,22 @@ import {
 } from '../lib/memorySummary'
 import { chatCompletion } from '../lib/api'
 import { getToken } from '../lib/auth'
-import { deleteMemory, listMemories, patchMemory, postMemory } from '../lib/sessionApi'
+import { deleteMemory, listMemories, patchMemory, postMemory, type Session } from '../lib/sessionApi'
 import {
   addMemoryCacheItem,
   getActiveSessionId,
   getMemoriesCache,
+  getMessagesCache,
+  getSessionsCache,
   mergeSessionMemories,
   reconcileMemoryCacheId,
   saveMemoriesCache,
   sessionMemoryToItem,
 } from '../lib/sessionStore'
-import { loadAIProfile, loadPersona, loadSettings, loadUserProfile } from '../lib/storage'
+import { getFirstSeen, loadAIProfile, loadPersona, loadSettings, loadUserProfile, type StoredMessage } from '../lib/storage'
+import { displaySessionName } from '../lib/sessionFlow'
+import { roleInitial } from '../lib/sessionProfile'
+import { computeDaysKnown, truncatePreview } from '../lib/aiSpaceDetail'
 
 /** 主题色块：一组柔和配色，按主题名稳定取一个 */
 const TOPIC_SOFT = [
@@ -130,7 +136,7 @@ function CalendarIcon() {
   )
 }
 
-/** 「TA 的周记」卡片的本子图标：细描边线条，暖橘由 CSS currentColor 控制 */
+/** 「相与书」卡片的本子图标：细描边线条，暖橘由 CSS currentColor 控制 */
 function NotebookIcon() {
   return (
     <svg
@@ -149,12 +155,12 @@ function NotebookIcon() {
   )
 }
 
-/** 双源信任来源小标记：用户明说的「你说的」（暖橘）/ TA 推断的「TA 记得的」（暖灰），低调小字 */
+/** 双源信任来源小标记：用户明说的「你说的」（暖橘）/ TA 推断的「TA所忆」（暖灰），低调小字 */
 function SourceTag({ explicit }: { explicit?: boolean }) {
   return explicit === true ? (
     <span className="memory-source-tag memory-source-user">你说的</span>
   ) : (
-    <span className="memory-source-tag memory-source-ta">TA 记得的</span>
+    <span className="memory-source-tag memory-source-ta">TA所忆</span>
   )
 }
 
@@ -175,6 +181,21 @@ function newestCreatedAt(items: MemoryItem[]): number {
     if (typeof m.createdAt === 'number' && m.createdAt > max) max = m.createdAt
   }
   return max
+}
+
+/** 某会话最近一条消息摘要（画廊卡片小字；无消息返回空串） */
+function lastMessageSummary(sessionId: string): string {
+  const msgs = getMessagesCache(sessionId)
+  if (msgs.length === 0) return ''
+  const last = msgs.reduce<StoredMessage | null>((best, m) => (!best || m.ts > best.ts ? m : best), null)
+  return last ? truncatePreview(stripMemoryMarkers(last.content), 18) : ''
+}
+
+/** 某会话相处天数小字：有认识起点就显示，否则空串 */
+function daysKnownText(sessionId: string): string {
+  const first = getFirstSeen(sessionId)
+  if (!first) return ''
+  return `认识第 ${computeDaysKnown(first)} 天`
 }
 
 /** 条目正文：编辑中显示内联输入框 + 保存/取消，平时显示原文 */
@@ -221,14 +242,18 @@ function MemoryItemTextEdit({
 interface MemoryProps {
   /** 点纪念日小卡片 → 进纪念日管理页 */
   onOpenAnniversary?: () => void
-  /** 点「TA 的周记」卡片 → 进周记页 */
+  /** 点「相与书」卡片 → 进周记页 */
   onOpenWeekly?: () => void
+  /** 忆览页「全部角色」画廊：点卡片 → 切会话并进该角色的 TA 空间 */
+  onOpenSpaceForSession?: (sessionId: string) => void
 }
 
-export default function Memory({ onOpenAnniversary, onOpenWeekly }: MemoryProps) {
+export default function Memory({ onOpenAnniversary, onOpenWeekly, onOpenSpaceForSession }: MemoryProps) {
   // B2c-3 会话模式：有 activeSessionId → 记忆读当前会话缓存（后台拉后端填充，后端权威）；
   // 无会话（过渡态）→ 读本地 ai_companion_memory（原逻辑）
   const activeSessionId = getActiveSessionId()
+  // 忆览页「全部角色」画廊：从会话缓存读全部角色（数据先接现状，精修是 P2）
+  const [roleSessions] = useState<Session[]>(() => getSessionsCache())
   const [items, setItems] = useState<MemoryItem[]>(() =>
     activeSessionId ? getMemoriesCache(activeSessionId) : loadMemory(),
   )
@@ -501,6 +526,7 @@ export default function Memory({ onOpenAnniversary, onOpenWeekly }: MemoryProps)
 
   return (
     <div className="page memory-page">
+      <h2 className="memory-page-title">我的忆录</h2>
       <p className="page-desc">
         TA 会把你放在心上的一句话记下来，下次见面还记得。
         <br />
@@ -516,13 +542,42 @@ export default function Memory({ onOpenAnniversary, onOpenWeekly }: MemoryProps)
         </div>
       )}
 
-      {/* 「TA 的周记」入口卡片：跟纪念日小卡片同一档样式，点进周记页 */}
+      {/* 全部角色的卡片画廊：点卡片进该角色的 TA 空间（数据先接现状，精修是 P2） */}
+      {roleSessions.length > 0 && (
+        <section className="memory-roles" aria-label="全部角色">
+          <h3 className="memory-roles-title">全部角色</h3>
+          <div className="memory-roles-grid">
+            {roleSessions.map((s) => {
+              const id = String(s.id)
+              const name = displaySessionName(s)
+              const sub = lastMessageSummary(id) || daysKnownText(id) || '还没有消息'
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className="memory-role-card"
+                  onClick={() => onOpenSpaceForSession?.(id)}
+                  aria-label={`进入 ${name} 的空间`}
+                >
+                  <span className="memory-role-avatar" aria-hidden="true">
+                    {roleInitial(name)}
+                  </span>
+                  <span className="memory-role-name">{name}</span>
+                  <span className="memory-role-sub">{sub}</span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* 「相与书」入口卡片：跟纪念日小卡片同一档样式，点进周记页 */}
       {onOpenWeekly && (
         <button type="button" className="anniversary-strip" onClick={onOpenWeekly}>
           <span className="anniversary-strip-icon" aria-hidden="true">
             <NotebookIcon />
           </span>
-          <span className="anniversary-strip-title">TA 的周记</span>
+          <span className="anniversary-strip-title">相与书</span>
           <span className="anniversary-strip-main">
             <span className="anniversary-strip-label">TA每周最多写下一篇周记，记录自己的生活与心绪，你可以阅读并留下感想</span>
           </span>
@@ -557,7 +612,7 @@ export default function Memory({ onOpenAnniversary, onOpenWeekly }: MemoryProps)
         <span className="anniversary-strip-icon" aria-hidden="true">
           <CalendarIcon />
         </span>
-        <span className="anniversary-strip-title">纪念日</span>
+        <span className="anniversary-strip-title">相逢纪</span>
         <span className="anniversary-strip-main">
           {mainAnniversary ? (
             <>

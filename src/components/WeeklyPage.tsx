@@ -295,10 +295,10 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const renderList = () => (
     <div className="page weekly-page">
       <div className="detail-header">
-        <button type="button" className="detail-back" onClick={onBack} aria-label="返回记忆页">
+        <button type="button" className="detail-back" onClick={onBack} aria-label="返回忆览页">
           <BackIcon />
         </button>
-        <h2 className="detail-title">TA 的周记</h2>
+        <h2 className="detail-title">相与书</h2>
         <button
           type="button"
           className="weekly-tooltip-btn"

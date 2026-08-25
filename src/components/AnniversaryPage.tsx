@@ -159,7 +159,7 @@ export default function AnniversaryPage({ onBack }: Props) {
         <button type="button" className="link-btn ai-space-back" onClick={onBack}>
           ‹ 返回
         </button>
-        <h2 className="ai-space-sub-title">纪念日</h2>
+        <h2 className="ai-space-sub-title">相逢纪</h2>
         <span className="ai-space-topbar-spacer" aria-hidden="true" />
       </div>
 
@@ -169,7 +169,7 @@ export default function AnniversaryPage({ onBack }: Props) {
           <section className="anniversary-main-section">
             <div className="anniversary-section-head">
               <h3 className="anniversary-section-title">主展示</h3>
-              <p className="anniversary-section-desc">记忆页小卡片上显示的日子</p>
+              <p className="anniversary-section-desc">忆览页小卡片上显示的日子</p>
             </div>
             <ul className="anniversary-main-list">
               {anniversaries.map((a) => {

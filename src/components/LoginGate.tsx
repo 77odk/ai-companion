@@ -1,8 +1,10 @@
-// 登录墙（B2b）：游客想进聊天/记忆/工作台/我的等使用页时，整屏拦住先登录。
+// 登录墙（B2b）：游客想进聊天/忆览/工作台/我的等使用页时，整屏拦住先登录。
 // 顶部有人味的引导文案 + 复用 LoginForm 登录/注册；登录成功调 onDone 回跳目标页。
 // 提供「先看看教程」小链接，游客可以先去逛使用指南。
 
+import { useRef } from 'react'
 import LoginForm from './LoginForm'
+import { forceRefresh } from '../lib/forceRefresh'
 
 interface Props {
   /** 登录成功后回跳目标页 */
@@ -14,6 +16,20 @@ interface Props {
 }
 
 export default function LoginGate({ onDone, onGoGuide, onBack }: Props) {
+  const logoClicks = useRef<number[]>([])
+
+  // 「忆文」logo 连点 3 下强刷（同顶栏逻辑）：清 caches + 注销 SW + reload，排查更新问题用
+  const handleLogoClick = () => {
+    const now = Date.now()
+    const recent = logoClicks.current.filter((t) => now - t < 2000)
+    recent.push(now)
+    logoClicks.current = recent
+    if (recent.length >= 3) {
+      logoClicks.current = []
+      void forceRefresh()
+    }
+  }
+
   return (
     <div className="login-gate">
       <div className="login-gate-header">
@@ -34,9 +50,9 @@ export default function LoginGate({ onDone, onGoGuide, onBack }: Props) {
       </div>
 
       <div className="login-gate-inner">
-        <div className="login-gate-logo" aria-hidden="true">
+        <button type="button" className="login-gate-logo" onClick={handleLogoClick} aria-label="忆文">
           <span>忆</span>
-        </div>
+        </button>
 
         <h1 className="login-gate-title">登录后，TA 才会记得你</h1>
         <p className="login-gate-sub">
