@@ -5,29 +5,33 @@ import Chat from './components/Chat'
 import Memory from './components/Memory'
 import Settings, { type SettingsPage } from './components/Settings'
 import AISpace from './components/AISpace'
+import ChatProfile from './components/ChatProfile'
 import AnniversaryPage from './components/AnniversaryPage'
 import WeeklyPage from './components/WeeklyPage'
 import GuideDetail from './components/Guide'
 import LoginGate from './components/LoginGate'
 import RolesPage from './components/RolesPage'
-import { loadMessages, loadPersona } from './lib/storage'
+import DefaultAvatar from './components/DefaultAvatar'
+import { loadAIProfile, loadMessages, loadPersona } from './lib/storage'
 import { getToken, isLoggedIn, isPublicView } from './lib/auth'
 import { listSessions } from './lib/sessionApi'
 import {
   getActiveSessionId,
+  getSessionsCache,
   setActiveSessionId,
   setSessionsCache,
 } from './lib/sessionStore'
 import { hasLocalLegacyData, hasMigratedFlag, runLocalMigration, setLocalMigratedFlag } from './lib/migrateLocal'
 import {
   decideLoginTarget,
+  displaySessionName,
   pickMostRecentSession,
   type RolePickMode,
 } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh } from './lib/forceRefresh'
 
-type View = 'welcome' | 'role' | 'roles' | 'chat' | 'memory' | 'settings' | 'aispace' | 'anniversary' | 'weekly' | 'guide' | 'loading'
+type View = 'welcome' | 'role' | 'roles' | 'chat' | 'memory' | 'settings' | 'aispace' | 'chatprofile' | 'anniversary' | 'weekly' | 'guide' | 'loading'
 
 // 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
 type MigrationState = 'idle' | 'running' | 'failed'
@@ -108,6 +112,15 @@ export default function App() {
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
+
+  // 聊天页头部 TA 头像（TASK-UI3）：点它打开聊天头像资料卡。有会话取角色名首字，
+  // 无会话（遗留流程）回落 AI 头像/默认头像
+  const headerAi = loadAIProfile()
+  const activeSid = getActiveSessionId()
+  const headerSession = activeSid
+    ? getSessionsCache().find((s) => String(s.id) === activeSid) ?? null
+    : null
+  const headerRoleName = headerSession ? displaySessionName(headerSession) : ''
 
   // 老数据一键迁移：建云端会话 → 按升序传消息 → 传记忆（单条失败跳过不中断）→
   // 置位 → 进聊天。本地数据只读不删（红线）；createSession 失败才算整个迁移失败（不置位，可重试）。
@@ -340,6 +353,8 @@ export default function App() {
         />
       ) : view === 'aispace' ? (
         <AISpace onBack={backFromSpace} onGoMine={() => navigate('settings')} />
+      ) : view === 'chatprofile' ? (
+        <ChatProfile onClose={() => navigate('chat')} onGoMine={() => navigate('settings')} />
       ) : view === 'anniversary' ? (
         <AnniversaryPage onBack={() => navigate('memory')} />
       ) : view === 'weekly' ? (
@@ -391,6 +406,23 @@ export default function App() {
             {view === 'chat' && (
               <button
                 type="button"
+                className="chat-header-avatar"
+                onClick={() => setView('chatprofile')}
+                aria-label="打开 TA 的资料卡"
+                title="TA 的资料卡"
+              >
+                {headerRoleName ? (
+                  <span className="chat-header-avatar-letter">{headerRoleName.slice(0, 1)}</span>
+                ) : headerAi.avatar.startsWith('data:') ? (
+                  <img src={headerAi.avatar} alt="" />
+                ) : (
+                  <DefaultAvatar kind="ai" className="avatar-default" />
+                )}
+              </button>
+            )}
+            {view === 'chat' && (
+              <button
+                type="button"
                 className="space-entry"
                 onClick={() => openSpace('chat')}
                 aria-label="进入 TA 的空间"
@@ -430,6 +462,7 @@ export default function App() {
               <Chat
                 onGoSettings={() => openSettings('main')}
                 onGoGuide={() => openGuide('settings')}
+                onOpenProfile={() => setView('chatprofile')}
               />
             )}
             {view === 'memory' && (

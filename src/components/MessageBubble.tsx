@@ -7,6 +7,8 @@ interface Props {
   message: StoredMessage
   /** 流式输出中且内容为空时显示"正在输入"动画 */
   typing?: boolean
+  /** 点 TA 的头像 → 打开聊天头像资料卡（TASK-UI3）；不传时头像不可点 */
+  onAvatarClick?: () => void
 }
 
 function Avatar({ value, kind, className }: { value: string; kind: 'user' | 'ai'; className: string }) {
@@ -21,7 +23,7 @@ function Avatar({ value, kind, className }: { value: string; kind: 'user' | 'ai'
   )
 }
 
-export default function MessageBubble({ message, typing = false }: Props) {
+export default function MessageBubble({ message, typing = false, onAvatarClick }: Props) {
   const isUser = message.role === 'user'
   const avatar = isUser ? loadUserProfile().avatar : loadAIProfile().avatar
   // 展示时把「【记忆】xxx」那行藏起来，不让用户看到标记（原文仍保存在存储里）
@@ -31,7 +33,20 @@ export default function MessageBubble({ message, typing = false }: Props) {
   const showMemorySaved = shouldShowMemorySaved(message)
   return (
     <div className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}>
-      {!isUser && <Avatar value={avatar} kind="ai" className="ai-avatar" />}
+      {!isUser &&
+        (onAvatarClick ? (
+          <button
+            type="button"
+            className="msg-avatar-btn"
+            onClick={onAvatarClick}
+            aria-label="打开 TA 的资料卡"
+            title="TA 的资料卡"
+          >
+            <Avatar value={avatar} kind="ai" className="ai-avatar" />
+          </button>
+        ) : (
+          <Avatar value={avatar} kind="ai" className="ai-avatar" />
+        ))}
       <div className="message-body">
         <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
           {typing ? (

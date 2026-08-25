@@ -37,9 +37,11 @@ import MilestoneCard from './MilestoneCard'
 interface Props {
   onGoSettings: () => void
   onGoGuide: () => void
+  /** 点 TA 的头像 → 打开聊天头像资料卡（TASK-UI3） */
+  onOpenProfile: () => void
 }
 
-export default function Chat({ onGoSettings, onGoGuide }: Props) {
+export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) {
   // B2c-1 会话模式：有 activeSessionId → 会话数据走后端（本地缓存秒开，后端权威）；
   // 没有 → 走现有 localStorage 流程（B2c 过渡期，等 B2c-2 选角色新建会话对接）
   const activeSessionId = getActiveSessionId()
@@ -490,6 +492,7 @@ export default function Chat({ onGoSettings, onGoGuide }: Props) {
               key={i}
               message={m}
               typing={streaming && i === visibleMessages.length - 1 && m.role === 'assistant' && m.content === ''}
+              onAvatarClick={onOpenProfile}
             />
           ))
         )}

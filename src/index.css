@@ -100,6 +100,49 @@ button {
   height: 20px;
 }
 
+/* 聊天页头部 TA 头像（TASK-UI3）：点它打开聊天头像资料卡，跟在空间入口左边 */
+.chat-header-avatar {
+  position: absolute;
+  right: 58px;
+  top: 12px;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-card);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  padding: 0;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.chat-header-avatar:hover {
+  color: var(--color-primary-deep);
+  border-color: rgba(255, 138, 92, 0.4);
+  background: rgba(255, 138, 92, 0.06);
+}
+
+.chat-header-avatar-letter {
+  color: var(--color-primary-deep);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.chat-header-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chat-header-avatar .avatar-default {
+  width: 60%;
+  height: 60%;
+}
+
 .app-main {
   flex: 1;
   min-height: 0;
@@ -312,6 +355,22 @@ button {
 .msg-avatar .avatar-default {
   width: 60%;
   height: 60%;
+}
+
+/* 消息区 TA 头像可点开资料卡（TASK-UI3）：按钮包住原头像，尺寸/圆角不变 */
+.msg-avatar-btn {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  overflow: hidden;
+  cursor: pointer;
 }
 
 .user-avatar {
