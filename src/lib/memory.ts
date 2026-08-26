@@ -314,6 +314,34 @@ export function detectMemoryInstruction(text: string): { isInstruction: boolean;
   return { isInstruction: false, fact: null }
 }
 
+/**
+ * 偏好/事实句自动记忆（2026-08-25 七七反馈：AI 不总带【记忆】标记，靠它自觉靠不住）：
+ * 「我喜欢/我爱吃/我讨厌/我害怕/我的XX是/我家的XX」这类客观事实句 → 保底提取存记忆。
+ * 命中返回事实文本（可能含完整句子，稍作裁剪），没命中返回 null。
+ * 只做浅层正则匹配，宁可漏不可错存（避免把"我喜欢你"这类情绪话当事实记）。
+ */
+const PREFERENCE_PATTERNS: RegExp[] = [
+  /(?:我|人家)(?:最喜欢|最爱吃|喜欢吃|喜欢吃辣|喜欢喝|爱喝|喜欢(?:吃|喝|用|看|听|玩|养|穿))[，,。.！!？?\s](.{2,30})/,
+  /我(?:特别|非常|超|很)?(?:喜欢吃|喜欢喝|爱喝|爱吃)(.{1,30})/,
+  /我(?:讨厌|不喜欢|吃不了|怕|害怕|过敏|不能吃)(.{2,30})/,
+  /我的(?:生日|名字|星座|血型|职业|工作|公司|学校|专业|老家|家乡|家|猫|狗|仓鼠)是(.{2,30})/,
+  /我(?:住在|在|家养了|养了|有)(.{2,30})/,
+  /我(?:每天|一般|通常|平时)(.{2,30})/,
+]
+
+export function detectPreferenceFact(text: string): string | null {
+  const t = String(text ?? '').trim()
+  if (!t || t.length > 60) return null
+  for (const re of PREFERENCE_PATTERNS) {
+    const m = re.exec(t)
+    // 捕获组至少 1 字就算事实（"我爱吃辣"→"辣"；正则本身已足够具体，不会误抓情绪话）
+    if (m && m[1] && m[1].trim().length >= 1) {
+      return t
+    }
+  }
+  return null
+}
+
 /** 去掉文本里的显式指令关键词（保底写入用）：返回剩余文本；无关键词原样返回 */
 export function stripMemoryKeyword(text: string): string {
   const t = String(text ?? '').trim()

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildSystemPrompt, chatCompletion, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage } from '../lib/api'
-import { detectMemoryInstruction, extractMemories, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
+import { detectMemoryInstruction, detectPreferenceFact, extractMemories, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { getToken } from '../lib/auth'
 import { getSession, listMemories, postMemory, postMessage, type Session } from '../lib/sessionApi'
@@ -263,6 +263,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       const content = (memInstr.fact ?? stripMemoryKeyword(text)).trim()
       if (content.length >= 4) {
         writeMemory(content, { source: text, topic: inferTopic(content), explicit: true })
+        userMsg.memorySaved = true
+      }
+    }
+    // 2026-08-25 七七反馈：AI 不总带【记忆】标记 → 偏好/事实句前端保底存（不依赖模型自觉）
+    if (!userMsg.memorySaved) {
+      const pref = detectPreferenceFact(text)
+      if (pref) {
+        writeMemory(pref, { source: text, topic: inferTopic(pref), explicit: true })
         userMsg.memorySaved = true
       }
     }
