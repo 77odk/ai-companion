@@ -2,6 +2,7 @@ import type { StoredMessage } from '../lib/storage'
 import { loadAIProfile, loadUserProfile, shouldShowMemorySaved } from '../lib/storage'
 import { extractMemories, stripMemoryMarkers } from '../lib/memory'
 import { getActiveSessionId } from '../lib/sessionStore'
+import { chatBubbleTime } from '../lib/time'
 import DefaultAvatar from './DefaultAvatar'
 
 interface Props {
@@ -61,6 +62,8 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
             <span className="bubble-text">{displayText}</span>
           )}
         </div>
+        {/* 每条消息都带时间（2026-08-26 七七拍板，AM/PM 微信式） */}
+        <span className="msg-bubble-time">{chatBubbleTime(message.ts)}</span>
         {hasMemory && <span className="memory-remembered">已记住</span>}
         {showMemorySaved && <span className="memory-saved">✅已帮你记下</span>}
       </div>

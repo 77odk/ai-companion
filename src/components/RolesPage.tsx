@@ -21,7 +21,7 @@ import {
 } from '../lib/sessionStore'
 import { stripMemoryMarkers } from '../lib/memory'
 import { truncatePreview } from '../lib/aiSpaceDetail'
-import { timeAgo } from '../lib/time'
+import { wechatListTime } from '../lib/time'
 import { loadAIProfile } from '../lib/storage'
 import type { StoredMessage } from '../lib/storage'
 
@@ -68,7 +68,21 @@ export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }
     }
   }, [])
 
+  // 微信式实时刷新（2026-08-26 七七拍板）：有新消息/缓存变化立刻重读重排，不用手动重进
+  useEffect(() => {
+    const onData = () => setSessions([...getSessionsCache()])
+    window.addEventListener('eluvin-data-change', onData)
+    return () => window.removeEventListener('eluvin-data-change', onData)
+  }, [])
+
   const list = Array.isArray(sessions) ? sessions : []
+  // 微信式排序（2026-08-26 七七拍板）：按最后一条消息的时间排，最新聊的排最上面；
+  // 没消息的会话按会话时间戳兜底，排最后
+  const sortedList = [...list].sort((a, b) => {
+    const ta = lastMessage(String(a.id))?.ts ?? sessionTimestamp(a)
+    const tb = lastMessage(String(b.id))?.ts ?? sessionTimestamp(b)
+    return tb - ta
+  })
   const activeId = getActiveSessionId()
 
   const switchSession = (id: string) => {
@@ -181,7 +195,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }
         </div>
       ) : (
         <ul className="roles-list">
-          {list.map((s) => {
+          {sortedList.map((s) => {
             const id = String(s.id)
             const active = id === activeId
             const displayName = displaySessionName(s)
@@ -211,7 +225,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }
                   </span>
                 </button>
                 <span className="roles-side">
-                  <span className="roles-item-time">{timeAgo(sessionTimestamp(s))}</span>
+                  <span className="roles-item-time">{wechatListTime((last ? last.ts : sessionTimestamp(s)))}</span>
                   {unread > 0 && (
                     <span className="roles-badge" aria-label={`${unread} 条未读`}>
                       {unread >= 99 ? '99+' : unread}

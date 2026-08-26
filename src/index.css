@@ -353,6 +353,22 @@ button {
   gap: 8px;
 }
 
+/* 每条气泡自带时间（2026-08-26 七七拍板，AM/PM 微信式） */
+.msg-bubble-time {
+  display: block;
+  font-size: 10px;
+  color: var(--color-text-3, #b0b0b6);
+  margin-top: 3px;
+  padding-left: 2px;
+  line-height: 1;
+}
+
+.row-user .msg-bubble-time {
+  text-align: right;
+  padding-left: 0;
+  padding-right: 2px;
+}
+
 .row-user {
   justify-content: flex-end;
 }
