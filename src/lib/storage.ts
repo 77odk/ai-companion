@@ -5,7 +5,7 @@ import { pickFirstSeen } from './aiSpaceDetail.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import type { SpacePost } from './aiSpaceCore'
 import type { MemoryItem } from './memory'
-import { getDefaultSessionId } from './sessionStore.ts'
+import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
 
 export type Provider = 'deepseek' | 'zhipu' | 'openai' | 'custom' | 'volcengine'
 
@@ -369,6 +369,51 @@ export function loadAIProfile(sessionId?: string): AIProfile {
 export function saveAIProfile(p: AIProfile, sessionId?: string): void {
   localStorage.setItem(aiProfileKey(sessionId), JSON.stringify(p))
   notifyDataChanged()
+}
+
+/** 云端同步用：汇总全部角色的 TA 资料（全局 + 各会话），防角色隔离后云端丢数据（TASK-UI3） */
+export function collectAllAIProfiles(): Record<string, AIProfile> {
+  const out: Record<string, AIProfile> = {}
+  try {
+    const global = localStorage.getItem(AI_PROFILE_KEY)
+    if (global != null) out._global = normalizeAIProfile(global)
+  } catch {
+    // 全局读不到就跳过
+  }
+  for (const s of getSessionsCache()) {
+    const sid = String(s.id)
+    if (!sid) continue
+    try {
+      const raw = localStorage.getItem(aiProfileKey(sid))
+      if (raw != null) out[sid] = normalizeAIProfile(raw)
+    } catch {
+      // 单个会话读不到不影响其他
+    }
+  }
+  return out
+}
+
+/** 云端同步用：把汇总的 TA 资料按 sid 写回本地（_global 写全局；每个会话写自己的 key，不覆盖已有会话级数据时以本地优先） */
+export function applyAllAIProfiles(cloud: Record<string, AIProfile> | undefined): void {
+  if (!cloud || typeof cloud !== 'object') return
+  try {
+    if (cloud._global) {
+      const g = normalizeAIProfile(JSON.stringify(cloud._global))
+      if (localStorage.getItem(AI_PROFILE_KEY) == null) {
+        localStorage.setItem(AI_PROFILE_KEY, JSON.stringify(g))
+      }
+    }
+    for (const [sid, p] of Object.entries(cloud)) {
+      if (sid === '_global') continue
+      if (!sid) continue
+      const raw = localStorage.getItem(aiProfileKey(sid))
+      if (raw == null) {
+        localStorage.setItem(aiProfileKey(sid), JSON.stringify(normalizeAIProfile(JSON.stringify(p))))
+      }
+    }
+  } catch {
+    // 合并失败不阻塞，下次同步再试
+  }
 }
 
 // ---- TA 的性别 / 备注（TASK-UI1 角色设定，独立 key 存） ----

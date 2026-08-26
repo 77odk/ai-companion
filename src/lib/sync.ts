@@ -14,6 +14,8 @@ import {
   loadPersona,
   loadUserProfile,
   loadAIProfile,
+  collectAllAIProfiles,
+  applyAllAIProfiles,
   getSessionStart,
   type StoredMessage,
   type UserProfile,
@@ -52,6 +54,8 @@ export interface SyncData {
   persona: string
   userProfile: UserProfile
   aiProfile: AIProfile
+  /** 各角色（会话）的 TA 资料：sid → profile；_global = 全局兜底（TASK-UI3 角色隔离云同步） */
+  aiProfiles?: Record<string, AIProfile>
   settings: SyncSettings
   sessionStart: number
   anniversaries: Anniversary[]
@@ -286,6 +290,7 @@ export function collectData(): SyncData {
     persona: loadPersona(),
     userProfile: loadUserProfile(),
     aiProfile: loadAIProfile(),
+    aiProfiles: collectAllAIProfiles(),
     settings: sanitizeSettings(),
     sessionStart: getSessionStart(),
     anniversaries: collectAllAnniversaries(),
@@ -400,6 +405,8 @@ export function applyData(data: SyncData): void {
   if (isEmptyAIProfile(loadAIProfile())) {
     localStorage.setItem(AI_PROFILE_KEY, JSON.stringify(normalizeAIProfile(d.aiProfile)))
   }
+  // 各角色（会话）的 TA 资料：按 sid 分发，本地已有会话级数据不覆盖（TASK-UI3 角色隔离云同步）
+  applyAllAIProfiles(d.aiProfiles)
 
   // 设置：本地配过就原样保留（含 apiKey）；本地从没配过才用云端的（云端不带 apiKey）
   const mergedSettings = mergeSettings(localStorage.getItem(SETTINGS_KEY), d.settings)
