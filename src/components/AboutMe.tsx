@@ -68,16 +68,12 @@ const DeleteIcon = () => (
   </svg>
 )
 
-/** 「我自己说的」里的显式记忆：用户主动输入框添加的（explicit=true），全局共享（不按会话过滤） */
+/** 「我自己说的」里的显式记忆：用户主动在关于我页输入框添加的（explicit=true，写全局），所有角色共享 */
 function myExplicitMemories(): MemoryItem[] {
-  // 关于我是「你自己的事」：所有角色同步。explicit 记忆读全局库（手动添加都写全局）；
-  // 会话缓存的 explicit 条目也汇总进来（老数据可能在会话缓存里）
-  const global = loadMemory().filter((m) => m.explicit === true)
-  const sid = getActiveSessionId()
-  if (!sid) return global
-  const sessionOnes = getMemoriesCache(sid).filter((m) => m.explicit === true)
-  const seen = new Set(global.map((m) => m.id))
-  return [...global, ...sessionOnes.filter((m) => !seen.has(m.id))]
+  // 关于我是「你自己的事」：所有角色同步。只读全局库的 explicit 条目。
+  // 注意：聊天中保底记住的喜好（detectPreferenceFact 等）写在「当前角色」的会话记忆（TA所忆），
+  // 不属于关于我——不要在关于我里汇总会话缓存的 explicit（2026-08-26 七七实测：西瓜串到关于我）。
+  return loadMemory().filter((m) => m.explicit === true)
 }
 
 /** 表单类型：birthday 生日 / period 生理期 / custom 自定义 */

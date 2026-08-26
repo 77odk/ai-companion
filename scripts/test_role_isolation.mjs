@@ -182,18 +182,25 @@ setSessionsCache([
   { id: 7, title: '阿叙', persona: '' },
   { id: 8, title: '阿温', persona: '' },
 ])
-localStorage.setItem('ai_companion_memory', JSON.stringify([{ id: 'g1', text: '对方不爱吃香菜', createdAt: 1, topic: '饮食' }]))
+// 全局记忆（关于我）：只有 explicit=true（用户主动填的档案）才所有角色共享；
+// explicit=false（聊天中记住的，如旧存档"喜欢红烧肉"）不共享——那是历史双写遗留，属于原角色（2026-08-26 七七拍板）
+localStorage.setItem('ai_companion_memory', JSON.stringify([
+  { id: 'g1', text: '对方不爱吃香菜', createdAt: 1, topic: '饮食', explicit: true },
+  { id: 'g0', text: '对方喜欢红烧肉', createdAt: 0, topic: '饮食' },
+]))
 saveMemoriesCache('7', [{ id: 's7', text: '对方喜欢猫', createdAt: 2, topic: '宠物' }])
 saveMemoriesCache('8', [{ id: 's8', text: '对方在公司加班', createdAt: 3, topic: '工作' }])
-// 语境同时命中 饮食/宠物/工作 三个主题：全局记忆 + 各自会话记忆都能召回，串读与否才看得清
+// 语境同时命中 饮食/宠物/工作 三个主题：关于我（explicit）+ 各自会话记忆都能召回，串读与否才看得清
 const r7 = recallSessionMemories('7', '猫吃辣加班吗', { now: 1000 })
 eq(r7.some((m) => m.id === 's7'), true, '会话 7 召回自己的记忆')
 eq(r7.some((m) => m.id === 's8'), false, '会话 7 绝不读会话 8 的记忆')
-eq(r7.some((m) => m.id === 'g1'), true, '会话 7 共享全局记忆')
+eq(r7.some((m) => m.id === 'g1'), true, '会话 7 共享关于我（explicit 全局记忆）')
+eq(r7.some((m) => m.id === 'g0'), false, '会话 7 不读全局里的聊天记忆（explicit=false 旧存档）')
 const r8 = recallSessionMemories('8', '猫吃辣加班吗', { now: 1000 })
 eq(r8.some((m) => m.id === 's8'), true, '会话 8 召回自己的记忆')
 eq(r8.some((m) => m.id === 's7'), false, '会话 8 绝不读会话 7 的记忆')
-eq(r8.some((m) => m.id === 'g1'), true, '会话 8 共享全局记忆')
+eq(r8.some((m) => m.id === 'g1'), true, '会话 8 共享关于我（explicit 全局记忆）')
+eq(r8.some((m) => m.id === 'g0'), false, '会话 8 不读全局里的聊天记忆（explicit=false 旧存档）')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) throw new Error(`${failed} 个用例失败`)

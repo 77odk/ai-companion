@@ -269,12 +269,17 @@ const withSession = recallSessionMemories('7', '我家的猫好可爱', { now: 1
 eq(withSession.some((m) => m.id === '1'), true, '有会话：命中当前会话缓存「宠物」')
 const withoutSessionEmpty = recallSessionMemories('', '我家的猫好可爱', { now: 1000 })
 eq(withoutSessionEmpty.length, 0, '无会话且本地空 → 召回空')
-localStorage.setItem('ai_companion_memory', JSON.stringify([{ id: 'loc', text: '对方不吃辣', createdAt: 1, topic: '饮食' }]))
+localStorage.setItem('ai_companion_memory', JSON.stringify([
+  { id: 'loc', text: '对方不吃辣', createdAt: 1, topic: '饮食', explicit: true },
+  { id: 'chatOld', text: '对方喜欢红烧肉', createdAt: 0, topic: '饮食' },
+]))
 const withoutSession = recallSessionMemories('', '这家店好辣', { now: 1000 })
-eq(withoutSession.some((m) => m.id === 'loc'), true, '无会话：兜底本地记忆')
+eq(withoutSession.some((m) => m.id === 'loc'), true, '无会话：兜底关于我（explicit 全局记忆）')
+eq(withoutSession.some((m) => m.id === 'chatOld'), false, '无会话：不读全局里的聊天记忆（explicit=false 旧存档）')
 const otherSession = recallSessionMemories('8', '我家的猫好可爱', { now: 1000 })
 eq(otherSession.some((m) => m.id === '1'), false, '会话 8 读不到会话 7 的记忆（严禁串读）')
-eq(otherSession.some((m) => m.id === 'loc'), true, '会话 8 能看到全局记忆（组合读取）')
+eq(otherSession.some((m) => m.id === 'loc'), true, '会话 8 能看到关于我（explicit 全局记忆）')
+eq(otherSession.some((m) => m.id === 'chatOld'), false, '会话 8 不读全局里的聊天记忆（explicit=false 旧存档）')
 
 console.log('\n[13] 未读红点（S1）：getLastRead / markRead / getUnreadCount')
 resetStore()

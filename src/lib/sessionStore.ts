@@ -327,7 +327,10 @@ export function recallSessionMemories(
   contextText: string,
   opts: RecallOptions = {},
 ): MemoryItem[] {
-  const global = loadMemory()
+  // 组合 = 关于我（全局库，仅用户主动填的 explicit 档案，所有角色共享）+ 当前角色会话记忆（TA所忆，专属）。
+  // 过滤依据（2026-08-26 七七拍板）：聊天中记住的内容只属于那个角色，绝不进别的角色的召回——
+  // 全局库里的聊天记忆（explicit=false 旧存档，如"喜欢红烧肉"）是历史双写遗留，不再注入任何角色。
+  const global = loadMemory().filter((m) => m.explicit === true)
   const items = activeSessionId ? [...global, ...getMemoriesCache(activeSessionId)] : global
   return recallRelevantMemories(items, contextText, opts)
 }
