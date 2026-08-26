@@ -38,6 +38,14 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
         <p className="welcome-count">
           已有 <span id="busuanzi_value_site_uv">0</span> 人访问
         </p>
+
+        <button
+          type="button"
+          className="welcome-refresh"
+          onClick={() => void import('../lib/forceRefresh').then((m) => m.forceRefresh())}
+        >
+          页面没更新？点这里强制刷新
+        </button>
       </div>
     </div>
   )

@@ -4376,6 +4376,40 @@ textarea.persona-input {
   text-decoration: underline;
 }
 
+/* 登录墙强刷按钮（2026-08-26 七七拍板：登录页也能强刷，解决用户一直看到旧版） */
+.login-gate-refresh {
+  display: block;
+  margin: 14px auto 0;
+  padding: 5px 10px;
+  border: none;
+  background: none;
+  font-size: 11px;
+  color: var(--color-text-3, #b0b0b6);
+  cursor: pointer;
+}
+
+.login-gate-refresh:hover {
+  color: var(--color-primary-deep);
+  text-decoration: underline;
+}
+
+/* 欢迎页强刷按钮（2026-08-26 七七拍板：首页也能强刷） */
+.welcome-refresh {
+  display: block;
+  margin: 12px auto 0;
+  padding: 5px 10px;
+  border: none;
+  background: none;
+  font-size: 11px;
+  color: var(--color-text-3, #b0b0b6);
+  cursor: pointer;
+}
+
+.welcome-refresh:hover {
+  color: var(--color-primary-deep);
+  text-decoration: underline;
+}
+
 /* 「我的」页退出登录按钮（仅登录状态显示） */
 .logout-btn {
   width: 100%;

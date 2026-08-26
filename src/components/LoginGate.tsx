@@ -66,6 +66,10 @@ export default function LoginGate({ onDone, onGoGuide, onBack }: Props) {
         <button type="button" className="login-gate-guide" onClick={onGoGuide}>
           先看看教程
         </button>
+
+        <button type="button" className="login-gate-refresh" onClick={() => void forceRefresh()}>
+          页面没更新？点这里强制刷新
+        </button>
       </div>
     </div>
   )
