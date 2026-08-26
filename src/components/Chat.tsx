@@ -23,6 +23,7 @@ import {
   saveMemoriesCache,
   saveMessagesCache,
   sessionMemoryToItem,
+  splitAssistantReplies,
   touchMemoryCache,
   upsertMemoryCache,
   type PendingOp,
@@ -376,9 +377,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     const commitFinal = (final: StoredMessage[]) => {
       persistMessages(final)
       setMessages(final)
-      const last = final[final.length - 1]
-      if (last && last.role === 'assistant') {
-        uploadMessage(last)
+      // 拆分后可能有多条同 ts 的 assistant 消息：全部上传（不只 last）
+      const sid = getActiveSessionId()
+      const token = getToken()
+      if (sid && token) {
+        for (const m of final) {
+          if (m.role !== 'assistant' || m.ts !== assistantTs) continue
+          uploadMessage(m)
+        }
       }
       setStreaming(false)
       controllerRef.current = null
@@ -414,7 +420,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         }
       }
       // 人机味/编造质检：回复像客服（"我是AI"）或编造共同经历（"我们之前一起…"）→ 自动重写一次
-      const cleaned = stripActionMarkers(stripEmoji(raw))
+      // 先剥掉【记忆】标记行（已存库），避免泄漏到聊天气泡（2026-08-25 真实用户反馈"记忆乱码"）
+      const cleaned = stripActionMarkers(stripEmoji(stripMemoryMarkers(raw)))
       if (cleaned && (looksRobotic(cleaned) || looksFabricated(cleaned)) && !retriedRef.current) {
         retriedRef.current = true
         setError(null)
@@ -447,7 +454,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         return
       }
       const final: StoredMessage[] = cleaned
-        ? [...messages, userMsg, { role: 'assistant', content: cleaned, ts: assistantTs }]
+        ? [...messages, userMsg, ...splitAssistantReplies(cleaned, assistantTs)]
         : [...messages, userMsg]
       commitFinal(final)
     }
@@ -458,7 +465,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         assistantText.current += t
         // 流式过程中直接追加原文，不做清洗——避免每个 token 都对全文跑两次正则（O(n²) 卡顿）。
         // 最终清洗在 finalize 里统一做一次，用户看到的最终结果是干净的。
-        setMessages([...messages, userMsg, { role: 'assistant', content: assistantText.current, ts: assistantTs }])
+        // 流式显示也按行拆多条气泡（微信式）；没换行时是单条；剥记忆标记行（不泄漏到气泡）
+        const splits = splitAssistantReplies(stripMemoryMarkers(assistantText.current), assistantTs)
+        setMessages([...messages, userMsg, ...splits])
       },
       onDone: finalize,
       onError: (err) => {

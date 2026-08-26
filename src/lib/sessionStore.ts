@@ -451,3 +451,27 @@ export async function flushPendingOps(token: string): Promise<void> {
     }
   }
 }
+
+// ---- 回复拆分（2026-08-25 七七拍板：微信式多条短气泡） ----
+
+/**
+ * 把 AI 回复拆成多条短消息（同一 ts 批次，渲染时各自独立气泡）：
+ * - 按换行/空行拆：AI 在提示词约束下会像发微信一样分行发（一条一行）
+ * - 单条 ≤ 1 行 → 原样；没换行就整条返回（一句话能说完就一句话）
+ * - 连续多行合成一条最长 60 字内；空白行是分段符
+ */
+export function splitAssistantReplies(content: string, ts: number): StoredMessage[] {
+  const text = String(content ?? '').trim()
+  if (!text) return []
+  const lines = text
+    .split(/\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (lines.length <= 1) return [{ role: 'assistant', content: text, ts }]
+  // 每行一条（提示词已让 AI 一行一条短消息）；过长的行按 60 字截断加省略号
+  return lines.map((l) => ({
+    role: 'assistant' as const,
+    content: l.length > 60 ? `${l.slice(0, 60)}…` : l,
+    ts,
+  }))
+}
