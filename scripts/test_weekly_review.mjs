@@ -198,7 +198,7 @@ ok(noReply.includes('- 对方喜欢吃米粉'), '记忆带 - 前缀')
 ok(noReply.includes('【相处天数】今天是你们认识的第 3 天。'), '含认识天数')
 ok(!noReply.includes('【上一篇批注】'), '无批注 → 不带上一篇批注段')
 ok(noReply.includes('【写作要求】'), '含【写作要求】')
-ok(noReply.includes('100-200 字'), '写作要求里带字数')
+ok(noReply.includes('300-500 字'), '写作要求里带字数（TASK-UI3 提质量到 300-500 字）')
 
 const withReply = buildWeeklyPrompt({ ...baseCtx, lastReply: '下周记得早点睡呀' })
 ok(withReply.includes('【上一篇批注】对方在你上篇周记下留了批注：下周记得早点睡呀'), '含批注 → 带上一篇批注段并附原文')

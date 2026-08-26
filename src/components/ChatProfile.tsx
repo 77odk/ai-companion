@@ -49,7 +49,10 @@ function profileDaysKnown(sessionId: string | null): number {
 }
 
 export default function ChatProfile({ onClose, onGoMine }: Props) {
-  const ai = loadAIProfile()
+  // 当前会话（有会话 → 名字/消息/动态全用该会话数据，无会话兜底全局）
+  const sessionId = getActiveSessionId()
+  // TA 资料按会话隔离：资料卡显示当前角色的头像/姓名
+  const ai = loadAIProfile(sessionId || undefined)
   const user = loadUserProfile()
   const yourName = user.nickname || '你'
   const hasPersona = Boolean(loadPersona().trim())
@@ -57,8 +60,6 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
   const aiRemark = loadAIRemark()
   const aiGender = loadAIGender()
 
-  // 当前会话（有会话 → 名字/消息/动态全用该会话数据，无会话兜底全局）
-  const sessionId = getActiveSessionId()
   const [profileSessionName] = useState<string>(() => {
     if (!sessionId) return ''
     const s = getSessionsCache().find((x) => String(x.id) === sessionId)

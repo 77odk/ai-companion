@@ -354,7 +354,8 @@ const WorkIcon = () => (
  */
 export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSpace?: () => void }) {
   const [sessions, setSessions] = useState<Session[]>(() => getSessionsCache())
-  const [ai, setAI] = useState<AIProfile>(() => loadAIProfile())
+  // TA 资料按会话隔离：有当前会话 → 读该会话自己的头像/姓名；无会话回落全局（游客/过渡态）
+  const [ai, setAI] = useState<AIProfile>(() => loadAIProfile(getActiveSessionId() || undefined))
   const [globalPersona, setGlobalPersona] = useState(() => loadPersona())
   const [remark, setRemark] = useState(() => loadAIRemark())
   const [gender, setGender] = useState<AIGender>(() => loadAIGender())
@@ -430,7 +431,8 @@ export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSp
       }
       const next = { ...ai, nickname: t }
       setAI(next)
-      saveAIProfile(next)
+      // 按会话隔离：有当前会话写该角色自己的 key，改 A 不影响 B
+      saveAIProfile(next, hasSession ? activeSessionId : undefined)
       dirtyRef.current = true
       setNameDraft(t)
       flashSaved('name')
@@ -457,11 +459,11 @@ export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSp
     flashSaved('gender')
   }
 
-  // 改头像：写 ai_companion_ai_profile.avatar
+  // 改头像：写当前角色的会话 key（无会话回落全局），改 A 不影响 B
   const updateAvatar = (avatar: string) => {
     const next = { ...ai, avatar }
     setAI(next)
-    saveAIProfile(next)
+    saveAIProfile(next, hasSession ? activeSessionId : undefined)
   }
 
   /**

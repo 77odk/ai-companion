@@ -18,12 +18,14 @@ import { getToken, isLoggedIn, isPublicView } from './lib/auth'
 import { listSessions } from './lib/sessionApi'
 import {
   getActiveSessionId,
+  getSessionsCache,
   setActiveSessionId,
   setSessionsCache,
 } from './lib/sessionStore'
 import { hasLocalLegacyData, hasMigratedFlag, runLocalMigration, setLocalMigratedFlag } from './lib/migrateLocal'
 import {
   decideLoginTarget,
+  displaySessionName,
   pickMostRecentSession,
   type RolePickMode,
 } from './lib/sessionFlow'
@@ -112,7 +114,12 @@ export default function App() {
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
 
-  // 聊天页头部（TASK-UI3）：小星球图标点开 TA 资料卡；返回箭头回会话列表
+  // 聊天页头部：返回箭头 + 小星球资料卡入口；顶栏标题 = 当前角色名（微信式）
+  const headerSession = (() => {
+    const sid = getActiveSessionId()
+    if (!sid) return null
+    return getSessionsCache().find((s) => String(s.id) === sid) ?? null
+  })()
 
   // 老数据一键迁移：建云端会话 → 按升序传消息 → 传记忆（单条失败跳过不中断）→
   // 置位 → 进聊天。本地数据只读不删（红线）；createSession 失败才算整个迁移失败（不置位，可重试）。
@@ -407,10 +414,14 @@ export default function App() {
                 <PlanetIcon />
               </button>
             )}
-            <h1 className="app-title" onClick={handleTitleClick}>
-              忆文
-            </h1>
-            <p className="app-subtitle">忆过往，成文思</p>
+            {view === 'chat' ? (
+              <h1 className="app-title chat-header-name">{headerSession ? displaySessionName(headerSession) : ''}</h1>
+            ) : (
+              <h1 className="app-title" onClick={handleTitleClick}>
+                忆文
+              </h1>
+            )}
+            {view !== 'chat' && <p className="app-subtitle">忆过往，成文思</p>}
           </header>
 
           <main className="app-main">

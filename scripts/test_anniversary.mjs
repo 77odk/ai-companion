@@ -12,7 +12,11 @@ import {
   updateAnniversary,
   removeAnniversary,
   buildDefaultAnniversary,
+  buildMilestoneAnniversary,
   getDefaultAnniversary,
+  nextMilestoneDay,
+  isMilestoneAnniversary,
+  getAnniversaries,
   daysUntil,
   formatAnniversaryDate,
   isValidAnniversaryDate,
@@ -113,10 +117,10 @@ eq(rm[0].id, 'a2', '剩下的是没删的那条')
 eq(loadAnniversaries().length, 1, '已持久化')
 eq(removeAnniversary('nope').length, 1, '不存在的 id 原样返回')
 
-console.log('\n[5] buildDefaultAnniversary 纯函数生成默认「认识纪念日」')
+console.log('\n[5] buildDefaultAnniversary 纯函数生成默认「认识 TA 的日子」')
 const firstSeen = new Date(2026, 7, 22, 10, 0).getTime() // 2026-08-22
 const def = buildDefaultAnniversary(firstSeen, now)
-eq(def.label, '认识纪念日', '名称是「认识纪念日」')
+eq(def.label, '认识 TA 的日子', '名称是「认识 TA 的日子」')
 eq(def.date, '08-22', 'date 取 firstSeen 的 MM-DD')
 eq(def.id, `default-08-22-${firstSeen}`, 'id 稳定可复现')
 eq(def.createdAt, now, 'createdAt 是生成时刻')
@@ -125,7 +129,7 @@ console.log('\n[6] getDefaultAnniversary 首次生成并保存，之后不再重
 resetStore()
 const g1 = getDefaultAnniversary()
 ok(g1 != null, '首次（无任何纪念日）生成默认')
-eq(g1.label, '认识纪念日', '默认名称是「认识纪念日」')
+eq(g1.label, '认识 TA 的日子', '默认名称是「认识 TA 的日子」')
 const todayMM = String(new Date().getMonth() + 1).padStart(2, '0')
 const todayDD = String(new Date().getDate()).padStart(2, '0')
 eq(g1.date, `${todayMM}-${todayDD}`, 'date 取今天（getFirstSeen 兜底当前时间）的 MM-DD')
@@ -243,6 +247,40 @@ ok(gd != null, '无 key 时生成默认')
 ok(localStorage.getItem('ai_companion_anniversaries') != null, '默认已落盘（key 存在）')
 localStorage.setItem('ai_companion_anniversaries', '[]')
 eq(getDefaultAnniversary(), null, 'key 存在但空数组（删光）→ 不复活')
+
+console.log('\n[18] 里程碑条目：buildMilestoneAnniversary / nextMilestoneDay / isMilestoneAnniversary')
+const msFirst = new Date(2026, 7, 1, 12, 0).getTime() // 2026-08-01 认识
+const ms100 = buildMilestoneAnniversary(msFirst, 100, now)
+eq(ms100.label, '在一起 100 天', 'label 是「在一起 100 天」')
+eq(ms100.date, '2026-11-08', 'date = 认识日 + (100-1) 本地日历日（2026-08-01 + 99 天 = 2026-11-08）')
+eq(ms100.milestoneDay, 100, '标 milestoneDay=100')
+ok(isMilestoneAnniversary(ms100), '有 milestoneDay → isMilestoneAnniversary 为真')
+ok(!isMilestoneAnniversary({ id: 'x', label: '生日', date: '03-15', createdAt: 1 }), '普通条目不是里程碑')
+ok(!isMilestoneAnniversary(null), 'null 不是里程碑')
+eq(nextMilestoneDay(1), 7, '认识第 1 天 → 下一个里程碑 7')
+eq(nextMilestoneDay(7), 7, '认识第 7 天 → 就是 7（当天仍展示）')
+eq(nextMilestoneDay(8), 30, '认识第 8 天 → 下一个 30')
+eq(nextMilestoneDay(30), 30, '认识第 30 天 → 就是 30')
+eq(nextMilestoneDay(31), 100, '认识第 31 天 → 下一个 100')
+eq(nextMilestoneDay(730), 730, '认识第 730 天 → 就是 730')
+eq(nextMilestoneDay(731), null, '认识第 731 天 → 已超过全部里程碑 → null')
+eq(formatCountdown(ms100, now), '还剩 77 天', '未来里程碑正计时兜底显示「还剩 77 天」')
+eq(formatCountdown(buildMilestoneAnniversary(msFirst, 100, now), new Date(2026, 10, 8, 12, 0).getTime()), '就是今天', '里程碑当天 → 就是今天')
+
+console.log('\n[19] getAnniversaries(会话) 首次读取自动补齐「认识 TA 的日子」+ 里程碑')
+resetStore()
+localStorage.setItem('ai_companion_sessions_cache', JSON.stringify([{ id: 100, title: '阳阳', persona: '' }]))
+// 认识日 = 今天 → 认识第 1 天 → 里程碑 =「在一起 7 天」（确定性，不依赖运行日期）
+localStorage.setItem('ai_companion_first_seen_100', String(Date.now()))
+const roleList = getAnniversaries('100')
+eq(roleList.some((a) => a.label === '认识 TA 的日子'), true, '自动补「认识 TA 的日子」')
+eq(roleList.some((a) => isMilestoneAnniversary(a)), true, '自动补里程碑条目')
+const roleMilestone = roleList.find((a) => isMilestoneAnniversary(a))
+eq(roleMilestone.label, '在一起 7 天', '认识第 1 天 → 里程碑是「在一起 7 天」')
+eq(roleList.some((a) => a.kind === 'personal'), false, '无个人节日时列表不含全局个人数据（空全局）')
+const again = getAnniversaries('100')
+eq(again.filter((a) => a.id === roleMilestone.id).length, 1, '重复读取不重复补里程碑（幂等）')
+eq(roleList.length, 2, '默认 = 认识日 + 里程碑 共 2 条')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

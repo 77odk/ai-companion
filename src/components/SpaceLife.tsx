@@ -76,7 +76,8 @@ interface Props {
 }
 
 export default function SpaceLife({ aiNickname, yourName, sessionId, hasPersona, onGoMine, onBack }: Props) {
-  const ai = loadAIProfile()
+  // TA 头像按会话隔离：动态列表显示当前角色的头像
+  const ai = loadAIProfile(sessionId)
   const name = aiNickname || 'TA'
   const displayName = name.slice(0, 1)
 

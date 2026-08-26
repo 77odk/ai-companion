@@ -290,7 +290,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       // 侧边栏改名后缓存即时更新，优先读缓存拿新名字；缓存没拉到（刚建会话）再退回会话详情的 title
       const cached = getSessionsCache().find((s) => String(s.id) === activeSessionId)
       const t = (cached?.title || activeSession?.title || '').trim()
-      if (!t || t === '新会话' || t === '我们的开始') return loadAIProfile().nickname
+      if (!t || t === '新会话' || t === '我们的开始') return loadAIProfile(activeSessionId).nickname
       return t
     })()
     const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined) }]

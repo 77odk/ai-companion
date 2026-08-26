@@ -1068,6 +1068,13 @@ textarea.persona-input {
   overflow: hidden;
 }
 
+.memory-role-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
 .memory-role-name {
   max-width: 100%;
   font-size: 14px;
@@ -1792,6 +1799,22 @@ textarea.persona-input {
 .anniversary-kind-tag.is-personal {
   color: #8a6d4d;
   background: rgba(180, 150, 100, 0.16);
+}
+
+/* 里程碑条目标：暖金「里程碑」（TASK-UI3 自动生成，与普通条目区分开） */
+.anniversary-milestone-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: #a8721f;
+  background: rgba(230, 180, 80, 0.18);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+/* 大日子卡正在展示的那条：暖描边 + 浅底，一眼看出点的是哪条 */
+.anniversary-page-item.is-displayed {
+  border-color: var(--color-primary);
+  background: rgba(255, 138, 92, 0.06);
 }
 
 .anniversary-page-actions {
@@ -5162,6 +5185,16 @@ textarea.persona-input {
   accent-color: var(--color-primary);
 }
 
+/* 已批阅锁定：方式不可切换，置灰弱化（TASK-UI3） */
+.weekly-reply-mode-option.is-locked {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.weekly-reply-mode-option.is-locked input {
+  pointer-events: none;
+}
+
 .weekly-reply-mode-note {
   margin: 0;
   font-size: 12px;
@@ -5851,7 +5884,7 @@ textarea.persona-input {
   font-weight: 600;
 }
 
-/* 关于我 · 添加日子表单（三类型：生日/姨妈周期/自定义，2026-08-25 v2） */
+/* 关于我 · 添加日子表单（三类型：生日/生理期/自定义，2026-08-25 v2） */
 .aboutme-form-types {
   display: flex;
   gap: 8px;

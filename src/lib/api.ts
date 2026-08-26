@@ -36,7 +36,7 @@ export function buildTimeContext(now: number = Date.now()): string {
 /**
  * 把纪念日列表组装成注入段（纯函数，可 Node 单测）。
  * 无纪念日返回空串，注入方据此决定是否占一行。
- * 格式：`【你们的重要日子】认识纪念日：08-22，生日：03-15。这些日子对你们很重要，到了日子要记得。`
+ * 格式：`【你们的重要日子】认识 TA 的日子：08-22，生日：03-15。这些日子对你们很重要，到了日子要记得。`
  */
 export function buildAnniversaryBlock(list: Anniversary[]): string {
   const valid = (Array.isArray(list) ? list : []).filter(

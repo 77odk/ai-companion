@@ -5,6 +5,7 @@ import { pickFirstSeen } from './aiSpaceDetail.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import type { SpacePost } from './aiSpaceCore'
 import type { MemoryItem } from './memory'
+import { getDefaultSessionId } from './sessionStore.ts'
 
 export type Provider = 'deepseek' | 'zhipu' | 'openai' | 'custom' | 'volcengine'
 
@@ -303,6 +304,9 @@ export function saveUserProfile(p: UserProfile): void {
 }
 
 // ---- 我的 AI（角色资料） ----
+// TASK-UI3 头像按角色隔离：每个会话（角色）存自己的头像/姓名到 ai_companion_ai_profile_<sid>，
+// 改 A 不影响 B。无会话/无 sid 回落全局 key（ai_companion_ai_profile，兼容老数据）。
+// 首次按会话读取时，老全局资料迁到「默认角色」（防丢，全局 key 保留作无会话兜底）。
 
 export interface AIProfile {
   nickname: string
@@ -310,25 +314,60 @@ export interface AIProfile {
 }
 
 const AI_PROFILE_KEY = 'ai_companion_ai_profile'
+const AI_PROFILE_MIGRATED_KEY = 'ai_companion_ai_profile_migrated'
 
 export const DEFAULT_AI_PROFILE: AIProfile = { nickname: 'TA', avatar: '' }
 
-export function loadAIProfile(): AIProfile {
+const aiProfileKey = (sessionId?: string): string =>
+  sessionId ? `${AI_PROFILE_KEY}_${sessionId}` : AI_PROFILE_KEY
+
+/** 首次按会话读取时，把老全局头像/姓名迁到「默认角色」（幂等；全局 key 保留，无会话兜底仍可读） */
+function ensureSessionProfile(_sessionId: string): void {
   try {
+    if (localStorage.getItem(AI_PROFILE_MIGRATED_KEY) != null) return
+    const defaultSid = getDefaultSessionId()
+    if (!defaultSid) return
     const raw = localStorage.getItem(AI_PROFILE_KEY)
-    if (!raw) return DEFAULT_AI_PROFILE
-    const p = JSON.parse(raw) as Partial<AIProfile>
-    return {
-      nickname: typeof p.nickname === 'string' && p.nickname ? p.nickname : 'TA',
-      avatar: typeof p.avatar === 'string' && p.avatar.startsWith('data:') ? p.avatar : '',
+    if (raw == null) return
+    if (localStorage.getItem(aiProfileKey(defaultSid)) == null) {
+      localStorage.setItem(aiProfileKey(defaultSid), raw)
     }
+    localStorage.setItem(AI_PROFILE_MIGRATED_KEY, '1')
+  } catch {
+    // 迁移失败不阻塞：全局 key 仍可读，下次再试
+  }
+}
+
+function normalizeAIProfile(raw: string | null): AIProfile {
+  if (!raw) return DEFAULT_AI_PROFILE
+  const p = JSON.parse(raw) as Partial<AIProfile>
+  return {
+    nickname: typeof p.nickname === 'string' && p.nickname ? p.nickname : 'TA',
+    avatar: typeof p.avatar === 'string' && p.avatar.startsWith('data:') ? p.avatar : '',
+  }
+}
+
+/**
+ * 读取 TA 资料（会话感知）：有 sessionId → 读会话 key；该会话没自己的资料 → 回落全局 key（兼容老数据）；
+ * 无 sessionId → 读全局 key。数据损坏/格式不对返回默认值。
+ */
+export function loadAIProfile(sessionId?: string): AIProfile {
+  try {
+    if (sessionId) ensureSessionProfile(sessionId)
+    const raw = localStorage.getItem(aiProfileKey(sessionId))
+    if (raw == null) {
+      // 有会话但该会话还没自己的资料：回落全局（老数据）；全局也没有 → 默认
+      return sessionId ? normalizeAIProfile(localStorage.getItem(AI_PROFILE_KEY)) : DEFAULT_AI_PROFILE
+    }
+    return normalizeAIProfile(raw)
   } catch {
     return DEFAULT_AI_PROFILE
   }
 }
 
-export function saveAIProfile(p: AIProfile): void {
-  localStorage.setItem(AI_PROFILE_KEY, JSON.stringify(p))
+/** 保存 TA 资料（会话感知）：传 sessionId 写会话 key（角色隔离），否则写全局 key（无会话兜底） */
+export function saveAIProfile(p: AIProfile, sessionId?: string): void {
+  localStorage.setItem(aiProfileKey(sessionId), JSON.stringify(p))
   notifyDataChanged()
 }
 

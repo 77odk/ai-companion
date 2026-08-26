@@ -7,6 +7,7 @@ import {
   formatCountdown,
   getAnniversaries,
   getMainAnniversaryId,
+  isMilestoneAnniversary,
   isValidAnniversaryDate,
   pickNextBigDay,
   removeAnniversary,
@@ -17,7 +18,8 @@ import {
   type CountMode,
 } from '../lib/anniversary'
 import { MEMORY_UPDATED_EVENT } from '../lib/memory'
-import { getActiveSessionId } from '../lib/sessionStore'
+import { getActiveSessionId, getSessionsCache } from '../lib/sessionStore'
+import { displaySessionName } from '../lib/sessionFlow'
 
 /* ---- 线条图标（去 emoji，跟全站同一种描边风格） ---- */
 
@@ -74,6 +76,14 @@ export default function AnniversaryPage({ onBack }: Props) {
   // 当前角色：个人节日存全局（不绑角色），双人节日存该角色 key；无会话回落全局（老逻辑）
   const sid = getActiveSessionId() || undefined
   const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() => getAnniversaries(sid))
+  // 角色名：大日子卡上里程碑显示「和{角色名}在一起 X 天」（无会话/找不到 → 空串，不拼）
+  const [roleName] = useState<string>(() => {
+    if (!sid) return ''
+    const s = getSessionsCache().find((x) => String(x.id) === sid)
+    return s ? displaySessionName(s) : ''
+  })
+  // 大日子卡当前展示哪条：null = 自动取「最近的大日子」；点列表条目 → 固定展示那一条
+  const [displayId, setDisplayId] = useState<string | null>(null)
 
   // 添加 / 编辑表单
   const [formMode, setFormMode] = useState<'idle' | 'add' | 'edit'>('idle')
@@ -91,6 +101,14 @@ export default function AnniversaryPage({ onBack }: Props) {
   const mainDisplay = resolveMainAnniversary(anniversaries, sid)
   // 最近的大日子（Big day）：下一个最近的纪念日（倒数日式）
   const bigDay = useMemo(() => pickNextBigDay(anniversaries), [anniversaries])
+  // 大日子卡展示的条目：点列表条目固定展示那条；没点过 / 点的条目已删除 → 自动回落到最近的大日子
+  const displayAnniversary = useMemo(() => {
+    if (displayId) {
+      const found = anniversaries.find((a) => a.id === displayId)
+      if (found) return found
+    }
+    return bigDay
+  }, [displayId, anniversaries, bigDay])
 
   // 数据变更自动刷新：记忆页/别处改了纪念日，进来立刻同步（会话感知）
   useEffect(() => {
@@ -175,13 +193,15 @@ export default function AnniversaryPage({ onBack }: Props) {
       </div>
 
       <div className="anniversary-page-body">
-        {/* 最近的大日子卡（Big day）：倒数日式，下一个最近的纪念日 */}
-        {bigDay && (
+        {/* 最近的大日子卡（Big day）：倒数日式；里程碑显示「和{角色名}在一起 X 天」 */}
+        {displayAnniversary && (
           <div className="anniversary-bigday">
             <div className="anniversary-bigday-label">最近的大日子</div>
-            <div className="anniversary-bigday-count">{formatCountdown(bigDay)}</div>
+            <div className="anniversary-bigday-count">{formatCountdown(displayAnniversary)}</div>
             <div className="anniversary-bigday-sub">
-              {bigDay.label} · {formatAnniversaryDate(bigDay.date)}
+              {isMilestoneAnniversary(displayAnniversary)
+                ? `${roleName ? `和${roleName}` : ''}${displayAnniversary.label}`
+                : `${displayAnniversary.label} · ${formatAnniversaryDate(displayAnniversary.date)}`}
             </div>
           </div>
         )}
@@ -219,70 +239,90 @@ export default function AnniversaryPage({ onBack }: Props) {
           </section>
         )}
 
-        {/* 纪念日列表：名称 + 日期 + 计时模式 + 编辑/删除 */}
+        {/* 纪念日列表：默认+自定义+里程碑一起；点条目 → 上面大日子卡展示这条；里程碑打标且不让改删 */}
         <section className="anniversary-list-section">
           <div className="anniversary-section-head">
             <h3 className="anniversary-section-title">全部纪念日</h3>
+            <p className="anniversary-section-desc">点条目，上面大日子卡会展示它</p>
           </div>
           {anniversaries.length === 0 ? (
             <div className="anniversary-page-empty">还没有纪念日，添加第一个吧</div>
           ) : (
             <ul className="anniversary-page-list">
-              {anniversaries.map((a) => (
-                <li key={a.id} className="anniversary-page-item">
-                  <div className="anniversary-page-info">
-                    <span className="anniversary-page-label">
-                      <span
-                        className={`anniversary-page-dot ann-color-${anniversaryColorIndex(a.color)}`}
-                        aria-hidden="true"
-                      />
-                      {a.label}
-                    </span>
-                    <span className="anniversary-page-meta">
-                      <span className="anniversary-page-date">{formatAnniversaryDate(a.date)}</span>
-                      <span className={`anniversary-count${a.countMode === 'countdown' ? '' : ' is-forward'}`}>
-                        {formatCountdown(a)}
+              {anniversaries.map((a) => {
+                const isMilestone = isMilestoneAnniversary(a)
+                return (
+                  <li
+                    key={a.id}
+                    className={`anniversary-page-item${displayId === a.id ? ' is-displayed' : ''}`}
+                    onClick={() => setDisplayId(a.id)}
+                  >
+                    <div className="anniversary-page-info">
+                      <span className="anniversary-page-label">
+                        <span
+                          className={`anniversary-page-dot ann-color-${anniversaryColorIndex(a.color)}`}
+                          aria-hidden="true"
+                        />
+                        {a.label}
                       </span>
-                      <span className={`anniversary-kind-tag${a.kind === 'personal' ? ' is-personal' : ''}`}>
-                        {a.kind === 'personal' ? '我的' : '双人'}
+                      <span className="anniversary-page-meta">
+                        <span className="anniversary-page-date">{formatAnniversaryDate(a.date)}</span>
+                        <span className={`anniversary-count${a.countMode === 'countdown' ? '' : ' is-forward'}`}>
+                          {formatCountdown(a)}
+                        </span>
+                        {isMilestone ? (
+                          <span className="anniversary-milestone-tag">里程碑</span>
+                        ) : (
+                          <span className={`anniversary-kind-tag${a.kind === 'personal' ? ' is-personal' : ''}`}>
+                            {a.kind === 'personal' ? '我的' : '双人'}
+                          </span>
+                        )}
                       </span>
-                    </span>
-                  </div>
-                  <div className="anniversary-page-actions">
-                    <button
-                      type="button"
-                      className="anniversary-page-btn"
-                      onClick={() => startEdit(a)}
-                      aria-label={`编辑「${a.label}」`}
-                    >
-                      <EditIcon />
-                    </button>
-                    {confirmingDelete === a.id ? (
-                      <span className="anniversary-confirm">
-                        <button type="button" className="btn btn-primary btn-sm" onClick={() => handleDelete(a.id)}>
-                          删除
-                        </button>
+                    </div>
+                    {!isMilestone && (
+                      <div className="anniversary-page-actions">
                         <button
                           type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => setConfirmingDelete(null)}
+                          className="anniversary-page-btn"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            startEdit(a)
+                          }}
+                          aria-label={`编辑「${a.label}」`}
                         >
-                          取消
+                          <EditIcon />
                         </button>
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="anniversary-page-btn danger"
-                        onClick={() => setConfirmingDelete(a.id)}
-                        aria-label={`删除「${a.label}」`}
-                      >
-                        <DeleteIcon />
-                      </button>
+                        {confirmingDelete === a.id ? (
+                          <span className="anniversary-confirm">
+                            <button type="button" className="btn btn-primary btn-sm" onClick={() => handleDelete(a.id)}>
+                              删除
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setConfirmingDelete(null)}
+                            >
+                              取消
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="anniversary-page-btn danger"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setConfirmingDelete(a.id)
+                            }}
+                            aria-label={`删除「${a.label}」`}
+                          >
+                            <DeleteIcon />
+                          </button>
+                        )}
+                      </div>
                     )}
-                  </div>
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>

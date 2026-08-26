@@ -1,6 +1,7 @@
 import type { StoredMessage } from '../lib/storage'
 import { loadAIProfile, loadUserProfile, shouldShowMemorySaved } from '../lib/storage'
 import { extractMemories, stripMemoryMarkers } from '../lib/memory'
+import { getActiveSessionId } from '../lib/sessionStore'
 import DefaultAvatar from './DefaultAvatar'
 
 interface Props {
@@ -25,7 +26,8 @@ function Avatar({ value, kind, className }: { value: string; kind: 'user' | 'ai'
 
 export default function MessageBubble({ message, typing = false, onAvatarClick }: Props) {
   const isUser = message.role === 'user'
-  const avatar = isUser ? loadUserProfile().avatar : loadAIProfile().avatar
+  // TA 头像按会话隔离：聊天气泡用当前会话自己的头像；用户头像全局
+  const avatar = isUser ? loadUserProfile().avatar : loadAIProfile(getActiveSessionId() || undefined).avatar
   // 展示时把「【记忆】xxx」那行藏起来，不让用户看到标记（原文仍保存在存储里）
   const displayText = isUser ? message.content : stripMemoryMarkers(message.content)
   const hasMemory = !isUser && extractMemories(message.content).length > 0

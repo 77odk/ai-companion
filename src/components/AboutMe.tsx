@@ -1,8 +1,8 @@
 // 关于我（TASK-UI 2026-08-25 七七拍板 v2）：
 // 忆览页「关于我」入口 → 这里只放「你自己的事」——所有角色同步共享（全局 key，不绑角色）：
 //   1) 我的资料头（头像/名字/签名）
-//   2) 我的重要日子：三种类型（生日 / 姨妈周期 / 自定义），标题右侧加号添加；
-//      生日=日期选择器（每年循环倒计时）；姨妈周期=上次来潮日期+周期天数（估算下次）；
+//   2) 我的重要日子：三种类型（生日 / 生理期 / 自定义），标题右侧加号添加；
+//      生日=日期选择器（每年循环倒计时）；生理期=上次来潮日期+周期天数（估算下次）；
 //      自定义=名称+日期+正数/倒数。
 //   3) 想让 TA 记住你什么？（输入框 → explicit 记忆，=「我自己说的」，所有角色共享）
 //   4) 我自己说的列表（explicit 记忆，可删）
@@ -80,7 +80,7 @@ function myExplicitMemories(): MemoryItem[] {
   return [...global, ...sessionOnes.filter((m) => !seen.has(m.id))]
 }
 
-/** 表单类型：birthday 生日 / period 姨妈周期 / custom 自定义 */
+/** 表单类型：birthday 生日 / period 生理期 / custom 自定义 */
 type DayType = 'birthday' | 'period' | 'custom'
 
 export default function AboutMe({ onBack }: Props) {
@@ -131,12 +131,12 @@ export default function AboutMe({ onBack }: Props) {
   }
 
   const handleAddDay = () => {
-    // 姨妈周期：label 固定「姨妈周期」，date=上次来潮日期，periodDays=周期天数，展示估算下次
+    // 生理期：label 固定「生理期」，date=上次来潮日期，periodDays=周期天数，展示估算下次
     if (dayType === 'period') {
       const d = date.trim()
       if (!d || !isValidAnniversaryDate(d)) return
       const daysNum = Math.max(1, Math.min(90, Number(periodDays) || 28))
-      addAnniversary('姨妈周期', d, { kind: 'personal', color, periodDays: daysNum }, undefined)
+      addAnniversary('生理期', d, { kind: 'personal', color, periodDays: daysNum }, undefined)
       setDays(getAnniversaries().filter((a) => a.kind === 'personal'))
       closeForm()
       return
@@ -245,14 +245,15 @@ export default function AboutMe({ onBack }: Props) {
         </div>
 
         {days.length === 0 ? (
-          <div className="aboutme-days-empty">还没有，点右上角 + 记一个（生日、姨妈周期…）</div>
+          <div className="aboutme-days-empty">还没有，点右上角 + 记一个（生日、生理期…）</div>
         ) : (
           <div className="aboutme-days">
             {days.map((a) => (
               <div key={a.id} className="aboutme-day-card">
                 <span className={`aboutme-day-dot ann-color-${anniversaryColorIndex(a.color)}`} aria-hidden="true" />
-                <div className="aboutme-day-label">{a.label}</div>
-                {/* 姨妈周期特殊显示：估算下次来潮日；其余显示正/倒计时 */}
+                {/* 旧数据存的「姨妈周期」统一按「生理期」展示（2026-08-25 七七拍板改名） */}
+                <div className="aboutme-day-label">{a.label === '姨妈周期' ? '生理期' : a.label}</div>
+                {/* 生理期特殊显示：估算下次来潮日；其余显示正/倒计时 */}
                 <div className="aboutme-day-count">
                   {a.periodDays ? formatPeriodEstimate(a) : formatCountdown(a)}
                 </div>
@@ -265,7 +266,7 @@ export default function AboutMe({ onBack }: Props) {
                   type="button"
                   className="aboutme-day-del"
                   onClick={() => handleRemoveDay(a.id)}
-                  aria-label={`删除${a.label}`}
+                  aria-label={`删除${a.label === '姨妈周期' ? '生理期' : a.label}`}
                 >
                   <DeleteIcon />
                 </button>
@@ -336,7 +337,7 @@ export default function AboutMe({ onBack }: Props) {
           <div className="aboutme-form" onClick={(e) => e.stopPropagation()}>
             <h3 className="aboutme-form-title">添加我的日子</h3>
 
-            {/* 类型选择：生日 / 姨妈周期 / 自定义 */}
+            {/* 类型选择：生日 / 生理期 / 自定义 */}
             <div className="aboutme-form-types">
               <button
                 type="button"
@@ -350,7 +351,7 @@ export default function AboutMe({ onBack }: Props) {
                 className={`aboutme-type-btn${dayType === 'period' ? ' is-active' : ''}`}
                 onClick={() => setDayType('period')}
               >
-                姨妈周期
+                生理期
               </button>
               <button
                 type="button"

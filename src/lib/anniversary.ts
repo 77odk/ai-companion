@@ -1,21 +1,23 @@
 // 纪念日（重要的日子）读写，localStorage 存储
 // date 支持两种格式：
-//   'MM-DD'        每年循环（如生日、认识纪念日）
-//   'YYYY-MM-DD'   一次性（如某次约定的日子）
-// 纯逻辑（buildDefaultAnniversary / formatCountdown / daysUntil / formatAnniversaryDate / isValidAnniversaryDate）
-// 不碰 localStorage，可被 Node 脚本直接跑单测；读写与广播才依赖浏览器。
+//   'MM-DD'        每年循环（如生日、认识 TA 的日子）
+//   'YYYY-MM-DD'   一次性（如某次约定的日子、里程碑那天）
+// 纯逻辑（buildDefaultAnniversary / buildMilestoneAnniversary / formatCountdown / daysUntil /
+// formatAnniversaryDate / isValidAnniversaryDate / nextMilestoneDay）不碰 localStorage，
+// 可被 Node 脚本直接跑单测；读写与广播才依赖浏览器。
 
 import { MEMORY_UPDATED_EVENT } from './memory.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { getFirstSeen } from './storage.ts'
 import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
+import { MILESTONE_DAYS, getKnownDays } from './milestone.ts'
 
 /** 计时模式：正计时（已经 X 天）| 倒计时（还剩 X 天） */
 export type CountMode = 'forward' | 'countdown'
 
 export interface Anniversary {
   id: string
-  /** 名称：认识纪念日 / 生日 / 在一起纪念日… */
+  /** 名称：认识 TA 的日子 / 生日 / 在一起纪念日 / 在一起 X 天（里程碑）… */
   label: string
   /** 'MM-DD'（每年循环）或 'YYYY-MM-DD'（一次性） */
   date: string
@@ -30,8 +32,13 @@ export interface Anniversary {
    * couple（双人纪念日）存角色 key。老数据缺省 = couple（都是双人）。
    */
   kind?: 'personal' | 'couple'
-  /** 姨妈周期专用：周期天数（如 28）。date 存「上次来潮日期」，展示时用周期估算下次来潮日 */
+  /** 生理期专用：周期天数（如 28）。date 存「上次来潮日期」，展示时用周期估算下次来潮日 */
   periodDays?: number
+  /**
+   * 里程碑条目专用：目标认识天数（如 100，=「在一起 100 天」）。有这个字段就是里程碑，
+   * 由 ensureRoleDefaults 自动维护（只保留下一个，认识天数过掉就换），列表打「里程碑」标，不让手动编辑/删除
+   */
+  milestoneDay?: number
 }
 
 // TASK-UI2 角色隔离：按会话分 key（ai_companion_anniversaries_<sid>），无会话回落全局 key（兼容老逻辑）。
@@ -141,7 +148,10 @@ function ensureSessionData(sessionId?: string): void {
  * 数据损坏/格式不对就返回空数组。
  */
 export function getAnniversaries(sessionId?: string): Anniversary[] {
-  if (sessionId) ensureSessionData(sessionId)
+  if (sessionId) {
+    ensureSessionData(sessionId)
+    ensureRoleDefaults(sessionId)
+  }
   const global = readRaw(undefined)
   if (!sessionId) return global
   return [...global, ...readRaw(sessionId)].sort((a, b) => b.createdAt - a.createdAt)
@@ -444,7 +454,7 @@ export function pickNextBigDay(list: Anniversary[], now: number = Date.now()): A
 }
 
 /**
- * 姨妈周期专用：由「上次来潮日期」+ 周期天数估算「下次来潮日」文案。
+ * 生理期专用：由「上次来潮日期」+ 周期天数估算「下次来潮日」文案。
  * date 须为 'YYYY-MM-DD'（一次性绝对日期）；periodDays 缺省 28。
  * 返回如「预计 9 月 2 日来」；日期非法返回空串。
  */
@@ -462,7 +472,7 @@ export function formatPeriodEstimate(a: Anniversary, now: number = Date.now()): 
 }
 
 /**
- * 姨妈周期专用：距下次来潮还差几天（数字，>=0）；日期非法返回 null。
+ * 生理期专用：距下次来潮还差几天（数字，>=0）；日期非法返回 null。
  */
 export function daysUntilPeriod(a: Anniversary, now: number = Date.now()): number | null {
   const parsed = parseAnniversaryDate(a?.date ?? '')
@@ -477,8 +487,7 @@ export function daysUntilPeriod(a: Anniversary, now: number = Date.now()): numbe
 }
 
 /**
- * 纯函数：由 firstSeen 时间戳生成默认「认识纪念日」（date 取 MM-DD，每年循环）。/**
- * 纯函数：由 firstSeen 时间戳生成默认「认识纪念日」（date 取 MM-DD，每年循环）。
+ * 纯函数：由 firstSeen 时间戳生成默认「认识 TA 的日子」（date 取 MM-DD，每年循环）。
  * 与 getDefaultAnniversary 拆开，方便 Node 单测。
  */
 export function buildDefaultAnniversary(firstSeen: number, now: number = Date.now()): Anniversary {
@@ -487,14 +496,14 @@ export function buildDefaultAnniversary(firstSeen: number, now: number = Date.no
   const dd = String(d.getDate()).padStart(2, '0')
   return {
     id: `default-${mm}-${dd}-${firstSeen}`,
-    label: '认识纪念日',
+    label: '认识 TA 的日子',
     date: `${mm}-${dd}`,
     createdAt: now,
   }
 }
 
 /**
- * 首次进入（该 store 还没有任何纪念日、也从没存过纪念日数据）时，用 getFirstSeen() 生成并保存默认「认识纪念日」；
+ * 首次进入（该 store 还没有任何纪念日、也从没存过纪念日数据）时，用 getFirstSeen() 生成并保存默认「认识 TA 的日子」；
  * 只要 localStorage 里出现过该纪念日 key——哪怕是空数组（用户删光过）——就不再生成（删光了不自动复活）。
  * 无会话缺省写全局 key（老逻辑）；有会话时默认双人生成到会话 key，且认识日按该角色自己的 firstSeen 算
  * （每个角色各自的认识日，2026-08-25 七七拍板：跟每个人都有自己的纪念日/里程碑）。
@@ -508,4 +517,87 @@ export function getDefaultAnniversary(sessionId?: string): Anniversary | null {
   const a = buildDefaultAnniversary(getFirstSeen(sessionId))
   saveAnniversaries([a], sessionId)
   return a
+}
+
+// ---- 里程碑条目（「在一起 X 天」，TASK-UI3 七七拍板：每个角色自动生成，只保留下一个） ----
+
+/** 本地日历日加 N 天 → 'YYYY-MM-DD'（UTC 基准，避免夏令时把一天算成 23/25 小时；纯函数可单测） */
+function addLocalDays(ts: number, n: number): string {
+  const d = new Date(ts)
+  const day = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) + n * 86400000
+  const dt = new Date(day)
+  const y = dt.getUTCFullYear()
+  const m = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
+/**
+ * 纯函数：生成「在一起 X 天」里程碑条目。targetDay = 认识第几天（认识当天 = 第 1 天，与 getKnownDays 同算法），
+ * date = 那一天（firstSeen + (targetDay-1) 本地日历日），标 milestoneDay。countMode 用 forward：未来显示「还剩 N 天」，
+ * 到了当天显示「就是今天」，过掉当天由 ensureRoleDefaults 换成下一个里程碑。
+ */
+export function buildMilestoneAnniversary(firstSeen: number, targetDay: number, now: number = Date.now()): Anniversary {
+  return {
+    id: `milestone-${targetDay}-${firstSeen}`,
+    label: `在一起 ${targetDay} 天`,
+    date: addLocalDays(firstSeen, targetDay - 1),
+    createdAt: now,
+    countMode: 'forward',
+    milestoneDay: targetDay,
+  }
+}
+
+/** 下一个里程碑日：认识天数已达/超过后返回下一个目标（认识当天=1，第 7 天 → 7）；超出全部里程碑返回 null */
+export function nextMilestoneDay(knownDays: number): number | null {
+  const next = (MILESTONE_DAYS as readonly number[]).find((d) => d >= knownDays)
+  return next ?? null
+}
+
+/** 某条目是否里程碑（有 milestoneDay 即里程碑） */
+export function isMilestoneAnniversary(a: Anniversary | null | undefined): boolean {
+  return a != null && typeof a.milestoneDay === 'number' && a.milestoneDay > 0
+}
+
+/**
+ * 首次按会话读取时补默认条目（TASK-UI3，七七拍板每个角色各有一套）：
+ * 1) 「认识 TA 的日子」——store key 从未存在才补（getDefaultAnniversary 语义，用户删光不复活）；
+ * 2) 下一个「在一起 X 天」里程碑——认识天数过掉当前里程碑就换成下一个；全部过完（730+）移除。
+ * 幂等：无变化不写不广播。只在有 sessionId 时生效（无会话 = 遗留全局模式不生成）。
+ * 被 getAnniversaries 调用，因此空间页/纪念日页/聊天注入第一次读到就自动补齐。
+ */
+function ensureRoleDefaults(sessionId?: string): void {
+  if (!sessionId) return
+  try {
+    const raw = localStorage.getItem(anniversariesKey(sessionId))
+    const neverInited = raw == null
+    const list = readRaw(sessionId)
+    const firstSeen = getFirstSeen(sessionId)
+    if (!firstSeen) return
+    const now = Date.now()
+    const changed: Anniversary[] = [...list]
+    if (neverInited) {
+      changed.push(buildDefaultAnniversary(firstSeen, now))
+    }
+    const knownDays = getKnownDays(now, sessionId)
+    const next = nextMilestoneDay(knownDays)
+    const existingIdx = changed.findIndex((a) => isMilestoneAnniversary(a))
+    if (next != null) {
+      const existing = existingIdx >= 0 ? changed[existingIdx] : null
+      if (!existing) {
+        changed.push(buildMilestoneAnniversary(firstSeen, next, now))
+      } else if (existing.milestoneDay !== next) {
+        changed.splice(existingIdx, 1, buildMilestoneAnniversary(firstSeen, next, now))
+      }
+    } else if (existingIdx >= 0) {
+      changed.splice(existingIdx, 1)
+    }
+    const same = changed.length === list.length && changed.every((a, i) => a.id === list[i].id)
+    if (!same) {
+      saveAnniversaries(changed, sessionId)
+      broadcastAnniversariesUpdated()
+    }
+  } catch {
+    // 保证默认数据失败不阻塞（localStorage 满/损坏）
+  }
 }

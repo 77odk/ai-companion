@@ -23,16 +23,17 @@ import { loadMemory } from '../lib/memory'
 /* ---- 定稿文案（一字不改） ---- */
 
 const REPLY_PLACEHOLDER = '写下读完这篇周记你的感想'
-const OPTION_IMMEDIATE = '✉️ 立即得到 TA 简短回复（默认）'
-const OPTION_SEALED = '📨 封存留言，等 TA 更新下一篇周记再完整回信'
+const OPTION_IMMEDIATE = '立即得到 TA 简短回复（默认）'
+const OPTION_SEALED = '封存留言，等 TA 更新下一篇周记再完整回信'
 const SEALED_NOTE = '封存模拟书信，不会立刻答复；TA 每周仅会产出一篇周记。'
-const SUCCESS_IMMEDIATE = '留言已送达✨ TA 读完写下了简短回复，展示在本条批阅下方。'
+const SUCCESS_IMMEDIATE = '留言已送达，TA 读完写下了简短回复，展示在本条批阅下方。'
 const SUCCESS_SEALED = '留言已封存 TA 暂时不会回复。TA 每周只会写一篇周记，下一篇周记更新时，你会收到完整回信。'
 const REPLY_FAILED = 'TA 暂时没回上，下周周记会提到'
 const EMPTY_STATE = 'TA 还没有写下周记，TA 每周最多产出一篇，请耐心等待。'
 const TOOLTIP_TEXT = '周记：TA 自主记录内心与生活，每周最多一篇，你可以阅读留言，体验慢书信互动。'
-const BANNER_REPLIED = '📬 TA 更新了新周记！同时拆开了你之前封存的留言，一并写下回信。'
+const BANNER_REPLIED = 'TA 更新了新周记！同时拆开了你之前封存的留言，一并写下回信。'
 const SLOW_LETTER_NOTE = '开启后，所有批阅强制封存，关闭即时回复，全部等待 TA 下一篇周记回信。'
+const MODE_LOCKED_NOTE = '已选过批阅方式，这篇周记的批阅方式已锁定，不能切换。'
 
 /* ---- 线条图标（去 emoji，跟全站同一种描边风格） ---- */
 
@@ -119,14 +120,25 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const cooldown = cooldownInfo(Date.now(), sid)
   const canGenerate = cooldown.canGenerate
 
-  // 批阅实际生效模式：全局慢信开启时强制封存
-  const effectiveMode = slowLetter ? 'sealed' : replyMode
-
   // 详情选中的那篇：从 reviews 里现找，批注保存后能立刻反映
   const selectedReview = useMemo(
     () => (selectedId ? reviews.find((r) => r.id === selectedId) ?? null : null),
     [reviews, selectedId],
   )
+
+  // 批阅方式锁定（TASK-UI3）：这篇已经批阅过 → 锁死当时用的方式，不能切换；
+  // 老数据没有 reviewMode 字段时按数据推导（有立即回复 → immediate；有封存留言 → sealed）
+  const lockedMode = selectedReview
+    ? (selectedReview.reviewMode ??
+      (selectedReview.myReply
+        ? 'immediate'
+        : Array.isArray(selectedReview.replies) && selectedReview.replies.length > 0
+          ? 'sealed'
+          : null))
+    : null
+
+  // 批阅实际生效模式：锁定优先；未锁定且全局慢信开启时强制封存
+  const effectiveMode = lockedMode ?? (slowLetter ? 'sealed' : replyMode)
 
   // 周记口吻：优先当前会话的人设（侧边栏会话缓存里有），没有回落到全局人设
   const persona = useMemo(() => {
@@ -238,8 +250,10 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     const now = Date.now()
     if (effectiveMode === 'sealed') {
       const pending = { id: newWeeklyReviewId(), content: t, repliedAt: now }
-      const next = reviews.map((r) =>
-        r.id === selectedReview.id ? { ...r, replies: [...(r.replies ?? []), pending] } : r,
+      const next: WeeklyReview[] = reviews.map((r) =>
+        r.id === selectedReview.id
+          ? { ...r, reviewMode: 'sealed', replies: [...(r.replies ?? []), pending] }
+          : r,
       )
       saveWeeklyReviews(next, sid)
       setReviews(next)
@@ -250,8 +264,10 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     }
 
     // 立即回复模式：先保存批注（myReply），再调用户 key 非流式生成一句简短回复
-    const base = reviews.map((r) =>
-      r.id === selectedReview.id ? { ...r, myReply: { content: t, repliedAt: now } } : r,
+    const base: WeeklyReview[] = reviews.map((r) =>
+      r.id === selectedReview.id
+        ? { ...r, reviewMode: 'immediate', myReply: { content: t, repliedAt: now } }
+        : r,
     )
     saveWeeklyReviews(base, sid)
     setReviews(base)
@@ -262,28 +278,36 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     try {
       const s = loadSettings()
       if (!s.apiKey?.trim() || !s.baseUrl?.trim() || !s.model?.trim()) throw new Error('no-key')
+      // 把这篇周记的标题+正文一起带给 TA，回复才贴周记内容、答在点子上（TASK-UI3 答非所问修复）
+      const reviewContext = selectedReview
+        ? `这篇周记《${selectedReview.title}》：\n${selectedReview.content}`
+        : ''
       const reply = await chatCompletion(
         s,
         [
           { role: 'system', content: WEEKLY_REPLY_SYSTEM_PROMPT },
-          { role: 'user', content: `我的批注：${t}` },
+          { role: 'user', content: `${reviewContext}\n\n对方在这篇周记下的批注：${t}` },
         ],
         { maxTokens: 100, timeoutMs: 30000 },
       )
       const clean = reply.trim()
       if (!clean) throw new Error('empty')
-      const withReply = reviews.map((r) =>
+      const withReply: WeeklyReview[] = reviews.map((r) =>
         r.id === selectedReview.id
-          ? { ...r, myReply: { content: t, repliedAt: now, taReply: clean, taReplyFailed: false } }
+          ? {
+              ...r,
+              reviewMode: 'immediate',
+              myReply: { content: t, repliedAt: now, taReply: clean, taReplyFailed: false },
+            }
           : r,
       )
       saveWeeklyReviews(withReply, sid)
       setReviews(withReply)
     } catch {
       // 无 key/429/网络 → 批注仍保存，回复区显示兜底文案，不阻塞
-      const failed = reviews.map((r) =>
+      const failed: WeeklyReview[] = reviews.map((r) =>
         r.id === selectedReview.id
-          ? { ...r, myReply: { content: t, repliedAt: now, taReplyFailed: true } }
+          ? { ...r, reviewMode: 'immediate', myReply: { content: t, repliedAt: now, taReplyFailed: true } }
           : r,
       )
       saveWeeklyReviews(failed, sid)
@@ -300,7 +324,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         <button type="button" className="detail-back" onClick={onBack} aria-label="返回忆览页">
           <BackIcon />
         </button>
-        <h2 className="detail-title">相与书</h2>
+        <h2 className="detail-title">TA 所写</h2>
         <button
           type="button"
           className="weekly-tooltip-btn"
@@ -337,9 +361,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         </div>
       ) : (
         <div className="weekly-guide-card">
-          <p className="weekly-guide-desc">
-            ⏳ TA还在沉淀思绪 TA每周只能写下一篇周记，距离下一篇周记还有 {cooldown.remainText}。
-          </p>
+          <p className="weekly-guide-desc">TA 还在沉淀思绪，每周只能写下一篇周记，距离下一篇周记还有 {cooldown.remainText}。</p>
           <button type="button" className="btn btn-primary" disabled>
             让 TA 写这周的周记
           </button>
@@ -450,25 +472,35 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                 <p className="weekly-reply-mode-note">{SLOW_LETTER_NOTE}</p>
               ) : (
                 <div className="weekly-reply-mode" role="radiogroup" aria-label="批阅方式">
-                  <label className={`weekly-reply-mode-option${effectiveMode === 'immediate' ? ' selected' : ''}`}>
+                  <label
+                    className={`weekly-reply-mode-option${effectiveMode === 'immediate' ? ' selected' : ''}${
+                      lockedMode ? ' is-locked' : ''
+                    }`}
+                  >
                     <input
                       type="radio"
                       name="weekly-reply-mode"
                       checked={effectiveMode === 'immediate'}
+                      disabled={lockedMode != null}
                       onChange={() => setReplyMode('immediate')}
                     />
                     <span>{OPTION_IMMEDIATE}</span>
                   </label>
-                  <label className={`weekly-reply-mode-option${effectiveMode === 'sealed' ? ' selected' : ''}`}>
+                  <label
+                    className={`weekly-reply-mode-option${effectiveMode === 'sealed' ? ' selected' : ''}${
+                      lockedMode ? ' is-locked' : ''
+                    }`}
+                  >
                     <input
                       type="radio"
                       name="weekly-reply-mode"
                       checked={effectiveMode === 'sealed'}
+                      disabled={lockedMode != null}
                       onChange={() => setReplyMode('sealed')}
                     />
                     <span>{OPTION_SEALED}</span>
                   </label>
-                  <p className="weekly-reply-mode-note">{SEALED_NOTE}</p>
+                  <p className="weekly-reply-mode-note">{lockedMode ? MODE_LOCKED_NOTE : SEALED_NOTE}</p>
                 </div>
               )}
               <div className="weekly-reply-actions">

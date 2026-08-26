@@ -5,6 +5,7 @@ import { formatMemoryDate } from '../lib/aiSpaceDetail'
 import {
   getAnniversaries,
   getDefaultAnniversary,
+  isMilestoneAnniversary,
   pickNextBigDay,
   formatCountdown,
   formatAnniversaryDate,
@@ -25,12 +26,12 @@ interface Props {
 }
 
 export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) {
-  const ai = loadAIProfile()
-  const user = loadUserProfile()
-  const yourName = user.nickname || '你'
-
   // 当前会话（S2 空间按角色独立）：有会话 → 消息/记忆/首次见面全用该会话数据，无会话兜底全局
   const sessionId = getActiveSessionId()
+  // TA 资料按会话隔离：空间头部显示当前角色的头像/姓名
+  const ai = loadAIProfile(sessionId || undefined)
+  const user = loadUserProfile()
+  const yourName = user.nickname || '你'
 
   // S1 空间角色化：有当前会话 → 标题/名字用当前角色名（如「阿叙的空间」）；无会话保持原样
   const [spaceSessionName] = useState<string>(() => {
@@ -52,8 +53,8 @@ export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) 
   )
 
   // 最近的大日子（Big day）：当前角色纪念日里「下一次」最近的那条；点卡片进纪念日页。
-  // 每个角色默认有一条「认识纪念日」（角色创建那天，getDefaultAnniversary 首次进空间时生成），
-  // 所以每个角色都有各自的 Big day，互不串（2026-08-25 七七拍板）。
+  // 每个角色默认有「认识 TA 的日子」（角色创建那天）+ 下一个「在一起 X 天」里程碑
+  //（getAnniversaries 首次读取自动补齐，TASK-UI3 七七拍板），所以每个角色都有各自的 Big day，互不串。
   const [bigDay, setBigDay] = useState<Anniversary | null>(null)
   useEffect(() => {
     const sid = sessionId || undefined
@@ -104,7 +105,9 @@ export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) 
                 <span className="ai-space-bigday-label">最近的大日子</span>
                 <span className="ai-space-bigday-count">{formatCountdown(bigDay)}</span>
                 <span className="ai-space-bigday-sub">
-                  {bigDay.label} · {formatAnniversaryDate(bigDay.date)}
+                  {isMilestoneAnniversary(bigDay)
+                    ? `${spaceSessionName ? `和${spaceSessionName}` : ''}${bigDay.label}`
+                    : `${bigDay.label} · ${formatAnniversaryDate(bigDay.date)}`}
                 </span>
               </span>
               <span className="ai-space-bigday-arrow" aria-hidden="true">

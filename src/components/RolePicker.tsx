@@ -135,12 +135,17 @@ export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
     setSetup({ open: true, template: t, initial: draft })
   }
 
-  /** 选定后保存：ai_companion_persona 存人设原文，姓名/头像/备注/性别存各自 key */
+  /** 选定后保存：ai_companion_persona 存人设原文，备注/性别存各自 key。
+   *  头像/姓名不在这里写——有会话时写该会话自己的 key（角色隔离），见 proceed 里建会话后调用。 */
   const persistSetup = (persona: string, s: RoleSetupState) => {
     savePersona(persona)
-    saveAIProfile({ nickname: s.nickname.trim(), avatar: s.avatar })
     saveAIRemark(s.remark.trim())
     saveAIGender(s.gender)
+  }
+
+  /** 把头像/姓名写入目标角色：有会话 → 会话级 key（改 A 不影响 B）；无会话（游客）→ 全局兜底 */
+  const saveProfileForSession = (s: RoleSetupState, sessionId?: string) => {
+    saveAIProfile({ nickname: s.nickname.trim(), avatar: s.avatar }, sessionId)
   }
 
   /**
@@ -163,12 +168,15 @@ export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
           if (sid) {
             const res = await patchSession(getToken(), sid, { persona, title })
             if (!res.ok) throw new Error(res.message)
+            // 换人设：头像/姓名写回当前角色自己的 key
+            saveProfileForSession(s, sid)
           } else {
             // 极端情况：没有当前会话 → 直接开个新会话换 TA
             const res = await createSession(getToken(), { persona, title })
             if (!res.ok) throw new Error(res.message)
             setActiveSessionId(String(res.data.id))
             createdTitle = res.data.title
+            saveProfileForSession(s, String(res.data.id))
           }
         } else {
           // mode 'first' 或 'new'：新建会话进聊天（旧会话完整保留）
@@ -176,7 +184,12 @@ export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
           if (!res.ok) throw new Error(res.message)
           setActiveSessionId(String(res.data.id))
           createdTitle = res.data.title
+          // 新角色：头像/姓名写入该会话自己的 key（角色隔离，改 A 不影响 B）
+          saveProfileForSession(s, String(res.data.id))
         }
+      } else {
+        // 游客：不建会话，头像/姓名写全局兜底（登录后会按角色隔离）
+        saveProfileForSession(s)
       }
       onDone(createdTitle ? { title: createdTitle } : undefined)
     } catch (err) {

@@ -70,8 +70,6 @@ export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }
 
   const list = Array.isArray(sessions) ? sessions : []
   const activeId = getActiveSessionId()
-  // 会话列表头像：显示 TA 上传的头像图，没图用首字母（2026-08-25 七七拍板）
-  const aiAvatar = loadAIProfile().avatar
 
   const switchSession = (id: string) => {
     setMenuFor(null)
@@ -190,6 +188,8 @@ export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }
             const last = lastMessage(id)
             const unread = getUnreadCount(s)
             const summary = last ? truncatePreview(stripMemoryMarkers(last.content), 18) : ''
+            // 会话列表头像：显示该角色自己的头像图，没图用首字母（TASK-UI3 按角色隔离）
+            const roleAvatar = loadAIProfile(id).avatar
             return (
               <li key={id} className={`roles-item${active ? ' active' : ''}`}>
                 <button
@@ -199,8 +199,8 @@ export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }
                   aria-label={`切换到角色：${displayName}`}
                 >
                   <span className="roles-avatar" aria-hidden="true">
-                    {aiAvatar.startsWith('data:') ? (
-                      <img src={aiAvatar} alt="" className="roles-avatar-img" />
+                    {roleAvatar.startsWith('data:') ? (
+                      <img src={roleAvatar} alt="" className="roles-avatar-img" />
                     ) : (
                       displayName.slice(0, 1)
                     )}
