@@ -104,6 +104,10 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const [replyText, setReplyText] = useState('')
   // 批阅模式：immediate 立即简短回复 / sealed 封存慢信（全局慢信开启时强制封存）
   const [replyMode, setReplyMode] = useState<'immediate' | 'sealed'>('immediate')
+  // 物理锁（2026-08-26 七七拍板）：点选批阅方式的那一刻就锁住，不能反悔切换；
+  // 提交成功后台数据也有 reviewMode，双保险。老数据 reviewMode 已存在则直接锁定。
+  // 初始锁定：当前这篇周记已有 reviewMode（老数据/已批阅过）→ 锁
+  const [modeChosen, setModeChosen] = useState<boolean>(false)
   // 全局慢信开关只在设置页改，进周记页读一次即可
   const slowLetter = isSlowLetterMode()
   // 提交成功提示（按模式）
@@ -137,8 +141,11 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
           : null))
     : null
 
+  // 物理锁（2026-08-26 七七拍板）：点选过方式（modeChosen）或数据已锁定（lockedMode）→ 都不能再切换
+  const modeLocked = modeChosen || lockedMode != null
+
   // 批阅实际生效模式：锁定优先；未锁定且全局慢信开启时强制封存
-  const effectiveMode = lockedMode ?? (slowLetter ? 'sealed' : replyMode)
+  const effectiveMode = (modeChosen ? replyMode : null) ?? lockedMode ?? (slowLetter ? 'sealed' : replyMode)
 
   // 周记口吻：优先当前会话的人设（侧边栏会话缓存里有），没有回落到全局人设
   const persona = useMemo(() => {
@@ -442,17 +449,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
               {r.myReply.taReplyFailed && <p className="weekly-reply-ta weekly-reply-ta-fail">{REPLY_FAILED}</p>}
               <div className="weekly-reply-foot">
                 <span className="weekly-reply-meta">TA 下周会看到</span>
-                <button
-                  type="button"
-                  className="link-btn"
-                  onClick={() => {
-                    setReplyText(r.myReply?.content ?? '')
-                    setEditingReply(true)
-                    setHint(null)
-                  }}
-                >
-                  修改
-                </button>
+                {/* 批注提交后物理锁定，不可修改（2026-08-26 七七拍板，对标笺"提交即永久锁定"） */}
               </div>
             </div>
           ) : (
@@ -474,33 +471,39 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                 <div className="weekly-reply-mode" role="radiogroup" aria-label="批阅方式">
                   <label
                     className={`weekly-reply-mode-option${effectiveMode === 'immediate' ? ' selected' : ''}${
-                      lockedMode ? ' is-locked' : ''
+                      modeLocked ? ' is-locked' : ''
                     }`}
                   >
                     <input
                       type="radio"
                       name="weekly-reply-mode"
                       checked={effectiveMode === 'immediate'}
-                      disabled={lockedMode != null}
-                      onChange={() => setReplyMode('immediate')}
+                      disabled={modeLocked}
+                      onChange={() => {
+                        setReplyMode('immediate')
+                        setModeChosen(true)
+                      }}
                     />
                     <span>{OPTION_IMMEDIATE}</span>
                   </label>
                   <label
                     className={`weekly-reply-mode-option${effectiveMode === 'sealed' ? ' selected' : ''}${
-                      lockedMode ? ' is-locked' : ''
+                      modeLocked ? ' is-locked' : ''
                     }`}
                   >
                     <input
                       type="radio"
                       name="weekly-reply-mode"
                       checked={effectiveMode === 'sealed'}
-                      disabled={lockedMode != null}
-                      onChange={() => setReplyMode('sealed')}
+                      disabled={modeLocked}
+                      onChange={() => {
+                        setReplyMode('sealed')
+                        setModeChosen(true)
+                      }}
                     />
                     <span>{OPTION_SEALED}</span>
                   </label>
-                  <p className="weekly-reply-mode-note">{lockedMode ? MODE_LOCKED_NOTE : SEALED_NOTE}</p>
+                  <p className="weekly-reply-mode-note">{modeLocked ? MODE_LOCKED_NOTE : SEALED_NOTE}</p>
                 </div>
               )}
               <div className="weekly-reply-actions">
