@@ -1,6 +1,6 @@
-// 登录/注册/找回密码表单（账号三选一：手机号 / 邮箱 / 用户名 + 密码）
+// 登录/注册/找回密码表单（邮箱 + 密码；手机号/用户名 2026-08-26 已下线）
 // 从 Account.tsx 抽出复用：登录墙 LoginGate 和「账号与同步」页共用同一套表单。
-// B2e：登录模式带「忘记密码？」；注册用户名必须绑邮箱/手机号（找回密码通道）；忘记密码=邮箱验证码重置。
+// 找回密码=邮箱验证码重置。
 
 import { useState } from 'react'
 import { login, register, syncNow, verifySend, resetPassword, type Account } from '../lib/sync'
@@ -14,20 +14,8 @@ function accountHint(value: string): string | null {
   if (s.includes('@')) {
     return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s) ? null : '邮箱格式不太对，检查一下'
   }
-  if (/^1[3-9]\d{9}$/.test(s)) return null // 合法手机号
-  if (/^\d{11}$/.test(s)) return '手机号格式不对，检查一下位数'
-  if (/^\d{10}$/.test(s)) return '手机号好像少了一位？如果不是手机号也能当用户名用'
-  if (s.length < 2) return '太短了，用户名至少 2 个字'
-  if (s.length > 16) return '太长了，用户名最多 16 个字'
-  if (!/^[一-龥A-Za-z0-9_]+$/.test(s)) return '用户名只能用中文、字母、数字和下划线'
-  return null
-}
-
-function isUsernameLike(value: string): boolean {
-  const s = value.trim()
-  if (!s || s.includes('@')) return false
-  if (/^1[3-9]\d{9}$/.test(s)) return false
-  return true
+  // 只支持邮箱（2026-08-26 手机号/用户名已下线）
+  return '现在只支持邮箱登录，填一下邮箱地址'
 }
 
 interface Props {
@@ -91,13 +79,10 @@ export default function LoginForm({ onSuccess }: Props) {
 
   const handleSendCode = async () => {
     if (sending) return
-    // 注册视图：发到要验证的邮箱（用户名注册发到绑定邮箱；邮箱注册发到账号本身）
-    const target =
-      view === 'register' && isUsernameLike(accountInput.trim())
-        ? (bindEmail && bindEmail.trim()) || ''
-        : accountInput.trim()
+    // 注册视图发到账号本身（现在只支持邮箱注册）；忘记密码发到填的邮箱
+    const target = accountInput.trim()
     if (!target) {
-      setError(view === 'register' && isUsernameLike(accountInput.trim()) ? '先填绑定邮箱' : '先填账号')
+      setError('先填邮箱')
       return
     }
     setSending(true)
@@ -142,7 +127,6 @@ export default function LoginForm({ onSuccess }: Props) {
   }
 
   const hint = accountHint(accountInput)
-  const needBind = view === 'register' && isUsernameLike(accountInput)
 
   if (view === 'forgot') {
     return (
@@ -206,6 +190,28 @@ export default function LoginForm({ onSuccess }: Props) {
 
   return (
     <>
+      {/* 登录/注册 tab（2026-08-26 七七拍板：清晰分开，别让人把登录页误认成注册页） */}
+      <div className="account-tabs" role="tablist" aria-label="登录或注册">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'login'}
+            className={`account-tab${view === 'login' ? ' on' : ''}`}
+            onClick={() => switchView('login')}
+          >
+            登录
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'register'}
+            className={`account-tab${view === 'register' ? ' on' : ''}`}
+            onClick={() => switchView('register')}
+          >
+            注册
+          </button>
+        </div>
+
       <div className="field">
         <label htmlFor="account-email">账号</label>
         <input
@@ -251,26 +257,8 @@ export default function LoginForm({ onSuccess }: Props) {
               {sending ? '发送中…' : '发验证码'}
             </button>
           </div>
-          <p className="account-format-hint">验证码发到填的邮箱，收到才能注册成功（手机注册开通中）</p>
+          <p className="account-format-hint">验证码发到填的邮箱，收到才能注册成功</p>
         </div>
-      )}
-
-      {needBind && (
-        <>
-          <p className="account-mode-label">用户名注册需要绑一个邮箱，以后忘了密码能找回来</p>
-          <div className="field">
-            <label htmlFor="bind-email">绑定邮箱</label>
-            <input
-              id="bind-email"
-              className="input"
-              type="text"
-              placeholder="用来收验证码的邮箱"
-              value={bindEmail}
-              onChange={(e) => setBindEmail(e.target.value)}
-              autoComplete="email"
-            />
-          </div>
-        </>
       )}
 
       <div className="settings-actions">
@@ -284,14 +272,6 @@ export default function LoginForm({ onSuccess }: Props) {
           忘记密码？
         </button>
       )}
-
-      <button
-        type="button"
-        className="account-toggle"
-        onClick={() => switchView(view === 'login' ? 'register' : 'login')}
-      >
-        {view === 'login' ? '没有账号？注册' : '已有账号？去登录'}
-      </button>
 
       {error && <p className="test-result error">{error}</p>}
       {info && <p className="test-result success">{info}</p>}

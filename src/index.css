@@ -903,6 +903,34 @@ textarea.persona-input {
   color: var(--color-primary-deep);
 }
 
+/* 登录/注册 tab（2026-08-26 七七拍板：清晰分开，别把登录页误认成注册页） */
+.account-tabs {
+  display: flex;
+  margin-bottom: 18px;
+  background: var(--color-bg-2, #f4f4f6);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.account-tab {
+  flex: 1;
+  text-align: center;
+  padding: 9px 0;
+  border: none;
+  background: none;
+  font-size: 14px;
+  color: var(--color-text-3, #888);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.account-tab.on {
+  background: #fff;
+  color: var(--color-text, #222);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
 .test-result {
   margin: 0;
   padding: 10px 12px;
