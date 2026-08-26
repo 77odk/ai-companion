@@ -82,13 +82,25 @@ export function getMessagesCache(sessionId: string): StoredMessage[] {
     if (!raw) return []
     const arr = JSON.parse(raw)
     if (!Array.isArray(arr)) return []
-    return arr.filter(
+    const valid = arr.filter(
       (m): m is StoredMessage =>
         m != null &&
         (m.role === 'user' || m.role === 'assistant') &&
         typeof m.content === 'string' &&
         typeof m.ts === 'number',
     )
+    // 自愈去重（2026-08-25）：历史脏数据里可能已有同一条消息的重复条目（本地 ts + 云端 ts 各一份），按 ts 或 role+内容去重
+    const seenTs = new Set<number>()
+    const seenContent = new Set<string>()
+    const deduped: StoredMessage[] = []
+    for (const m of valid) {
+      const ck = `${m.role}|${m.content}`
+      if (seenTs.has(m.ts) || seenContent.has(ck)) continue
+      seenTs.add(m.ts)
+      seenContent.add(ck)
+      deduped.push(m)
+    }
+    return deduped
   } catch {
     return []
   }
@@ -376,12 +388,21 @@ export function newPendingOpId(): string {
  * 与 sync.ts 的 mergeMessages 思路一致（输入顺序不影响结果），但这里后端优先（权威数据源）。
  */
 export function mergeSessionMessages(local: StoredMessage[], cloud: StoredMessage[]): StoredMessage[] {
-  const map = new Map<number, StoredMessage>()
-  for (const m of [...(local ?? []), ...(cloud ?? [])]) {
+  // 去重：同 ts（云端优先）或同 role+内容（本地乐观 ts 与云端 createdAt 毫秒差）都算同一条。
+  // 根因（2026-08-25 七七实测）：本地乐观写入 ts=Date.now()，云端=后端 createdAt，毫秒差导致同一条消息被当两条显示。
+  // cloud 在前 = 同 ts 时云端版本优先（后端权威）。
+  const seenTs = new Set<number>()
+  const seenContent = new Set<string>()
+  const out: StoredMessage[] = []
+  for (const m of [...(cloud ?? []), ...(local ?? [])]) {
     if (m == null || typeof m.ts !== 'number' || Number.isNaN(m.ts)) continue
-    map.set(m.ts, m)
+    const ck = `${m.role}|${m.content}`
+    if (seenTs.has(m.ts) || seenContent.has(ck)) continue
+    seenTs.add(m.ts)
+    seenContent.add(ck)
+    out.push(m)
   }
-  return [...map.values()].sort((a, b) => a.ts - b.ts)
+  return out.sort((a, b) => a.ts - b.ts)
 }
 
 // ---- 上传成功后的本地对账 ----

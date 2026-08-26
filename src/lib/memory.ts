@@ -153,11 +153,32 @@ function bigrams(s: string): Set<string> {
   return out
 }
 
+/** 去掉口水词/代词，保留关键词（用于短句近似去重） */
+function stripNoise(s: string): string {
+  return s
+    .replace(/我喜欢|我爱|我特别|我超|人家|我的|我就是|就是|了|呢|啊|吧|的|很|也|都|还/g, '')
+}
+
 /** 两条记忆是否高度相似：完全相同、互相包含，或字符重合度很高 */
 function isSimilar(a: string, b: string): boolean {
   if (!a || !b) return false
   if (a === b) return true
   if (a.includes(b) || b.includes(a)) return true
+  // 口水词去除后再看互相包含（「我喜欢吃排骨话梅味的」vs「喜欢吃话梅味的排骨」→ 都剩「吃排骨话梅味」）
+  const na = stripNoise(a)
+  const nb = stripNoise(b)
+  if (na && nb && (na.includes(nb) || nb.includes(na))) return true
+  // 短句（去口水词后 ≤10 字）：比「关键词字符集合」重合——词序打乱也能识别
+  //（「吃排骨话梅味」vs「话梅味排骨吃」→ 字符集合几乎相同）
+  if (na && nb && na.length <= 10 && nb.length <= 10) {
+    const charsA = new Set(na.split(''))
+    const charsB = new Set(nb.split(''))
+    let same = 0
+    for (const c of charsA) if (charsB.has(c)) same++
+    const union = charsA.size + charsB.size - same
+    if (union > 0 && same / union > 0.7) return true
+  }
+  // 还不行就比二元组重合度
   const A = bigrams(a)
   const B = bigrams(b)
   let same = 0

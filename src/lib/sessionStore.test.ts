@@ -293,7 +293,7 @@ saveMessagesCache('7', [
 markRead('7')
 eq(getUnreadCount({ id: '7' }), 0, 'markRead 后归零（lastRead 晚于全部消息 ts）')
 resetStore()
-saveMessagesCache('7', Array.from({ length: 120 }, (_, i) => ({ role: 'assistant' as const, content: 'x', ts: 1000 + i })))
+saveMessagesCache('7', Array.from({ length: 120 }, (_, i) => ({ role: 'assistant' as const, content: `x${i}`, ts: 1000 + i })))
 eq(getUnreadCount({ id: '7' }), 99, '超过 99 条截断为 99')
 eq(getUnreadCount({ id: '7' }, [{ role: 'user' as const, content: 'y', ts: 5000 }]), 1, '显式传 messages 优先于缓存')
 eq(getUnreadCount({ id: '7' }, null as never), 0, '非法 messages → 0')
