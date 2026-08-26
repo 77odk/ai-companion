@@ -16,6 +16,7 @@ import {
 } from '../lib/aiSpaceDetail'
 import { stripMemoryMarkers } from '../lib/memory'
 import type { StoredMessage } from '../lib/storage'
+import { chatBubbleTime } from '../lib/time'
 import { SearchIcon } from './spaceIcons'
 
 interface Props {
@@ -269,6 +270,8 @@ export default function SpaceChatLogs({ messages, yourName, aiNickname, onBack }
                   <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
                     <span className="bubble-text">{isUser ? m.content : stripMemoryMarkers(m.content)}</span>
                   </div>
+                  {/* 聊天记录回放也带时间（2026-08-26 七七拍板，AM/PM 跟聊天界面一致） */}
+                  <span className="msg-bubble-time">{chatBubbleTime(m.ts)}</span>
                 </div>
               </div>
             )
