@@ -31,14 +31,8 @@ import {
   type MemoryItem,
 } from '../lib/memory'
 import { getToken } from '../lib/auth'
-import { deleteMemory, postMemory } from '../lib/sessionApi'
-import {
-  addMemoryCacheItem,
-  getActiveSessionId,
-  getMemoriesCache,
-  reconcileMemoryCacheId,
-  saveMemoriesCache,
-} from '../lib/sessionStore'
+import { deleteMemory } from '../lib/sessionApi'
+import { getActiveSessionId, getMemoriesCache, saveMemoriesCache } from '../lib/sessionStore'
 import { loadUserProfile } from '../lib/storage'
 
 interface Props {
@@ -163,25 +157,9 @@ export default function AboutMe({ onBack }: Props) {
   const handleAddMemory = () => {
     const t = text.trim()
     if (!t) return
-    const s = getActiveSessionId()
-    if (s) {
-      const item = addMemoryCacheItem(s, t, '其他', true)
-      setMemories(myExplicitMemories())
-      const token = getToken()
-      if (item && token) {
-        postMemory(token, s, { content: t }).then((res) => {
-          if (res.ok) {
-            reconcileMemoryCacheId(s, item.id, res.data.id)
-            setMemories(myExplicitMemories())
-            setMemError(null)
-          } else {
-            setMemError('这条没传上去，已留在本地，稍后可再试')
-          }
-        })
-      }
-    } else {
-      setMemories(addMemoryItem(t, '其他', true).filter((m) => m.explicit === true))
-    }
+    // 关于我 = 个人档案，所有角色共享：永远写全局库（2026-08-26 修复：之前有会话时误写进会话缓存，
+    // 导致提交后关于我页面不显示）
+    setMemories(addMemoryItem(t, '其他', true).filter((m) => m.explicit === true))
     setText('')
   }
 

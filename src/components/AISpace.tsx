@@ -59,7 +59,8 @@ export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) 
   useEffect(() => {
     const sid = sessionId || undefined
     getDefaultAnniversary(sid)
-    setBigDay(pickNextBigDay(getAnniversaries(sid)))
+    // 大日子只取和角色相关的（couple）：个人生日/生理期是「关于我」的事，不占角色空间（2026-08-26 七七拍板）
+    setBigDay(pickNextBigDay(getAnniversaries(sid).filter((a) => a.kind !== 'personal')))
   }, [sessionId])
 
   const goHome = () => setPage('home')

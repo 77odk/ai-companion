@@ -2001,6 +2001,14 @@ textarea.persona-input {
   accent-color: var(--color-primary);
 }
 
+/* 纪念日表单提示（2026-08-26：个人日子在关于我里添加） */
+.anniversary-form-note {
+  font-size: 12px;
+  color: var(--color-text-3, #999);
+  padding: 4px 2px;
+  line-height: 1.5;
+}
+
 .anniversary-color-options {
   display: flex;
   gap: 10px;

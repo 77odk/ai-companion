@@ -75,7 +75,11 @@ interface Props {
 export default function AnniversaryPage({ onBack }: Props) {
   // 当前角色：个人节日存全局（不绑角色），双人节日存该角色 key；无会话回落全局（老逻辑）
   const sid = getActiveSessionId() || undefined
-  const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() => getAnniversaries(sid))
+  // 纪念日页只显示和角色相关的内容（couple）：个人生日/生理期等 personal 只在「关于我」里管
+  //（2026-08-26 七七拍板：A 方案，个人日子不混进角色纪念日）
+  const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() =>
+    getAnniversaries(sid).filter((a) => a.kind !== 'personal'),
+  )
   // 角色名：大日子卡上里程碑显示「和{角色名}在一起 X 天」（无会话/找不到 → 空串，不拼）
   const [roleName] = useState<string>(() => {
     if (!sid) return ''
@@ -113,7 +117,7 @@ export default function AnniversaryPage({ onBack }: Props) {
   // 数据变更自动刷新：记忆页/别处改了纪念日，进来立刻同步（会话感知）
   useEffect(() => {
     const refresh = () => {
-      setAnniversaries(getAnniversaries(getActiveSessionId() || undefined))
+      setAnniversaries(getAnniversaries(getActiveSessionId() || undefined).filter((a) => a.kind !== 'personal'))
     }
     window.addEventListener(MEMORY_UPDATED_EVENT, refresh)
     window.addEventListener('storage', refresh)
@@ -395,15 +399,7 @@ export default function AnniversaryPage({ onBack }: Props) {
                   />
                   双人（你们的日子，只属于当前 TA）
                 </label>
-                <label className={`anniversary-mode-option${kind === 'personal' ? ' active' : ''}`}>
-                  <input
-                    type="radio"
-                    name="ann-kind"
-                    checked={kind === 'personal'}
-                    onChange={() => setKind('personal')}
-                  />
-                  个人（自己的生日、节日，所有 TA 都知道）
-                </label>
+                <p className="anniversary-form-note">个人生日、生理期在「关于我」里添加，所有 TA 都会知道</p>
               </div>
             </div>
             <div className="anniversary-form-color">
