@@ -384,10 +384,37 @@ export const AIGENDER_LABELS: Record<AIGender, string> = {
 
 const AI_REMARK_KEY = 'ai_companion_ai_remark'
 const AI_GENDER_KEY = 'ai_companion_ai_gender'
+const AI_GENDER_MIGRATED_KEY = 'ai_companion_ai_gender_migrated'
 
-/** 读取 TA 备注（没设置过返回空串） */
-export function loadAIRemark(): string {
+const aiRemarkKey = (sessionId?: string): string =>
+  sessionId ? `${AI_REMARK_KEY}_${sessionId}` : AI_REMARK_KEY
+const aiGenderKey = (sessionId?: string): string =>
+  sessionId ? `${AI_GENDER_KEY}_${sessionId}` : AI_GENDER_KEY
+
+/** 首次按会话读取时，把老全局性别迁到「默认角色」（幂等；全局 key 保留兜底） */
+function ensureSessionGender(_sessionId: string): void {
   try {
+    if (localStorage.getItem(AI_GENDER_MIGRATED_KEY) != null) return
+    const defaultSid = getDefaultSessionId()
+    if (!defaultSid) return
+    const raw = localStorage.getItem(AI_GENDER_KEY)
+    if (raw != null && localStorage.getItem(aiGenderKey(defaultSid)) == null) {
+      localStorage.setItem(aiGenderKey(defaultSid), raw)
+    }
+    localStorage.setItem(AI_GENDER_MIGRATED_KEY, '1')
+  } catch {
+    // 迁移失败不阻塞：全局 key 仍可读，下次再试
+  }
+}
+
+/** 读取 TA 备注（会话感知：有会话读会话 key，没设置回落全局/空串） */
+export function loadAIRemark(sessionId?: string): string {
+  try {
+    if (sessionId) {
+      const v = localStorage.getItem(aiRemarkKey(sessionId))
+      if (v != null) return v
+      return localStorage.getItem(AI_REMARK_KEY) ?? ''
+    }
     const v = localStorage.getItem(AI_REMARK_KEY)
     return typeof v === 'string' ? v : ''
   } catch {
@@ -395,14 +422,23 @@ export function loadAIRemark(): string {
   }
 }
 
-export function saveAIRemark(remark: string): void {
-  localStorage.setItem(AI_REMARK_KEY, remark)
+export function saveAIRemark(remark: string, sessionId?: string): void {
+  localStorage.setItem(aiRemarkKey(sessionId), remark)
   notifyDataChanged()
 }
 
-/** 读取 TA 性别：'male' | 'female'，非法/未设置兜底 'unknown' */
-export function loadAIGender(): AIGender {
+/** 读取 TA 性别（会话感知：有会话读会话 key，没设置回落全局/unknown） */
+export function loadAIGender(sessionId?: string): AIGender {
   try {
+    if (sessionId) {
+      ensureSessionGender(sessionId)
+      const v = localStorage.getItem(aiGenderKey(sessionId))
+      if (v != null) {
+        return v === 'male' || v === 'female' ? v : 'unknown'
+      }
+      const g = localStorage.getItem(AI_GENDER_KEY)
+      return g === 'male' || g === 'female' ? g : 'unknown'
+    }
     const v = localStorage.getItem(AI_GENDER_KEY)
     return v === 'male' || v === 'female' ? v : 'unknown'
   } catch {
@@ -410,8 +446,8 @@ export function loadAIGender(): AIGender {
   }
 }
 
-export function saveAIGender(gender: AIGender): void {
-  localStorage.setItem(AI_GENDER_KEY, gender)
+export function saveAIGender(gender: AIGender, sessionId?: string): void {
+  localStorage.setItem(aiGenderKey(sessionId), gender)
   notifyDataChanged()
 }
 

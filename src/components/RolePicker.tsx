@@ -137,15 +137,15 @@ export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
 
   /** 选定后保存：ai_companion_persona 存人设原文，备注/性别存各自 key。
    *  头像/姓名不在这里写——有会话时写该会话自己的 key（角色隔离），见 proceed 里建会话后调用。 */
-  const persistSetup = (persona: string, s: RoleSetupState) => {
+  const persistSetup = (persona: string) => {
     savePersona(persona)
-    saveAIRemark(s.remark.trim())
-    saveAIGender(s.gender)
   }
 
-  /** 把头像/姓名写入目标角色：有会话 → 会话级 key（改 A 不影响 B）；无会话（游客）→ 全局兜底 */
+  /** 把头像/姓名/备注/性别写入目标角色：有会话 → 会话级 key（改 A 不影响 B）；无会话（游客）→ 全局兜底 */
   const saveProfileForSession = (s: RoleSetupState, sessionId?: string) => {
     saveAIProfile({ nickname: s.nickname.trim(), avatar: s.avatar }, sessionId)
+    saveAIRemark(s.remark.trim(), sessionId)
+    saveAIGender(s.gender, sessionId)
   }
 
   /**
@@ -158,7 +158,7 @@ export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
     if (!persona.trim()) return
     setSubmitting(true)
     setSubmitError(null)
-    persistSetup(persona, s)
+    persistSetup(persona)
     const title = s.nickname.trim() || resolveSessionName(persona, roleKey ?? undefined)
     try {
       let createdTitle: string | undefined

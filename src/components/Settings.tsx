@@ -357,8 +357,8 @@ export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSp
   // TA 资料按会话隔离：有当前会话 → 读该会话自己的头像/姓名；无会话回落全局（游客/过渡态）
   const [ai, setAI] = useState<AIProfile>(() => loadAIProfile(getActiveSessionId() || undefined))
   const [globalPersona, setGlobalPersona] = useState(() => loadPersona())
-  const [remark, setRemark] = useState(() => loadAIRemark())
-  const [gender, setGender] = useState<AIGender>(() => loadAIGender())
+  const [remark, setRemark] = useState(() => loadAIRemark(getActiveSessionId() || undefined))
+  const [gender, setGender] = useState<AIGender>(() => loadAIGender(getActiveSessionId() || undefined))
   // 各字段草稿：null = 还没动过，显示当前值（会话刷新后自动跟着变）；改过才进草稿
   const [nameDraft, setNameDraft] = useState<string | null>(null)
   const [personalityDraft, setPersonalityDraft] = useState<string | null>(null)
@@ -441,20 +441,20 @@ export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSp
     }
   }
 
-  // 改备注：写 ai_companion_ai_remark
+  // 改备注：按会话写（角色隔离）
   const handleSaveRemark = () => {
     const v = remarkValue.trim()
     setRemark(v)
-    saveAIRemark(v)
+    saveAIRemark(v, getActiveSessionId() || undefined)
     dirtyRef.current = true
     setRemarkDraft(v)
     flashSaved('remark')
   }
 
-  // 改性别：写 ai_companion_ai_gender
+  // 改性别：按会话写（角色隔离）
   const handleSaveGender = (g: AIGender) => {
     setGender(g)
-    saveAIGender(g)
+    saveAIGender(g, getActiveSessionId() || undefined)
     dirtyRef.current = true
     flashSaved('gender')
   }

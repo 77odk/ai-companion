@@ -56,9 +56,9 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
   const user = loadUserProfile()
   const yourName = user.nickname || '你'
   const hasPersona = Boolean(loadPersona().trim())
-  // 设定卡扩展字段（TASK-UI1）：备注 + 性别，资料卡首页直接展示
-  const aiRemark = loadAIRemark()
-  const aiGender = loadAIGender()
+  // 设定卡扩展字段（TASK-UI1）：备注 + 性别，按会话隔离（改 A 不影响 B）
+  const aiRemark = loadAIRemark(sessionId || undefined)
+  const aiGender = loadAIGender(sessionId || undefined)
 
   const [profileSessionName] = useState<string>(() => {
     if (!sessionId) return ''
