@@ -104,9 +104,8 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const [replyText, setReplyText] = useState('')
   // 批阅模式：immediate 立即简短回复 / sealed 封存慢信（全局慢信开启时强制封存）
   const [replyMode, setReplyMode] = useState<'immediate' | 'sealed'>('immediate')
-  // 物理锁（2026-08-26 七七拍板）：点选批阅方式的那一刻就锁住，不能反悔切换；
-  // 提交成功后台数据也有 reviewMode，双保险。老数据 reviewMode 已存在则直接锁定。
-  // 初始锁定：当前这篇周记已有 reviewMode（老数据/已批阅过）→ 锁
+  // 物理锁（2026-08-26 七七拍板）：批注提交后锁定，不能再改/换方式；
+  // 老数据 reviewMode 已存在（已批阅过）也锁。选中方式不锁（1 太苛刻，七七笑死）
   const [modeChosen, setModeChosen] = useState<boolean>(false)
   // 全局慢信开关只在设置页改，进周记页读一次即可
   const slowLetter = isSlowLetterMode()
@@ -267,6 +266,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
       setHint(SUCCESS_SEALED)
       setEditingReply(false)
       setReplyText('')
+      setModeChosen(true) // 提交即锁
       return
     }
 
@@ -281,6 +281,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     setEditingReply(false)
     setReplyText('')
     setHint(SUCCESS_IMMEDIATE)
+    setModeChosen(true) // 提交即锁
     setTaReplying(true)
     try {
       const s = loadSettings()
@@ -479,10 +480,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                       name="weekly-reply-mode"
                       checked={effectiveMode === 'immediate'}
                       disabled={modeLocked}
-                      onChange={() => {
-                        setReplyMode('immediate')
-                        setModeChosen(true)
-                      }}
+                      onChange={() => setReplyMode('immediate')}
                     />
                     <span>{OPTION_IMMEDIATE}</span>
                   </label>
@@ -496,10 +494,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                       name="weekly-reply-mode"
                       checked={effectiveMode === 'sealed'}
                       disabled={modeLocked}
-                      onChange={() => {
-                        setReplyMode('sealed')
-                        setModeChosen(true)
-                      }}
+                      onChange={() => setReplyMode('sealed')}
                     />
                     <span>{OPTION_SEALED}</span>
                   </label>
