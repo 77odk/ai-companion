@@ -272,6 +272,21 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       if (pref) {
         writeMemory(pref, { source: text, topic: inferTopic(pref), explicit: true })
         userMsg.memorySaved = true
+      } else if (text.trim().length >= 1 && text.trim().length <= 8) {
+        // 追问补全（2026-08-25 实测踩坑）：AI 问「你爱吃什么口味的排骨？」→ 用户回「话梅」（单短词），
+        // 前一条 AI 消息含「喜欢/爱吃什么/什么口味/告诉我」类问句时，把短回复并成「喜欢X」存记忆
+        const prevAi = visibleMessages.filter((m) => m.role === 'assistant').slice(-1)[0]
+        const askText = prevAi ? stripMemoryMarkers(prevAi.content) : ''
+        if (askText) {
+          const askAsk = /(爱|喜欢|爱吃|爱喝|口味|喜欢什么|想要什么|想要|想去|想做什么|是什么|叫什么)[，,。.！!？?]|(告诉我|说说|讲讲).{0,10}(喜欢|想要|想去|想)/.test(askText)
+          const short = text.trim()
+          if (askAsk && short.length >= 1) {
+            // 拼成「喜欢X」（饮食偏好常见场景）；其余短词用原样存
+            const fact = short.length <= 4 ? `喜欢${short}` : short
+            writeMemory(fact, { source: `TA问：${askText.slice(0, 30)}\n我答：${text}`, topic: inferTopic(fact), explicit: true })
+            userMsg.memorySaved = true
+          }
+        }
       }
     }
     // 发给模型的上下文只带刷新后的消息（base = 可见消息 + 新消息）
