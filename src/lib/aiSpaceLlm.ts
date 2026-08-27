@@ -51,6 +51,8 @@ export function buildLlmMessages(ctx: LlmContext): ApiMessage[] {
   const system =
     `你是「${ctx.taName}」，一个认真生活的人，正在自己的日常里发一条生活动态。` +
     `要求 1-2 句话，口语化碎碎念，有温度，贴合自己的性格。` +
+    `句式要多样，别老用同一种开头——禁止用「刚把」「刚刚」「今天又」「突然」这类万能开头，` +
+    `像真人随手写的一样，每条动态开口都不一样（这回想天气，下回想件小事，再下回想人）。` +
     `如果这条动态想配一张小图（大约三分之一的情况），在正文后另起一行写「[配图]一句话描述配图内容」，不想配图就只写正文。` +
     `禁止 emoji；禁止自称 AI/助手/模型；禁止出现「设定」「人设」「朋友圈」这类词。` +
     `就像真人随手写的生活，别让人看出是编排好的。`
@@ -59,9 +61,10 @@ export function buildLlmMessages(ctx: LlmContext): ApiMessage[] {
   user += `你有一个在意的人，叫「${ctx.yourName}」，动态里可以自然地提到${ctx.yourName}。\n\n`
   user += `你的性格：\n${ctx.persona.trim()}\n`
   if (ctx.chatTopics && ctx.chatTopics.length > 0) {
-    user += `\n最近你们聊天里，对方提到过：\n${ctx.chatTopics.map((t) => `- ${t}`).join('\n')}\n`
-    user += `\n如果里面有你能自然接上、自己也经历过的，就顺着写一条回应这个的动态` +
-      `（比如对方提到火锅，你就写「刚跟朋友去吃了火锅」）；没有合适的就写自己的日常。`
+    user += `\n你记得对方最近跟你提过这些事：\n${ctx.chatTopics.map((t) => `- ${t}`).join('\n')}\n`
+    user += `\n这些只能当引子，不能照抄——禁止复述对方原话、禁止写跟对方一模一样的场景` +
+      `（对方说喝了绿豆汤，你别也写自己在喝绿豆汤）。` +
+      `要么从自己的角度自然接一句不一样的，要么干脆写你自己的日常，别硬贴。`
   }
   if (ctx.recent.length > 0) {
     user += `\n你最近发过的动态：\n${ctx.recent.map((r) => `- ${r}`).join('\n')}\n`

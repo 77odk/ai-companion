@@ -113,8 +113,8 @@ const msgsWithTopics = buildLlmMessages({
 eq(msgsWithTopics.length, 2, '有话题时仍是两段消息')
 ok(msgsWithTopics[1].content.includes('火锅'), 'user 含话题 1')
 ok(msgsWithTopics[1].content.includes('周末爬山'), 'user 含话题 2')
-ok(msgsWithTopics[1].content.includes('回应'), 'user 引导 TA 回应聊天内容')
-ok(msgsWithTopics[1].content.includes('刚跟朋友去吃了火锅'), 'user 给出呼应的示例句式')
+ok(msgsWithTopics[1].content.includes('禁止复述'), 'user 禁止照抄话题/复述原话')
+ok(msgsWithTopics[1].content.includes('别硬贴'), 'user 引导 TA 别硬贴话题')
 
 console.log('\n[5] extractImageCaption 配图标记拆解（TASK_UI_BATCH2）')
 eq(extractImageCaption('今天路过花店，买了一把。\n[配图]一束粉色花束'), {
