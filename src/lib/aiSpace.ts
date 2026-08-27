@@ -250,8 +250,22 @@ export async function generatePendingPosts(
   const settings = loadSettings()
   const vars = buildVars(taName, yourName, now)
   const recent = plan.posts.slice(0, 3).map((p) => p.text)
-  // TASK_UI_BATCH2 事件触发：最近聊天话题注入 LLM，让 TA 优先呼应最近聊到的事
-  const chatTopics = loadChatTopics(sessionId)
+  // 事件触发：最近聊天话题（带日期）注入 LLM，让 TA 只在「当天相关」时呼应（2026-08-26 七七拍板）
+  const rawTopics = loadChatTopics(sessionId)
+  // 转成「时间标签 + 内容」：今天聊的标「今天」，之前聊的标日期，方便 LLM 判断当天相关性
+  const dayLabel = (ts: number): string => {
+    if (!ts) return ''
+    const d = new Date(ts)
+    const t0 = new Date(now)
+    const sameDay = d.getFullYear() === t0.getFullYear() && d.getMonth() === t0.getMonth() && d.getDate() === t0.getDate()
+    if (sameDay) return '今天'
+    return `${d.getMonth() + 1}-${d.getDate()}`
+  }
+  const chatTopics = rawTopics.map((x) => {
+    const label = dayLabel(x.ts)
+    return label ? `${label} ${x.t}` : x.t
+  })
+  const todayStr = `${new Date(now).getMonth() + 1}月${new Date(now).getDate()}日`
   const used = { ...plan.used }
   const newPosts: SpacePost[] = []
   let usedFallback = false
@@ -278,6 +292,7 @@ export async function generatePendingPosts(
         weatherWord: vars.weatherWord,
         recent,
         chatTopics,
+        todayStr,
       })
       try {
         const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })

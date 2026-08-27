@@ -28,8 +28,10 @@ export interface LlmContext {
   weatherWord: string
   /** TA 最近发过的动态原文，用于防止重复/雷同 */
   recent: string[]
-  /** 最近聊天里对方提到的事情/话题（TASK_UI_BATCH2 事件触发：TA 优先呼应这些内容） */
+  /** 最近聊天里对方提到的事情/话题（带「今天/8-20」时间标签，事件触发：TA 挑当天相关的呼应） */
   chatTopics?: string[]
+  /** 今天日期字符串（如「8月26日」），供 TA 判断话题是否当天相关 */
+  todayStr: string
 }
 
 /** 是否满足 LLM 路径：人设 + 服务商配置齐全 */
@@ -49,7 +51,7 @@ export function canUseLlm(persona: string, settings: LlmSettings): boolean {
  */
 export function buildLlmMessages(ctx: LlmContext): ApiMessage[] {
   const system =
-    `你是「${ctx.taName}」，一个认真生活的人，正在自己的日常里发一条生活动态。` +
+    `你是「${ctx.taName}」，一个认真生活的人，正在自己的日常里发一条今天的生活动态。` +
     `要求 1-2 句话，口语化碎碎念，有温度，贴合自己的性格。` +
     `句式要多样，别老用同一种开头——禁止用「刚把」「刚刚」「今天又」「突然」这类万能开头，` +
     `像真人随手写的一样，每条动态开口都不一样（这回想天气，下回想件小事，再下回想人）。` +
@@ -57,14 +59,15 @@ export function buildLlmMessages(ctx: LlmContext): ApiMessage[] {
     `禁止 emoji；禁止自称 AI/助手/模型；禁止出现「设定」「人设」「朋友圈」这类词。` +
     `就像真人随手写的生活，别让人看出是编排好的。`
 
-  let user = `现在是${ctx.season}天${ctx.timeWord}，天气${ctx.weatherWord}。`
+  let user = `现在是${ctx.season}天${ctx.timeWord}，天气${ctx.weatherWord}。今天是${ctx.todayStr}。`
   user += `你有一个在意的人，叫「${ctx.yourName}」，动态里可以自然地提到${ctx.yourName}。\n\n`
   user += `你的性格：\n${ctx.persona.trim()}\n`
   if (ctx.chatTopics && ctx.chatTopics.length > 0) {
-    user += `\n你记得对方最近跟你提过这些事：\n${ctx.chatTopics.map((t) => `- ${t}`).join('\n')}\n`
-    user += `\n这些只能当引子，不能照抄——禁止复述对方原话、禁止写跟对方一模一样的场景` +
-      `（对方说喝了绿豆汤，你别也写自己在喝绿豆汤）。` +
-      `要么从自己的角度自然接一句不一样的，要么干脆写你自己的日常，别硬贴。`
+    user += `\n你记得对方跟你提过这些事（前面带「今天」的是今天说的，带日期的是那天说的）：\n${ctx.chatTopics.map((t) => `- ${t}`).join('\n')}\n`
+    user += `\n挑跟今天有关的写：比如对方说过「9月1号开学」，今天正好是9月1号，你就写今天送/看着对方去上学的动态；` +
+      `对方今天约了你做什么，你就写今天在做这件事的动态。` +
+      `禁止复述对方原话、禁止写跟对方一模一样的场景（对方说喝了绿豆汤，你别也写自己在喝绿豆汤）。` +
+      `今天没有特别的事，就写你自己的日常。`
   }
   if (ctx.recent.length > 0) {
     user += `\n你最近发过的动态：\n${ctx.recent.map((r) => `- ${r}`).join('\n')}\n`
