@@ -466,15 +466,29 @@ export async function flushPendingOps(token: string): Promise<void> {
 export function splitAssistantReplies(content: string, ts: number): StoredMessage[] {
   const text = String(content ?? '').trim()
   if (!text) return []
+  // 1) 优先按换行/空行拆：AI 在提示词约束下会像发微信一样分行发（一条一行）
   const lines = text
     .split(/\n+/)
     .map((s) => s.trim())
     .filter(Boolean)
-  if (lines.length <= 1) return [{ role: 'assistant', content: text, ts }]
-  // 每行一条（提示词已让 AI 一行一条短消息）；过长的行按 60 字截断加省略号
-  return lines.map((l) => ({
+  if (lines.length > 1) {
+    // 每行一条（提示词已让 AI 一行一条短消息）；过长的行按 60 字截断加省略号
+    return lines.map((l) => ({
+      role: 'assistant' as const,
+      content: l.length > 60 ? `${l.slice(0, 60)}…` : l,
+      ts,
+    }))
+  }
+  // 2) 没换行（一整段）：按句子拆——句号/问号/感叹号/省略号断句，一条一句，
+  //    不让一大段直接甩脸上；单句超 60 字截断
+  const sentences = text
+    .split(/(?<=[。！？!?…])/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (sentences.length <= 1) return [{ role: 'assistant', content: text, ts }]
+  return sentences.map((s) => ({
     role: 'assistant' as const,
-    content: l.length > 60 ? `${l.slice(0, 60)}…` : l,
+    content: s.length > 60 ? `${s.slice(0, 60)}…` : s,
     ts,
   }))
 }
