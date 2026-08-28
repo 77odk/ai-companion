@@ -106,14 +106,18 @@ export function getMessagesCache(sessionId: string): StoredMessage[] {
   }
 }
 
-/** 写入某会话的消息缓存，写后广播 dataChange（账号同步监听到会防抖上传，网络失败静默） */
-export function saveMessagesCache(sessionId: string, msgs: StoredMessage[]): void {
+/**
+ * 写入某会话的消息缓存，写后广播 dataChange（账号同步监听到会防抖上传，网络失败静默）。
+ * broadcast=false 用于「对账」类写入（confirmMessageInCache 只改 ts，内容没变）——
+ * 不广播避免同一条消息触发两次同步/UI 刷新（review3 新-1 双同步）。
+ */
+export function saveMessagesCache(sessionId: string, msgs: StoredMessage[], broadcast = true): void {
   try {
     localStorage.setItem(msgsKey(sessionId), JSON.stringify(Array.isArray(msgs) ? msgs : []))
   } catch {
     // 存不下（localStorage 满）不弹窗不打断，聊天照常
   }
-  notifyDataChanged()
+  if (broadcast) notifyDataChanged()
 }
 
 /** 删除会话时同步清该会话的消息缓存 */
@@ -425,7 +429,8 @@ export function confirmMessageInCache(
   const ts = Date.parse(serverMsg.createdAt)
   if (!Number.isFinite(ts)) return
   list[idx] = { role: serverMsg.role, content: serverMsg.content, ts }
-  saveMessagesCache(sessionId, list)
+  // 对账只把本地 ts 换成服务端 ts，内容不变：不广播（避免双同步），RolesPage 列表摘要已是最新
+  saveMessagesCache(sessionId, list, false)
 }
 
 // ---- 补传 pending 队列（联网自动补传，Chat 挂载 / window online 时调用） ----

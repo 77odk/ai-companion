@@ -30,9 +30,6 @@ import {
   MEMORY_UPDATED_EVENT,
   type MemoryItem,
 } from '../lib/memory'
-import { getToken } from '../lib/auth'
-import { deleteMemory } from '../lib/sessionApi'
-import { getActiveSessionId, getMemoriesCache, saveMemoriesCache } from '../lib/sessionStore'
 import { loadUserProfile } from '../lib/storage'
 
 interface Props {
@@ -85,7 +82,6 @@ export default function AboutMe({ onBack }: Props) {
   // 我自己说的：explicit 记忆（全局）
   const [memories, setMemories] = useState<MemoryItem[]>(() => myExplicitMemories())
   const [text, setText] = useState('')
-  const [memError, setMemError] = useState<string | null>(null)
 
   // 添加纪念日表单（三类型）
   const [formOpen, setFormOpen] = useState(false)
@@ -164,28 +160,10 @@ export default function AboutMe({ onBack }: Props) {
   }
 
   const handleRemoveMemory = (id: string) => {
-    const s = getActiveSessionId()
-    if (s) {
-      const list = getMemoriesCache(s)
-      const item = list.find((m) => m.id === id)
-      saveMemoriesCache(s, list.filter((m) => m.id !== id))
-      setMemories(myExplicitMemories())
-      const token = getToken()
-      if (item && token && /^\d+$/.test(item.id)) {
-        deleteMemory(token, item.id).then((res) => {
-          if (!res.ok) {
-            const cur = getMemoriesCache(s)
-            if (!cur.some((m) => m.id === item.id)) {
-              saveMemoriesCache(s, [item, ...cur])
-              setMemories(myExplicitMemories())
-            }
-            setMemError('删除没成功，这条留在了本地')
-          }
-        })
-      }
-    } else {
-      setMemories(removeMemoryItem(id).filter((m) => m.explicit === true))
-    }
+    // 「我自己说的」存在全局记忆库（所有角色共享，myExplicitMemories 读的就是全局 explicit 条目）：
+    // 删除永远操作全局库，绝不碰会话缓存（那是 TA所忆，按角色隔离）。
+    // 修 review3 新-13：之前有会话时误删「会话缓存」里的条目，全局记忆根本没动 → 删了个寂寞。
+    setMemories(removeMemoryItem(id).filter((m) => m.explicit === true))
   }
 
   return (
@@ -273,8 +251,6 @@ export default function AboutMe({ onBack }: Props) {
           <h3 className="aboutme-section-title">我自己说的 · {memories.length} 条</h3>
           <span className="aboutme-section-spacer" aria-hidden="true" />
         </div>
-
-        {memError && <p className="aboutme-error">{memError}</p>}
 
         {memories.length === 0 ? (
           <div className="aboutme-mem-empty">还没记过。在上面说一句，TA 就会记得。</div>

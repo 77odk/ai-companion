@@ -74,6 +74,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const controllerRef = useRef<AbortController | null>(null)
+  // 流式轮次号（review3 新-8 串台修复）：每次发送/切会话/卸载都 +1，
+  // 旧轮次的 onToken/onDone/onError 回调凭 runId 判断自己已作废 → 直接 return，
+  // 防止切角色后旧会话的流式内容继续冒进新会话（用户看到的「TA 一直乱说」）。
+  const runIdRef = useRef(0)
   const finalizeRef = useRef<() => void>(() => {})
   const retriedRef = useRef(false)
   const assistantText = useRef('')
@@ -131,6 +135,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   // 别让旧会话的消息还挂在屏幕上；会话详情拉回后再合并更新（下面那个 effect）。
   // 切到无会话（游客/过渡）则退回全局 localStorage 流程。进入会话即已读（S1 红点消失）。
   useEffect(() => {
+    // 切会话：作废在途流式（runId 失效 + abort 请求），旧会话的流式内容绝不能串进新会话
+    runIdRef.current += 1
+    controllerRef.current?.abort()
     setMessages(activeSessionId ? getMessagesCache(activeSessionId) : loadMessages())
     setActiveSession(null)
     if (activeSessionId) markRead(activeSessionId)
@@ -190,6 +197,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     return () => window.removeEventListener('online', onOnline)
   }, [activeSessionId])
 
+  // 组件卸载：作废在途流式 + 中止请求（review3 新-8：防卸载后回调继续 setState / 落盘残句）
+  useEffect(() => {
+    return () => {
+      runIdRef.current += 1
+      controllerRef.current?.abort()
+    }
+  }, [])
+
   // 开场白机制（遗留 localStorage 流程）：全新开始（没有任何聊天记录）且人设里写了「初次见面开场白」→
   // 把 TA 的见面第一句话插进来当第一条 assistant 消息。不调 API、不耗 key，
   // 模型后续也能看到这句历史，衔接自然。只在无聊天记录时插入；
@@ -220,6 +235,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   const send = useCallback((raw: string) => {
     const text = raw.trim()
     if (!text || streaming) return
+
+    // 本轮流式的轮次号：作废之前任何还在途的回调（onToken/onDone/onError 会核对）
+    const runId = ++runIdRef.current
 
     // 每轮新对话重置质检重写标记：上一轮触发过重写不影响本轮
     retriedRef.current = false
@@ -440,10 +458,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
             if (!retryCleaned || looksRobotic(retryCleaned) || looksFabricated(retryCleaned)) {
               // 重写还是有问题？就用兜底话，自然带过但不编造
               const fallback = '这个我还真没头绪，你跟我说说呗。'
-              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: fallback, ts: Date.now() }]
+              // ts 用 assistantTs（review3 新-10）：commitFinal 只上传 ts === assistantTs 的助手消息，
+              // 之前这里用 Date.now() 导致重写/兜底回复永远不上云
+              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: fallback, ts: assistantTs }]
               commitFinal(final)
             } else {
-              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: retryCleaned, ts: Date.now() }]
+              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: retryCleaned, ts: assistantTs }]
               commitFinal(final)
             }
           })
@@ -462,6 +482,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
 
     const controller = streamChat(settings, apiMessages, {
       onToken: (t) => {
+        if (runId !== runIdRef.current) return
         assistantText.current += t
         // 流式过程中直接追加原文，不做清洗——避免每个 token 都对全文跑两次正则（O(n²) 卡顿）。
         // 最终清洗在 finalize 里统一做一次，用户看到的最终结果是干净的。
@@ -469,8 +490,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         const splits = splitAssistantReplies(stripMemoryMarkers(assistantText.current), assistantTs)
         setMessages([...messages, userMsg, ...splits])
       },
-      onDone: finalize,
+      onDone: () => {
+        if (runId !== runIdRef.current) return
+        finalize()
+      },
       onError: (err) => {
+        if (runId !== runIdRef.current) return
         finalize()
         setError(err.message)
         setFailedText(userMsg.content)
