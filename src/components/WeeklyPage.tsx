@@ -143,6 +143,11 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   // 物理锁（2026-08-26 七七拍板）：点选过方式（modeChosen）或数据已锁定（lockedMode）→ 都不能再切换
   const modeLocked = modeChosen || lockedMode != null
 
+  // ★2026-09-02 修复：判定「这篇是否已批阅」必须同时看 immediate(myReply) 和 sealed(replies)，
+  // 之前只查 myReply → 封存提交后编辑框还在，能反复追加封存留言（七七实测抓到）
+  const alreadyReplied = (r?: WeeklyReview | null): boolean =>
+    Boolean(r?.myReply) || (Array.isArray(r?.replies) && (r?.replies ?? []).length > 0)
+
   // 批阅实际生效模式：锁定优先；未锁定且全局慢信开启时强制封存
   const effectiveMode = (modeChosen ? replyMode : null) ?? lockedMode ?? (slowLetter ? 'sealed' : replyMode)
 
@@ -253,6 +258,8 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const handleSaveReply = async () => {
     const t = replyText.trim()
     if (!t || !selectedReview || taReplying) return
+    // ★2026-09-02 修复：已批阅过（immediate 或 sealed）→ 物理拦截，杜绝第二次提交
+    if (alreadyReplied(selectedReview)) return
     const now = Date.now()
     if (effectiveMode === 'sealed') {
       const pending = { id: newWeeklyReviewId(), content: t, repliedAt: now }
@@ -451,6 +458,14 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
               <div className="weekly-reply-foot">
                 <span className="weekly-reply-meta">TA 下周会看到</span>
                 {/* 批注提交后物理锁定，不可修改（2026-08-26 七七拍板，对标笺"提交即永久锁定"） */}
+              </div>
+            </div>
+          ) : alreadyReplied(r) && !r.myReply ? (
+            /* ★2026-09-02 修复：封存模式已批阅 → 不再显示编辑框，只提示已封存（原 bug：只查 myReply，封存后还能反复追加） */
+            <div className="weekly-reply-show">
+              <p className="weekly-reply-content">已封存 {r.replies?.length ?? 0} 条留言，TA 更新下一篇周记时会一并回信。</p>
+              <div className="weekly-reply-foot">
+                <span className="weekly-reply-meta">批阅方式已锁定，这篇周记不能再批</span>
               </div>
             </div>
           ) : (
