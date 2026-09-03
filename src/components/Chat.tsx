@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildSystemPrompt, chatCompletion, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage } from '../lib/api'
+import { buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, extractMemories, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { getToken } from '../lib/auth'
@@ -74,6 +74,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const controllerRef = useRef<AbortController | null>(null)
+  // 真人思考延迟的定时器（2026-09-03 七七拍板）：延迟期间用户点停止要能取消
+  const thinkTimerRef = useRef<number | null>(null)
   // 流式轮次号（review3 新-8 串台修复）：每次发送/切会话/卸载都 +1，
   // 旧轮次的 onToken/onDone/onError 回调凭 runId 判断自己已作废 → 直接 return，
   // 防止切角色后旧会话的流式内容继续冒进新会话（用户看到的「TA 一直乱说」）。
@@ -138,6 +140,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     // 切会话：作废在途流式（runId 失效 + abort 请求），旧会话的流式内容绝不能串进新会话
     runIdRef.current += 1
     controllerRef.current?.abort()
+    if (thinkTimerRef.current !== null) {
+      clearTimeout(thinkTimerRef.current)
+      thinkTimerRef.current = null
+    }
     setMessages(activeSessionId ? getMessagesCache(activeSessionId) : loadMessages())
     setActiveSession(null)
     if (activeSessionId) markRead(activeSessionId)
@@ -202,6 +208,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     return () => {
       runIdRef.current += 1
       controllerRef.current?.abort()
+      if (thinkTimerRef.current !== null) {
+        clearTimeout(thinkTimerRef.current)
+        thinkTimerRef.current = null
+      }
     }
   }, [])
 
@@ -480,28 +490,36 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     }
     finalizeRef.current = finalize
 
-    const controller = streamChat(settings, apiMessages, {
-      onToken: (t) => {
-        if (runId !== runIdRef.current) return
-        assistantText.current += t
-        // 流式过程中直接追加原文，不做清洗——避免每个 token 都对全文跑两次正则（O(n²) 卡顿）。
-        // 最终清洗在 finalize 里统一做一次，用户看到的最终结果是干净的。
-        // 流式显示也按行拆多条气泡（微信式）；没换行时是单条；剥记忆标记行（不泄漏到气泡）
-        const splits = splitAssistantReplies(stripMemoryMarkers(assistantText.current), assistantTs)
-        setMessages([...messages, userMsg, ...splits])
-      },
-      onDone: () => {
-        if (runId !== runIdRef.current) return
-        finalize()
-      },
-      onError: (err) => {
-        if (runId !== runIdRef.current) return
-        finalize()
-        setError(err.message)
-        setFailedText(userMsg.content)
-      },
-    })
-    controllerRef.current = controller
+    // 真人节奏（2026-09-03 七七拍板）：TA 先"读消息"，3~10 秒后再开口。
+    // 占位空 assistant 消息已经上屏 + streaming=true → 这期间显示「正在输入」动画。
+    // 延迟受 runId 守卫：期间切会话/停止，runId 变了就不发起请求。
+    const startStream = () => {
+      if (runId !== runIdRef.current) return
+      const controller = streamChat(settings, apiMessages, {
+        onToken: (t) => {
+          if (runId !== runIdRef.current) return
+          assistantText.current += t
+          // 流式过程中直接追加原文，不做清洗——避免每个 token 都对全文跑两次正则（O(n²) 卡顿）。
+          // 最终清洗在 finalize 里统一做一次，用户看到的最终结果是干净的。
+          // 流式显示也按行拆多条气泡（微信式）；没换行时是单条；剥记忆标记行（不泄漏到气泡）
+          const splits = splitAssistantReplies(stripMemoryMarkers(assistantText.current), assistantTs)
+          setMessages([...messages, userMsg, ...splits])
+        },
+        onDone: () => {
+          if (runId !== runIdRef.current) return
+          finalize()
+        },
+        onError: (err) => {
+          if (runId !== runIdRef.current) return
+          finalize()
+          setError(err.message)
+          setFailedText(userMsg.content)
+        },
+      })
+      controllerRef.current = controller
+    }
+    const thinkMs = computeThinkDelayMs(text.length)
+    thinkTimerRef.current = window.setTimeout(startStream, thinkMs)
   }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, persistMessages, uploadMessage])
 
   // 工作台「跟 TA 说」带话进来：Chat 挂载时取走并直接发给 TA（StrictMode 双跑靠 take 清空去重）
@@ -513,6 +531,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   const handleSend = () => send(input)
 
   const handleStop = () => {
+    // 思考延迟中停止：清定时器 + runId 作废本轮——别让 timer 到点又把请求发出去
+    runIdRef.current += 1
+    if (thinkTimerRef.current !== null) {
+      clearTimeout(thinkTimerRef.current)
+      thinkTimerRef.current = null
+    }
     controllerRef.current?.abort()
     finalizeRef.current()
   }
