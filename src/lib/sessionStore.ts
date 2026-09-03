@@ -424,7 +424,10 @@ export function confirmMessageInCache(
   serverMsg: { role: 'user' | 'assistant'; content: string; createdAt: string },
 ): void {
   const list = getMessagesCache(sessionId)
-  const idx = list.findIndex((m) => m.ts === op.ts && m.role === op.payload.role)
+  // 同批拆分消息 ts 相同（同 assistantTs）——必须带 content 精确定位，否则 findIndex 永远命中批内第一条，对账错乱（2026-09-03 排查乱序时发现）
+  const idx = list.findIndex(
+    (m) => m.ts === op.ts && m.role === op.payload.role && m.content === op.payload.content,
+  )
   if (idx < 0) return
   const ts = Date.parse(serverMsg.createdAt)
   if (!Number.isFinite(ts)) return

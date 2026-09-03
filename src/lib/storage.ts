@@ -187,15 +187,20 @@ export function saveMessages(messages: StoredMessage[]): void {
 
 const SESSION_START_KEY = 'ai_companion_session_start'
 
+/** 起点 key 按会话隔离（2026-09-03 修复：不隔离会导致刷新 A 角色误伤 B 角色）；无会话时用全局 key（老流程兼容） */
+function sessionStartKey(sessionId?: string): string {
+  return sessionId ? `${SESSION_START_KEY}_sid_${sessionId}` : SESSION_START_KEY
+}
+
 /**
  * 会话起点时间戳：刷新对话 = 把起点设为当前时间，聊天页只显示/只发送起点之后的消息。
  * 没有设置过返回 0（= 不设起点，全部显示）。
  * 只影响「当前对话」的显示与发送，不删任何聊天记录——
  * 聊天记录页（TA 空间）读 loadMessages() 全量，不受 sessionStart 影响。
  */
-export function getSessionStart(): number {
+export function getSessionStart(sessionId?: string): number {
   try {
-    const raw = localStorage.getItem(SESSION_START_KEY)
+    const raw = localStorage.getItem(sessionStartKey(sessionId))
     if (!raw) return 0
     const n = Number(raw)
     return Number.isFinite(n) && n > 0 ? n : 0
@@ -204,8 +209,8 @@ export function getSessionStart(): number {
   }
 }
 
-export function setSessionStart(ts: number): void {
-  localStorage.setItem(SESSION_START_KEY, String(ts))
+export function setSessionStart(ts: number, sessionId?: string): void {
+  localStorage.setItem(sessionStartKey(sessionId), String(ts))
 }
 
 // ---- 聊天背景（按会话隔离，2026-08-25 七七拍板：全屏对标微信） ----

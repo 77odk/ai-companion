@@ -487,6 +487,12 @@ button {
   padding: 2px 4px;
 }
 
+.typing .typing-text {
+  font-size: 0.85em;
+  color: var(--color-text-secondary, #999);
+  margin-right: 2px;
+}
+
 .typing i {
   width: 7px;
   height: 7px;

@@ -54,6 +54,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
         <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
           {typing ? (
             <span className="typing" aria-label="正在输入">
+              <span className="typing-text">正在输入</span>
               <i />
               <i />
               <i />

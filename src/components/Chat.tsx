@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage } from '../lib/api'
+import { buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, extractMemories, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { getToken } from '../lib/auth'
@@ -64,8 +64,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   const [milestone, setMilestone] = useState<{ day: number; hit: boolean; shown: boolean } | null>(null)
   const [showMilestone, setShowMilestone] = useState(false)
 
-  // 会话起点（M7-3 刷新对话）：会话模式下不套全局起点（每会话消息全量显示），遗留流程照旧
-  const sessionStart = useMemo(() => (activeSessionId ? 0 : getSessionStart()), [activeSessionId])
+  // 会话起点（M7-3 刷新对话）：会话模式按当前会话读起点（2026-09-03 修复——之前写死 0 导致刷新对话对登录用户完全失效）；
+  // 没登录的遗留流程读全局起点。起点之后的消息才显示/才发送给 TA = TA 忘掉重来，聊天记录一条不删。
+  const sessionStart = useMemo(() => getSessionStart(activeSessionId || undefined), [activeSessionId])
   const visibleMessages = useMemo(
     () => filterSessionMessages(messages, sessionStart),
     [messages, sessionStart],
@@ -76,6 +77,23 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   const controllerRef = useRef<AbortController | null>(null)
   // 真人思考延迟的定时器（2026-09-03 七七拍板）：延迟期间用户点停止要能取消
   const thinkTimerRef = useRef<number | null>(null)
+  // 打字机播放器（2026-09-03 七七拍板：像真人发微信——逐字打出、一条打完停一下再打下一
+  // 条，不是整段瞬间刷出来）。播放器只负责"推进显示"，原文仍在 assistantText.current 累积。
+  const playTimerRef = useRef<number | null>(null)
+  /** 已显示到的字符数（按剥掉记忆标记后的干净文本计） */
+  const showLenRef = useRef(0)
+  /** 流式是否已结束（onDone/onError 后播放器放完剩余才 finalize，避免跳变） */
+  const streamEndedRef = useRef(false)
+  /** 行/句末停顿剩余 tick 数（打完一条歇一下再打下一条） */
+  const pauseLeftRef = useRef(0)
+  /** 流式错误暂存（onError 先停流，播放器放完剩余再统一报错收尾） */
+  const streamErrorRef = useRef<ChatError | null>(null)
+  /** 每轮 send 注入的播放 tick（interval 常驻只调这个 ref） */
+  const tickPlayRef = useRef<() => void>(() => {})
+  /** 当前已显示到屏幕的干净文本（停止时截断用，避免把没播完的内容一下全蹦出来） */
+  const displayCleanRef = useRef('')
+  /** 本轮是否已收尾（播放器 tick 反复触发防重入） */
+  const finishedRef = useRef(false)
   // 流式轮次号（review3 新-8 串台修复）：每次发送/切会话/卸载都 +1，
   // 旧轮次的 onToken/onDone/onError 回调凭 runId 判断自己已作废 → 直接 return，
   // 防止切角色后旧会话的流式内容继续冒进新会话（用户看到的「TA 一直乱说」）。
@@ -97,11 +115,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   }, [])
 
   // 乐观上传：先入 pendingSync 队列（本地不丢），再异步 postMessage 上传；
-  // 成功移出队列并把缓存里的乐观条目对账成服务端版本（ts 换成 createdAt），失败留在队列联网补传
-  const uploadMessage = useCallback((msg: StoredMessage) => {
+  // 成功移出队列并把缓存里的乐观条目对账成服务端版本（ts 换成 createdAt），失败留在队列联网补传。
+  // 返回 Promise（串行链用）：同批消息按顺序一条传完再传下一条——修复并发上传导致服务器时间戳先后随机、页面重排乱序（2026-09-03 七七实测）
+  const uploadMessage = useCallback((msg: StoredMessage): Promise<void> => {
     const sid = getActiveSessionId()
     const token = getToken()
-    if (!sid || !token) return
+    if (!sid || !token) return Promise.resolve()
     const op: PendingOp = {
       id: newPendingOpId(),
       type: 'message',
@@ -110,7 +129,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       ts: msg.ts,
     }
     addPendingOp(op)
-    postMessage(token, sid, { role: msg.role, content: msg.content }).then((res) => {
+    return postMessage(token, sid, { role: msg.role, content: msg.content }).then((res) => {
       if (res.ok) {
         removePendingOp(op.id)
         confirmMessageInCache(sid, op, res.data)
@@ -211,6 +230,23 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       if (thinkTimerRef.current !== null) {
         clearTimeout(thinkTimerRef.current)
         thinkTimerRef.current = null
+      }
+      if (playTimerRef.current !== null) {
+        clearInterval(playTimerRef.current)
+        playTimerRef.current = null
+      }
+    }
+  }, [])
+
+  // 打字机播放心跳（2026-09-03 七七拍板：像真人发微信——逐字打出、句末停顿、一条条来）：
+  // 常驻 interval，每 70ms 调一次当轮 send 注入的 tickPlayRef.current()。
+  // 无播放任务时 tick 内部快速 return，开销可忽略。卸载统一清理。
+  useEffect(() => {
+    playTimerRef.current = window.setInterval(() => tickPlayRef.current(), 70)
+    return () => {
+      if (playTimerRef.current !== null) {
+        clearInterval(playTimerRef.current)
+        playTimerRef.current = null
       }
     }
   }, [])
@@ -405,13 +441,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     const commitFinal = (final: StoredMessage[]) => {
       persistMessages(final)
       setMessages(final)
-      // 拆分后可能有多条同 ts 的 assistant 消息：全部上传（不只 last）
+      // 拆分后可能有多条同 ts 的 assistant 消息：全部上传（不只 last）。
+      // ★串行链上传（2026-09-03 七七实测乱序修复）：同批消息一条传完再传下一条，
+      // 让服务器按顺序记 created_at——并发上传会让时间戳先后随机，页面重排时同批被打散错位。
       const sid = getActiveSessionId()
       const token = getToken()
       if (sid && token) {
+        let chain: Promise<void> = Promise.resolve()
         for (const m of final) {
           if (m.role !== 'assistant' || m.ts !== assistantTs) continue
-          uploadMessage(m)
+          chain = chain.then(() => uploadMessage(m))
         }
       }
       setStreaming(false)
@@ -490,30 +529,77 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     }
     finalizeRef.current = finalize
 
+    // 打字机播放器（2026-09-03 七七拍板：像真人发微信——逐字打出、一条打完歇一下、不整段蹦出）：
+    // 模型流式只往 assistantText.current 累积原文；上屏由这个 tick 按真人速度逐字推进。
+    // 显示文本 = 原文剥掉记忆标记后的前缀（slice 0..showLen），拆条规则与最终一致（换行/句号断句），
+    // 所以先出现的气泡内容稳定，最后一条逐字变长——看起来就是"正在打字"。
+    // 边界（换行/句末标点）出现时歇一下（pause 几拍），模拟打完一条再打下一条。
+    // 流结束（onDone/onError）后：先放完剩余字符，再统一 finalize，避免中途跳变。
+    const playTick = () => {
+      if (runId !== runIdRef.current) return // 旧轮次作废
+      if (finishedRef.current) return
+      if (pauseLeftRef.current > 0) {
+        pauseLeftRef.current -= 1 // 句末停顿中，不放字符
+        return
+      }
+      const clean = stripMemoryMarkers(assistantText.current) // 显示层剥记忆标记
+      const total = clean.length
+      if (showLenRef.current >= total) {
+        // 已放完所有已收到的字符：若流已结束 → 收尾；否则等下一个 token
+        if (streamEndedRef.current) finishStreaming()
+        return
+      }
+      // 推进 1 个字符（每 tick 70ms ≈ 14 字/秒，接近真人打字）
+      showLenRef.current += 1
+      const ch = clean[showLenRef.current - 1]
+      // 句末/换行 = 一条消息的边界 → 打完歇一下
+      if (ch === '\n' || ch === '。' || ch === '！' || ch === '？' || ch === '…' || ch === '.' || ch === '!' || ch === '?') {
+        pauseLeftRef.current = 5 // ~350ms
+      }
+      displayCleanRef.current = clean.slice(0, showLenRef.current)
+      const splits = splitAssistantReplies(displayCleanRef.current, assistantTs)
+      setMessages([...messages, userMsg, ...splits])
+      // 刚好放完且流已结束 → 收尾
+      if (showLenRef.current >= total && streamEndedRef.current) finishStreaming()
+    }
+    // 收尾：只走一次。有流式错误则 finalize 后统一报错（错误信息在 streamErrorRef 里等播放完）
+    const finishStreaming = () => {
+      if (finishedRef.current) return
+      finishedRef.current = true
+      const err = streamErrorRef.current
+      finalize()
+      if (err) {
+        setError(err.message)
+        setFailedText(userMsg.content)
+      }
+    }
+    tickPlayRef.current = playTick
+
     // 真人节奏（2026-09-03 七七拍板）：TA 先"读消息"，3~10 秒后再开口。
     // 占位空 assistant 消息已经上屏 + streaming=true → 这期间显示「正在输入」动画。
     // 延迟受 runId 守卫：期间切会话/停止，runId 变了就不发起请求。
     const startStream = () => {
       if (runId !== runIdRef.current) return
+      streamEndedRef.current = false
+      streamErrorRef.current = null
+      showLenRef.current = 0
+      pauseLeftRef.current = 0
+      displayCleanRef.current = ''
+      finishedRef.current = false
       const controller = streamChat(settings, apiMessages, {
         onToken: (t) => {
           if (runId !== runIdRef.current) return
+          // 只累积原文；上屏交给播放器 tick 按真人速度推进（避免整段/多行一起蹦）
           assistantText.current += t
-          // 流式过程中直接追加原文，不做清洗——避免每个 token 都对全文跑两次正则（O(n²) 卡顿）。
-          // 最终清洗在 finalize 里统一做一次，用户看到的最终结果是干净的。
-          // 流式显示也按行拆多条气泡（微信式）；没换行时是单条；剥记忆标记行（不泄漏到气泡）
-          const splits = splitAssistantReplies(stripMemoryMarkers(assistantText.current), assistantTs)
-          setMessages([...messages, userMsg, ...splits])
         },
         onDone: () => {
           if (runId !== runIdRef.current) return
-          finalize()
+          streamEndedRef.current = true // 播放器放完剩余后统一收尾
         },
         onError: (err) => {
           if (runId !== runIdRef.current) return
-          finalize()
-          setError(err.message)
-          setFailedText(userMsg.content)
+          streamErrorRef.current = err
+          streamEndedRef.current = true // 先放完已收到的，再报错收尾
         },
       })
       controllerRef.current = controller
@@ -538,6 +624,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       thinkTimerRef.current = null
     }
     controllerRef.current?.abort()
+    // 打字机模式下停止：把原文截断到"已显示到屏幕"的部分再收尾，
+    // 别让 finalize 把还没逐字放完的全文一次性蹦上屏（跳变）
+    if (displayCleanRef.current) assistantText.current = displayCleanRef.current
+    finishedRef.current = true
+    retriedRef.current = true // 停止=用户不想等了：跳过质检重写（别再发一次请求）
     finalizeRef.current()
   }
 

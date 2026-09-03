@@ -74,12 +74,14 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
   const [page, setPage] = useState<'home' | 'profile' | 'life' | 'chats' | 'bg'>('home')
   const goHome = () => setPage('home')
 
-  // 刷新对话：仅清当前对话上下文（TA 忘掉重来），聊天记录一条不删
+  // 刷新对话：仅清当前对话上下文（TA 忘掉重来），聊天记录一条不删。
+  // ★2026-09-03 修复：起点按会话隔离存储（sessionId 透传），会话模式下聊天页才能真正读到。
+  // 刷新后回聊天页（view 切走再切回，Chat 重新挂载）会重新按起点过滤，旧消息不再发给 TA。
   const [confirmRefresh, setConfirmRefresh] = useState(false)
   const [hint, setHint] = useState<string | null>(null)
 
   const doRefresh = () => {
-    setSessionStart(Date.now())
+    setSessionStart(Date.now(), sessionId || undefined)
     setConfirmRefresh(false)
     setHint('已刷新，TA 从新的一页开始')
     window.setTimeout(() => setHint(null), 2600)
