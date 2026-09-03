@@ -84,6 +84,7 @@ const msgs = buildLlmMessages({
   season: '夏',
   timeWord: '午后',
   weatherWord: '晴',
+  atDateStr: '8月26日',
   recent: ['今天吃了小鱼干', '窗台阳光很好'],
 })
 eq(msgs.length, 2, '两段消息：system + user')
@@ -95,11 +96,13 @@ ok(msgs[1].content.includes('阿明'), 'user 含用户昵称')
 ok(msgs[1].content.includes('夏'), 'user 含季节')
 ok(msgs[1].content.includes('午后'), 'user 含时段')
 ok(msgs[1].content.includes('晴'), 'user 含天气')
+ok(msgs[1].content.includes('8月26日'), 'user 含该条动态的日期（已按 at 对齐）')
 ok(msgs[1].content.includes('你是只猫，爱晒太阳'), 'user 含人设全文')
 ok(msgs[1].content.includes('今天吃了小鱼干'), 'user 含最近动态')
+ok(msgs[1].content.includes('不是你的全部生活'), '素材换血：明确 TA 不是用户的附属')
 ok(!msgs[0].content.includes('{') && !msgs[1].content.includes('{'), '提示词无残留占位符')
 
-console.log('\n[4b] buildLlmMessages 事件触发话题（TASK_UI_BATCH2）')
+console.log('\n[4b] buildLlmMessages 事件触发话题（素材换血后：话题=偶尔引子）')
 const msgsWithTopics = buildLlmMessages({
   taName: '小忆',
   yourName: '阿明',
@@ -107,14 +110,16 @@ const msgsWithTopics = buildLlmMessages({
   season: '夏',
   timeWord: '午后',
   weatherWord: '晴',
+  atDateStr: '8月26日',
   recent: [],
   chatTopics: ['火锅', '周末爬山'],
 })
 eq(msgsWithTopics.length, 2, '有话题时仍是两段消息')
 ok(msgsWithTopics[1].content.includes('火锅'), 'user 含话题 1')
 ok(msgsWithTopics[1].content.includes('周末爬山'), 'user 含话题 2')
-ok(msgsWithTopics[1].content.includes('今天'), 'user 注入「今天」锚点让 TA 判断当天相关性')
-ok(msgsWithTopics[1].content.includes('9月1号开学'), 'user 给出当天呼应的示例')
+ok(msgsWithTopics[1].content.includes('同一天说的'), 'user 说明「今天」=这条动态那天说的')
+ok(msgsWithTopics[1].content.includes('大多数动态写你自己的日子就好'), '素材换血：九成写自己的生活')
+ok(msgsWithTopics[1].content.includes('别整条都写对方'), '素材换血：禁止整条复读对方')
 
 console.log('\n[5] extractImageCaption 配图标记拆解（TASK_UI_BATCH2）')
 eq(extractImageCaption('今天路过花店，买了一把。\n[配图]一束粉色花束'), {

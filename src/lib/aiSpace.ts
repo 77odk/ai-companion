@@ -7,14 +7,13 @@
 
 import {
   advanceTimeline,
-  computeNewCount,
-  newPostTimestamps,
+  planBackfillTimestamps,
+  dayKeyOf,
   getSeason,
   getTimeWord,
   pickWeatherWord,
   generatePost,
   mergeNewPosts,
-  dayKeyOf,
   MAX_POSTS,
   MAX_POSTS_PER_DAY,
   pickReplyFallback,
@@ -183,9 +182,14 @@ export function refreshSpace(
   const vars = buildVars(taName, yourName, now)
   const persona = loadPersona()
   const settings = loadSettings()
-  // TASK_UI_BATCH2 限频：按「今天已有条数」截断（每天最多 2 条）
-  const count = computeNewCount(prev.lastVisit, now, prev.posts)
-  const timestamps = newPostTimestamps(count, now, prev.lastVisit == null)
+  // 事件日 = 有聊天话题的自然日（loadChatTopics 带 ts；兼容 ts=0 的旧数据归到今天）
+  const topics = loadChatTopics(sessionId)
+  const activeDays = new Set<string>()
+  for (const t of topics) {
+    const ts = t.ts && Number.isFinite(t.ts) && t.ts > 0 ? t.ts : now
+    activeDays.add(dayKeyOf(ts))
+  }
+  const timestamps = planBackfillTimestamps(prev.lastVisit, now, prev.posts, activeDays)
 
   // 没人设：不调 LLM。空间为空时用模板兜底生成 1 条保证空间不空，其余交给「先写人设」引导
   if (!persona.trim()) {
@@ -207,11 +211,11 @@ export function refreshSpace(
   if (canUseLlm(persona, settings)) {
     const state: SpaceState = { ...prev, lastVisit: now }
     saveState(state, sessionId)
-    return { posts: state.posts, mode: 'llm', created: count, pending: timestamps, used: state.used }
+    return { posts: state.posts, mode: 'llm', created: timestamps.length, pending: timestamps, used: state.used }
   }
 
   // 有人设但没 key：降级模板，同步生成（纯文字动态，不配图）
-  const { state, created } = advanceTimeline(prev, vars, now)
+  const { state, created } = advanceTimeline(prev, vars, now, activeDays)
   const posts = state.posts
   saveState({ ...state, posts }, sessionId)
   return { posts, mode: 'template', created, pending: [], used: state.used }
@@ -240,20 +244,6 @@ export async function generatePendingPosts(
   const recent = plan.posts.slice(0, 3).map((p) => p.text)
   // 事件触发：最近聊天话题（带日期）注入 LLM，让 TA 只在「当天相关」时呼应（2026-08-26 七七拍板）
   const rawTopics = loadChatTopics(sessionId)
-  // 转成「时间标签 + 内容」：今天聊的标「今天」，之前聊的标日期，方便 LLM 判断当天相关性
-  const dayLabel = (ts: number): string => {
-    if (!ts) return ''
-    const d = new Date(ts)
-    const t0 = new Date(now)
-    const sameDay = d.getFullYear() === t0.getFullYear() && d.getMonth() === t0.getMonth() && d.getDate() === t0.getDate()
-    if (sameDay) return '今天'
-    return `${d.getMonth() + 1}-${d.getDate()}`
-  }
-  const chatTopics = rawTopics.map((x) => {
-    const label = dayLabel(x.ts)
-    return label ? `${label} ${x.t}` : x.t
-  })
-  const todayStr = `${new Date(now).getMonth() + 1}月${new Date(now).getDate()}日`
   const used = { ...plan.used }
   const newPosts: SpacePost[] = []
   let usedFallback = false
@@ -271,16 +261,40 @@ export async function generatePendingPosts(
     let made: { post: SpacePost; templateKey?: string } | null = null
 
     if (canUseLlm(persona, settings)) {
+      // ★每条动态按它自己的时间戳(at)构建上下文——回填昨天就按昨天的日期/时段写，
+      //   话题标签也以 at 那天为基准（at 当天聊的标「今天」，其余标日期），凌晨回填不穿帮
+      const atBase = new Date(at)
+      const sameDay = (ts: number): boolean => {
+        if (!ts) return false
+        const d = new Date(ts)
+        return (
+          d.getFullYear() === atBase.getFullYear() &&
+          d.getMonth() === atBase.getMonth() &&
+          d.getDate() === atBase.getDate()
+        )
+      }
+      const chatTopics = rawTopics.map((x) => {
+        if (sameDay(x.ts)) return `今天 ${x.t}`
+        const d = new Date(x.ts)
+        if (Number.isFinite(x.ts) && x.ts > 0) return `${d.getMonth() + 1}-${d.getDate()} ${x.t}`
+        return x.t
+      })
+      const atDateStr = `${atBase.getMonth() + 1}月${atBase.getDate()}日`
+      const atVars: TemplateVar = {
+        ...vars,
+        season: getSeason(at),
+        timeWord: getTimeWord(at),
+      }
       const messages = buildLlmMessages({
         taName,
         yourName,
         persona,
-        season: vars.season,
-        timeWord: vars.timeWord,
-        weatherWord: vars.weatherWord,
+        season: atVars.season,
+        timeWord: atVars.timeWord,
+        weatherWord: atVars.weatherWord,
         recent,
         chatTopics,
-        todayStr,
+        atDateStr,
       })
       try {
         const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })
@@ -299,7 +313,9 @@ export async function generatePendingPosts(
     }
 
     if (!made) {
-      const g = generatePost(vars, used, at, rand)
+      // 模板降级也按 at 的时段/季节生成（回填昨天就用昨天的时段词，不穿帮）
+      const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(at), season: getSeason(at) }
+      const g = generatePost(dayVars, used, at, rand)
       used[g.templateKey] = now
       made = { post: g.post, templateKey: g.templateKey }
       usedFallback = true

@@ -26,12 +26,12 @@ export interface LlmContext {
   season: string
   timeWord: string
   weatherWord: string
-  /** TA 最近发过的动态原文，用于防止重复/雷同 */
-  recent: string[]
   /** 最近聊天里对方提到的事情/话题（带「今天/8-20」时间标签，事件触发：TA 挑当天相关的呼应） */
   chatTopics?: string[]
-  /** 今天日期字符串（如「8月26日」），供 TA 判断话题是否当天相关 */
-  todayStr: string
+  /** TA 最近发过的动态原文，用于防止重复/雷同 */
+  recent: string[]
+  /** 这条动态的日期字符串（如「8月26日」），已按该条 at 对齐（回填昨天就是昨天的日期） */
+  atDateStr: string
 }
 
 /** 是否满足 LLM 路径：人设 + 服务商配置齐全 */
@@ -47,32 +47,32 @@ export function canUseLlm(persona: string, settings: LlmSettings): boolean {
 /**
  * 组装 LLM 提示词。
  * system：TA 是人设里的角色，正在发一条自己的生活动态；纯文字，不配图（2026-09-03 七七拍板删色卡配图）；
- * user：人设全文 + TA/用户昵称 + 季节时段天气 + 最近聊天话题（事件触发）+ 最近 3 条动态。
+ * user：人设全文 + TA/用户昵称 + 「这条动态的时间」（已按 at 对齐）+ 最近聊天话题（偶尔引子）+ 最近 3 条动态。
+ * 素材换血（2026-09-04 七七拍板）：动态九成写 TA 自己的生活，从人设里长出来；
+ * 用户话题只是偶尔引子——3~4 条里最多 1 条提到对方，且只在真的一起经历了什么时。
  */
 export function buildLlmMessages(ctx: LlmContext): ApiMessage[] {
   const system =
-    `你是「${ctx.taName}」，一个认真生活的人，正在自己的日常里发一条今天的生活动态。` +
+    `你是「${ctx.taName}」，一个认真生活的人。你在自己的日子里随手发一条动态，分享你此刻的生活。` +
     `要求 1-2 句话，口语化碎碎念，有温度，贴合自己的性格。` +
     `句式要多样，别老用同一种开头——禁止用「刚把」「刚刚」「今天又」「突然」这类万能开头，` +
     `像真人随手写的一样，每条动态开口都不一样（这回想天气，下回想件小事，再下回想人）。` +
     `禁止 emoji；禁止自称 AI/助手/模型；禁止出现「设定」「人设」「朋友圈」这类词。` +
     `就像真人随手写的生活，别让人看出是编排好的。`
 
-  let user = `现在是${ctx.season}天${ctx.timeWord}，天气${ctx.weatherWord}。今天是${ctx.todayStr}。`
-  user += `你有一个在意的人，叫「${ctx.yourName}」，动态里可以自然地提到${ctx.yourName}。\n\n`
-  user += `你的性格：\n${ctx.persona.trim()}\n`
+  let user = `这是你「${ctx.atDateStr}${ctx.timeWord}」发的一条动态（${ctx.season}天，天气${ctx.weatherWord}）。写你那一刻的生活。`
+  user += `\n\n你的生活与性格：\n${ctx.persona.trim()}\n`
+  user += `\n写你自己的日子：你在做什么、看到什么、想到什么、心情如何——从你的生活和性格里长出来。`
+  user += `\n你有一个在意的人叫「${ctx.yourName}」，但 TA 不是你的全部生活：这条动态先写你自己。`
   if (ctx.chatTopics && ctx.chatTopics.length > 0) {
-    user += `\n你记得对方跟你提过这些事（前面带「今天」的是今天说的，带日期的是那天说的）：\n${ctx.chatTopics.map((t) => `- ${t}`).join('\n')}\n`
-    user += `\n挑跟今天有关的写：比如对方说过「9月1号开学」，今天正好是9月1号，你就写今天送/看着对方去上学的动态；` +
-      `对方今天约了你做什么，你就写今天在做这件事的动态。` +
-      `禁止复述对方原话、禁止写跟对方一模一样的场景（对方说喝了绿豆汤，你别也写自己在喝绿豆汤）。` +
-      `今天没有特别的事，就写你自己的日常。`
+    user += `\n\n你记得对方跟你提过这些事（带「今天」的是这条动态同一天说的，带日期的是那天说的）：\n${ctx.chatTopics.map((t) => `- ${t}`).join('\n')}\n`
+    user += `\n大多数动态写你自己的日子就好。只有当你和对方真的共同经历了什么（比如约好这天去哪、这天一起做了什么、对方这天有大事你惦记着），才在这条里自然地提一句对方——别整条都写对方，更别复述对方原话。`
   }
   if (ctx.recent.length > 0) {
     user += `\n你最近发过的动态：\n${ctx.recent.map((r) => `- ${r}`).join('\n')}\n`
-    user += `\n别和上面重复，写点新鲜事。`
+    user += `\n别和上面重复，写点新鲜的。`
   }
-  user += `\n\n直接写这条新动态，只要正文。`
+  user += `\n\n直接写这条新动态，只要正文，别解释。`
 
   return [
     { role: 'system', content: system },

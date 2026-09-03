@@ -1,10 +1,14 @@
 // TA 的空间 · 动态生成引擎（纯逻辑核心）
 // 本文件零依赖、不碰 localStorage，方便被 Node 脚本直接跑单测。
-// 时间轴规则（TASK_UI_BATCH2 限频后）：
-//   首访（无 lastVisit）→ 预生成 3 条（今天 2 条 + 昨天 1 条，保证每天 ≤2 条）
-//   距上次 ≥ 2 小时 → 补 1 条（时间戳=现在往前几分钟）
-//   距上次 ≥ 24 小时 → 补 2 条
-//   每天最多 2 条（自然日）：computeNewCount 按「今天已有条数」截断，advanceTimeline 兜底跳过多产日子
+// 时间轴规则（2026-09-04 七七拍板·回填式时间轴）：
+//   角色像真人一样过日子：用户不来，TA 也在生活（每天可发自己的动态）。
+//   但"发圈频率"由自然日回填决定，不是用户打开就咔咔补：
+//   回填窗口 = 上次访问到今天之间的自然日（最多 MAX_BACKFILL_DAYS 天）
+//   事件日（那天聊过/约过事）→ 必补（大事趁热，不卡天数，最多补满当天 2 条）
+//   非事件日 → TA 也有自己的生活：按概率补 1 条生活动态（BACKFILL_LIFE_CHANCE，防抖后）
+//   首访（无 lastVisit）→ 预生成 3 条铺最近 3 天，空间不空
+//   每天最多 2 条（自然日）：planBackfillDays 按当天已有条数截断
+//   时间戳落在各自那天（不是 now 前几分钟）：文案时段由 at 决定，凌晨不穿帮
 //   总数上限 20 条，超出丢最旧
 // 模板去重：同一模板 30 天内不重复使用（按 kind 记录每个模板索引的最近使用时间）
 
@@ -116,12 +120,16 @@ export const TEMPLATES: Record<SpaceKind, string[]> = {
 }
 
 // 时间常量（毫秒）
-export const MIN_INTERVAL_MS = 2 * 60 * 60 * 1000 // 2 小时
+export const MIN_INTERVAL_MS = 2 * 60 * 60 * 1000 // 2 小时（距上次访问太近不补，防抖）
 export const DAY_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 小时
 export const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000 // 30 天
 export const MAX_POSTS = 20
 /** 每天最多发几条动态（TASK_UI_BATCH2 限频，对标朋友圈节奏） */
 export const MAX_POSTS_PER_DAY = 2
+/** 回填窗口最多看几个自然日（含今天，往前数）——用户离开太久，只回填最近这段，别一次性补一堆 */
+export const MAX_BACKFILL_DAYS = 3
+/** 非事件日（那天没聊过事）抽中「发一条自己生活动态」的概率——TA 有日子过，但不是天天发圈 */
+export const BACKFILL_LIFE_CHANCE = 0.45
 
 // 每类插画变体数量（SpaceArt 里要有对应变体）
 export const ART_VARIANTS: Record<SpaceKind, number> = {
@@ -159,13 +167,30 @@ export function getSeason(now: number): string {
   return '冬'
 }
 
-/** 按当前小时算时段：5-10 早上，11-14 午后，15-18 傍晚，其余夜里 */
+/** 按当前小时算时段（2026-09-04 七七拍板细分，配合回填式时间轴，凌晨不穿帮）：
+ *  0-4 凌晨 / 5-8 清晨 / 9-11 上午 / 12-13 中午 / 14-17 下午 / 18-22 晚上 / 23 深夜 */
 export function getTimeWord(now: number): string {
   const h = new Date(now).getHours()
-  if (h >= 5 && h < 11) return '早上'
-  if (h >= 11 && h < 15) return '午后'
-  if (h >= 15 && h < 19) return '傍晚'
-  return '夜里'
+  if (h >= 0 && h < 5) return '凌晨'
+  if (h >= 5 && h < 9) return '清晨'
+  if (h >= 9 && h < 12) return '上午'
+  if (h >= 12 && h < 14) return '中午'
+  if (h >= 14 && h < 18) return '下午'
+  if (h >= 18 && h < 23) return '晚上'
+  return '深夜'
+}
+
+/** 取「某自然日里发动态的合理时刻」：按 rand 挑一个 7:00-23:00 之间的时刻。
+ *  回填过去某天时，动态时间戳应落在那个自然日的白天/晚上，而不是被 now 拖到凌晨。
+ *  @param dayStart 该自然日 00:00 的时间戳
+ *  @returns 该日内随机时刻（7 点后，最多到 23 点，绝不超过 dayStart+24h） */
+export function pickDayPostHour(dayStart: number, rand: () => number = Math.random): number {
+  const dayEnd = dayStart + DAY_INTERVAL_MS
+  // 7:00 - 23:59 之间取一个毫秒点（真人发圈集中在白天和晚上）
+  const startMs = dayStart + 7 * 60 * 60 * 1000
+  const spanMs = 17 * 60 * 60 * 1000 - 1 // 7:00 → 23:59:59
+  const at = startMs + Math.floor(rand() * spanMs)
+  return Math.min(at, dayEnd - 1000)
 }
 
 /** 从天气词库里随机取一个：晴 / 雨 / 阴 / 多云 */
@@ -238,44 +263,109 @@ export function generatePost(
   return { post: { id, at: now, kind, text, art }, templateKey: `${kind}:${templateIndex}` }
 }
 
-/**
- * 判定这次访问要补几条（TASK_UI_BATCH2 限频）：
- *   首访 → 3 条（今天最多 2 + 昨天 1，时间戳由 newPostTimestamps 分散开）；
- *   ≥24h → 最多 2 条，再被「今天已有条数」截断（每天最多 2 条）；
- *   ≥2h  → 最多 1 条，同样截断；
- *   否则 0 条。
- * 传入已有 posts 才能算「今天已发几条」；不传按 0 计（老调用兼容）。
- */
-export function computeNewCount(lastVisit: number | null, now: number, posts: SpacePost[] = []): number {
-  const today = countPostsOnDay(posts, dayKeyOf(now))
-  const remaining = Math.max(0, MAX_POSTS_PER_DAY - today)
-  if (lastVisit == null) {
-    // 首访：昨天 1 条 + 今天最多 2 条 = 1 + remaining
-    return 1 + remaining
-  }
-  const elapsed = now - lastVisit
-  if (elapsed >= DAY_INTERVAL_MS) return Math.min(2, remaining)
-  if (elapsed >= MIN_INTERVAL_MS) return Math.min(1, remaining)
-  return 0
+/** 某自然日的 00:00 时间戳（本地时区） */
+export function dayStartOf(ts: number): number {
+  const d = new Date(ts)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
 }
 
 /**
- * 新动态的时间戳（从旧到新）。
- * 首访：昨天 1 条 + 今天 (count-1) 条（最多 2），保证每天 ≤2 条；
- * 补新的：一律往前推几分钟（落地在今天，配合限频截断）。
+ * 回填式时间轴计划（2026-09-04 七七拍板，取代 TASK_UI_BATCH2 的「隔 2h/24h 补 1~2 条」）：
+ *  角色像真人一样过日子——不是每次打开都咔咔补，而是把「TA 该发动态的日子」按自然日回填：
+ *  - 防抖：距上次访问 < MIN_INTERVAL_MS(2h) → 不补（避免反复开关疯狂生成）
+ *  - 首访（lastVisit==null）：铺最近 MAX_BACKFILL_DAYS 个自然日，每天 1 条（空间不空、有生活感）
+ *  - 窗口：lastVisit 之后到今天之间的自然日，最多回看 MAX_BACKFILL_DAYS 天
+ *  - 事件日（那天聊过事/约过事，activeDays 命中）→ 必补到当天 ≤2 条（大事趁热，不卡天数）
+ *  - 非事件日 → 按 BACKFILL_LIFE_CHANCE 概率补 1 条 TA 自己的生活动态（有日子过，但不是天天发圈）
+ *  - 凌晨(0-4 点)访问：把「今天」让给昨天——深夜 TA 在睡觉，不刚发圈
+ *  - 时间戳落在各自自然日 7:00-23:59（回填过去就标过去，文案按 at 算时段，凌晨不穿帮）
+ * @returns 升序时间戳数组（从旧到新），调用方逐条生成动态
  */
-export function newPostTimestamps(count: number, now: number, firstVisit: boolean): number[] {
-  if (firstVisit) {
-    // 最新在前：今天 40 分钟前 / 3 小时前 + 昨天 1 条，每天 ≤2 条
-    const list: number[] = []
-    if (count >= 2) list.push(now - 40 * 60 * 1000)
-    if (count >= 3) list.push(now - 3 * 60 * 60 * 1000)
-    if (count >= 1) list.push(now - 27 * 60 * 60 * 1000)
-    return list
+export function planBackfillTimestamps(
+  lastVisit: number | null,
+  now: number,
+  posts: SpacePost[],
+  activeDays: ReadonlySet<string>,
+  rand: () => number = Math.random,
+): number[] {
+  const h = new Date(now).getHours()
+  // 凌晨 0-4 点访问：今天的「白天发圈时刻」还没到来，把锚点日让给昨天
+  const anchorDay = h < 5 ? dayStartOf(now - DAY_INTERVAL_MS) : dayStartOf(now)
+  const out: number[] = []
+
+  // 首访：铺最近 MAX_BACKFILL_DAYS 个自然日，每天最多 1 条（旧→新）
+  if (lastVisit == null) {
+    for (let i = MAX_BACKFILL_DAYS - 1; i >= 0; i--) {
+      const day = anchorDay - i * DAY_INTERVAL_MS
+      if (countPostsOnDay(posts, dayKeyOf(day)) >= MAX_POSTS_PER_DAY) continue
+      out.push(pickDayPostHour(day, rand))
+    }
+    return out.sort((a, b) => a - b)
   }
-  if (count >= 2) return [now - 3 * 60 * 1000, now - 45 * 60 * 1000]
-  if (count === 1) return [now - 3 * 60 * 1000]
-  return []
+
+  // 防抖：距上次访问不足 2 小时不补（防止用户反复开关空间疯狂生成）
+  if (now - lastVisit < MIN_INTERVAL_MS) return []
+
+  // 窗口内候选自然日：lastVisit 所在日之后（不含当天，那天已结算）→ anchorDay（含），最多 MAX_BACKFILL_DAYS 天
+  const lastDay = dayStartOf(lastVisit)
+  const todayStart = dayStartOf(now)
+  const days: number[] = []
+  for (let i = MAX_BACKFILL_DAYS - 1; i >= 0; i--) {
+    const day = anchorDay - i * DAY_INTERVAL_MS
+    if (day > lastDay) days.push(day)
+  }
+  days.sort((a, b) => a - b)
+
+  // 生成某天动态的时间戳：今天只在「今天已过去的时段」里挑（最晚 now-5 分钟，最早 7:00），
+  // 过去的日子（昨天/前天）用 7:00-23:59 全时段随机——绝不让时间戳落在未来，也绝不被拖到凌晨。
+  const pickTime = (day: number): number | null => {
+    if (day === todayStart) {
+      const lo = day + 7 * 60 * 60 * 1000 // 今天最早 7:00 发圈
+      if (now < lo) return null // 现在还没到 7 点：今天 TA 还没发圈，正常
+      const hi = now - 5 * 60 * 1000
+      if (hi <= lo) return lo + Math.floor(rand() * Math.max(0, hi - lo)) // 极端兜底
+      return lo + Math.floor(rand() * (hi - lo))
+    }
+    return pickDayPostHour(day, rand)
+  }
+
+  for (const day of days) {
+    const dk = dayKeyOf(day)
+    const existing = countPostsOnDay(posts, dk)
+    if (existing >= MAX_POSTS_PER_DAY) continue
+    const isEvent = activeDays.has(dk)
+    if (isEvent) {
+      // 事件日：必补，补到当天 ≤2 条（大事当天发，不拖不卡）
+      const slots = MAX_POSTS_PER_DAY - existing
+      const times: number[] = []
+      for (let s = 0; s < slots; s++) {
+        const t = pickTime(day)
+        if (t == null) continue
+        times.push(t)
+      }
+      // 同一天两条错开至少 3 小时：第二条在第一条 +3h 后重新取（不挤在一个点，也绝不超过 now）
+      times.sort((a, b) => a - b)
+      for (let s = 0; s < times.length; s++) {
+        if (s === 0) {
+          out.push(times[s])
+        } else {
+          const lo = times[s - 1] + 3 * 60 * 60 * 1000
+          const hi = Math.min(now - 5 * 60 * 1000, day + 23 * 60 * 60 * 1000 - 1)
+          if (hi <= lo) continue // 排不开第二条就不硬塞（每天 ≥1 条已达标）
+          const t = lo + Math.floor(rand() * Math.max(0, hi - lo))
+          out.push(Math.min(t, hi))
+        }
+      }
+    } else {
+      // 非事件日：TA 也有自己的生活——按概率发 1 条，不是天天刷屏
+      if (rand() < BACKFILL_LIFE_CHANCE) {
+        const t = pickTime(day)
+        if (t != null) out.push(t)
+      }
+    }
+  }
+  return out.sort((a, b) => a - b)
 }
 
 export interface SpaceState {
@@ -294,25 +384,25 @@ export function mergeNewPosts(existing: SpacePost[], incoming: SpacePost[]): Spa
   return [...existing, ...incoming].sort((a, b) => b.at - a.at).slice(0, MAX_POSTS)
 }
 
-/** 时间轴推进（纯函数）：按规则补新动态，更新 lastVisit，去重记录，裁到上限 */
+/** 时间轴推进（纯函数）：按回填计划补新动态，更新 lastVisit，去重记录，裁到上限 */
 export function advanceTimeline(
   prev: SpaceState,
   vars: TemplateVar,
   now: number,
+  activeDays: ReadonlySet<string> = new Set(),
   rand: () => number = Math.random,
 ): AdvanceResult {
-  const firstVisit = prev.lastVisit == null
-  const count = computeNewCount(prev.lastVisit, now, prev.posts)
-  const timestamps = newPostTimestamps(count, now, firstVisit)
+  const timestamps = planBackfillTimestamps(prev.lastVisit, now, prev.posts, activeDays, rand)
   const posts = [...prev.posts]
   const used = { ...prev.used }
   let created = 0
-  // timestamps 是时间从旧到新，倒序 unshift 让数组保持最新在前
-  for (let i = timestamps.length - 1; i >= 0; i--) {
-    const ts = timestamps[i]
-    // 每天 ≤2 条兜底：目标日已满 2 条就跳过这条（首访/边缘情况保护）
+  // timestamps 是升序（旧→新）；正序 unshift 让最新进数组头部，列表保持「最新在前」
+  for (const ts of timestamps) {
+    // 每天 ≤2 条兜底：目标日已满 2 条就跳过这条（窗口/边缘情况保护）
     if (countPostsOnDay(posts, dayKeyOf(ts)) >= MAX_POSTS_PER_DAY) continue
-    const g = generatePost(vars, used, ts, rand)
+    // 每条动态按自己的时间戳算时段/季节（回填昨天就用昨天的时段，凌晨不穿帮）
+    const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(ts), season: getSeason(ts) }
+    const g = generatePost(dayVars, used, ts, rand)
     used[g.templateKey] = now
     posts.unshift(g.post)
     created++
