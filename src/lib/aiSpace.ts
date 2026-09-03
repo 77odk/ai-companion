@@ -17,8 +17,6 @@ import {
   dayKeyOf,
   MAX_POSTS,
   MAX_POSTS_PER_DAY,
-  pickHasImage,
-  imageCaptionForPost,
   pickReplyFallback,
   KIND_KEYS,
   type SpacePost,
@@ -36,7 +34,6 @@ import {
   buildReplyMessages,
   extractImageCaption,
 } from './aiSpaceLlm.ts'
-import { createPostImageDataUrl } from './aiSpaceImage.ts'
 import { loadChatTopics } from './chatTopics.ts'
 import { chatCompletion } from './api.ts'
 import { notifyDataChanged } from './dataChange.ts'
@@ -97,7 +94,6 @@ function isSpacePost(p: unknown): p is SpacePost {
     (KIND_KEYS as string[]).includes(o.kind) &&
     typeof o.text === 'string' &&
     typeof o.art === 'number' &&
-    (o.img == null || typeof o.img === 'string') &&
     (o.liked == null || typeof o.liked === 'boolean') &&
     (o.comments == null || (Array.isArray(o.comments) && o.comments.every(isSpaceComment)))
   )
@@ -176,14 +172,6 @@ function buildVars(taName: string, yourName: string, now: number): TemplateVar {
   }
 }
 
-/** 给一条动态按 ~1/3 概率配图（浏览器画 dataURL；没 canvas 环境原样返回） */
-function maybeAttachImage(post: SpacePost, rand: () => number = Math.random): SpacePost {
-  if (post.img) return post
-  if (!pickHasImage(rand)) return post
-  const img = createPostImageDataUrl(post.kind, imageCaptionForPost(post, rand))
-  return img ? { ...post, img } : post
-}
-
 /** 每次进入 / 手动刷新 TA 的空间时调用：推进时间轴、返回最新列表与生成计划（会话感知，按角色隔离） */
 export function refreshSpace(
   taName: string,
@@ -207,7 +195,7 @@ export function refreshSpace(
     if (prev.posts.length === 0) {
       const g = generatePost(vars, used, now - 3 * 60 * 1000)
       used[g.templateKey] = now
-      posts.unshift(maybeAttachImage(g.post))
+      posts.unshift(g.post)
       created = 1
     }
     const state: SpaceState = { posts: posts.slice(0, MAX_POSTS), lastVisit: now, used }
@@ -222,9 +210,9 @@ export function refreshSpace(
     return { posts: state.posts, mode: 'llm', created: count, pending: timestamps, used: state.used }
   }
 
-  // 有人设但没 key：降级模板，同步生成；新生成的动态按概率配图
+  // 有人设但没 key：降级模板，同步生成（纯文字动态，不配图）
   const { state, created } = advanceTimeline(prev, vars, now)
-  const posts = state.posts.map((p, i) => (i < created ? maybeAttachImage(p) : p))
+  const posts = state.posts
   saveState({ ...state, posts }, sessionId)
   return { posts, mode: 'template', created, pending: [], used: state.used }
 }
@@ -298,17 +286,10 @@ export async function generatePendingPosts(
         const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })
         const cleaned = cleanLlmText(raw)
         if (cleaned) {
-          // 拆配图标记：模型说配图就按描述画，没说走 ~1/3 兜底
-          const { text, caption } = extractImageCaption(cleaned)
+          // 纯文字动态（2026-09-03 七七拍板删色卡配图）：模型如残留 [配图] 标记只剥掉，不再生成图片
+          const { text } = extractImageCaption(cleaned)
           if (text) {
             const post = buildLlmPost(text, at, guessKind(text), rand)
-            if (caption) {
-              const img = createPostImageDataUrl(post.kind, caption)
-              if (img) post.img = img
-            } else if (pickHasImage(rand)) {
-              const img = createPostImageDataUrl(post.kind, imageCaptionForPost(post, rand))
-              if (img) post.img = img
-            }
             made = { post }
           }
         }
@@ -320,7 +301,7 @@ export async function generatePendingPosts(
     if (!made) {
       const g = generatePost(vars, used, at, rand)
       used[g.templateKey] = now
-      made = { post: maybeAttachImage(g.post, rand), templateKey: g.templateKey }
+      made = { post: g.post, templateKey: g.templateKey }
       usedFallback = true
     }
 

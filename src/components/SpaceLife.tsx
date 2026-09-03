@@ -1,6 +1,6 @@
 // TA 的生活子页（P3 从 AISpace 抽出，资料卡里复用）：
-// TASK_UI_BATCH2 改版：对标微信朋友圈——TA 头像 + 名字 + 时间 + 文字/配图 + [点赞][评论] 操作行。
-// 纯文字动态不套大文本框，就文字本身；配图是 canvas 生成的 dataURL（src/lib/aiSpaceImage.ts）。
+// TASK_UI_BATCH2 改版：对标微信朋友圈——TA 头像 + 名字 + 时间 + 文字 + [点赞][评论] 操作行。
+// 纯文字动态不套大文本框，就文字本身。
 // 点赞/评论随 posts 一起存 localStorage，云端同步沿用 collectAllSpacePosts。
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -282,7 +282,6 @@ export default function SpaceLife({ aiNickname, yourName, sessionId, hasPersona,
 
               <div className="space-life-content">
                 <p className="space-life-text">{p.text}</p>
-                {p.img && <img className="space-life-img" src={p.img} alt="" loading="lazy" />}
               </div>
 
               <div className="space-life-actions">

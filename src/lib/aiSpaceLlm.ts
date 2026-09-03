@@ -46,7 +46,7 @@ export function canUseLlm(persona: string, settings: LlmSettings): boolean {
 
 /**
  * 组装 LLM 提示词。
- * system：TA 是人设里的角色，正在发一条自己的生活动态；约 1/3 可配图（[配图] 标记）；
+ * system：TA 是人设里的角色，正在发一条自己的生活动态；纯文字，不配图（2026-09-03 七七拍板删色卡配图）；
  * user：人设全文 + TA/用户昵称 + 季节时段天气 + 最近聊天话题（事件触发）+ 最近 3 条动态。
  */
 export function buildLlmMessages(ctx: LlmContext): ApiMessage[] {
@@ -55,7 +55,6 @@ export function buildLlmMessages(ctx: LlmContext): ApiMessage[] {
     `要求 1-2 句话，口语化碎碎念，有温度，贴合自己的性格。` +
     `句式要多样，别老用同一种开头——禁止用「刚把」「刚刚」「今天又」「突然」这类万能开头，` +
     `像真人随手写的一样，每条动态开口都不一样（这回想天气，下回想件小事，再下回想人）。` +
-    `如果这条动态想配一张小图（大约三分之一的情况），在正文后另起一行写「[配图]一句话描述配图内容」，不想配图就只写正文。` +
     `禁止 emoji；禁止自称 AI/助手/模型；禁止出现「设定」「人设」「朋友圈」这类词。` +
     `就像真人随手写的生活，别让人看出是编排好的。`
 

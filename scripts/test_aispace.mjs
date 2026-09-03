@@ -16,8 +16,6 @@ import {
   buildPostText,
   advanceTimeline,
   dayKeyOf,
-  pickHasImage,
-  imageCaptionForPost,
   pickReplyFallback,
   REPLY_FALLBACKS,
   MAX_POSTS,
@@ -276,18 +274,9 @@ ok(MIN_INTERVAL_MS === 2 * HOUR, '2 小时常量正确')
 ok(DAY_INTERVAL_MS === 24 * HOUR, '24 小时常量正确')
 ok(MAX_POSTS === 20, '上限为 20')
 
-console.log('\n[12] TASK_UI_BATCH2 配图决策 + 降级回复')
+console.log('\n[12] 降级回复话术 + 常量')
 eq(dayKeyOf(new Date(2026, 7, 22, 23, 59).getTime()), '2026-08-22', 'dayKeyOf 本地日期')
 eq(dayKeyOf(new Date(2026, 0, 5, 0, 0).getTime()), '2026-01-05', 'dayKeyOf 补零')
-
-// pickHasImage 频率约 1/3
-let imgTrue = 0
-const s = seeded(7)
-for (let i = 0; i < 300; i++) if (pickHasImage(s)) imgTrue++
-ok(imgTrue >= 70 && imgTrue <= 130, `pickHasImage 频率约 1/3（得 ${imgTrue}/300）`)
-
-const cap = imageCaptionForPost({ id: 'x', at: now, kind: '日常', text: '今天路过花店', art: 0 }, seeded(1))
-ok(typeof cap === 'string' && cap.length > 0, 'imageCaptionForPost 返回非空文案')
 
 ok(REPLY_FALLBACKS.length >= 3, '降级回复至少 3 条')
 const fb = pickReplyFallback(seeded(2))

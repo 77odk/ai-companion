@@ -36,11 +36,9 @@ export interface SpacePost {
   at: number
   kind: SpaceKind
   text: string
-  /** 插画变体索引（生成时定好，保证每条动态配图固定） */
+  /** 插画变体索引（生成时定好） */
   art: number
-  /** 配图 dataURL（可选；纯文字动态不带） */
-  img?: string
-  /** 是否点过赞（可选，未点赞不存或 false） */
+  /** 点赞（可选） */
   liked?: boolean
   /** 评论列表（可选；无评论不存） */
   comments?: SpaceComment[]
@@ -320,32 +318,6 @@ export function advanceTimeline(
     created++
   }
   return { state: { posts: posts.slice(0, MAX_POSTS), lastVisit: now, used }, created }
-}
-
-/* ---- TASK_UI_BATCH2 配图决策（纯逻辑；真正画 dataURL 在 aiSpaceImage.ts，浏览器才有） ---- */
-
-/** 是否给这条动态配图：约 1/3 概率 */
-export function pickHasImage(rand: () => number = Math.random): boolean {
-  return rand() < 1 / 3
-}
-
-/** 每种 kind 一张配图的候选文案（模板/兜底路径用；LLM 走 [配图] 标记自带描述） */
-export const KIND_IMAGE_CAPTIONS: Record<SpaceKind, string[]> = {
-  日常: ['今天的小日常', '窗边的时光', '慢一点也很好'],
-  心情: ['今日心情', '发了一会儿呆', '情绪的小角落'],
-  钻研: ['认真捣鼓', '一点点靠近答案', '今天也在研究'],
-  天气: ['今天的天气', '窗外', '风的样子'],
-  想你: ['在想你', '今天的想念', '把话留到见面'],
-  小确幸: ['小确幸', '开心的事', '生活的亮晶晶'],
-}
-
-/** 给一条动态挑配图文案：优先从正文里抠一句短的，否则按 kind 随机取 */
-export function imageCaptionForPost(
-  post: SpacePost,
-  rand: () => number = Math.random,
-): string {
-  const list = KIND_IMAGE_CAPTIONS[post.kind] ?? KIND_IMAGE_CAPTIONS.日常
-  return list[Math.floor(rand() * list.length) % list.length]
 }
 
 /* ---- TASK_UI_BATCH2 评论回复降级话术（无 key / LLM 失败时用，贴合动态的通用回应） ---- */
