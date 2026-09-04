@@ -33,8 +33,10 @@ import {
 } from '../lib/sessionStore'
 import { containsBusyKeyword, findBusyCutoff, inferBusyReason, pickBusyReply, randomBusyDurationMs, serializeBusyContext, type BusyState } from '../lib/aiBusy'
 import { loadCurrentPosts } from '../lib/aiSpace'
-import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE } from '../lib/spaceChatInject'
+import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELINE_EN } from '../lib/spaceChatInject'
 import { buildSelfTimelineBlock } from '../lib/selfTimeline'
+import { detectLang, type Lang } from '../lib/langDetect'
+import { getSessionLang, saveSessionLang } from '../lib/sessionStore'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
@@ -43,16 +45,20 @@ import { getWeeklyReviews } from '../lib/weeklyReview'
 import { recordChatTopic } from '../lib/chatTopics'
 import { estimateToken, truncateByToken } from '../lib/token'
 import MilestoneCard from './MilestoneCard'
+
 /** 总输入 token 预算：系统提示词+记忆注入+历史消息合计不超过此值 */
 const TOTAL_INPUT_BUDGET = 64000
+
 interface Props {
   onGoSettings: () => void
   onGoGuide: () => void
   /** 点 TA 的头像 → 打开聊天头像资料卡 */
   onOpenProfile: () => void
 }
+
 export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) {
   const activeSessionId = getActiveSessionId()
+
   const [messages, setMessages] = useState<StoredMessage[]>(() =>
     activeSessionId ? getMessagesCache(activeSessionId) : loadMessages(),
   )
@@ -67,11 +73,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   const persona = activeSession?.persona ?? loadPersona()
   const [milestone, setMilestone] = useState<{ day: number; hit: boolean; shown: boolean } | null>(null)
   const [showMilestone, setShowMilestone] = useState(false)
+
   const sessionStart = useMemo(() => getSessionStart(activeSessionId || undefined), [activeSessionId])
   const visibleMessages = useMemo(
     () => filterSessionMessages(messages, sessionStart),
     [messages, sessionStart],
   )
+
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const controllerRef = useRef<AbortController | null>(null)
@@ -89,12 +97,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   const finalizeRef = useRef<() => void>(() => {})
   const retriedRef = useRef(false)
   const assistantText = useRef('')
+  // 第27条：模型独立思考字段 reasoning_content 累积（DeepSeek/Qwen/Kimi/豆包等），finalize 时合并到 thinking
+  const reasoningRef = useRef('')
   // 忙碌状态相关 ref
   const busyTimerRef = useRef<number | null>(null)
   const busyTriggeredRef = useRef(false)
   const busyRepliedRef = useRef(false)
   const enterBusyRef = useRef<(text: string) => void>(() => {})
   const sendBusyReturnRef = useRef<(runId: number, sid: string, state: BusyState) => Promise<void>>(async () => {})
+
   const persistMessages = useCallback((msgs: StoredMessage[]) => {
     const sid = getActiveSessionId()
     if (sid) {
@@ -104,6 +115,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       saveMessages(msgs)
     }
   }, [])
+
   const uploadMessage = useCallback((msg: StoredMessage): Promise<void> => {
     const sid = getActiveSessionId()
     const token = getToken()
@@ -123,6 +135,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       }
     })
   }, [])
+
   // ---- 忙碌状态：进入忙碌 ----
   const enterBusy = (triggerText: string) => {
     const sid = getActiveSessionId()
@@ -150,6 +163,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     }, duration)
   }
   enterBusyRef.current = enterBusy
+
   // ---- 忙碌状态：忙完回来自动发消息 ----
   const sendBusyReturn = async (triggerRunId: number, sid: string, state: BusyState) => {
     // runId + sessionId 双重校验：切角色/发新消息后旧定时器作废
@@ -169,6 +183,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     }
     const settings = loadSettings()
     if (!settings.apiKey || !settings.baseUrl || !settings.model) return
+    // TASK-ENGLISH-MODE：从 sessionStore 读会话语言
+    const busyLang: Lang = sid ? getSessionLang(sid) : 'zh'
     const nameForPrompt = (() => {
       if (!sid) return loadAIProfile().nickname
       const cached = getSessionsCache().find((s) => String(s.id) === sid)
@@ -176,7 +192,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       if (!t || t === '新会话' || t === '我们的开始') return loadAIProfile(sid).nickname
       return t
     })()
-    const systemPrompt = buildSystemPrompt(persona, nameForPrompt, undefined, sid || undefined)
+    const systemPrompt = buildSystemPrompt(persona, nameForPrompt, undefined, sid || undefined, busyLang)
     // 生成"忙完回来"前重新读缓存：busy 期间用户可能又发了消息（handleBusySend 只落库没进 busyContext），
     // 不带上的话 TA 回来会接不上用户最新的内容（2026-09-04 乔部署审查抓到）。
     // 取最近 3 条（含 busy 期间用户新发的），有新的用新的，没有退回进 busy 时存的 context。
@@ -192,7 +208,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     } catch {
       // 读缓存失败就用进 busy 时的快照
     }
-    const busyPrompt = buildBusyReturnPrompt(state.busyReason, latestContext)
+    const busyPrompt = buildBusyReturnPrompt(state.busyReason, latestContext, busyLang)
     try {
       const content = await chatCompletion(
         settings,
@@ -220,6 +236,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     }
   }
   sendBusyReturnRef.current = sendBusyReturn
+
   // ---- 忙碌状态：忙碌中用户发消息，只回一句"在忙" ----
   const handleBusySend = (text: string) => {
     const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
@@ -233,16 +250,19 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       setBusyReplyText(pickBusyReply())
     }
   }
+
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [visibleMessages, busyReplyText])
+
   useEffect(() => {
     const el = inputRef.current
     if (!el) return
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
   }, [input])
+
   useEffect(() => {
     runIdRef.current += 1
     controllerRef.current?.abort()
@@ -285,6 +305,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       setIsBusy(false)
     }
   }, [activeSessionId])
+
   useEffect(() => {
     if (!activeSessionId) return
     const token = getToken()
@@ -294,7 +315,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       if (cancelled || !res.ok) return
       setActiveSession(res.data.session)
       const cloud: StoredMessage[] = res.data.messages
-        .map((m) => ({ role: m.role, content: m.content, ts: Date.parse(m.createdAt) }))
+        .map((m) => ({ role: m.role, content: m.content, ts: Date.parse(m.createdAt), thinking: m.thinking }))
         .filter((m) => Number.isFinite(m.ts))
       const merged = mergeSessionMessages(getMessagesCache(activeSessionId), cloud)
       saveMessagesCache(activeSessionId, merged)
@@ -320,6 +341,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       cancelled = true
     }
   }, [activeSessionId])
+
   useEffect(() => {
     if (!activeSessionId) return
     const token = getToken()
@@ -331,6 +353,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     window.addEventListener('online', onOnline)
     return () => window.removeEventListener('online', onOnline)
   }, [activeSessionId])
+
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -352,6 +375,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       }
     }
   }, [])
+
   useEffect(() => {
     playTimerRef.current = window.setInterval(() => tickPlayRef.current(), 70)
     return () => {
@@ -361,6 +385,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       }
     }
   }, [])
+
   useEffect(() => {
     if (activeSessionId) return
     const existing = loadMessages()
@@ -372,6 +397,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     saveMessages(next)
     setMessages(next)
   }, [activeSessionId])
+
   useEffect(() => {
     const st = getMilestoneStatus(Date.now(), getActiveSessionId() || undefined)
     if (st.hit && !st.shown) {
@@ -379,22 +405,39 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       setShowMilestone(true)
     }
   }, [])
+
   const send = useCallback((raw: string) => {
     const text = raw.trim()
     if (!text || streaming) return
+
     // 忙碌中：不调 API，只回一句"在忙"
     if (isBusy) {
       handleBusySend(text)
       return
     }
+
     const runId = ++runIdRef.current
     retriedRef.current = false
     busyTriggeredRef.current = false
+
+    // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看最近5条用户消息多数语言），存 sessionStore
+    const personaText = persona?.trim() || ''
+    let lang: Lang
+    if (personaText) {
+      lang = detectLang(personaText)
+    } else {
+      const recentUserMsgs = visibleMessages.filter((m) => m.role === 'user').slice(-5).map((m) => m.content)
+      const zhCount = recentUserMsgs.filter((m) => detectLang(m) === 'zh').length
+      lang = zhCount > recentUserMsgs.length / 2 ? 'zh' : 'en'
+    }
+    if (activeSessionId) saveSessionLang(activeSessionId, lang)
+
     const settings = loadSettings()
     if (!settings.apiKey || !settings.baseUrl || !settings.model) {
       setError('还没接上 TA，去「我的」页填一下 API Key 就能聊了')
       return
     }
+
     const writeMemory = (content: string, opts: { source?: string; topic?: string; explicit?: boolean } = {}) => {
       const trimmed = content.trim()
       if (!trimmed) return
@@ -413,6 +456,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       }
       notifyMemoryUpdated()
     }
+
     const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
     recordChatTopic(text, getActiveSessionId() || undefined)
     const memInstr = detectMemoryInstruction(text)
@@ -446,14 +490,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     const base = [...visibleMessages, userMsg]
     const assistantTs = Date.now()
     assistantText.current = ''
+    reasoningRef.current = ''
     setMessages([...messages, userMsg, { role: 'assistant', content: '', ts: assistantTs }])
     setInput('')
     setError(null)
     setStreaming(true)
+
     if (activeSessionId) {
       persistMessages([...messages, userMsg])
       uploadMessage(userMsg)
     }
+
     const nameForPrompt = (() => {
       if (!activeSessionId) return loadAIProfile().nickname
       const cached = getSessionsCache().find((s) => String(s.id) === activeSessionId)
@@ -461,17 +508,20 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       if (!t || t === '新会话' || t === '我们的开始') return loadAIProfile(activeSessionId).nickname
       return t
     })()
-    const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined) }]
+    const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined, lang) }]
+
     const contextText = base
       .slice(-6)
       .map((m) => (m.role === 'assistant' ? stripThinkBlocks(stripMemoryMarkers(m.content)) : m.content))
       .join('\n')
     const memory = recallSessionMemories(activeSessionId, contextText)
     if (memory.length > 0) {
+      const memoryHeader = lang === 'en'
+        ? 'Facts about them you already remember:\n'
+        : '关于对方你已经记住的事实：\n'
       apiMessages.push({
         role: 'system',
-        content:
-          '关于对方你已经记住的事实：\n' + memory.map((m) => `- ${toPromptPerspective(m.text)}`).join('\n'),
+        content: memoryHeader + memory.map((m) => `- ${toPromptPerspective(m.text)}`).join('\n'),
       })
       const now = Date.now()
       for (const m of memory) {
@@ -481,7 +531,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       }
     }
     // 自我时间线：TA 刚说过的话，让它记得自己做过什么，不依附忙碌机制（TASK-SELF-TIMELINE）
-    const timelineBlock = buildSelfTimelineBlock(base)
+    const timelineBlock = buildSelfTimelineBlock(base, Date.now(), lang)
     if (timelineBlock) {
       apiMessages.push({ role: 'system', content: timelineBlock })
     }
@@ -490,33 +540,57 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       const w = weeklyList[0]
       // TASK-JOURNAL-INJECT：不只带标题，带最近一篇正文前 200 字摘要，被问"周记写的啥"有内容可答
       const excerpt = (w.content ?? '').trim().slice(0, 200)
-      const excerptLine = excerpt ? `\n周记内容摘录：${excerpt}` : ''
-      apiMessages.push({
-        role: 'system',
-        content: `你最近写给对方的周记是「${w.title}」（${w.weekLabel}）。${excerptLine}\n对方要是提起周记，就照这篇的语气和内容回应。`,
-      })
+      if (lang === 'en') {
+        const excerptLine = excerpt ? `\nJournal excerpt: ${excerpt}` : ''
+        apiMessages.push({
+          role: 'system',
+          content: `Your most recent journal entry to them is "${w.title}" (${w.weekLabel}).${excerptLine}\nIf they bring up the journal, respond in the tone and content of this entry.`,
+        })
+      } else {
+        const excerptLine = excerpt ? `\n周记内容摘录：${excerpt}` : ''
+        apiMessages.push({
+          role: 'system',
+          content: `你最近写给对方的周记是「${w.title}」（${w.weekLabel}）。${excerptLine}\n对方要是提起周记，就照这篇的语气和内容回应。`,
+        })
+      }
     }
     // TA 最近发过的动态注入：让 TA 知道自己的空间历史，被问"你发过…"时有真凭据（TASK-SPACE-CHAT）
-    const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined))
+    const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 5, lang)
     if (spaceBlock) {
       apiMessages.push({ role: 'system', content: spaceBlock })
     }
     // 生活基线：人设没写生活信息时补中性事实锚，让 TA 说"在洗碗/翻书"有根（TASK-SPACE-CHAT）
     if (!personaHasLifeAnchors(persona)) {
-      apiMessages.push({ role: 'system', content: LIFE_BASELINE })
+      apiMessages.push({ role: 'system', content: lang === 'en' ? LIFE_BASELINE_EN : LIFE_BASELINE })
     }
     if (memInstr.isInstruction) {
-      apiMessages.push({
-        role: 'system',
-        content: `用户刚要求你记住：${memInstr.fact ?? text}。请在回复末尾单独一行输出【记忆·主题】标记（主题词概括类别），内容写这条事实，并在回复里简短确认已经记下。`,
-      })
+      if (lang === 'en') {
+        apiMessages.push({
+          role: 'system',
+          content: `They just asked you to remember: ${memInstr.fact ?? text}. At the end of your reply, output a separate line with [Memory: Topic] marker (topic word summarizes the category), write this fact as the content, and briefly confirm in your reply that you've noted it.`,
+        })
+      } else {
+        apiMessages.push({
+          role: 'system',
+          content: `用户刚要求你记住：${memInstr.fact ?? text}。请在回复末尾单独一行输出【记忆·主题】标记（主题词概括类别），内容写这条事实，并在回复里简短确认已经记下。`,
+        })
+      }
     } else if (isRetort) {
-      apiMessages.push({
-        role: 'system',
-        content:
-          '用户刚才在提醒你记下之前提到的信息。从最近的对话里提取值得长期记住的事实（作息、喜好、身体情况、重要经历等），在回复末尾单独一行输出【记忆·主题】标记，并确认已经记下。',
-      })
+      if (lang === 'en') {
+        apiMessages.push({
+          role: 'system',
+          content:
+            'They just reminded you to note down something mentioned earlier. Extract facts worth long-term remembering from the recent conversation (schedule, preferences, health conditions, important experiences, etc.), output a separate [Memory: Topic] line at the end of your reply, and confirm you\'ve noted it.',
+        })
+      } else {
+        apiMessages.push({
+          role: 'system',
+          content:
+            '用户刚才在提醒你记下之前提到的信息。从最近的对话里提取值得长期记住的事实（作息、喜好、身体情况、重要经历等），在回复末尾单独一行输出【记忆·主题】标记，并确认已经记下。',
+        })
+      }
     }
+
     // 按总 token 预算动态截断：系统消息占多少，剩下的全给历史消息
     const systemTokens = apiMessages.reduce((sum, m) => sum + estimateToken(m.content), 0)
     const historyBudget = Math.max(0, TOTAL_INPUT_BUDGET - systemTokens)
@@ -528,6 +602,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       historyBudget,
     )
     apiMessages.push(...history)
+
     const commitFinal = (final: StoredMessage[]) => {
       persistMessages(final)
       // 模块二：组件卸载后跳过 UI 更新，落库/云同步继续执行
@@ -544,6 +619,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       if (mountedRef.current) setStreaming(false)
       controllerRef.current = null
     }
+
     const finalize = () => {
       // 防重入守卫：onDone 直接 finalize + playTick finishStreaming 可能二次调用
       if (finishedRef.current) return
@@ -573,7 +649,18 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         }
       }
       // 模块三·内心戏：提取思考链原文（存到 thinking 字段），正文剥离思考链
-      const thinking = extractThinkBlocks(raw)
+      // 第27条：合并两个来源——①正文里 `` 泄漏的思考 ②模型独立字段 reasoning_content
+      const thinkFromContent = extractThinkBlocks(raw)
+      const thinkFromReasoning = reasoningRef.current?.trim() || ''
+      let thinking = ''
+      if (thinkFromContent && thinkFromReasoning) {
+        // 两个来源都有：合并去重（reasoning 在前，因为是标准字段；内容相同不重复）
+        thinking = thinkFromReasoning.includes(thinkFromContent.slice(0, 50))
+          ? thinkFromReasoning
+          : `${thinkFromReasoning}\n---\n${thinkFromContent}`
+      } else {
+        thinking = thinkFromReasoning || thinkFromContent
+      }
       const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw))))
       if (cleaned && (looksRobotic(cleaned) || looksFabricated(cleaned)) && !retriedRef.current) {
         retriedRef.current = true
@@ -614,6 +701,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       commitFinal(final)
     }
     finalizeRef.current = finalize
+
     const playTick = () => {
       if (runId !== runIdRef.current) return
       if (finishedRef.current) return
@@ -647,6 +735,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       }
     }
     tickPlayRef.current = playTick
+
     const startStream = () => {
       if (runId !== runIdRef.current) return
       streamEndedRef.current = false
@@ -673,8 +762,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
             enterBusyRef.current(assistantText.current)
           }
         },
-        onDone: () => {
+        onDone: (reasoning) => {
           if (runId !== runIdRef.current) return
+          // 第27条：收集模型独立思考字段 reasoning_content，finalize 时合并到 thinking
+          if (reasoning) reasoningRef.current = reasoning
           streamEndedRef.current = true
           // 模块二：组件挂载时走原流程（playTick 播完打字机节奏再 finishStreaming→finalize），
           // 只有卸载时才直接 finalize（保证落库不丢，不打断打字机）
@@ -697,11 +788,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     const thinkMs = computeThinkDelayMs(text.length)
     thinkTimerRef.current = window.setTimeout(startStream, thinkMs)
   }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, isBusy, persistMessages, uploadMessage])
+
   useEffect(() => {
     const injected = takeChatMessage()
     if (injected) send(injected)
   }, [send])
+
   const handleSend = () => send(input)
+
   const handleStop = () => {
     runIdRef.current += 1
     if (thinkTimerRef.current !== null) {
@@ -715,12 +809,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     retriedRef.current = true
     finalizeRef.current()
   }
+
   const closeMilestone = () => {
     if (milestone) markMilestoneShown(milestone.day)
     setShowMilestone(false)
   }
+
   const isEmpty = visibleMessages.length === 0
   const chatBg = useMemo(() => loadChatBg(activeSessionId ?? undefined), [activeSessionId])
+
   return (
     <div className="chat-page" style={chatBg ? { backgroundImage: `url(${chatBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' } : undefined}>
       <div className="message-list" ref={scrollRef}>
@@ -760,6 +857,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
           </>
         )}
       </div>
+
       {error && (
         <div className="chat-error-wrap">
           <div className="chat-error">{error}</div>
@@ -784,6 +882,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
           )}
         </div>
       )}
+
       <div className="composer">
         <textarea
           ref={inputRef}
@@ -809,13 +908,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
           </button>
         )}
       </div>
+
       {showMilestone && milestone && <MilestoneCard day={milestone.day} onClose={closeMilestone} />}
     </div>
   )
 }
+
 function isRateLimitError(message: string): boolean {
   return message.includes('429') || message.includes('太频繁') || message.includes('访问量过大')
 }
+
 function RateLimitFallback({
   hasDoubao,
   onSwitch,

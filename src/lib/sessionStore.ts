@@ -215,6 +215,35 @@ export function clearBusyState(sessionId: string): void {
   }
 }
 
+// ---- 会话语言（TASK-ENGLISH-MODE） ----
+// 按会话隔离存储 lang（zh/en），每次 send 时算一次存下来。
+// MessageBubble 读会话 lang 显示内心戏标签，Chat 读 lang 切换提示词语言。
+import type { Lang } from './langDetect.ts'
+
+const LANG_KEY_PREFIX = 'ai_companion_lang_'
+const langKey = (sessionId: string) => `${LANG_KEY_PREFIX}${sessionId}`
+
+/** 某会话的语言（无会话或没存过返回 'zh'，默认中文） */
+export function getSessionLang(sessionId?: string): Lang {
+  if (!sessionId) return 'zh'
+  try {
+    const raw = localStorage.getItem(langKey(sessionId))
+    return raw === 'en' ? 'en' : 'zh'
+  } catch {
+    return 'zh'
+  }
+}
+
+/** 写入某会话的语言 */
+export function saveSessionLang(sessionId: string | undefined, lang: Lang): void {
+  if (!sessionId) return
+  try {
+    localStorage.setItem(langKey(sessionId), lang)
+  } catch {
+    // 存不下不影响功能
+  }
+}
+
 // ---- 未读红点（S1，为「TA 主动发消息」预留） ----
 // lastRead 存 localStorage（ai_companion_read_<sid>，时间戳）。未读数 = 会话里 ts 晚于 lastRead 的消息条数。
 // 进入会话（切换/打开）时 markRead → 红点消失；当前会话里自己发完消息也在会话内 = 已读（persistMessages 时 markRead）。

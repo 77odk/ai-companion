@@ -251,48 +251,57 @@ export interface ExtractedMemory {
   text: string
 }
 
-/** 从一条回复里提取记忆（每个「【记忆】xxx」或「【记忆·主题】xxx」一行算一条） */
+/** 从一条回复里提取记忆（中文「【记忆·主题】xxx」或英文「[Memory: Topic] xxx」一行算一条） */
 export function extractMemories(text: string): ExtractedMemory[] {
   const out: ExtractedMemory[] = []
   for (const line of text.split('\n')) {
-    const m = /^\s*【记忆(?:[·・]\s*([^】]+))?】\s*(.+?)\s*$/.exec(line)
-    if (m && m[2]) out.push({ ...(m[1]?.trim() ? { topic: m[1].trim() } : {}), text: m[2].trim() })
+    // 中文格式：【记忆·主题】内容 或 【记忆】内容
+    const mZh = /^\s*【记忆(?:[·・]\s*([^】]+))?】\s*(.+?)\s*$/.exec(line)
+    if (mZh && mZh[2]) {
+      out.push({ ...(mZh[1]?.trim() ? { topic: mZh[1].trim() } : {}), text: mZh[2].trim() })
+      continue
+    }
+    // 英文格式：[Memory: Topic] content 或 [Memory] content
+    const mEn = /^\s*\[Memory(?::\s*([^\]]+))?\]\s*(.+?)\s*$/i.exec(line)
+    if (mEn && mEn[2]) {
+      out.push({ ...(mEn[1]?.trim() ? { topic: mEn[1].trim() } : {}), text: mEn[2].trim() })
+    }
   }
   return out
 }
 
-/** 去掉回复里的记忆标记行（仅展示用；存储里保留原文） */
+/** 去掉回复里的记忆标记行（中文「【记忆】」和英文「[Memory:]」都剥，仅展示用；存储里保留原文） */
 export function stripMemoryMarkers(text: string): string {
   return text
     .split('\n')
-    .filter((line) => !/^\s*【记忆/.test(line))
+    .filter((line) => !/^\s*【记忆/.test(line) && !/^\s*\[Memory/i.test(line))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
 
 /**
- * 剥离思考链（<think> 包裹的推理内容）。
+ * 剥离思考链（`` 包裹的推理内容）。
  * 模块三·内心戏：模型思考链泄漏到正文时，在展示和上下文注入两处剥离。
  * 存储不动，只在读取时剥离。
  *
  * 处理：
- * 1. <think> ... <think> 包裹的块（有明确结尾标记）
- * 2. <think> 无闭合时删到第一个中文字符前（真实泄漏形态：<think>+英文推理无闭合+中文正文，保护后面的中文正文不被吞）
- * 3. <think> 后面没有中文字符（整条都是思考链）→ 删到结尾
- * 4. 整条消息就是 <think> 标记 → 返回空串
+ * 1. `` ... `` 包裹的块（有明确结尾标记）
+ * 2. `` 无闭合时删到第一个中文字符前（真实泄漏形态：``+英文推理无闭合+中文正文，保护后面的中文正文不被吞）
+ * 3. `` 后面没有中文字符（整条都是思考链）→ 删到结尾
+ * 4. 整条消息就是 `` 标记 → 返回空串
  */
 export function stripThinkBlocks(text: string): string {
   const t = String(text ?? '')
   if (!t) return ''
-  // 整条消息就是 <think> 标记
+  // 整条消息就是 `` 标记
   if (/^\s*<think>\s*$/.test(t)) return ''
   let result = t
-  // 1. <think> ... <think> 明确包裹的块
+  // 1. `` ... `` 明确包裹的块
   result = result.replace(/<think>[\s\S]*?<\/think>/g, '')
-  // 2. <think> 无闭合：删到第一个中文字符前（保护后面的中文正文）
+  // 2. `` 无闭合：删到第一个中文字符前（保护后面的中文正文）
   result = result.replace(/<think>[\s\S]*?(?=[\u4e00-\u9fff])/g, '')
-  // 3. <think> 后面没有中文字符（整条都是思考链）→ 删到结尾
+  // 3. `` 后面没有中文字符（整条都是思考链）→ 删到结尾
   result = result.replace(/<think>[\s\S]*$/g, '')
   // 清理多余空行
   result = result.replace(/\n{3,}/g, '\n\n').trim()
@@ -302,7 +311,7 @@ export function stripThinkBlocks(text: string): string {
 /**
  * 检测消息是否是纯思考链（整条消息都是思考链内容，没有正文）。
  * 用于展示层过滤：纯思考链消息不渲染气泡。
- * 纯思考链判定：content 以 <think> 开头，或匹配英文推理开头模式（Initiating/Interpreting/Addressing/Analyzing）。
+ * 纯思考链判定：content 以 `` 开头，或匹配英文推理开头模式（Initiating/Interpreting/Addressing/Analyzing）。
  */
 export function isPureThinkBlock(text: string): boolean {
   const t = String(text ?? '').trim()
@@ -314,9 +323,9 @@ export function isPureThinkBlock(text: string): boolean {
 }
 
 /**
- * 提取思考链原文（<think> 包裹的内容）。
+ * 提取思考链原文（`` 包裹的内容）。
  * 用于 finalize 时把思考链存到消息的 thinking 附加字段。
- * 返回思考链原文（不包含 <think> 标记），没有则返回空串。
+ * 返回思考链原文（不包含 `` 标记），没有则返回空串。
  */
 export function extractThinkBlocks(text: string): string {
   const t = String(text ?? '')
@@ -333,6 +342,7 @@ export function extractThinkBlocks(text: string): string {
 
 /** 显式指令关键词：命中任一即视为用户要求记住（导出供 Chat 与测试使用） */
 export const MEMORY_INSTRUCTION_KEYWORDS = [
+  // 中文
   '帮我记一下',
   '帮我记',
   '记一下',
@@ -342,6 +352,13 @@ export const MEMORY_INSTRUCTION_KEYWORDS = [
   '你要记住',
   '你记着',
   '你记住',
+  // 英文
+  'remember this',
+  'note this',
+  'keep this in mind',
+  "don't forget",
+  'memorize this',
+  'write this down',
 ]
 
 /** 反问/催促类：用户没直说"帮我记"但明显在要求记（关键词只是反问题里的片段，事实在上文） */
@@ -384,8 +401,10 @@ export function detectMemoryInstruction(text: string): { isInstruction: boolean;
   const t = String(text ?? '').trim()
   if (!t) return { isInstruction: false, fact: null }
   if (isMemoryRetort(t)) return { isInstruction: false, fact: null }
+  const tLower = t.toLowerCase()
   for (const kw of MEMORY_KEYWORDS_SORTED) {
-    const idx = t.indexOf(kw)
+    // 英文关键词转小写匹配（用户可能输入 Remember This），中文关键词原样匹配
+    const idx = /[a-zA-Z]/.test(kw) ? tLower.indexOf(kw.toLowerCase()) : t.indexOf(kw)
     if (idx < 0) continue
     const fact = (t.slice(0, idx) + t.slice(idx + kw.length)).trim()
     return { isInstruction: true, fact: fact.length >= 4 ? fact : null }
