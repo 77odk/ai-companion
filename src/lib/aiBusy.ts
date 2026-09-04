@@ -92,12 +92,14 @@ export function randomBusyDurationMs(rand: () => number = Math.random): number {
 /**
  * 从忙碌原因关键词推断 reason 文案。
  * 纯函数，可单测。
+ * 注意：关键词表里有"洗个澡/洗个碗"这类带"个"的变体，正则必须覆盖，
+ * 否则触发了忙碌却归因为"忙"，忙完回来话术对不上（2026-09-04 单测抓到）。
  */
 export function inferBusyReason(text: string): string {
   const t = String(text ?? '')
-  if (/洗碗/.test(t)) return '洗碗'
+  if (/洗碗|洗个碗/.test(t)) return '洗碗'
   if (/做饭|煮面|煮个/.test(t)) return '做饭'
-  if (/洗澡|冲澡/.test(t)) return '洗澡'
+  if (/洗澡|冲澡|洗个澡/.test(t)) return '洗澡'
   if (/厕所/.test(t)) return '上厕所'
   if (/出去|出门/.test(t)) return '出门'
   return '忙'

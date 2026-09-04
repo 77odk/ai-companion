@@ -183,7 +183,22 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       return t
     })()
     const systemPrompt = buildSystemPrompt(persona, nameForPrompt, undefined, sid || undefined)
-    const busyPrompt = buildBusyReturnPrompt(state.busyReason, state.busyContext)
+    // 生成"忙完回来"前重新读缓存：busy 期间用户可能又发了消息（handleBusySend 只落库没进 busyContext），
+    // 不带上的话 TA 回来会接不上用户最新的内容（2026-09-04 乔部署审查抓到）。
+    // 取最近 3 条（含 busy 期间用户新发的），有新的用新的，没有退回进 busy 时存的 context。
+    let latestContext = state.busyContext
+    try {
+      const cache = sid ? getMessagesCache(sid) : loadMessages()
+      const tail = cache.slice(-3).map((m) => ({
+        role: m.role,
+        content: stripMemoryMarkers(m.content),
+      }))
+      const fresh = serializeBusyContext(tail)
+      if (fresh) latestContext = fresh
+    } catch {
+      // 读缓存失败就用进 busy 时的快照
+    }
+    const busyPrompt = buildBusyReturnPrompt(state.busyReason, latestContext)
     try {
       const content = await chatCompletion(
         settings,
