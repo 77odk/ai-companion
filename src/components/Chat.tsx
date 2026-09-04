@@ -506,9 +506,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     }
     const weeklyList = getWeeklyReviews(activeSessionId || undefined)
     if (weeklyList.length > 0) {
+      const w = weeklyList[0]
+      // TASK-JOURNAL-INJECT：不只带标题，带最近一篇正文前 200 字摘要，被问"周记写的啥"有内容可答
+      const excerpt = (w.content ?? '').trim().slice(0, 200)
+      const excerptLine = excerpt ? `\n周记内容摘录：${excerpt}` : ''
       apiMessages.push({
         role: 'system',
-        content: `你最近写给对方的周记是「${weeklyList[0].title}」（${weeklyList[0].weekLabel}）。对方要是提起周记，就照这篇的语气和内容回应。`,
+        content: `你最近写给对方的周记是「${w.title}」（${w.weekLabel}）。${excerptLine}\n对方要是提起周记，就照这篇的语气和内容回应。`,
       })
     }
     // TA 最近发过的动态注入：让 TA 知道自己的空间历史，被问"你发过…"时有真凭据（TASK-SPACE-CHAT）
