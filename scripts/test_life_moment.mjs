@@ -1,9 +1,9 @@
-// 聊天提示词 · 生活素材钩子 + 分寸规则自测（2026-09-04 七七拍板：TA 要有自己的生活、会主动分享）
+// 聊天提示词 · 精简版提示词自测（2026-09-04 豆包版：10层压6层，CHAT_RULES 4句人话）
 // 直接导入纯逻辑 TS（Node 22+ 原生类型剥离），不依赖任何构建工具。
 // 跑法：node scripts/test_life_moment.mjs
-// 覆盖：buildLifeMoment 时段锚点 / 有人设分支注入【你的此刻】/ FLOW_RULE 分享升级（不再是"冷场才能说"）
+// 覆盖：CHAT_RULES 4 句人话语义 / 有人设分支精简注入 / 无人设分支兜底 / 记忆规则仍在
 
-import { buildLifeMoment, buildSystemPrompt } from '../src/lib/api.ts'
+import { buildSystemPrompt } from '../src/lib/api.ts'
 
 let passed = 0
 let failed = 0
@@ -18,42 +18,36 @@ function ok(cond, name) {
   }
 }
 
-function eq(actual, expected, name) {
-  const a = JSON.stringify(actual)
-  const b = JSON.stringify(expected)
-  ok(a === b, `${name}（得 ${a}，期望 ${b}）`)
-}
-
-console.log('\n[1] buildLifeMoment 时段锚点（白天有日子过，深夜有没睡的理由）')
-const morning = buildLifeMoment(new Date(2026, 8, 4, 8, 30).getTime())
-ok(morning.includes('【你的此刻】'), '含【你的此刻】标题')
-ok(morning.includes('一天刚开始') || morning.includes('白天是你的时间'), '早晨给「一天刚开始/白天忙」锚点')
-ok(morning.includes('8点30'), '含具体时刻 8点30')
-const day = buildLifeMoment(new Date(2026, 8, 4, 14, 5).getTime())
-ok(day.includes('白天是你的时间'), '下午给「白天是你的时间」锚点')
-const night = buildLifeMoment(new Date(2026, 8, 4, 21, 0).getTime())
-ok(night.includes('一天快收尾了'), '晚上给「收尾」锚点')
-const late = buildLifeMoment(new Date(2026, 8, 4, 1, 30).getTime())
-ok(late.includes('夜深了') && late.includes('没睡的理由'), '深夜给「没睡的理由」锚点')
-const late2 = buildLifeMoment(new Date(2026, 8, 4, 23, 45).getTime())
-ok(late2.includes('夜深了'), '23:45 也算深夜')
-ok(morning.includes('有依据才说'), '红线：共同经历必须有依据才说')
-ok(!morning.includes('{'), '无残留占位符')
-
-console.log('\n[2] 有人设分支注入【你的此刻】+ 分享分寸（FLOW_RULE v2）')
+console.log('\n[1] 有人设分支：精简注入（人设 + 名字 + CHAT_RULES，无堆砌）')
 const withPersona = buildSystemPrompt('你是温柔男友，爱做饭，最近在学一道新菜', '小忆', new Date(2026, 8, 4, 20, 0).getTime())
-ok(withPersona.includes('【你的此刻】'), '有人设时注入【你的此刻】')
-ok(withPersona.includes('你也有自己的日子要过'), 'FLOW_RULE v2：分享是日常权利（不再是冷场才说）')
-ok(withPersona.includes('对方说加班累，你也能说你刚忙完'), '分寸示例：有来有往的分享')
-ok(withPersona.includes('盘问不像真人'), '仍禁止盘问')
-ok(withPersona.includes('对方在倾诉'), '对方倾诉时你的故事让路')
-ok(withPersona.includes('更不是冷场了才能说'), '明确否定「冷场才能分享」（分享=日常权利）')
-ok(withPersona.includes('学一道新菜'), '人设原文保留')
+ok(withPersona.includes('爱做饭，最近在学一道新菜'), '人设原文保留')
+ok(withPersona.includes('你的名字叫「小忆」'), '名字注入保留')
+ok(withPersona.includes('【聊天规矩】'), '含精简后的聊天规矩')
+ok(withPersona.includes('你是活人不是AI'), '规矩1：不承认AI')
+ok(withPersona.includes('不知道的事就说不知道'), '规矩1：不编不圆')
+ok(withPersona.includes('像真人微信聊天'), '规矩2：像真人说话')
+ok(withPersona.includes('你有自己的日子在过'), '规矩3：有自己的生活')
+ok(withPersona.includes('带具体细节'), '规矩3：分享带画面')
+ok(withPersona.includes('对方冷淡回嗯哦…，就递个有画面的事续话'), '规矩4：冷淡时递钩子')
+ok(withPersona.includes('【记忆规则】') || withPersona.includes('记忆规则：'), '记忆规则仍在')
+// 精简验证：不该有的堆砌都不在
+ok(!withPersona.includes('【你的此刻】'), '无【你的此刻】段')
+ok(!withPersona.includes('【按设定说话】'), '无【按设定说话】段')
+ok(!withPersona.includes('【底线·永远遵守】'), '无旧【底线】段')
+ok(!withPersona.includes('【分寸·像真人一样说话】'), '无旧【分寸】段')
+ok(!withPersona.includes('【示范·照这个感觉说话】'), '无示范对话')
+ok(!withPersona.includes('不承认、不解释、不科普'), '无旧啰嗦措辞')
 
-console.log('\n[3] 无人设分支不注入【你的此刻】')
+console.log('\n[2] 无人设分支：兜底身份 + CHAT_RULES')
 const noPersona = buildSystemPrompt('', '小忆', new Date(2026, 8, 4, 20, 0).getTime())
-ok(!noPersona.includes('【你的此刻】'), '无人设时没有生活锚（无从长起，不硬编）')
-ok(noPersona.includes('分寸·像真人一样说话'), '无人设仍带分寸框架（FLOW_RULE 两分支都注入）')
+ok(noPersona.includes('你是对方的人'), '无人设兜底身份在')
+ok(noPersona.includes('【聊天规矩】'), '无人设也带聊天规矩')
+ok(noPersona.includes('对方怎么叫你，你就是谁'), '兜底身份原文')
+
+console.log('\n[3] 认识天数 + 纪念日 + 时间仍在（Node 无 localStorage 时认识天数段为空属正常，函数不崩即可）')
+ok(typeof buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()) === 'string', 'buildSystemPrompt 正常返回字符串')
+ok(buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).includes('此刻时间'), '时间上下文仍在')
+ok(buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).length < 1100, `提示词总长 <1100（得 ${buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).length}）`)
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)
