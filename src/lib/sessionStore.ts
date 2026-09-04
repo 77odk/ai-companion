@@ -7,6 +7,7 @@ import { notifyDataChanged } from './dataChange.ts'
 import { postMessage, postMemory, type Session } from './sessionApi.ts'
 import type { StoredMessage } from './storage.ts'
 import { isSimilarMemory, loadMemory, newMemoryItemId, recallRelevantMemories, type MemoryItem, type RecallOptions } from './memory.ts'
+import type { BusyState } from './aiBusy.ts'
 
 const ACTIVE_SESSION_KEY = 'ai_companion_active_session_id'
 const SESSIONS_CACHE_KEY = 'ai_companion_sessions_cache'
@@ -163,6 +164,52 @@ export function saveMemoriesCache(sessionId: string, items: MemoryItem[]): void 
 export function clearMemoriesCache(sessionId: string): void {
   try {
     localStorage.removeItem(memsKey(sessionId))
+  } catch {
+    // ignore
+  }
+}
+
+// ---- AI 忙碌状态（TASK-BUSY，按会话隔离） ----
+// TA 说"去洗碗了"进入忙碌，4-5分钟后自动回来。状态存 localStorage，
+// 用户关了页面下次打开发现 busyUntil 已过且没发过回来消息 → 补发（防重复）。
+
+const BUSY_KEY_PREFIX = 'ai_companion_busy_'
+const busyKey = (sessionId: string) => `${BUSY_KEY_PREFIX}${sessionId}`
+
+/** idle 状态常量（避免每次新建对象） */
+const IDLE_BUSY: BusyState = { status: 'idle', busyUntil: 0, busyReason: '', busyContext: '', returnSent: false }
+
+/** 某会话的忙碌状态（无会话或没存过返回 idle） */
+export function getBusyState(sessionId: string): BusyState {
+  try {
+    const raw = localStorage.getItem(busyKey(sessionId))
+    if (!raw) return { ...IDLE_BUSY }
+    const obj = JSON.parse(raw)
+    return {
+      status: obj.status === 'busy' ? 'busy' : 'idle',
+      busyUntil: typeof obj.busyUntil === 'number' ? obj.busyUntil : 0,
+      busyReason: typeof obj.busyReason === 'string' ? obj.busyReason : '',
+      busyContext: typeof obj.busyContext === 'string' ? obj.busyContext : '',
+      returnSent: obj.returnSent === true,
+    }
+  } catch {
+    return { ...IDLE_BUSY }
+  }
+}
+
+/** 写入某会话的忙碌状态 */
+export function saveBusyState(sessionId: string, state: BusyState): void {
+  try {
+    localStorage.setItem(busyKey(sessionId), JSON.stringify(state))
+  } catch {
+    // 存不下不影响功能
+  }
+}
+
+/** 清除某会话的忙碌状态（回到 idle） */
+export function clearBusyState(sessionId: string): void {
+  try {
+    localStorage.removeItem(busyKey(sessionId))
   } catch {
     // ignore
   }
