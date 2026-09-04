@@ -278,8 +278,9 @@ export function stripMemoryMarkers(text: string): string {
  *
  * 处理：
  * 1. `` ... `` 包裹的块（有明确结尾标记）
- * 2. 以 `` 开头到行尾/消息结尾的内容（无明确结尾标记时，到第一个双换行或结尾）
- * 3. 整条消息就是 `` 标记 → 返回空串（展示层过滤空消息）
+ * 2. `` 无闭合时删到第一个中文字符前（真实泄漏形态：``+英文推理无闭合+中文正文，保护后面的中文正文不被吞）
+ * 3. `` 后面没有中文字符（整条都是思考链）→ 删到结尾
+ * 4. 整条消息就是 `` 标记 → 返回空串
  */
 export function stripThinkBlocks(text: string): string {
   const t = String(text ?? '')
@@ -289,7 +290,9 @@ export function stripThinkBlocks(text: string): string {
   let result = t
   // 1. `` ... `` 明确包裹的块
   result = result.replace(/``[\s\S]*?``/g, '')
-  // 2. `` 开头到结尾（无明确结束标记）
+  // 2. `` 无闭合：删到第一个中文字符前（保护后面的中文正文）
+  result = result.replace(/``[\s\S]*?(?=[\u4e00-\u9fff])/g, '')
+  // 3. `` 后面没有中文字符（整条都是思考链）→ 删到结尾
   result = result.replace(/``[\s\S]*$/g, '')
   // 清理多余空行
   result = result.replace(/\n{3,}/g, '\n\n').trim()
