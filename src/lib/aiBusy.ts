@@ -2,15 +2,18 @@
 // TA 说"去洗碗了""去忙了"这类话时，真的进入忙碌状态，4-5分钟后再回来。
 // 纯逻辑抽成可单测的导出函数；localStorage 读写委托给 sessionStore。
 
-/** 忙碌关键词：TA 回复里出现这些词就触发忙碌状态 */
-const BUSY_KEYWORDS = [
-  '去洗碗', '洗碗了', '洗个碗',
-  '去做饭', '做饭了', '煮个面', '去煮面',
-  '去洗澡', '洗澡了', '洗个澡', '冲个澡',
-  '我先忙', '先忙一下', '稍等我', '等我一下', '我去忙',
-  '去趟厕所', '去个厕所', '上个厕所',
-  '出去一下', '我出去', '出门一下',
-  '去拿个', '去取个', '去倒个',
+/** 忙碌触发规则：TA 回复里命中这些正则就触发忙碌状态。
+ * 2026-09-04 实测修复：原来精确词表（去洗碗/洗碗了/洗个碗）太死，
+ * 模型自然表达"我去把碗洗了""碗洗完了跟你说一声"全部漏网。
+ * 改为覆盖"去/把/碗洗完了"等常见变体的正则族。 */
+const BUSY_PATTERNS: { re: RegExp; reason: string }[] = [
+  { re: /去洗碗|洗碗了|洗个碗|把碗洗|碗洗(?:完|好)/, reason: '洗碗' },
+  { re: /去做饭|做饭了|煮个面|去煮面|把饭做|饭做(?:完|好)/, reason: '做饭' },
+  { re: /去洗澡|洗澡了|洗个澡|冲个澡|把澡洗|澡洗(?:完|好)/, reason: '洗澡' },
+  { re: /厕所/, reason: '上厕所' },
+  { re: /出去|出门/, reason: '出门' },
+  { re: /去拿|去取|去倒/, reason: '拿东西' },
+  { re: /我先忙|先忙一下|稍等我|等我一下|我去忙|忙完找你/, reason: '忙' },
 ]
 
 /** 忙碌中自动回复文案（用户发消息时回一句短的，不展开） */
@@ -48,7 +51,7 @@ export const IDLE_STATE: BusyState = {
  */
 export function containsBusyKeyword(text: string): boolean {
   const t = String(text ?? '')
-  return BUSY_KEYWORDS.some((kw) => t.includes(kw))
+  return BUSY_PATTERNS.some((p) => p.re.test(t))
 }
 
 /**
@@ -60,11 +63,11 @@ export function containsBusyKeyword(text: string): boolean {
  */
 export function findBusyCutoff(text: string): number {
   const t = String(text ?? '')
-  // 找最早出现的关键词位置
+  // 找最早命中的规则位置
   let earliest = -1
-  for (const kw of BUSY_KEYWORDS) {
-    const idx = t.indexOf(kw)
-    if (idx >= 0 && (earliest < 0 || idx < earliest)) earliest = idx
+  for (const p of BUSY_PATTERNS) {
+    const m = p.re.exec(t)
+    if (m && (earliest < 0 || m.index < earliest)) earliest = m.index
   }
   if (earliest < 0) return -1
   // 从关键词往后找第一个句子结束符
@@ -97,11 +100,9 @@ export function randomBusyDurationMs(rand: () => number = Math.random): number {
  */
 export function inferBusyReason(text: string): string {
   const t = String(text ?? '')
-  if (/洗碗|洗个碗/.test(t)) return '洗碗'
-  if (/做饭|煮面|煮个/.test(t)) return '做饭'
-  if (/洗澡|冲澡|洗个澡/.test(t)) return '洗澡'
-  if (/厕所/.test(t)) return '上厕所'
-  if (/出去|出门/.test(t)) return '出门'
+  for (const p of BUSY_PATTERNS) {
+    if (p.re.test(t)) return p.reason
+  }
   return '忙'
 }
 
