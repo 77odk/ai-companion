@@ -2,26 +2,45 @@
 // 让 TA 聊天时知道自己发过什么（被问"是你发动态那家店吗"有真凭据），
 // 并补一个中性的"生活基线"事实锚（人设没写生活信息时，TA 说"在洗碗/翻书"才有根）。
 // 纯逻辑零依赖（只 import 类型），方便被 Node 脚本直接跑单测。
-
 import type { SpacePost } from './aiSpaceCore.ts'
-
+/** 单条动态的评论互动摘要：让 TA 知道"对方留言了、自己回没回"（TASK-SPACE-CHAT #4） */
+function formatComments(post: SpacePost): string {
+  const cs = Array.isArray(post.comments) ? post.comments : []
+  if (cs.length === 0) return ''
+  const parts: string[] = []
+  // 对方（用户）的留言 + TA 对应的回复（replyTo 指向那条用户评论）
+  for (const uc of cs) {
+    if (uc.from !== 'user') continue
+    const reply = cs.find((c) => c.from === 'ta' && c.replyTo === uc.id)
+    parts.push(reply ? `对方留言「${uc.text}」，你回了「${reply.text}」` : `对方留言「${uc.text}」，你还没回`)
+  }
+  // TA 主动发的不归属任何留言的回复（理论上少见，也带上）
+  for (const tc of cs) {
+    if (tc.from === 'ta' && !tc.replyTo) parts.push(`你在这条下补了一句「${tc.text}」`)
+  }
+  return parts.length > 0 ? `\n    互动：${parts.join('；')}` : ''
+}
 /**
- * 把最近动态格式化成聊天注入块：只取 text，逐条成行（列表已最新在前）。
+ * 把最近动态（含评论互动）格式化成聊天注入块：只取 text + 评论，逐条成行（列表已最新在前）。
  * 返回空串 = 没动态可注入，调用方据此跳过，不占上下文。
  */
 export function buildSpacePostsBlock(posts: SpacePost[], limit = 5): string {
   const list = (Array.isArray(posts) ? posts : []).slice(0, limit)
   const lines = list
-    .map((p) => (p && typeof p.text === 'string' ? p.text.trim() : ''))
+    .map((p) => {
+      if (!p || typeof p.text !== 'string') return ''
+      const t = p.text.trim()
+      if (!t) return ''
+      return '- ' + t + formatComments(p)
+    })
     .filter(Boolean)
   if (lines.length === 0) return ''
   return (
     '你最近发过的动态：\n' +
-    lines.map((t) => `- ${t}`).join('\n') +
+    lines.join('\n') +
     '\n这是你自己发过的生活记录，对方提起时照实接，别当成现在正在发生的事。'
   )
 }
-
 /**
  * 人设里是否已带生活锚点（职业/身份/工作/住处/日常习惯等）。
  * 命中 = 人设已经给了 TA 一个生活落点 → 不再补基线，避免注入与人设冲突的内容
@@ -35,7 +54,6 @@ export function personaHasLifeAnchors(persona: string): boolean {
     t,
   )
 }
-
 /**
  * 中性生活基线（事实锚，不是行为规则）：人设没写生活信息时补，
  * 给 TA"你是谁/你在哪/平时做什么"的根——TA 说"在洗碗/翻书"才有依据，

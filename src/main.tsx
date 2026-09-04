@@ -5,13 +5,13 @@ import './index.css'
 import App from './App.tsx'
 import ErrorBoundary from './components/ErrorBoundary.tsx'
 import { initSyncListener } from './lib/sync.ts'
-
+import { applyTheme } from './lib/theme.ts'
 // PWA：自动注册 Service Worker，新版本发布后自动更新
 registerSW({ immediate: true })
-
 // 账号同步：监听本地数据变更，防抖 4 秒后自动上传（未登录时静默跳过）
 initSyncListener()
-
+// 主题系统（TASK_THEME）：启动即应用本地/云端主题（渲染前写入 CSS 变量，避免闪烁）
+applyTheme()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>

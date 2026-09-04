@@ -6,7 +6,6 @@
 //   GET  /api/sync     Bearer <token>                → {data,updatedAt}  全量拉取（无数据 data=null）
 // 错误统一返回 {error: '...'}，HTTP 400/401/409。
 // 纯逻辑（合并/清洗/账户读写）都放在可被 Node 单测的导出函数里；网络失败静默，不打断用户。
-
 import { ELUVIN_DATA_CHANGE, notifyAuthChanged } from './dataChange.ts'
 import {
   loadSettings,
@@ -26,27 +25,23 @@ import { loadMemory, type MemoryItem } from './memory.ts'
 import { collectAllAnniversaries, loadAnniversaries, getMainAnniversaryId, type Anniversary } from './anniversary.ts'
 import { collectAllSpacePosts } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
-
+import { THEME_KEY, loadThemeState, saveThemeState, applyTheme, type ThemeState } from './theme.ts'
 /** 后端服务地址（本地写死一个出口常量：同步接口与会话接口共用，别各自写死） */
 export const API_BASE = 'https://texas-division-trivia-stars.trycloudflare.com'
-
 export interface Account {
   token: string
   /** 登录标识：邮箱 / 手机号 / 用户名（用户填的原始内容，trim 后） */
   account: string
 }
-
 /** 云端同步的设置结构：apiKey 绝不上云，每个服务商只留 baseUrl/model */
 export interface ProviderSyncSettings {
   baseUrl: string
   model: string
 }
-
 export interface SyncSettings {
   provider: string
   providers: Partial<Record<Provider, ProviderSyncSettings>>
 }
-
 /** 云端同步的全量数据载荷（localStorage 各 key 的映射） */
 export interface SyncData {
   messages: StoredMessage[]
@@ -61,8 +56,9 @@ export interface SyncData {
   anniversaries: Anniversary[]
   mainAnniversary: string | null
   spacePosts: SpacePost[]
+  /** 主题状态（TASK_THEME）：localStorage ai_companion_theme，云同步换设备不丢 */
+  theme?: ThemeState
 }
-
 const ACCOUNT_KEY = 'ai_companion_account'
 const SETTINGS_KEY = 'ai_companion_settings'
 const MESSAGES_KEY = 'ai_companion_messages'
@@ -74,11 +70,8 @@ const SESSION_START_KEY = 'ai_companion_session_start'
 const ANNIVERSARIES_KEY = 'ai_companion_anniversaries'
 const MAIN_ANNIVERSARY_KEY = 'ai_companion_main_anniversary'
 const SPACE_POSTS_KEY = 'ai_space_posts'
-
 const ALL_PROVIDERS: Provider[] = ['deepseek', 'zhipu', 'openai', 'custom', 'volcengine']
-
 // ---- 账号（localStorage key 'ai_companion_account'） ----
-
 export function getAccount(): Account | null {
   try {
     const raw = localStorage.getItem(ACCOUNT_KEY)
@@ -92,17 +85,13 @@ export function getAccount(): Account | null {
     return null
   }
 }
-
 export function setAccount(account: Account): void {
   localStorage.setItem(ACCOUNT_KEY, JSON.stringify({ token: account.token, account: account.account }))
 }
-
 export function clearAccount(): void {
   localStorage.removeItem(ACCOUNT_KEY)
 }
-
 // ---- 注册 / 登录 ----
-
 async function errorMessage(resp: Response): Promise<string> {
   try {
     const body = (await resp.json()) as { error?: unknown }
@@ -112,7 +101,6 @@ async function errorMessage(resp: Response): Promise<string> {
   }
   return `操作失败（HTTP ${resp.status}）`
 }
-
 async function postAuth(path: string, account: string, password: string, extra: Record<string, string> = {}): Promise<Account> {
   let resp: Response
   try {
@@ -135,7 +123,6 @@ async function postAuth(path: string, account: string, password: string, extra: 
   }
   throw new Error('服务器返回异常，请稍后重试')
 }
-
 export function register(account: string, password: string, bindEmail?: string, bindPhone?: string, code?: string): Promise<Account> {
   const extra: Record<string, string> = {}
   if (bindEmail && bindEmail.trim()) extra.bindEmail = bindEmail.trim()
@@ -143,18 +130,14 @@ export function register(account: string, password: string, bindEmail?: string, 
   if (code && code.trim()) extra.code = code.trim()
   return postAuth('/api/register', account, password, extra)
 }
-
 export function login(account: string, password: string): Promise<Account> {
   return postAuth('/api/login', account, password)
 }
-
 // ---- B2e：找回密码 + 账号绑定 ----
-
 export interface Identity {
   type: 'email' | 'phone' | 'username'
   value: string
 }
-
 /** 发验证码（找回密码 reset / 注册 register），成功返回脱敏邮箱 */
 export async function verifySend(account: string, purpose: 'reset' | 'register' | 'verify' = 'reset'): Promise<string> {
   let resp: Response
@@ -172,7 +155,6 @@ export async function verifySend(account: string, purpose: 'reset' | 'register' 
   if (body && typeof body.sentTo === 'string') return body.sentTo
   throw new Error('发送失败，请稍后再试')
 }
-
 /** 用验证码重置密码 */
 export async function resetPassword(account: string, code: string, newPassword: string): Promise<void> {
   let resp: Response
@@ -187,7 +169,6 @@ export async function resetPassword(account: string, code: string, newPassword: 
   }
   if (!resp.ok) throw new Error(await errorMessage(resp))
 }
-
 /** 老用户补验证邮箱：用验证码确认邮箱（2026-08-25） */
 export async function verifyConfirm(account: string, code: string): Promise<void> {
   let resp: Response
@@ -202,7 +183,6 @@ export async function verifyConfirm(account: string, code: string): Promise<void
   }
   if (!resp.ok) throw new Error(await errorMessage(resp))
 }
-
 /** 查询当前账号邮箱验证状态（2026-08-25） */
 export async function getAccountStatus(): Promise<{ verified: boolean; email: string | null }> {
   const token = getAccount()?.token
@@ -219,7 +199,6 @@ export async function getAccountStatus(): Promise<{ verified: boolean; email: st
   const body = (await resp.json()) as { verified?: number; email?: string | null }
   return { verified: !!body.verified, email: body.email ?? null }
 }
-
 /** 登录后绑定新标识（邮箱/手机号，需验证码） */
 export async function bindIdentity(type: 'email' | 'phone', value: string, code?: string): Promise<void> {
   const token = getAccount()?.token
@@ -236,7 +215,6 @@ export async function bindIdentity(type: 'email' | 'phone', value: string, code?
   }
   if (!resp.ok) throw new Error(await errorMessage(resp))
 }
-
 /** 当前账号所有登录标识 */
 export async function getIdentities(): Promise<Identity[]> {
   const token = getAccount()?.token
@@ -254,9 +232,7 @@ export async function getIdentities(): Promise<Identity[]> {
   if (body && Array.isArray(body.identities)) return body.identities
   throw new Error('获取失败，请稍后再试')
 }
-
 // ---- 数据打包（collectData）/ 应用（applyData） ----
-
 function sanitizeSettings(): SyncSettings {
   const s = loadSettings()
   const providers: SyncSettings['providers'] = {}
@@ -266,7 +242,6 @@ function sanitizeSettings(): SyncSettings {
   }
   return { provider: s.provider, providers }
 }
-
 function readSpacePosts(): SpacePost[] {
   try {
     const raw = localStorage.getItem(SPACE_POSTS_KEY)
@@ -277,7 +252,6 @@ function readSpacePosts(): SpacePost[] {
     return []
   }
 }
-
 /**
  * 把本地 localStorage 全量打包成同步载荷：settings 剔除 apiKey（key 不上云）。
  * TASK-UI2 角色隔离后：纪念日/空间动态按会话分 key 了，这里汇总全部角色的数据（全局个人 + 各会话双人），
@@ -296,11 +270,10 @@ export function collectData(): SyncData {
     anniversaries: collectAllAnniversaries(),
     mainAnniversary: getMainAnniversaryId(),
     spacePosts: collectAllSpacePosts(),
+    theme: loadThemeState(),
   }
 }
-
 // ---- 合并策略（纯函数，可单测） ----
-
 /**
  * messages 合并：按 ts 去重（Map key=ts），同一 ts 本地覆盖云端；合并后按 ts 升序。
  * 输入顺序不影响结果（升序排序兜底）。
@@ -313,7 +286,6 @@ export function mergeMessages(local: StoredMessage[], cloud: StoredMessage[]): S
   }
   return [...map.values()].sort((a, b) => a.ts - b.ts)
 }
-
 /**
  * memory 合并：按 id 去重（没 id 的用 JSON.stringify 兜底做 key），同一 key 本地覆盖云端。
  */
@@ -326,22 +298,18 @@ export function mergeMemory(local: MemoryItem[], cloud: MemoryItem[]): MemoryIte
   }
   return [...map.values()]
 }
-
 function isEmptyString(v: unknown): boolean {
   return typeof v !== 'string' || v.trim() === ''
 }
-
 function isEmptyProfile(p: object | null | undefined): boolean {
   if (p == null) return true
   return Object.values(p).every((v) => isEmptyString(v))
 }
-
 /** TA 资料的空判断：默认昵称「TA」不算用户数据（没填过 = 空），新设备才能被云端资料填充 */
 function isEmptyAIProfile(p: AIProfile | null | undefined): boolean {
   if (p == null) return true
   return (isEmptyString(p.nickname) || p.nickname === 'TA') && isEmptyString(p.avatar)
 }
-
 function normalizeUserProfile(raw: unknown): UserProfile {
   const p = (raw ?? {}) as Partial<UserProfile>
   return {
@@ -350,7 +318,6 @@ function normalizeUserProfile(raw: unknown): UserProfile {
     bio: typeof p.bio === 'string' ? p.bio : '',
   }
 }
-
 function normalizeAIProfile(raw: unknown): AIProfile {
   const p = (raw ?? {}) as Partial<AIProfile>
   return {
@@ -358,7 +325,6 @@ function normalizeAIProfile(raw: unknown): AIProfile {
     avatar: typeof p.avatar === 'string' && p.avatar.startsWith('data:') ? p.avatar : '',
   }
 }
-
 /**
  * 设置合并：本地配过设置（有 ai_companion_settings key，含 apiKey）→ 本地优先，原样保留；
  * 本地从没配过（新设备首次登录）→ 用云端设置（云端不带 apiKey，落盘时 apiKey 置空）。
@@ -376,7 +342,6 @@ function mergeSettings(localRaw: string | null, cloud: SyncSettings | undefined)
   }
   return null
 }
-
 /**
  * 把拉下来的云端数据写回 localStorage。
  * messages / memory 做并集去重合并；其余字段按「本地全空且云端有数据 → 用云端（新设备首次登录）；
@@ -384,20 +349,17 @@ function mergeSettings(localRaw: string | null, cloud: SyncSettings | undefined)
  */
 export function applyData(data: SyncData): void {
   const d = data ?? ({} as SyncData)
-
   if (Array.isArray(d.messages)) {
     localStorage.setItem(MESSAGES_KEY, JSON.stringify(mergeMessages(loadMessages(), d.messages)))
   }
   if (Array.isArray(d.memory)) {
     localStorage.setItem(MEMORY_KEY, JSON.stringify(mergeMemory(loadMemory(), d.memory)))
   }
-
   // persona：本地没写过才用云端的
   const persona = loadPersona()
   if (isEmptyString(persona) && !isEmptyString(d.persona)) {
     localStorage.setItem(PERSONA_KEY, d.persona)
   }
-
   // 用户资料 / TA 资料：本地全空才用云端
   if (isEmptyProfile(loadUserProfile())) {
     localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(normalizeUserProfile(d.userProfile)))
@@ -407,18 +369,15 @@ export function applyData(data: SyncData): void {
   }
   // 各角色（会话）的 TA 资料：按 sid 分发，本地已有会话级数据不覆盖（TASK-UI3 角色隔离云同步）
   applyAllAIProfiles(d.aiProfiles)
-
   // 设置：本地配过就原样保留（含 apiKey）；本地从没配过才用云端的（云端不带 apiKey）
   const mergedSettings = mergeSettings(localStorage.getItem(SETTINGS_KEY), d.settings)
   if (mergedSettings != null) {
     localStorage.setItem(SETTINGS_KEY, mergedSettings)
   }
-
   // 会话起点：本地为 0 且云端有才用云端（0 = 没设过）
   const localStart = getSessionStart()
   const cloudStart = typeof d.sessionStart === 'number' && d.sessionStart > 0 ? d.sessionStart : 0
   localStorage.setItem(SESSION_START_KEY, String(localStart > 0 ? localStart : cloudStart))
-
   // 纪念日 / 主纪念日 / 空间动态：本地空且云端有才用云端
   // TASK-UI2 取舍：同步仍是全局合并（新设备把云端汇总数据写进全局 key，首次按会话读取时按各设备自己的
   // 迁移标记分发给默认角色；个人节日留在全局）。好处是绝不丢数据、不报错；代价是跨设备角色归属不完全精确，
@@ -434,10 +393,13 @@ export function applyData(data: SyncData): void {
   if (readSpacePosts().length === 0 && Array.isArray(d.spacePosts) && d.spacePosts.length > 0) {
     localStorage.setItem(SPACE_POSTS_KEY, JSON.stringify(d.spacePosts))
   }
+  // 主题：本地没配过且云端有 → 用云端，并立即应用（TASK_THEME）
+  if (localStorage.getItem(THEME_KEY) == null && d.theme && (d.theme.type === 'preset' || d.theme.type === 'custom')) {
+    saveThemeState(d.theme)
+    applyTheme()
+  }
 }
-
 // ---- 同步执行（手动 / 登录后 / 数据变更自动） ----
-
 async function downloadAll(): Promise<boolean> {
   const account = getAccount()
   if (!account) return false
@@ -457,7 +419,6 @@ async function downloadAll(): Promise<boolean> {
   }
   return false
 }
-
 async function uploadAll(): Promise<void> {
   const account = getAccount()
   if (!account) return
@@ -473,7 +434,6 @@ async function uploadAll(): Promise<void> {
   }
   if (!resp.ok) throw new Error(await errorMessage(resp))
 }
-
 /**
  * 手动/登录后触发：先拉（云端有数据就合并到本地），再全量上传合并后的数据。
  * 失败抛 Error（后端 error 文案或网络兜底），由 UI 展示原因。
@@ -484,11 +444,8 @@ export async function syncNow(): Promise<void> {
   await downloadAll()
   await uploadAll()
 }
-
 // ---- 数据变更自动上传（防抖 4 秒，仅已登录；网络失败静默） ----
-
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
-
 function scheduleUploadAll(): void {
   if (!getAccount()) return
   if (debounceTimer != null) clearTimeout(debounceTimer)
@@ -499,7 +456,6 @@ function scheduleUploadAll(): void {
     })
   }, 4000)
 }
-
 /** 监听 'eluvin-data-change'，防抖后自动上传（App 启动时调用一次） */
 export function initSyncListener(): void {
   if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return
