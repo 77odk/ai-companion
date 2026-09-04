@@ -271,6 +271,61 @@ export function stripMemoryMarkers(text: string): string {
     .trim()
 }
 
+/**
+ * 剥离思考链（`` 包裹的推理内容）。
+ * 模块三·内心戏：模型思考链泄漏到正文时，在展示和上下文注入两处剥离。
+ * 存储不动，只在读取时剥离。
+ *
+ * 处理：
+ * 1. `` ... `` 包裹的块（有明确结尾标记）
+ * 2. 以 `` 开头到行尾/消息结尾的内容（无明确结尾标记时，到第一个双换行或结尾）
+ * 3. 整条消息就是 `` 标记 → 返回空串（展示层过滤空消息）
+ */
+export function stripThinkBlocks(text: string): string {
+  const t = String(text ?? '')
+  if (!t) return ''
+  // 整条消息就是 `` 标记
+  if (/^\s*``\s*$/.test(t)) return ''
+  let result = t
+  // 1. `` ... `` 明确包裹的块
+  result = result.replace(/``[\s\S]*?``/g, '')
+  // 2. `` 开头到结尾（无明确结束标记）
+  result = result.replace(/``[\s\S]*$/g, '')
+  // 清理多余空行
+  result = result.replace(/\n{3,}/g, '\n\n').trim()
+  return result
+}
+
+/**
+ * 检测消息是否是纯思考链（整条消息都是思考链内容，没有正文）。
+ * 用于展示层过滤：纯思考链消息不渲染气泡。
+ * 纯思考链判定：content 以 `` 开头，或匹配英文推理开头模式（Initiating/Interpreting/Addressing/Analyzing）。
+ */
+export function isPureThinkBlock(text: string): boolean {
+  const t = String(text ?? '').trim()
+  if (!t) return false
+  if (t.startsWith('``')) return true
+  // 英文推理开头模式（思考链泄漏的典型特征）
+  if (/^(Initiating|Interpreting|Addressing|Analyzing|Reasoning|Thinking|Processing|Dissecting)\b/i.test(t)) return true
+  return false
+}
+
+/**
+ * 提取思考链原文（`` 包裹的内容）。
+ * 用于 finalize 时把思考链存到消息的 thinking 附加字段。
+ * 返回思考链原文（不包含 `` 标记），没有则返回空串。
+ */
+export function extractThinkBlocks(text: string): string {
+  const t = String(text ?? '')
+  if (!t) return ''
+  const matches = t.match(/``([\s\S]*?)(?:``|$)/g)
+  if (!matches || matches.length === 0) return ''
+  return matches
+    .map((m) => m.replace(/^``\s*/, '').replace(/\s*``$/, '').trim())
+    .filter(Boolean)
+    .join('\n---\n')
+}
+
 // ---- 显式记忆指令检测（TASK-LM1：用户明说"帮我记一下"等硬触发；反问修复） ----
 
 /** 显式指令关键词：命中任一即视为用户要求记住（导出供 Chat 与测试使用） */
