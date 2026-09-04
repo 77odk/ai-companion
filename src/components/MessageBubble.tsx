@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { StoredMessage } from '../lib/storage'
 import { loadAIProfile, loadUserProfile, shouldShowMemorySaved } from '../lib/storage'
-import { extractMemories, stripMemoryMarkers, stripThinkBlocks } from '../lib/memory'
+import { extractMemories, isPureThinkBlock, stripMemoryMarkers, stripThinkBlocks } from '../lib/memory'
 import { getActiveSessionId } from '../lib/sessionStore'
 import { chatBubbleTime } from '../lib/time'
 import DefaultAvatar from './DefaultAvatar'
@@ -28,6 +28,8 @@ function Avatar({ value, kind, className }: { value: string; kind: 'user' | 'ai'
 
 export default function MessageBubble({ message, typing = false, onAvatarClick }: Props) {
   const isUser = message.role === 'user'
+  // 模块三：纯思考链消息不渲染气泡（历史泄漏的英文推理段，没 `` 包裹的那种）
+  if (!isUser && isPureThinkBlock(message.content)) return null
   // 模块三·内心戏：思考链展开/收起状态
   const [thinkOpen, setThinkOpen] = useState(false)
   // TA 头像按会话隔离：聊天气泡用当前会话自己的头像；用户头像全局
