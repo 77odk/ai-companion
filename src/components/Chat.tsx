@@ -32,6 +32,8 @@ import {
   type PendingOp,
 } from '../lib/sessionStore'
 import { containsBusyKeyword, findBusyCutoff, inferBusyReason, pickBusyReply, randomBusyDurationMs, serializeBusyContext, type BusyState } from '../lib/aiBusy'
+import { loadCurrentPosts } from '../lib/aiSpace'
+import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE } from '../lib/spaceChatInject'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
@@ -508,6 +510,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         role: 'system',
         content: `你最近写给对方的周记是「${weeklyList[0].title}」（${weeklyList[0].weekLabel}）。对方要是提起周记，就照这篇的语气和内容回应。`,
       })
+    }
+    // TA 最近发过的动态注入：让 TA 知道自己的空间历史，被问"你发过…"时有真凭据（TASK-SPACE-CHAT）
+    const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined))
+    if (spaceBlock) {
+      apiMessages.push({ role: 'system', content: spaceBlock })
+    }
+    // 生活基线：人设没写生活信息时补中性事实锚，让 TA 说"在洗碗/翻书"有根（TASK-SPACE-CHAT）
+    if (!personaHasLifeAnchors(persona)) {
+      apiMessages.push({ role: 'system', content: LIFE_BASELINE })
     }
     if (memInstr.isInstruction) {
       apiMessages.push({
