@@ -27,6 +27,8 @@ export interface SessionMessage {
   role: 'user' | 'assistant'
   content: string
   createdAt: string
+  /** 思考链原文（内心戏）：后端 messages 表 thinking 列，老数据没有 = 不显示灰条 */
+  thinking?: string
 }
 
 /** 会话记忆（后端 memories 表） */
