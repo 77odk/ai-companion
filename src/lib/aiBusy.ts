@@ -1,17 +1,25 @@
 // AI 忙碌状态工具（TASK-BUSY）
-// TA 说"去洗碗了""去忙了"这类话时，真的进入忙碌状态，4-5分钟后再回来。
+// TA 说"我去洗碗了""我先去开个会"这类表达"离开去忙"的话时，进入忙碌状态，4-5分钟后再回来。
+// 2026-09-05 升级：从词表精确匹配改为"离开意图"句式正则匹配——不枚举具体事情，匹配句式结构。
 // 纯逻辑抽成可单测的导出函数；localStorage 读写委托给 sessionStore。
 
-/** 忙碌关键词：TA 回复里出现这些词就触发忙碌状态 */
-const BUSY_KEYWORDS = [
-  '去洗碗', '洗碗了', '洗个碗',
-  '去做饭', '做饭了', '煮个面', '去煮面',
-  '去洗澡', '洗澡了', '洗个澡', '冲个澡',
-  '我先忙', '先忙一下', '稍等我', '等我一下', '我去忙',
-  '去趟厕所', '去个厕所', '上个厕所',
-  '出去一下', '我出去', '出门一下',
-  '去拿个', '去取个', '去倒个',
-]
+/**
+ * 离开意图前缀：TA 表达"我要离开去做某事"的起始词。
+ * 不枚举具体事情（洗碗/开会/写报告），只匹配"离开意图"的句式结构。
+ */
+const BUSY_INTENT_PREFIX = /(我去|我出去|我先|我得|我要去|等我|我忙一下|我去忙)/
+
+/**
+ * 完整离开句式：前缀 + 0~12 字内容 + 结尾词（了/吧/啊/啦/。/～）。
+ * 用于"触发判定"——只有完整的离开句式才触发 busy，半句话不触发。
+ */
+const BUSY_INTENT_FULL = /(我去|我出去|我先|我得|我要去|等我|我忙一下|我去忙).{0,12}(了|吧|啊|啦|一下|。|～|！|？)/
+
+/**
+ * 排除列表：句式命中但内容是奔向对方的（为对方做的事），不触发。
+ * TA 说"我去找你吧"是要继续聊，不该消失 4-5 分钟。
+ */
+const BUSY_EXCLUDE = /(找你|接你|给你|陪你|来看你|去找你)/
 
 /** 忙碌中自动回复文案（用户发消息时回一句短的，不展开） */
 const BUSY_REPLIES = [
@@ -43,38 +51,54 @@ export const IDLE_STATE: BusyState = {
 }
 
 /**
- * 检测文本中是否包含忙碌关键词。
+ * 匹配离开意图句式，返回匹配对象或 null。
+ *
+ * 两层分离（乔 2026-09-05 强调）：
+ * - 本函数管"触发判定"——这句是不是完整离开句式（有结尾词、不被排除列表排除）
+ * - findBusyCutoff 管"流式截断位置"——截在哪、别掐半句话
+ *
  * 纯函数，可单测。
  */
-export function containsBusyKeyword(text: string): boolean {
+export function matchBusyIntent(text: string): RegExpMatchArray | null {
   const t = String(text ?? '')
-  return BUSY_KEYWORDS.some((kw) => t.includes(kw))
+  const m = t.match(BUSY_INTENT_FULL)
+  if (!m) return null
+  // 排除为对方做的事："我去找你吧""我来接你"这类是奔向对方，不该消失
+  if (BUSY_EXCLUDE.test(m[0])) return null
+  return m
 }
 
 /**
- * 找到忙碌关键词所在句子的结尾位置（用于流式截断）。
- * 截断规则：找到第一个忙碌关键词，然后从关键词往后找第一个句子结束符
+ * 检测文本中是否包含离开意图句式。
+ * 纯函数，可单测。
+ */
+export function containsBusyKeyword(text: string): boolean {
+  return matchBusyIntent(text) !== null
+}
+
+/**
+ * 找到离开意图句式所在句子的结尾位置（用于流式截断）。
+ *
+ * 两层分离：本函数管"截在哪"——找到离开意图前缀的起始位置，往后找第一个句子结束符
  * （句号/问号/感叹号/省略号/换行/字符串结尾），截到那个位置。
- * 返回 -1 表示没找到关键词。
+ * 不管"这句是不是完整离开句式"——那是 matchBusyIntent 的事。
+ *
+ * 返回 -1 表示没找到离开意图前缀。
  * 纯函数，可单测。
  */
 export function findBusyCutoff(text: string): number {
   const t = String(text ?? '')
-  // 找最早出现的关键词位置
-  let earliest = -1
-  for (const kw of BUSY_KEYWORDS) {
-    const idx = t.indexOf(kw)
-    if (idx >= 0 && (earliest < 0 || idx < earliest)) earliest = idx
-  }
-  if (earliest < 0) return -1
-  // 从关键词往后找第一个句子结束符
+  const m = t.match(BUSY_INTENT_PREFIX)
+  if (!m || m.index === undefined) return -1
+  const earliest = m.index
+  // 从前缀往后找第一个句子结束符
   const rest = t.slice(earliest)
   const sentenceEnd = rest.search(/[。！？!?…\n]/)
   if (sentenceEnd < 0) {
     // 没找到结束符，截到字符串结尾（关键词所在的整句还没说完，保留已输出部分）
     return t.length
   }
-  // 截到结束符（含结束符），位置 = 关键词起点 + 结束符在rest中的索引 + 1
+  // 截到结束符（含结束符），位置 = 前缀起点 + 结束符在rest中的索引 + 1
   return earliest + sentenceEnd + 1
 }
 
