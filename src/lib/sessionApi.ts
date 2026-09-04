@@ -120,7 +120,7 @@ export function patchSession(
 export function postMessage(
   token: string,
   sessionId: string | number,
-  body: { role: 'user' | 'assistant'; content: string },
+  body: { role: 'user' | 'assistant'; content: string; thinking?: string },
 ): Promise<ApiResult<SessionMessage>> {
   return request<SessionMessage>(`/api/sessions/${sessionId}/messages`, { token, method: 'POST', body })
 }
