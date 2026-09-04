@@ -5,6 +5,7 @@ import DefaultAvatar from './DefaultAvatar'
 import Account from './Account'
 import GenderSelect from './GenderSelect'
 import Work from './Work'
+import Appearance from './Appearance'
 import {
   DEFAULT_SETTINGS,
   isSlowLetterMode,
@@ -45,7 +46,7 @@ import {
 type TestState = 'idle' | 'testing' | 'success' | 'error'
 
 /** 设置页子页：使用指南已抽成 App 独立 view（guide），不再嵌在这里 */
-export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work'
+export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work' | 'appearance'
 
 interface Props {
   onGoWelcome?: () => void
@@ -77,6 +78,9 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, initial
       </div>
     )
   }
+  if (page === 'appearance') {
+    return <Appearance onBack={() => setPage('main')} />
+  }
   return (
     <MainCenter
       onOpenAccount={() => setPage('account')}
@@ -84,6 +88,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, initial
       onOpenGuide={() => onGoGuide?.()}
       onOpenAbout={() => setPage('about')}
       onOpenWork={() => setPage('work')}
+      onOpenAppearance={() => setPage('appearance')}
       onGoWelcome={onGoWelcome}
     />
   )
@@ -122,6 +127,7 @@ function MainCenter({
   onOpenGuide,
   onOpenAbout,
   onOpenWork,
+  onOpenAppearance,
   onGoWelcome,
 }: {
   onOpenAccount: () => void
@@ -129,6 +135,7 @@ function MainCenter({
   onOpenGuide: () => void
   onOpenAbout: () => void
   onOpenWork: () => void
+  onOpenAppearance: () => void
   onGoWelcome?: () => void
 }) {
   const [user, setUser] = useState<UserProfile>(() => loadUserProfile())
@@ -218,6 +225,7 @@ function MainCenter({
 
       <ProfileGroup title="设置">
         <EntryRow icon={<KeyIcon />} label="服务商配置" onClick={onOpenProvider} />
+        <EntryRow icon={<PaletteIcon />} label="外观" onClick={onOpenAppearance} />
         <EntryRow icon={<WorkIcon />} label="工作台" onClick={onOpenWork} />
         <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
       </ProfileGroup>
@@ -340,6 +348,15 @@ const WorkIcon = () => (
     <rect x="3" y="7" width="18" height="13" rx="2" />
     <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
     <path d="M3 12h18" />
+  </svg>
+)
+
+const PaletteIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3a9 9 0 1 0 0 18h1.2a1.8 1.8 0 0 0 1.3-3 1.8 1.8 0 0 1 1.3-3H18A4 4 0 0 0 21 11a8 8 0 0 0-9-8z" />
+    <circle cx="7.5" cy="10.5" r="1.2" />
+    <circle cx="12" cy="7.5" r="1.2" />
+    <circle cx="16.5" cy="10.5" r="1.2" />
   </svg>
 )
 
