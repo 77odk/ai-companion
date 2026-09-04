@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
+import { buildBusyReturnPrompt, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, extractMemories, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { getToken } from '../lib/auth'
 import { getSession, listMemories, postMemory, postMessage, type Session } from '../lib/sessionApi'
 import {
   addPendingOp,
+  clearBusyState,
   confirmMessageInCache,
   flushPendingOps,
   getActiveSessionId,
+  getBusyState,
   getMemoriesCache,
   getMessagesCache,
   getSessionsCache,
@@ -20,6 +22,7 @@ import {
   recallSessionMemories,
   reconcileMemoryCacheId,
   removePendingOp,
+  saveBusyState,
   saveMemoriesCache,
   saveMessagesCache,
   sessionMemoryToItem,
@@ -28,6 +31,7 @@ import {
   upsertMemoryCache,
   type PendingOp,
 } from '../lib/sessionStore'
+import { containsBusyKeyword, findBusyCutoff, inferBusyReason, pickBusyReply, randomBusyDurationMs, serializeBusyContext, type BusyState } from '../lib/aiBusy'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
@@ -59,6 +63,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   const [failedText, setFailedText] = useState<string | null>(null)
   const [hasKey] = useState(() => Boolean(loadSettings().apiKey))
   const [activeSession, setActiveSession] = useState<Session | null>(null)
+  const [isBusy, setIsBusy] = useState(false)
+  const [busyReplyText, setBusyReplyText] = useState<string | null>(null)
   const persona = activeSession?.persona ?? loadPersona()
   const [milestone, setMilestone] = useState<{ day: number; hit: boolean; shown: boolean } | null>(null)
   const [showMilestone, setShowMilestone] = useState(false)
@@ -85,6 +91,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   const finalizeRef = useRef<() => void>(() => {})
   const retriedRef = useRef(false)
   const assistantText = useRef('')
+  // 忙碌状态相关 ref
+  const busyTimerRef = useRef<number | null>(null)
+  const busyTriggeredRef = useRef(false)
+  const busyRepliedRef = useRef(false)
+  const enterBusyRef = useRef<(text: string) => void>(() => {})
+  const sendBusyReturnRef = useRef<(runId: number, sid: string, state: BusyState) => Promise<void>>(async () => {})
 
   const persistMessages = useCallback((msgs: StoredMessage[]) => {
     const sid = getActiveSessionId()
@@ -116,10 +128,108 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     })
   }, [])
 
+  // ---- 忙碌状态：进入忙碌 ----
+  const enterBusy = (triggerText: string) => {
+    const sid = getActiveSessionId()
+    const duration = randomBusyDurationMs()
+    const busyUntil = Date.now() + duration
+    const reason = inferBusyReason(triggerText)
+    const context = serializeBusyContext(visibleMessages.slice(-3))
+    const state: BusyState = {
+      status: 'busy',
+      busyUntil,
+      busyReason: reason,
+      busyContext: context,
+      returnSent: false,
+    }
+    if (sid) saveBusyState(sid, state)
+    setIsBusy(true)
+    setBusyReplyText(null)
+    busyRepliedRef.current = false
+    if (busyTimerRef.current !== null) {
+      clearTimeout(busyTimerRef.current)
+    }
+    const triggerRunId = runIdRef.current
+    busyTimerRef.current = window.setTimeout(() => {
+      void sendBusyReturnRef.current(triggerRunId, sid, state)
+    }, duration)
+  }
+  enterBusyRef.current = enterBusy
+
+  // ---- 忙碌状态：忙完回来自动发消息 ----
+  const sendBusyReturn = async (triggerRunId: number, sid: string, state: BusyState) => {
+    // runId + sessionId 双重校验：切角色/发新消息后旧定时器作废
+    if (triggerRunId !== runIdRef.current) return
+    if (sid !== getActiveSessionId()) return
+    // 标记已发，防重复补发
+    if (sid) {
+      saveBusyState(sid, { ...state, returnSent: true })
+    } else {
+      clearBusyState('')
+    }
+    setIsBusy(false)
+    setBusyReplyText(null)
+    if (busyTimerRef.current !== null) {
+      clearTimeout(busyTimerRef.current)
+      busyTimerRef.current = null
+    }
+    const settings = loadSettings()
+    if (!settings.apiKey || !settings.baseUrl || !settings.model) return
+    const nameForPrompt = (() => {
+      if (!sid) return loadAIProfile().nickname
+      const cached = getSessionsCache().find((s) => String(s.id) === sid)
+      const t = (cached?.title || activeSession?.title || '').trim()
+      if (!t || t === '新会话' || t === '我们的开始') return loadAIProfile(sid).nickname
+      return t
+    })()
+    const systemPrompt = buildSystemPrompt(persona, nameForPrompt, undefined, sid || undefined)
+    const busyPrompt = buildBusyReturnPrompt(state.busyReason, state.busyContext)
+    try {
+      const content = await chatCompletion(
+        settings,
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'system', content: busyPrompt },
+        ],
+        { maxTokens: 150, temperature: 0.9 },
+      )
+      const cleaned = stripActionMarkers(stripEmoji(content)).trim()
+      if (!cleaned) return
+      const msg: StoredMessage = { role: 'assistant', content: cleaned, ts: Date.now() }
+      const current = sid ? getMessagesCache(sid) : loadMessages()
+      const next = [...current, msg]
+      if (sid) {
+        saveMessagesCache(sid, next)
+        markRead(sid)
+      } else {
+        saveMessages(next)
+      }
+      setMessages(next)
+      void uploadMessage(msg)
+    } catch {
+      // 生成失败静默，不打扰用户
+    }
+  }
+  sendBusyReturnRef.current = sendBusyReturn
+
+  // ---- 忙碌状态：忙碌中用户发消息，只回一句"在忙" ----
+  const handleBusySend = (text: string) => {
+    const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
+    const next = [...messages, userMsg]
+    persistMessages(next)
+    if (activeSessionId) void uploadMessage(userMsg)
+    setMessages(next)
+    setInput('')
+    if (!busyRepliedRef.current) {
+      busyRepliedRef.current = true
+      setBusyReplyText(pickBusyReply())
+    }
+  }
+
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [visibleMessages])
+  }, [visibleMessages, busyReplyText])
 
   useEffect(() => {
     const el = inputRef.current
@@ -135,9 +245,40 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       clearTimeout(thinkTimerRef.current)
       thinkTimerRef.current = null
     }
+    if (busyTimerRef.current !== null) {
+      clearTimeout(busyTimerRef.current)
+      busyTimerRef.current = null
+    }
     setMessages(activeSessionId ? getMessagesCache(activeSessionId) : loadMessages())
     setActiveSession(null)
+    setBusyReplyText(null)
     if (activeSessionId) markRead(activeSessionId)
+    // 恢复忙碌状态：切换会话/挂载时检查
+    if (activeSessionId) {
+      const state = getBusyState(activeSessionId)
+      if (state.status === 'busy' && state.busyUntil > 0) {
+        if (Date.now() >= state.busyUntil && !state.returnSent) {
+          // 忙碌已结束但没发回来的消息，补发
+          setIsBusy(false)
+          void sendBusyReturnRef.current(runIdRef.current, activeSessionId, state)
+        } else if (Date.now() < state.busyUntil) {
+          // 还在忙碌中，恢复定时器
+          setIsBusy(true)
+          busyRepliedRef.current = false
+          const remaining = state.busyUntil - Date.now()
+          const triggerRunId = runIdRef.current
+          busyTimerRef.current = window.setTimeout(() => {
+            void sendBusyReturnRef.current(triggerRunId, activeSessionId, state)
+          }, remaining)
+        } else {
+          setIsBusy(false)
+        }
+      } else {
+        setIsBusy(false)
+      }
+    } else {
+      setIsBusy(false)
+    }
   }, [activeSessionId])
 
   useEffect(() => {
@@ -200,6 +341,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         clearInterval(playTimerRef.current)
         playTimerRef.current = null
       }
+      if (busyTimerRef.current !== null) {
+        clearTimeout(busyTimerRef.current)
+        busyTimerRef.current = null
+      }
     }
   }, [])
 
@@ -237,8 +382,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     const text = raw.trim()
     if (!text || streaming) return
 
+    // 忙碌中：不调 API，只回一句"在忙"
+    if (isBusy) {
+      handleBusySend(text)
+      return
+    }
+
     const runId = ++runIdRef.current
     retriedRef.current = false
+    busyTriggeredRef.current = false
 
     const settings = loadSettings()
     if (!settings.apiKey || !settings.baseUrl || !settings.model) {
@@ -493,6 +645,19 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         onToken: (t) => {
           if (runId !== runIdRef.current) return
           assistantText.current += t
+          // 忙碌关键词检测：流式累积层截断，不是显示层
+          if (!busyTriggeredRef.current && containsBusyKeyword(assistantText.current)) {
+            busyTriggeredRef.current = true
+            const cutoff = findBusyCutoff(assistantText.current)
+            if (cutoff > 0 && cutoff < assistantText.current.length) {
+              assistantText.current = assistantText.current.slice(0, cutoff)
+            }
+            // 停流：abort 后 catch 里会直接 return，不会触发 onError
+            controllerRef.current?.abort()
+            streamEndedRef.current = true
+            // 进入忙碌状态（用 ref 避免闭包）
+            enterBusyRef.current(assistantText.current)
+          }
         },
         onDone: () => {
           if (runId !== runIdRef.current) return
@@ -508,7 +673,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     }
     const thinkMs = computeThinkDelayMs(text.length)
     thinkTimerRef.current = window.setTimeout(startStream, thinkMs)
-  }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, persistMessages, uploadMessage])
+  }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, isBusy, persistMessages, uploadMessage])
 
   useEffect(() => {
     const injected = takeChatMessage()
@@ -560,14 +725,21 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
             )}
           </div>
         ) : (
-          visibleMessages.map((m, i) => (
-            <MessageBubble
-              key={i}
-              message={m}
-              typing={streaming && i === visibleMessages.length - 1 && m.role === 'assistant' && m.content === ''}
-              onAvatarClick={onOpenProfile}
-            />
-          ))
+          <>
+            {visibleMessages.map((m, i) => (
+              <MessageBubble
+                key={i}
+                message={m}
+                typing={streaming && i === visibleMessages.length - 1 && m.role === 'assistant' && m.content === ''}
+                onAvatarClick={onOpenProfile}
+              />
+            ))}
+            {busyReplyText && (
+              <div style={{ color: '#888', fontSize: '13px', margin: '4px 0 4px 12px', paddingLeft: '28px' }}>
+                {busyReplyText}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -601,7 +773,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
           ref={inputRef}
           className="composer-input"
           rows={1}
-          placeholder="说点什么…"
+          placeholder={isBusy ? 'TA 正在忙，消息会稍后回复' : '说点什么…'}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
