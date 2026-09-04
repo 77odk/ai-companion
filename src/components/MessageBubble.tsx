@@ -28,10 +28,11 @@ function Avatar({ value, kind, className }: { value: string; kind: 'user' | 'ai'
 
 export default function MessageBubble({ message, typing = false, onAvatarClick }: Props) {
   const isUser = message.role === 'user'
-  // 模块三：纯思考链消息不渲染气泡（历史泄漏的英文推理段，没 `` 包裹的那种）
-  if (!isUser && isPureThinkBlock(message.content)) return null
-  // 模块三·内心戏：思考链展开/收起状态
+  // 模块三·内心戏：思考链展开/收起状态（Hooks 必须在所有条件返回之前调用，防 React Hooks 顺序崩溃）
   const [thinkOpen, setThinkOpen] = useState(false)
+  // 模块三：纯思考链消息不渲染气泡（历史泄漏的英文推理段，没 `` 包裹的那种）
+  // 注意：必须在 useState 之后再条件返回，否则列表重排时同一位置组件实例 Hooks 调用次数不一致会崩
+  if (!isUser && isPureThinkBlock(message.content)) return null
   // TA 头像按会话隔离：聊天气泡用当前会话自己的头像；用户头像全局
   const avatar = isUser ? loadUserProfile().avatar : loadAIProfile(getActiveSessionId() || undefined).avatar
   // 展示时把「【记忆】xxx」那行和思考链「」藏起来，不让用户看到标记（原文仍保存在存储里）
