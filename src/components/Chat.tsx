@@ -34,6 +34,7 @@ import {
 import { containsBusyKeyword, findBusyCutoff, inferBusyReason, pickBusyReply, randomBusyDurationMs, serializeBusyContext, type BusyState } from '../lib/aiBusy'
 import { loadCurrentPosts } from '../lib/aiSpace'
 import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE } from '../lib/spaceChatInject'
+import { buildSelfTimelineBlock } from '../lib/selfTimeline'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
@@ -503,6 +504,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         if (activeSessionId) touchMemoryCache(activeSessionId, m.id, now)
         touchMemory(m.id, now)
       }
+    }
+    // 自我时间线：TA 刚说过的话，让它记得自己做过什么，不依附忙碌机制（TASK-SELF-TIMELINE）
+    const timelineBlock = buildSelfTimelineBlock(base)
+    if (timelineBlock) {
+      apiMessages.push({ role: 'system', content: timelineBlock })
     }
     const weeklyList = getWeeklyReviews(activeSessionId || undefined)
     if (weeklyList.length > 0) {
