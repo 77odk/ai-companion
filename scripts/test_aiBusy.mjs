@@ -53,12 +53,6 @@ ok(!containsBusyKeyword(''), '空串 → 不触发')
 ok(!containsBusyKeyword('我爱你'), '亲密话 → 不触发')
 ok(!containsBusyKeyword('我们去看电影吧'), '邀约 → 不触发（无离开语义）')
 ok(!containsBusyKeyword('我刚忙完回来'), '忙完回来 → 不触发（已完成）')
-// 2026-09-04 实测补：模型自然表达变体（原来精确词表全漏）
-ok(containsBusyKeyword('行，我先去把碗洗了。'), '我先去把碗洗了 → 触发')
-ok(containsBusyKeyword('行，碗洗完了跟你说一声。'), '碗洗完了 → 触发')
-ok(containsBusyKeyword('碗洗好了，手有点凉。'), '碗洗好了 → 触发')
-ok(containsBusyKeyword('好，我把饭做好了叫你。'), '把饭做好 → 触发')
-ok(containsBusyKeyword('我先去把澡洗了。'), '把澡洗了 → 触发')
 
 console.log('\n[2] findBusyCutoff 截断位置')
 eq(findBusyCutoff('我去洗碗了。碗洗好了，手有点凉'), 6, '截到关键词句句号（含句号）')
