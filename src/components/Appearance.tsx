@@ -114,7 +114,6 @@ export default function Appearance({ onBack }: Props) {
               <span className="appearance-swatch" style={{ background: currentHex }} />
             </label>
             <div className="appearance-custom-info">
-              <span className="appearance-custom-hex">{currentHex}</span>
               <span className="appearance-custom-desc">
                 {isCustom ? '已应用自定义主色' : '选一个颜色，自动派生整套'}
               </span>
