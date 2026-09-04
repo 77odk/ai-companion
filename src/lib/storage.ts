@@ -139,9 +139,11 @@ export interface StoredMessage {
   ts: number
   /** 用户这条消息是否触发了记忆写入（TASK-LM1：显式指令保底写入成功标记；旧数据没有 = 不标） */
   memorySaved?: boolean
+  /** 思考链原文（模块三·内心戏）：模型推理过程，展示时以「TA 想了想」灰条折叠；旧数据没有 = 不显示 */
+  thinking?: string
 }
 
-/** 用户气泡下「✅已帮你记下」反馈是否显示：仅用户消息且该条触发了记忆写入（TASK-LM2） */
+/** 用户气泡下「✅已帮你记下」反馈是否显示：仅用户消息且该条触发记忆写入（TASK-LM2） */
 export function shouldShowMemorySaved(m: StoredMessage): boolean {
   return m.role === 'user' && m.memorySaved === true
 }
