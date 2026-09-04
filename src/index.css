@@ -6497,3 +6497,48 @@ textarea.persona-input {
 .appearance-reset {
   margin: 0 14px 14px;
 }
+/* ===== 模块三·内心戏：思考链展示 ===== */
+.think-block {
+  margin-bottom: 6px;
+}
+
+.think-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: var(--color-bg, #f5f5f5);
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--color-text-muted, #999);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.think-bar:hover {
+  opacity: 0.75;
+}
+
+.think-bar-label {
+  font-weight: 500;
+}
+
+.think-bar-arrow {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.think-content {
+  margin-top: 5px;
+  padding: 8px 12px;
+  background: var(--color-bg, #fafafa);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-muted, #888);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+}
