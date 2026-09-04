@@ -43,7 +43,7 @@ ok(block.includes('- 早餐店的豆浆油条，绝了'), '含第一条（最新
 ok(block.includes('- 煮了碗面，加了俩蛋'), '含第二条')
 ok(block.includes('- 楼下散步，天气不错'), '含第三条')
 ok(block.includes('这是你自己发过的生活记录，对方提起时照实接'), '带被动引用说明（别当成实时经历）')
-ok(!block.includes('现在正在发生'), '不带「现在正在发生」误表述')
+ok(block.includes('别当成现在正在发生的事'), '明确是历史记录非实时经历')
 
 // limit 截断
 const five = buildSpacePostsBlock(
@@ -60,7 +60,7 @@ console.log('\n[2] personaHasLifeAnchors 生活基线判断')
 ok(personaHasLifeAnchors('你是一个医生，工作很忙'), '含职业 → true（不补基线）')
 ok(personaHasLifeAnchors('你是大学生，住校'), '含身份/住处 → true')
 ok(personaHasLifeAnchors('你是个程序员，住在上海'), '含职业+住处 → true')
-ok(personaHasLifeAnchors('你开了一家书店'), '含开店 → true')
+ok(personaHasLifeAnchors('你开了一家书店'), '含开店/书店 → true')
 ok(!personaHasLifeAnchors('你是对方的恋人，性格温柔有耐心'), '纯性格 → false（补中性基线）')
 ok(!personaHasLifeAnchors(''), '空人设 → false（补基线）')
 ok(!personaHasLifeAnchors(null), 'null → false')
