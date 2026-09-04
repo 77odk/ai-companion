@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildBusyReturnPrompt, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
-import { detectMemoryInstruction, detectPreferenceFact, extractMemories, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
+import { detectMemoryInstruction, detectPreferenceFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { getToken } from '../lib/auth'
 import { getSession, listMemories, postMemory, postMessage, type Session } from '../lib/sessionApi'
@@ -91,6 +91,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   const displayCleanRef = useRef('')
   const finishedRef = useRef(false)
   const runIdRef = useRef(0)
+  const mountedRef = useRef(true)
   const finalizeRef = useRef<() => void>(() => {})
   const retriedRef = useRef(false)
   const assistantText = useRef('')
@@ -119,11 +120,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       id: newPendingOpId(),
       type: 'message',
       sessionId: sid,
-      payload: { role: msg.role, content: msg.content },
+      payload: { role: msg.role, content: msg.content, thinking: msg.thinking ?? '' },
       ts: msg.ts,
     }
     addPendingOp(op)
-    return postMessage(token, sid, { role: msg.role, content: msg.content }).then((res) => {
+    return postMessage(token, sid, { role: msg.role, content: msg.content, thinking: msg.thinking }).then((res) => {
       if (res.ok) {
         removePendingOp(op.id)
         confirmMessageInCache(sid, op, res.data)
@@ -194,7 +195,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       const cache = sid ? getMessagesCache(sid) : loadMessages()
       const tail = cache.slice(-3).map((m) => ({
         role: m.role,
-        content: stripMemoryMarkers(m.content),
+        content: stripThinkBlocks(stripMemoryMarkers(m.content)),
       }))
       const fresh = serializeBusyContext(tail)
       if (fresh) latestContext = fresh
@@ -348,9 +349,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   }, [activeSessionId])
 
   useEffect(() => {
+    mountedRef.current = true
     return () => {
-      runIdRef.current += 1
-      controllerRef.current?.abort()
+      // 模块二：组件卸载不中断请求（让 TA 想完说完落库），只清理定时器
+      // 去掉了 runIdRef.current += 1 和 controllerRef.current?.abort()
+      // ——卸载不是换会话，不应使旧请求回调失效或中断请求
+      mountedRef.current = false
       if (thinkTimerRef.current !== null) {
         clearTimeout(thinkTimerRef.current)
         thinkTimerRef.current = null
@@ -489,7 +493,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
 
     const contextText = base
       .slice(-6)
-      .map((m) => (m.role === 'assistant' ? stripMemoryMarkers(m.content) : m.content))
+      .map((m) => (m.role === 'assistant' ? stripThinkBlocks(stripMemoryMarkers(m.content)) : m.content))
       .join('\n')
     const memory = recallSessionMemories(activeSessionId, contextText)
     if (memory.length > 0) {
@@ -549,7 +553,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     const history: ApiMessage[] = truncateByToken(
       base.map((m) => ({
         role: m.role,
-        content: m.role === 'assistant' ? stripMemoryMarkers(m.content) : m.content,
+        content: m.role === 'assistant' ? stripThinkBlocks(stripMemoryMarkers(m.content)) : m.content,
       })),
       historyBudget,
     )
@@ -557,7 +561,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
 
     const commitFinal = (final: StoredMessage[]) => {
       persistMessages(final)
-      setMessages(final)
+      // 模块二：组件卸载后跳过 UI 更新，落库/云同步继续执行
+      if (mountedRef.current) setMessages(final)
       const sid = getActiveSessionId()
       const token = getToken()
       if (sid && token) {
@@ -567,7 +572,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
           chain = chain.then(() => uploadMessage(m))
         }
       }
-      setStreaming(false)
+      if (mountedRef.current) setStreaming(false)
       controllerRef.current = null
     }
 
@@ -596,7 +601,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
           notifyMemoryUpdated()
         }
       }
-      const cleaned = stripActionMarkers(stripEmoji(stripMemoryMarkers(raw)))
+      // 模块三·内心戏：提取思考链原文（存到 thinking 字段），正文剥离思考链
+      const thinking = extractThinkBlocks(raw)
+      const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw))))
       if (cleaned && (looksRobotic(cleaned) || looksFabricated(cleaned)) && !retriedRef.current) {
         retriedRef.current = true
         setError(null)
@@ -627,9 +634,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
           })
         return
       }
-      const final: StoredMessage[] = cleaned
-        ? [...messages, userMsg, ...splitAssistantReplies(cleaned, assistantTs)]
-        : [...messages, userMsg]
+      const assistantMsgs = cleaned ? splitAssistantReplies(cleaned, assistantTs) : []
+      // 思考链存到第一条 assistant 消息的 thinking 字段（内心戏展示用）
+      if (assistantMsgs.length > 0 && thinking) {
+        assistantMsgs[0].thinking = thinking
+      }
+      const final: StoredMessage[] = [...messages, userMsg, ...assistantMsgs]
       commitFinal(final)
     }
     finalizeRef.current = finalize
@@ -641,7 +651,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         pauseLeftRef.current -= 1
         return
       }
-      const clean = stripMemoryMarkers(assistantText.current)
+      const clean = stripThinkBlocks(stripMemoryMarkers(assistantText.current))
       const total = clean.length
       if (showLenRef.current >= total) {
         if (streamEndedRef.current) finishStreaming()
@@ -662,7 +672,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       finishedRef.current = true
       const err = streamErrorRef.current
       finalize()
-      if (err) {
+      if (err && mountedRef.current) {
         setError(err.message)
         setFailedText(userMsg.content)
       }
@@ -698,11 +708,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         onDone: () => {
           if (runId !== runIdRef.current) return
           streamEndedRef.current = true
+          // 模块二：直接 finalize，不依赖 playTick 定时器
+          // ——组件卸载后 playTimer 已被清理，靠 playTick 间接调用 finalize 会导致消息落不了库
+          finalizeRef.current?.()
         },
         onError: (err) => {
           if (runId !== runIdRef.current) return
           streamErrorRef.current = err
           streamEndedRef.current = true
+          finalizeRef.current?.()
         },
       })
       controllerRef.current = controller
