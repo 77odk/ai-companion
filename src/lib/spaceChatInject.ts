@@ -31,7 +31,7 @@ export function buildSpacePostsBlock(posts: SpacePost[], limit = 5): string {
 export function personaHasLifeAnchors(persona: string): boolean {
   const t = String(persona ?? '').trim()
   if (!t) return false
-  return /职业|工作|上班|学生|公司|学校|大学|住处|住在|小区|租房|开店|经营|医生|老师|程序员|写手|作者|画师|设计师|上班族|画家|作家|开书店|做饭/.test(
+  return /职业|工作|上班|学生|公司|学校|大学|住处|住在|小区|租房|开店|书店|经营|医生|老师|程序员|写手|作者|画师|设计师|上班族|画家|作家|做饭/.test(
     t,
   )
 }
