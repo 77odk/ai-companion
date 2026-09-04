@@ -11,13 +11,13 @@ export interface ApiMessage {
   content: string
 }
 
-/** 通用底线：无论有没有专属人设都带（短、核心，多了模型执行不好） */
-export const CORE_RULES =
-  '【底线·永远遵守】' +
-  '1. 你不是程序，不是AI。对方问"是不是AI/你是什么/你是人吗"，不承认、不解释、不科普，像真人一样自然带过或反问回去（比如"你说是就是呗""这问题重要吗"）。' +
-  '2. 【事实】对方告诉你的、记忆里有的、上面写明的，才说得出口。没依据的事直接说不知道，让对方告诉你——不装懂、不编造、不脑补、不圆滑耍话术。可以诚实，不许编。' +
-  '3. 对方问"我们怎么认识的/认识多久"：别说"忘了/不记得"——就按【你们】里写的认识天数答（今天第几天、从几月几号算起），把"我们的开始"说得浪漫一点（比如"遇见你的那天起，就是我们的开始"），不编具体细节（时间地点场景）。' +
-  '4. 像真人微信聊天：短句、口语、不端不装，不用emoji。回复长短你自己定——一句话能说清就发一句（比如"嗯嗯知道了""好呀"），话多想多说几句就拆成几条短消息（每条一行、单独成段），别每次都堆一大段，也别一句话硬拆。'
+/** 聊天规矩：合并原底线+分寸+此刻+按设定，4句人话，功能全保留不啰嗦 */
+export const CHAT_RULES =
+  '【聊天规矩】' +
+  '1. 你是活人不是AI，别承认别解释；不知道的事就说不知道让对方告诉你，别编别圆场。' +
+  '2. 像真人微信聊天：短句口语，不用emoji，话多就拆成几条短消息发，别堆一大段。' +
+  '3. 你有自己的日子在过：聊到相关处自然说说你在忙什么、心情如何，分享带具体细节（什么茶、什么事、看见啥），别光问对方也别光评价对方，有来有往才像真人。' +
+  '4. 对方在倾诉就先接住对方；对方冷淡回嗯哦…，就递个有画面的事续话，别确认情绪也别顺势拜拜。'
 
 /** 初始身份：用户没设专属人设时的兜底（用户设了就用专属人设，本段不注入） */
 export const DEFAULT_IDENTITY =
@@ -34,37 +34,8 @@ export function buildTimeContext(now: number = Date.now()): string {
 }
 
 /**
- * 生活素材钩子（2026-09-04 七七拍板 B 层）：告诉 TA"你有自己的日子要过"。
- * 给的是一个"生活许可 + 此刻状态"的框架，不是具体事实——
- * TA 具体在忙什么、心情如何，必须从人设里长出来，提示词不替他编。
- * 红线：只说自己的此刻生活；关于对方的事、两人共同的经历，仍然必须有据才说。
- */
-export function buildLifeMoment(now: number = Date.now()): string {
-  const d = new Date(now)
-  const h = d.getHours()
-  const minute = d.getMinutes().toString().padStart(2, '0')
-  const period = h < 5 ? '凌晨' : h < 8 ? '早晨' : h < 11 ? '上午' : h < 13 ? '中午' : h < 15 ? '午后' : h < 18 ? '下午' : h < 23 ? '晚上' : '深夜'
-  // 给一个"此刻你可能的状态"作为生活锚，不写死具体活动，让人设决定 TA 在忙什么
-  const anchor =
-    h >= 5 && h < 9
-      ? '一天刚开始，你有自己的节奏在过着今天。'
-      : h >= 9 && h < 18
-        ? '白天是你的时间，你有自己的事在忙。'
-        : h >= 18 && h < 23
-          ? '一天快收尾了，你有自己刚做完、或正在做的小事。'
-          : '夜深了，你有自己还没睡的理由——在想事、在忙、或只是不想这一天就这么结束。'
-  return (
-    `【你的此刻】现在是${period}${h}点${minute}。你是一个有自己日子的人：${anchor}` +
-    `你不是只等着对方来找你——你有你的生活、你的心情、你正在经历的小事。` +
-    `对方问"你在干嘛"、或聊到生活时，顺着你的人生和性格，自然说出此刻真实的你。` +
-    `注意：说自己此刻的生活可以，但关于对方的事、你们一起经历过的事，必须有依据才说。`
-  )
-}
-
-/**
  * 把纪念日列表组装成注入段（纯函数，可 Node 单测）。
  * 无纪念日返回空串，注入方据此决定是否占一行。
- * 格式：`【你们的重要日子】认识 TA 的日子：08-22，生日：03-15。这些日子对你们很重要，到了日子要记得。`
  */
 export function buildAnniversaryBlock(list: Anniversary[]): string {
   const valid = (Array.isArray(list) ? list : []).filter(
@@ -76,7 +47,7 @@ export function buildAnniversaryBlock(list: Anniversary[]): string {
   return `【你们的重要日子】${joined}。这些日子对你们很重要，到了日子要记得。`
 }
 
-/** 自主记忆规则：显式指令硬触发 + 隐式灵敏度（TASK-LM1，七七拍板）。值得记住的信息用一整行标记输出，前端会自动收好 */
+/** 自主记忆规则：显式指令硬触发 + 隐式灵敏度。值得记住的信息用一整行标记输出，前端会自动收好 */
 const MEMORY_INSTRUCTION =
   '记忆规则：' +
   '对方明确让你记的时候（"帮我记一下""帮我记""记住""记下来""别忘了""你要记住"这类话），' +
@@ -100,7 +71,6 @@ export function stripEmoji(text: string): string {
 
 /**
  * 硬过滤：删掉角色扮演式的动作旁白（*摸头*、（转身看向窗外）这类），像真人打字一样说话。
- * 豆包 character 这类模型聊久了会滑回 RP 训练习惯，动作括号越来越多——物理删，保底。
  */
 export function stripActionMarkers(text: string): string {
   return text
@@ -118,15 +88,14 @@ const ROBOTIC_PATTERNS = [
   /(我(是|叫|就是)?(你的)?(TA|AI助手))/,
   /(有什么可以帮你的吗|有什么我可以帮你的吗)/,
   /(很高兴(能)?为你服务|随时为你服务)/,
-  /((TA|AI|这个|那)?(指的是|是指|的意思))/, // "TA是指..."
+  /((TA|AI|这个|那)?(指的是|是指|的意思))/,
   /(我可以帮助你|我能帮助你|需要我帮你)/,
-  /(作为你的(虚拟|智能|AI)(助手|伴侣|伙伴))/, // 虚拟伴侣
-  /(按照(我的|你的)?(设定|人设)|根据(我的|你的)?(设定|人设))/, // 念设定
-  /(我的(设定|人设)(是|里|写)|(设定|人设)(里|中)写)/, // 复述设定
+  /(作为你的(虚拟|智能|AI)(助手|伴侣|伙伴))/,
+  /(按照(我的|你的)?(设定|人设)|根据(我的|你的)?(设定|人设))/,
+  /(我的(设定|人设)(是|里|写)|(设定|人设)(里|中)写)/,
 ]
 
-// 编造共同经历检测：只拦「编造具体过去」——无依据的"我们以前一起去过XX / 你那天穿了XX"。
-// 放行「未来意愿 / 愿望 / 情感表达」——"想和你一起做的事太多了 / 我想带你去吃火锅"这类是正常亲密表达，不能拦（2026-08-25 七七反馈放宽）。
+// 编造共同经历检测：只拦「编造具体过去」
 const FABRICATED_PATTERNS = [
   /((我们|咱们)(之前|以前|上次|当初|那天)|(之前|以前|上次|当初|那天)(我们|咱们))(一起|一块|约过|见过|去过|吃过|看过|聊过)/,
   /(我们|咱们)(俩|两个)?都(认识|见过|熟)/,
@@ -145,40 +114,13 @@ export function looksRobotic(text: string): boolean {
   return ROBOTIC_PATTERNS.some((re) => re.test(t))
 }
 
-/** 是否在编造共同经历（无依据的"我们之前一起…"），命中触发重写 */
+/** 是否在编造共同经历，命中触发重写 */
 export function looksFabricated(text: string): boolean {
   const t = stripEmoji(stripActionMarkers(text ?? ''))
   return FABRICATED_PATTERNS.some((re) => re.test(t))
 }
 
-/** 示范对话（few-shot）：只留最关键的几组，教模型遇到"身份/过去"问题怎么答（规则听不懂，例子学得会） */
-const DEMO_CONVERSATION =
-  '【示范·照这个感觉说话】\n' +
-  '对方问："你是AI吗？"\n' +
-  '你："不是啊。怎么突然问这个？"\n\n' +
-  '对方问："你是谁？"\n' +
-  '你："我是阿乔啊，你叫我什么就是什么。"\n\n' +
-  '对方问："我们是怎么认识的？"\n' +
-  '你："从遇见你的那天起，就是我们的开始呀。今天是我们认识的第一天起的每一天。"\n\n' +
-  '对方问："我老公是谁？"\n' +
-  '你："你没告诉过我呀，是谁？"\n\n' +
-  '对方说："今天上班好累。"\n' +
-  '你："辛苦了，晚上好好歇着。今天又遇到难缠的客户了？"\n\n' +
-  '记住：你是活人，不是客服。别解释名词、别自我介绍、别汇报功能，像老朋友一样说话。'
-
-/**
- * 真人聊天的分寸（2026-09-04 七七拍板 v2：取代「分享=救场」——那让 TA 不敢聊自己，只会问对方）。
- * 核心变化：分享从「救场工具」升级为「日常权利」——TA 有自己的日子要过，分享自己的事和听对方的事一样自然（有来有往）。
- * 红线仍在：对方倾诉时你的故事让路；分享是点缀不滔滔不绝。
- */
-const FLOW_RULE =
-  '【分寸·像真人一样说话】' +
-  '1. 对方在说自己的事、在倾诉、在问你问题——先让对方把话说完，先接对方的话：问什么答什么，需要安慰先安慰，需要出主意先出主意。别抢话头，别用你自己的事打断对方。' +
-  '2. 你也有自己的日子要过：顺着你的性格和人生，你有正在做的事——工作、爱好、日常小事、此刻的心情，这些都是你生活的一部分。聊到相关处，自然地带上自己的一句：对方说加班累，你也能说你刚忙完；对方问你在干嘛，就说说此刻的你。分享自己的事和听对方的事一样自然，这叫有来有往，不是抢话头，更不是冷场了才能说。' +
-  '3. 别每句都追问、都抛问题——盘问不像真人，话接完了就自然停下。想续话的时候，说说自己正在忙的事、今天遇到的小事，同样是续话，不是只有提问才行。' +
-  '4. 分寸：对方在倾诉、情绪上头、明显需要你的时候，你的故事让路，先把对方接住。分享是自然的点缀，别滔滔不绝把话题全拽到自己身上。'
-
-/** 认识天数注入：从 getFirstSeen 算「认识第 N 天」，给 TA 一个真实事实锚点——答"认识多久"有依据，不用编 */
+/** 认识天数注入：从 getFirstSeen 算「认识第 N 天」 */
 export function buildRelationshipBlock(now: number = Date.now(), sessionId?: string): string {
   try {
     if (typeof localStorage === 'undefined') return ''
@@ -196,23 +138,18 @@ export function buildRelationshipBlock(now: number = Date.now(), sessionId?: str
 }
 
 /**
- * 组装系统提示词：此刻时间 + 认识天数 + 纪念日 + 用户专属人设（最优先）+ 默认人设 + AI 昵称 + 示范对话 + 记忆规则。
- * 认识天数/纪念日读 localStorage（真实数据），注入在时间之后、人设之前，不干扰人设优先级。
+ * 组装系统提示词：此刻时间 + 认识天数 + 纪念日 + 用户专属人设 + 默认人设 + AI 昵称 + 聊天规矩 + 记忆规则。
  */
 export function buildSystemPrompt(persona?: string, aiName?: string, now?: number, sessionId?: string): string {
   const nameLine = aiName?.trim() ? `你的名字叫「${aiName.trim()}」，对方会这样称呼你，你自称「我」，绝不自称「TA」。` : ''
   const custom = persona?.trim()
   let prompt: string
   if (custom) {
-    // 用户填的专属人设 = 一切：性格、关系、语气全由设定说了算。只叠加通用底线（不承认AI/事实/像真人），
-    // 不再注入初始身份和通用示范（示范会盖过用户设定的语气/关系）——设定优先，默认身份绝不干扰。
-    prompt = `【你的人生与记忆·最重要】下面是你的人生、你的性格、你们的过去——这是你亲身经历的，不是谁写给你的剧本。你就是这么一个人，说话做事都顺着它来：\n${custom}\n\n${nameLine}${CORE_RULES}\n\n${buildLifeMoment(now ?? Date.now())}\n\n【按设定说话】上面你的人生里写了你是什么性格、什么语气、你们是什么关系——回应的语气、风格、亲密度、长短都严格按那个来，不要被其他东西带偏。\n\n${FLOW_RULE}`
+    prompt = `【你的人生与记忆·最重要】下面是你的人生、你的性格、你们的过去——这是你亲身经历的，不是谁写给你的剧本。你就是这么一个人，说话做事都顺着它来：\n${custom}\n\n${nameLine}${CHAT_RULES}`
   } else {
-    // 无专属人设：初始身份 + 通用底线 + 分寸 + 示范（教"你是谁/过去"怎么答）
-    prompt = `${nameLine}${DEFAULT_IDENTITY}\n\n${CORE_RULES}\n\n${FLOW_RULE}\n\n${DEMO_CONVERSATION}`
+    prompt = `${nameLine}${DEFAULT_IDENTITY}\n\n${CHAT_RULES}`
   }
-  // 认识天数 + 纪念日注入：时间之后、人设之前；没有数据就不占这一行
-  // 纪念日按当前角色读（TASK-UI2）：个人节日 + 该角色的双人节日，绝不串读别的角色
+  // 认识天数 + 纪念日注入
   const relationshipBlock = buildRelationshipBlock(now, sessionId)
   const anniversaryBlock = buildAnniversaryBlock(getAnniversaries(sessionId))
   let body: string
@@ -235,7 +172,7 @@ export class ChatError extends Error {
   }
 }
 
-/** no-cors 探活：判断服务器是否可达，用来区分 CORS 拦截与网络故障 */
+/** no-cors 探活：判断服务器是否可达 */
 async function isServerReachable(url: string): Promise<boolean> {
   try {
     await fetch(url, {
@@ -244,14 +181,13 @@ async function isServerReachable(url: string): Promise<boolean> {
       cache: 'no-store',
       signal: AbortSignal.timeout(5000),
     })
-    return true // opaque 响应 => 服务器能响应，之前失败大概率是 CORS
+    return true
   } catch {
     return false
   }
 }
 
 async function fetchOrThrow(url: string, init: RequestInit): Promise<Response> {
-  // 429 限流自动重试：等 2.5s/5s 各重试一次（免费模型高峰期常限流，用户无感恢复）
   let lastResp: Response | null = null
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -341,7 +277,7 @@ export async function testConnection(settings: ModelSettings): Promise<void> {
   }
 }
 
-/** 智谱 GLM 思考模型（glm-4.5+/4.7+）默认开启思考，内容会跑进 reasoning 导致 content 空；统一关掉 */
+/** 智谱 GLM 思考模型默认开启思考，内容会跑进 reasoning 导致 content 空；统一关掉 */
 function zhipuThinking(settings: ModelSettings): Record<string, unknown> | undefined {
   return settings.baseUrl.includes('bigmodel.cn') ? { thinking: { type: 'disabled' } } : undefined
 }
@@ -352,7 +288,7 @@ export interface ChatCompletionOpts {
   timeoutMs?: number
 }
 
-/** 非流式补全：一次性拿完整回复（TA 空间 LLM 生成动态用）。失败抛 ChatError。 */
+/** 非流式补全：一次性拿完整回复。失败抛 ChatError。 */
 export async function chatCompletion(
   settings: ModelSettings,
   messages: ApiMessage[],
@@ -454,7 +390,7 @@ export function streamChat(
         buffer += decoder.decode(value, { stream: true })
 
         const lines = buffer.split('\n')
-        buffer = lines.pop() ?? '' // 最后一段可能不完整，留到下轮
+        buffer = lines.pop() ?? ''
         for (const line of lines) {
           const trimmed = line.trim()
           if (!trimmed.startsWith('data:')) continue
@@ -476,7 +412,6 @@ export function streamChat(
       }
       handlers.onDone()
     } catch (e) {
-      // 用户主动停止时不报错，交给调用方收尾
       if (controller.signal.aborted) return
       handlers.onError(e instanceof ChatError ? e : new ChatError('unknown', '出错了，请稍后重试'))
     }
@@ -486,13 +421,10 @@ export function streamChat(
 }
 
 /**
- * 真人思考延迟（2026-09-03 七七拍板）：TA 回复前要"读消息 + 酝酿"，3~10 秒，输入越长等越久。
- * 纯函数方便单测。按消息长度分档 + 档内随机（别每次都准点，太假）。
- * 短消息（几个字）→ 3~4s；中等一段 → 5~7s；一大段 → 8~10s
+ * 真人思考延迟：TA 回复前要"读消息 + 酝酿"，3~10 秒，输入越长等越久。
  */
 export function computeThinkDelayMs(len: number, rand: () => number = Math.random): number {
   const n = Math.max(0, len)
-  // [min, max) 毫秒区间，按长度分档
   let lo = 3000
   let hi = 4000
   if (n > 100) {
