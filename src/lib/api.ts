@@ -439,3 +439,19 @@ export function computeThinkDelayMs(len: number, rand: () => number = Math.rando
   }
   return Math.round(lo + rand() * (hi - lo))
 }
+
+/**
+ * 忙完回来的消息生成提示词（TASK-BUSY）。
+ * TA 忙碌结束后自动发一条消息回来，必须衔接之前的话题，不能突兀开新话题。
+ * 纯函数，可单测。只新增此函数，其他提示词不动。
+ */
+export function buildBusyReturnPrompt(busyReason: string, busyContext: string): string {
+  const reason = busyReason?.trim() || '忙'
+  const context = busyContext?.trim()
+    ? `\n\n【忙碌前你们在聊】\n${busyContext.trim()}\n\n顺着上面的话题接，别开新话题。`
+    : ''
+  return `你刚${reason}回来，给对方发一条消息。要求：
+1. 自然地说你忙完了，带一点具体细节（比如"手还有点凉""身上还有油烟味"），别干巴巴说"我回来了"。
+2. 顺着你们之前聊的话题接一句，或者问对方一个具体的问题，让对方有话可接。${context}
+3. 短句口语，不用emoji，一句话能说完就一句话，最多两句。`
+}
