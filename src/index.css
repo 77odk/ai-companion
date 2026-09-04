@@ -596,7 +596,7 @@ button {
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: #ffc7a6;
+  background: color-mix(in srgb, var(--color-primary-soft) 55%, var(--color-primary));
 }
 
 .btn-send {
@@ -1485,8 +1485,13 @@ textarea.persona-input {
 
 /* 记忆页 v2 · 「TA 眼中的你」汇总卡（暖橘渐变大卡，页面的灵魂） */
 .memory-summary-card {
-  background: linear-gradient(135deg, #fff1e0 0%, #fff8f3 55%, #ffe7d0 100%);
-  border: 1px solid #f3dcc7;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary-soft) 45%, var(--color-card)) 0%,
+    var(--color-card) 55%,
+    color-mix(in srgb, var(--color-primary-soft) 60%, var(--color-card)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--color-primary-soft) 45%, var(--color-border));
   border-radius: var(--radius-md);
   box-shadow: var(--shadow);
   padding: 18px 18px 16px;
