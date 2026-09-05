@@ -23,6 +23,9 @@ import {
   saveAIGender,
   setSlowLetterMode,
   PROVIDER_NAMES,
+  COMMON_MODELS,
+  loadModelHistory,
+  saveModelHistory,
   type AIGender,
   type ModelSettings,
   type Provider,
@@ -680,6 +683,10 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
   const [apiKey, setApiKey] = useState(initial.providers[initial.provider].apiKey)
   const [baseUrl, setBaseUrl] = useState(initial.providers[initial.provider].baseUrl)
   const [model, setModel] = useState(initial.providers[initial.provider].model)
+  // 第三批⑫：模型名点选下拉
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
+  const [modelHistory, setModelHistory] = useState<string[]>(() => loadModelHistory())
+  const modelDropdownRef = useRef<HTMLDivElement>(null)
   const [keyHint, setKeyHint] = useState<string | null>(() =>
     keyFormatHint(initial.provider, initial.providers[initial.provider].apiKey),
   )
@@ -702,6 +709,17 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
     setKeyHint(keyFormatHint(p, cfg.apiKey))
   }
 
+  // 第三批⑫：点击模型下拉外部关闭下拉
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) {
+        setModelDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const currentSettings = (): ModelSettings => ({
     provider,
     apiKey,
@@ -711,6 +729,11 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
 
   const handleSave = () => {
     saveSettings(currentSettings())
+    // 第三批⑫：保存模型名到历史，下次点选直接可选
+    saveModelHistory(model)
+    setModelHistory(loadModelHistory())
+    // 第一批①：切模型串流 bug——保存模型设置=显式切换点，通知 Chat abort 旧请求
+    window.dispatchEvent(new CustomEvent('model-settings-changed'))
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -785,16 +808,79 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
 
         <div className="field">
           <label htmlFor="model">模型名称</label>
-          <input
-            id="model"
-            className="input"
-            type="text"
-            placeholder="glm-4.7-flash"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            autoComplete="off"
-          />
-          <p className="hint">切换服务商时自动带出，一般不用改</p>
+          <div className="model-select-wrapper" ref={modelDropdownRef} style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                id="model"
+                className="input"
+                type="text"
+                placeholder="glm-4.7-flash"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                onFocus={() => setModelDropdownOpen(true)}
+                autoComplete="off"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+                style={{ padding: '0 12px', whiteSpace: 'nowrap' }}
+              >
+                选择
+              </button>
+            </div>
+            {modelDropdownOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  marginTop: '4px',
+                  background: 'var(--color-card, #fff)',
+                  border: '1px solid var(--color-border, #eee)',
+                  borderRadius: '8px',
+                  maxHeight: '240px',
+                  overflowY: 'auto',
+                  zIndex: 100,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                }}
+              >
+                {modelHistory.length > 0 && (
+                  <div style={{ padding: '8px 12px', fontSize: '12px', color: '#999', borderBottom: '1px solid #f0f0f0' }}>
+                    最近用过
+                  </div>
+                )}
+                {modelHistory.map((m) => (
+                  <div
+                    key={`hist-${m}`}
+                    onClick={() => { setModel(m); setModelDropdownOpen(false) }}
+                    style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '14px' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f5f5f5')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    {m}
+                  </div>
+                ))}
+                <div style={{ padding: '8px 12px', fontSize: '12px', color: '#999', borderBottom: '1px solid #f0f0f0', borderTop: modelHistory.length > 0 ? '1px solid #f0f0f0' : 'none' }}>
+                  常见模型
+                </div>
+                {COMMON_MODELS[provider]?.map((m) => (
+                  <div
+                    key={`common-${m}`}
+                    onClick={() => { setModel(m); setModelDropdownOpen(false) }}
+                    style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '14px' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f5f5f5')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    {m}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="hint">切换服务商时自动带出，也可以点「选择」从常见模型里选</p>
         </div>
 
         <button
@@ -878,7 +964,7 @@ function AboutDetail({ onBack, onGoWelcome }: { onBack: () => void; onGoWelcome?
         <p className="about-slogan">忆过往，成文思</p>
         <p className="about-intro">一个住在你浏览器里的 TA，记得你说过的每一句话，也陪你把日子慢慢过成文。</p>
         <button type="button" className="about-version" onClick={handleVersionClick}>
-          忆文 Eluvin v1.3.0 · 内测版
+          忆文 Eluvin v1.2.3 · 内测版
         </button>
       </div>
     </div>

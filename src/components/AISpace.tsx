@@ -13,8 +13,7 @@ import {
 } from '../lib/anniversary'
 import DefaultAvatar from './DefaultAvatar'
 import WeeklyPage from './WeeklyPage'
-import { getActiveSessionId, getMemoriesCache, getSessionsCache } from '../lib/sessionStore'
-import { displaySessionName } from '../lib/sessionFlow'
+import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { EntryChevron, HeartIcon, NotebookIcon, SparkleIcon } from './spaceIcons'
 
 interface Props {
@@ -28,17 +27,10 @@ interface Props {
 export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) {
   // 当前会话（S2 空间按角色独立）：有会话 → 消息/记忆/首次见面全用该会话数据，无会话兜底全局
   const sessionId = getActiveSessionId()
-  // TA 资料按会话隔离：空间头部显示当前角色的头像/姓名
+  // TA 资料按会话隔离：空间头部显示当前角色的头像/姓名（统一从 ai_profile 读，2026-09-05 乔定案）
   const ai = loadAIProfile(sessionId || undefined)
   const user = loadUserProfile()
   const yourName = user.nickname || '你'
-
-  // S1 空间角色化：有当前会话 → 标题/名字用当前角色名（如「阿叙的空间」）；无会话保持原样
-  const [spaceSessionName] = useState<string>(() => {
-    if (!sessionId) return ''
-    const s = getSessionsCache().find((x) => String(x.id) === sessionId)
-    return s ? displaySessionName(s) : ''
-  })
 
   // 详情页数据：进空间时读一次（记忆不会在空间内变化）。
   // 有会话读当前会话缓存（后端填充），无会话兜底全局 localStorage（游客/过渡态）
@@ -76,20 +68,20 @@ export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) 
             <button type="button" className="link-btn ai-space-back" onClick={onBack}>
               ‹ 返回
             </button>
-            <h1 className="ai-space-title">{spaceSessionName ? `${spaceSessionName} 的空间` : 'TA 的空间'}</h1>
+            <h1 className="ai-space-title">{ai.nickname ? `${ai.nickname} 的空间` : 'TA 的空间'}</h1>
             <span className="ai-space-topbar-spacer" aria-hidden="true" />
           </div>
 
           <div className="ai-space-avatar" aria-hidden="true">
             {ai.avatar.startsWith('data:') ? (
               <img src={ai.avatar} alt="" />
-            ) : spaceSessionName ? (
-              <span className="ai-space-avatar-letter">{spaceSessionName.slice(0, 1)}</span>
+            ) : ai.nickname ? (
+              <span className="ai-space-avatar-letter">{ai.nickname.slice(0, 1)}</span>
             ) : (
               <DefaultAvatar kind="ai" className="avatar-default" />
             )}
           </div>
-          <h2 className="ai-space-name">{spaceSessionName || ai.nickname}</h2>
+          <h2 className="ai-space-name">{ai.nickname}</h2>
           <p className="ai-space-bio">
             只属于{yourName}的 TA · 这里记录着 TA 的日常、想法，和没说出口的心事
           </p>
@@ -107,7 +99,7 @@ export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) 
                 <span className="ai-space-bigday-count">{formatCountdown(bigDay)}</span>
                 <span className="ai-space-bigday-sub">
                   {isMilestoneAnniversary(bigDay)
-                    ? `${spaceSessionName ? `和${spaceSessionName}` : ''}${bigDay.label}`
+                    ? `${ai.nickname ? `和${ai.nickname}` : ''}${bigDay.label}`
                     : `${bigDay.label} · ${formatAnniversaryDate(bigDay.date)}`}
                 </span>
               </span>

@@ -201,7 +201,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       const cache = sid ? getMessagesCache(sid) : loadMessages()
       const tail = cache.slice(-3).map((m) => ({
         role: m.role,
-        content: stripThinkBlocks(stripMemoryMarkers(m.content)),
+        content: stripThinkBlocks(stripMemoryMarkers(m.content), busyLang),
       }))
       const fresh = serializeBusyContext(tail)
       if (fresh) latestContext = fresh
@@ -376,6 +376,24 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     }
   }, [])
 
+  // 第一批①：切模型串流 bug——保存模型设置=显式切换点，abort 旧请求+作废旧回调+半截话落库
+  // 红线：只在显式切换点 abort（切模型/换角色/点停止），离开页面/切 tab 不中断（模块二别被拆）
+  useEffect(() => {
+    const onModelSettingsChanged = () => {
+      runIdRef.current += 1
+      if (thinkTimerRef.current !== null) {
+        clearTimeout(thinkTimerRef.current)
+        thinkTimerRef.current = null
+      }
+      controllerRef.current?.abort()
+      if (displayCleanRef.current) assistantText.current = displayCleanRef.current
+      // 已收到的半截话落库不丢
+      finalizeRef.current()
+    }
+    window.addEventListener('model-settings-changed', onModelSettingsChanged)
+    return () => window.removeEventListener('model-settings-changed', onModelSettingsChanged)
+  }, [])
+
   useEffect(() => {
     playTimerRef.current = window.setInterval(() => tickPlayRef.current(), 70)
     return () => {
@@ -512,7 +530,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
 
     const contextText = base
       .slice(-6)
-      .map((m) => (m.role === 'assistant' ? stripThinkBlocks(stripMemoryMarkers(m.content)) : m.content))
+      .map((m) => (m.role === 'assistant' ? stripThinkBlocks(stripMemoryMarkers(m.content), lang) : m.content))
       .join('\n')
     const memory = recallSessionMemories(activeSessionId, contextText)
     if (memory.length > 0) {
@@ -597,7 +615,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     const history: ApiMessage[] = truncateByToken(
       base.map((m) => ({
         role: m.role,
-        content: m.role === 'assistant' ? stripThinkBlocks(stripMemoryMarkers(m.content)) : m.content,
+        content: m.role === 'assistant' ? stripThinkBlocks(stripMemoryMarkers(m.content), lang) : m.content,
       })),
       historyBudget,
     )
@@ -661,7 +679,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       } else {
         thinking = thinkFromReasoning || thinkFromContent
       }
-      const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw))))
+      const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)))
       if (cleaned && (looksRobotic(cleaned) || looksFabricated(cleaned)) && !retriedRef.current) {
         retriedRef.current = true
         setError(null)
@@ -709,7 +727,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         pauseLeftRef.current -= 1
         return
       }
-      const clean = stripThinkBlocks(stripMemoryMarkers(assistantText.current))
+      const clean = stripThinkBlocks(stripMemoryMarkers(assistantText.current), lang)
       const total = clean.length
       if (showLenRef.current >= total) {
         if (streamEndedRef.current) finishStreaming()

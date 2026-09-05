@@ -21,6 +21,22 @@ const BUSY_INTENT_FULL = /(我去|我出去|我先|我得|我要去|等我|我�
  */
 const BUSY_EXCLUDE = /(找你|接你|给你|陪你|来看你|去找你)/
 
+/**
+ * 第三批⑩：英文 busy 句式（二期）——英文用户说 "I'll go wash the dishes" 也触发。
+ * 英文前缀：I'll go / I'm going to / let me / I need to / I'm gonna / I'll go handle / brb 等
+ */
+const BUSY_INTENT_PREFIX_EN = /(I'?ll go|I'?m going to|let me|I need to|I'?m gonna|I'?ll go handle|I'?ll be right back|brb|I'?m off to|I gotta|I'?ve got to)/i
+
+/**
+ * 英文完整离开句式：前缀 + 0~20 字符内容 + 结尾词（now/right away/quickly/brb/./! 等）
+ */
+const BUSY_INTENT_FULL_EN = /(I'?ll go|I'?m going to|let me|I need to|I'?m gonna|I'?ll go handle|I'?ll be right back|brb|I'?m off to|I gotta|I'?ve got to).{0,30}(now|right away|quickly|brb|be right back|\.|!|~)/i
+
+/**
+ * 英文排除列表：come find you / see you / pick you up 这类奔向对方的，不触发
+ */
+const BUSY_EXCLUDE_EN = /(come find you|come see you|see you|pick you up|get you|meet you|come get you)/i
+
 /** 忙碌中自动回复文案（用户发消息时回一句短的，不展开） */
 const BUSY_REPLIES = [
   '在忙呢，等下说。',
@@ -61,11 +77,42 @@ export const IDLE_STATE: BusyState = {
  */
 export function matchBusyIntent(text: string): RegExpMatchArray | null {
   const t = String(text ?? '')
+  // 中文句式
   const m = t.match(BUSY_INTENT_FULL)
-  if (!m) return null
-  // 排除为对方做的事："我去找你吧""我来接你"这类是奔向对方，不该消失
-  if (BUSY_EXCLUDE.test(m[0])) return null
-  return m
+  if (m) {
+    if (BUSY_EXCLUDE.test(m[0])) return null
+    return m
+  }
+  // 第三批⑩：英文句式
+  const mEn = t.match(BUSY_INTENT_FULL_EN)
+  if (mEn) {
+    if (BUSY_EXCLUDE_EN.test(mEn[0])) return null
+    return mEn
+  }
+  // 英文纯离开词：brb / gotta go / be right back 单独出现即离开意图（2026-09-05 乔补强）
+  const pureEn = t.match(/\b(brb|be right back|gotta go|gtg|i'?m off)\b/i)
+  if (pureEn) {
+    if (BUSY_EXCLUDE_EN.test(pureEn[0])) return null
+    return pureEn
+  }
+  // 英文前缀 + 动作（无结束语也触发，如 "I'll go wash the dishes"）：
+  // 前缀命中后检查后续内容，含"非离开动词"（think/tell you/with you 等）→ 不是离开，不触发
+  // （2026-09-05 乔补强：原版只认带结尾词 now/right away 的句式，日常口语大量漏匹配）
+  const prefixEn = t.match(BUSY_INTENT_PREFIX_EN)
+  if (prefixEn) {
+    const after = t.slice((prefixEn.index ?? 0) + prefixEn[0].length).slice(0, 40)
+    if (BUSY_EXCLUDE_EN.test(after)) return null
+    // 非离开动词黑名单：以这些开头说明还要继续聊/跟你相关，不是去忙
+    if (
+      /(think|tell you|ask you|talk to you|chat with you|show you|help you|explain|be honest|with you|wait for you|come get you)/i.test(
+        after,
+      )
+    ) {
+      return null
+    }
+    return prefixEn
+  }
+  return null
 }
 
 /**
@@ -88,9 +135,18 @@ export function containsBusyKeyword(text: string): boolean {
  */
 export function findBusyCutoff(text: string): number {
   const t = String(text ?? '')
-  const m = t.match(BUSY_INTENT_PREFIX)
-  if (!m || m.index === undefined) return -1
-  const earliest = m.index
+  // 中文前缀
+  let m = t.match(BUSY_INTENT_PREFIX)
+  // 第三批⑩：英文前缀
+  const mEn = t.match(BUSY_INTENT_PREFIX_EN)
+  // 取最早出现的前缀位置
+  let earliest = -1
+  if (m && m.index !== undefined) earliest = m.index
+  if (mEn && mEn.index !== undefined && (earliest < 0 || mEn.index < earliest)) {
+    earliest = mEn.index
+    m = mEn
+  }
+  if (earliest < 0) return -1
   // 从前缀往后找第一个句子结束符
   const rest = t.slice(earliest)
   const sentenceEnd = rest.search(/[。！？!?…\n]/)

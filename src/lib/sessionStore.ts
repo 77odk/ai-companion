@@ -90,14 +90,13 @@ export function getMessagesCache(sessionId: string): StoredMessage[] {
         typeof m.content === 'string' &&
         typeof m.ts === 'number',
     )
-    // 自愈去重（2026-08-25）：历史脏数据里可能已有同一条消息的重复条目（本地 ts + 云端 ts 各一份），按 ts 或 role+内容去重
-    const seenTs = new Set<number>()
+    // 自愈去重（2026-08-25）：历史脏数据里可能已有同一条消息的重复条目（本地 ts + 云端 ts 各一份），按 role+内容去重
+    // 2026-09-05 修复：不能只按 ts 去重——同一轮 splitAssistantReplies 拆出的多条 assistant 消息用同一个 assistantTs，按 ts 去重会把后面的消息全删掉（吞消息根因）
     const seenContent = new Set<string>()
     const deduped: StoredMessage[] = []
     for (const m of valid) {
       const ck = `${m.role}|${m.content}`
-      if (seenTs.has(m.ts) || seenContent.has(ck)) continue
-      seenTs.add(m.ts)
+      if (seenContent.has(ck)) continue
       seenContent.add(ck)
       deduped.push(m)
     }
@@ -542,10 +541,43 @@ export async function flushPendingOps(token: string): Promise<void> {
 // ---- 回复拆分（2026-08-25 七七拍板：微信式多条短气泡） ----
 
 /**
+ * 第二批⑨：超长文本折行不丢弃——把超过 maxLen 的文本拆成多条，每条不超过 maxLen 字。
+ * 优先在标点/空格处断（保句子完整），无标点硬折；最后残余哪怕几个字也保留；不加省略号。
+ * 中文按标点断，英文按空格/标点断。
+ */
+function chunkText(text: string, maxLen: number = 60): string[] {
+  const t = String(text ?? '').trim()
+  if (!t) return []
+  if (t.length <= maxLen) return [t]
+  const chunks: string[] = []
+  let remaining = t
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLen) {
+      chunks.push(remaining)
+      break
+    }
+    // 在 maxLen 范围内找最后一个标点/空格作为断点
+    const window = remaining.slice(0, maxLen)
+    // 中文标点：。！？；，、 英文标点：.!?;, 空格
+    const breakMatch = window.match(/[。！？；，、.!?;,，][^。！？；，、.!?;,，\s]*$|\s[^\s]*$/)
+    let breakPos = maxLen
+    if (breakMatch && breakMatch.index !== undefined) {
+      // 断点在标点/空格之后，保留标点在当前 chunk
+      breakPos = breakMatch.index + breakMatch[0].length
+      if (breakPos > maxLen) breakPos = maxLen
+    }
+    chunks.push(remaining.slice(0, breakPos).trim())
+    remaining = remaining.slice(breakPos).trim()
+  }
+  return chunks.filter(Boolean)
+}
+
+/**
  * 把 AI 回复拆成多条短消息（同一 ts 批次，渲染时各自独立气泡）：
  * - 按换行/空行拆：AI 在提示词约束下会像发微信一样分行发（一条一行）
  * - 单条 ≤ 1 行 → 原样；没换行就整条返回（一句话能说完就一句话）
  * - 连续多行合成一条最长 60 字内；空白行是分段符
+ * - 第二批⑨：超长内容折行不丢弃，不再 slice+省略号
  */
 export function splitAssistantReplies(content: string, ts: number): StoredMessage[] {
   const text = String(content ?? '').trim()
@@ -556,23 +588,30 @@ export function splitAssistantReplies(content: string, ts: number): StoredMessag
     .map((s) => s.trim())
     .filter(Boolean)
   if (lines.length > 1) {
-    // 每行一条（提示词已让 AI 一行一条短消息）；过长的行按 60 字截断加省略号
-    return lines.map((l) => ({
-      role: 'assistant' as const,
-      content: l.length > 60 ? `${l.slice(0, 60)}…` : l,
-      ts,
-    }))
+    // 每行一条；过长的行折行不丢弃（第二批⑨）
+    const result: StoredMessage[] = []
+    for (const l of lines) {
+      for (const chunk of chunkText(l, 60)) {
+        result.push({ role: 'assistant' as const, content: chunk, ts })
+      }
+    }
+    return result
   }
   // 2) 没换行（一整段）：按句子拆——句号/问号/感叹号/省略号断句，一条一句，
-  //    不让一大段直接甩脸上；单句超 60 字截断
+  //    不让一大段直接甩脸上；单句超 60 字折行不丢弃（第二批⑨）
   const sentences = text
     .split(/(?<=[。！？!?…])/)
     .map((s) => s.trim())
     .filter(Boolean)
-  if (sentences.length <= 1) return [{ role: 'assistant', content: text, ts }]
-  return sentences.map((s) => ({
-    role: 'assistant' as const,
-    content: s.length > 60 ? `${s.slice(0, 60)}…` : s,
-    ts,
-  }))
+  if (sentences.length <= 1) {
+    // 单句超长也折行
+    return chunkText(text, 60).map((c) => ({ role: 'assistant' as const, content: c, ts }))
+  }
+  const result: StoredMessage[] = []
+  for (const s of sentences) {
+    for (const chunk of chunkText(s, 60)) {
+      result.push({ role: 'assistant' as const, content: chunk, ts })
+    }
+  }
+  return result
 }

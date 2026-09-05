@@ -303,7 +303,7 @@ function buildHeaders(settings: ModelSettings): Record<string, string> {
   }
 }
 
-/** 测试连接：发一个 max_tokens=10 的最小请求，验证 Key 可用 */
+/** 测试连接：发一个最小请求，验证 Key 可用 */
 export async function testConnection(settings: ModelSettings): Promise<void> {
   const url = buildUrl(settings, '/chat/completions')
   let resp: Response
@@ -314,7 +314,8 @@ export async function testConnection(settings: ModelSettings): Promise<void> {
       body: JSON.stringify({
         model: settings.model,
         messages: [{ role: 'user', content: '你好，请只回复四个字：连接成功' }],
-        max_tokens: 10,
+        // 第二批④：思考模型（Gemini/DeepSeek-R1等）需要更多 token 思考，10 不够
+        max_tokens: 100,
         stream: false,
         ...zhipuThinking(settings),
       }),
@@ -328,7 +329,11 @@ export async function testConnection(settings: ModelSettings): Promise<void> {
 
   try {
     const data = await resp.json()
-    if (!data?.choices?.[0]?.message?.content) {
+    const msg = data?.choices?.[0]?.message
+    // 第二批④：思考模型 content 可能为空（思考在 reasoning_content 里），任一非空即成功
+    const hasContent = typeof msg?.content === 'string' && msg.content.trim().length > 0
+    const hasReasoning = typeof msg?.reasoning_content === 'string' && msg.reasoning_content.trim().length > 0
+    if (!hasContent && !hasReasoning) {
       throw new ChatError('bad-request', '服务商返回了异常数据，请检查 base_url 是否正确')
     }
   } catch (e) {

@@ -26,7 +26,7 @@ const SETTINGS_KEY = 'ai_companion_settings'
 
 /** 各服务商默认 base_url 与模型 */
 export const DEFAULT_SETTINGS: Record<Provider, { baseUrl: string; model: string }> = {
-  deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+  deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' },
   zhipu: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4.7-flash' },
   openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   custom: { baseUrl: '', model: 'gpt-4o-mini' },
@@ -40,6 +40,46 @@ export const PROVIDER_NAMES: Record<Provider, string> = {
   openai: 'OpenAI',
   custom: '自定义',
   volcengine: '火山豆包',
+}
+
+/**
+ * 第三批⑫：常见模型列表（按服务商分组），用于模型名点选下拉。
+ * 用户点一下自动填入，不用手敲。
+ */
+export const COMMON_MODELS: Record<Provider, string[]> = {
+  deepseek: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'],
+  zhipu: ['glm-4.7-flash', 'glm-5.3-flash'],
+  openai: ['gpt-4o', 'gpt-4o-mini'],
+  custom: ['claude-sonnet-5', 'claude-opus-4', 'gemini-3.1-pro-high', 'gpt-4o', 'deepseek-v4-flash', 'glm-4.7-flash', 'doubao-seed-character'],
+  volcengine: ['doubao-seed-character', 'doubao-1.5-pro-32k', 'doubao-1.5-lite-32k'],
+}
+
+/** 历史模型名存储 key（用户填过的模型名，下次直接可选） */
+const MODEL_HISTORY_KEY = 'ai_companion_model_history'
+
+/** 读取历史模型名（最近用过的，去重，最多 10 个） */
+export function loadModelHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(MODEL_HISTORY_KEY)
+    if (!raw) return []
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? arr.filter((s) => typeof s === 'string').slice(0, 10) : []
+  } catch {
+    return []
+  }
+}
+
+/** 保存模型名到历史（去重，最新的排前面，最多 10 个） */
+export function saveModelHistory(model: string): void {
+  const m = String(model ?? '').trim()
+  if (!m) return
+  try {
+    const existing = loadModelHistory().filter((s) => s !== m)
+    const next = [m, ...existing].slice(0, 10)
+    localStorage.setItem(MODEL_HISTORY_KEY, JSON.stringify(next))
+  } catch {
+    // 存失败不阻塞
+  }
 }
 
 function defaultProviderConfig(p: Provider): ProviderConfig {
@@ -143,7 +183,7 @@ export interface StoredMessage {
   thinking?: string
 }
 
-/** 用户气泡下「✅已帮你记下」反馈是否显示：仅用户消息且该条触发记忆写入（TASK-LM2） */
+/** 用户气泡下「✅已帮你记下」反馈是否显示：仅用户消息且该条触发了记忆写入（TASK-LM2） */
 export function shouldShowMemorySaved(m: StoredMessage): boolean {
   return m.role === 'user' && m.memorySaved === true
 }

@@ -2,6 +2,7 @@
 // 既有字段保持兼容：id / text / createdAt / source；新加的 topic / updatedAt 都是可选字段
 
 import { notifyDataChanged } from './dataChange.ts'
+import type { Lang } from './langDetect.ts'
 
 export interface MemoryItem {
   id: string
@@ -291,7 +292,7 @@ export function stripMemoryMarkers(text: string): string {
  * 3. `` 后面没有中文字符（整条都是思考链）→ 删到结尾
  * 4. 整条消息就是 `` 标记 → 返回空串
  */
-export function stripThinkBlocks(text: string): string {
+export function stripThinkBlocks(text: string, lang: Lang = 'zh'): string {
   const t = String(text ?? '')
   if (!t) return ''
   // 整条消息就是 `` 标记
@@ -303,6 +304,20 @@ export function stripThinkBlocks(text: string): string {
   result = result.replace(/<think>[\s\S]*?(?=[\u4e00-\u9fff])/g, '')
   // 3. `` 后面没有中文字符（整条都是思考链）→ 删到结尾
   result = result.replace(/<think>[\s\S]*$/g, '')
+  // 第一批③：裸英文思考泄漏——只在中文会话里剥，按推理特征词判，英文会话正文绝不动
+  if (lang === 'zh') {
+    // 4. 无 `` 包裹但以推理特征词开头的英文段（思考链泄漏的典型形态）
+    // 特征词：Initiating/Interpreting/Addressing/Analyzing/Reasoning/Thinking/Processing/Dissecting/Parsing
+    result = result.replace(
+      /^(Initiating|Interpreting|Addressing|Analyzing|Reasoning|Thinking|Processing|Dissecting|Parsing)\b[\s\S]*?(?=[\u4e00-\u9fff]|$)/gi,
+      '',
+    )
+    // 5. I'm parsing / Let me think / Let me analyze 开头的
+    result = result.replace(
+      /^(I'?m\s+(parsing|analyzing|thinking|processing|dissecting)|Let\s+me\s+(think|analyze|parse|process))\b[\s\S]*?(?=[\u4e00-\u9fff]|$)/gi,
+      '',
+    )
+  }
   // 清理多余空行
   result = result.replace(/\n{3,}/g, '\n\n').trim()
   return result

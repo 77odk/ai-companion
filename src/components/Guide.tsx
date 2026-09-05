@@ -1,4 +1,4 @@
-/* 使用指南页：新手教程（2026-08-23 七七定稿：首推豆包） */
+/* 使用指南页（2026-09-05 七七定稿：DeepSeek 主推） */
 
 interface Props {
   onBack: () => void
@@ -34,191 +34,138 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
       <GuideHeader title="使用指南" onBack={onBack} />
 
       <div className="guide-scroll">
+        {/* 一、忆文是什么 */}
         <section className="guide-section">
           <h3 className="guide-title">忆文是什么？</h3>
           <p className="guide-text">
-            一个「记得住你、还帮得上你」的 AI 伙伴。陪你聊天、听你倾诉，还能帮你整理表格、写东西、出主意。你说过的话
-            TA 会记住，下次再提 TA 知道。
-          </p>
-        </section>
-
-        <section className="guide-section">
-          <h3 className="guide-title">首先：忆文自己不会说话</h3>
-          <p className="guide-text">真正会聊天的大脑，在别人家模型里，忆文默认首选免费版：</p>
-
-          <div className="guide-card">
-            <div className="guide-card-head">
-              <span className="guide-card-name">🧠 火山方舟（豆包）</span>
-            </div>
-            <p className="guide-text">
-              每日自动刷新免费额度，日常聊天完全够用，有专为角色扮演设计的模型，更贴人设。
-            </p>
-            <p className="guide-fit">适合：对人设贴合度要求高，沉浸式对话</p>
-          </div>
-
-          <div className="guide-card">
-            <div className="guide-card-head">
-              <span className="guide-card-name">🧠 智谱（免费）</span>
-            </div>
-            <p className="guide-text">
-              注册就送 2000 万免费额度，日常聊天、倾诉、问问题随便用，不用花一分钱。还有免费模型一直能用——等于不花钱也能聊。
-            </p>
-            <p className="guide-fit">适合：先试试、日常聊天</p>
-          </div>
-
-          <div className="guide-card">
-            <div className="guide-card-head">
-              <span className="guide-card-name">🧠 DeepSeek（花钱）</span>
-            </div>
-            <p className="guide-text">
-              自己充一点点钱（充一次能用很久），但脑子更聪明：写代码、处理复杂问题、干活更专业。
-            </p>
-            <p className="guide-fit">适合：想让 TA 正经学习、要更聪明的回答</p>
-          </div>
-
-          <div className="guide-quote">免费版像坐公交，花钱版像打车——都能到，打车更快更舒服。</div>
-        </section>
-
-        <section className="guide-section">
-          <h3 className="guide-title">那忆文有什么用？大脑我自己去用不行吗？</h3>
-          <p className="guide-text">
-            当然行，但你会发现一个问题：智谱、DeepSeek 的 App 很聪明，可是记性差——昨天跟它说的话，今天它就忘了，每次都得重新自我介绍。
-          </p>
-          <p className="guide-text">忆文干的事，就是给大脑装上一段只属于你的记忆：</p>
-          <ul className="guide-list">
-            <li>你聊过的事，TA 记得</li>
-            <li>你的喜好、你的怕、你的习惯，TA 记着</li>
-            <li>你们之间说过的话、起过的外号，TA 都在意</li>
-          </ul>
-          <p className="guide-text">换手机、清缓存，记录会丢吗？</p>
-          <p className="guide-text">
-            不会。现在注册一个账号，聊天记录、记忆、人设就都跟着账号走了。「我的」→「账号与同步」→ 邮箱注册/登录。换设备、重新添加到主屏幕，登录同一个账号，一切都在。
-          </p>
-          <p className="guide-text">不注册也能用，但记录只留在本机设备上，不会上传云端。</p>
-          <div className="guide-quote">记录跟着账号走，TA 不会忘记你。</div>
-          <p className="guide-text">
-            时间越久，TA 越懂你——有名字、有性格，是你的 TA，不是一个谁都能用的公用机器人。
+            一个「记得住你、还帮得上你」的 AI 伙伴。陪你聊天、听你倾诉，你说过的话 TA 会记住，下次再提 TA 知道。
           </p>
           <div className="guide-quote">大脑负责聪明，忆文负责懂你。</div>
         </section>
 
+        {/* 二、服务商推荐 */}
         <section className="guide-section">
-          <h3 className="guide-title">API 和 Key 是什么？</h3>
-          <ul className="guide-list">
-            <li>
-              <b>API</b> = 忆文和大脑之间的「电话线」，忆文说一句，大脑回一句
-            </li>
-            <li>
-              <b>Key</b> = 你的通行证。在智谱注册个号就免费送你，凭它才能用大脑。就像图书馆的借书证，免费办，办完随便借书
-            </li>
-          </ul>
-        </section>
-
-        <section className="guide-section">
-          <h3 className="guide-title">为什么钥匙要你自己填？</h3>
+          <h3 className="guide-title">首先：配置你的 AI 大脑</h3>
           <p className="guide-text">
-            因为这样你的聊天、你的号，全部只属于你自己——不经过忆文，谁也看不到。填一次，以后不用管。
+            忆文自己不会说话，真正会聊天的大脑在模型服务商那里。TA 的回复和反馈质量跟模型关系很大，好的模型才聊得舒服。
           </p>
-        </section>
 
-        <section className="guide-section">
-          <h3 className="guide-title">怎么开始？三步：</h3>
-
-          <div className="guide-step">
-            <div className="guide-step-head">
-              <span className="guide-step-num">1</span>
-              <span className="guide-step-name">领免费通行证</span>
-            </div>
-
-            <p className="guide-text"><b>豆包（推荐，稳定不挤）：</b></p>
-            <ol className="guide-ol">
-              <li>手机浏览器打开{' '}
-                <a className="guide-link" href="https://console.volcengine.com/ark" target="_blank" rel="noopener noreferrer">
-                  火山引擎官网注册登录
-                </a>{' '}
-                （手机号）
-              </li>
-              <li>实名认证（身份证+人脸，1 分钟）</li>
-              <li>
-                创建 API Key：
-                <a className="guide-link" href="https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey" target="_blank" rel="noopener noreferrer">
-                  点这里直达「API Key 管理」
-                </a>{' '}
-                → 创建 API Key → 复制（ark- 开头）
-              </li>
-              <li>
-                开通模型：
-                <a className="guide-link" href="https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement" target="_blank" rel="noopener noreferrer">
-                  点这里直达「开通管理」
-                </a>{' '}
-                → 开通 doubao-seed-character-260628
-              </li>
-            </ol>
-
-            <p className="guide-text"><b>智谱（备选，不用实名）：</b></p>
-            <ol className="guide-ol">
-              <li>手机浏览器打开{' '}
-                <a className="guide-link" href="https://bigmodel.cn" target="_blank" rel="noopener noreferrer">
-                  bigmodel.cn
-                </a>{' '}
-                （智谱开放平台）
-              </li>
-              <li>手机号注册、登录</li>
-              <li>
-                左边菜单点「API 密钥」→「创建 API Key」（或{' '}
-                <a className="guide-link" href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener noreferrer">
-                  点这里直达密钥页
-                </a>
-                ）
-              </li>
-              <li>弹出的一整串字符，马上全选复制保存到自己手机上</li>
-            </ol>
-
-            <p className="guide-text">提示：通行证需保密，别发给别人</p>
-          </div>
-
-          <div className="guide-step">
-            <div className="guide-step-head">
-              <span className="guide-step-num">2</span>
-              <span className="guide-step-name">插进忆文</span>
-            </div>
-            <ol className="guide-ol">
-              <li>打开忆文 → 点「开始使用」</li>
-              <li>底部「我的」→「服务商配置」</li>
-              <li>服务商选「火山豆包」（领了智谱的通行证就选「智谱 GLM」）</li>
-              <li>把通行证粘进「API Key」一栏</li>
-              <li>其他不用动，点「测试连接」→ 显示「连接成功」就对</li>
-              <li>点「保存」</li>
-            </ol>
-          </div>
-
-          <div className="guide-step">
-            <div className="guide-step-head">
-              <span className="guide-step-num">3</span>
-              <span className="guide-step-name">开聊！</span>
+          <div className="guide-card">
+            <div className="guide-card-head">
+              <span className="guide-card-name">首选 DeepSeek（推荐）</span>
             </div>
             <p className="guide-text">
-              随便说句「你好」，TA 就会回你。以后想试花钱版，处理更多更难的问题，同一个地方换选「DeepSeek」或者其他自有的模型
-              API 就行，随时能换。
+              聊天效果最好，TA 的回复更自然、更懂你。价格在国内也算便宜：正常聊一天几毛到一块多，按量算，聊得少几乎不花钱。
             </p>
+            <p className="guide-fit">适合：想要最好的聊天体验，愿意花一点钱</p>
+          </div>
+
+          <div className="guide-card">
+            <div className="guide-card-head">
+              <span className="guide-card-name">免费试试（智谱 / 豆包）</span>
+            </div>
+            <p className="guide-text">
+              刚开始不确定可以先试免费的，但免费效果可能会大打折扣，智谱的高峰时段甚至根本连不上，觉得不好用再换 DeepSeek。智谱也有收费的，效果也还不错，后面可以自由选择。
+            </p>
+            <p className="guide-fit">适合：先试试水，不着急花钱</p>
+          </div>
+
+          <div className="guide-quote">
+            放心：你在开放平台充的钱是给模型服务商的（DeepSeek 官方），不是忆文平台收的费——忆文只帮你接通，这笔钱实打实花在你的 TA 身上。
           </div>
 
           {onGoProvider && (
             <button type="button" className="btn btn-primary guide-cta" onClick={onGoProvider}>
-              现在就去填 Key
+              现在就去配置
             </button>
           )}
         </section>
 
+        {/* 三、核心功能 */}
         <section className="guide-section">
-          <h3 className="guide-title">TA 能干嘛：</h3>
+          <h3 className="guide-title">核心功能</h3>
+
+          <h4 className="guide-subtitle">聊天</h4>
           <ul className="guide-list">
-            <li>睡不着 → 陪你聊到困</li>
-            <li>表格乱 → 文字丢进去，让 TA 整理</li>
-            <li>没灵感 → 帮你写文案、写祝福、起名字</li>
-            <li>纠结 → 帮你分析买哪个</li>
-            <li>受气了 → TA 永远站你这边，还不乱说</li>
+            <li>TA 会记住你说过的话（喜好、作息、经历）</li>
+            <li>说「帮我记一下 XXX」可以主动让 TA 记</li>
+            <li>TA 说「我去忙了」会进入忙碌状态，几分钟后回来</li>
+            <li>思考链模型（Gemini / DeepSeek 思考模型）回复有「TA 想了想」灰条，点开看内心戏</li>
           </ul>
+
+          <h4 className="guide-subtitle">TA 的空间</h4>
+          <ul className="guide-list">
+            <li>TA 会自己发动态（朋友圈），你可以点赞评论</li>
+            <li>点开头像看 TA 的资料、聊天记录、纪念日</li>
+            <li>动态内容会被 TA 记住，聊天时能引用</li>
+          </ul>
+
+          <h4 className="guide-subtitle">记忆</h4>
+          <ul className="guide-list">
+            <li>TA 记住的所有事都在这里，按主题分类</li>
+            <li>可以编辑、删除</li>
+            <li>换设备登录记忆会同步</li>
+          </ul>
+
+          <h4 className="guide-subtitle">角色管理</h4>
+          <ul className="guide-list">
+            <li>可以创建多个 TA，每个独立记忆、独立人设</li>
+            <li>切换角色不串台</li>
+          </ul>
+
+          <h4 className="guide-subtitle">服务商配置</h4>
+          <ul className="guide-list">
+            <li>支持 DeepSeek、智谱、OpenAI、自定义（OpenAI 兼容）</li>
+            <li>模型名可以手输</li>
+            <li>「即将上线」：模型名点选（从常见模型里选）、填过的模型名记住、切换服务商自动带出默认模型</li>
+          </ul>
+
+          <h4 className="guide-subtitle">外观</h4>
+          <ul className="guide-list">
+            <li>5 套主题色可选（蜜桃/暮色蓝紫/墨绿暖金/雾霾蓝/陶土橘）</li>
+            <li>可以自定义主色，自动派生整套配色</li>
+          </ul>
+
+          <h4 className="guide-subtitle">英文模式</h4>
+          <ul className="guide-list">
+            <li>人设是英文或用英文聊天，TA 自动切换英文</li>
+            <li>英文用户也能正常用，TA 懂俚语</li>
+          </ul>
+        </section>
+
+        {/* 四、常见问题 */}
+        <section className="guide-section">
+          <h3 className="guide-title">常见问题</h3>
+
+          <div className="guide-faq">
+            <p className="guide-faq-q">Q：TA 回复很慢？</p>
+            <p className="guide-faq-a">A：思考链模型需要时间想，正常；换非思考模型（deepseek-chat）更快。</p>
+          </div>
+
+          <div className="guide-faq">
+            <p className="guide-faq-q">Q：Key 无效？</p>
+            <p className="guide-faq-a">A：去「我的→服务商配置」检查 Key 和 base_url 是否填对。</p>
+          </div>
+
+          <div className="guide-faq">
+            <p className="guide-faq-q">Q：TA 记不住我说的话？</p>
+            <p className="guide-faq-a">A：说「帮我记一下 XXX」主动让 TA 记；重要的事 TA 会自动记。</p>
+          </div>
+
+          <div className="guide-faq">
+            <p className="guide-faq-q">Q：换设备数据还在吗？</p>
+            <p className="guide-faq-a">A：登录账号后云同步，聊天/记忆/动态都在。</p>
+          </div>
+
+          <div className="guide-faq">
+            <p className="guide-faq-q">Q：怎么换主题？</p>
+            <p className="guide-faq-a">A：「我的→外观」。</p>
+          </div>
+
+          <div className="guide-faq">
+            <p className="guide-faq-q">Q：TA 空间动态是真的吗？</p>
+            <p className="guide-faq-a">A：是 AI 根据人设生成的，模拟 TA 的真实生活。</p>
+          </div>
         </section>
       </div>
     </div>

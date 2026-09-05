@@ -7,6 +7,7 @@ import { chatBubbleTime } from '../lib/time'
 import { chatCompletion } from '../lib/api'
 import { detectLang } from '../lib/langDetect'
 import DefaultAvatar from './DefaultAvatar'
+
 interface Props {
   message: StoredMessage
   /** 流式输出中且内容为空时显示"正在输入"动画 */
@@ -14,6 +15,7 @@ interface Props {
   /** 点 TA 的头像 → 打开聊天头像资料卡（TASK-UI3）；不传时头像不可点 */
   onAvatarClick?: () => void
 }
+
 function Avatar({ value, kind, className }: { value: string; kind: 'user' | 'ai'; className: string }) {
   return (
     <span className={`msg-avatar ${className}`} aria-hidden="true">
@@ -25,6 +27,7 @@ function Avatar({ value, kind, className }: { value: string; kind: 'user' | 'ai'
     </span>
   )
 }
+
 // 内心戏翻译缓存：localStorage key 前缀，按消息 ts 存翻译结果（StoredMessage 无 id，用 ts 作唯一标识）
 const THINK_ZH_CACHE_PREFIX = 'ai_companion_thinkzh_'
 function getThinkZhCache(ts: number): string | null {
@@ -41,8 +44,10 @@ function setThinkZhCache(ts: number, text: string): void {
     // 存不下不影响功能
   }
 }
+
 // 翻译 prompt：把英文思考链改写成第一人称中文心里话
 const THINK_TRANSLATE_PROMPT = `把下面这段 AI 的思考过程改写成第一人称中文心里话，3-5句，150字以内，口语化，去技术味，保留在意对方的点。只输出改写后的中文，不要解释。`
+
 export default function MessageBubble({ message, typing = false, onAvatarClick }: Props) {
   const isUser = message.role === 'user'
   // 模块三·内心戏：思考链展开/收起状态（Hooks 必须在所有条件返回之前调用，防 React Hooks 顺序崩溃）
@@ -56,15 +61,17 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
   // 模块三：纯思考链消息不渲染气泡（历史泄漏的英文推理段，没 `` 包裹的那种）
   // 注意：必须在 useState 之后再条件返回，否则列表重排时同一位置组件实例 Hooks 调用次数不一致会崩
   if (!isUser && isPureThinkBlock(message.content)) return null
+  // TASK-ENGLISH-MODE：会话语言决定灰条标签和思考链剥离范围
+  const sessionLang = getSessionLang(getActiveSessionId() || undefined)
   // TA 头像按会话隔离：聊天气泡用当前会话自己的头像；用户头像全局
   const avatar = isUser ? loadUserProfile().avatar : loadAIProfile(getActiveSessionId() || undefined).avatar
   // 展示时把「【记忆】xxx」那行和思考链「」藏起来，不让用户看到标记（原文仍保存在存储里）
-  const displayText = isUser ? message.content : stripThinkBlocks(stripMemoryMarkers(message.content))
+  // 第一批③：裸英文思考泄漏——只在中文会话剥，英文会话正文绝不动
+  const displayText = isUser ? message.content : stripThinkBlocks(stripMemoryMarkers(message.content), sessionLang)
   const hasMemory = !isUser && extractMemories(message.content).length > 0
   // 内心戏：TA 消息有 thinking 字段时显示灰条
   const hasThink = !isUser && !!message.thinking && message.thinking.trim().length > 0
-  // TASK-ENGLISH-MODE：会话语言决定灰条标签
-  const sessionLang = getSessionLang(getActiveSessionId() || undefined)
+  // TASK-ENGLISH-MODE：会话语言决定灰条标签（sessionLang 已在上面定义）
   const thinkLabel = sessionLang === 'en' ? 'TA was thinking' : 'TA 想了想'
   // 思考链是否需要翻译：中文会话 + thinking 是英文 → 需要懒翻译
   const thinkingRaw = message.thinking ?? ''
@@ -77,6 +84,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
     : ''
   // 用户这条消息触发记忆写入时，气泡下方给个「已帮你记下」的反馈
   const showMemorySaved = shouldShowMemorySaved(message)
+
   // 点开灰条时触发懒翻译（仅中文会话+英文思考链）
   const handleThinkToggle = () => {
     const nextOpen = !thinkOpen
@@ -113,6 +121,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
         })
     }
   }
+
   return (
     <div className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}>
       {!isUser &&
