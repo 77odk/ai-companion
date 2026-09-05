@@ -35,6 +35,23 @@ import { containsBusyKeyword, findBusyCutoff, inferBusyReason, pickBusyReply, ra
 import { loadCurrentPosts } from '../lib/aiSpace'
 import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELINE_EN } from '../lib/spaceChatInject'
 import { buildSelfTimelineBlock } from '../lib/selfTimeline'
+
+/**
+ * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
+ * TA 看到「你 3 小时前发的」自然知道隔了多久——解决「对时间流逝无感」。只在间隔明显时标，不刷屏。
+ */
+function msgTimeMark(ts: number, lang: Lang): string {
+  if (!Number.isFinite(ts) || ts <= 0) return ''
+  const diff = Date.now() - ts
+  if (diff < 2 * 60000) return ''
+  const m = Math.floor(diff / 60000)
+  if (m < 60) return lang === 'en' ? `[${m} min ago] ` : `[${m} 分钟前] `
+  const h = Math.floor(m / 60)
+  if (h < 24) return lang === 'en' ? `[${h} h ago] ` : `[${h} 小时前] `
+  const days = Math.floor(h / 24)
+  if (days === 1) return lang === 'en' ? '[yesterday] ' : '[昨天] '
+  return lang === 'en' ? `[${days} days ago] ` : `[${days} 天前] `
+}
 import { detectLang, type Lang } from '../lib/langDetect'
 import { getSessionLang, saveSessionLang } from '../lib/sessionStore'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
@@ -625,10 +642,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     const systemTokens = apiMessages.reduce((sum, m) => sum + estimateToken(m.content), 0)
     const historyBudget = Math.max(0, TOTAL_INPUT_BUDGET - systemTokens)
     const history: ApiMessage[] = truncateByToken(
-      base.map((m) => ({
-        role: m.role,
-        content: m.role === 'assistant' ? stripThinkBlocks(stripMemoryMarkers(m.content), lang) : m.content,
-      })),
+      base.map((m) => {
+        const body =
+          m.role === 'assistant' ? stripThinkBlocks(stripMemoryMarkers(m.content), lang) : m.content
+        // 时间流逝标记（只注入不改存储）：让 TA 感知每条消息隔了多久
+        const mark = msgTimeMark(m.ts, lang)
+        return { role: m.role, content: mark ? mark + body : body }
+      }),
       historyBudget,
     )
     apiMessages.push(...history)
