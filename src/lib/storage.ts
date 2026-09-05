@@ -368,6 +368,15 @@ export const DEFAULT_AI_PROFILE: AIProfile = { nickname: 'TA', avatar: '' }
 const aiProfileKey = (sessionId?: string): string =>
   sessionId ? `${AI_PROFILE_KEY}_${sessionId}` : AI_PROFILE_KEY
 
+/** 该会话是否有自己独立的 TA 资料（区别于回落全局；老角色没写过 = false） */
+export function hasOwnAIProfile(sessionId: string): boolean {
+  try {
+    return localStorage.getItem(aiProfileKey(sessionId)) != null
+  } catch {
+    return false
+  }
+}
+
 /** 首次按会话读取时，把老全局头像/姓名迁到「默认角色」（幂等；全局 key 保留，无会话兜底仍可读） */
 function ensureSessionProfile(_sessionId: string): void {
   try {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { loadAIProfile, loadUserProfile } from '../lib/storage'
+import { hasOwnAIProfile, loadAIProfile, loadUserProfile, saveAIProfile, type AIProfile } from '../lib/storage'
 import { loadMemory, type MemoryItem } from '../lib/memory'
 import { formatMemoryDate } from '../lib/aiSpaceDetail'
 import {
@@ -13,7 +13,8 @@ import {
 } from '../lib/anniversary'
 import DefaultAvatar from './DefaultAvatar'
 import WeeklyPage from './WeeklyPage'
-import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
+import { getActiveSessionId, getMemoriesCache, getSessionsCache } from '../lib/sessionStore'
+import { displaySessionName } from '../lib/sessionFlow'
 import { EntryChevron, HeartIcon, NotebookIcon, SparkleIcon } from './spaceIcons'
 
 interface Props {
@@ -28,7 +29,20 @@ export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) 
   // 当前会话（S2 空间按角色独立）：有会话 → 消息/记忆/首次见面全用该会话数据，无会话兜底全局
   const sessionId = getActiveSessionId()
   // TA 资料按会话隔离：空间头部显示当前角色的头像/姓名（统一从 ai_profile 读，2026-09-05 乔定案）
-  const ai = loadAIProfile(sessionId || undefined)
+  const [ai, setAi] = useState<AIProfile>(() => loadAIProfile(sessionId || undefined))
+  // 老角色修复（2026-09-05）：M9 时代之前建的会话没有自己的 ai_profile，会回落全局昵称（串名）。
+  // 打开空间时发现该会话没自己的资料 → 用会话自己的标题补写一份（幂等，补完 hasOwn 就不再走）。
+  useEffect(() => {
+    if (!sessionId) return
+    if (hasOwnAIProfile(sessionId)) return
+    const s = getSessionsCache().find((x) => String(x.id) === String(sessionId))
+    const title = s ? displaySessionName(s) : ''
+    if (title && title !== 'TA' && title !== '新会话' && title !== '我们的开始') {
+      const next: AIProfile = { ...ai, nickname: title }
+      saveAIProfile(next, sessionId)
+      setAi(next)
+    }
+  }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
   const user = loadUserProfile()
   const yourName = user.nickname || '你'
 

@@ -40,6 +40,18 @@ import { loadPersona, loadSettings } from './storage.ts'
 import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
 import { migrateGlobalToDefaultSession } from './roleData.ts'
 
+/**
+ * 会话人设（2026-09-05 乔修）：有会话 → 用该会话自己的 persona（角色隔离，阳阳回复串成律师案子的根因）；
+ * 无会话/会话无 persona → 回落全局（游客/过渡态兼容）。
+ */
+function sessionPersona(sessionId?: string): string {
+  if (sessionId) {
+    const s = getSessionsCache().find((x) => String(x.id) === String(sessionId))
+    if (s && typeof s.persona === 'string' && s.persona.trim()) return s.persona
+  }
+  return loadPersona()
+}
+
 const POSTS_KEY = 'ai_space_posts'
 const LAST_VISIT_KEY = 'ai_space_last_visit'
 const USED_KEY = 'ai_space_used_templates'
@@ -180,7 +192,7 @@ export function refreshSpace(
 ): RefreshPlan {
   const prev = loadState(sessionId)
   const vars = buildVars(taName, yourName, now)
-  const persona = loadPersona()
+  const persona = sessionPersona(sessionId)
   const settings = loadSettings()
   // 事件日 = 有聊天话题的自然日（loadChatTopics 带 ts；兼容 ts=0 的旧数据归到今天）
   const topics = loadChatTopics(sessionId)
@@ -238,7 +250,7 @@ export async function generatePendingPosts(
   now: number = Date.now(),
   rand: () => number = Math.random,
 ): Promise<GenerateResult> {
-  const persona = loadPersona()
+  const persona = sessionPersona(sessionId)
   const settings = loadSettings()
   const vars = buildVars(taName, yourName, now)
   const recent = plan.posts.slice(0, 3).map((p) => p.text)
@@ -385,7 +397,7 @@ export async function generateTaReply(
   now: number = Date.now(),
   rand: () => number = Math.random,
 ): Promise<SpacePost[]> {
-  const persona = loadPersona()
+  const persona = sessionPersona(sessionId)
   const settings = loadSettings()
   const state = loadState(sessionId)
   const post = state.posts.find((p) => p.id === postId)

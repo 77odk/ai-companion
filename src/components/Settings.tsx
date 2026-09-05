@@ -471,10 +471,11 @@ export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSp
     flashSaved('remark')
   }
 
-  // 改性别：按会话写（角色隔离）
+  // 改性别：按会话写（角色隔离）+ 全局也写一份（2026-09-05 乔修：选一次全局锁住，新角色/老角色都默认记住，不用每次重设）
   const handleSaveGender = (g: AIGender) => {
     setGender(g)
     saveAIGender(g, getActiveSessionId() || undefined)
+    saveAIGender(g)
     dirtyRef.current = true
     flashSaved('gender')
   }
