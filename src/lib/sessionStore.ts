@@ -90,14 +90,16 @@ export function getMessagesCache(sessionId: string): StoredMessage[] {
         typeof m.content === 'string' &&
         typeof m.ts === 'number',
     )
-    // 自愈去重（2026-08-25）：历史脏数据里可能已有同一条消息的重复条目（本地 ts + 云端 ts 各一份），按 role+内容去重
-    // 2026-09-05 修复：不能只按 ts 去重——同一轮 splitAssistantReplies 拆出的多条 assistant 消息用同一个 assistantTs，按 ts 去重会把后面的消息全删掉（吞消息根因）
-    const seenContent = new Set<string>()
+    // 自愈去重（2026-08-25）：历史脏数据里可能已有同一条消息的重复条目（本地 ts + 云端 ts 各一份）
+    // 2026-09-05 上午：去掉 ts 只按内容 → TA 正常发两条相同内容的话会被误删（吞对话）
+    // 2026-09-05 夜：去重键 = role+content+ts 三重——拆条（同批同 ts 内容不同）不误删；
+    //   正常重复消息（内容同但 ts 不同）不误删；真重复同步副本（同 ts 同内容）才删
+    const seen = new Set<string>()
     const deduped: StoredMessage[] = []
     for (const m of valid) {
-      const ck = `${m.role}|${m.content}`
-      if (seenContent.has(ck)) continue
-      seenContent.add(ck)
+      const ck = `${m.role}|${m.content}|${m.ts}`
+      if (seen.has(ck)) continue
+      seen.add(ck)
       deduped.push(m)
     }
     return deduped

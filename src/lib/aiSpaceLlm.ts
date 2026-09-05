@@ -52,6 +52,32 @@ export function canUseLlm(persona: string, settings: LlmSettings): boolean {
  * 用户话题只是偶尔引子——3~4 条里最多 1 条提到对方，且只在真的一起经历了什么时。
  */
 export function buildLlmMessages(ctx: LlmContext): ApiMessage[] {
+  // 2026-09-05 夜乔修：Sam 发中文动态——动态生成没跟角色语言走。英文人设 → 英文模板
+  const en = /[\u4e00-\u9fff]/.test(ctx.persona ?? '') === false && /[a-zA-Z]/.test(ctx.persona ?? '')
+  if (en) {
+    const system =
+      `You are "${ctx.taName}", a real person living your own life. Post one casual status sharing what's going on with you right now. ` +
+      `1-2 short sentences, casual and warm, matching your personality. ` +
+      `Vary your openings — don't reuse the same starter. ` +
+      `No emoji. Never say you're an AI/assistant/model. Write like a real person's casual post, never robotic.`
+    let user = `This is a post you made ${ctx.atDateStr}${ctx.timeWord} (${ctx.season}, ${ctx.weatherWord}). Write about that moment of your life.`
+    user += `\n\nYour life and personality:\n${(ctx.persona ?? '').trim()}\n`
+    user += `\nWrite about your own day — what you're doing, seeing, thinking, feeling. Grow it from your life and personality.`
+    user += `\nThere's someone you care about named "${ctx.yourName}", but they're not your whole life: write about yourself first.`
+    if (ctx.chatTopics && ctx.chatTopics.length > 0) {
+      user += `\n\nThings they told you (marked "today" if said the same day as this post):\n${ctx.chatTopics.map((t) => `- ${t}`).join('\n')}\n`
+      user += `\nWrite mostly about your own day. Only when you truly shared something together, mention them naturally in one line — don't make the whole post about them.`
+    }
+    if (ctx.recent.length > 0) {
+      user += `\n\nYour recent posts:\n${ctx.recent.map((r) => `- ${r}`).join('\n')}\n`
+      user += `\nDon't repeat those — write something new.`
+    }
+    user += `\n\nWrite the post directly, content only, no explanation.`
+    return [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ]
+  }
   const system =
     `你是「${ctx.taName}」，一个认真生活的人。你在自己的日子里随手发一条动态，分享你此刻的生活。` +
     `要求 1-2 句话，口语化碎碎念，有温度，贴合自己的性格。` +
@@ -179,6 +205,24 @@ export interface ReplyContext {
  * user：人设 + 动态原文 + 留言，直接写回复正文。
  */
 export function buildReplyMessages(ctx: ReplyContext): ApiMessage[] {
+  // 2026-09-05 夜乔修：英文人设的角色，评论回复也用英文
+  const en = /[\u4e00-\u9fff]/.test(ctx.persona ?? '') === false && /[a-zA-Z]/.test(ctx.persona ?? '')
+  if (en) {
+    const system =
+      `You are "${ctx.taName}" and they just left a comment on one of your posts. ` +
+      `Reply back briefly like a real person (1-2 short sentences, casual, warm, in character and on-topic). ` +
+      `Keep it short — don't ask questions to drag the conversation on. ` +
+      `No emoji. Never say you're an AI/assistant/model.`
+    const user =
+      `Your personality:\n${ctx.persona.trim()}\n\n` +
+      `Your post:\n${ctx.postText}\n\n` +
+      `Their comment:\n${ctx.commentText}\n\n` +
+      `Write your reply directly, content only.`
+    return [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ]
+  }
   const system =
     `你是「${ctx.taName}」，对方刚在你的一条生活动态下留言了。` +
     `像真人一样简短地回一句（一两句话，口语化、有温度，贴合自己的性格和那条动态）。` +

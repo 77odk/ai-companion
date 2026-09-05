@@ -51,13 +51,22 @@ function CommentIcon() {
 }
 
 function timeAgo(ts: number): string {
-  const diff = Date.now() - ts
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return '刚刚'
-  if (m < 60) return `${m} 分钟前`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h} 小时前`
-  return `${Math.floor(h / 24)} 天前`
+  // 2026-09-05 夜乔修：什么时间发的显示什么时间（精准到分钟）；三天前起只写 N 天前
+  const now = new Date()
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const days = Math.floor((startOfDay(now) - startOfDay(d)) / 86400000)
+  if (days <= 0) {
+    const m = Math.floor((now.getTime() - ts) / 60000)
+    if (m < 1) return '刚刚'
+    return hm
+  }
+  if (days === 1) return `昨天 ${hm}`
+  if (days === 2) return `前天 ${hm}`
+  if (days < 30) return `${days} 天前`
+  return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
 interface Props {

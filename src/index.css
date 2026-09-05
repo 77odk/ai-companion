@@ -6542,3 +6542,11 @@ textarea.persona-input {
   max-height: 300px;
   overflow-y: auto;
 }
+
+/* 2026-09-05 夜乔修：禁止整页下拉刷新——忆文是单页应用，整页刷新会丢当前视图跳回主界面。
+   动态/列表刷新走页面内机制（进入自动刷新 + 各页刷新按钮）。Android/桌面 Chrome 生效；
+   iOS Safari 下拉刷新是系统行为，此规则无效时请用页面内刷新。 */
+html, body {
+  overscroll-behavior-y: none;
+}
+

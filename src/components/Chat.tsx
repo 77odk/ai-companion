@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildBusyReturnPrompt, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
+import { buildBusyReturnPrompt, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { getToken } from '../lib/auth'
@@ -404,6 +404,18 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     }
   }, [])
 
+  // 卸载期间 TA 回复完成落库的广播（2026-09-05 夜乔修）：返回主界面再进来时，刷新缓存让那条回复显示出来
+  useEffect(() => {
+    const onCommitted = (e: Event) => {
+      const sid = (e as CustomEvent).detail?.sid
+      if (!sid) return
+      if (String(getActiveSessionId()) !== String(sid)) return
+      setMessages(getMessagesCache(sid))
+    }
+    window.addEventListener('yiwem:ai-reply-committed', onCommitted)
+    return () => window.removeEventListener('yiwem:ai-reply-committed', onCommitted)
+  }, [])
+
   useEffect(() => {
     if (activeSessionId) return
     const existing = loadMessages()
@@ -621,6 +633,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     )
     apiMessages.push(...history)
 
+    // 时间感知（2026-09-05 夜 乔修）：系统提示词开头的时间会被长历史冲淡，部分模型（官方 deepseek 正文/doi 套壳）
+    // 生成回复时不看开头。在历史末尾（紧贴要回应的上文）再注入一条此刻时间——数据注入不是设定，所有模型统一可见。
+    apiMessages.push({ role: 'system', content: buildTimeContext(Date.now(), lang) })
+
     const commitFinal = (final: StoredMessage[]) => {
       persistMessages(final)
       // 模块二：组件卸载后跳过 UI 更新，落库/云同步继续执行
@@ -636,6 +652,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       }
       if (mountedRef.current) setStreaming(false)
       controllerRef.current = null
+      // 卸载期间回复完成落库（2026-09-05 夜乔修：返回主界面后 TA 的回复"消失"，发下一条才一起冒出）
+      // ——广播事件，重新进入的聊天页实例收到后刷新缓存，让这条回复立即显示
+      if (!mountedRef.current) {
+        window.dispatchEvent(new CustomEvent('yiwem:ai-reply-committed', { detail: { sid: getActiveSessionId() } }))
+      }
     }
 
     const finalize = () => {
