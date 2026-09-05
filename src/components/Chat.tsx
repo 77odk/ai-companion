@@ -692,6 +692,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       if (finishedRef.current) return
       finishedRef.current = true
       const raw = assistantText.current
+      // 非流式/流式漏网兜底（2026-09-05 晚）：部分中转站（doi 等）不给标准 SSE 逐字流，onToken 忙碌检测跑不到——
+      // 完整文本到 finalize 时再查一次，命中照样截断进忙碌（忙语句之后的尾巴不落库）
+      if (!busyTriggeredRef.current && raw && containsBusyKeyword(raw)) {
+        busyTriggeredRef.current = true
+        const cut = findBusyCutoff(raw)
+        const busyText = cut > 0 && cut < raw.length ? raw.slice(0, cut) : raw
+        enterBusyRef.current(busyText)
+        return
+      }
       if (raw) {
         const memories = extractMemories(raw)
         if (memories.length > 0) {
