@@ -655,7 +655,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
 
     // 时间感知（2026-09-05 夜 乔修）：系统提示词开头的时间会被长历史冲淡，部分模型（官方 deepseek 正文/doi 套壳）
     // 生成回复时不看开头。在历史末尾（紧贴要回应的上文）再注入一条此刻时间——数据注入不是设定，所有模型统一可见。
-    apiMessages.push({ role: 'system', content: buildTimeContext(Date.now(), lang) })
+    // 追加防学样说明：历史消息里的 [x分钟前/x小时前/昨天] 标签是系统标注，模型回复严禁输出同类标签（2026-09-05 夜二修：TA 把标签学走了）
+    apiMessages.push({
+      role: 'system',
+      content:
+        buildTimeContext(Date.now(), lang) +
+        (lang === 'en'
+          ? '\nNote: time tags like [3 min ago] in the conversation history are system annotations, not part of any message. Never output such tags in your replies.'
+          : '\n注：对话历史里 [3 分钟前]/[昨天] 这类标签是系统自动标注的，不是消息内容。你的回复里绝对不要出现这类时间标签。'),
+    })
 
     const commitFinal = (final: StoredMessage[]) => {
       persistMessages(final)
