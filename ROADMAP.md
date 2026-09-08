@@ -35,6 +35,7 @@
 - 新模块按分层写：Character(Persona/Relationship) → State(mood/activity/time) → Memory(retrieval) → Context Composer → Any LLM
 - localStorage 债控制：新数据先想归属（user/session/global），别再往 localStorage 里无脑塞；同步字段按目标模型命名
 - 新功能不进 Chat.tsx（已 ~1000 行）：拆组件/拆 lib，聊天管线认 ref 群 + 串行上传 + 三重去重键，别打散
+- [x] api.ts 手术拆分（2026-09-09：只搬职责不改行为——提示词层→chatPrompts.ts、模型调用层→modelChat.ts，api.ts 留作兼容出口 re-export，43 测试全绿）
 - 功能开关/文案：全站 TA、禁"演"字、营销有调性、教程大白话
 
 ## 3. 有用户后再做（有留存数据再动核心）
