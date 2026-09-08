@@ -27,7 +27,7 @@ import { collectAllSpacePosts } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
 import { THEME_KEY, loadThemeState, saveThemeState, applyTheme, type ThemeState } from './theme.ts'
 /** 后端服务地址（本地写死一个出口常量：同步接口与会话接口共用，别各自写死） */
-export const API_BASE = 'https://texas-division-trivia-stars.trycloudflare.com'
+export const API_BASE = 'https://written-within-wallpaper-discount.trycloudflare.com'
 export interface Account {
   token: string
   /** 登录标识：邮箱 / 手机号 / 用户名（用户填的原始内容，trim 后） */
