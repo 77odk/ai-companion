@@ -116,8 +116,8 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
           <h4 className="guide-subtitle">服务商配置</h4>
           <ul className="guide-list">
             <li>支持 DeepSeek、智谱、OpenAI、自定义（OpenAI 兼容）</li>
-            <li>模型名可以手输</li>
-            <li>「即将上线」：模型名点选（从常见模型里选）、填过的模型名记住、切换服务商自动带出默认模型</li>
+            <li>模型名可以手输，也可以点「选择」从常见模型里挑，填过的会自动记住</li>
+            <li>切换服务商时自动带出对应的默认模型</li>
           </ul>
 
           <h4 className="guide-subtitle">外观</h4>
@@ -143,8 +143,10 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
           </div>
 
           <div className="guide-faq">
-            <p className="guide-faq-q">Q：Key 无效？</p>
-            <p className="guide-faq-a">A：去「我的→服务商配置」检查 Key 和 base_url 是否填对。</p>
+            <p className="guide-faq-q">Q：Key 无效或连不上？</p>
+            <p className="guide-faq-a">
+              A：先点「测试连接」看是哪一种：提示 Key 无效/401/403 就是 Key 复制错了或已过期，回「我的→服务商配置」重新粘贴；提示网络错误/超时就是网络连不上服务商（官方 OpenAI 国内直连不通，需要代理或中转地址，国内用户推荐 DeepSeek/智谱）。
+            </p>
           </div>
 
           <div className="guide-faq">
@@ -164,7 +166,32 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
 
           <div className="guide-faq">
             <p className="guide-faq-q">Q：TA 空间动态是真的吗？</p>
-            <p className="guide-faq-a">A：是 AI 根据人设生成的，模拟 TA 的真实生活。</p>
+            <p className="guide-faq-a">A：是 TA 自己写的生活记录——按 TA 的人设和你们聊过的事，像发朋友圈一样。点赞评论 TA 看得见，还会回你。</p>
+          </div>
+
+          <div className="guide-faq">
+            <p className="guide-faq-q">Q：智谱免费版老是连不上？</p>
+            <p className="guide-faq-a">A：免费模型高峰时段会拥堵（提示访问量过大），换个时段用，或换 DeepSeek 更稳。</p>
+          </div>
+
+          <div className="guide-faq">
+            <p className="guide-faq-q">Q：「刷新对话」会删掉聊天记录吗？</p>
+            <p className="guide-faq-a">A：不会。只是让 TA 忘掉当前话题、重新开始，历史聊天一条不少，随时能在 TA 的空间里翻到。</p>
+          </div>
+
+          <div className="guide-faq">
+            <p className="guide-faq-q">Q：忘了密码怎么办？</p>
+            <p className="guide-faq-a">A：登录页点「忘记密码？」，去邮箱收验证码就能重置。</p>
+          </div>
+
+          <div className="guide-faq">
+            <p className="guide-faq-q">Q：「TA 想了想」灰条是什么？</p>
+            <p className="guide-faq-a">A：TA 用思考模型时的内心戏——回话前 TA 琢磨了什么，点开灰条就能看到。换成非思考模型（deepseek-chat）就没有这条。</p>
+          </div>
+
+          <div className="guide-faq">
+            <p className="guide-faq-q">Q：退出页面，TA 的回复还会发出来吗？</p>
+            <p className="guide-faq-a">A：会。TA 会把话说完存好，你回来就能看到，不用一直守着页面。</p>
           </div>
         </section>
       </div>
