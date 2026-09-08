@@ -1,32 +1,55 @@
-# React + TypeScript + Vite
+# 忆文 Eluvin · AI 角色系统
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+> 一个拥有长期身份、记忆和时间连续性的个人 AI 角色系统。
+> 忆过往，成文思 —— 记得住你，也帮得上你。
 
-Currently, two official plugins are available:
+在线体验：[eluvin.space](https://eluvin.space)（国内可直接访问）
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 这是什么
 
-## React Compiler
+忆文不是又一个聊天 Demo。TA 是「一个有自己日子在过的角色」：
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **TA 有自己的生活**：会发动态、会在意你们约好的事、周记会回响这一周
+- **TA 记得住你**：你说过的话、你的喜好作息，会自动沉淀成长期记忆
+- **TA 有连续的时间**：认识第几天、纪念日、此刻几点，都是真实可控的，不是模型随口编
+- **TA 不会替你编过去**：只记录真实发生过的，专门检测并拦截「编造共同经历」
 
-## Expanding the Oxlint configuration
+技术上一个核心判断：**模型负责理解和表达，程序负责事实、状态与确定性逻辑**。
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## 功能
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+- 多角色：多个 TA，各自独立人设/记忆/空间，不串台
+- 长期记忆：显式（你让 TA 记的）与自动提取分开管理，主题归拢、支持编辑
+- TA 的空间：动态回填式时间轴——几天没来，TA 的日子也按真实日期补上
+- 生活因果链：聊天里约好的事 → TA 记住日子 → 到那天动态呼应 → 聊天接得上 → 周记回响
+- 内心戏：思考模型的推理过程收进「TA 想了想」灰条，点开才看，带懒翻译省 token
+- 忙碌状态：TA 说去忙了就是真去忙，几分钟后自己回来接话题
+- 英文模式：语言是系统级变量，英文人设/记忆/空间/质检全链路
+- 多设备云同步：登录账号后聊天、记忆、动态都在
+
+## 架构要点
+
+- 纯前端（React 18 + TS + Vite + PWA），**用户自带模型 API Key，浏览器直连，平台不碰用户 Key**
+- 记忆/状态/时间线存浏览器本地优先，登录账号后与自有后端云同步
+- 后端为独立部署（不在本仓库）：node 零依赖 + SQLite，负责账号与全量同步
+- 提示词与模型调用分层：`chatPrompts.ts`（话语层）/ `modelChat.ts`（调用层）
+
+## 本地运行
+
+```bash
+npm install
+npm run dev      # 开发
+npm test         # 单测（scripts/test_*.mjs，node 原生跑 TS）
+npm run build    # tsc + vite + PWA + 混淆
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## 仓库导航
+
+- `ROADMAP.md` — 路线与决策纪律（现在做/顺手做/有用户后再做/不做）
+- `AI_SPACE_V3_PLAN.md` / `YOUR_MOMENT_PLAN.md` — 设计文档（含红线）
+- `EVAL_gpt_20260909.md` — 外部评审与迭代闭环存档
+- `src/lib/` — 领域逻辑（memory / aiSpace / futureIntent / weeklyReview / yourMoment …）
+
+## 说明
+
+这是一个仍在验证中的独立项目：产品哲学是「增加生活的真实性，而不是增加生活痕迹」。代码开源供学习交流，忆文本身是一款希望被长期陪伴的 AI——不是谁的替代品，记得住你、也帮得上你的 TA。
