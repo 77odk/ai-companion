@@ -17,6 +17,9 @@ import {
 import { getKnownDays } from '../lib/milestone'
 import { getFirstSeen, isSlowLetterMode, loadMessages, loadPersona, loadSettings } from '../lib/storage'
 import { chatCompletion } from '../lib/api'
+import { loadCurrentPosts } from '../lib/aiSpace'
+import { loadChatTopics } from '../lib/chatTopics'
+import { dayKeyOf } from '../lib/aiSpaceCore'
 import { getActiveSessionId, getMemoriesCache, getMessagesCache, getSessionsCache } from '../lib/sessionStore'
 import { loadMemory } from '../lib/memory'
 
@@ -202,6 +205,14 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
       // 封存留言：下一篇周记生成时一并完整回信
       const pending = getPendingReplies(curReviews)
       const pendingTexts = pending.map((p) => p.content)
+      // 因果链·周记回响：本周 TA 发过的动态 + 本周到期的约定，作为周记素材
+      const weekPosts = loadCurrentPosts(sid || undefined)
+        .filter((p) => p.at >= week.startTs && p.at <= week.endTs)
+        .slice(0, 5)
+        .map((p) => p.text)
+      const weekAgenda = loadChatTopics(sid || undefined)
+        .filter((t) => typeof t.futureDay === 'string' && t.futureDay >= dayKeyOf(week.startTs) && t.futureDay <= dayKeyOf(week.endTs))
+        .map((t) => `${t.t}（约在 ${t.futureDay}）`)
 
       const raw = await chatCompletion(
         s,
@@ -216,6 +227,8 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
               daysKnown: getKnownDays(ts, sid),
               ...(lastReply?.trim() ? { lastReply: lastReply.trim() } : {}),
               ...(pendingTexts.length > 0 ? { pendingReplies: pendingTexts } : {}),
+              ...(weekPosts.length > 0 ? { weekPosts } : {}),
+              ...(weekAgenda.length > 0 ? { weekAgenda } : {}),
               ...(persona ? { persona } : {}),
             }),
           },

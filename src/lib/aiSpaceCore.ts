@@ -1,15 +1,19 @@
 // TA 的空间 · 动态生成引擎（纯逻辑核心）
 // 本文件零依赖、不碰 localStorage，方便被 Node 脚本直接跑单测。
-// 时间轴规则（2026-09-04 七七拍板·回填式时间轴）：
+// 时间轴规则（2026-09-04 七七拍板·回填式时间轴；2026-09-09 v3 事件通道补全）：
 //   角色像真人一样过日子：用户不来，TA 也在生活（每天可发自己的动态）。
 //   但"发圈频率"由自然日回填决定，不是用户打开就咔咔补：
 //   回填窗口 = 上次访问到今天之间的自然日（最多 MAX_BACKFILL_DAYS 天）
-//   事件日（那天聊过/约过事）→ 必补（大事趁热，不卡天数，最多补满当天 2 条）
+//   事件日（那天聊过/约过事，loadChatTopics 带 ts 的话题日）→ 大事趁热：
+//     每天优先补 1 条「事件动态」（source='event'），不被日常 2 条配额吞掉，
+//     也不占日常配额；但全天动态总数（日常+事件）≤ MAX_TOTAL_PER_DAY 防刷屏
 //   非事件日 → TA 也有自己的生活：按概率补 1 条生活动态（BACKFILL_LIFE_CHANCE，防抖后）
 //   首访（无 lastVisit）→ 预生成 3 条铺最近 3 天，空间不空
-//   每天最多 2 条（自然日）：planBackfillDays 按当天已有条数截断
+//   日常每天最多 MAX_POSTS_PER_DAY 条（自然日）：planBackfillDays 按当天已有条数截断
 //   时间戳落在各自那天（不是 now 前几分钟）：文案时段由 at 决定，凌晨不穿帮
 //   总数上限 20 条，超出丢最旧
+// 配额账本（v3）：持久层在 aiSpace.ts，核心只提供纯函数——
+//   已用额度 = max(现存动态计数, 账本计数)（删动态不回升，防删了重生成刷屏）
 // 模板去重：同一模板 30 天内不重复使用（按 kind 记录每个模板索引的最近使用时间）
 
 export type SpaceKind = '日常' | '心情' | '钻研' | '天气' | '想你' | '小确幸'
@@ -35,13 +39,18 @@ export interface SpaceComment {
   replyTo?: string
 }
 
+/** 动态来源通道：daily=日常配额动态 / event=事件动态（大事趁热，不占日常配额，两通道各自每天限量） */
+export type SpaceSource = 'daily' | 'event'
+
 export interface SpacePost {
   id: string
   at: number
   kind: SpaceKind
   text: string
-  /** 插画变体索引（生成时定好） */
-  art: number
+  /** 来源通道（v3 起写入；老数据无此字段视同 daily） */
+  source?: SpaceSource
+  /** 插画变体索引（色卡已删不再写入，仅兼容存量老数据读取） */
+  art?: number
   /** 点赞（可选） */
   liked?: boolean
   /** 评论列表（可选；无评论不存） */
@@ -126,20 +135,12 @@ export const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000 // 30 天
 export const MAX_POSTS = 20
 /** 每天最多发几条动态（TASK_UI_BATCH2 限频，对标朋友圈节奏） */
 export const MAX_POSTS_PER_DAY = 2
+/** 全天动态总数上限（日常+事件）= 日常 2 + 事件 1，防刷屏（v3） */
+export const MAX_TOTAL_PER_DAY = MAX_POSTS_PER_DAY + 1
 /** 回填窗口最多看几个自然日（含今天，往前数）——用户离开太久，只回填最近这段，别一次性补一堆 */
 export const MAX_BACKFILL_DAYS = 3
 /** 非事件日（那天没聊过事）抽中「发一条自己生活动态」的概率——TA 有日子过，但不是天天发圈 */
 export const BACKFILL_LIFE_CHANCE = 0.45
-
-// 每类插画变体数量（SpaceArt 里要有对应变体）
-export const ART_VARIANTS: Record<SpaceKind, number> = {
-  日常: 2,
-  心情: 2,
-  钻研: 2,
-  天气: 2,
-  想你: 2,
-  小确幸: 2,
-}
 
 /** 本地自然日 key：YYYY-MM-DD（跨天按本地时区分组） */
 export function dayKeyOf(ts: number): string {
@@ -149,13 +150,77 @@ export function dayKeyOf(ts: number): string {
   return `${d.getFullYear()}-${m}-${day}`
 }
 
-/** 某一天已有的动态条数（限频用） */
+/** 某一天已有的动态条数（限频用；老数据无 source 视同 daily） */
 export function countPostsOnDay(posts: SpacePost[], day: string): number {
-  let n = 0
+  const u = countPostsBySource(posts, day)
+  return u.daily + u.event
+}
+
+/** 按来源通道统计某一天的动态条数：{ daily, event }（老数据无 source 视为 daily） */
+export function countPostsBySource(posts: SpacePost[], day: string): { daily: number; event: number } {
+  let daily = 0
+  let event = 0
   for (const p of posts) {
-    if (p && typeof p.at === 'number' && dayKeyOf(p.at) === day) n++
+    if (p && typeof p.at === 'number' && dayKeyOf(p.at) === day) {
+      if (p.source === 'event') event++
+      else daily++
+    }
   }
-  return n
+  return { daily, event }
+}
+
+/* ---- v3 配额账本（纯函数部分；持久层在 aiSpace.ts） ---- */
+
+/** 某天某通道的账本记录 */
+export interface LedgerEntry {
+  daily: number
+  event: number
+}
+
+/** 账本：自然日 key → 当日两通道已发条数 */
+export type SpaceLedger = Record<string, LedgerEntry>
+
+/** 账本某天某通道计数 +1（不可变，返回新对象） */
+export function addLedgerEntry(ledger: SpaceLedger, day: string, source: SpaceSource): SpaceLedger {
+  const next: SpaceLedger = { ...ledger }
+  const cur = next[day] ?? { daily: 0, event: 0 }
+  next[day] = source === 'event' ? { ...cur, event: cur.event + 1 } : { ...cur, daily: cur.daily + 1 }
+  return next
+}
+
+/** 账本某天的计数（无记录返回 { daily: 0, event: 0 }） */
+export function getLedgerEntry(ledger: SpaceLedger | undefined, day: string): LedgerEntry {
+  if (!ledger) return { daily: 0, event: 0 }
+  const e = ledger[day]
+  return e ? { daily: e.daily || 0, event: e.event || 0 } : { daily: 0, event: 0 }
+}
+
+/** 跨天滚动：只保留 keepDay 那天的记录（账本只管当天防刷屏，历史键丢弃） */
+export function pruneLedger(ledger: SpaceLedger | undefined, keepDay: string): SpaceLedger {
+  if (!ledger) return {}
+  const out: SpaceLedger = {}
+  for (const k of Object.keys(ledger)) {
+    if (k === keepDay) out[k] = ledger[k]
+  }
+  return out
+}
+
+/**
+ * 某自然日的「已用额度」= max(现存动态计数, 账本计数)：
+ * 账本在生成时逐条记一笔，用户手动删动态后现存计数会掉、账本不掉——
+ * 取二者较大值保证「删了配额照扣」，防删了重生成刷屏（v3）。
+ * @param ledger 账本（通常已 prune 到当天；跨天滚动后仅当天有记录）
+ */
+export function dayUsage(
+  posts: SpacePost[],
+  day: string,
+  ledger?: SpaceLedger,
+): { daily: number; event: number; total: number } {
+  const fromPosts = countPostsBySource(posts, day)
+  const fromLedger = getLedgerEntry(ledger, day)
+  const daily = Math.max(fromPosts.daily, fromLedger.daily)
+  const event = Math.max(fromPosts.event, fromLedger.event)
+  return { daily, event, total: daily + event }
 }
 
 /** 按月份算季节：3-5 春，6-8 夏，9-11 秋，12-2 冬 */
@@ -231,12 +296,6 @@ export function pickTemplateIndex(
   return chosen
 }
 
-/** 随机挑一个插画变体索引 */
-export function pickArtVariant(kind: SpaceKind, rand: () => number = Math.random): number {
-  const n = ART_VARIANTS[kind] ?? 1
-  return Math.floor(rand() * n) % n
-}
-
 /** 把模板里的占位符替换成真实文案 */
 export function buildPostText(kind: SpaceKind, templateIndex: number, vars: TemplateVar): string {
   let text = TEMPLATES[kind]?.[templateIndex] ?? TEMPLATES[kind]?.[0] ?? ''
@@ -248,19 +307,26 @@ export function buildPostText(kind: SpaceKind, templateIndex: number, vars: Temp
   return text
 }
 
-/** 生成一条动态：随机 kind → 挑模板 → 替换占位 → 挑插画变体 */
+/** 生成一条动态：随机 kind → 挑模板 → 替换占位（v3 起不再写 art 色卡字段，按 source 通道标记） */
 export function generatePost(
   vars: TemplateVar,
   used: UsedTemplates,
   now: number,
   rand: () => number = Math.random,
+  source: SpaceSource = 'daily',
 ): { post: SpacePost; templateKey: string } {
   const kind = KIND_KEYS[Math.floor(rand() * KIND_KEYS.length) % KIND_KEYS.length]
   const templateIndex = pickTemplateIndex(kind, used, now, rand)
   const text = buildPostText(kind, templateIndex, vars)
-  const art = pickArtVariant(kind, rand)
   const id = `p${now.toString(36)}${Math.floor(rand() * 1e6).toString(36)}`
-  return { post: { id, at: now, kind, text, art }, templateKey: `${kind}:${templateIndex}` }
+  return { post: { id, at: now, kind, text, source }, templateKey: `${kind}:${templateIndex}` }
+}
+
+/** 生成当前真实时刻的中文日期锚文本：如「2026年9月9日 星期三」（CST，补发/跨天防穿帮用） */
+export function formatNowAnchor(now: number): string {
+  const d = new Date(now)
+  const week = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][d.getDay()]
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${week}`
 }
 
 /** 某自然日的 00:00 时间戳（本地时区） */
@@ -270,38 +336,54 @@ export function dayStartOf(ts: number): number {
   return d.getTime()
 }
 
+/** 回填计划里的一条待生成动态：时间戳 + 来源通道（daily 日常 / event 事件） */
+export interface SpaceSlot {
+  at: number
+  source: SpaceSource
+}
+
 /**
- * 回填式时间轴计划（2026-09-04 七七拍板，取代 TASK_UI_BATCH2 的「隔 2h/24h 补 1~2 条」）：
+ * 回填式时间轴计划（2026-09-04 七七拍板 + 2026-09-09 v3 事件通道）：
  *  角色像真人一样过日子——不是每次打开都咔咔补，而是把「TA 该发动态的日子」按自然日回填：
  *  - 防抖：距上次访问 < MIN_INTERVAL_MS(2h) → 不补（避免反复开关疯狂生成）
  *  - 首访（lastVisit==null）：铺最近 MAX_BACKFILL_DAYS 个自然日，每天 1 条（空间不空、有生活感）
  *  - 窗口：lastVisit 之后到今天之间的自然日，最多回看 MAX_BACKFILL_DAYS 天
- *  - 事件日（那天聊过事/约过事，activeDays 命中）→ 必补到当天 ≤2 条（大事趁热，不卡天数）
+ *  - 事件日（那天聊过事/约过事，activeDays 命中）→ 大事趁热：当天还没发过事件动态就优先补 1 条
+ *    source='event'（不被日常 2 条配额吞掉、不占日常配额；全天总数仍 ≤ MAX_TOTAL_PER_DAY 防刷屏）
+ *  - 当天已发过事件 → 当天不再补（一天一件事，不刷屏）
  *  - 非事件日 → 按 BACKFILL_LIFE_CHANCE 概率补 1 条 TA 自己的生活动态（有日子过，但不是天天发圈）
  *  - 凌晨(0-4 点)访问：把「今天」让给昨天——深夜 TA 在睡觉，不刚发圈
+ *  - 当天补发通道：同一天内再次进空间（窗口已不含今天）时，若今天有新聊出的事件还没发，
+ *    仍可补 1 条今天的事件动态（大事趁热，仍受防抖与全天上限约束）
  *  - 时间戳落在各自自然日 7:00-23:59（回填过去就标过去，文案按 at 算时段，凌晨不穿帮）
- * @returns 升序时间戳数组（从旧到新），调用方逐条生成动态
+ * @param ledger 配额账本（可选；已用额度 = max(现存动态, 账本)，删动态不回升）
+ * @returns 升序计划（从旧到新），调用方逐条生成动态
  */
-export function planBackfillTimestamps(
+export function planBackfillSlots(
   lastVisit: number | null,
   now: number,
   posts: SpacePost[],
   activeDays: ReadonlySet<string>,
   rand: () => number = Math.random,
-): number[] {
+  ledger?: SpaceLedger,
+): SpaceSlot[] {
   const h = new Date(now).getHours()
   // 凌晨 0-4 点访问：今天的「白天发圈时刻」还没到来，把锚点日让给昨天
   const anchorDay = h < 5 ? dayStartOf(now - DAY_INTERVAL_MS) : dayStartOf(now)
-  const out: number[] = []
+  const out: SpaceSlot[] = []
 
-  // 首访：铺最近 MAX_BACKFILL_DAYS 个自然日，每天最多 1 条（旧→新）
+  // 首访：铺最近 MAX_BACKFILL_DAYS 个自然日，每天最多 1 条（旧→新）；事件日铺事件、其余铺日常
   if (lastVisit == null) {
     for (let i = MAX_BACKFILL_DAYS - 1; i >= 0; i--) {
       const day = anchorDay - i * DAY_INTERVAL_MS
-      if (countPostsOnDay(posts, dayKeyOf(day)) >= MAX_POSTS_PER_DAY) continue
-      out.push(pickDayPostHour(day, rand))
+      const dk = dayKeyOf(day)
+      const isEvent = activeDays.has(dk)
+      const u = dayUsage(posts, dk, ledger)
+      if (isEvent ? u.event >= 1 : u.daily >= MAX_POSTS_PER_DAY) continue
+      if (u.total >= MAX_TOTAL_PER_DAY) continue
+      out.push({ at: pickDayPostHour(day, rand), source: isEvent ? 'event' : 'daily' })
     }
-    return out.sort((a, b) => a - b)
+    return out.sort((a, b) => a.at - b.at)
   }
 
   // 防抖：距上次访问不足 2 小时不补（防止用户反复开关空间疯狂生成）
@@ -310,6 +392,7 @@ export function planBackfillTimestamps(
   // 窗口内候选自然日：lastVisit 所在日之后（不含当天，那天已结算）→ anchorDay（含），最多 MAX_BACKFILL_DAYS 天
   const lastDay = dayStartOf(lastVisit)
   const todayStart = dayStartOf(now)
+  const todayKey = dayKeyOf(todayStart)
   const days: number[] = []
   for (let i = MAX_BACKFILL_DAYS - 1; i >= 0; i--) {
     const day = anchorDay - i * DAY_INTERVAL_MS
@@ -324,48 +407,57 @@ export function planBackfillTimestamps(
       const lo = day + 7 * 60 * 60 * 1000 // 今天最早 7:00 发圈
       if (now < lo) return null // 现在还没到 7 点：今天 TA 还没发圈，正常
       const hi = now - 5 * 60 * 1000
-      if (hi <= lo) return lo + Math.floor(rand() * Math.max(0, hi - lo)) // 极端兜底
+      if (hi <= lo) return lo // 极端兜底：刚过 7 点没几分钟
       return lo + Math.floor(rand() * (hi - lo))
     }
     return pickDayPostHour(day, rand)
   }
 
+  // 当天是否已被窗口覆盖（lastVisit 是今天之前的日子 → 今天在窗口里，事件当天在窗口内规划）
+  const todayCovered = todayStart > lastDay && days.includes(todayStart)
+
   for (const day of days) {
     const dk = dayKeyOf(day)
-    const existing = countPostsOnDay(posts, dk)
-    if (existing >= MAX_POSTS_PER_DAY) continue
+    const u = dayUsage(posts, dk, ledger)
     const isEvent = activeDays.has(dk)
     if (isEvent) {
-      // 事件日：必补，补到当天 ≤2 条（大事当天发，不拖不卡）
-      const slots = MAX_POSTS_PER_DAY - existing
-      const times: number[] = []
-      for (let s = 0; s < slots; s++) {
-        const t = pickTime(day)
-        if (t == null) continue
-        times.push(t)
-      }
-      // 同一天两条错开至少 3 小时：第二条在第一条 +3h 后重新取（不挤在一个点，也绝不超过 now）
-      times.sort((a, b) => a - b)
-      for (let s = 0; s < times.length; s++) {
-        if (s === 0) {
-          out.push(times[s])
-        } else {
-          const lo = times[s - 1] + 3 * 60 * 60 * 1000
-          const hi = Math.min(now - 5 * 60 * 1000, day + 23 * 60 * 60 * 1000 - 1)
-          if (hi <= lo) continue // 排不开第二条就不硬塞（每天 ≥1 条已达标）
-          const t = lo + Math.floor(rand() * Math.max(0, hi - lo))
-          out.push(Math.min(t, hi))
-        }
-      }
+      // 事件日：优先 1 条事件动态（趁热发，不吞日常配额、不被日常 2 条吞掉）；已发过事件则当天不再补
+      if (u.event >= 1 || u.total >= MAX_TOTAL_PER_DAY) continue
+      const t = pickTime(day)
+      if (t != null) out.push({ at: t, source: 'event' })
     } else {
       // 非事件日：TA 也有自己的生活——按概率发 1 条，不是天天刷屏
-      if (rand() < BACKFILL_LIFE_CHANCE) {
+      if (u.daily < MAX_POSTS_PER_DAY && u.total < MAX_TOTAL_PER_DAY && rand() < BACKFILL_LIFE_CHANCE) {
         const t = pickTime(day)
-        if (t != null) out.push(t)
+        if (t != null) out.push({ at: t, source: 'daily' })
       }
     }
   }
-  return out.sort((a, b) => a - b)
+
+  // 当天补发通道：窗口不含今天（上次访问就是今天）但今天新聊出了大事、且今天还没发过事件动态 →
+  // 白天时段进空间仍趁热补 1 条今天的事件动态（防抖已过才可能走到这）
+  if (
+    h >= 5 &&
+    !todayCovered &&
+    activeDays.has(todayKey) &&
+    dayUsage(posts, todayKey, ledger).event < 1 &&
+    dayUsage(posts, todayKey, ledger).total < MAX_TOTAL_PER_DAY
+  ) {
+    const t = pickTime(todayStart)
+    if (t != null) out.push({ at: t, source: 'event' })
+  }
+  return out.sort((a, b) => a.at - b.at)
+}
+
+/** 兼容旧调用/旧测试的纯时间戳版计划（来源信息丢弃，只回时间戳升序数组） */
+export function planBackfillTimestamps(
+  lastVisit: number | null,
+  now: number,
+  posts: SpacePost[],
+  activeDays: ReadonlySet<string>,
+  rand: () => number = Math.random,
+): number[] {
+  return planBackfillSlots(lastVisit, now, posts, activeDays, rand).map((s) => s.at)
 }
 
 export interface SpaceState {
@@ -384,25 +476,31 @@ export function mergeNewPosts(existing: SpacePost[], incoming: SpacePost[]): Spa
   return [...existing, ...incoming].sort((a, b) => b.at - a.at).slice(0, MAX_POSTS)
 }
 
-/** 时间轴推进（纯函数）：按回填计划补新动态，更新 lastVisit，去重记录，裁到上限 */
+/** 时间轴推进（纯函数）：按回填计划补新动态，更新 lastVisit，去重记录，裁到上限（v3 支持事件槽/配额账本） */
 export function advanceTimeline(
   prev: SpaceState,
   vars: TemplateVar,
   now: number,
   activeDays: ReadonlySet<string> = new Set(),
   rand: () => number = Math.random,
+  ledger?: SpaceLedger,
 ): AdvanceResult {
-  const timestamps = planBackfillTimestamps(prev.lastVisit, now, prev.posts, activeDays, rand)
+  const slots = planBackfillSlots(prev.lastVisit, now, prev.posts, activeDays, rand, ledger)
   const posts = [...prev.posts]
   const used = { ...prev.used }
   let created = 0
-  // timestamps 是升序（旧→新）；正序 unshift 让最新进数组头部，列表保持「最新在前」
-  for (const ts of timestamps) {
-    // 每天 ≤2 条兜底：目标日已满 2 条就跳过这条（窗口/边缘情况保护）
-    if (countPostsOnDay(posts, dayKeyOf(ts)) >= MAX_POSTS_PER_DAY) continue
+  // slots 是升序（旧→新）；正序 unshift 让最新进数组头部，列表保持「最新在前」
+  for (const slot of slots) {
+    // 兜底：目标日对应通道已满/全天已满就跳过这条（窗口/边缘情况保护，v3 按通道配额）
+    const u = dayUsage(posts, dayKeyOf(slot.at), ledger)
+    if (slot.source === 'event') {
+      if (u.event >= 1 || u.total >= MAX_TOTAL_PER_DAY) continue
+    } else {
+      if (u.daily >= MAX_POSTS_PER_DAY || u.total >= MAX_TOTAL_PER_DAY) continue
+    }
     // 每条动态按自己的时间戳算时段/季节（回填昨天就用昨天的时段，凌晨不穿帮）
-    const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(ts), season: getSeason(ts) }
-    const g = generatePost(dayVars, used, ts, rand)
+    const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(slot.at), season: getSeason(slot.at) }
+    const g = generatePost(dayVars, used, slot.at, rand, slot.source)
     used[g.templateKey] = now
     posts.unshift(g.post)
     created++

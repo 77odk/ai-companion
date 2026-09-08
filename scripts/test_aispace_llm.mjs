@@ -146,13 +146,16 @@ eq(extractImageCaption('正文 [配图]图片与正文同行'), {
 }, '标记同行也拆干净')
 ok(!/[\u{1F000}-\u{1FAFF}]/u.test(extractImageCaption('正文\n[配图]阳光下的沙滩🏖️').caption ?? ''), '配图描述里 emoji 被删')
 
-console.log('\n[5b] buildLlmPost 构造动态')
+console.log('\n[5b] buildLlmPost 构造动态（v3：不再写 art 色卡，按 source 通道标记）')
 const post = buildLlmPost('今天天气很好', 1700000000000, '天气', seeded(1))
 eq(post.text, '今天天气很好', 'text 原样')
 eq(post.at, 1700000000000, 'at 用给定时间戳')
 eq(post.kind, '天气', 'kind 用给定值')
 ok(typeof post.id === 'string' && post.id.length > 0, 'id 是合法字符串')
-ok(Number.isFinite(post.art) && post.art >= 0 && post.art < 2, 'art 在合法范围')
+eq(post.source, 'daily', 'source 默认 daily（老数据无 source 视同 daily）')
+ok(post.art == null, 'v3 起不再写 art 色卡字段')
+const evtPost = buildLlmPost('一起去看展了', 1700000000000, '日常', seeded(2), 'event')
+eq(evtPost.source, 'event', '可显式指定 source=event（事件动态）')
 
 console.log('\n[6] buildReplyMessages 评论回复提示词（TASK_UI_BATCH2）')
 const replyMsgs = buildReplyMessages({

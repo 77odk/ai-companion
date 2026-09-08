@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildBusyReturnPrompt, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
-import { detectMemoryInstruction, detectPreferenceFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
+import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { getToken } from '../lib/auth'
 import { getSession, listMemories, postMemory, postMessage, type Session } from '../lib/sessionApi'
@@ -34,7 +34,9 @@ import {
 import { containsBusyKeyword, findBusyCutoff, inferBusyReason, pickBusyReply, randomBusyDurationMs, serializeBusyContext, type BusyState } from '../lib/aiBusy'
 import { loadCurrentPosts } from '../lib/aiSpace'
 import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELINE_EN } from '../lib/spaceChatInject'
+import { buildFutureAgendaBlock } from '../lib/futureAgenda'
 import { buildSelfTimelineBlock } from '../lib/selfTimeline'
+import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYourMoment } from '../lib/yourMoment'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -59,7 +61,7 @@ import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
 import { getMilestoneStatus, markMilestoneShown } from '../lib/milestone'
 import { getWeeklyReviews } from '../lib/weeklyReview'
-import { recordChatTopic } from '../lib/chatTopics'
+import { recordChatTopic, loadChatTopics } from '../lib/chatTopics'
 import { estimateToken, truncateByToken } from '../lib/token'
 import MilestoneCard from './MilestoneCard'
 
@@ -520,7 +522,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       if (pref) {
         writeMemory(pref, { source: text, topic: inferTopic(pref), explicit: true })
         userMsg.memorySaved = true
-      } else if (text.trim().length >= 1 && text.trim().length <= 8) {
+      } else {
+        // 作息自动记（2026-09-09 七七拍板）：稳定作息类（上晚班/几点上下班/几点睡）保底提取，补偏好正则的漏网
+        const sched = detectScheduleFact(text)
+        if (sched) {
+          writeMemory(sched, { source: text, topic: '工作', explicit: true })
+          userMsg.memorySaved = true
+        } else if (text.trim().length >= 1 && text.trim().length <= 8) {
         const prevAi = visibleMessages.filter((m) => m.role === 'assistant').slice(-1)[0]
         const askText = prevAi ? stripMemoryMarkers(prevAi.content) : ''
         if (askText) {
@@ -532,6 +540,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
             userMsg.memorySaved = true
           }
         }
+      }
       }
     }
     const base = [...visibleMessages, userMsg]
@@ -606,9 +615,31 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     if (spaceBlock) {
       apiMessages.push({ role: 'system', content: spaceBlock })
     }
+    // 未来约定注入（因果链第二环 TASK-FUTURE-AGENDA）：TA 记得「约好还没做的事」，
+    // 对方问起/到期临近时能自然接，不会一问三不知；没约定返回空串跳过，不占上下文。
+    const agendaBlock = buildFutureAgendaBlock(loadChatTopics(activeSessionId || undefined), new Date(), lang)
+    if (agendaBlock) {
+      apiMessages.push({ role: 'system', content: agendaBlock })
+    }
     // 生活基线：人设没写生活信息时补中性事实锚，让 TA 说"在洗碗/翻书"有根（TASK-SPACE-CHAT）
     if (!personaHasLifeAnchors(persona)) {
       apiMessages.push({ role: 'system', content: lang === 'en' ? LIFE_BASELINE_EN : LIFE_BASELINE })
+    }
+    // 【你的时刻】分享钩子（TASK-YOUR-MOMENT）：低频给 TA 此刻的生活画面，让"自己有日子在过"落地成画面，
+    // 不每次回复都带——只在 对方最近消息冷淡/很短、或连续几条都不长、或对方主动问 TA 近况 时触发；
+    // 人设没生活锚时 buildYourMomentBlock 返回空串 → 跳过，不占上下文。不动聊天记录存储/上传/去重/忙碌逻辑。
+    const recentUserTexts = base
+      .filter((m) => m.role === 'user')
+      .slice(-3)
+      .map((m) => m.content)
+    if (shouldInjectYourMoment(recentUserTexts, lang)) {
+      const momentBlock = buildYourMomentBlock(persona, new Date(), lang)
+      if (momentBlock) {
+        apiMessages.push({
+          role: 'system',
+          content: `${lang === 'en' ? MOMENT_GUIDE_EN : MOMENT_GUIDE_ZH}\n${momentBlock}`,
+        })
+      }
     }
     if (memInstr.isInstruction) {
       if (lang === 'en') {

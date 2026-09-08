@@ -11,13 +11,13 @@ import {
   getTimeWord,
   pickWeatherWord,
   planBackfillTimestamps,
+  planBackfillSlots,
   dayStartOf,
   pickDayPostHour,
   pickTemplateIndex,
   buildPostText,
   advanceTimeline,
   dayKeyOf,
-  countPostsOnDay,
   pickReplyFallback,
   REPLY_FALLBACKS,
   MAX_POSTS,
@@ -124,15 +124,19 @@ for (const ts of latePlan) {
   ok(ts < dayStartOf(midnight), '凌晨访问回填的都在昨天及以前')
 }
 
-console.log('\n[4] 每天最多 2 条（已有动态占用额度）')
-// 昨天已满 2 条 → 事件日也不再给昨天加
+console.log('\n[4] v3 配额按通道：日常满 2 条不吞事件 / 事件不占日常配额 / 一天一条事件 / 全天 ≤3')
 const yPosts = [
-  { id: 'a', at: now - DAY + 5 * HOUR, kind: '日常', text: 'A', art: 0 },
-  { id: 'b', at: now - DAY + 9 * HOUR, kind: '日常', text: 'B', art: 0 },
+  { id: 'a', at: now - DAY + 5 * HOUR, kind: '日常', text: 'A' },
+  { id: 'b', at: now - DAY + 9 * HOUR, kind: '日常', text: 'B' },
 ]
-const capped = planBackfillTimestamps(lastVisit, now, yPosts, new Set([yesterdayKey]), seeded(7))
-ok(!capped.some((ts) => dayKeyOf(ts) === yesterdayKey), '昨天已满 2 条则不再补昨天')
-ok(capped.every((ts) => countPostsOnDay(yPosts, dayKeyOf(ts)) < 2 || dayKeyOf(ts) !== yesterdayKey), '不超每日上限')
+const slots4 = planBackfillSlots(lastVisit, now, yPosts, new Set([yesterdayKey]), seeded(7))
+const yEvt = slots4.filter((s) => dayKeyOf(s.at) === yesterdayKey && s.source === 'event')
+eq(yEvt.length, 1, '昨天日常已满 2 条 → 事件通道仍补 1 条（大事不被日常配额吞掉）')
+ok(!slots4.some((s) => s.source === 'daily' && dayKeyOf(s.at) === yesterdayKey), '昨天不再补日常（日常配额 2 已满）')
+ok(slots4.every((s) => s.source === 'daily' || s.source === 'event'), '计划里每条都有合法来源通道（daily/event）')
+const yPosts3 = [...yPosts, { id: 'c', at: now - DAY + 11 * HOUR, kind: '日常', text: 'C', source: 'event' }]
+const slots4b = planBackfillSlots(lastVisit, now, yPosts3, new Set([yesterdayKey]), seeded(7))
+ok(!slots4b.some((s) => dayKeyOf(s.at) === yesterdayKey), '昨天已有事件动态 → 当天不再补事件（一天一件事）')
 
 console.log('\n[5] advanceTimeline 回填生成')
 const vars = { taName: 'TA', yourName: '小七', season: '夏', timeWord: '中午', weatherWord: '晴' }

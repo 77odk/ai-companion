@@ -5,7 +5,7 @@
 //   - 组装发给模型的 system / user 提示词
 //   - 清洗模型返回、按关键词猜 kind、构造 SpacePost
 
-import { pickArtVariant, type SpaceKind, type SpacePost } from './aiSpaceCore.ts'
+import type { SpaceKind, SpacePost, SpaceSource } from './aiSpaceCore.ts'
 import type { ApiMessage } from './api.ts'
 
 /** 能走 LLM 路径所需的设置项（与 ModelSettings 结构兼容） */
@@ -28,10 +28,14 @@ export interface LlmContext {
   weatherWord: string
   /** 最近聊天里对方提到的事情/话题（带「今天/8-20」时间标签，事件触发：TA 挑当天相关的呼应） */
   chatTopics?: string[]
-  /** TA 最近发过的动态原文，用于防止重复/雷同 */
+  /** TA 最近发过的动态原文，用于防止重复/雷同（取最近 1-2 条，宁缺毋滥） */
   recent: string[]
   /** 这条动态的日期字符串（如「8月26日」），已按该条 at 对齐（回填昨天就是昨天的日期） */
   atDateStr: string
+  /** 当前真实时刻锚文本（如「2026年9月9日 星期三」），与 at 对齐语境共存：防止补发/跨天把今天说成昨天 */
+  nowAnchor?: string
+  /** 这条动态的来源通道：event=为那天共同经历/约好的事发的（大事趁热），daily=日常生活 */
+  postSource?: SpaceSource
 }
 
 /** 是否满足 LLM 路径：人设 + 服务商配置齐全 */
@@ -54,23 +58,33 @@ export function canUseLlm(persona: string, settings: LlmSettings): boolean {
 export function buildLlmMessages(ctx: LlmContext): ApiMessage[] {
   // 2026-09-05 夜乔修：Sam 发中文动态——动态生成没跟角色语言走。英文人设 → 英文模板
   const en = /[\u4e00-\u9fff]/.test(ctx.persona ?? '') === false && /[a-zA-Z]/.test(ctx.persona ?? '')
+  const isEvent = ctx.postSource === 'event'
   if (en) {
     const system =
       `You are "${ctx.taName}", a real person living your own life. Post one casual status sharing what's going on with you right now. ` +
       `1-2 short sentences, casual and warm, matching your personality. ` +
       `Vary your openings — don't reuse the same starter. ` +
       `No emoji. Never say you're an AI/assistant/model. Write like a real person's casual post, never robotic.`
-    let user = `This is a post you made ${ctx.atDateStr}${ctx.timeWord} (${ctx.season}, ${ctx.weatherWord}). Write about that moment of your life.`
+    let user = ''
+    if (ctx.nowAnchor) {
+      user += `[Current Time] It is now ${ctx.nowAnchor}. `
+    }
+    user += `This is a post you made ${ctx.atDateStr}${ctx.timeWord} (${ctx.season}, ${ctx.weatherWord}). `
+    user += `Write about that moment of your life — if it was days ago, write from that day's perspective, not "today".`
     user += `\n\nYour life and personality:\n${(ctx.persona ?? '').trim()}\n`
     user += `\nWrite about your own day — what you're doing, seeing, thinking, feeling. Grow it from your life and personality.`
     user += `\nThere's someone you care about named "${ctx.yourName}", but they're not your whole life: write about yourself first.`
     if (ctx.chatTopics && ctx.chatTopics.length > 0) {
       user += `\n\nThings they told you (marked "today" if said the same day as this post):\n${ctx.chatTopics.map((t) => `- ${t}`).join('\n')}\n`
-      user += `\nWrite mostly about your own day. Only when you truly shared something together, mention them naturally in one line — don't make the whole post about them.`
+      if (isEvent) {
+        user += `\nThis post is about the thing you two shared or planned that day (the "today"-marked one) — write how you felt right after it, in your own words, one or two lines. Don't quote them back verbatim.`
+      } else {
+        user += `\nWrite mostly about your own day. Only when you truly shared something together, mention them naturally in one line — don't make the whole post about them.`
+      }
     }
     if (ctx.recent.length > 0) {
       user += `\n\nYour recent posts:\n${ctx.recent.map((r) => `- ${r}`).join('\n')}\n`
-      user += `\nDon't repeat those — write something new.`
+      user += `\nDon't repeat the same content — life moves on, write something new.`
     }
     user += `\n\nWrite the post directly, content only, no explanation.`
     return [
@@ -86,17 +100,29 @@ export function buildLlmMessages(ctx: LlmContext): ApiMessage[] {
     `禁止 emoji；禁止自称 AI/助手/模型；禁止出现「设定」「人设」「朋友圈」这类词。` +
     `就像真人随手写的生活，别让人看出是编排好的。`
 
-  let user = `这是你「${ctx.atDateStr}${ctx.timeWord}」发的一条动态（${ctx.season}天，天气${ctx.weatherWord}）。写你那一刻的生活。`
+  let user = ''
+  if (ctx.nowAnchor) {
+    // 当前真实时刻锚：与 at 对齐语境共存——补发/跨天时模型也知道「现在」是几号，不会把今天说成昨天
+    user += `【当前时刻】现在是 ${ctx.nowAnchor}。`
+  }
+  user += `这是你「${ctx.atDateStr}${ctx.timeWord}」发的一条动态（${ctx.season}天，天气${ctx.weatherWord}）。`
+  user += `这条可能写在今天，也可能是前几天补记的——以「这条动态的时间」为准来写，别把日子说错。`
   user += `\n\n你的生活与性格：\n${ctx.persona.trim()}\n`
   user += `\n写你自己的日子：你在做什么、看到什么、想到什么、心情如何——从你的生活和性格里长出来。`
   user += `\n你有一个在意的人叫「${ctx.yourName}」，但 TA 不是你的全部生活：这条动态先写你自己。`
   if (ctx.chatTopics && ctx.chatTopics.length > 0) {
     user += `\n\n你记得对方跟你提过这些事（带「今天」的是这条动态同一天说的，带日期的是那天说的）：\n${ctx.chatTopics.map((t) => `- ${t}`).join('\n')}\n`
-    user += `\n大多数动态写你自己的日子就好。只有当你和对方真的共同经历了什么（比如约好这天去哪、这天一起做了什么、对方这天有大事你惦记着），才在这条里自然地提一句对方——别整条都写对方，更别复述对方原话。`
+    if (isEvent) {
+      // 事件动态：就是为那天共同经历/约好的事发的（大事趁热），允许（也要求）自然地以那件事为主体
+      user += `这条动态正是为你和对方那天共同经历或约好的事发的（下面带「今天」的就是当天的事）：`
+      user += `从那件事出发，写你刚经历完、或正惦记着这件事时的心情——从你自己的视角，一两句自然的话，别复述对方原话。`
+    } else {
+      user += `大多数动态写你自己的日子就好。只有当你和对方真的共同经历了什么（比如约好这天去哪、这天一起做了什么、对方这天有大事你惦记着），才在这条里自然地提一句对方——别整条都写对方，更别复述对方原话。`
+    }
   }
   if (ctx.recent.length > 0) {
-    user += `\n你最近发过的动态：\n${ctx.recent.map((r) => `- ${r}`).join('\n')}\n`
-    user += `\n别和上面重复，写点新鲜的。`
+    user += `\n你最近发过这些动态：\n${ctx.recent.map((r) => `- ${r}`).join('\n')}\n`
+    user += `别重复同样的内容，生活继续往前——写点新鲜的。`
   }
   user += `\n\n直接写这条新动态，只要正文，别解释。`
 
@@ -155,15 +181,16 @@ export function guessKind(text: string): SpaceKind {
   return '日常'
 }
 
-/** 由清洗后的 LLM 文案构造一条动态（id / 时间戳 / kind / 插画变体都定好） */
+/** 由清洗后的 LLM 文案构造一条动态（id / 时间戳 / kind / 来源通道都定好；v3 不再写 art 色卡字段） */
 export function buildLlmPost(
   text: string,
   at: number,
   kind: SpaceKind,
   rand: () => number = Math.random,
+  source: SpaceSource = 'daily',
 ): SpacePost {
   const id = `p${at.toString(36)}${Math.floor(rand() * 1e6).toString(36)}`
-  return { id, at, kind, text, art: pickArtVariant(kind, rand) }
+  return { id, at, kind, text, source }
 }
 
 /**

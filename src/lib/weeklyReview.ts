@@ -247,6 +247,10 @@ export interface WeeklyPromptContext {
   pendingReplies?: string[]
   /** 专属人设（可选，注入让口吻更贴 TA） */
   persona?: string
+  /** 本周 TA 自己发过的动态 text（因果链·周记回响；没有不带） */
+  weekPosts?: string[]
+  /** 本周到期/进行中的约定（因果链·周记回响；没有不带） */
+  weekAgenda?: string[]
 }
 
 /** 周记生成的系统提示词：守住「像 TA 写信、只写有依据的」底线（喂给 chatCompletion 的 system） */
@@ -283,6 +287,25 @@ export function buildWeeklyPrompt(ctx: WeeklyPromptContext): string {
     .filter(Boolean)
   if (memories.length === 0) lines.push('这周没有记住什么新的事。')
   else lines.push(...memories.map((m) => `- ${m}`))
+
+  // 因果链·周记回响：本周 TA 发过的动态是「自己的生活线」，周记自然接着念叨（动态里写的事/心情，回响进周记）
+  const weekPosts = (Array.isArray(ctx.weekPosts) ? ctx.weekPosts : [])
+    .map((s) => String(s ?? '').trim())
+    .filter(Boolean)
+  if (weekPosts.length > 0) {
+    lines.push('【本周你自己的生活（你自己发的动态）】')
+    lines.push(...weekPosts.map((p) => `- ${p}`))
+    lines.push('这些是你这周发的动态、过自己的生活留下的痕迹。周记里可以自然地回响它们——动态里提过的那部电影、那碗面、那件惦记的事，这周周记接着写下去（只在动态确实写了时才提，别硬凑）。')
+  }
+
+  // 因果链·周记回响：本周到期的约定是「你们共同的时间线」，周记里念叨一句（去了吗/还惦记着）
+  const weekAgenda = (Array.isArray(ctx.weekAgenda) ? ctx.weekAgenda : [])
+    .map((s) => String(s ?? '').trim())
+    .filter(Boolean)
+  if (weekAgenda.length > 0) {
+    lines.push('【本周你们说好要做的事】')
+    lines.push(...weekAgenda.map((a) => `- ${a}`))
+  }
 
   lines.push(`【相处天数】今天是你们认识的第 ${ctx.daysKnown} 天。`)
 

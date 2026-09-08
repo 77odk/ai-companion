@@ -2650,50 +2650,6 @@ textarea.persona-input {
   color: var(--color-text);
 }
 
-/* 动态配图区：柔和渐变底色 + 居中线条插画 */
-.ai-space-art {
-  height: 150px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.ai-space-art-svg {
-  width: 130px;
-  height: 88px;
-}
-
-.ai-space-post-body {
-  padding: 12px 14px;
-}
-
-/* 每种 kind 一档柔和渐变（暖橘/奶白/浅灰系，跟记忆页主题色块同族） */
-.art-tone-0 {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 20%, transparent), color-mix(in srgb, var(--color-bg) 90%, transparent));
-  color: #b26a4e;
-}
-.art-tone-1 {
-  background: linear-gradient(135deg, rgba(132, 169, 74, 0.18), rgba(243, 247, 232, 0.9));
-  color: #6b7f3f;
-}
-.art-tone-2 {
-  background: linear-gradient(135deg, rgba(90, 148, 196, 0.18), rgba(232, 241, 248, 0.9));
-  color: #4d7b9e;
-}
-.art-tone-3 {
-  background: linear-gradient(135deg, rgba(164, 106, 192, 0.18), rgba(245, 234, 248, 0.9));
-  color: #8a5aa8;
-}
-.art-tone-4 {
-  background: linear-gradient(135deg, rgba(224, 168, 84, 0.2), rgba(252, 244, 228, 0.9));
-  color: #b07f3a;
-}
-.art-tone-5 {
-  background: linear-gradient(135deg, rgba(214, 106, 130, 0.16), rgba(252, 236, 240, 0.9));
-  color: #a24e5e;
-}
-
 /* 列表顶部的更新提示行 + 刷新按钮 */
 .ai-space-update-row {
   display: flex;
