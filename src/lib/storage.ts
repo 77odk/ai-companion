@@ -557,6 +557,36 @@ export function saveAIGender(gender: AIGender, sessionId?: string): void {
 const FIRST_SEEN_KEY = 'ai_companion_first_seen'
 
 /**
+ * 认识锚点上云（2026-09-09，跨域名/换设备 firstSeen 丢失根因修复）：
+ * 会话接口返回的 firstSeenAt（该角色最早消息/记忆/创建的云端权威锚）落到本地缓存。
+ * 覆盖条件：本地无缓存，或云端锚更早（只往更早修，绝不把真实起点往后推）。
+ * 调用点：listSessions / getSession 成功拿到数据后。已污染的「今天」缓存会被更早的云端锚修正。
+ */
+export function seedFirstSeenFromCloud(sessions: { id: number; firstSeenAt?: string | null }[]): void {
+  try {
+    for (const s of sessions) {
+      if (!s || typeof s.id !== 'number' || !s.firstSeenAt) continue
+      const ts = new Date(s.firstSeenAt).getTime()
+      if (!Number.isFinite(ts) || ts <= 0) continue
+      const cacheKey = `${FIRST_SEEN_KEY}_${s.id}`
+      let cur = 0
+      try {
+        const raw = localStorage.getItem(cacheKey)
+        if (raw) {
+          const n = Number(raw)
+          if (Number.isFinite(n) && n > 0) cur = n
+        }
+      } catch {
+        // 读不到按无缓存处理
+      }
+      if (cur === 0 || ts < cur) localStorage.setItem(cacheKey, String(ts))
+    }
+  } catch {
+    // 种子失败不影响主流程（下次拉会话还会再种）
+  }
+}
+
+/**
  * 认识 TA 的第一天（时间戳）。
  * 取值顺序：已有缓存 → 本地最老聊天记录 ts → 最老记忆 createdAt → 最老生活动态 at → 当前时间。
  * 一旦算出就缓存到 localStorage，之后不再覆盖，保证「认识第几天」只增不减

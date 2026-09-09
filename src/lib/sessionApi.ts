@@ -6,6 +6,7 @@
 
 import { API_BASE } from './sync.ts'
 import { logout } from './auth.ts'
+import { seedFirstSeenFromCloud } from './storage.ts'
 
 /** 统一的接口结果：成功带 data，失败带 status + message（网络失败 status 为 0） */
 export type ApiResult<T> =
@@ -19,6 +20,8 @@ export interface Session {
   persona: string
   created_at: string
   updatedAt: string
+  /** 认识锚点（2026-09-09 firstSeen 上云）：该角色最早消息/记忆/创建的 UTC ISO；空=新会话 */
+  firstSeenAt?: string | null
 }
 
 /** 会话消息（后端 messages 表，createdAt 是 ISO 字符串） */
@@ -88,7 +91,11 @@ async function request<T>(
 
 /** 会话列表（不含消息/记忆） */
 export function listSessions(token: string): Promise<ApiResult<{ sessions: Session[] }>> {
-  return request<{ sessions: Session[] }>('/api/sessions', { token, method: 'GET' })
+  return request<{ sessions: Session[] }>('/api/sessions', { token, method: 'GET' }).then((r) => {
+    // firstSeen 上云（2026-09-09）：拉到云端认识锚点立刻种本地缓存，修正跨域名/换设备的「今天」污染
+    if (r.ok) seedFirstSeenFromCloud(r.data.sessions)
+    return r
+  })
 }
 
 /** 新建会话（persona/title 均可选，后端 title 空默认「新会话」） */
@@ -101,7 +108,10 @@ export function createSession(
 
 /** 会话详情：session + 该会话全部消息(升序) + 全部记忆(升序) */
 export function getSession(token: string, id: string | number): Promise<ApiResult<SessionDetail>> {
-  return request<SessionDetail>(`/api/sessions/${id}`, { token, method: 'GET' })
+  return request<SessionDetail>(`/api/sessions/${id}`, { token, method: 'GET' }).then((r) => {
+    if (r.ok) seedFirstSeenFromCloud([r.data.session])
+    return r
+  })
 }
 
 /** 删除会话（后端级联删消息/记忆） */
