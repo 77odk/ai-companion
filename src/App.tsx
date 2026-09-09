@@ -11,6 +11,8 @@ import AnniversaryPage from './components/AnniversaryPage'
 import WeeklyPage from './components/WeeklyPage'
 import GuideDetail from './components/Guide'
 import LoginGate from './components/LoginGate'
+import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
+import { getAccount } from './lib/sync'
 import RolesPage from './components/RolesPage'
 import { PlanetIcon } from './components/spaceIcons'
 import { loadMessages, loadPersona } from './lib/storage'
@@ -113,6 +115,15 @@ export default function App() {
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
+  // ConsentGate V1：首次使用先过「开始之前」安全说明（本机已同意当前版本则直接跳过）
+  const [firstConsentDone, setFirstConsentDone] = useState<boolean>(() => !consentGateNeeded())
+  // 老用户轻量补确认：已登录但服务端无 consent 记录（或版本过期）时盖一层 light
+  const [needLightConsent, setNeedLightConsent] = useState(false)
+  useEffect(() => {
+    if (!loggedIn) return
+    const acct = getAccount()
+    if (acct && !acct.consentVersion) setNeedLightConsent(true)
+  }, [loggedIn])
 
   // 聊天页头部：返回箭头 + 小星球资料卡入口；顶栏标题 = 当前角色名（微信式）
   const headerSession = (() => {
@@ -325,8 +336,16 @@ export default function App() {
 
   return (
     <div className="app">
-      {gateShown ? (
-        <LoginGate onDone={handleGateDone} onGoGuide={() => openGuide('gate')} onBack={handleGateBack} />
+      {loggedIn && needLightConsent ? (
+        // ConsentGate V1：老用户/登录态无服务端 consent 记录 → 轻量补确认（同意后上报服务端留档）
+        <ConsentGate mode="light" onDone={() => setNeedLightConsent(false)} />
+      ) : gateShown ? (
+        // ConsentGate V1：首次进入先过「开始之前」安全说明（双勾选+同意），过了才进登录/注册
+        !firstConsentDone ? (
+          <ConsentGate mode="full" onDone={() => setFirstConsentDone(true)} />
+        ) : (
+          <LoginGate onDone={handleGateDone} onGoGuide={() => openGuide('gate')} onBack={handleGateBack} />
+        )
       ) : view === 'guide' ? (
         <GuideDetail onBack={handleGuideBack} onGoProvider={() => openSettings('provider')} />
       ) : view === 'welcome' ? (

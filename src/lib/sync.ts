@@ -7,6 +7,7 @@
 // 错误统一返回 {error: '...'}，HTTP 400/401/409。
 // 纯逻辑（合并/清洗/账户读写）都放在可被 Node 单测的导出函数里；网络失败静默，不打断用户。
 import { ELUVIN_DATA_CHANGE, notifyAuthChanged } from './dataChange.ts'
+import { readLocalConsent, writeLocalConsent, makeConsent } from './consentState.ts'
 import {
   loadSettings,
   loadMessages,
@@ -32,6 +33,8 @@ export interface Account {
   token: string
   /** 登录标识：邮箱 / 手机号 / 用户名（用户填的原始内容，trim 后） */
   account: string
+  /** 知情同意版本（服务端留档；null=老用户还没补确认，前端据此弹轻量版 ConsentGate） */
+  consentVersion?: string | null
 }
 /** 云端同步的设置结构：apiKey 绝不上云，每个服务商只留 baseUrl/model */
 export interface ProviderSyncSettings {
@@ -78,7 +81,7 @@ export function getAccount(): Account | null {
     if (!raw) return null
     const p = JSON.parse(raw) as Partial<Account>
     if (p != null && typeof p.token === 'string' && p.token && typeof p.account === 'string') {
-      return { token: p.token, account: p.account }
+      return { token: p.token, account: p.account, consentVersion: p.consentVersion ?? null }
     }
     return null
   } catch {
@@ -86,7 +89,7 @@ export function getAccount(): Account | null {
   }
 }
 export function setAccount(account: Account): void {
-  localStorage.setItem(ACCOUNT_KEY, JSON.stringify({ token: account.token, account: account.account }))
+  localStorage.setItem(ACCOUNT_KEY, JSON.stringify({ token: account.token, account: account.account, consentVersion: account.consentVersion ?? null }))
 }
 export function clearAccount(): void {
   localStorage.removeItem(ACCOUNT_KEY)
@@ -101,13 +104,17 @@ async function errorMessage(resp: Response): Promise<string> {
   }
   return `操作失败（HTTP ${resp.status}）`
 }
-async function postAuth(path: string, account: string, password: string, extra: Record<string, string> = {}): Promise<Account> {
+async function postAuth(path: string, account: string, password: string, extra: Record<string, unknown> = {}): Promise<Account> {
   let resp: Response
+  // ConsentGate V1：登录/注册自动携带本机同意记录（有的话），让服务端留档；没同意过就不带
+  const localConsent = readLocalConsent()
+  const bodyObj: Record<string, unknown> = { email: account.trim(), password, ...extra }
+  if (localConsent) bodyObj.consent = localConsent
   try {
     resp = await fetch(`${API_BASE}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: account.trim(), password, ...extra }),
+      body: JSON.stringify(bodyObj),
     })
   } catch {
     throw new Error('网络不通，连不上服务器，请检查网络后重试')
@@ -115,7 +122,7 @@ async function postAuth(path: string, account: string, password: string, extra: 
   if (!resp.ok) throw new Error(await errorMessage(resp))
   const body = (await resp.json().catch(() => null)) as Partial<Account> | null
   if (body != null && typeof body.token === 'string' && typeof body.account === 'string') {
-    const acct: Account = { token: body.token, account: body.account }
+    const acct: Account = { token: body.token, account: body.account, consentVersion: body.consentVersion ?? null }
     setAccount(acct)
     // 登录状态变化广播：App 监听后关闭登录墙 / 刷新「我的」页状态
     notifyAuthChanged()
@@ -123,15 +130,44 @@ async function postAuth(path: string, account: string, password: string, extra: 
   }
   throw new Error('服务器返回异常，请稍后重试')
 }
-export function register(account: string, password: string, bindEmail?: string, bindPhone?: string, code?: string): Promise<Account> {
-  const extra: Record<string, string> = {}
-  if (bindEmail && bindEmail.trim()) extra.bindEmail = bindEmail.trim()
-  if (bindPhone && bindPhone.trim()) extra.bindPhone = bindPhone.trim()
-  if (code && code.trim()) extra.code = code.trim()
+export interface RegisterOpts {
+  bindEmail?: string
+  bindPhone?: string
+  code?: string
+  /** ConsentGate V1：完整出生日期 YYYY-MM-DD，注册时后端算年龄，<18 拒绝 */
+  dateOfBirth?: string
+}
+export function register(account: string, password: string, opts: RegisterOpts = {}): Promise<Account> {
+  const extra: Record<string, unknown> = {}
+  if (opts.bindEmail && opts.bindEmail.trim()) extra.bindEmail = opts.bindEmail.trim()
+  if (opts.bindPhone && opts.bindPhone.trim()) extra.bindPhone = opts.bindPhone.trim()
+  if (opts.code && opts.code.trim()) extra.code = opts.code.trim()
+  if (opts.dateOfBirth && opts.dateOfBirth.trim()) extra.date_of_birth = opts.dateOfBirth.trim()
   return postAuth('/api/register', account, password, extra)
 }
 export function login(account: string, password: string): Promise<Account> {
   return postAuth('/api/login', account, password)
+}
+/** ConsentGate V1：登录态上报知情同意（老用户轻量补确认 / 改版重确认），成功后更新本机账号的 consentVersion */
+export async function postConsent(version: string): Promise<void> {
+  const acct = getAccount()
+  if (!acct) throw new Error('还没登录')
+  const consent = makeConsent(version)
+  let resp: Response
+  try {
+    resp = await fetch(`${API_BASE}/api/consent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${acct.token}` },
+      body: JSON.stringify(consent),
+    })
+  } catch {
+    throw new Error('网络不通，同意记录没传上去，稍后会自动重试')
+  }
+  if (!resp.ok) throw new Error(await errorMessage(resp))
+  writeLocalConsent(version, consent.consentedAt)
+  acct.consentVersion = version
+  setAccount(acct)
+  notifyAuthChanged()
 }
 // ---- B2e：找回密码 + 账号绑定 ----
 export interface Identity {

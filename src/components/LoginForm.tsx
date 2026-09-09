@@ -30,6 +30,10 @@ export default function LoginForm({ onSuccess }: Props) {
   const [bindEmail, setBindEmail] = useState('')
   const [bindPhone, setBindPhone] = useState('')
   const [code, setCode] = useState('')
+  // ConsentGate V1：注册必填出生日期（完整年月日，后端算年龄 <18 拒绝）。DOB 只进后端，不进任何资料展示。
+  const [dobY, setDobY] = useState('')
+  const [dobM, setDobM] = useState('')
+  const [dobD, setDobD] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [sending, setSending] = useState(false)
@@ -53,10 +57,20 @@ export default function LoginForm({ onSuccess }: Props) {
     setError(null)
     setInfo(null)
     try {
+      if (view === 'register' && !dobY && !dobM && !dobD) {
+        setError('请先选择出生日期（忆文仅面向 18 岁以上用户）')
+        setSubmitting(false)
+        return
+      }
       const acct =
         view === 'login'
           ? await login(acctValue, password)
-          : await register(acctValue, password, bindEmail, bindPhone, code)
+          : await register(acctValue, password, {
+              bindEmail,
+              bindPhone,
+              code,
+              dateOfBirth: dobY && dobM && dobD ? `${dobY}-${dobM}-${dobD}` : undefined,
+            })
       setAccountInput('')
       setPassword('')
       setBindEmail('')
@@ -258,6 +272,33 @@ export default function LoginForm({ onSuccess }: Props) {
             </button>
           </div>
           <p className="account-format-hint">验证码发到填的邮箱，收到才能注册成功</p>
+        </div>
+      )}
+
+      {view === 'register' && (
+        <div className="field">
+          <label>出生日期（仅忆文确认年龄用）</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <select className="input" style={{ flex: 2 }} value={dobY} onChange={(e) => setDobY(e.target.value)} aria-label="出生年">
+              <option value="">年</option>
+              {Array.from({ length: 80 }, (_, i) => String(2026 - 8 - i)).map((y) => (
+                <option key={y} value={y}>{y} 年</option>
+              ))}
+            </select>
+            <select className="input" style={{ flex: 1 }} value={dobM} onChange={(e) => setDobM(e.target.value)} aria-label="出生月">
+              <option value="">月</option>
+              {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map((m) => (
+                <option key={m} value={m}>{Number(m)} 月</option>
+              ))}
+            </select>
+            <select className="input" style={{ flex: 1 }} value={dobD} onChange={(e) => setDobD(e.target.value)} aria-label="出生日">
+              <option value="">日</option>
+              {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((d) => (
+                <option key={d} value={d}>{Number(d)} 日</option>
+              ))}
+            </select>
+          </div>
+          <p className="account-format-hint">忆文仅面向 18 岁及以上用户，日期只用于年龄确认</p>
         </div>
       )}
 
