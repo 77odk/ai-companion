@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadMemory, type MemoryItem } from '../lib/memory'
 import { computeDaysKnown, formatMemoryDate } from '../lib/aiSpaceDetail'
 import WeeklyPage from './WeeklyPage'
@@ -12,6 +12,18 @@ import {
   groupSummary,
   type MemoryWallGroup,
 } from '../lib/memoryWall'
+import {
+  loadLocalPhotos,
+  addLocalPhoto,
+  mergePhotos,
+  photoUrl,
+  scaleImageToDataUrl,
+  dataUrlBytes,
+  uploadPhoto,
+  listPhotos,
+  type PhotoMeta,
+} from '../lib/photoWall'
+import { getToken } from '../lib/auth'
 
 interface Props {
   /** 进入时的初始子页：home 空间主页 / memories 记忆墙（「我的 → TA 记得的」直接进记忆墙） */
@@ -207,27 +219,122 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
 
   const goHome = () => setPage('home')
 
-  /* ---- 子页面渲染 ---- */
+  /* ---- 照片墙（第 7 批：真上传 + 网格 + 点开大图） ---- */
 
-  /** 空间主页（定稿第二屏：顶部一句 / 照片墙 / 一起经历过 / 周记 / TA 记得的 / 底部注脚） */
-  function renderHomePage() {
-    const hasPhotos = false // 照片墙第 7 批接真上传，本批只做空状态
+  // 本地元数据缓存（登录用户只存 id/日期/尺寸；游客本地存 dataUrl 兜底渲染）
+  const [photos, setPhotos] = useState<PhotoMeta[]>(() => loadLocalPhotos(sid))
+  // 上传中（数量）：网格里显示占位，避免重复点
+  const [photoUploading, setPhotoUploading] = useState(0)
+  // 点开的大图 id（lightbox）
+  const [lightboxId, setLightboxId] = useState<string | null>(null)
+  // 上传错误提示（超限/413/网络），几秒后自动消失
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  // 隐藏的文件选择 input（空态引导 + 网格添加入口共用）
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  // 进入空间主页时：有登录态 → 拉云端列表合并（契约：按需拉，不进 /api/sync）
+  useEffect(() => {
+    if (page !== 'home' || !sid) return
+    const token = getToken()
+    if (!token) return
+    let alive = true
+    listPhotos(token, sid).then((res) => {
+      if (!alive || !res.ok || !res.data) return
+      const cloud: PhotoMeta[] = res.data.photos.map((p) => ({
+        id: p.id,
+        sessionId: p.sessionId,
+        width: p.width,
+        height: p.height,
+        createdAt: p.createdAt,
+      }))
+      setPhotos((prev) => mergePhotos(prev, cloud))
+    })
+    return () => {
+      alive = false
+    }
+  }, [page, sid])
+
+  // 单张处理：压缩 → 上传（有 token）/ 本地存（游客）→ 更新列表
+  async function handlePhotoFile(file: File) {
+    let scaled: { dataUrl: string; width: number; height: number }
+    try {
+      scaled = await scaleImageToDataUrl(file)
+    } catch {
+      setPhotoError('这张图读不了，换一张试试')
+      return
+    }
+    if (dataUrlBytes(scaled.dataUrl) > 4 * 1024 * 1024) {
+      setPhotoError('图片太大（超过 4MB），换一张小点的')
+      return
+    }
+    const token = getToken()
+    if (token && sid) {
+      const res = await uploadPhoto(token, sid, scaled.dataUrl, scaled.width, scaled.height)
+      if (res.ok && res.data) {
+        const p = res.data.photo
+        const meta: PhotoMeta = {
+          id: p.id,
+          sessionId: p.sessionId,
+          width: p.width,
+          height: p.height,
+          createdAt: p.createdAt,
+        }
+        setPhotos((prev) => mergePhotos([meta], prev))
+      } else if (res.status === 413) {
+        setPhotoError('图片太大（超过 4MB），换一张小点的')
+      } else {
+        setPhotoError(res.message || '上传失败，稍后再试')
+      }
+    } else {
+      // 游客：无 token 不上云，dataUrl 落本地缓存（登录后云端列表会合并进来）
+      const meta: PhotoMeta = {
+        id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        sessionId: sid ?? '',
+        width: scaled.width,
+        height: scaled.height,
+        createdAt: Date.now(),
+        dataUrl: scaled.dataUrl,
+      }
+      setPhotos(addLocalPhoto(meta, sid))
+    }
+  }
+
+  // 多选逐张串行上传（避免并发请求乱序；与聊天串行上传同一原则）
+  async function handlePhotoFiles(files: FileList | null) {
+    if (!files || files.length === 0) return
+    const list = Array.from(files)
+    setPhotoError(null)
+    setPhotoUploading(list.length)
+    for (const f of list) {
+      await handlePhotoFile(f)
+    }
+    setPhotoUploading(0)
+  }
+
+  // 照片墙：空态（引导 + 添加）/ 网格（3 列 4:3，左下角日期）/ 上传中占位 / 点开大图
+  function renderPhotoWall() {
+    const token = getToken()
     return (
-      <div className="ai-space-v2">
-        <p className="ai-space-v2-line">我们已经认识 {days} 天了。</p>
+      <section className="ai-space-v2-section">
+        <div className="ai-space-v2-head">
+          <span className="ai-space-v2-title">照片墙</span>
+          <span className="ai-space-v2-en">PHOTOS</span>
+        </div>
 
-        {/* 照片墙（空态） */}
-        <section className="ai-space-v2-section">
-          <div className="ai-space-v2-head">
-            <span className="ai-space-v2-title">照片墙</span>
-            <span className="ai-space-v2-en">PHOTOS</span>
-            {hasPhotos && (
-              <button type="button" className="ai-space-v2-all">
-                全部 ›
-              </button>
-            )}
-          </div>
-          <div className="ai-space-photo-add" aria-label="添加照片（即将上线）">
+        {photos.length === 0 && photoUploading === 0 ? (
+          <div
+            className="ai-space-photo-add"
+            role="button"
+            tabIndex={0}
+            aria-label="添加照片"
+            onClick={() => fileInputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                fileInputRef.current?.click()
+              }
+            }}
+          >
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -240,7 +347,92 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
             </svg>
             <p>从第一张开始，慢慢留下我们的日子。</p>
           </div>
-        </section>
+        ) : (
+          <div className="ai-photo-grid">
+            {photos.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className="ai-photo-cell"
+                onClick={() => setLightboxId(p.id)}
+              >
+                <img
+                  src={p.dataUrl ?? photoUrl(p.id, token)}
+                  alt=""
+                  loading="lazy"
+                  className="ai-photo-img"
+                />
+                <span className="ai-photo-date">{fmtMD(p.createdAt)}</span>
+              </button>
+            ))}
+            {photoUploading > 0 && (
+              <div className="ai-photo-cell ai-photo-uploading" aria-label="上传中">
+                <span className="ai-photo-spinner" />
+              </div>
+            )}
+          </div>
+        )}
+
+        {photoError && <p className="ai-photo-err">{photoError}</p>}
+
+        {/* 隐藏文件选择：网格右上 + 空态引导共用 */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="ai-photo-file"
+          onChange={(e) => {
+            void handlePhotoFiles(e.target.files)
+            e.target.value = ''
+          }}
+        />
+        {/* 网格时右上角仍留添加入口 */}
+        {photos.length > 0 && (
+          <button
+            type="button"
+            className="ai-photo-add-more"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            添加 ›
+          </button>
+        )}
+
+        {/* 点开大图 */}
+        {lightboxId && (
+          <div
+            className="ai-photo-lightbox"
+            role="dialog"
+            aria-label="查看大图"
+            onClick={() => setLightboxId(null)}
+          >
+            {(() => {
+              const p = photos.find((x) => x.id === lightboxId)
+              if (!p) return null
+              return (
+                <img
+                  src={p.dataUrl ?? photoUrl(p.id, token)}
+                  alt=""
+                  className="ai-photo-lightbox-img"
+                />
+              )
+            })()}
+          </div>
+        )}
+      </section>
+    )
+  }
+
+  /* ---- 子页面渲染 ---- */
+
+  /** 空间主页（定稿第二屏：顶部一句 / 照片墙 / 一起经历过 / 周记 / TA 记得的 / 底部注脚） */
+  function renderHomePage() {
+    return (
+      <div className="ai-space-v2">
+        <p className="ai-space-v2-line">我们已经认识 {days} 天了。</p>
+
+        {/* 照片墙（第 7 批：真上传 + 网格 + 点开大图） */}
+        {renderPhotoWall()}
 
         {/* 一起经历过 */}
         <section className="ai-space-v2-section">
