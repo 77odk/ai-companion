@@ -13,8 +13,8 @@ import { timeAgo } from '../lib/time'
 interface Props {
   /** 「和 TA 说说话」→ 聊天页 */
   onGoChat: () => void
-  /** 「TA 的生活 · 全部」→ TA 空间 */
-  onGoSpace: () => void
+  /** 「TA 的生活 · 全部」→ TA 的生活页（修正批：不再跳空间） */
+  onGoLife: () => void
 }
 
 /** 按时段问候（凌晨/早上/上午/中午/下午/晚上/夜深） */
@@ -57,7 +57,7 @@ function countdownText(n: number): string {
   return `${n}天`
 }
 
-export default function Home({ onGoChat, onGoSpace }: Props) {
+export default function Home({ onGoChat, onGoLife }: Props) {
   const sid = getActiveSessionId() || undefined
   const firstSeen = useMemo(() => getFirstSeen(sid), [sid])
   const days = useMemo(() => computeDaysKnown(firstSeen), [firstSeen])
@@ -144,7 +144,7 @@ export default function Home({ onGoChat, onGoSpace }: Props) {
           <div className="home-section-head">
             <span className="home-section-title">TA 的生活</span>
           </div>
-          <button type="button" className="home-more" onClick={onGoSpace}>
+          <button type="button" className="home-more" onClick={onGoLife}>
             全部 ›
           </button>
         </div>

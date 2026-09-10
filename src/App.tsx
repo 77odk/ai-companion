@@ -14,7 +14,7 @@ import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
 import { getAccount } from './lib/sync'
 import RolesPage from './components/RolesPage'
 import { PlanetIcon } from './components/spaceIcons'
-import { loadMessages, loadPersona } from './lib/storage'
+import { loadMessages, loadPersona, loadAIProfile, loadUserProfile } from './lib/storage'
 import { getToken, isLoggedIn, isPublicView } from './lib/auth'
 import { listSessions } from './lib/sessionApi'
 import {
@@ -33,8 +33,9 @@ import {
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh } from './lib/forceRefresh'
 import Home from './components/Home'
+import SpaceLife from './components/SpaceLife'
 
-type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'aispace' | 'chatprofile' | 'aboutme' | 'anniversary' | 'weekly' | 'guide' | 'loading'
+type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'aispace' | 'chatprofile' | 'aboutme' | 'anniversary' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
 // 底部三 tab 的常显范围：主视图（TA/空间/我的及二级页）带底部导航；全屏页（欢迎/指南/选角色/加载等）不带。
 // 用函数判断避免 TS 对嵌套 view 比较做过度收窄（误报不可达比较）。
@@ -44,7 +45,7 @@ function isNavView(v: View): boolean {
 
 // 三 tab 高亮：TA 高亮首页/聊天/会话列表；空间高亮 TA 空间；我的高亮设置页
 function navTabActive(v: View, tab: 'ta' | 'space' | 'mine'): boolean {
-  if (tab === 'ta') return v === 'home' || v === 'chat' || v === 'roles'
+  if (tab === 'ta') return v === 'home' || v === 'chat' || v === 'roles' || v === 'spacelife'
   if (tab === 'space') return v === 'aispace'
   return v === 'settings'
 }
@@ -110,6 +111,97 @@ function useAuthState(): boolean {
 
 export default function App() {
   const [view, setView] = useState<View>(initialView)
+
+  // ---- 导航历史 + 滚动位置（修正批第 2/3 条）----
+  // 浏览器后退/侧滑返回不白屏：goView 入栈 + pushState，popstate 时弹出上一页，栈空回首页。
+  // 所有页面统一恢复离开时的滚动位置（切 view 时捕获，回来时还原）。
+  const viewRef = useRef<View>(view)
+  viewRef.current = view
+  const viewStackRef = useRef<View[]>([])
+  const scrollPosRef = useRef<Map<string, { cls: string; idx: number; top: number }[]>>(new Map())
+
+  const captureScroll = useCallback((v: View) => {
+    if (!v) return
+    const container = document.querySelector('.app-main')
+    if (!container) return
+    const els = Array.from(container.querySelectorAll<HTMLElement>('*'))
+    const items: { cls: string; idx: number; top: number }[] = []
+    els.forEach((el, i) => {
+      if (el.scrollTop > 0) {
+        const cls = typeof el.className === 'string' && el.className ? el.className : el.tagName
+        const same = els.filter(
+          (x, xi) => ((typeof x.className === 'string' && x.className) || x.tagName) === cls && xi <= i,
+        )
+        items.push({ cls, idx: same.length - 1, top: el.scrollTop })
+      }
+    })
+    scrollPosRef.current.set(v, items)
+  }, [])
+
+  const restoreScroll = useCallback((v: View) => {
+    const items = scrollPosRef.current.get(v)
+    if (!items || items.length === 0) return
+    window.setTimeout(() => {
+      const container = document.querySelector('.app-main')
+      if (!container) return
+      const els = Array.from(container.querySelectorAll<HTMLElement>('*'))
+      for (const { cls, idx, top } of items) {
+        let n = 0
+        for (const el of els) {
+          if (((typeof el.className === 'string' && el.className) || el.tagName) === cls) {
+            if (n === idx) {
+              if (el.scrollTop === 0) el.scrollTop = top
+              break
+            }
+            n++
+          }
+        }
+      }
+    }, 0)
+  }, [])
+
+  /** 用户主动导航：入历史栈（可后退） */
+  const goView = useCallback(
+    (v: View) => {
+      if (viewRef.current === v) return
+      captureScroll(viewRef.current)
+      viewStackRef.current.push(viewRef.current)
+      window.history.pushState({ v }, '')
+      viewRef.current = v
+      setView(v)
+    },
+    [captureScroll],
+  )
+
+  /** 流程性跳转（登录分流/迁移等）：不入历史栈，后退不回到流程中间 */
+  const replaceView = useCallback(
+    (v: View) => {
+      if (viewRef.current === v) return
+      captureScroll(viewRef.current)
+      viewRef.current = v
+      setView(v)
+    },
+    [captureScroll],
+  )
+
+  // 挂载时初始化历史 state；popstate = 浏览器后退/侧滑返回 → 弹出上一页，栈空回首页
+  useEffect(() => {
+    window.history.replaceState({ v: viewRef.current }, '')
+    const onPop = () => {
+      const prev = viewStackRef.current.pop()
+      const target = prev ?? 'home'
+      viewRef.current = target
+      setView(target)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  // 进入 view 后还原滚动位置（页面渲染完再写）
+  useEffect(() => {
+    restoreScroll(view)
+  }, [view, restoreScroll])
+
   // 二级页（资料卡/关于我/纪念日/周记）的来源：从哪进返回哪（聊天/忆览/空间/我的）
   const [detailFrom, setDetailFrom] = useState<View>('chat')
   // 进空间时的初始子页：「我的 → TA 记得的」进记忆墙，其余入口进空间主页
@@ -159,14 +251,14 @@ export default function App() {
     setActiveSessionId(String(result.sessionId))
     setLocalMigratedFlag()
     setMigration('idle')
-    setView('chat')
+    replaceView('chat')
   }, [])
 
   // 迁移失败后的「重试」：重新走一遍迁移（本地旧数据仍在）
   const retryMigration = () => {
     const token = getToken()
     if (!token) {
-      setView('welcome')
+      replaceView('welcome')
       return
     }
     setMigration('running')
@@ -178,7 +270,7 @@ export default function App() {
     setMigration('idle')
     setRoleMode('first')
     setRoleBack('welcome')
-    setView('role')
+    replaceView('role')
   }
 
   // 登录用户分流：拉会话列表 → 有会话进最近会话聊天；没有但有本地旧数据（且没迁过）→ 自动迁移；
@@ -187,10 +279,10 @@ export default function App() {
   // 这里就把 redirectStarted 置位，避免 view 切到 loading 后下面的挂载 effect 再触发一次重复拉取。
   const redirectBySessions = useCallback(async () => {
     redirectStarted.current = true
-    setView('loading')
+    replaceView('loading')
     const token = getToken()
     if (!token) {
-      setView('welcome')
+      replaceView('welcome')
       return
     }
     const res = await listSessions(token)
@@ -203,7 +295,7 @@ export default function App() {
         // 有云端会话 → 进首页（回家；聊天/空间都从首页进）
         setActiveSessionId(String(latest.id))
         setMigration('idle')
-        setView('home')
+        replaceView('home')
       } else if (!hasMigratedFlag() && hasLocalLegacyData()) {
         // 无云端会话 + 本地有旧数据 + 没迁过 → 自动把本地数据搬成第一个会话
         setActiveSessionId('')
@@ -219,16 +311,16 @@ export default function App() {
           setRoleMode('first')
           setRoleBack('welcome')
         }
-        setView(target)
+        replaceView(target)
       }
     } else if (getActiveSessionId()) {
-      setView('chat')
+      replaceView('chat')
     } else if (needsRolePick()) {
       setRoleMode('first')
       setRoleBack('welcome')
-      setView('role')
+      replaceView('role')
     } else {
-      setView('chat')
+      replaceView('chat')
     }
   }, [runMigration])
 
@@ -242,7 +334,7 @@ export default function App() {
       setGateTarget(null) // 回到公开页 = 取消待登录的目标
       setPendingTarget(null)
     }
-    setView(v)
+    goView(v)
   }
 
   const openSettings = (target: SettingsPage) => {
@@ -257,7 +349,7 @@ export default function App() {
       setGateTarget(null)
     }
     setGuideBack(from)
-    setView('guide')
+    goView('guide')
   }
 
   const handleGuideBack = () => {
@@ -266,9 +358,9 @@ export default function App() {
       setPendingTarget(null)
       if (target) {
         setGateTarget(target)
-        setView(target)
+        replaceView(target)
       } else {
-        setView('welcome')
+        replaceView('welcome')
       }
       return
     }
@@ -296,7 +388,7 @@ export default function App() {
   const handleGateBack = () => {
     setGateTarget(null)
     setPendingTarget(null)
-    setView('welcome')
+    replaceView('welcome')
   }
 
   const handleTitleClick = () => {
@@ -328,7 +420,7 @@ export default function App() {
   const handleRolesNew = () => {
     setRoleBack('roles')
     setRoleMode('first')
-    setView('role')
+    goView('role')
   }
 
   // 已登录用户首次挂载（initialView='loading'）时拉会话分流；开机欢迎页时等「开始使用」再分流。
@@ -369,13 +461,15 @@ export default function App() {
             // 新建会话后顺手拉一次列表：角色列表/头部入口都能立刻显示新角色名
             void refreshSessions()
           }}
-          onBack={() => navigate(roleBack)}
+          onBack={() => navigate(loggedIn && roleBack === 'welcome' ? 'home' : roleBack)}
           onLogin={() => setGateTarget('chat')}
         />
       ) : view === 'chatprofile' ? (
         <ChatProfile
-          onClose={() => navigate(detailFrom === 'settings' ? 'settings' : 'chat')}
+          onClose={() => navigate(detailFrom === 'settings' ? 'settings' : detailFrom === 'roles' ? 'roles' : 'chat')}
           onGoMine={() => navigate('settings')}
+          fromRoles={detailFrom === 'roles'}
+          onChat={() => goView('chat')}
         />
       ) : view === 'aboutme' ? (
         <AboutMe onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'aispace')} />
@@ -383,6 +477,15 @@ export default function App() {
         <AnniversaryPage onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'aispace')} />
       ) : view === 'weekly' ? (
         <WeeklyPage onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'aispace')} onGoSettings={() => openSettings('provider')} />
+      ) : view === 'spacelife' ? (
+        <SpaceLife
+          aiNickname={loadAIProfile(getActiveSessionId() || undefined).nickname}
+          yourName={loadUserProfile().nickname || '你'}
+          sessionId={getActiveSessionId() || undefined}
+          hasPersona={Boolean(loadPersona().trim())}
+          onGoMine={() => openSettings('main')}
+          onBack={() => goView('home')}
+        />
       ) : view === 'loading' ? (
         <div className="session-loading">
           {migration === 'failed' ? (
@@ -432,7 +535,10 @@ export default function App() {
                 <button
                   type="button"
                   className="chat-header-planet"
-                  onClick={() => setView('chatprofile')}
+                  onClick={() => {
+                    setDetailFrom('chat')
+                    goView('chatprofile')
+                  }}
                   aria-label="打开 TA 的资料卡"
                   title="TA 的资料卡"
                 >
@@ -454,17 +560,18 @@ export default function App() {
             {view === 'home' && (
               <Home
                 onGoChat={() => navigate('chat')}
-                onGoSpace={() => {
-                  setSpaceInitialPage('home')
-                  navigate('aispace')
-                }}
+                onGoLife={() => goView('spacelife')}
               />
             )}
             {view === 'roles' && (
               <RolesPage
                 onBack={() => navigate('settings')}
                 onNew={handleRolesNew}
-                onSwitch={() => setView('chat')}
+                onSwitch={() => goView('chat')}
+                onOpenProfile={() => {
+                  setDetailFrom('roles')
+                  goView('chatprofile')
+                }}
                 standalone={false}
               />
             )}
@@ -475,7 +582,7 @@ export default function App() {
                 onGoGuide={() => openGuide('settings')}
                 onOpenProfile={() => {
                   setDetailFrom('chat')
-                  setView('chatprofile')
+                  goView('chatprofile')
                 }}
               />
             )}
@@ -493,10 +600,6 @@ export default function App() {
                 onGoAboutMe={() => {
                   setDetailFrom('settings')
                   navigate('aboutme')
-                }}
-                onGoWeekly={() => {
-                  setDetailFrom('settings')
-                  navigate('weekly')
                 }}
                 onGoAnniversary={() => {
                   setDetailFrom('settings')

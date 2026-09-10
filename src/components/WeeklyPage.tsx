@@ -349,8 +349,9 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const renderList = () => (
     <div className="page weekly-page">
       <div className="detail-header">
-        <button type="button" className="detail-back" onClick={onBack} aria-label="返回忆览页">
+        <button type="button" className="detail-back detail-back-text" onClick={onBack} aria-label="返回">
           <BackIcon />
+          返回
         </button>
         <h2 className="detail-title">TA 所写</h2>
         <button
@@ -428,7 +429,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         <div className="detail-header">
           <button
             type="button"
-            className="detail-back"
+            className="detail-back detail-back-text"
             onClick={() => {
               setView('list')
               setSelectedId(null)
@@ -436,6 +437,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
             aria-label="返回周记列表"
           >
             <BackIcon />
+            返回
           </button>
           <h2 className="detail-title">{r.title}</h2>
           <span className="detail-spacer" aria-hidden="true" />

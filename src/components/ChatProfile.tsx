@@ -35,6 +35,10 @@ interface Props {
   onClose: () => void
   /** 「去写人设」跳「我的」页（App 里即 settings 视图），透传给 TA 的生活引导卡 */
   onGoMine?: () => void
+  /** 从角色管理进来（点角色 → 资料卡，而不是直接进聊天）；此时显示「和 TA 聊天」按钮 */
+  fromRoles?: boolean
+  /** 「和 TA 聊天」：从资料卡进聊天（角色管理模式用） */
+  onChat?: () => void
 }
 
 /** 相识天数：角色创建（会话 created_at）当天起算；无会话/读不到回落 getFirstSeen，至少 1 天 */
@@ -50,7 +54,7 @@ function profileDaysKnown(sessionId: string | null): number {
   return computeDaysKnown(getFirstSeen(sessionId || undefined))
 }
 
-export default function ChatProfile({ onClose, onGoMine }: Props) {
+export default function ChatProfile({ onClose, onGoMine, fromRoles = false, onChat }: Props) {
   // 当前会话（有会话 → 名字/消息/动态全用该会话数据，无会话兜底全局）
   const sessionId = getActiveSessionId()
   // TA 资料按会话隔离：资料卡显示当前角色的头像/姓名
@@ -129,7 +133,7 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
       <div className="ai-space-head">
         <div className="ai-space-topbar">
           <button type="button" className="link-btn ai-space-back" onClick={onClose}>
-            ‹ 关闭
+            ‹ 返回
           </button>
           <h1 className="ai-space-title">资料卡</h1>
           <span className="ai-space-topbar-spacer" aria-hidden="true" />
@@ -165,6 +169,12 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
 
       <div className="ai-space-timeline">
         <div className="ai-space-entry-list">
+          {/* 从角色管理进来：点角色只开资料卡，明确「和 TA 聊天」才进聊天 */}
+          {fromRoles && onChat && (
+            <button type="button" className="btn btn-primary chatprofile-chat-cta" onClick={onChat}>
+              和 TA 聊天
+            </button>
+          )}
           {/* TA 是谁：展示态成人话（有数据才摆行），点「编辑」进表单 */}
           {(who.personality || who.background || who.opening) ? (
             <div className="ai-who-card">

@@ -63,8 +63,6 @@ interface Props {
   onGoMemory?: () => void
   /** 记忆组：关于我（我的重要日子 + 我说的） */
   onGoAboutMe?: () => void
-  /** 我们组：周记（TA 写的周记） */
-  onGoWeekly?: () => void
   /** 我们组：纪念日（重要的日子） */
   onGoAnniversary?: () => void
   /** 我们组：一起经历过（TA 的空间 · 大小事） */
@@ -75,7 +73,7 @@ interface Props {
   initialPage?: SettingsPage
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoMemory, onGoAboutMe, onGoWeekly, onGoAnniversary, onGoSpace, onGoProfile, initialPage }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoMemory, onGoAboutMe, onGoAnniversary, onGoSpace, onGoProfile, initialPage }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
 
   if (page === 'provider') {
@@ -109,7 +107,6 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onGoRoles={() => onGoRoles?.()}
       onGoMemory={() => onGoMemory?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
-      onGoWeekly={() => onGoWeekly?.()}
       onGoAnniversary={() => onGoAnniversary?.()}
       onGoSpace={() => onGoSpace?.()}
       onGoProfile={() => onGoProfile?.()}
@@ -123,7 +120,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
 function DetailHeader({ title, onBack }: { title: string; onBack: () => void }) {
   return (
     <div className="detail-header">
-      <button type="button" className="detail-back" onClick={onBack} aria-label="返回「我的」">
+      <button type="button" className="detail-back detail-back-text" onClick={onBack} aria-label="返回">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -136,6 +133,7 @@ function DetailHeader({ title, onBack }: { title: string; onBack: () => void }) 
           <path d="M19 12H5" />
           <path d="M12 19l-7-7 7-7" />
         </svg>
+        返回
       </button>
       <h2 className="detail-title">{title}</h2>
       <span className="detail-spacer" aria-hidden="true" />
@@ -155,7 +153,6 @@ function MainCenter({
   onGoRoles,
   onGoMemory,
   onGoAboutMe,
-  onGoWeekly,
   onGoAnniversary,
   onGoSpace,
   onGoProfile,
@@ -170,7 +167,6 @@ function MainCenter({
   onGoRoles?: () => void
   onGoMemory?: () => void
   onGoAboutMe?: () => void
-  onGoWeekly?: () => void
   onGoAnniversary?: () => void
   onGoSpace?: () => void
   onGoProfile?: () => void
@@ -265,7 +261,6 @@ function MainCenter({
       </ProfileGroup>
 
       <ProfileGroup title="我们">
-        {onGoWeekly && <EntryRow icon={<WeeklyIcon />} label="周记" onClick={onGoWeekly} />}
         {onGoAnniversary && <EntryRow icon={<AnniversaryIcon />} label="纪念日" onClick={onGoAnniversary} />}
         {onGoSpace && <EntryRow icon={<JourneyIcon />} label="一起经历过" onClick={onGoSpace} />}
         <div className="slow-letter-row">
@@ -445,16 +440,6 @@ const AboutMeIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="12" cy="8" r="3.8" />
     <path d="M5 20a7 7 0 0 1 14 0" />
-  </svg>
-)
-
-/* 周记：打开的日记本 */
-const WeeklyIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15z" />
-    <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20" />
-    <path d="M8 7h8" />
-    <path d="M8 10.5h6" />
   </svg>
 )
 

@@ -30,8 +30,10 @@ interface Props {
   onBack: () => void
   /** 新建角色：App 跳选角色页（roleMode='first'） */
   onNew: () => void
-  /** 会话已切换（本页已 setActiveSessionId），App 回聊天页 */
+  /** 会话已切换（本页已 setActiveSessionId），App 回聊天页（删除当前会话后切到最近会话用） */
   onSwitch: () => void
+  /** 点角色：本页已 setActiveSessionId(id)，App 打开该角色资料卡（不再直进聊天） */
+  onOpenProfile: () => void
   /** 主页化（微信式）：嵌在底部导航「聊天」tab 里，无返回按钮；默认 true=全屏页带返回 */
   standalone?: boolean
 }
@@ -43,7 +45,7 @@ function lastMessage(sessionId: string): StoredMessage | null {
   return msgs.reduce<StoredMessage | null>((best, m) => (!best || m.ts > best.ts ? m : best), null)
 }
 
-export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }: Props) {
+export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, standalone = true }: Props) {
   // 列表自持：进页面先用缓存秒开，再拉后端刷新（拉取失败用缓存兜底）
   const [sessions, setSessions] = useState<Session[]>(() => getSessionsCache())
   // 「···」动作菜单开在哪个会话上（null = 收起）
@@ -85,10 +87,11 @@ export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }
   })
   const activeId = getActiveSessionId()
 
-  const switchSession = (id: string) => {
+  // 点角色：切换当前会话 + 打开该角色资料卡（不直进聊天；资料卡里有「和 TA 聊天」）
+  const openRoleProfile = (id: string) => {
     setMenuFor(null)
     setActiveSessionId(id)
-    onSwitch()
+    onOpenProfile()
   }
 
   const handleNew = () => {
@@ -160,18 +163,8 @@ export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }
     <div className="roles-page">
       <div className="detail-header roles-header">
         {standalone && (
-          <button type="button" className="detail-back" onClick={onBack} aria-label="返回">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
+          <button type="button" className="link-btn ai-space-back" onClick={onBack} aria-label="返回">
+            ‹ 返回
           </button>
         )}
         <h1 className="detail-title">{standalone ? '角色' : '聊天'}</h1>
@@ -213,8 +206,8 @@ export default function RolesPage({ onBack, onNew, onSwitch, standalone = true }
                 <button
                   type="button"
                   className="roles-main"
-                  onClick={() => switchSession(id)}
-                  aria-label={`切换到角色：${displayName}`}
+                  onClick={() => openRoleProfile(id)}
+                  aria-label={`打开角色：${displayName}`}
                 >
                   <span className="roles-avatar" aria-hidden="true">
                     {roleAvatar.startsWith('data:') ? (

@@ -163,6 +163,16 @@ export function loadAnniversaries(): Anniversary[] {
 }
 
 /**
+ * 只读「当前角色自己」的纪念日（不合并全局）：默认纪念日 + 里程碑 + 双人节日都在角色 key 里。
+ * 无会话回落全局（老逻辑）。纪念日页主区用它——只显示当前角色，别的角色不混进来。
+ */
+export function readRoleAnniversaries(sessionId?: string): Anniversary[] {
+  if (!sessionId) return readRaw(undefined)
+  ensureRoleDefaults(sessionId)
+  return readRaw(sessionId)
+}
+
+/**
  * 云端同步用：汇总全部角色的纪念日（全局个人 + 各会话双人），保证角色隔离后云端仍持有完整数据。
  * 同步本身仍是全局合并（applyData 写全局 key），这里只是防止上传时把角色数据清空。
  */

@@ -10,6 +10,7 @@ import {
   isMilestoneAnniversary,
   isValidAnniversaryDate,
   pickNextBigDay,
+  readRoleAnniversaries,
   removeAnniversary,
   resolveMainAnniversary,
   setMainAnniversaryId,
@@ -75,10 +76,10 @@ interface Props {
 export default function AnniversaryPage({ onBack }: Props) {
   // 当前角色：个人节日存全局（不绑角色），双人节日存该角色 key；无会话回落全局（老逻辑）
   const sid = getActiveSessionId() || undefined
-  // 纪念日页只显示和角色相关的内容（couple）：个人生日/生理期等 personal 只在「关于我」里管
-  //（2026-08-26 七七拍板：A 方案，个人日子不混进角色纪念日）
+  // 主区只显示当前角色自己的纪念日（角色 key：默认纪念日 + 里程碑 + 双人节日），
+  // 其他角色/全局残留不混进来（修正批第 8 条：不再显示全部角色）
   const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() =>
-    getAnniversaries(sid).filter((a) => a.kind !== 'personal'),
+    readRoleAnniversaries(sid).filter((a) => a.kind !== 'personal'),
   )
   // 角色名：大日子卡上里程碑显示「和{角色名}在一起 X 天」（无会话/找不到 → 空串，不拼）
   const [roleName] = useState<string>(() => {
@@ -117,7 +118,7 @@ export default function AnniversaryPage({ onBack }: Props) {
   // 数据变更自动刷新：记忆页/别处改了纪念日，进来立刻同步（会话感知）
   useEffect(() => {
     const refresh = () => {
-      setAnniversaries(getAnniversaries(getActiveSessionId() || undefined).filter((a) => a.kind !== 'personal'))
+      setAnniversaries(readRoleAnniversaries(getActiveSessionId() || undefined).filter((a) => a.kind !== 'personal'))
     }
     window.addEventListener(MEMORY_UPDATED_EVENT, refresh)
     window.addEventListener('storage', refresh)
@@ -126,6 +127,20 @@ export default function AnniversaryPage({ onBack }: Props) {
       window.removeEventListener('storage', refresh)
     }
   }, [])
+
+  // 其他角色的纪念日：折叠分组放下面（数据不删，只是不混进当前角色主区）
+  const otherRoles = useMemo(() => {
+    if (!sid) return []
+    return getSessionsCache()
+      .filter((s) => String(s.id) !== sid)
+      .map((s) => {
+        const id = String(s.id)
+        // 该角色自己的数据 + 全局残留一并收纳展示（数据不丢）
+        const list = getAnniversaries(id).filter((a) => a.kind !== 'personal')
+        return { id, name: displaySessionName(s), list }
+      })
+      .filter((r) => r.list.length > 0)
+  }, [sid, anniversaries])
 
   const resetForm = () => {
     setFormMode('idle')
@@ -246,7 +261,7 @@ export default function AnniversaryPage({ onBack }: Props) {
         {/* 纪念日列表：默认+自定义+里程碑一起；点条目 → 上面大日子卡展示这条；里程碑打标且不让改删 */}
         <section className="anniversary-list-section">
           <div className="anniversary-section-head">
-            <h3 className="anniversary-section-title">全部纪念日</h3>
+            <h3 className="anniversary-section-title">{sid ? '当前 TA 的纪念日' : '全部纪念日'}</h3>
             <p className="anniversary-section-desc">点条目，上面大日子卡会展示它</p>
           </div>
           {anniversaries.length === 0 ? (
@@ -330,6 +345,50 @@ export default function AnniversaryPage({ onBack }: Props) {
             </ul>
           )}
         </section>
+
+        {/* 其他角色的纪念日：折叠分组放下面（只读展示，数据不删） */}
+        {otherRoles.length > 0 && (
+          <section className="anniversary-others-section">
+            <div className="anniversary-section-head">
+              <h3 className="anniversary-section-title">其他角色</h3>
+              <p className="anniversary-section-desc">他们的日子也都在，只是不打扰当前 TA</p>
+            </div>
+            {otherRoles.map((role) => (
+              <details key={role.id} className="anniversary-other-group">
+                <summary className="anniversary-other-summary">
+                  <span className="anniversary-other-name">{role.name}</span>
+                  <span className="anniversary-other-count">{role.list.length} 个纪念日</span>
+                  <span className="anniversary-other-caret" aria-hidden="true">›</span>
+                </summary>
+                <ul className="anniversary-page-list">
+                  {role.list.map((a) => {
+                    const isMilestone = isMilestoneAnniversary(a)
+                    return (
+                      <li key={a.id} className="anniversary-page-item is-readonly">
+                        <div className="anniversary-page-info">
+                          <span className="anniversary-page-label">
+                            <span
+                              className={`anniversary-page-dot ann-color-${anniversaryColorIndex(a.color)}`}
+                              aria-hidden="true"
+                            />
+                            {a.label}
+                          </span>
+                          <span className="anniversary-page-meta">
+                            <span className="anniversary-page-date">{formatAnniversaryDate(a.date)}</span>
+                            <span className={`anniversary-count${a.countMode === 'countdown' ? '' : ' is-forward'}`}>
+                              {formatCountdown(a)}
+                            </span>
+                            {isMilestone && <span className="anniversary-milestone-tag">里程碑</span>}
+                          </span>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </details>
+            ))}
+          </section>
+        )}
 
         {/* 添加按钮 */}
         {formMode === 'idle' && (
