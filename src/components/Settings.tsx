@@ -260,7 +260,7 @@ function MainCenter({
       </ProfileGroup>
 
       <ProfileGroup title="记忆">
-        {onGoMemory && <EntryRow icon={<MemoryIcon />} label="忆览" onClick={onGoMemory} />}
+        {onGoMemory && <EntryRow icon={<MemoryIcon />} label="TA 记得的" onClick={onGoMemory} />}
         {onGoAboutMe && <EntryRow icon={<AboutMeIcon />} label="关于我" onClick={onGoAboutMe} />}
       </ProfileGroup>
 

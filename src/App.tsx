@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Welcome from './components/Welcome'
 import RolePicker from './components/RolePicker'
 import Chat from './components/Chat'
-import Memory from './components/Memory'
 import Settings, { type SettingsPage } from './components/Settings'
 import AISpace from './components/AISpace'
 import ChatProfile from './components/ChatProfile'
@@ -35,17 +34,17 @@ import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh } from './lib/forceRefresh'
 import Home from './components/Home'
 
-type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'memory' | 'settings' | 'aispace' | 'chatprofile' | 'aboutme' | 'anniversary' | 'weekly' | 'guide' | 'loading'
+type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'aispace' | 'chatprofile' | 'aboutme' | 'anniversary' | 'weekly' | 'guide' | 'loading'
 
 // 底部三 tab 的常显范围：主视图（TA/空间/我的及二级页）带底部导航；全屏页（欢迎/指南/选角色/加载等）不带。
 // 用函数判断避免 TS 对嵌套 view 比较做过度收窄（误报不可达比较）。
 function isNavView(v: View): boolean {
-  return v === 'home' || v === 'chat' || v === 'roles' || v === 'memory' || v === 'aispace' || v === 'settings'
+  return v === 'home' || v === 'chat' || v === 'roles' || v === 'aispace' || v === 'settings'
 }
 
-// 三 tab 高亮：TA 高亮首页/聊天/会话列表/忆览；空间高亮 TA 空间；我的高亮设置页
+// 三 tab 高亮：TA 高亮首页/聊天/会话列表；空间高亮 TA 空间；我的高亮设置页
 function navTabActive(v: View, tab: 'ta' | 'space' | 'mine'): boolean {
-  if (tab === 'ta') return v === 'home' || v === 'chat' || v === 'roles' || v === 'memory'
+  if (tab === 'ta') return v === 'home' || v === 'chat' || v === 'roles'
   if (tab === 'space') return v === 'aispace'
   return v === 'settings'
 }
@@ -113,6 +112,8 @@ export default function App() {
   const [view, setView] = useState<View>(initialView)
   // 二级页（资料卡/关于我/纪念日/周记）的来源：从哪进返回哪（聊天/忆览/空间/我的）
   const [detailFrom, setDetailFrom] = useState<View>('chat')
+  // 进空间时的初始子页：「我的 → TA 记得的」进记忆墙，其余入口进空间主页
+  const [spaceInitialPage, setSpaceInitialPage] = useState<'home' | 'memories'>('home')
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
   // 游客想进需登录页时记下的目标 view：仅登录墙展示用（登录成功后改为按云端会话分流，不再硬回跳）
   const [gateTarget, setGateTarget] = useState<View | null>(null)
@@ -249,12 +250,6 @@ export default function App() {
     navigate('settings')
   }
 
-  // 忆览页「全部角色」卡片：切到该角色会话后进它的 TA 空间
-  const openSpaceForSession = (sessionId: string) => {
-    setActiveSessionId(String(sessionId))
-    navigate('aispace')
-  }
-
   const openGuide = (from: 'welcome' | 'settings' | 'gate') => {
     if (from === 'gate') {
       // 登录墙 → 指南：把回跳目标收起来，返回时再放回登录墙
@@ -377,25 +372,17 @@ export default function App() {
           onBack={() => navigate(roleBack)}
           onLogin={() => setGateTarget('chat')}
         />
-      ) : view === 'aispace' ? (
-        <AISpace
-          onGoMine={() => navigate('settings')}
-          onOpenAnniversary={() => {
-            setDetailFrom('aispace')
-            navigate('anniversary')
-          }}
-        />
       ) : view === 'chatprofile' ? (
         <ChatProfile
           onClose={() => navigate(detailFrom === 'settings' ? 'settings' : 'chat')}
           onGoMine={() => navigate('settings')}
         />
       ) : view === 'aboutme' ? (
-        <AboutMe onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'memory')} />
+        <AboutMe onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'aispace')} />
       ) : view === 'anniversary' ? (
         <AnniversaryPage onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'aispace')} />
       ) : view === 'weekly' ? (
-        <WeeklyPage onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'memory')} onGoSettings={() => openSettings('provider')} />
+        <WeeklyPage onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'aispace')} onGoSettings={() => openSettings('provider')} />
       ) : view === 'loading' ? (
         <div className="session-loading">
           {migration === 'failed' ? (
@@ -467,7 +454,10 @@ export default function App() {
             {view === 'home' && (
               <Home
                 onGoChat={() => navigate('chat')}
-                onGoSpace={() => navigate('aispace')}
+                onGoSpace={() => {
+                  setSpaceInitialPage('home')
+                  navigate('aispace')
+                }}
               />
             )}
             {view === 'roles' && (
@@ -489,15 +479,6 @@ export default function App() {
                 }}
               />
             )}
-            {view === 'memory' && (
-              <Memory
-                onOpenAboutMe={() => {
-                  setDetailFrom('memory')
-                  navigate('aboutme')
-                }}
-                onOpenSpaceForSession={openSpaceForSession}
-              />
-            )}
             {view === 'settings' && (
               <Settings
                 initialPage={settingsTarget}
@@ -505,7 +486,10 @@ export default function App() {
                 onGoGuide={() => openGuide('settings')}
                 onGoWorkChat={() => navigate('chat')}
                 onGoRoles={() => navigate('roles')}
-                onGoMemory={() => navigate('memory')}
+                onGoMemory={() => {
+                  setSpaceInitialPage('memories')
+                  navigate('aispace')
+                }}
                 onGoAboutMe={() => {
                   setDetailFrom('settings')
                   navigate('aboutme')
@@ -518,10 +502,23 @@ export default function App() {
                   setDetailFrom('settings')
                   navigate('anniversary')
                 }}
-                onGoSpace={() => navigate('aispace')}
+                onGoSpace={() => {
+                  setSpaceInitialPage('home')
+                  navigate('aispace')
+                }}
                 onGoProfile={() => {
                   setDetailFrom('settings')
                   navigate('chatprofile')
+                }}
+              />
+            )}
+            {view === 'aispace' && (
+              <AISpace
+                initialPage={spaceInitialPage}
+                onGoMine={() => navigate('settings')}
+                onOpenAnniversary={() => {
+                  setDetailFrom('aispace')
+                  navigate('anniversary')
                 }}
               />
             )}
@@ -537,7 +534,10 @@ export default function App() {
               </button>
               <button
                 className={`nav-btn${navTabActive(view, 'space') ? ' active' : ''}`}
-                onClick={() => navigate('aispace')}
+                onClick={() => {
+                  setSpaceInitialPage('home')
+                  navigate('aispace')
+                }}
               >
                 空间
               </button>

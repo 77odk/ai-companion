@@ -3266,6 +3266,101 @@ textarea.persona-input {
   color: var(--color-text-muted);
 }
 
+/* 记忆墙（TA 记得的 · 定稿第三屏） */
+.ai-wall-impression {
+  background: linear-gradient(135deg, var(--color-primary-soft), var(--color-card) 70%);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 18px 16px;
+}
+
+.ai-wall-impression-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary-deep);
+  margin-bottom: 8px;
+}
+
+.ai-wall-impression-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.ai-wall-impression-loading,
+.ai-wall-impression-empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.ai-wall-group {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.ai-wall-group-head {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 13px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.ai-wall-group-head.open {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ai-wall-group-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.ai-wall-group-summary {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-wall-group-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary-deep);
+}
+
+.ai-wall-group-arrow {
+  font-size: 14px;
+  color: var(--color-primary);
+  line-height: 1;
+}
+
+.ai-wall-group-empty {
+  margin: 0;
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+}
+
+
 /* 聊天记录：按天分组列表 */
 .ai-space-day-list {
   display: flex;
