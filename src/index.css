@@ -542,7 +542,8 @@ button {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  /* 底部三 tab 常显后，safe-area 间距由 .app-nav 兜底，这里不再叠加 */
+  padding: 10px 14px 10px;
   border-top: 1px solid var(--color-border);
   background: var(--color-card);
 }

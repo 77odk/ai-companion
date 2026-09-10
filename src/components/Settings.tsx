@@ -57,11 +57,15 @@ interface Props {
   onGoGuide?: () => void
   /** 工作台「跟 TA 说」→ 切到聊天页（工作台展示模式用） */
   onGoWorkChat?: () => void
+  /** 三 tab 改版：角色管理（会话列表）入口，降级放「我的」 */
+  onGoRoles?: () => void
+  /** 三 tab 改版：忆览（记忆总览）入口，临时放「我的」，后续记忆墙按新分组归位 */
+  onGoMemory?: () => void
   /** 进入设置页时打开的子页 */
   initialPage?: SettingsPage
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, initialPage }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoMemory, initialPage }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
 
   if (page === 'provider') {
@@ -92,6 +96,8 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, initial
       onOpenAbout={() => setPage('about')}
       onOpenWork={() => setPage('work')}
       onOpenAppearance={() => setPage('appearance')}
+      onGoRoles={() => onGoRoles?.()}
+      onGoMemory={() => onGoMemory?.()}
       onGoWelcome={onGoWelcome}
     />
   )
@@ -131,6 +137,8 @@ function MainCenter({
   onOpenAbout,
   onOpenWork,
   onOpenAppearance,
+  onGoRoles,
+  onGoMemory,
   onGoWelcome,
 }: {
   onOpenAccount: () => void
@@ -139,6 +147,8 @@ function MainCenter({
   onOpenAbout: () => void
   onOpenWork: () => void
   onOpenAppearance: () => void
+  onGoRoles?: () => void
+  onGoMemory?: () => void
   onGoWelcome?: () => void
 }) {
   const [user, setUser] = useState<UserProfile>(() => loadUserProfile())
@@ -231,6 +241,8 @@ function MainCenter({
         <EntryRow icon={<PaletteIcon />} label="外观" onClick={onOpenAppearance} />
         <EntryRow icon={<WorkIcon />} label="工作台" onClick={onOpenWork} />
         <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
+        {onGoRoles && <EntryRow icon={<RolesIcon />} label="角色管理" status="进阶" onClick={onGoRoles} />}
+        {onGoMemory && <EntryRow icon={<MemoryIcon />} label="忆览" onClick={onGoMemory} />}
       </ProfileGroup>
 
       <ProfileGroup title="周记">
@@ -360,6 +372,25 @@ const PaletteIcon = () => (
     <circle cx="7.5" cy="10.5" r="1.2" />
     <circle cx="12" cy="7.5" r="1.2" />
     <circle cx="16.5" cy="10.5" r="1.2" />
+  </svg>
+)
+
+const RolesIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="9" cy="8" r="3.5" />
+    <path d="M3.5 20a5.5 5.5 0 0 1 11 0" />
+    <path d="M16 4.6a3.5 3.5 0 0 1 0 6.8" />
+    <path d="M17.5 14.2a5.5 5.5 0 0 1 3 5.8" />
+  </svg>
+)
+
+const MemoryIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5z" />
+    <path d="M8 3v4" />
+    <path d="M12 3v4" />
+    <path d="M16 3v4" />
+    <path d="M8 11l2 2 4-4" />
   </svg>
 )
 
