@@ -1,56 +1,34 @@
-import { useEffect, useMemo, useState } from 'react'
-import { hasOwnAIProfile, loadAIProfile, loadUserProfile, saveAIProfile, type AIProfile } from '../lib/storage'
+import { useMemo, useState } from 'react'
 import { loadMemory, type MemoryItem } from '../lib/memory'
-import { formatMemoryDate } from '../lib/aiSpaceDetail'
-import {
-  getAnniversaries,
-  getDefaultAnniversary,
-  isMilestoneAnniversary,
-  pickNextBigDay,
-  formatCountdown,
-  formatAnniversaryDate,
-  type Anniversary,
-} from '../lib/anniversary'
-import DefaultAvatar from './DefaultAvatar'
+import { computeDaysKnown, formatMemoryDate } from '../lib/aiSpaceDetail'
 import WeeklyPage from './WeeklyPage'
-import { getActiveSessionId, getMemoriesCache, getSessionsCache } from '../lib/sessionStore'
-import { displaySessionName } from '../lib/sessionFlow'
-import { EntryChevron, HeartIcon, NotebookIcon, SparkleIcon } from './spaceIcons'
+import { getActiveSessionId, getMemoriesCache, getMessagesCache } from '../lib/sessionStore'
+import { getWeeklyReviews, type WeeklyReview } from '../lib/weeklyReview'
+import { getFirstSeen, loadMessages } from '../lib/storage'
 
 interface Props {
-  onBack: () => void
   /** 引导「去写人设」/「去配置」跳「我的」页（App 里即 settings 视图） */
   onGoMine?: () => void
-  /** 点「最近的大日子」卡 → 进纪念日页 */
+  /** 点「最近的大日子」卡 → 进纪念日页（2026-09-10 空间重构后倒计时由首页承载，空间不再放，保留 prop 兼容调用方） */
   onOpenAnniversary?: () => void
 }
 
-export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) {
+/** 时间戳 → 8月2日（TA 记得的起始日期、底部注脚用） */
+function fmtMD(ts: number): string {
+  const d = new Date(ts)
+  return `${d.getMonth() + 1}月${d.getDate()}日`
+}
+
+export default function AISpace({ onGoMine }: Props) {
   // 当前会话（S2 空间按角色独立）：有会话 → 消息/记忆/首次见面全用该会话数据，无会话兜底全局
   const sessionId = getActiveSessionId()
-  // TA 资料按会话隔离：空间头部显示当前角色的头像/姓名（统一从 ai_profile 读，2026-09-05 乔定案）
-  const [ai, setAi] = useState<AIProfile>(() => loadAIProfile(sessionId || undefined))
-  // 老角色修复（2026-09-05）：M9 时代之前建的会话没有自己的 ai_profile，会回落全局昵称（串名）。
-  // 打开空间时发现该会话没自己的资料 → 用会话自己的标题补写一份（幂等，补完 hasOwn 就不再走）。
-  useEffect(() => {
-    if (!sessionId) return
-    if (hasOwnAIProfile(sessionId)) return
-    const s = getSessionsCache().find((x) => String(x.id) === String(sessionId))
-    const title = s ? displaySessionName(s) : ''
-    if (title && title !== 'TA' && title !== '新会话' && title !== '我们的开始') {
-      const next: AIProfile = { ...ai, nickname: title }
-      saveAIProfile(next, sessionId)
-      setAi(next)
-    }
-  }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
-  const user = loadUserProfile()
-  const yourName = user.nickname || '你'
+  const sid = sessionId || undefined
 
   // 详情页数据：进空间时读一次（记忆不会在空间内变化）。
   // 有会话读当前会话缓存（后端填充），无会话兜底全局 localStorage（游客/过渡态）
-  const [memories] = useState<MemoryItem[]>(() => (sessionId ? getMemoriesCache(sessionId) : loadMemory()))
+  const [memories] = useState<MemoryItem[]>(() => (sid ? getMemoriesCache(sid) : loadMemory()))
 
-  // 子页面路由：home 资料页 / memories TA所忆 / events TA所记（大小事） / weekly TA所写（周记）
+  // 子页面路由：home 空间主页 / memories TA所忆 / events TA所记（大小事） / weekly TA所写（周记）
   const [page, setPage] = useState<'home' | 'memories' | 'events' | 'weekly'>('home')
 
   const sortedMemories = useMemo(
@@ -58,108 +36,159 @@ export default function AISpace({ onBack, onGoMine, onOpenAnniversary }: Props) 
     [memories],
   )
 
-  // 最近的大日子（Big day）：当前角色纪念日里「下一次」最近的那条；点卡片进纪念日页。
-  // 每个角色默认有「认识 TA 的日子」（角色创建那天）+ 下一个「在一起 X 天」里程碑
-  //（getAnniversaries 首次读取自动补齐，TASK-UI3 七七拍板），所以每个角色都有各自的 Big day，互不串。
-  const [bigDay, setBigDay] = useState<Anniversary | null>(null)
-  useEffect(() => {
-    const sid = sessionId || undefined
-    getDefaultAnniversary(sid)
-    // 大日子只取和角色相关的（couple）：个人生日/生理期是「关于我」的事，不占角色空间（2026-08-26 七七拍板）
-    setBigDay(pickNextBigDay(getAnniversaries(sid).filter((a) => a.kind !== 'personal')))
-  }, [sessionId])
+  // 相识天数（首页同口径：getFirstSeen + computeDaysKnown）
+  const firstSeen = useMemo(() => getFirstSeen(sid), [sid])
+  const days = useMemo(() => computeDaysKnown(firstSeen), [firstSeen])
+
+  // 周记：最近一篇（getWeeklyReviews 已按 createdAt 降序）
+  const [weekly] = useState<WeeklyReview | null>(() => getWeeklyReviews(sid)[0] ?? null)
+
+  // 聊过多少次：有会话读会话消息缓存，无会话兜底全局
+  const [messageCount] = useState<number>(() =>
+    sid ? getMessagesCache(sid).length : loadMessages().length,
+  )
+
+  // 一起经历过：记忆按「第 N 天」聚类，每天取最早一条，倒序展示最近 3 个节点
+  const timelineNodes = useMemo(() => {
+    const byDay = new Map<number, MemoryItem>()
+    for (const m of memories) {
+      if (!m || typeof m.createdAt !== 'number' || !Number.isFinite(m.createdAt)) continue
+      const n = computeDaysKnown(firstSeen, m.createdAt)
+      if (!byDay.has(n) || m.createdAt < (byDay.get(n)?.createdAt ?? Infinity)) {
+        byDay.set(n, m)
+      }
+    }
+    return [...byDay.entries()]
+      .sort((a, b) => b[0] - a[0])
+      .slice(0, 3)
+      .map(([n, m]) => ({ day: n, text: m.text }))
+  }, [memories, firstSeen])
+
+  // TA 记得的：一句印象取最近一条记忆（截断），无记忆给空态引导
+  const memoryImpression = useMemo(() => {
+    const first = sortedMemories[0]
+    if (!first) return null
+    return first.text.length > 30 ? `${first.text.slice(0, 30)}…` : first.text
+  }, [sortedMemories])
+  const memoryStartAt = useMemo(() => {
+    let min = Infinity
+    for (const m of memories) {
+      if (typeof m.createdAt === 'number' && Number.isFinite(m.createdAt) && m.createdAt < min) min = m.createdAt
+    }
+    return Number.isFinite(min) ? min : null
+  }, [memories])
 
   const goHome = () => setPage('home')
 
   /* ---- 子页面渲染 ---- */
 
-  /** 资料页（home）：头部 + 最近的大日子卡 + 功能入口列表 */
+  /** 空间主页（定稿第二屏：顶部一句 / 照片墙 / 一起经历过 / 周记 / TA 记得的 / 底部注脚） */
   function renderHomePage() {
+    const hasPhotos = false // 照片墙第 7 批接真上传，本批只做空状态
     return (
-      <>
-        <div className="ai-space-head">
-          <div className="ai-space-topbar">
-            <button type="button" className="link-btn ai-space-back" onClick={onBack}>
-              ‹ 返回
-            </button>
-            <h1 className="ai-space-title">{ai.nickname ? `${ai.nickname} 的空间` : 'TA 的空间'}</h1>
-            <span className="ai-space-topbar-spacer" aria-hidden="true" />
-          </div>
+      <div className="ai-space-v2">
+        <p className="ai-space-v2-line">我们已经认识 {days} 天了。</p>
 
-          <div className="ai-space-avatar" aria-hidden="true">
-            {ai.avatar.startsWith('data:') ? (
-              <img src={ai.avatar} alt="" />
-            ) : ai.nickname ? (
-              <span className="ai-space-avatar-letter">{ai.nickname.slice(0, 1)}</span>
-            ) : (
-              <DefaultAvatar kind="ai" className="avatar-default" />
+        {/* 照片墙（空态） */}
+        <section className="ai-space-v2-section">
+          <div className="ai-space-v2-head">
+            <span className="ai-space-v2-title">照片墙</span>
+            <span className="ai-space-v2-en">PHOTOS</span>
+            {hasPhotos && (
+              <button type="button" className="ai-space-v2-all">
+                全部 ›
+              </button>
             )}
           </div>
-          <h2 className="ai-space-name">{ai.nickname}</h2>
-          <p className="ai-space-bio">
-            只属于{yourName}的 TA · 这里记录着 TA 的日常、想法，和没说出口的心事
-          </p>
-        </div>
+          <div className="ai-space-photo-add" aria-label="添加照片（即将上线）">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            <p>从第一张开始，慢慢留下我们的日子。</p>
+          </div>
+        </section>
 
-        <div className="ai-space-timeline">
-          {/* 最近的大日子卡：点它进纪念日页（2026-08-25 七七拍板） */}
-          {bigDay && onOpenAnniversary && (
-            <button type="button" className="ai-space-bigday" onClick={onOpenAnniversary}>
-              <span className="ai-space-bigday-icon" aria-hidden="true">
-                <HeartIcon />
-              </span>
-              <span className="ai-space-bigday-main">
-                <span className="ai-space-bigday-label">最近的大日子</span>
-                <span className="ai-space-bigday-count">{formatCountdown(bigDay)}</span>
-                <span className="ai-space-bigday-sub">
-                  {isMilestoneAnniversary(bigDay)
-                    ? `${ai.nickname ? `和${ai.nickname}` : ''}${bigDay.label}`
-                    : `${bigDay.label} · ${formatAnniversaryDate(bigDay.date)}`}
-                </span>
-              </span>
-              <span className="ai-space-bigday-arrow" aria-hidden="true">
-                ›
-              </span>
-            </button>
-          )}
-
-          {/* 功能入口列表：TA所忆 / TA所记 / TA所写（2026-08-25 七七拍板，TA所X 系列） */}
-          <div className="ai-space-entry-list">
-            <button type="button" className="ai-space-entry-row" onClick={() => setPage('memories')}>
-              <span className="ai-space-entry-icon" aria-hidden="true">
-                <HeartIcon />
-              </span>
-              <span className="ai-space-entry-main">
-                <span className="ai-space-entry-title">TA所忆</span>
-                <span className="ai-space-entry-sub">TA 记得的事 · {memories.length} 件记忆</span>
-              </span>
-              <EntryChevron />
-            </button>
-
-            <button type="button" className="ai-space-entry-row" onClick={() => setPage('events')}>
-              <span className="ai-space-entry-icon" aria-hidden="true">
-                <SparkleIcon />
-              </span>
-              <span className="ai-space-entry-main">
-                <span className="ai-space-entry-title">TA所记</span>
-                <span className="ai-space-entry-sub">你们的大小事</span>
-              </span>
-              <EntryChevron />
-            </button>
-
-            <button type="button" className="ai-space-entry-row" onClick={() => setPage('weekly')}>
-              <span className="ai-space-entry-icon" aria-hidden="true">
-                <NotebookIcon />
-              </span>
-              <span className="ai-space-entry-main">
-                <span className="ai-space-entry-title">TA所写</span>
-                <span className="ai-space-entry-sub">TA 写的周记 · 每周最多一篇</span>
-              </span>
-              <EntryChevron />
+        {/* 一起经历过 */}
+        <section className="ai-space-v2-section">
+          <div className="ai-space-v2-head">
+            <span className="ai-space-v2-title">一起经历过</span>
+            <span className="ai-space-v2-en">TIMELINE</span>
+            <button type="button" className="ai-space-v2-all" onClick={() => setPage('events')}>
+              全部 ›
             </button>
           </div>
-        </div>
-      </>
+          {timelineNodes.length === 0 ? (
+            <p className="ai-space-empty">多和 TA 聊聊，TA 会开始记得你们一起的事</p>
+          ) : (
+            <div className="ai-space-nodes">
+              {timelineNodes.map((n) => (
+                <div key={n.day} className="ai-space-node">
+                  <span className="ai-space-node-day">第{n.day}天</span>
+                  <span className="ai-space-node-text">{n.text}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* 周记 */}
+        <section className="ai-space-v2-section">
+          <div className="ai-space-v2-head">
+            <span className="ai-space-v2-title">周记</span>
+            <span className="ai-space-v2-en">WEEKLY</span>
+            <button type="button" className="ai-space-v2-all" onClick={() => setPage('weekly')}>
+              全部 ›
+            </button>
+          </div>
+          <button type="button" className="ai-space-weekly-card" onClick={() => setPage('weekly')}>
+            {weekly ? (
+              <>
+                <span className="ai-space-weekly-label">{weekly.weekLabel}</span>
+                <span className="ai-space-weekly-title">
+                  {weekly.title.length > 20 ? `${weekly.title.slice(0, 20)}…` : weekly.title}
+                </span>
+              </>
+            ) : (
+              <span className="ai-space-weekly-empty">TA 还没写过周记</span>
+            )}
+          </button>
+        </section>
+
+        {/* TA 记得的 */}
+        <section className="ai-space-v2-section">
+          <div className="ai-space-v2-head">
+            <span className="ai-space-v2-title">TA 记得的</span>
+            <span className="ai-space-v2-en">MEMORY</span>
+            <button type="button" className="ai-space-v2-all" onClick={() => setPage('memories')}>
+              全部 ›
+            </button>
+          </div>
+          <button type="button" className="ai-space-memory-card" onClick={() => setPage('memories')}>
+            {memoryImpression ? (
+              <>
+                <span className="ai-space-memory-line">{memoryImpression}</span>
+                <span className="ai-space-memory-sub">
+                  {memories.length} 件事{memoryStartAt ? ` · 从 ${fmtMD(memoryStartAt)} 开始` : ''}
+                </span>
+              </>
+            ) : (
+              <span className="ai-space-weekly-empty">多和 TA 聊聊，TA 会开始记得你</span>
+            )}
+          </button>
+        </section>
+
+        {/* 底部注脚（聊过 0 次时隐藏那一段，避免"没打开过聊天就显示 0"的观感） */}
+        <p className="ai-space-footnote">
+          {days} 天{messageCount > 0 ? ` · 聊过 ${messageCount} 次` : ''} · 记得 {memories.length} 件
+        </p>
+      </div>
     )
   }
 

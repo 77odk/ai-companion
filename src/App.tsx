@@ -111,7 +111,6 @@ function useAuthState(): boolean {
 
 export default function App() {
   const [view, setView] = useState<View>(initialView)
-  const [spaceFrom, setSpaceFrom] = useState<View>('chat')
   // 二级页（资料卡/关于我/纪念日/周记）的来源：从哪进返回哪（聊天/忆览/空间/我的）
   const [detailFrom, setDetailFrom] = useState<View>('chat')
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
@@ -250,14 +249,11 @@ export default function App() {
     navigate('settings')
   }
 
-  // 忆览页「全部角色」卡片：切到该角色会话后进它的 TA 空间，返回时回忆览页
+  // 忆览页「全部角色」卡片：切到该角色会话后进它的 TA 空间
   const openSpaceForSession = (sessionId: string) => {
     setActiveSessionId(String(sessionId))
-    setSpaceFrom('memory')
     navigate('aispace')
   }
-
-  const backFromSpace = () => navigate(spaceFrom)
 
   const openGuide = (from: 'welcome' | 'settings' | 'gate') => {
     if (from === 'gate') {
@@ -383,7 +379,6 @@ export default function App() {
         />
       ) : view === 'aispace' ? (
         <AISpace
-          onBack={backFromSpace}
           onGoMine={() => navigate('settings')}
           onOpenAnniversary={() => {
             setDetailFrom('aispace')
@@ -472,10 +467,7 @@ export default function App() {
             {view === 'home' && (
               <Home
                 onGoChat={() => navigate('chat')}
-                onGoSpace={() => {
-                  setSpaceFrom('home')
-                  navigate('aispace')
-                }}
+                onGoSpace={() => navigate('aispace')}
               />
             )}
             {view === 'roles' && (
@@ -526,10 +518,7 @@ export default function App() {
                   setDetailFrom('settings')
                   navigate('anniversary')
                 }}
-                onGoSpace={() => {
-                  setSpaceFrom('settings')
-                  navigate('aispace')
-                }}
+                onGoSpace={() => navigate('aispace')}
                 onGoProfile={() => {
                   setDetailFrom('settings')
                   navigate('chatprofile')
@@ -548,10 +537,7 @@ export default function App() {
               </button>
               <button
                 className={`nav-btn${navTabActive(view, 'space') ? ' active' : ''}`}
-                onClick={() => {
-                  setSpaceFrom('home')
-                  navigate('aispace')
-                }}
+                onClick={() => navigate('aispace')}
               >
                 空间
               </button>
