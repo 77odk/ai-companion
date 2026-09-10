@@ -2061,118 +2061,213 @@ textarea.persona-input {
   font-size: 13px;
 }
 
-/* ========== 主页（角色卡） ========== */
+/* ========== 首页（回家） ========== */
 .home-page {
-  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  text-align: center;
-  padding: 24px 20px;
+  padding: 28px 20px 24px;
 }
 
 .home-inner {
-  margin: auto;
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
 }
 
-.home-avatar {
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-deep));
-  color: var(--color-on-primary);
+/* 品牌区 */
+.home-brand {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 18px;
-  box-shadow: 0 6px 20px color-mix(in srgb, var(--color-primary) 35%, transparent);
+  gap: 10px;
+  margin-bottom: 28px;
 }
 
-.home-avatar svg {
-  width: 52px;
-  height: 52px;
-}
-
-.home-name {
-  margin: 0 0 6px;
+.home-brand-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-deep));
+  color: var(--color-on-primary);
   font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+.home-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.home-brand-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: 0.08em;
+}
+
+.home-brand-en {
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  color: var(--color-text-muted);
+}
+
+/* 问候 + 认识天数 */
+.home-greeting {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.home-days-title {
+  margin: 0 0 6px;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--color-text);
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+.home-days-range {
+  margin: 0 0 26px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* 分节标题 */
+.home-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 0 2px;
+}
+
+.home-section-title {
+  font-size: 15px;
   font-weight: 700;
   color: var(--color-text);
 }
 
-.home-greeting {
-  margin: 0 0 24px;
-  font-size: 15px;
+.home-section-en {
+  font-size: 10px;
+  letter-spacing: 0.18em;
   color: var(--color-text-muted);
 }
 
-.home-start {
-  min-width: 180px;
-  padding: 12px 0;
-  font-size: 16px;
+/* 倒计时双卡 */
+.home-countdowns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 24px;
 }
 
-.home-persona-note {
-  margin: 14px 0 0;
-  font-size: 13px;
+.home-count-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 14px);
+  padding: 14px 12px 12px;
+  box-shadow: var(--shadow, 0 2px 10px rgba(0, 0, 0, 0.04));
+}
+
+.home-count-label {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.home-count-num {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
   color: var(--color-primary-deep);
 }
 
-.home-links {
-  margin-top: 20px;
+.home-count-sub {
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 
-.link-btn {
+/* TA 此刻 */
+.home-moment {
+  margin: 0 0 22px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 14px);
+  padding: 14px 14px 13px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--color-text);
+  box-shadow: var(--shadow, 0 2px 10px rgba(0, 0, 0, 0.04));
+}
+
+/* 主按钮 */
+.home-chat-btn {
+  width: 100%;
+  padding: 13px 0;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: var(--radius-md, 14px);
+  margin-bottom: 26px;
+}
+
+/* TA 的生活 */
+.home-life-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 10px;
+  padding: 0 2px;
+}
+
+.home-life-head .home-section-head {
+  margin: 0;
+  padding: 0;
+}
+
+.home-more {
   border: none;
   background: none;
+  padding: 2px 4px;
+  font-size: 13px;
   color: var(--color-text-muted);
-  font-size: 14px;
-  padding: 6px 14px;
   cursor: pointer;
 }
 
-.home-tip {
-  position: absolute;
-  bottom: 84px;
-  margin: 0;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  opacity: 0.75;
-}
-
-/* 主页：干活中心入口卡片 */
-.home-work-card {
-  margin-top: 24px;
-  width: 100%;
-  max-width: 320px;
+.home-life-card {
   background: var(--color-card);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  box-shadow: var(--shadow);
+  border-radius: var(--radius-md, 14px);
+  padding: 14px 14px 12px;
+  box-shadow: var(--shadow, 0 2px 10px rgba(0, 0, 0, 0.04));
 }
 
-.home-work-title {
-  margin: 0 0 6px;
-  font-size: 16px;
-  font-weight: 600;
+.home-life-text {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.65;
   color: var(--color-text);
 }
 
-.home-work-desc {
-  margin: 0 0 12px;
-  font-size: 13px;
-  line-height: 1.6;
+.home-life-time {
+  margin: 0;
+  font-size: 11px;
   color: var(--color-text-muted);
 }
 
-.home-work-btn {
-  width: 100%;
+.home-life-empty .home-life-text {
+  color: var(--color-text-muted);
 }
 
 /* ========== AI 工作台 ========== */

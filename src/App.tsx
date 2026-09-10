@@ -33,18 +33,19 @@ import {
 } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh } from './lib/forceRefresh'
+import Home from './components/Home'
 
-type View = 'welcome' | 'role' | 'roles' | 'chat' | 'memory' | 'settings' | 'aispace' | 'chatprofile' | 'aboutme' | 'anniversary' | 'weekly' | 'guide' | 'loading'
+type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'memory' | 'settings' | 'aispace' | 'chatprofile' | 'aboutme' | 'anniversary' | 'weekly' | 'guide' | 'loading'
 
 // 底部三 tab 的常显范围：主视图（TA/空间/我的及二级页）带底部导航；全屏页（欢迎/指南/选角色/加载等）不带。
 // 用函数判断避免 TS 对嵌套 view 比较做过度收窄（误报不可达比较）。
 function isNavView(v: View): boolean {
-  return v === 'chat' || v === 'roles' || v === 'memory' || v === 'aispace' || v === 'settings'
+  return v === 'home' || v === 'chat' || v === 'roles' || v === 'memory' || v === 'aispace' || v === 'settings'
 }
 
-// 三 tab 高亮：TA 高亮聊天/会话列表/忆览；空间高亮 TA 空间；我的高亮设置页
+// 三 tab 高亮：TA 高亮首页/聊天/会话列表/忆览；空间高亮 TA 空间；我的高亮设置页
 function navTabActive(v: View, tab: 'ta' | 'space' | 'mine'): boolean {
-  if (tab === 'ta') return v === 'chat' || v === 'roles' || v === 'memory'
+  if (tab === 'ta') return v === 'home' || v === 'chat' || v === 'roles' || v === 'memory'
   if (tab === 'space') return v === 'aispace'
   return v === 'settings'
 }
@@ -197,10 +198,10 @@ export default function App() {
       setSessionsCache(sessions)
       const latest = pickMostRecentSession(sessions)
       if (latest) {
-        // 有云端会话 → 进会话列表主页（微信式：从列表点人进聊天）
+        // 有云端会话 → 进首页（回家；聊天/空间都从首页进）
         setActiveSessionId(String(latest.id))
         setMigration('idle')
-        setView('roles')
+        setView('home')
       } else if (!hasMigratedFlag() && hasLocalLegacyData()) {
         // 无云端会话 + 本地有旧数据 + 没迁过 → 自动把本地数据搬成第一个会话
         setActiveSessionId('')
@@ -370,7 +371,8 @@ export default function App() {
         <RolePicker
           mode={roleMode}
           onDone={() => {
-            navigate('chat')
+            // 登录用户新建完角色回首页（TA 主页）；游客维持原流程直接进聊天
+            navigate(loggedIn ? 'home' : 'chat')
             // 新建会话后顺手拉一次列表：角色列表/头部入口都能立刻显示新角色名
             void refreshSessions()
           }}
@@ -413,53 +415,64 @@ export default function App() {
         </div>
       ) : (
         <>
-          <header className="app-header">
-            {view === 'chat' && loggedIn && (
-              <button
-                type="button"
-                className="session-list-entry"
-                onClick={() => navigate('roles')}
-                aria-label="返回会话列表"
-                title="返回会话列表"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
+          {view === 'home' ? null : (
+            <header className="app-header">
+              {view === 'chat' && loggedIn && (
+                <button
+                  type="button"
+                  className="session-list-entry"
+                  onClick={() => navigate('home')}
+                  aria-label="返回首页"
+                  title="返回首页"
                 >
-                  <path d="M15 18l-6-6 6-6" />
-                </svg>
-              </button>
-            )}
-            {view === 'chat' && (
-              <button
-                type="button"
-                className="chat-header-planet"
-                onClick={() => setView('chatprofile')}
-                aria-label="打开 TA 的资料卡"
-                title="TA 的资料卡"
-              >
-                <PlanetIcon />
-              </button>
-            )}
-            {view === 'chat' ? (
-              <h1 className="app-title chat-header-name">{headerSession ? displaySessionName(headerSession) : ''}</h1>
-            ) : (
-              <h1 className="app-title" onClick={handleTitleClick}>
-                忆文
-              </h1>
-            )}
-            {view !== 'chat' && <p className="app-subtitle">忆过往，成文思</p>}
-          </header>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M15 18l-6-6 6-6" />
+                  </svg>
+                </button>
+              )}
+              {view === 'chat' && (
+                <button
+                  type="button"
+                  className="chat-header-planet"
+                  onClick={() => setView('chatprofile')}
+                  aria-label="打开 TA 的资料卡"
+                  title="TA 的资料卡"
+                >
+                  <PlanetIcon />
+                </button>
+              )}
+              {view === 'chat' ? (
+                <h1 className="app-title chat-header-name">{headerSession ? displaySessionName(headerSession) : ''}</h1>
+              ) : (
+                <h1 className="app-title" onClick={handleTitleClick}>
+                  忆文
+                </h1>
+              )}
+              {view !== 'chat' && <p className="app-subtitle">忆过往，成文思</p>}
+            </header>
+          )}
 
           <main className="app-main">
+            {view === 'home' && (
+              <Home
+                onGoChat={() => navigate('chat')}
+                onGoSpace={() => {
+                  setSpaceFrom('home')
+                  navigate('aispace')
+                }}
+              />
+            )}
             {view === 'roles' && (
               <RolesPage
-                onBack={() => navigate('chat')}
+                onBack={() => navigate('settings')}
                 onNew={handleRolesNew}
                 onSwitch={() => setView('chat')}
                 standalone={false}
@@ -467,6 +480,7 @@ export default function App() {
             )}
             {view === 'chat' && (
               <Chat
+                key={headerSession ? String(headerSession.id) : 'no-session'}
                 onGoSettings={() => openSettings('main')}
                 onGoGuide={() => openGuide('settings')}
                 onOpenProfile={() => setView('chatprofile')}
@@ -494,13 +508,16 @@ export default function App() {
             <nav className="app-nav">
               <button
                 className={`nav-btn${navTabActive(view, 'ta') ? ' active' : ''}`}
-                onClick={() => navigate('chat')}
+                onClick={() => navigate('home')}
               >
                 TA
               </button>
               <button
                 className={`nav-btn${navTabActive(view, 'space') ? ' active' : ''}`}
-                onClick={() => navigate('aispace')}
+                onClick={() => {
+                  setSpaceFrom('home')
+                  navigate('aispace')
+                }}
               >
                 空间
               </button>
