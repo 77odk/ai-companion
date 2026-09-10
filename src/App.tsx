@@ -112,6 +112,8 @@ function useAuthState(): boolean {
 export default function App() {
   const [view, setView] = useState<View>(initialView)
   const [spaceFrom, setSpaceFrom] = useState<View>('chat')
+  // 二级页（资料卡/关于我/纪念日/周记）的来源：从哪进返回哪（聊天/忆览/空间/我的）
+  const [detailFrom, setDetailFrom] = useState<View>('chat')
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
   // 游客想进需登录页时记下的目标 view：仅登录墙展示用（登录成功后改为按云端会话分流，不再硬回跳）
   const [gateTarget, setGateTarget] = useState<View | null>(null)
@@ -383,16 +385,22 @@ export default function App() {
         <AISpace
           onBack={backFromSpace}
           onGoMine={() => navigate('settings')}
-          onOpenAnniversary={() => navigate('anniversary')}
+          onOpenAnniversary={() => {
+            setDetailFrom('aispace')
+            navigate('anniversary')
+          }}
         />
       ) : view === 'chatprofile' ? (
-        <ChatProfile onClose={() => navigate('chat')} onGoMine={() => navigate('settings')} />
+        <ChatProfile
+          onClose={() => navigate(detailFrom === 'settings' ? 'settings' : 'chat')}
+          onGoMine={() => navigate('settings')}
+        />
       ) : view === 'aboutme' ? (
-        <AboutMe onBack={() => navigate('memory')} />
+        <AboutMe onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'memory')} />
       ) : view === 'anniversary' ? (
-        <AnniversaryPage onBack={() => navigate('aispace')} />
+        <AnniversaryPage onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'aispace')} />
       ) : view === 'weekly' ? (
-        <WeeklyPage onBack={() => navigate('memory')} onGoSettings={() => openSettings('provider')} />
+        <WeeklyPage onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'memory')} onGoSettings={() => openSettings('provider')} />
       ) : view === 'loading' ? (
         <div className="session-loading">
           {migration === 'failed' ? (
@@ -483,12 +491,18 @@ export default function App() {
                 key={headerSession ? String(headerSession.id) : 'no-session'}
                 onGoSettings={() => openSettings('main')}
                 onGoGuide={() => openGuide('settings')}
-                onOpenProfile={() => setView('chatprofile')}
+                onOpenProfile={() => {
+                  setDetailFrom('chat')
+                  setView('chatprofile')
+                }}
               />
             )}
             {view === 'memory' && (
               <Memory
-                onOpenAboutMe={() => navigate('aboutme')}
+                onOpenAboutMe={() => {
+                  setDetailFrom('memory')
+                  navigate('aboutme')
+                }}
                 onOpenSpaceForSession={openSpaceForSession}
               />
             )}
@@ -500,6 +514,26 @@ export default function App() {
                 onGoWorkChat={() => navigate('chat')}
                 onGoRoles={() => navigate('roles')}
                 onGoMemory={() => navigate('memory')}
+                onGoAboutMe={() => {
+                  setDetailFrom('settings')
+                  navigate('aboutme')
+                }}
+                onGoWeekly={() => {
+                  setDetailFrom('settings')
+                  navigate('weekly')
+                }}
+                onGoAnniversary={() => {
+                  setDetailFrom('settings')
+                  navigate('anniversary')
+                }}
+                onGoSpace={() => {
+                  setSpaceFrom('settings')
+                  navigate('aispace')
+                }}
+                onGoProfile={() => {
+                  setDetailFrom('settings')
+                  navigate('chatprofile')
+                }}
               />
             )}
           </main>

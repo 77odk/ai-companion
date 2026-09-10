@@ -3664,6 +3664,13 @@ textarea.persona-input {
 }
 
 /* ========== 我的页 · 个人中心 ========== */
+.settings-place-note {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
 .profile-card {
   display: flex;
   flex-direction: column;

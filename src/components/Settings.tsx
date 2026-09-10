@@ -61,11 +61,21 @@ interface Props {
   onGoRoles?: () => void
   /** 三 tab 改版：忆览（记忆总览）入口，临时放「我的」，后续记忆墙按新分组归位 */
   onGoMemory?: () => void
+  /** 记忆组：关于我（我的重要日子 + 我说的） */
+  onGoAboutMe?: () => void
+  /** 我们组：周记（TA 写的周记） */
+  onGoWeekly?: () => void
+  /** 我们组：纪念日（重要的日子） */
+  onGoAnniversary?: () => void
+  /** 我们组：一起经历过（TA 的空间 · 大小事） */
+  onGoSpace?: () => void
+  /** TA 组：TA 的样子（资料卡；第 4 批换成合并页） */
+  onGoProfile?: () => void
   /** 进入设置页时打开的子页 */
   initialPage?: SettingsPage
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoMemory, initialPage }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoMemory, onGoAboutMe, onGoWeekly, onGoAnniversary, onGoSpace, onGoProfile, initialPage }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
 
   if (page === 'provider') {
@@ -98,6 +108,11 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenAppearance={() => setPage('appearance')}
       onGoRoles={() => onGoRoles?.()}
       onGoMemory={() => onGoMemory?.()}
+      onGoAboutMe={() => onGoAboutMe?.()}
+      onGoWeekly={() => onGoWeekly?.()}
+      onGoAnniversary={() => onGoAnniversary?.()}
+      onGoSpace={() => onGoSpace?.()}
+      onGoProfile={() => onGoProfile?.()}
       onGoWelcome={onGoWelcome}
     />
   )
@@ -139,6 +154,11 @@ function MainCenter({
   onOpenAppearance,
   onGoRoles,
   onGoMemory,
+  onGoAboutMe,
+  onGoWeekly,
+  onGoAnniversary,
+  onGoSpace,
+  onGoProfile,
   onGoWelcome,
 }: {
   onOpenAccount: () => void
@@ -149,6 +169,11 @@ function MainCenter({
   onOpenAppearance: () => void
   onGoRoles?: () => void
   onGoMemory?: () => void
+  onGoAboutMe?: () => void
+  onGoWeekly?: () => void
+  onGoAnniversary?: () => void
+  onGoSpace?: () => void
+  onGoProfile?: () => void
   onGoWelcome?: () => void
 }) {
   const [user, setUser] = useState<UserProfile>(() => loadUserProfile())
@@ -227,25 +252,22 @@ function MainCenter({
         )}
       </div>
 
-      <ProfileGroup title="账号">
-        <EntryRow
-          icon={<CloudSyncIcon />}
-          label="账号与同步"
-          onClick={onOpenAccount}
-          status={accountLabel ?? '未登录'}
-        />
-      </ProfileGroup>
+      <p className="settings-place-note">这是你和 TA 的地方。</p>
 
-      <ProfileGroup title="设置">
-        <EntryRow icon={<KeyIcon />} label="服务商配置" onClick={onOpenProvider} />
-        <EntryRow icon={<PaletteIcon />} label="外观" onClick={onOpenAppearance} />
-        <EntryRow icon={<WorkIcon />} label="工作台" onClick={onOpenWork} />
-        <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
+      <ProfileGroup title="TA">
+        {onGoProfile && <EntryRow icon={<ProfileIcon />} label="TA 的样子" onClick={onGoProfile} />}
         {onGoRoles && <EntryRow icon={<RolesIcon />} label="角色管理" status="进阶" onClick={onGoRoles} />}
-        {onGoMemory && <EntryRow icon={<MemoryIcon />} label="忆览" onClick={onGoMemory} />}
       </ProfileGroup>
 
-      <ProfileGroup title="周记">
+      <ProfileGroup title="记忆">
+        {onGoMemory && <EntryRow icon={<MemoryIcon />} label="忆览" onClick={onGoMemory} />}
+        {onGoAboutMe && <EntryRow icon={<AboutMeIcon />} label="关于我" onClick={onGoAboutMe} />}
+      </ProfileGroup>
+
+      <ProfileGroup title="我们">
+        {onGoWeekly && <EntryRow icon={<WeeklyIcon />} label="周记" onClick={onGoWeekly} />}
+        {onGoAnniversary && <EntryRow icon={<AnniversaryIcon />} label="纪念日" onClick={onGoAnniversary} />}
+        {onGoSpace && <EntryRow icon={<JourneyIcon />} label="一起经历过" onClick={onGoSpace} />}
         <div className="slow-letter-row">
           <div className="slow-letter-text">
             <span className="slow-letter-title">开启全局慢信笔友模式</span>
@@ -267,6 +289,19 @@ function MainCenter({
             <span className="settings-switch-thumb" />
           </button>
         </div>
+      </ProfileGroup>
+
+      <ProfileGroup title="其他">
+        <EntryRow
+          icon={<CloudSyncIcon />}
+          label="账号与同步"
+          onClick={onOpenAccount}
+          status={accountLabel ?? '未登录'}
+        />
+        <EntryRow icon={<PaletteIcon />} label="外观" onClick={onOpenAppearance} />
+        <EntryRow icon={<KeyIcon />} label="AI 服务" onClick={onOpenProvider} />
+        <EntryRow icon={<WorkIcon />} label="工作台" onClick={onOpenWork} />
+        <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
       </ProfileGroup>
 
       <ProfileGroup title="关于忆文">
@@ -391,6 +426,57 @@ const MemoryIcon = () => (
     <path d="M12 3v4" />
     <path d="M16 3v4" />
     <path d="M8 11l2 2 4-4" />
+  </svg>
+)
+
+/* TA 的样子（资料卡）：人像 + 卡片 */
+const ProfileIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3.5" y="4" width="17" height="16" rx="2.5" />
+    <circle cx="12" cy="9.5" r="2.8" />
+    <path d="M7 17.5a5 5 0 0 1 10 0" />
+    <path d="M7 7.5h.01" />
+    <path d="M7 11h.01" />
+  </svg>
+)
+
+/* 关于我：单人像 */
+const AboutMeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="8" r="3.8" />
+    <path d="M5 20a7 7 0 0 1 14 0" />
+  </svg>
+)
+
+/* 周记：打开的日记本 */
+const WeeklyIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15z" />
+    <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20" />
+    <path d="M8 7h8" />
+    <path d="M8 10.5h6" />
+  </svg>
+)
+
+/* 纪念日：日历 + 爱心 */
+const AnniversaryIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="5" width="18" height="16" rx="2.5" />
+    <path d="M8 3v4" />
+    <path d="M16 3v4" />
+    <path d="M3 9.5h18" />
+    <path d="M12 18.5c-2.8-1.8-4.2-3.3-4.2-5a2.3 2.3 0 0 1 4.2-1.4 2.3 2.3 0 0 1 4.2 1.4c0 1.7-1.4 3.2-4.2 5z" />
+  </svg>
+)
+
+/* 一起经历过：时间线节点 */
+const JourneyIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="6" cy="6" r="2" />
+    <circle cx="18" cy="7" r="2" />
+    <circle cx="12" cy="18" r="2" />
+    <path d="M7.5 7.5l3 8" />
+    <path d="M16 8.8l-2.6 7" />
   </svg>
 )
 
