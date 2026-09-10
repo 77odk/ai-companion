@@ -174,9 +174,9 @@ export function readLedger(sessionId?: string, now: number = Date.now()): SpaceL
   }
 }
 
-function writeLedger(ledger: SpaceLedger, sessionId?: string): void {
+function writeLedger(ledger: SpaceLedger, sessionId?: string, now: number = Date.now()): void {
   try {
-    localStorage.setItem(ledgerKey(sessionId), JSON.stringify(pruneLedger(ledger, dayKeyOf(Date.now()))))
+    localStorage.setItem(ledgerKey(sessionId), JSON.stringify(pruneLedger(ledger, dayKeyOf(now))))
   } catch {
     // 账本写失败不影响主流程：配额兜底仍有存量动态计数
   }
@@ -190,7 +190,7 @@ function recordLedger(created: SpacePost[], sessionId?: string, now: number = Da
     const dk = dayKeyOf(p.at)
     ledger = addLedgerEntry(ledger, dk, p.source === 'event' ? 'event' : 'daily')
   }
-  writeLedger(ledger, sessionId) // 写前再滚一次：只留今天（过去日子的历史记录不占今天额度）
+  writeLedger(ledger, sessionId, now) // 写前再滚一次：只留今天（过去日子的历史记录不占今天额度）
 }
 
 /** 只读地拿当天（用于计划时的权威额度；跨天滚动后只有今天的键还在） */
