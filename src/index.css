@@ -2840,6 +2840,48 @@ textarea.persona-input {
   overflow: hidden;
 }
 
+/* TA 的样子（第 4 批合并页）：展示态人话卡 */
+.ai-who-card {
+  padding: 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+.ai-who-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.ai-who-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.ai-who-edit {
+  border: none;
+  background: none;
+  padding: 2px 0 2px 12px;
+  font-size: 13px;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+.ai-who-row {
+  display: flex;
+  gap: 10px;
+  margin: 6px 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.ai-who-row-label {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  padding-top: 1px;
+}
+.ai-who-row-value {
+  color: var(--color-text);
+  word-break: break-word;
+}
+
 .ai-space-entry-row {
   width: 100%;
   display: flex;

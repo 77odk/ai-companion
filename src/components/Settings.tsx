@@ -638,11 +638,11 @@ export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSp
 
   return (
     <div className="page settings-page">
-      <DetailHeader title="TA 的资料" onBack={onBack} />
+      <DetailHeader title="TA 的样子" onBack={onBack} />
 
       {!hasSession && (
         <div className="settings-card">
-          <p className="hint">登录并开始聊天后，这里就是 TA 的资料卡。</p>
+          <p className="hint">登录并开始聊天后，这里就是 TA 的样子。</p>
         </div>
       )}
 
@@ -656,7 +656,7 @@ export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSp
         )}
         <div className="ai-role-info">
           <span className="ai-role-name">{roleName}</span>
-          <span className="ai-role-sub">这是 TA 的资料卡，改动会存回本地并同步当前角色</span>
+          <span className="ai-role-sub">这是 TA 的样子，改动会存回本地并同步当前角色</span>
         </div>
       </div>
 

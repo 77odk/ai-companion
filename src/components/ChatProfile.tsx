@@ -21,6 +21,8 @@ import {
 import { getActiveSessionId, getMessagesCache, getSessionsCache } from '../lib/sessionStore'
 import { displaySessionName } from '../lib/sessionFlow'
 import { computeDaysKnown } from '../lib/aiSpaceDetail'
+import { extractPersonality, extractBackgroundLine, extractOpeningLine } from '../lib/customPersona'
+import { resolveRolePersona } from '../lib/sessionProfile'
 import DefaultAvatar from './DefaultAvatar'
 import SpaceChatLogs from './SpaceChatLogs'
 import ChatBgSetting from './ChatBgSetting'
@@ -60,13 +62,25 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
   const aiRemark = loadAIRemark(sessionId || undefined)
   const aiGender = loadAIGender(sessionId || undefined)
 
-  const [profileSessionName] = useState<string>(() => {
+  // 名字：每次渲染直接读（编辑完返回展示卡要立刻反映新名字；原来挂载时读一次会显示旧值）
+  const profileSessionName = (() => {
     if (!sessionId) return ''
     const s = getSessionsCache().find((x) => String(x.id) === sessionId)
     return s ? displaySessionName(s) : ''
-  })
+  })()
   // 相识天数：角色创建那天起算
   const [daysKnown] = useState<number>(() => profileDaysKnown(sessionId || null))
+  // TA 的样子：展示态从人设拆三段（会话 persona 优先，无会话兜底全局），没写就不摆行
+  // ★每次渲染直接读：编辑完返回展示卡要立刻反映新数据（原来 useState 只在挂载时读一次，改完不刷新）
+  const who = ((): { personality: string; background: string; opening: string } => {
+    const sessions = getSessionsCache()
+    const persona = sessionId ? resolveRolePersona(sessionId, sessions, loadPersona()) : loadPersona()
+    return {
+      personality: extractPersonality(persona),
+      background: extractBackgroundLine(persona),
+      opening: extractOpeningLine(persona),
+    }
+  })()
   // 聊天记录子页数据：进资料卡时读一次（聊天页里消息不会在资料卡内变化）
   const [messages] = useState<StoredMessage[]>(() => (sessionId ? getMessagesCache(sessionId) : loadMessages()))
 
@@ -150,22 +164,50 @@ export default function ChatProfile({ onClose, onGoMine }: Props) {
       </div>
 
       <div className="ai-space-timeline">
-        {/* 功能入口列表：微信式资料页，每个入口都是子页面 */}
         <div className="ai-space-entry-list">
-          {/* TA 的资料（最上面）：角色设定卡完整版，每项可改 */}
-          <button type="button" className="ai-space-entry-row" onClick={() => setPage('profile')}>
-            <span className="ai-space-entry-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="8" r="3.6" />
-                <path d="M5 20c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6" />
-              </svg>
-            </span>
-            <span className="ai-space-entry-main">
-              <span className="ai-space-entry-title">TA 的资料</span>
-              <span className="ai-space-entry-sub">名字、备注、性别、性格、背景、开场白</span>
-            </span>
-            <EntryChevron />
-          </button>
+          {/* TA 是谁：展示态成人话（有数据才摆行），点「编辑」进表单 */}
+          {(who.personality || who.background || who.opening) ? (
+            <div className="ai-who-card">
+              <div className="ai-who-card-head">
+                <span className="ai-who-card-title">TA 是谁</span>
+                <button type="button" className="ai-who-edit" onClick={() => setPage('profile')}>
+                  编辑
+                </button>
+              </div>
+              {who.personality && (
+                <p className="ai-who-row">
+                  <span className="ai-who-row-label">性格</span>
+                  <span className="ai-who-row-value">{who.personality}</span>
+                </p>
+              )}
+              {who.background && (
+                <p className="ai-who-row">
+                  <span className="ai-who-row-label">关系背景</span>
+                  <span className="ai-who-row-value">{who.background}</span>
+                </p>
+              )}
+              {who.opening && (
+                <p className="ai-who-row">
+                  <span className="ai-who-row-label">初次见面</span>
+                  <span className="ai-who-row-value">{who.opening}</span>
+                </p>
+              )}
+            </div>
+          ) : (
+            <button type="button" className="ai-space-entry-row" onClick={() => setPage('profile')}>
+              <span className="ai-space-entry-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="8" r="3.6" />
+                  <path d="M5 20c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6" />
+                </svg>
+              </span>
+              <span className="ai-space-entry-main">
+                <span className="ai-space-entry-title">TA 的样子</span>
+                <span className="ai-space-entry-sub">头像、名字、性格、关系背景、开场白</span>
+              </span>
+              <EntryChevron />
+            </button>
+          )}
 
           {/* TA 的生活 */}
           <button type="button" className="ai-space-entry-row" onClick={() => setPage('life')}>
