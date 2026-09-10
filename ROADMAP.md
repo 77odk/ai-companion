@@ -30,6 +30,13 @@
 - [x] 使用指南 FAQ（2026-09-05 落地：连不上/拥堵/刷新对话/忘密码/内心戏/退出不中断 12 条全量在 Guide.tsx）
 - [x] 服务商模型名点选（Settings.tsx 已上线：最近用过 + 常见模型 + 可手输）
 
+**性能（2026-09-10 挂账；用户反馈「网页一卡一卡，想跟正经软件一样」）**
+- 诊断（乔实测）：① 首屏 TTFB 3.2s——静态站走 cloudflared 隧道回源广州，CF 边缘不缓存（HTML=DYNAMIC、JS=MISS），每次访问都回源；② 构建混淆把 JS 撑到 973KB（混淆前 403KB，膨胀 2.4 倍），手机解析慢；③ 运行时同步读写——记忆/消息/会话全在 localStorage，切页集中解析
+- [ ] 静态资源上 CF 边缘缓存（Cache Rules，或前端迁 CF Pages 走真 CDN）——配置层，不改业务代码
+- [ ] 去掉构建混淆（回到 403KB）或改轻量压缩；护城河是记忆与关系，代码保密不划算
+- [ ] 定位运行时卡点（打开 / 切页 / 输入 / 滚动哪一步最明显）后针对性优化
+- 待用户确认：「卡」的具体场景是首屏、切页还是交互中
+
 ## 2. 顺手做（新代码收敛，不推倒重来）
 
 - 新模块按分层写：Character(Persona/Relationship) → State(mood/activity/time) → Memory(retrieval) → Context Composer → Any LLM
