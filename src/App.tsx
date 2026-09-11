@@ -207,6 +207,12 @@ export default function App() {
   const [profileTarget, setProfileTarget] = useState<string | null>(null)
   // 进空间时的初始子页：「我的 → TA 记得的」进记忆墙，其余入口进空间主页
   const [spaceInitialPage, setSpaceInitialPage] = useState<'home' | 'memories'>('home')
+  // 从「我的 → TA 记得的」进记忆墙时，底部高亮算在「我的」上（旧记账项修复）；其余入口算「空间」
+  const [spaceFrom, setSpaceFrom] = useState<'space' | 'settings'>('space')
+  const navActive = (tab: 'ta' | 'space' | 'mine'): boolean => {
+    if (view === 'aispace' && spaceFrom === 'settings') return tab === 'mine'
+    return navTabActive(view, tab)
+  }
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
   // 游客想进需登录页时记下的目标 view：仅登录墙展示用（登录成功后改为按云端会话分流，不再硬回跳）
   const [gateTarget, setGateTarget] = useState<View | null>(null)
@@ -607,6 +613,7 @@ export default function App() {
                 onGoWorkChat={() => navigate('chat')}
                 onGoRoles={() => navigate('roles')}
                 onGoMemory={() => {
+                  setSpaceFrom('settings')
                   setSpaceInitialPage('memories')
                   navigate('aispace')
                 }}
@@ -615,6 +622,7 @@ export default function App() {
                   navigate('aboutme')
                 }}
                 onGoSpace={() => {
+                  setSpaceFrom('space')
                   setSpaceInitialPage('home')
                   navigate('aispace')
                 }}
@@ -636,14 +644,15 @@ export default function App() {
           {isNavView(view) && (
             <nav className="app-nav">
               <button
-                className={`nav-btn${navTabActive(view, 'ta') ? ' active' : ''}`}
+                className={`nav-btn${navActive('ta') ? ' active' : ''}`}
                 onClick={() => navigate('home')}
               >
                 TA
               </button>
               <button
-                className={`nav-btn${navTabActive(view, 'space') ? ' active' : ''}`}
+                className={`nav-btn${navActive('space') ? ' active' : ''}`}
                 onClick={() => {
+                  setSpaceFrom('space')
                   setSpaceInitialPage('home')
                   navigate('aispace')
                 }}
@@ -651,7 +660,7 @@ export default function App() {
                 空间
               </button>
               <button
-                className={`nav-btn${navTabActive(view, 'mine') ? ' active' : ''}`}
+                className={`nav-btn${navActive('mine') ? ' active' : ''}`}
                 onClick={() => navigate('settings')}
               >
                 我的

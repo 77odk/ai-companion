@@ -3366,6 +3366,7 @@ textarea.persona-input {
 
 /* 记忆墙（TA 记得的 · 定稿第三屏） */
 .ai-wall-impression {
+  position: relative;
   background: linear-gradient(135deg, var(--color-primary-soft), var(--color-card) 70%);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -3378,6 +3379,27 @@ textarea.persona-input {
   font-weight: 600;
   color: var(--color-primary-deep);
   margin-bottom: 8px;
+  padding-right: 56px;
+}
+
+/* 汇总卡右上角「更新」：指纹没变 → 直接用缓存不白调（省用户 key） */
+.ai-wall-impression-refresh {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--color-primary-deep);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ai-wall-impression-refresh:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .ai-wall-impression-text {
@@ -3393,6 +3415,26 @@ textarea.persona-input {
   margin: 0;
   font-size: 13px;
   line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+/* stale 提示：记忆有更新但 24h 节流未到，显示旧文 + 提示可手动更新 */
+.ai-wall-impression-stale {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-primary-deep);
+}
+
+/* 两大区：关于你 / 我们之间 */
+.ai-wall-section {
+  margin-top: 20px;
+}
+
+.ai-wall-section-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--color-text-muted);
 }
 

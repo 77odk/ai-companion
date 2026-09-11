@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { loadMemory, type MemoryItem } from '../lib/memory'
 import { computeDaysKnown, formatMemoryDate } from '../lib/aiSpaceDetail'
 import WeeklyPage from './WeeklyPage'
@@ -7,10 +7,12 @@ import { getWeeklyReviews, type WeeklyReview } from '../lib/weeklyReview'
 import { getFirstSeen, loadMessages, loadSettings } from '../lib/storage'
 import { chatCompletion } from '../lib/api'
 import {
-  MEMORY_WALL_GROUPS,
-  groupMemoriesByWall,
+  groupMemoriesByTopic,
+  pickRelationMemories,
   groupSummary,
-  type MemoryWallGroup,
+  fingerprintOf,
+  decideImpression,
+  shouldAutoRegenerate,
 } from '../lib/memoryWall'
 import {
   loadLocalPhotos,
@@ -40,12 +42,16 @@ function fmtMD(ts: number): string {
 }
 
 // ── TA 眼中的你（LLM 生成 / 模板兜底 / 本地缓存）──
+// 省 key 策略（批 2-2）：缓存里存指纹（记忆条数 + 最后一条记忆更新时间），
+// 指纹没变 → 直接用缓存，绝不调模型；变了 → 标记 stale，还需
+// 「距上次生成 >24h」+「用户在页面（或手动点更新）」才真调。
+// 硬指标：自动生成每 24 小时最多 1 次。
 const IMPRESSION_CACHE_PREFIX = 'ai_companion_impression'
-const IMPRESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
-interface ImpressionCache {
+interface ImpressionCacheLocal {
   text: string
   memCount: number
+  lastMemTs: number
   genAt: number
 }
 
@@ -53,18 +59,18 @@ function impressionKey(sid?: string): string {
   return sid ? `${IMPRESSION_CACHE_PREFIX}_${sid}` : IMPRESSION_CACHE_PREFIX
 }
 
-function loadImpressionCache(sid?: string): ImpressionCache | null {
+function loadImpressionCache(sid?: string): ImpressionCacheLocal | null {
   try {
     const raw = localStorage.getItem(impressionKey(sid))
     if (!raw) return null
-    const d = JSON.parse(raw) as ImpressionCache
+    const d = JSON.parse(raw) as ImpressionCacheLocal
     return d && typeof d.text === 'string' ? d : null
   } catch {
     return null
   }
 }
 
-function saveImpressionCache(sid: string | undefined, data: ImpressionCache): void {
+function saveImpressionCache(sid: string | undefined, data: ImpressionCacheLocal): void {
   try {
     localStorage.setItem(impressionKey(sid), JSON.stringify(data))
   } catch {
@@ -109,70 +115,101 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     [memories],
   )
 
-  // 记忆墙四组（只读映射，不写回数据）
-  const wallGroups = useMemo(() => groupMemoriesByWall(memories), [memories])
+  // 记忆墙：关于你（topic 分组）+ 我们之间（关键词挑）——只读映射，不写回数据
+  const topicGroups = useMemo(() => groupMemoriesByTopic(memories), [memories])
+  const relationMemories = useMemo(() => pickRelationMemories(memories), [memories])
 
-  // 「TA 眼中的你」：有 key 用 LLM 生成（缓存 7 天 / 记忆数变化重生成），无 key / 失败回落模板
+  // 「TA 眼中的你」：指纹（条数 + 最后一条更新时间）没变 → 直接用缓存，绝不调模型；
+  // 变了 → stale，还需「距上次生成 >24h」+「用户在页面（或手动点更新）」才真调；无 key / 失败回落模板。
   const [impression, setImpression] = useState<string | null>(null)
   const [impressionLoading, setImpressionLoading] = useState(false)
-  useEffect(() => {
-    if (sortedMemories.length === 0) {
-      setImpression(null)
-      return
-    }
-    const cache = loadImpressionCache(sid)
-    if (cache && cache.memCount === sortedMemories.length && Date.now() - cache.genAt < IMPRESSION_TTL_MS) {
-      setImpression(cache.text)
-      return
-    }
-    const settings = loadSettings()
-    const hasKey = Boolean(settings.apiKey?.trim() && settings.baseUrl?.trim() && settings.model?.trim())
-    const fallback = () => setImpression(impressionTemplate(sortedMemories))
-    if (!hasKey) {
-      fallback()
-      return
-    }
-    let alive = true
-    setImpressionLoading(true)
-    setImpression(null)
-    const memoryLines = sortedMemories
-      .slice(0, 20)
-      .map((m) => {
-        const t = (m.text || '').trim()
-        return t.length > 60 ? `${t.slice(0, 60)}…` : t
-      })
-      .join('\n')
-    chatCompletion(
-      settings,
-      [
-        { role: 'system', content: IMPRESSION_SYSTEM_PROMPT },
-        { role: 'user', content: `TA 记得关于你的这些事：\n${memoryLines}` },
-      ],
-      { maxTokens: 200, temperature: 0.8 },
-    )
-      .then((raw) => {
-        const text = (raw || '').trim().replace(/^["“」]+|["”]+$/g, '')
-        if (!alive) return
-        if (text) {
-          setImpression(text)
-          saveImpressionCache(sid, { text, memCount: sortedMemories.length, genAt: Date.now() })
-        } else {
-          fallback()
-        }
-      })
-      .catch(() => {
-        if (alive) fallback()
-      })
-      .finally(() => {
-        if (alive) setImpressionLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [sid, sortedMemories]) // eslint-disable-line react-hooks/exhaustive-deps
+  // stale 提示（记忆有更新但 24h 节流未到，显示旧文 + 提示可手动更新）
+  const [impressionStale, setImpressionStale] = useState(false)
+  const impressionFp = useMemo(() => fingerprintOf(memories), [memories])
 
-  // 记忆墙：当前展开的分组明细（null=收起）
-  const [openWallGroup, setOpenWallGroup] = useState<MemoryWallGroup | null>(null)
+  const generateImpression = useCallback(
+    (opts: { manual?: boolean } = {}) => {
+      if (impressionFp.memCount === 0) {
+        setImpression(null)
+        setImpressionStale(false)
+        return
+      }
+      const cache = loadImpressionCache(sid)
+      const decision = decideImpression(cache, impressionFp)
+      if (decision === 'fresh') {
+        // 指纹没变 → 直接用缓存，绝不调模型（手动「更新」也一样）
+        setImpression(cache!.text)
+        setImpressionStale(false)
+        return
+      }
+      if (!opts.manual) {
+        // 自动：stale 还需 24h 节流 + 用户在页面（页面可见才生成，不做后台预生成）
+        if (decision === 'stale' && !shouldAutoRegenerate(cache, Date.now())) {
+          setImpression(cache!.text)
+          setImpressionStale(true)
+          return
+        }
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      }
+      const settings = loadSettings()
+      const hasKey = Boolean(settings.apiKey?.trim() && settings.baseUrl?.trim() && settings.model?.trim())
+      const fallback = () => {
+        setImpression(impressionTemplate(impressionFp.memCount > 0 ? sortedMemories : []))
+        setImpressionStale(false)
+      }
+      if (!hasKey) {
+        fallback()
+        return
+      }
+      setImpressionLoading(true)
+      setImpression(null)
+      const memoryLines = sortedMemories
+        .slice(0, 20)
+        .map((m) => {
+          const t = (m.text || '').trim()
+          return t.length > 60 ? `${t.slice(0, 60)}…` : t
+        })
+        .join('\n')
+      chatCompletion(
+        settings,
+        [
+          { role: 'system', content: IMPRESSION_SYSTEM_PROMPT },
+          { role: 'user', content: `TA 记得关于你的这些事：\n${memoryLines}` },
+        ],
+        { maxTokens: 200, temperature: 0.8 },
+      )
+        .then((raw) => {
+          const text = (raw || '').trim().replace(/^["“」]+|["”]+$/g, '')
+          if (text) {
+            setImpression(text)
+            setImpressionStale(false)
+            saveImpressionCache(sid, {
+              text,
+              memCount: impressionFp.memCount,
+              lastMemTs: impressionFp.lastMemTs,
+              genAt: Date.now(),
+            })
+          } else {
+            fallback()
+          }
+        })
+        .catch(() => {
+          fallback()
+        })
+        .finally(() => {
+          setImpressionLoading(false)
+        })
+    },
+    [sid, impressionFp, sortedMemories],
+  )
+
+  // 打开记忆墙（挂载）时自动评估一次；记忆变化（指纹变）且 24h 已过时也会自动重生成
+  useEffect(() => {
+    generateImpression()
+  }, [generateImpression])
+
+  // 记忆墙：当前展开的「关于你」topic 组（null=收起）
+  const [openTopicGroup, setOpenTopicGroup] = useState<string | null>(null)
 
   // 相识天数（首页同口径：getFirstSeen + computeDaysKnown）
   const firstSeen = useMemo(() => getFirstSeen(sid), [sid])
@@ -503,53 +540,85 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
         </div>
 
         <div className="ai-space-timeline">
-          {/* TA 眼中的你：大卡 */}
+          {/* TA 眼中的你：汇总卡（指纹没变 → 直接用缓存绝不调模型；右上角手动「更新」同一套判断） */}
           <div className="ai-wall-impression">
             <span className="ai-wall-impression-title">TA 眼中的你</span>
+            <button
+              type="button"
+              className="ai-wall-impression-refresh"
+              onClick={() => generateImpression({ manual: true })}
+              disabled={impressionLoading}
+            >
+              {impressionLoading ? '更新中…' : '更新'}
+            </button>
             {impressionLoading ? (
               <p className="ai-wall-impression-loading">TA 正在回想…</p>
             ) : impression ? (
-              <p className="ai-wall-impression-text">{impression}</p>
+              <>
+                <p className="ai-wall-impression-text">{impression}</p>
+                {impressionStale && (
+                  <p className="ai-wall-impression-stale">记忆有更新，点「更新」让 TA 重新想想</p>
+                )}
+              </>
             ) : (
               <p className="ai-wall-impression-empty">多和 TA 聊聊，TA 会开始记得你</p>
             )}
           </div>
 
-          {/* 四组：习惯 / 喜欢 / 约定 / 印象 */}
-          {MEMORY_WALL_GROUPS.map((g) => {
-            const list = wallGroups[g.key]
-            const open = openWallGroup === g.key
-            return (
-              <div key={g.key} className="ai-wall-group">
-                <button
-                  type="button"
-                  className={`ai-wall-group-head${open ? ' open' : ''}`}
-                  onClick={() => setOpenWallGroup(open ? null : g.key)}
-                >
-                  <span className="ai-wall-group-title">{g.title}</span>
-                  {list.length > 0 && <span className="ai-wall-group-summary">{groupSummary(list)}</span>}
-                  <span className="ai-wall-group-count">{list.length}</span>
-                  <span className="ai-wall-group-arrow" aria-hidden="true">
-                    {open ? '−' : '+'}
-                  </span>
-                </button>
-                {open && (
-                  list.length === 0 ? (
-                    <p className="ai-wall-group-empty">{g.empty}</p>
-                  ) : (
-                    <div className="ai-space-memory-list">
-                      {list.map((m) => (
-                        <div key={m.id} className="ai-space-memory-item">
-                          <p className="ai-space-memory-text">你说过——{m.text}</p>
-                          <span className="ai-space-memory-date">{formatMemoryDate(m.createdAt)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                )}
+          {/* 关于你：按记忆 topic 分组（有数据才显示，没数据的组不占位） */}
+          <section className="ai-wall-section" aria-label="关于你">
+            <h3 className="ai-wall-section-title">关于你</h3>
+            {topicGroups.length === 0 ? (
+              <p className="ai-wall-group-empty">多和 TA 聊聊，TA 会开始记得你</p>
+            ) : (
+              topicGroups.map((g) => {
+                const open = openTopicGroup === g.topic
+                return (
+                  <div key={g.topic} className="ai-wall-group">
+                    <button
+                      type="button"
+                      className={`ai-wall-group-head${open ? ' open' : ''}`}
+                      onClick={() => setOpenTopicGroup(open ? null : g.topic)}
+                    >
+                      <span className="ai-wall-group-title">{g.label}</span>
+                      <span className="ai-wall-group-summary">{groupSummary(g.list)}</span>
+                      <span className="ai-wall-group-count">{g.list.length}</span>
+                      <span className="ai-wall-group-arrow" aria-hidden="true">
+                        {open ? '−' : '+'}
+                      </span>
+                    </button>
+                    {open && (
+                      <div className="ai-space-memory-list">
+                        {g.list.map((m) => (
+                          <div key={m.id} className="ai-space-memory-item">
+                            <p className="ai-space-memory-text">你说过——{m.text}</p>
+                            <span className="ai-space-memory-date">{formatMemoryDate(m.createdAt)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </section>
+
+          {/* 我们之间：关系类长期事实（约定/称呼/共同习惯，关键词挑；挑不出空态） */}
+          <section className="ai-wall-section" aria-label="我们之间">
+            <h3 className="ai-wall-section-title">我们之间</h3>
+            {relationMemories.length === 0 ? (
+              <p className="ai-wall-group-empty">你们之间还没有沉淀下来的事</p>
+            ) : (
+              <div className="ai-space-memory-list">
+                {relationMemories.map((m) => (
+                  <div key={m.id} className="ai-space-memory-item">
+                    <p className="ai-space-memory-text">你说过——{m.text}</p>
+                    <span className="ai-space-memory-date">{formatMemoryDate(m.createdAt)}</span>
+                  </div>
+                ))}
               </div>
-            )
-          })}
+            )}
+          </section>
         </div>
       </>
     )
