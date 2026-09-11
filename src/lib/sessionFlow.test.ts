@@ -13,6 +13,7 @@ import {
   resolveSessionName,
   resolveSessionTitle,
   pickNextSessionAfterDelete,
+  resolveActiveSession,
 } from './sessionFlow.ts'
 import type { Session } from './sessionApi.ts'
 
@@ -108,6 +109,12 @@ eq(displaySessionName({ title: '小乖', persona: 'x' }), '小乖', '改名后�
 eq(displaySessionName({ title: '我们的开始', persona: '角色昵称：阿温' }), '阿温', '迁移占位标题 → persona 昵称兜底')
 eq(displaySessionName({ title: '新会话', persona: '角色昵称：小满' }), '小满', '旧默认标题 → persona 昵称兜底')
 eq(displaySessionName({ title: '', persona: '' }), 'TA', '全空 → TA')
+
+console.log('\n[9] resolveActiveSession：优先恢复有效持久会话，仅失效时回退最近会话')
+eq(resolveActiveSession([older, newer], '1')?.id, 1, '已保存会话存在 → 恢复该会话而非最新会话')
+eq(resolveActiveSession([older, newer], '99')?.id, 2, '已保存会话不存在 → 安全回退到最近会话')
+eq(resolveActiveSession([older, newer], '')?.id, 2, '没有已保存会话 → 使用现有最近会话默认逻辑')
+eq(resolveActiveSession([], '1'), null, '空列表 → null')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) throw new Error(`${failed} 个用例失败`)

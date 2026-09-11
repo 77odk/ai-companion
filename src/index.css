@@ -7097,12 +7097,8 @@ html, body {
   background: var(--color-primary-soft);
 }
 
-.memory-page-back {
-  margin-bottom: 22px;
-}
-
 .memory-hero {
-  padding: 8px 8px 44px;
+  padding: 0 8px 44px;
 }
 
 .memory-hero-kicker,
@@ -7843,13 +7839,14 @@ html, body {
 .home-moment-copy h2 { margin: 0 0 7px; font-size: 14px; }
 .home-moment-copy p { min-height: 44px; margin: 0; color: var(--home-ink-soft); font-size: 14px; line-height: 1.65; }
 
-.ta-orb { position: relative; width: 154px; height: 154px; margin: 12px 0 4px; padding: 0; border: 0; background: transparent; color: var(--home-ink); cursor: pointer; }
+.ta-orb { position: relative; width: 154px; height: 154px; margin: 12px 0 4px; color: var(--home-ink); }
 .ta-orb svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 10px 24px rgba(52, 117, 194, .18)); }
 .ta-orb-track { fill: none; stroke: rgba(105, 164, 229, .38); stroke-width: 1; stroke-dasharray: 4 8; transform-origin: center; animation: ta-orbit 28s linear infinite; }
 .ta-orb-dot { fill: #6daef5; transform-origin: 90px 90px; animation: ta-orbit 20s linear infinite reverse; }
 .ta-orb-core { fill: rgba(128, 188, 244, .28); stroke: rgba(255,255,255,.52); stroke-width: 1; animation: ta-breathe 7s ease-in-out infinite; transform-origin: center; }
 .ta-orb-night .ta-orb-core { fill: rgba(93, 154, 241, .35); }
 .ta-orb > span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 21px; font-weight: 600; }
+.ta-orb > span img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; }
 @keyframes ta-orbit { to { transform: rotate(360deg); } }
 @keyframes ta-breathe { 50% { transform: scale(1.045); opacity: .82; } }
 

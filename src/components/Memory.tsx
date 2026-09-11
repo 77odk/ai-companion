@@ -2,10 +2,6 @@ import { useMemo, useState } from 'react'
 import { inferTopic, loadMemory, type MemoryItem } from '../lib/memory'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 
-interface MemoryProps {
-  onBack: () => void
-}
-
 interface DatedMemory {
   item: MemoryItem
   timestamp: number | null
@@ -72,7 +68,7 @@ function groupMemories(items: DatedMemory[]): MemoryYear[] {
   }))
 }
 
-export default function Memory({ onBack }: MemoryProps) {
+export default function Memory() {
   const sessionId = getActiveSessionId()
   const memories = useMemo(() => {
     const globalExplicit = loadMemory().filter((memory) => memory.explicit === true)
@@ -169,10 +165,6 @@ export default function Memory({ onBack }: MemoryProps) {
 
   return (
     <div className="page memory-page">
-      <button type="button" className="memory-back memory-page-back" onClick={onBack}>
-        ‹ 返回我的
-      </button>
-
       <header className="memory-hero">
         <span className="memory-hero-kicker">MEMORY</span>
         <h2 className="memory-page-title">TA 记得的你</h2>

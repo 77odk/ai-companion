@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getActiveSessionId, getSessionsCache } from '../lib/sessionStore'
-import { getFirstSeen } from '../lib/storage'
+import { getFirstSeen, loadAIProfile } from '../lib/storage'
 import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import {
   formatAnniversaryDate,
@@ -21,7 +21,6 @@ import TaOrb from './TaOrb'
 interface Props {
   onGoChat: () => void
   onGoLife: () => void
-  onGoSpace: () => void
   onGoAnniversary: () => void
 }
 
@@ -34,7 +33,7 @@ function fmtFull(ts: number): string {
   return `${d.getFullYear()}.${pad2(d.getMonth() + 1)}.${pad2(d.getDate())}`
 }
 
-export default function Home({ onGoChat, onGoLife, onGoSpace, onGoAnniversary }: Props) {
+export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   const sid = getActiveSessionId() || undefined
   const now = useMemo(() => new Date(), [])
   const scene = getHomeScene(now)
@@ -45,6 +44,7 @@ export default function Home({ onGoChat, onGoLife, onGoSpace, onGoAnniversary }:
     return session ? displaySessionName(session) : 'TA'
   }, [sid])
   const posts = useMemo(() => loadCurrentPosts(sid), [sid])
+  const taAvatar = useMemo(() => loadAIProfile(sid).avatar, [sid])
   const momentPost = useMemo(() => posts.find((p) => p.source === 'event') ?? posts[0], [posts])
 
   const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() =>
@@ -98,12 +98,11 @@ export default function Home({ onGoChat, onGoLife, onGoSpace, onGoAnniversary }:
             <h2 id="home-moment-title">{taName} 此刻</h2>
             <p>{momentPost?.text ?? '正过着安静而寻常的一天，也在等你来。'}</p>
           </div>
-          <TaOrb label={taName} scene={scene.id} onActivate={onGoChat} />
+          <TaOrb label={taName} scene={scene.id} avatar={taAvatar} />
           <button type="button" className="home-talk" onClick={onGoChat}>和 {taName} 说说话 <span>→</span></button>
         </section>
 
         <nav className="home-shortcuts" aria-label="首页快捷入口">
-          <button type="button" onClick={onGoSpace}>一起经历过</button>
           <button type="button" onClick={onGoLife}>{taName} 的生活</button>
         </nav>
       </div>
