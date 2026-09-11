@@ -33,8 +33,9 @@ import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh } from './lib/forceRefresh'
 import Home from './components/Home'
 import SpaceLife from './components/SpaceLife'
+import Memory from './components/Memory'
 
-type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
+type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
 // 底部三 tab 的常显范围：主视图（TA/空间/我的及二级页）带底部导航；全屏页（欢迎/指南/选角色/角色管理/加载等）不带。
 // 用函数判断避免 TS 对嵌套 view 比较做过度收窄（误报不可达比较）。
@@ -613,9 +614,7 @@ export default function App() {
                 onGoWorkChat={() => navigate('chat')}
                 onGoRoles={() => navigate('roles')}
                 onGoMemory={() => {
-                  setSpaceFrom('settings')
-                  setSpaceInitialPage('memories')
-                  navigate('aispace')
+                  navigate('memory')
                 }}
                 onGoAboutMe={() => {
                   setDetailFrom('settings')
@@ -639,6 +638,7 @@ export default function App() {
                 onGoMine={() => navigate('settings')}
               />
             )}
+            {view === 'memory' && <Memory onBack={() => navigate('settings')} />}
           </main>
 
           {isNavView(view) && (
