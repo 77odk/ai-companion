@@ -7769,7 +7769,7 @@ html, body {
   padding: max(24px, env(safe-area-inset-top)) 20px 28px;
   color: var(--home-ink);
   background-color: #dbe8f1;
-  background-image: var(--home-scene-image), linear-gradient(160deg, #dcebf2 0%, #f5e9d8 56%, #b9cfdb 100%);
+  background-image: var(--home-scene-image, linear-gradient(transparent, transparent)), linear-gradient(160deg, #dcebf2 0%, #f5e9d8 56%, #b9cfdb 100%);
   background-position: center;
   background-size: cover;
   overflow-x: hidden;
@@ -7778,14 +7778,14 @@ html, body {
 
 .home-scene-day {
   background-color: #d8e8ef;
-  background-image: var(--home-scene-image), linear-gradient(155deg, #d8eef5 0%, #f5f0df 52%, #b8d5d5 100%);
+  background-image: var(--home-scene-image, linear-gradient(transparent, transparent)), linear-gradient(155deg, #d8eef5 0%, #f5f0df 52%, #b8d5d5 100%);
 }
 
 .home-scene-night {
   --home-ink: #f4f7ff;
   --home-ink-soft: rgba(238, 244, 255, 0.7);
   background-color: #101b35;
-  background-image: var(--home-scene-image), linear-gradient(155deg, #10182e 0%, #1e3154 48%, #253d58 100%);
+  background-image: var(--home-scene-image, linear-gradient(transparent, transparent)), linear-gradient(155deg, #10182e 0%, #1e3154 48%, #253d58 100%);
 }
 
 .home-scene-overlay {
