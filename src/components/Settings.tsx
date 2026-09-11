@@ -6,6 +6,7 @@ import Account from './Account'
 import GenderSelect from './GenderSelect'
 import Work from './Work'
 import Appearance from './Appearance'
+import AnniversaryManager from './AnniversaryManager'
 import {
   DEFAULT_SETTINGS,
   isSlowLetterMode,
@@ -49,7 +50,7 @@ import {
 type TestState = 'idle' | 'testing' | 'success' | 'error'
 
 /** 设置页子页：使用指南已抽成 App 独立 view（guide），不再嵌在这里 */
-export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work' | 'appearance'
+export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary'
 
 interface Props {
   onGoWelcome?: () => void
@@ -94,6 +95,9 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
   if (page === 'appearance') {
     return <Appearance onBack={() => setPage('main')} />
   }
+  if (page === 'anniversary') {
+    return <AnniversaryManager onBack={() => setPage('main')} />
+  }
   return (
     <MainCenter
       onOpenAccount={() => setPage('account')}
@@ -102,6 +106,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenAbout={() => setPage('about')}
       onOpenWork={() => setPage('work')}
       onOpenAppearance={() => setPage('appearance')}
+      onOpenAnniversary={() => setPage('anniversary')}
       onGoRoles={() => onGoRoles?.()}
       onGoMemory={() => onGoMemory?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
@@ -147,6 +152,7 @@ function MainCenter({
   onOpenAbout,
   onOpenWork,
   onOpenAppearance,
+  onOpenAnniversary,
   onGoRoles,
   onGoMemory,
   onGoAboutMe,
@@ -160,6 +166,7 @@ function MainCenter({
   onOpenAbout: () => void
   onOpenWork: () => void
   onOpenAppearance: () => void
+  onOpenAnniversary: () => void
   onGoRoles?: () => void
   onGoMemory?: () => void
   onGoAboutMe?: () => void
@@ -256,6 +263,7 @@ function MainCenter({
       </ProfileGroup>
 
       <ProfileGroup title="我们">
+        <EntryRow icon={<AnniversaryIcon />} label="纪念日" onClick={onOpenAnniversary} />
         {onGoSpace && <EntryRow icon={<JourneyIcon />} label="一起经历过" onClick={onGoSpace} />}
         <div className="slow-letter-row">
           <div className="slow-letter-text">
@@ -415,6 +423,14 @@ const MemoryIcon = () => (
     <path d="M12 3v4" />
     <path d="M16 3v4" />
     <path d="M8 11l2 2 4-4" />
+  </svg>
+)
+
+const AnniversaryIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <path d="M7 3v4M17 3v4M3 10h18" />
+    <path d="M8 14h3M13 14h3M8 17h3" />
   </svg>
 )
 
