@@ -70,9 +70,11 @@ interface Props {
   onGoProfile?: () => void
   /** 进入设置页时打开的子页 */
   initialPage?: SettingsPage
+  /** App 级来源（例如 TA 首页）进入纪念日时，由来源负责返回。 */
+  onAnniversaryBack?: () => void
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoMemory, onGoAboutMe, onGoSpace, onGoProfile, initialPage }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoMemory, onGoAboutMe, onGoSpace, onGoProfile, initialPage, onAnniversaryBack }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
 
   if (page === 'provider') {
@@ -96,7 +98,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
     return <Appearance onBack={() => setPage('main')} />
   }
   if (page === 'anniversary') {
-    return <AnniversaryManager onBack={() => setPage('main')} />
+    return <AnniversaryManager onBack={onAnniversaryBack ?? (() => setPage('main'))} />
   }
   return (
     <MainCenter

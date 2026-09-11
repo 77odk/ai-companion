@@ -26,7 +26,7 @@ import { hasLocalLegacyData, hasMigratedFlag, runLocalMigration, setLocalMigrate
 import {
   decideLoginTarget,
   displaySessionName,
-  pickMostRecentSession,
+  resolveActiveSession,
   type RolePickMode,
 } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
@@ -216,6 +216,9 @@ export default function App() {
     return navTabActive(view, tab)
   }
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
+  const [settingsRootKey, setSettingsRootKey] = useState(0)
+  const [spaceRootKey, setSpaceRootKey] = useState(0)
+  const [memoryRootKey, setMemoryRootKey] = useState(0)
   // 游客想进需登录页时记下的目标 view：仅登录墙展示用（登录成功后改为按云端会话分流，不再硬回跳）
   const [gateTarget, setGateTarget] = useState<View | null>(null)
   // 从登录墙去逛指南时，暂时收起来的回跳目标（指南返回时放回登录墙）
@@ -299,10 +302,10 @@ export default function App() {
       const sessions = res.data.sessions
       // S1 头部入口要显示当前角色名：列表直接落缓存，切换/重进不用等角色列表页
       setSessionsCache(sessions)
-      const latest = pickMostRecentSession(sessions)
-      if (latest) {
+      const active = resolveActiveSession(sessions, getActiveSessionId())
+      if (active) {
         // 有云端会话 → 进首页（回家；聊天/空间都从首页进）
-        setActiveSessionId(String(latest.id))
+        setActiveSessionId(String(active.id))
         setMigration('idle')
         replaceView('home')
       } else if (!hasMigratedFlag() && hasLocalLegacyData()) {
@@ -349,6 +352,24 @@ export default function App() {
   const openSettings = (target: SettingsPage) => {
     setSettingsTarget(target)
     navigate('settings')
+  }
+
+  const openSettingsRoot = () => {
+    setSettingsTarget('main')
+    setSettingsRootKey((key) => key + 1)
+    navigate('settings')
+  }
+
+  const openSpaceRoot = () => {
+    setSpaceFrom('space')
+    setSpaceInitialPage('home')
+    setSpaceRootKey((key) => key + 1)
+    navigate('aispace')
+  }
+
+  const openMemoryRoot = () => {
+    setMemoryRootKey((key) => key + 1)
+    navigate('memory')
   }
 
   const openGuide = (from: 'welcome' | 'settings' | 'gate') => {
@@ -581,11 +602,6 @@ export default function App() {
                 onGoChat={() => navigate('chat')}
                 onGoLife={() => goView('spacelife')}
                 onGoAnniversary={() => openSettings('anniversary')}
-                onGoSpace={() => {
-                  setSpaceFrom('space')
-                  setSpaceInitialPage('home')
-                  navigate('aispace')
-                }}
               />
             )}
             {view === 'roles' && (
@@ -615,7 +631,9 @@ export default function App() {
             )}
             {view === 'settings' && (
               <Settings
+                key={`${settingsTarget}-${settingsRootKey}`}
                 initialPage={settingsTarget}
+                onAnniversaryBack={settingsTarget === 'anniversary' ? () => navigate('home') : undefined}
                 onGoWelcome={() => navigate('welcome')}
                 onGoGuide={() => openGuide('settings')}
                 onGoWorkChat={() => navigate('chat')}
@@ -641,11 +659,12 @@ export default function App() {
             )}
             {view === 'aispace' && (
               <AISpace
+                key={spaceRootKey}
                 initialPage={spaceInitialPage}
                 onGoMine={() => navigate('settings')}
               />
             )}
-            {view === 'memory' && <Memory onBack={() => navigate('home')} />}
+            {view === 'memory' && <Memory key={memoryRootKey} />}
           </main>
 
           {isNavView(view) && (
@@ -658,23 +677,19 @@ export default function App() {
               </button>
               <button
                 className={`nav-btn${navActive('space') ? ' active' : ''}`}
-                onClick={() => {
-                  setSpaceFrom('space')
-                  setSpaceInitialPage('home')
-                  navigate('aispace')
-                }}
+                onClick={openSpaceRoot}
               >
                 空间
               </button>
               <button
                 className={`nav-btn${navActive('memory') ? ' active' : ''}`}
-                onClick={() => navigate('memory')}
+                onClick={openMemoryRoot}
               >
                 记忆
               </button>
               <button
                 className={`nav-btn${navActive('mine') ? ' active' : ''}`}
-                onClick={() => navigate('settings')}
+                onClick={openSettingsRoot}
               >
                 我的
               </button>
