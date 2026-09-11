@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 
 export type HomeSceneId = 'morning' | 'day' | 'night'
 
@@ -15,9 +15,34 @@ export function getHomeScene(now: Date): HomeSceneState {
 }
 
 export default function HomeScene({ scene, children }: { scene: HomeSceneState; children: ReactNode }) {
-  const backgroundImage = `url("/home-scenes/${scene.id}.webp")`
+  const [loadedScene, setLoadedScene] = useState<HomeSceneId | null>(null)
+
+  useEffect(() => {
+    let active = true
+    const image = new Image()
+
+    setLoadedScene(null)
+    image.onload = () => {
+      if (active) setLoadedScene(scene.id)
+    }
+    image.onerror = () => {
+      if (active) setLoadedScene(null)
+    }
+    image.src = `/home-scenes/${scene.id}.webp`
+
+    return () => {
+      active = false
+      image.onload = null
+      image.onerror = null
+    }
+  }, [scene.id])
+
+  const style = loadedScene === scene.id
+    ? { '--home-scene-image': `url("/home-scenes/${scene.id}.webp")` } as CSSProperties
+    : undefined
+
   return (
-    <div className={`home-page home-scene-${scene.id}`} style={{ '--home-scene-image': backgroundImage } as CSSProperties}>
+    <div className={`home-page home-scene-${scene.id}`} style={style}>
       <div className="home-scene-overlay" aria-hidden="true" />
       {children}
     </div>
