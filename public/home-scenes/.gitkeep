@@ -1,0 +1,13 @@
+Home scene assets for Eluvin.
+
+Expected production assets:
+- morning.webp
+- day.webp
+- night.webp
+
+These assets are selected by HomeScene according to the user's local browser time:
+- Morning: 05:00–11:59
+- Day: 12:00–17:59
+- Night: 18:00–04:59
+
+If an asset is unavailable or fails to load, HomeScene falls back to the built-in gradient background.
