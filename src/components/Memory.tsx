@@ -141,6 +141,7 @@ export default function Memory() {
 
   if (view === 'detail' && selected) {
     const topic = selected.item.topic?.trim() || inferTopic(selected.item.text)
+    const pinned = selected.item.pinned === true
     return (
       <div className="page memory-page memory-detail-page">
         <div className="memory-local-bar">
@@ -149,10 +150,30 @@ export default function Memory() {
           </button>
           <span className="memory-local-kicker">一段记忆</span>
         </div>
-        <article className={`memory-detail-sheet${selected.item.pinned ? ' is-pinned' : ''}`}>
-          <p className="memory-detail-date">{formatDate(selected.timestamp)}</p>
+        <article className={`memory-detail-sheet${pinned ? ' is-pinned' : ''}`}>
+          <p className="memory-detail-date">
+            {formatDate(selected.timestamp)}
+            {pinned ? (
+              <span className="memory-detail-pin">
+                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6Z" />
+                  <path d="M12 14v7" />
+                </svg>
+                TA 收下的
+              </span>
+            ) : null}
+          </p>
           <p className="memory-detail-text">{selected.item.text}</p>
-          {topic && <span className="memory-topic">{topic}</span>}
+          {selected.item.source?.trim() ? (
+            <p className="memory-detail-quote">
+              来自对话 ·「{selected.item.source.trim()}」
+            </p>
+          ) : null}
+          {topic ? (
+            <p className="memory-detail-topic">
+              <span aria-hidden="true">·</span> {topic}
+            </p>
+          ) : null}
           <p className="memory-detail-note">这是 TA 在与你相处时留下的一段记忆。</p>
         </article>
         <button type="button" className="memory-read-button" onClick={() => setView('book')}>
@@ -194,27 +215,44 @@ export default function Memory() {
 
           <div className="memory-river-flow">
             {years.map((year) => (
-              <section key={year.key} className="memory-year" aria-labelledby={`memory-year-${year.key}`}>
-                <h4 id={`memory-year-${year.key}`} className="memory-year-label">{year.label}</h4>
+              <section key={year.key} className="memory-year-chapter" aria-labelledby={`memory-year-${year.key}`}>
+                <h4 id={`memory-year-${year.key}`} className="memory-year-chapter-label">{year.label}</h4>
                 {year.months.map((month) => (
-                  <div key={month.key} className="memory-month">
-                    <h5 className="memory-month-label">{month.label}</h5>
-                    <div className="memory-month-items">
+                  <div key={month.key} className="memory-month-chapter">
+                    <h5 className="memory-month-chapter-label">
+                      {month.label}
+                      <span className="memory-month-chapter-count">{month.items.length} 件</span>
+                    </h5>
+                    <div className="memory-month-entries">
                       {month.items.map(({ item, timestamp }, index) => {
                         const topic = item.topic?.trim()
+                        const explicit = item.explicit === true
+                        const pinned = item.pinned === true
+                        const entryClass = [
+                          'memory-entry',
+                          pinned ? 'is-pinned' : '',
+                          explicit ? 'is-explicit' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')
                         return (
                           <button
                             key={`${item.id}-${index}`}
                             type="button"
-                            className={`memory-river-node${item.pinned ? ' is-pinned' : ''}`}
+                            className={entryClass}
                             onClick={() => openDetail(item)}
                           >
-                            <span className="memory-river-dot" aria-hidden="true" />
-                            <span className="memory-river-paper">
-                              <span className="memory-river-text">{item.text}</span>
-                              <span className="memory-river-meta">
-                                {formatDate(timestamp)}
-                                {topic ? <span className="memory-topic">{topic}</span> : null}
+                            <span className="memory-entry-dot" aria-hidden="true" />
+                            <span className="memory-entry-body">
+                              <span className="memory-entry-text">{item.text}</span>
+                              {item.source?.trim() ? (
+                                <span className="memory-entry-quote">
+                                  来自对话 ·「{item.source.trim()}」
+                                </span>
+                              ) : null}
+                              <span className="memory-entry-meta">
+                                <span className="memory-entry-date">{formatDate(timestamp)}</span>
+                                {topic ? <span className="memory-entry-topic">{topic}</span> : null}
                               </span>
                             </span>
                           </button>
