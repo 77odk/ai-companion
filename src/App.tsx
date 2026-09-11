@@ -37,17 +37,18 @@ import Memory from './components/Memory'
 
 type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
-// 底部三 tab 的常显范围：主视图（TA/空间/我的及二级页）带底部导航；全屏页（欢迎/指南/选角色/角色管理/加载等）不带。
+// 底部四 tab 的常显范围：主视图（TA/空间/记忆/我的）带底部导航；全屏页不带。
 // 用函数判断避免 TS 对嵌套 view 比较做过度收窄（误报不可达比较）。
 function isNavView(v: View): boolean {
   return v === 'home' || v === 'chat' || v === 'aispace' || v === 'settings' || v === 'memory'
 }
 
-// 三 tab 高亮：TA 高亮首页/聊天；空间高亮 TA 空间；我的高亮设置页（角色管理已独立成页，不高亮任何 tab）
-function navTabActive(v: View, tab: 'ta' | 'space' | 'mine'): boolean {
+// 四 tab 高亮：TA=首页/聊天，空间=AI Space，记忆=独立 Memory，我的=设置。
+function navTabActive(v: View, tab: 'ta' | 'space' | 'memory' | 'mine'): boolean {
   if (tab === 'ta') return v === 'home' || v === 'chat' || v === 'spacelife'
   if (tab === 'space') return v === 'aispace'
-  return v === 'settings' || v === 'memory'
+  if (tab === 'memory') return v === 'memory'
+  return v === 'settings'
 }
 
 // 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
@@ -210,7 +211,7 @@ export default function App() {
   const [spaceInitialPage, setSpaceInitialPage] = useState<'home' | 'memories'>('home')
   // 从「我的 → TA 记得的」进记忆墙时，底部高亮算在「我的」上（旧记账项修复）；其余入口算「空间」
   const [spaceFrom, setSpaceFrom] = useState<'space' | 'settings'>('space')
-  const navActive = (tab: 'ta' | 'space' | 'mine'): boolean => {
+  const navActive = (tab: 'ta' | 'space' | 'memory' | 'mine'): boolean => {
     if (view === 'aispace' && spaceFrom === 'settings') return tab === 'mine'
     return navTabActive(view, tab)
   }
@@ -579,6 +580,12 @@ export default function App() {
               <Home
                 onGoChat={() => navigate('chat')}
                 onGoLife={() => goView('spacelife')}
+                onGoAnniversary={() => openSettings('anniversary')}
+                onGoSpace={() => {
+                  setSpaceFrom('space')
+                  setSpaceInitialPage('home')
+                  navigate('aispace')
+                }}
               />
             )}
             {view === 'roles' && (
@@ -638,7 +645,7 @@ export default function App() {
                 onGoMine={() => navigate('settings')}
               />
             )}
-            {view === 'memory' && <Memory onBack={() => navigate('settings')} />}
+            {view === 'memory' && <Memory onBack={() => navigate('home')} />}
           </main>
 
           {isNavView(view) && (
@@ -658,6 +665,12 @@ export default function App() {
                 }}
               >
                 空间
+              </button>
+              <button
+                className={`nav-btn${navActive('memory') ? ' active' : ''}`}
+                onClick={() => navigate('memory')}
+              >
+                记忆
               </button>
               <button
                 className={`nav-btn${navActive('mine') ? ' active' : ''}`}

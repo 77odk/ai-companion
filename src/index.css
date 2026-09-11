@@ -7762,6 +7762,113 @@ html, body {
   background: transparent;
 }
 
+/* ============ UI 2.0：沉浸式首页时间场景 ============ */
+.home-page {
+  --home-ink: #17243a;
+  --home-ink-soft: rgba(23, 36, 58, 0.68);
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  height: 100%;
+  padding: max(24px, env(safe-area-inset-top)) 20px 28px;
+  color: var(--home-ink);
+  background-color: #dbe8f1;
+  background-image: var(--home-scene-image), linear-gradient(160deg, #dcebf2 0%, #f5e9d8 56%, #b9cfdb 100%);
+  background-position: center;
+  background-size: cover;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.home-scene-day {
+  background-color: #d8e8ef;
+  background-image: var(--home-scene-image), linear-gradient(155deg, #d8eef5 0%, #f5f0df 52%, #b8d5d5 100%);
+}
+
+.home-scene-night {
+  --home-ink: #f4f7ff;
+  --home-ink-soft: rgba(238, 244, 255, 0.7);
+  background-color: #101b35;
+  background-image: var(--home-scene-image), linear-gradient(155deg, #10182e 0%, #1e3154 48%, #253d58 100%);
+}
+
+.home-scene-overlay {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(248,251,255,.08) 42%, rgba(10,24,45,.13));
+}
+
+.home-scene-night .home-scene-overlay {
+  background: linear-gradient(180deg, rgba(5, 10, 25, .16), rgba(5, 12, 29, .38));
+}
+
+.home-inner { position: relative; z-index: 1; max-width: 520px; margin: 0 auto; gap: 0; }
+
+.home-brand { justify-content: flex-start; gap: 9px; margin: 0 0 clamp(34px, 8vh, 70px); }
+.home-brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.45); border-radius: 50%; background: rgba(255,255,255,.18); backdrop-filter: blur(12px); color: var(--home-ink); font-weight: 700; }
+.home-brand > span:last-child { display: flex; flex-direction: column; }
+.home-brand strong { font-size: 16px; letter-spacing: .12em; }
+.home-brand small { color: var(--home-ink-soft); font-size: 8px; letter-spacing: .25em; }
+
+.home-time { text-align: center; }
+.home-greeting { margin: 0 0 9px; color: var(--home-ink-soft); font-size: 14px; }
+.home-time h1 { margin: 0; font-size: clamp(23px, 7vw, 34px); font-weight: 500; letter-spacing: .02em; }
+.home-time h1 strong { color: var(--color-primary-deep); font-size: 1.35em; }
+.home-scene-night .home-time h1 strong { color: #93c5ff; }
+.home-time > p:last-child { margin: 8px 0 0; color: var(--home-ink-soft); font-size: 12px; letter-spacing: .05em; }
+
+.home-anniversary { margin: 28px 0 22px; padding: 18px 20px; border: 1px solid rgba(255,255,255,.36); border-radius: 22px; background: rgba(255,255,255,.19); backdrop-filter: blur(18px); }
+.home-eyebrow { color: var(--home-ink-soft); font-size: 9px; letter-spacing: .2em; }
+.home-anniversary h2 { margin: 9px 0 2px; font-size: 15px; font-weight: 600; }
+.home-anniversary strong { display: block; font-size: 28px; font-weight: 650; }
+.home-anniversary time { color: var(--home-ink-soft); font-size: 12px; }
+.home-anniversary-empty { color: var(--home-ink-soft); font-size: 12px; }
+.home-anniversary-view { float: right; margin-top: -24px; padding: 5px 9px; border: 0; border-radius: 999px; background: rgba(255,255,255,.22); color: var(--home-ink); font: inherit; font-size: 11px; cursor: pointer; }
+
+.anniversary-manager-note { margin: 0 0 18px; color: var(--color-text-muted); font-size: 13px; }
+.anniversary-manager .anniversary-page-list { margin-bottom: 14px; }
+.anniversary-manager-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.anniversary-manager-actions button { padding: 5px 9px; border: 0; border-radius: 999px; background: var(--color-primary-soft); color: var(--color-primary-deep); font: inherit; font-size: 11px; cursor: pointer; }
+.anniversary-manager-actions button:disabled { opacity: .65; cursor: default; }
+.anniversary-manager-actions button.danger { background: color-mix(in srgb, #e5484d 10%, transparent); color: #b73237; }
+.anniversary-manager-field { display: flex; flex-direction: column; gap: 6px; color: var(--color-text-muted); font-size: 12px; }
+.anniversary-manager-fieldset { margin: 0; padding: 0; border: 0; color: var(--color-text-muted); font-size: 12px; }
+.anniversary-manager-fieldset legend { margin-bottom: 7px; font-weight: 600; }
+.anniversary-manager-fieldset > label { margin-right: 16px; }
+
+.home-companion { display: flex; flex-direction: column; align-items: center; padding: 20px 18px 16px; border-radius: 28px; background: linear-gradient(145deg, rgba(255,255,255,.23), rgba(255,255,255,.08)); backdrop-filter: blur(14px); }
+.home-moment-copy { align-self: stretch; }
+.home-moment-copy h2 { margin: 0 0 7px; font-size: 14px; }
+.home-moment-copy p { min-height: 44px; margin: 0; color: var(--home-ink-soft); font-size: 14px; line-height: 1.65; }
+
+.ta-orb { position: relative; width: 154px; height: 154px; margin: 12px 0 4px; padding: 0; border: 0; background: transparent; color: var(--home-ink); cursor: pointer; }
+.ta-orb svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 10px 24px rgba(52, 117, 194, .18)); }
+.ta-orb-track { fill: none; stroke: rgba(105, 164, 229, .38); stroke-width: 1; stroke-dasharray: 4 8; transform-origin: center; animation: ta-orbit 28s linear infinite; }
+.ta-orb-dot { fill: #6daef5; transform-origin: 90px 90px; animation: ta-orbit 20s linear infinite reverse; }
+.ta-orb-core { fill: rgba(128, 188, 244, .28); stroke: rgba(255,255,255,.52); stroke-width: 1; animation: ta-breathe 7s ease-in-out infinite; transform-origin: center; }
+.ta-orb-night .ta-orb-core { fill: rgba(93, 154, 241, .35); }
+.ta-orb > span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 21px; font-weight: 600; }
+@keyframes ta-orbit { to { transform: rotate(360deg); } }
+@keyframes ta-breathe { 50% { transform: scale(1.045); opacity: .82; } }
+
+.home-talk { width: auto; padding: 9px 16px; border: 0; border-radius: 999px; background: rgba(255,255,255,.24); color: var(--home-ink); font: inherit; font-size: 14px; cursor: pointer; }
+.home-talk span { margin-left: 5px; color: var(--color-primary-deep); }
+.home-shortcuts { display: flex; justify-content: center; gap: 10px; margin-top: 16px; }
+.home-shortcuts button { min-width: 0; padding: 9px 14px; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; background: rgba(255,255,255,.15); backdrop-filter: blur(12px); color: var(--home-ink); font: inherit; font-size: 12px; cursor: pointer; }
+
+.app-nav { position: relative; z-index: 10; border-top-color: color-mix(in srgb, var(--color-border) 60%, transparent); background: color-mix(in srgb, var(--color-card) 88%, transparent); backdrop-filter: blur(18px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ta-orb-track, .ta-orb-dot, .ta-orb-core { animation: none; }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .home-anniversary, .home-companion, .home-shortcuts button, .home-brand-mark { background: rgba(240, 246, 251, .84); }
+  .home-scene-night .home-anniversary, .home-scene-night .home-companion, .home-scene-night .home-shortcuts button, .home-scene-night .home-brand-mark { background: rgba(20, 34, 61, .88); }
+}
+
 /* ============ 批 2-1：一起经历过 · 竖线时间轴（只换渲染） ============ */
 
 .ai-shared-timeline {
