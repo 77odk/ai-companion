@@ -39,6 +39,8 @@ interface Props {
   fromRoles?: boolean
   /** 「和 TA 聊天」：从资料卡进聊天（角色管理模式用） */
   onChat?: () => void
+  /** 临时查看的角色 id（角色管理「角色详情」只看不切）；缺省读当前会话 */
+  sessionIdOverride?: string
 }
 
 /** 相识天数：角色创建（会话 created_at）当天起算；无会话/读不到回落 getFirstSeen，至少 1 天 */
@@ -54,9 +56,9 @@ function profileDaysKnown(sessionId: string | null): number {
   return computeDaysKnown(getFirstSeen(sessionId || undefined))
 }
 
-export default function ChatProfile({ onClose, onGoMine, fromRoles = false, onChat }: Props) {
-  // 当前会话（有会话 → 名字/消息/动态全用该会话数据，无会话兜底全局）
-  const sessionId = getActiveSessionId()
+export default function ChatProfile({ onClose, onGoMine, fromRoles = false, onChat, sessionIdOverride }: Props) {
+  // 当前会话（角色管理「角色详情」临时查看时用 sessionIdOverride；其余入口读当前会话；无会话兜底全局）
+  const sessionId = sessionIdOverride ?? getActiveSessionId()
   // TA 资料按会话隔离：资料卡显示当前角色的头像/姓名
   const ai = loadAIProfile(sessionId || undefined)
   const user = loadUserProfile()

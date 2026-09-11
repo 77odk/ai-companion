@@ -24,14 +24,13 @@ import {
   type PhotoMeta,
 } from '../lib/photoWall'
 import { getToken } from '../lib/auth'
+import { getSharedExperiences, formatSharedDate } from '../lib/sharedExperiences'
 
 interface Props {
   /** 进入时的初始子页：home 空间主页 / memories 记忆墙（「我的 → TA 记得的」直接进记忆墙） */
   initialPage?: 'home' | 'memories'
   /** 引导「去写人设」/「去配置」跳「我的」页（App 里即 settings 视图） */
   onGoMine?: () => void
-  /** 点「最近的大日子」卡 → 进纪念日页（2026-09-10 空间重构后倒计时由首页承载，空间不再放，保留 prop 兼容调用方） */
-  onOpenAnniversary?: () => void
 }
 
 /** 时间戳 → 8月2日（TA 记得的起始日期、底部注脚用） */
@@ -187,21 +186,8 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     sid ? getMessagesCache(sid).length : loadMessages().length,
   )
 
-  // 一起经历过：记忆按「第 N 天」聚类，每天取最早一条，倒序展示最近 3 个节点
-  const timelineNodes = useMemo(() => {
-    const byDay = new Map<number, MemoryItem>()
-    for (const m of memories) {
-      if (!m || typeof m.createdAt !== 'number' || !Number.isFinite(m.createdAt)) continue
-      const n = computeDaysKnown(firstSeen, m.createdAt)
-      if (!byDay.has(n) || m.createdAt < (byDay.get(n)?.createdAt ?? Infinity)) {
-        byDay.set(n, m)
-      }
-    }
-    return [...byDay.entries()]
-      .sort((a, b) => b[0] - a[0])
-      .slice(0, 3)
-      .map(([n, m]) => ({ day: n, text: m.text }))
-  }, [memories, firstSeen])
+  // 一起经历过：数据源 = getSharedExperiences（legacy 记忆按天聚类；Event 上线后只换 lib 内部）
+  const timelineNodes = useMemo(() => getSharedExperiences(sid), [sid, memories])
 
   // TA 记得的：一句印象取最近一条记忆（截断），无记忆给空态引导
   const memoryImpression = useMemo(() => {
@@ -434,7 +420,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
         {/* 照片墙（第 7 批：真上传 + 网格 + 点开大图） */}
         {renderPhotoWall()}
 
-        {/* 一起经历过 */}
+        {/* 一起经历过：竖线时间轴（只换渲染，数据 = getSharedExperiences 记忆聚类） */}
         <section className="ai-space-v2-section">
           <div className="ai-space-v2-head">
             <span className="ai-space-v2-title">一起经历过</span>
@@ -446,14 +432,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
           {timelineNodes.length === 0 ? (
             <p className="ai-space-empty">多和 TA 聊聊，TA 会开始记得你们一起的事</p>
           ) : (
-            <div className="ai-space-nodes">
-              {timelineNodes.map((n) => (
-                <div key={n.day} className="ai-space-node">
-                  <span className="ai-space-node-day">第{n.day}天</span>
-                  <span className="ai-space-node-text">{n.text}</span>
-                </div>
-              ))}
-            </div>
+            renderSharedTimeline(timelineNodes.slice(0, 3))
           )}
         </section>
 
@@ -576,7 +555,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     )
   }
 
-  /** TA所记子页：你们的大小事（数据逻辑待定，先空态引导） */
+  /** TA所记子页：你们的大小事（完整时间轴；数据源 = 记忆聚类 legacy，Event 上线后只换 lib） */
   function renderEventsPage() {
     return (
       <>
@@ -584,14 +563,37 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
           <button type="button" className="link-btn ai-space-back" onClick={() => setPage('home')}>
             ‹ 返回
           </button>
-          <h2 className="ai-space-sub-title">TA所记</h2>
+          <h2 className="ai-space-sub-title">一起经历过</h2>
           <span className="ai-space-topbar-spacer" aria-hidden="true" />
         </div>
 
         <div className="ai-space-timeline">
-          <p className="ai-space-empty">你们一起经历的大小事，TA 会慢慢记在这里</p>
+          {timelineNodes.length === 0 ? (
+            <p className="ai-space-empty">多和 TA 聊聊，TA 会开始记得你们一起的事</p>
+          ) : (
+            renderSharedTimeline(timelineNodes)
+          )}
         </div>
       </>
+    )
+  }
+
+  /** 竖线时间轴：节点 = 「09月01日 · 第 1 天」+ 一句话（定稿样式，只换渲染不造数据） */
+  function renderSharedTimeline(nodes: ReturnType<typeof getSharedExperiences>) {
+    return (
+      <div className="ai-shared-timeline">
+        {nodes.map((n) => (
+          <div key={n.day} className="ai-shared-item">
+            <span className="ai-shared-dot" aria-hidden="true" />
+            <div className="ai-shared-main">
+              <span className="ai-shared-date">
+                {formatSharedDate(n.dateTs)} · 第 {n.day} 天
+              </span>
+              <p className="ai-shared-text">{n.text}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     )
   }
 

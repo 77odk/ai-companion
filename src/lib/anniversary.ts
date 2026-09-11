@@ -611,3 +611,36 @@ function ensureRoleDefaults(sessionId?: string): void {
     // 保证默认数据失败不阻塞（localStorage 满/损坏）
   }
 }
+
+// ---- 首页纪念日区（批 2-1）展示层辅助：合并重复 + 临近排序（纯函数，可 Node 单测） ----
+
+/** 同名+同日期在展示层合并（保留第一条；数据一条不删，只影响展示）。仅判断 label 与 date 都相同。 */
+export function mergeDuplicateAnniversaries(list: Anniversary[]): Anniversary[] {
+  if (!Array.isArray(list)) return []
+  const seen = new Set<string>()
+  const out: Anniversary[] = []
+  for (const a of list) {
+    if (!a || typeof a.id !== 'string') continue
+    const key = `${a.label}\u0000${a.date}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(a)
+  }
+  return out
+}
+
+/**
+ * 按「下一次最近」升序排列：倒计时越近的越靠前（daysUntilNext 最小值优先），
+ * 日期非法/永远算不出下一次的排最后，保持原相对顺序。
+ */
+export function sortAnniversariesByNext(list: Anniversary[], now: number = Date.now()): Anniversary[] {
+  if (!Array.isArray(list)) return []
+  return [...list].sort((a, b) => {
+    const da = daysUntilNext(a, now)
+    const db = daysUntilNext(b, now)
+    if (da == null && db == null) return 0
+    if (da == null) return 1
+    if (db == null) return -1
+    return da - db
+  })
+}

@@ -6,7 +6,6 @@ import Settings, { type SettingsPage } from './components/Settings'
 import AISpace from './components/AISpace'
 import ChatProfile from './components/ChatProfile'
 import AboutMe from './components/AboutMe'
-import AnniversaryPage from './components/AnniversaryPage'
 import WeeklyPage from './components/WeeklyPage'
 import GuideDetail from './components/Guide'
 import LoginGate from './components/LoginGate'
@@ -35,17 +34,17 @@ import { forceRefresh } from './lib/forceRefresh'
 import Home from './components/Home'
 import SpaceLife from './components/SpaceLife'
 
-type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'aispace' | 'chatprofile' | 'aboutme' | 'anniversary' | 'weekly' | 'spacelife' | 'guide' | 'loading'
+type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
-// 底部三 tab 的常显范围：主视图（TA/空间/我的及二级页）带底部导航；全屏页（欢迎/指南/选角色/加载等）不带。
+// 底部三 tab 的常显范围：主视图（TA/空间/我的及二级页）带底部导航；全屏页（欢迎/指南/选角色/角色管理/加载等）不带。
 // 用函数判断避免 TS 对嵌套 view 比较做过度收窄（误报不可达比较）。
 function isNavView(v: View): boolean {
-  return v === 'home' || v === 'chat' || v === 'roles' || v === 'aispace' || v === 'settings'
+  return v === 'home' || v === 'chat' || v === 'aispace' || v === 'settings'
 }
 
-// 三 tab 高亮：TA 高亮首页/聊天/会话列表；空间高亮 TA 空间；我的高亮设置页
+// 三 tab 高亮：TA 高亮首页/聊天；空间高亮 TA 空间；我的高亮设置页（角色管理已独立成页，不高亮任何 tab）
 function navTabActive(v: View, tab: 'ta' | 'space' | 'mine'): boolean {
-  if (tab === 'ta') return v === 'home' || v === 'chat' || v === 'roles' || v === 'spacelife'
+  if (tab === 'ta') return v === 'home' || v === 'chat' || v === 'spacelife'
   if (tab === 'space') return v === 'aispace'
   return v === 'settings'
 }
@@ -202,8 +201,10 @@ export default function App() {
     restoreScroll(view)
   }, [view, restoreScroll])
 
-  // 二级页（资料卡/关于我/纪念日/周记）的来源：从哪进返回哪（聊天/忆览/空间/我的）
+  // 二级页（资料卡/关于我/周记）的来源：从哪进返回哪（聊天/忆览/空间/我的）
   const [detailFrom, setDetailFrom] = useState<View>('chat')
+  // 角色管理「角色详情」只看不切：临时查看的会话 id（chatprofile 优先读它；聊天/我的入口进资料卡时为 null）
+  const [profileTarget, setProfileTarget] = useState<string | null>(null)
   // 进空间时的初始子页：「我的 → TA 记得的」进记忆墙，其余入口进空间主页
   const [spaceInitialPage, setSpaceInitialPage] = useState<'home' | 'memories'>('home')
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
@@ -466,15 +467,24 @@ export default function App() {
         />
       ) : view === 'chatprofile' ? (
         <ChatProfile
-          onClose={() => navigate(detailFrom === 'settings' ? 'settings' : detailFrom === 'roles' ? 'roles' : 'chat')}
+          sessionIdOverride={profileTarget ?? undefined}
+          onClose={() => {
+            setProfileTarget(null)
+            navigate(detailFrom === 'settings' ? 'settings' : detailFrom === 'roles' ? 'roles' : 'chat')
+          }}
           onGoMine={() => navigate('settings')}
           fromRoles={detailFrom === 'roles'}
-          onChat={() => goView('chat')}
+          onChat={() => {
+            // 资料卡「和 TA 聊天」：临时查看的角色先落成当前会话，再进聊天
+            if (profileTarget) {
+              setActiveSessionId(profileTarget)
+              setProfileTarget(null)
+            }
+            goView('chat')
+          }}
         />
       ) : view === 'aboutme' ? (
         <AboutMe onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'aispace')} />
-      ) : view === 'anniversary' ? (
-        <AnniversaryPage onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'aispace')} />
       ) : view === 'weekly' ? (
         <WeeklyPage onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'aispace')} onGoSettings={() => openSettings('provider')} />
       ) : view === 'spacelife' ? (
@@ -537,6 +547,7 @@ export default function App() {
                   className="chat-header-planet"
                   onClick={() => {
                     setDetailFrom('chat')
+                    setProfileTarget(null)
                     goView('chatprofile')
                   }}
                   aria-label="打开 TA 的资料卡"
@@ -568,11 +579,13 @@ export default function App() {
                 onBack={() => navigate('settings')}
                 onNew={handleRolesNew}
                 onSwitch={() => goView('chat')}
-                onOpenProfile={() => {
+                onOpenProfile={(sid) => {
                   setDetailFrom('roles')
+                  setProfileTarget(sid)
                   goView('chatprofile')
                 }}
-                standalone={false}
+                onSelectDone={() => navigate('home')}
+                standalone
               />
             )}
             {view === 'chat' && (
@@ -601,16 +614,13 @@ export default function App() {
                   setDetailFrom('settings')
                   navigate('aboutme')
                 }}
-                onGoAnniversary={() => {
-                  setDetailFrom('settings')
-                  navigate('anniversary')
-                }}
                 onGoSpace={() => {
                   setSpaceInitialPage('home')
                   navigate('aispace')
                 }}
                 onGoProfile={() => {
                   setDetailFrom('settings')
+                  setProfileTarget(null)
                   navigate('chatprofile')
                 }}
               />
@@ -619,10 +629,6 @@ export default function App() {
               <AISpace
                 initialPage={spaceInitialPage}
                 onGoMine={() => navigate('settings')}
-                onOpenAnniversary={() => {
-                  setDetailFrom('aispace')
-                  navigate('anniversary')
-                }}
               />
             )}
           </main>

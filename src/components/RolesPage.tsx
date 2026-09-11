@@ -1,9 +1,9 @@
-// 全屏角色列表页（S2）：删除侧边栏后，角色/会话列表搬到这里
-// 对标 ling/微信列表：每个角色一行（首字圆形头像 + 角色名大字 + 最近消息摘要 + 右侧时间/未读角标）。
-// 顶部返回 + 新建；每项「···」操作：改名（PATCH title）/ 删除（确认后级联删）。
-// 数据自持：getSessionsCache() 初始化 + 进入页面时 listSessions 刷新；每次改动同步写回缓存，
-// 这样聊天页头部入口、Chat 取名都拿到新名字。纯展示外的事（切会话/新建/删除/改名）都在这页做，
-// 需要 App 配合的只通过 onBack / onNew / onSwitch 三个导航回调。
+// 角色管理页（批 2-1 独立页化）：从「我的 → 角色管理」进入，全屏、无底部导航、不高亮任何 tab。
+// 对标微信列表：每个角色一行（首字圆形头像 + 角色名大字 + 最近消息摘要 + 右侧时间/未读角标）。
+// 顶部返回（回「我的」）+ 新建；每行两个按钮：「选择」（确认框 → 切换会话 → 回首页）和「角色详情」（只看资料卡，不切换会话）；
+// 行本体点击 = 角色详情（批一行为保留，批 2-1 起不再切换当前会话）；每项「···」操作：改名 / 删除。
+// 数据自持：getSessionsCache() 初始化 + 进入页面时 listSessions 刷新；每次改动同步写回缓存。
+// 需要 App 配合的只通过 onBack / onNew / onSwitch / onOpenProfile / onSelectDone 五个导航回调。
 
 import { useEffect, useState } from 'react'
 import { getToken } from '../lib/auth'
@@ -26,15 +26,17 @@ import { loadAIProfile, saveAIProfile } from '../lib/storage'
 import type { StoredMessage } from '../lib/storage'
 
 interface Props {
-  /** 返回聊天页（主页化 standalone=false 时不渲染返回按钮，保留接口兼容） */
+  /** 返回「我的」（角色管理页的返回落点） */
   onBack: () => void
   /** 新建角色：App 跳选角色页（roleMode='first'） */
   onNew: () => void
   /** 会话已切换（本页已 setActiveSessionId），App 回聊天页（删除当前会话后切到最近会话用） */
   onSwitch: () => void
-  /** 点角色：本页已 setActiveSessionId(id)，App 打开该角色资料卡（不再直进聊天） */
-  onOpenProfile: () => void
-  /** 主页化（微信式）：嵌在底部导航「聊天」tab 里，无返回按钮；默认 true=全屏页带返回 */
+  /** 点角色/角色详情：只看资料卡不切换会话，App 用临时角色参数打开该角色资料卡（onOpenProfile(id)） */
+  onOpenProfile: (sessionId: string) => void
+  /** 「选择」确认后：App 回首页 */
+  onSelectDone?: () => void
+  /** 主页化（微信式）：嵌在底部导航里用（批 2-1 后只保留接口兼容，实际都走独立页） */
   standalone?: boolean
 }
 
@@ -45,7 +47,7 @@ function lastMessage(sessionId: string): StoredMessage | null {
   return msgs.reduce<StoredMessage | null>((best, m) => (!best || m.ts > best.ts ? m : best), null)
 }
 
-export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, standalone = true }: Props) {
+export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSelectDone, standalone = true }: Props) {
   // 列表自持：进页面先用缓存秒开，再拉后端刷新（拉取失败用缓存兜底）
   const [sessions, setSessions] = useState<Session[]>(() => getSessionsCache())
   // 「···」动作菜单开在哪个会话上（null = 收起）
@@ -55,6 +57,8 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, stan
   const [renameDraft, setRenameDraft] = useState('')
   // 删除请求进行中（禁用删除按钮防连点）
   const [deleting, setDeleting] = useState(false)
+  // 「选择」确认层：开在哪个会话上（null = 收起）
+  const [confirmingSelect, setConfirmingSelect] = useState<string | null>(null)
 
   useEffect(() => {
     const token = getToken()
@@ -87,11 +91,23 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, stan
   })
   const activeId = getActiveSessionId()
 
-  // 点角色：切换当前会话 + 打开该角色资料卡（不直进聊天；资料卡里有「和 TA 聊天」）
+  // 点角色/角色详情：打开该角色资料卡（不切换当前会话；资料卡由 App 用临时角色参数渲染）
   const openRoleProfile = (id: string) => {
     setMenuFor(null)
+    setConfirmingSelect(null)
+    onOpenProfile(id)
+  }
+
+  // 「选择」：弹确认框，确认后切会话 + 回首页
+  const askSelect = (id: string) => {
+    setMenuFor(null)
+    setConfirmingSelect(id)
+  }
+
+  const confirmSelect = (id: string) => {
+    setConfirmingSelect(null)
     setActiveSessionId(id)
-    onOpenProfile()
+    onSelectDone?.()
   }
 
   const handleNew = () => {
@@ -159,6 +175,8 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, stan
     setRenaming(null)
   }
 
+  const confirmingSession = confirmingSelect ? list.find((s) => String(s.id) === confirmingSelect) : null
+
   return (
     <div className="roles-page">
       <div className="detail-header roles-header">
@@ -167,7 +185,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, stan
             ‹ 返回
           </button>
         )}
-        <h1 className="detail-title">{standalone ? '角色' : '聊天'}</h1>
+        <h1 className="detail-title">{standalone ? '角色管理' : '聊天'}</h1>
         <button type="button" className="roles-new" onClick={handleNew} aria-label="新建角色">
           <svg
             viewBox="0 0 24 24"
@@ -250,6 +268,25 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, stan
                     <circle cx="19" cy="12" r="1.2" fill="currentColor" stroke="none" />
                   </svg>
                 </button>
+                {/* 批 2-1：行内两个按钮 —— 选择（确认后回首页）/ 角色详情（进资料卡） */}
+                <span className="roles-actions">
+                  <button
+                    type="button"
+                    className="roles-action roles-action-select"
+                    onClick={() => askSelect(id)}
+                    aria-label={`选择角色：${displayName}`}
+                  >
+                    选择
+                  </button>
+                  <button
+                    type="button"
+                    className="roles-action roles-action-detail"
+                    onClick={() => openRoleProfile(id)}
+                    aria-label={`角色详情：${displayName}`}
+                  >
+                    角色详情
+                  </button>
+                </span>
                 {menuFor === id && (
                   <div className="roles-menu" role="menu">
                     <button
@@ -277,6 +314,30 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, stan
 
       {/* 菜单展开时点列表其他位置收起（半透明遮罩，不拦截菜单本体） */}
       {menuFor && <div className="roles-menu-backdrop" onClick={() => setMenuFor(null)} aria-hidden="true" />}
+
+      {/* 「选择」确认层：确认后切会话回首页 */}
+      {confirmingSession && (
+        <div
+          className="roles-select-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="切换角色"
+          onClick={() => setConfirmingSelect(null)}
+        >
+          <div className="roles-select" onClick={(e) => e.stopPropagation()}>
+            <h3 className="roles-select-title">切换到「{displaySessionName(confirmingSession)}」？</h3>
+            <p className="roles-select-text">切换后，TA 主页和聊天都会跟着这个 TA 走。</p>
+            <div className="roles-select-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setConfirmingSelect(null)}>
+                取消
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => confirmSelect(confirmingSelect!)}>
+                确认切换
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {renaming && (
         <div

@@ -7107,3 +7107,324 @@ html, body {
   opacity: 1;
   cursor: default;
 }
+
+/* ============ 批 2-1：首页纪念日区（独立纪念日页取消，内容全在首页） ============ */
+
+/* 重要倒计时：主展示单卡（替代原双卡；顶部「和 TA 的第 N 天」大字负责认识天数） */
+.home-countdowns {
+  display: block;
+  margin-bottom: 20px;
+}
+
+.home-count-card-main {
+  padding: 18px 16px 16px;
+}
+
+.home-count-card-main .home-count-label {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.home-count-card-main .home-count-num {
+  font-size: 30px;
+  margin-bottom: 8px;
+}
+
+.home-count-card-main .home-count-sub {
+  font-size: 12px;
+}
+
+/* 其他纪念日列表：当前角色、临近排序、重复合并；点条目 = 设为主展示 */
+.home-ann-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.home-ann-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 14px);
+  background: var(--color-card);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow, 0 2px 10px rgba(0, 0, 0, 0.04));
+}
+
+.home-ann-item.is-main {
+  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+
+.home-ann-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.home-ann-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-ann-main-tag {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+}
+
+.home-ann-meta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-ann-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.home-ann-btn {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.home-ann-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.home-ann-btn:hover {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+}
+
+.home-ann-btn.danger:hover {
+  background: color-mix(in srgb, #e5484d 12%, transparent);
+  color: #e5484d;
+}
+
+.home-ann-item .anniversary-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 添加一个纪念日 */
+.home-ann-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 0;
+  margin: 4px 0 24px;
+  border: 1px dashed color-mix(in srgb, var(--color-primary) 55%, transparent);
+  border-radius: var(--radius-md, 14px);
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+  color: var(--color-primary-deep);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.home-ann-add svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 里程碑 / 其他角色折叠（首页内） */
+.anniversary-milestone-section,
+.anniversary-others-section {
+  margin-bottom: 14px;
+}
+
+.anniversary-other-group-nested {
+  margin: 4px 0 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* ============ 批 2-1：一起经历过 · 竖线时间轴（只换渲染） ============ */
+
+.ai-shared-timeline {
+  position: relative;
+  padding-left: 16px;
+  margin: 2px 0 6px;
+}
+
+.ai-shared-timeline::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  bottom: 8px;
+  width: 1.5px;
+  background: var(--color-border);
+}
+
+.ai-shared-item {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  padding: 0 0 14px;
+}
+
+.ai-shared-item:last-child {
+  padding-bottom: 0;
+}
+
+.ai-shared-dot {
+  position: absolute;
+  left: -16px;
+  top: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: 2px solid var(--color-card);
+}
+
+.ai-shared-main {
+  flex: 1;
+  min-width: 0;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px);
+  padding: 10px 12px;
+  box-shadow: var(--shadow, 0 2px 10px rgba(0, 0, 0, 0.04));
+}
+
+.ai-shared-date {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary-deep);
+  margin-bottom: 4px;
+}
+
+.ai-shared-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+/* ============ 批 2-1：角色管理独立页 · 行内「选择 / 角色详情」按钮 ============ */
+
+.roles-item {
+  flex-wrap: wrap;
+}
+
+.roles-actions {
+  flex: none;
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.roles-action {
+  flex: 1;
+  padding: 8px 0;
+  border-radius: var(--radius-md, 10px);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.roles-action-select {
+  border: none;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.roles-action-select:hover {
+  background: var(--color-primary-deep);
+}
+
+.roles-action-detail {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+}
+
+.roles-action-detail:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary-deep);
+}
+
+/* 「选择」确认层 */
+.roles-select-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(61, 44, 41, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.roles-select {
+  width: min(320px, 100%);
+  background: var(--color-card);
+  border-radius: var(--radius);
+  padding: 20px 18px 16px;
+  box-shadow: var(--shadow);
+}
+
+.roles-select-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.roles-select-text {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.roles-select-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

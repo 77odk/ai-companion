@@ -63,8 +63,6 @@ interface Props {
   onGoMemory?: () => void
   /** 记忆组：关于我（我的重要日子 + 我说的） */
   onGoAboutMe?: () => void
-  /** 我们组：纪念日（重要的日子） */
-  onGoAnniversary?: () => void
   /** 我们组：一起经历过（TA 的空间 · 大小事） */
   onGoSpace?: () => void
   /** TA 组：TA 的样子（资料卡；第 4 批换成合并页） */
@@ -73,7 +71,7 @@ interface Props {
   initialPage?: SettingsPage
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoMemory, onGoAboutMe, onGoAnniversary, onGoSpace, onGoProfile, initialPage }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoMemory, onGoAboutMe, onGoSpace, onGoProfile, initialPage }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
 
   if (page === 'provider') {
@@ -107,7 +105,6 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onGoRoles={() => onGoRoles?.()}
       onGoMemory={() => onGoMemory?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
-      onGoAnniversary={() => onGoAnniversary?.()}
       onGoSpace={() => onGoSpace?.()}
       onGoProfile={() => onGoProfile?.()}
       onGoWelcome={onGoWelcome}
@@ -153,7 +150,6 @@ function MainCenter({
   onGoRoles,
   onGoMemory,
   onGoAboutMe,
-  onGoAnniversary,
   onGoSpace,
   onGoProfile,
   onGoWelcome,
@@ -167,7 +163,6 @@ function MainCenter({
   onGoRoles?: () => void
   onGoMemory?: () => void
   onGoAboutMe?: () => void
-  onGoAnniversary?: () => void
   onGoSpace?: () => void
   onGoProfile?: () => void
   onGoWelcome?: () => void
@@ -261,7 +256,6 @@ function MainCenter({
       </ProfileGroup>
 
       <ProfileGroup title="我们">
-        {onGoAnniversary && <EntryRow icon={<AnniversaryIcon />} label="纪念日" onClick={onGoAnniversary} />}
         {onGoSpace && <EntryRow icon={<JourneyIcon />} label="一起经历过" onClick={onGoSpace} />}
         <div className="slow-letter-row">
           <div className="slow-letter-text">
@@ -440,17 +434,6 @@ const AboutMeIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="12" cy="8" r="3.8" />
     <path d="M5 20a7 7 0 0 1 14 0" />
-  </svg>
-)
-
-/* 纪念日：日历 + 爱心 */
-const AnniversaryIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="3" y="5" width="18" height="16" rx="2.5" />
-    <path d="M8 3v4" />
-    <path d="M16 3v4" />
-    <path d="M3 9.5h18" />
-    <path d="M12 18.5c-2.8-1.8-4.2-3.3-4.2-5a2.3 2.3 0 0 1 4.2-1.4 2.3 2.3 0 0 1 4.2 1.4c0 1.7-1.4 3.2-4.2 5z" />
   </svg>
 )
 
