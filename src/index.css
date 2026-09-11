@@ -7244,16 +7244,18 @@ html, body {
 
 .memory-river-paper {
   display: block;
+  width: calc(100% - 8px);
   padding: 17px 18px 15px;
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 22%, transparent);
   border-radius: 7px 18px 18px 16px;
-  background: color-mix(in srgb, var(--color-card) 94%, var(--color-primary-soft));
-  box-shadow: 0 5px 20px rgba(56, 49, 45, 0.045);
+  background: color-mix(in srgb, var(--color-card) 62%, transparent);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--memory-ink) 3%, transparent);
   transition: transform 160ms ease, border-color 160ms ease;
 }
 
 .memory-river-node:nth-child(even) .memory-river-paper {
-  margin-left: 13px;
+  width: calc(100% - 20px);
+  margin-left: 16px;
   border-radius: 18px 7px 16px 18px;
 }
 
@@ -7264,8 +7266,8 @@ html, body {
 }
 
 .memory-river-node.is-pinned .memory-river-paper {
-  border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
-  background: linear-gradient(135deg, color-mix(in srgb, var(--color-primary-soft) 42%, var(--color-card)), var(--color-card));
+  border-color: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-primary-soft) 34%, transparent), color-mix(in srgb, var(--color-card) 68%, transparent));
 }
 
 .memory-river-node.is-pinned .memory-river-dot {
@@ -7315,6 +7317,8 @@ html, body {
 
 .memory-empty {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 300px;
   justify-content: center;
   padding: 36px 24px 72px;
@@ -7419,8 +7423,8 @@ html, body {
   border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
   border-radius: 8px 28px 28px 8px;
   background:
-    linear-gradient(90deg, rgba(65, 55, 48, 0.035), transparent 18px),
-    color-mix(in srgb, var(--color-card) 97%, #fffaf1);
+    linear-gradient(90deg, color-mix(in srgb, var(--memory-ink) 3.5%, transparent), transparent 18px),
+    color-mix(in srgb, var(--color-card) 96%, var(--color-primary-soft));
   box-shadow: 0 18px 50px rgba(56, 49, 45, 0.07);
 }
 

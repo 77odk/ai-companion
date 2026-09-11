@@ -40,14 +40,14 @@ type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'memor
 // 底部三 tab 的常显范围：主视图（TA/空间/我的及二级页）带底部导航；全屏页（欢迎/指南/选角色/角色管理/加载等）不带。
 // 用函数判断避免 TS 对嵌套 view 比较做过度收窄（误报不可达比较）。
 function isNavView(v: View): boolean {
-  return v === 'home' || v === 'chat' || v === 'aispace' || v === 'settings'
+  return v === 'home' || v === 'chat' || v === 'aispace' || v === 'settings' || v === 'memory'
 }
 
 // 三 tab 高亮：TA 高亮首页/聊天；空间高亮 TA 空间；我的高亮设置页（角色管理已独立成页，不高亮任何 tab）
 function navTabActive(v: View, tab: 'ta' | 'space' | 'mine'): boolean {
   if (tab === 'ta') return v === 'home' || v === 'chat' || v === 'spacelife'
   if (tab === 'space') return v === 'aispace'
-  return v === 'settings'
+  return v === 'settings' || v === 'memory'
 }
 
 // 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
