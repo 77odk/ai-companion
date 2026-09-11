@@ -166,7 +166,7 @@ export default function Memory() {
           <p className="memory-detail-text">{selected.item.text}</p>
           {selected.item.source?.trim() ? (
             <p className="memory-detail-quote">
-              来自对话 ·「{selected.item.source.trim()}」
+              当时你说 ·「{selected.item.source.trim()}」
             </p>
           ) : null}
           {topic ? (
@@ -247,7 +247,7 @@ export default function Memory() {
                               <span className="memory-entry-text">{item.text}</span>
                               {item.source?.trim() ? (
                                 <span className="memory-entry-quote">
-                                  来自对话 ·「{item.source.trim()}」
+                                  当时你说 ·「{item.source.trim()}」
                                 </span>
                               ) : null}
                               <span className="memory-entry-meta">

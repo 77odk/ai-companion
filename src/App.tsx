@@ -638,9 +638,6 @@ export default function App() {
                 onGoGuide={() => openGuide('settings')}
                 onGoWorkChat={() => navigate('chat')}
                 onGoRoles={() => navigate('roles')}
-                onGoMemory={() => {
-                  navigate('memory')
-                }}
                 onGoAboutMe={() => {
                   setDetailFrom('settings')
                   navigate('aboutme')
