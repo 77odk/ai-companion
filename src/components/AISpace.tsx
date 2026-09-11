@@ -543,7 +543,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
             </button>
           </div>
           {timelineNodes.length === 0 ? (
-            <p className="ai-space-empty">你们还没有一起经历过的事</p>
+            <p className="ai-space-empty">你们还没有一起经历过的事——从今天起，你们一起做过的事会自己留在这里。</p>
           ) : (
             renderSharedTimeline(timelineNodes.slice(0, 3))
           )}
@@ -771,7 +771,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
 
         <div className="ai-space-timeline">
           {timelineNodes.length === 0 ? (
-            <p className="ai-space-empty">你们还没有一起经历过的事</p>
+            <p className="ai-space-empty">你们还没有一起经历过的事——从今天起，你们一起做过的事会自己留在这里。</p>
           ) : (
             renderSharedTimeline(timelineNodes)
           )}
