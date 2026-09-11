@@ -1,6 +1,6 @@
 # 忆文 Eluvin · AI 编码助手红线与提交规范
 
-版本 v1，文档建立时的参考基线 main = ae44308b（2026-09-12）
+版本 v1（公开安全版），文档建立时的参考基线 main = ae44308b（2026-09-12）
 适用范围：豆包 / Codex / Claude / 任何外部或内部 AI 编码助手在本仓库工作时的强制规范。
 
 ---
@@ -35,7 +35,8 @@
 - src/lib/consentState.ts、src/lib/auth.ts、src/lib/token.ts（登录态与同意版本）
 - Event 相关文件整体
 - public/ 下已有的图片资产（不许重新生成、裁切、压缩、改色、改尺寸，只许原样新增）
-- backend/ 整个目录、backend/data.db、任何 .env / key / token 文件、systemd unit
+- backend/ 整个目录（后端代码不在本仓库）
+- 任何 .env / key / token / 凭据文件、任何服务部署与运维配置
 
 ---
 
@@ -45,7 +46,7 @@
 2. 先说范围：写清要改哪几个文件、为什么、影响什么，确认后再改。
 3. 一次一件事：拆小批量，跑完一批验收一批，绝不并行开多个改造。
 4. 视觉类改动：先定结构（块、顺序、交互、文案），视觉稿确认后再写代码。
-5. 文案类改动：逐字对照第七节与第十一节红线。
+5. 文案类改动：逐字对照第十一节与第十五节红线。
 6. 涉及记忆、聊天记录、同步的改动：额外跑对应测试脚本，并在交付说明里列出跑过的测试名。
 
 ---
@@ -129,7 +130,7 @@
    - 改人设/注入：`node scripts/test_persona_memory_fix.mjs`、`test_fabricated.mjs`、`test_your_moment.mjs`、`test_aiBusy.mjs`
    - 改纪念日：`node scripts/test_anniversary.mjs`
    - 改会话/角色：src/lib/*.test.ts（npm test 覆盖）+ `scripts/test_session*.mjs`
-3. 涉及后端接口的，跑 backend/ 下对应测试（test_consent_api.mjs 等）。
+3. 涉及后端接口的，跑 backend 对应的既有测试脚本。
 
 测试不通过，不许提 PR。
 
@@ -137,11 +138,11 @@
 
 ## 十、验收最低要求
 
-- build：`npm run build` 必须成功，涉及资产时确认 dist 下有对应文件。
+- build：`npm run build` 必须成功，涉及资产时确认构建产物中包含对应文件。
 - test：见第九节。
 - diff：逐文件核对 diff，确认没有顺手改动；文案类逐字比对红线。
 - runtime：上线前必须在无头浏览器里以 390 宽 iPhone 视图走完相关流程，确认 0 pageerror、0 console error、无横向溢出。
-- 部署前后必须比对：本地 dist 与线上同名文件 md5 完全一致（JS、CSS、图片都比）。
+- 部署前后必须比对：线上静态资源与本地构建产物 md5 完全一致（JS、CSS、图片都比）。
 
 任何一项没过，不许报「完成」。
 
@@ -173,39 +174,28 @@
 
 ---
 
-## 十三、部署前后检查清单
+## 十三、部署与交付纪律
 
-部署前：
-
-- `npm test` 全绿
-- `npm run build` 成功，确认 dist 产物清单
-
-部署：
-
-```
-cd frontend
-rm -rf ~/yiwem-web/assets ~/yiwem-web/home-scenes && cp -r dist/* ~/yiwem-web/
-```
-
-部署后：
-
-- `systemctl is-active yiwem-web.service`（须 active）
-- `systemctl is-active eluvin-tunnel`（须 active）
-- `curl -s -o /dev/null -w "%{http_code}" https://eluvin.space/`（须 200）
-- 线上 /assets 下 JS、CSS 的 md5 与本地逐字节一致
-- 有图片资产时 `/home-scenes/*.webp` 三个路径都 200 且 md5 一致
-- 浏览器 runtime 检查：0 pageerror、0 console error
-- 后端改动还要 `systemctl is-active yiwem-backend` + `curl https://api.eluvin.space/api/health`
+- AI 编码助手不得自行部署。部署由项目方执行。
+- 编码助手交付前必须完成本规范规定的 build、test、diff 和 runtime 验收；如涉及静态资产，应确认构建产物包含对应文件。
+- 具体服务器路径、服务管理与部署命令不记录在公开仓库；编码助手的任务范围止于「代码提交 + PR + 交付说明」。
+- 交付说明里应写清：改了哪些文件、跑了哪些测试、验收结果、有没有任务外发现。
+- 项目方部署后需要满足的最低线上标准（由项目方执行或作为交付要求）：
+  - 正式站返回 200
+  - 线上静态资源与本地构建产物逐字节一致（md5 比对，JS / CSS / 图片都要比）
+  - 浏览器 runtime 检查：0 pageerror、0 console error、无横向溢出
+  - 涉及后端接口的改动，需确认后端健康检查接口正常
 
 ---
 
-## 十四、安全基线
+## 十四、安全基线与仓库信息
 
-- 本文档建立时的参考基线：main = `ae44308b`（feat: add official home scene assets，2026-09-12）。
-- 重要：这个 commit 只是建立文档时的参考，不是永久的最新 main。每次新任务开始前必须先 `git fetch`，并以当时最新的 `origin/main` 为实际安全基线；不得把本文档记录的历史 commit 当成当前 main 使用。
-- 线上前端：https://eluvin.space（静态，~/yiwem-web，yiwem-web.service + eluvin-tunnel）
-- 线上后端：https://api.eluvin.space（yiwem-backend 本机 8787；后端不在 GitHub 仓库，只有项目方可改）
-- 代码仓库：github.com/77odk/ai-companion，main 分支，git 根在 frontend/ 子目录
+- 本文档建立时的参考基线：main = `ae44308b`（2026-09-12，feat: add official home scene assets）。
+- 重要：该 commit 只是建立文档时的参考，不是永久的最新 main。每次新任务开始前必须先 `git fetch`，并以当时最新的 `origin/main` 为实际安全基线；不得把本文档记录的历史 commit 当成当前 main 使用。
+- 代码仓库：github.com/77odk/ai-companion，main 分支，git 根位于前端项目子目录。
+- 线上公开服务地址：前端 https://eluvin.space ；后端 API https://api.eluvin.space 。
+- 后端服务代码不在本仓库内，由项目方维护，AI 编码助手不得访问、修改或部署后端。
+- 服务器路径、服务管理方式、部署命令等运维细节不记录在公开仓库。
 
 ---
 
