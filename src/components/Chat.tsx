@@ -63,6 +63,8 @@ import { getMilestoneStatus, markMilestoneShown } from '../lib/milestone'
 import { getWeeklyReviews } from '../lib/weeklyReview'
 import { recordChatTopic, loadChatTopics } from '../lib/chatTopics'
 import { estimateToken, truncateByToken } from '../lib/token'
+import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
+import { processEventCandidate } from '../lib/eventDetector'
 import MilestoneCard from './MilestoneCard'
 
 /** 总输入 token 预算：系统提示词+记忆注入+历史消息合计不超过此值 */
@@ -557,6 +559,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       uploadMessage(userMsg)
     }
 
+    // Event（E3 一处）：用户消息落库后异步跑识别（粗筛→额度→精判→硬过滤），不阻塞、失败静默
+    void processEventCandidate({
+      sessionId: activeSessionId || undefined,
+      userText: userMsg.content,
+      now: userMsg.ts,
+    })
+
     const nameForPrompt = (() => {
       if (!activeSessionId) return loadAIProfile().nickname
       const cached = getSessionsCache().find((s) => String(s.id) === activeSessionId)
@@ -585,6 +594,20 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         if (activeSessionId) touchMemoryCache(activeSessionId, m.id, now)
         touchMemory(m.id, now)
       }
+    }
+    // Event（E3 二处）：最近 5 条一起经历过的事注入（记忆注入之后、自我时间线之前）；
+    // 只作背景信息，不让 TA 直接复述
+    const recentEvents = getRecentEvents(activeSessionId || undefined, 5)
+    if (recentEvents.length > 0) {
+      const eventsHeader = lang === 'en'
+        ? 'Background info — things you two have been through together (do not repeat these lines as-is):\n'
+        : '以上是背景信息，不要直接复述这些句子——你们一起经历过的事：\n'
+      apiMessages.push({
+        role: 'system',
+        content:
+          eventsHeader +
+          recentEvents.map((e) => `- ${formatEventDateShort(e.occurredAt)}：${e.title}${e.description ? `（${e.description}）` : ''}`).join('\n'),
+      })
     }
     // 自我时间线：TA 刚说过的话，让它记得自己做过什么，不依附忙碌机制（TASK-SELF-TIMELINE）
     const timelineBlock = buildSelfTimelineBlock(base, Date.now(), lang)

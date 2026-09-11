@@ -22,6 +22,7 @@ import { loadChatTopics } from '../lib/chatTopics'
 import { dayKeyOf } from '../lib/aiSpaceCore'
 import { getActiveSessionId, getMemoriesCache, getMessagesCache, getSessionsCache } from '../lib/sessionStore'
 import { loadMemory } from '../lib/memory'
+import { getEventsForWeek } from '../lib/eventStore'
 
 /* ---- 定稿文案（一字不改） ---- */
 
@@ -213,6 +214,10 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
       const weekAgenda = loadChatTopics(sid || undefined)
         .filter((t) => typeof t.futureDay === 'string' && t.futureDay >= dayKeyOf(week.startTs) && t.futureDay <= dayKeyOf(week.endTs))
         .map((t) => `${t.t}（约在 ${t.futureDay}）`)
+      // Event（E3）：本周一起经历过的事，周记只读引用（不复制成记忆）
+      const weekEvents = getEventsForWeek(sid || undefined, week.startTs, week.endTs)
+        .slice(0, 5)
+        .map((e) => (e.description ? `${e.title}（${e.description}）` : e.title))
 
       const raw = await chatCompletion(
         s,
@@ -229,6 +234,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
               ...(pendingTexts.length > 0 ? { pendingReplies: pendingTexts } : {}),
               ...(weekPosts.length > 0 ? { weekPosts } : {}),
               ...(weekAgenda.length > 0 ? { weekAgenda } : {}),
+              ...(weekEvents.length > 0 ? { weekEvents } : {}),
               ...(persona ? { persona } : {}),
             }),
           },

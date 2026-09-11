@@ -26,6 +26,7 @@ import { loadMemory, type MemoryItem } from './memory.ts'
 import { collectAllAnniversaries, loadAnniversaries, getMainAnniversaryId, type Anniversary } from './anniversary.ts'
 import { collectAllSpacePosts } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
+import { collectAllEvents, applyCloudEvents, type CompanionEvent } from './eventStore.ts'
 import { THEME_KEY, loadThemeState, saveThemeState, applyTheme, type ThemeState } from './theme.ts'
 /** 后端服务地址（本地写死一个出口常量：同步接口与会话接口共用，别各自写死） */
 export const API_BASE = 'https://api.eluvin.space'
@@ -59,6 +60,8 @@ export interface SyncData {
   anniversaries: Anniversary[]
   mainAnniversary: string | null
   spacePosts: SpacePost[]
+  /** Event（你们一起经历过的事）：走全量 blob，跨设备同步（E3） */
+  events?: CompanionEvent[]
   /** 主题状态（TASK_THEME）：localStorage ai_companion_theme，云同步换设备不丢 */
   theme?: ThemeState
 }
@@ -306,6 +309,7 @@ export function collectData(): SyncData {
     anniversaries: collectAllAnniversaries(),
     mainAnniversary: getMainAnniversaryId(),
     spacePosts: collectAllSpacePosts(),
+    events: collectAllEvents(),
     theme: loadThemeState(),
   }
 }
@@ -428,6 +432,10 @@ export function applyData(data: SyncData): void {
   }
   if (readSpacePosts().length === 0 && Array.isArray(d.spacePosts) && d.spacePosts.length > 0) {
     localStorage.setItem(SPACE_POSTS_KEY, JSON.stringify(d.spacePosts))
+  }
+  // Event：照 mergeMessages/mergeMemory 模式按 id 合并（含软删状态），按会话 key 分发写回
+  if (Array.isArray(d.events) && d.events.length > 0) {
+    applyCloudEvents(d.events)
   }
   // 主题：本地没配过且云端有 → 用云端，并立即应用（TASK_THEME）
   if (localStorage.getItem(THEME_KEY) == null && d.theme && (d.theme.type === 'preset' || d.theme.type === 'custom')) {

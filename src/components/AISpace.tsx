@@ -27,6 +27,15 @@ import {
 } from '../lib/photoWall'
 import { getToken } from '../lib/auth'
 import { getSharedExperiences, formatSharedDate } from '../lib/sharedExperiences'
+import {
+  createEvent,
+  updateEvent,
+  softDeleteEvent,
+  getEvents,
+  EVENT_TYPES,
+  type CompanionEvent,
+  type EventType,
+} from '../lib/eventStore'
 
 interface Props {
   /** 进入时的初始子页：home 空间主页 / memories 记忆墙（「我的 → TA 记得的」直接进记忆墙） */
@@ -223,8 +232,75 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     sid ? getMessagesCache(sid).length : loadMessages().length,
   )
 
-  // 一起经历过：数据源 = getSharedExperiences（legacy 记忆按天聚类；Event 上线后只换 lib 内部）
-  const timelineNodes = useMemo(() => getSharedExperiences(sid), [sid, memories])
+  // 一起经历过：数据源 = getSharedExperiences（E3 起 = Event，按会话隔离、occurredAt 倒序）
+  // eventsVersion：手动添加/编辑/删除后自增，驱动时间轴重算
+  const [eventsVersion, setEventsVersion] = useState(0)
+  const timelineNodes = useMemo(() => getSharedExperiences(sid), [sid, memories, eventsVersion])
+
+  /* ---- Event 手动添加 / 编辑 / 删除（E3：source='manual'、confidence=1、不调模型） ---- */
+  const [eventFormOpen, setEventFormOpen] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<CompanionEvent | null>(null)
+  const [formTitle, setFormTitle] = useState('')
+  const [formDate, setFormDate] = useState('')
+  const [formDesc, setFormDesc] = useState('')
+  const [formType, setFormType] = useState<EventType>('activity')
+  const [eventFormError, setEventFormError] = useState<string | null>(null)
+
+  const openEventForm = (ev: CompanionEvent | null) => {
+    setEditingEvent(ev)
+    setFormTitle(ev?.title ?? '')
+    setFormDesc(ev?.description ?? '')
+    setFormType((ev?.type as EventType) ?? 'activity')
+    const d = ev ? new Date(ev.occurredAt) : new Date()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    setFormDate(ev ? `${d.getFullYear()}-${m}-${dd}` : `${d.getFullYear()}-${m}-${dd}`)
+    setEventFormError(null)
+    setEventFormOpen(true)
+  }
+
+  const saveEventForm = () => {
+    const title = formTitle.trim()
+    if (!title) {
+      setEventFormError('给这件事起个标题吧')
+      return
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(formDate)) {
+      setEventFormError('选一个日期')
+      return
+    }
+    const occurredAt = new Date(`${formDate}T00:00:00`).getTime()
+    if (!Number.isFinite(occurredAt) || occurredAt > Date.now()) {
+      setEventFormError('这件事还没发生，先记在计划里吧')
+      return
+    }
+    if (editingEvent) {
+      updateEvent(sid, editingEvent.id, {
+        title,
+        description: formDesc.trim() || undefined,
+        occurredAt,
+        type: formType,
+      })
+    } else {
+      createEvent({
+        sessionId: sid,
+        type: formType,
+        title,
+        ...(formDesc.trim() ? { description: formDesc.trim() } : {}),
+        occurredAt,
+        source: 'manual',
+      })
+    }
+    setEventFormOpen(false)
+    setEditingEvent(null)
+    setEventsVersion((v) => v + 1)
+  }
+
+  const deleteEvent = (ev: CompanionEvent) => {
+    if (!window.confirm(`删掉「${ev.title}」这条吗？`)) return
+    softDeleteEvent(sid, ev.id)
+    setEventsVersion((v) => v + 1)
+  }
 
   // TA 记得的：一句印象取最近一条记忆（截断），无记忆给空态引导
   const memoryImpression = useMemo(() => {
@@ -467,7 +543,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
             </button>
           </div>
           {timelineNodes.length === 0 ? (
-            <p className="ai-space-empty">多和 TA 聊聊，TA 会开始记得你们一起的事</p>
+            <p className="ai-space-empty">你们还没有一起经历过的事</p>
           ) : (
             renderSharedTimeline(timelineNodes.slice(0, 3))
           )}
@@ -624,7 +700,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     )
   }
 
-  /** TA所记子页：你们的大小事（完整时间轴；数据源 = 记忆聚类 legacy，Event 上线后只换 lib） */
+  /** TA所记子页：你们的大小事（完整时间轴；数据源 = Event，E3） */
   function renderEventsPage() {
     return (
       <>
@@ -633,12 +709,69 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
             ‹ 返回
           </button>
           <h2 className="ai-space-sub-title">一起经历过</h2>
-          <span className="ai-space-topbar-spacer" aria-hidden="true" />
+          <button type="button" className="ai-space-v2-all" onClick={() => openEventForm(null)}>
+            ＋ 添加一件事
+          </button>
         </div>
+
+        {/* 手动添加 / 编辑表单（E3：标题必填、日期必填、描述/类型可选；未来日期拒绝；不调模型） */}
+        {eventFormOpen && (
+          <div className="ai-event-form">
+            <label className="ai-event-field">
+              <span>标题（必填）</span>
+              <input
+                type="text"
+                value={formTitle}
+                onChange={(e) => setFormTitle(e.target.value)}
+                placeholder="比如：一起看了场电影"
+              />
+            </label>
+            <label className="ai-event-field">
+              <span>日期（必填）</span>
+              <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} />
+            </label>
+            <label className="ai-event-field">
+              <span>描述（可选）</span>
+              <input
+                type="text"
+                value={formDesc}
+                onChange={(e) => setFormDesc(e.target.value)}
+                placeholder="想起来的小细节"
+              />
+            </label>
+            <label className="ai-event-field">
+              <span>类型（可选）</span>
+              <select value={formType} onChange={(e) => setFormType(e.target.value as EventType)}>
+                {EVENT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {eventFormError && <p className="ai-event-error">{eventFormError}</p>}
+            <div className="ai-event-actions">
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() => {
+                  setEventFormOpen(false)
+                  setEditingEvent(null)
+                  setEventFormError(null)
+                }}
+              >
+                取消
+              </button>
+              <button type="button" className="ai-event-save" onClick={saveEventForm}>
+                {editingEvent ? '保存修改' : '记下来'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="ai-space-timeline">
           {timelineNodes.length === 0 ? (
-            <p className="ai-space-empty">多和 TA 聊聊，TA 会开始记得你们一起的事</p>
+            <p className="ai-space-empty">你们还没有一起经历过的事</p>
           ) : (
             renderSharedTimeline(timelineNodes)
           )}
@@ -647,21 +780,36 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     )
   }
 
-  /** 竖线时间轴：节点 = 「09月01日 · 第 1 天」+ 一句话（定稿样式，只换渲染不造数据） */
+  /** 竖线时间轴：节点 = 「09月01日 · 第 N 天」+ 标题 + 描述（有才显示）；行尾编辑/删除（E3） */
   function renderSharedTimeline(nodes: ReturnType<typeof getSharedExperiences>) {
+    const byId = new Map(getEvents(sid).map((e) => [e.id, e]))
     return (
       <div className="ai-shared-timeline">
-        {nodes.map((n) => (
-          <div key={n.day} className="ai-shared-item">
-            <span className="ai-shared-dot" aria-hidden="true" />
-            <div className="ai-shared-main">
-              <span className="ai-shared-date">
-                {formatSharedDate(n.dateTs)} · 第 {n.day} 天
-              </span>
-              <p className="ai-shared-text">{n.text}</p>
+        {nodes.map((n) => {
+          const ev = byId.get(n.id) ?? null
+          return (
+            <div key={n.id} className="ai-shared-item">
+              <span className="ai-shared-dot" aria-hidden="true" />
+              <div className="ai-shared-main">
+                <span className="ai-shared-date">
+                  {formatSharedDate(n.dateTs)} · 第 {n.day} 天
+                </span>
+                <p className="ai-shared-text">{n.title}</p>
+                {n.description ? <p className="ai-shared-desc">{n.description}</p> : null}
+                {ev && (
+                  <span className="ai-shared-ops">
+                    <button type="button" className="link-btn" onClick={() => openEventForm(ev)}>
+                      编辑
+                    </button>
+                    <button type="button" className="link-btn ai-shared-del" onClick={() => deleteEvent(ev)}>
+                      删除
+                    </button>
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     )
   }

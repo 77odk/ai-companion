@@ -1,40 +1,35 @@
-// 一起经历过（Shared Experiences）——空间时间轴的数据源
-// 当前实现 = 记忆按天聚类（legacy）；Event 上线后只换这里（getSharedExperiences 内部），调用方不动。
-//
-// 逻辑：把该角色的记忆按「第 N 天」聚类，每天取最早一条（第一次发生的那条），倒序返回。
-// 与聊天注入、记忆墙同源：关于我（全局 explicit，所有角色共享）+ 当前角色会话记忆。
-// 纯逻辑（聚类/排序）不碰 localStorage，可被 Node 脚本直接跑单测。
-
-import { loadMemory, type MemoryItem } from './memory.ts'
-import { getMemoriesCache } from './sessionStore.ts'
+// 一起经历过（Shared Experiences）——空间时间轴的数据源（E3）
+// 2026-09-11：数据源从「legacy 记忆按天聚类」换成 Event（getEvents，按会话隔离、occurredAt 倒序）。
+// 节点 = 日期 + 标题 + 描述（有才显示）；不显示 confidence/source/id 等内部字段。
+// 纯逻辑（排序/格式化）不碰 localStorage 写入，可被 Node 脚本直接跑单测。
+import { getEvents, type CompanionEvent } from './eventStore.ts'
 import { getFirstSeen } from './storage.ts'
 import { computeDaysKnown } from './aiSpaceDetail.ts'
 
 export interface SharedExperience {
+  /** Event id（key 用；不展示） */
+  id: string
   /** 第 N 天（认识当天 = 第 1 天，与 computeDaysKnown 同算法） */
   day: number
-  /** 当天最早一条记忆的时间戳（展示节点日期用） */
+  /** 事件发生时间戳（展示节点日期用） */
   dateTs: number
-  /** 当天第一条记忆的原文（节点的一句话） */
-  text: string
+  /** 事件标题（节点的一句话） */
+  title: string
+  /** 事件描述（有才显示） */
+  description?: string
 }
 
-/** 读取「一起经历过」节点（legacy：记忆按天聚类；Event 上线后只换这里） */
+/** 读取「一起经历过」节点（数据源 = Event，未软删，occurredAt 倒序；没有 Event 返回空数组） */
 export function getSharedExperiences(sessionId?: string): SharedExperience[] {
-  const global = loadMemory().filter((m) => m.explicit === true)
-  const memories: MemoryItem[] = sessionId ? [...global, ...getMemoriesCache(sessionId)] : global
+  const events: CompanionEvent[] = getEvents(sessionId)
   const firstSeen = getFirstSeen(sessionId || undefined)
-  const byDay = new Map<number, MemoryItem>()
-  for (const m of memories) {
-    if (!m || typeof m.createdAt !== 'number' || !Number.isFinite(m.createdAt)) continue
-    const n = computeDaysKnown(firstSeen, m.createdAt)
-    if (!byDay.has(n) || m.createdAt < (byDay.get(n)?.createdAt ?? Infinity)) {
-      byDay.set(n, m)
-    }
-  }
-  return [...byDay.entries()]
-    .sort((a, b) => b[0] - a[0])
-    .map(([n, m]) => ({ day: n, dateTs: m.createdAt, text: m.text }))
+  return events.map((e) => ({
+    id: e.id,
+    day: computeDaysKnown(firstSeen, e.occurredAt),
+    dateTs: e.occurredAt,
+    title: e.title,
+    ...(e.description?.trim() ? { description: e.description.trim() } : {}),
+  }))
 }
 
 /** 节点日期文案：「09月01日」（时间戳 → MM月DD日，补零） */

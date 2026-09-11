@@ -251,6 +251,8 @@ export interface WeeklyPromptContext {
   weekPosts?: string[]
   /** 本周到期/进行中的约定（因果链·周记回响；没有不带） */
   weekAgenda?: string[]
+  /** 本周 Event（你们一起经历过的事，E3：只读引用，不回写、不复制成记忆；没有不带） */
+  weekEvents?: string[]
 }
 
 /** 周记生成的系统提示词：守住「像 TA 写信、只写有依据的」底线（喂给 chatCompletion 的 system） */
@@ -305,6 +307,16 @@ export function buildWeeklyPrompt(ctx: WeeklyPromptContext): string {
   if (weekAgenda.length > 0) {
     lines.push('【本周你们说好要做的事】')
     lines.push(...weekAgenda.map((a) => `- ${a}`))
+  }
+
+  // Event（E3）：本周一起经历过的事，周记里自然带一笔（只读引用，不复制成记忆）
+  const weekEvents = (Array.isArray(ctx.weekEvents) ? ctx.weekEvents : [])
+    .map((s) => String(s ?? '').trim())
+    .filter(Boolean)
+  if (weekEvents.length > 0) {
+    lines.push('【本周你们一起经历过的事】')
+    lines.push(...weekEvents.map((e) => `- ${e}`))
+    lines.push('这些是你们这周真实一起做过的事，周记里可以自然地提一笔（只在这些事确实在清单里时才写，别硬凑）。')
   }
 
   lines.push(`【相处天数】今天是你们认识的第 ${ctx.daysKnown} 天。`)

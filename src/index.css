@@ -7387,6 +7387,90 @@ html, body {
   color: var(--color-text);
 }
 
+/* ============ Event E3：时间轴描述 / 编辑删除 / 手动添加表单 ============ */
+
+.ai-shared-desc {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-text-soft, rgba(0, 0, 0, 0.55));
+}
+
+.ai-shared-ops {
+  display: inline-flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.ai-shared-del {
+  color: var(--color-danger, #c0392b) !important;
+}
+
+.ai-event-form {
+  margin: 2px 12px 14px;
+  padding: 12px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-event-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-event-field > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-soft, rgba(0, 0, 0, 0.55));
+}
+
+.ai-event-field input,
+.ai-event-field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  outline: none;
+}
+
+.ai-event-field input:focus,
+.ai-event-field select:focus {
+  border-color: var(--color-primary);
+}
+
+.ai-event-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-danger, #c0392b);
+}
+
+.ai-event-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  align-items: center;
+}
+
+.ai-event-save {
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary);
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+}
+
 /* ============ 批 2-1：角色管理独立页 · 行内「选择 / 角色详情」按钮 ============ */
 
 .roles-item {
