@@ -1,123 +1,241 @@
-import { useState } from 'react'
-import { stripMemoryMarkers } from '../lib/memory'
-import { getActiveSessionId, getMessagesCache, getSessionsCache } from '../lib/sessionStore'
-import { getFirstSeen, loadAIProfile, type StoredMessage } from '../lib/storage'
-import { displaySessionName } from '../lib/sessionFlow'
-import { roleInitial } from '../lib/sessionProfile'
-import { computeDaysKnown, truncatePreview } from '../lib/aiSpaceDetail'
-import type { Session } from '../lib/sessionApi'
-
-/** 「关于我」卡片的人物图标：细描边线条（暖橘由 CSS currentColor 控制） */
-function UserIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="8" r="3.6" />
-      <path d="M5 20c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6" />
-    </svg>
-  )
-}
-
-/** 某会话最近一条消息摘要（画廊卡片小字；无消息返回空串） */
-function lastMessageSummary(sessionId: string): string {
-  const msgs = getMessagesCache(sessionId)
-  if (msgs.length === 0) return ''
-  const last = msgs.reduce<StoredMessage | null>((best, m) => (!best || m.ts > best.ts ? m : best), null)
-  return last ? truncatePreview(stripMemoryMarkers(last.content), 18) : ''
-}
-
-/** 某会话相处天数小字：有认识起点就显示，否则空串 */
-function daysKnownText(sessionId: string): string {
-  const first = getFirstSeen(sessionId)
-  if (!first) return ''
-  return `认识第 ${computeDaysKnown(first)} 天`
-}
+import { useMemo, useState } from 'react'
+import { inferTopic, loadMemory, type MemoryItem } from '../lib/memory'
+import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 
 interface MemoryProps {
-  /** 点「关于我」卡片 → 进关于我页（我的重要日子 + 我说的） */
-  onOpenAboutMe?: () => void
-  /** 忆览页「全部角色」画廊：点卡片 → 切会话并进该角色的 TA 空间 */
-  onOpenSpaceForSession?: (sessionId: string) => void
+  onBack: () => void
 }
 
-export default function Memory({ onOpenAboutMe, onOpenSpaceForSession }: MemoryProps) {
-  // B2c-3 会话模式：有 activeSessionId → 记忆读当前会话缓存；无会话（过渡态）→ 读本地
-  const activeSessionId = getActiveSessionId()
-  // 忆览页「全部角色」画廊：从会话缓存读全部角色（每次进入页面重新挂载，读最新缓存）
-  const [roleSessions] = useState<Session[]>(() => getSessionsCache())
+interface DatedMemory {
+  item: MemoryItem
+  timestamp: number | null
+}
+
+interface MemoryMonth {
+  key: string
+  label: string
+  items: DatedMemory[]
+}
+
+interface MemoryYear {
+  key: string
+  label: string
+  months: MemoryMonth[]
+}
+
+function validTimestamp(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && !Number.isNaN(new Date(value).getTime())
+    ? value
+    : null
+}
+
+function formatDate(timestamp: number | null): string {
+  if (timestamp == null) return '日期未知'
+  return new Date(timestamp).toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+function formatEarliest(timestamp: number | null): string {
+  if (timestamp == null) return '最早的日期还没有留下来'
+  return `最早从 ${new Date(timestamp).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })} 开始`
+}
+
+function groupMemories(items: DatedMemory[]): MemoryYear[] {
+  const years = new Map<string, { label: string; months: Map<string, MemoryMonth> }>()
+
+  for (const memory of items) {
+    const date = memory.timestamp == null ? null : new Date(memory.timestamp)
+    const yearKey = date ? String(date.getFullYear()) : 'unknown'
+    const monthKey = date ? `${yearKey}-${date.getMonth()}` : 'unknown'
+    const yearLabel = date ? yearKey : '较早的记忆'
+    const monthLabel = date ? `${date.getMonth() + 1}月` : '日期未知'
+    let year = years.get(yearKey)
+    if (!year) {
+      year = { label: yearLabel, months: new Map() }
+      years.set(yearKey, year)
+    }
+    let month = year.months.get(monthKey)
+    if (!month) {
+      month = { key: monthKey, label: monthLabel, items: [] }
+      year.months.set(monthKey, month)
+    }
+    month.items.push(memory)
+  }
+
+  return [...years.entries()].map(([key, year]) => ({
+    key,
+    label: year.label,
+    months: [...year.months.values()],
+  }))
+}
+
+export default function Memory({ onBack }: MemoryProps) {
+  const sessionId = getActiveSessionId()
+  const memories = useMemo(() => {
+    const globalExplicit = loadMemory().filter((memory) => memory.explicit === true)
+    const sessionMemories = sessionId ? getMemoriesCache(sessionId) : []
+    return [...globalExplicit, ...sessionMemories]
+  }, [sessionId])
+
+  const chronological = useMemo<DatedMemory[]>(() => {
+    return memories
+      .map((item) => ({ item, timestamp: validTimestamp(item.createdAt) }))
+      .sort((a, b) => {
+        if (a.timestamp == null && b.timestamp == null) return 0
+        if (a.timestamp == null) return -1
+        if (b.timestamp == null) return 1
+        return a.timestamp - b.timestamp
+      })
+  }, [memories])
+
+  const riverItems = useMemo(() => [...chronological].reverse(), [chronological])
+  const years = useMemo(() => groupMemories(riverItems), [riverItems])
+  const earliest = chronological.find((memory) => memory.timestamp != null)?.timestamp ?? null
+  const [view, setView] = useState<'river' | 'detail' | 'book'>('river')
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const selected = chronological[selectedIndex] ?? null
+
+  const openDetail = (item: MemoryItem) => {
+    const index = chronological.findIndex((memory) => memory.item === item)
+    setSelectedIndex(index >= 0 ? index : 0)
+    setView('detail')
+  }
+
+  if (view === 'book' && selected) {
+    return (
+      <div className="page memory-page memory-book-page">
+        <div className="memory-local-bar">
+          <button type="button" className="memory-back" onClick={() => setView('detail')}>
+            ‹ 返回详情
+          </button>
+          <span className="memory-local-kicker">记忆书</span>
+        </div>
+        <article className="memory-book" aria-live="polite">
+          <div className="memory-book-rule" aria-hidden="true" />
+          <p className="memory-book-date">{formatDate(selected.timestamp)}</p>
+          <p className="memory-book-text">{selected.item.text}</p>
+          <footer className="memory-book-footer">
+            <button
+              type="button"
+              className="memory-book-turn"
+              onClick={() => setSelectedIndex((index) => Math.max(0, index - 1))}
+              disabled={selectedIndex === 0}
+              aria-label="上一条记忆"
+            >
+              ‹
+            </button>
+            <span>{selectedIndex + 1} / {chronological.length}</span>
+            <button
+              type="button"
+              className="memory-book-turn"
+              onClick={() => setSelectedIndex((index) => Math.min(chronological.length - 1, index + 1))}
+              disabled={selectedIndex === chronological.length - 1}
+              aria-label="下一条记忆"
+            >
+              ›
+            </button>
+          </footer>
+        </article>
+      </div>
+    )
+  }
+
+  if (view === 'detail' && selected) {
+    const topic = selected.item.topic?.trim() || inferTopic(selected.item.text)
+    return (
+      <div className="page memory-page memory-detail-page">
+        <div className="memory-local-bar">
+          <button type="button" className="memory-back" onClick={() => setView('river')}>
+            ‹ 返回长河
+          </button>
+          <span className="memory-local-kicker">一段记忆</span>
+        </div>
+        <article className={`memory-detail-sheet${selected.item.pinned ? ' is-pinned' : ''}`}>
+          <p className="memory-detail-date">{formatDate(selected.timestamp)}</p>
+          <p className="memory-detail-text">{selected.item.text}</p>
+          {topic && <span className="memory-topic">{topic}</span>}
+          <p className="memory-detail-note">这是 TA 在与你相处时留下的一段记忆。</p>
+        </article>
+        <button type="button" className="memory-read-button" onClick={() => setView('book')}>
+          以记忆书阅读
+          <span aria-hidden="true">›</span>
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="page memory-page">
-      <h2 className="memory-page-title">TA 空间</h2>
-      <p className="page-desc">
-        每个 TA 都有自己的一片空间——TA 记得的事、TA 写的周记、你们的日子。
-        <br />
-        {activeSessionId
-          ? '点下面的角色卡，进去看看这个 TA 自己的空间。'
-          : '选好 TA 开始聊之后，这里就会有每个 TA 自己的空间。'}
-      </p>
+      <button type="button" className="memory-back memory-page-back" onClick={onBack}>
+        ‹ 返回我的
+      </button>
 
-      {!activeSessionId && (
-        <div className="memory-session-guide">
-          <p>当前还没在会话里，先选一个 TA 开始聊吧。</p>
+      <header className="memory-hero">
+        <span className="memory-hero-kicker">MEMORY</span>
+        <h2 className="memory-page-title">TA 记得的你</h2>
+        <p className="memory-hero-copy">这些，是 TA 一点一点记住的你。</p>
+        {memories.length > 0 && (
+          <p className="memory-hero-meta">
+            共 {memories.length} 条记忆 <span aria-hidden="true">·</span> {formatEarliest(earliest)}
+          </p>
+        )}
+      </header>
+
+      {memories.length === 0 ? (
+        <div className="memory-empty">
+          <span className="memory-empty-line" aria-hidden="true" />
+          <h3 className="memory-empty-title">TA 还在慢慢认识你。</h3>
+          <p className="memory-empty-copy">以后被记住的那些小事，会慢慢留在这里。</p>
         </div>
-      )}
-
-      {/* 全部角色的卡片画廊：点卡片进该角色的 TA 空间（头像按角色隔离，TASK-UI3） */}
-      {roleSessions.length > 0 && (
-        <section className="memory-roles" aria-label="全部角色">
-          <h3 className="memory-roles-title">全部角色</h3>
-          <div className="memory-roles-grid">
-            {roleSessions.map((s) => {
-              const id = String(s.id)
-              const name = displaySessionName(s)
-              const sub = lastMessageSummary(id) || daysKnownText(id) || '还没有消息'
-              const roleAvatar = loadAIProfile(id).avatar
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  className="memory-role-card"
-                  onClick={() => onOpenSpaceForSession?.(id)}
-                  aria-label={`进入 ${name} 的空间`}
-                >
-                  <span className="memory-role-avatar" aria-hidden="true">
-                    {roleAvatar.startsWith('data:') ? (
-                      <img className="memory-role-avatar-img" src={roleAvatar} alt="" />
-                    ) : (
-                      roleInitial(name)
-                    )}
-                  </span>
-                  <span className="memory-role-name">{name}</span>
-                  <span className="memory-role-sub">{sub}</span>
-                </button>
-              )
-            })}
+      ) : (
+        <section className="memory-river" aria-label="记忆长河">
+          <div className="memory-river-heading">
+            <div>
+              <span className="memory-river-en">THE RIVER OF TIME</span>
+              <h3>记忆长河</h3>
+            </div>
+            <span className="memory-river-whisper">还在继续向前</span>
           </div>
-        </section>
-      )}
 
-      {/* 「关于我」入口卡片：一行样式（跟原相逢纪同款），点进关于我页（我的重要日子 + 我说的） */}
-      {onOpenAboutMe && (
-        <button type="button" className="anniversary-strip" onClick={onOpenAboutMe}>
-          <span className="anniversary-strip-icon" aria-hidden="true">
-            <UserIcon />
-          </span>
-          <span className="anniversary-strip-title">关于我</span>
-          <span className="anniversary-strip-main">
-            <span className="anniversary-strip-label">我的重要日子，和我想让 TA 记住的</span>
-          </span>
-          <span className="anniversary-strip-arrow" aria-hidden="true">
-            ›
-          </span>
-        </button>
+          <div className="memory-river-flow">
+            {years.map((year) => (
+              <section key={year.key} className="memory-year" aria-labelledby={`memory-year-${year.key}`}>
+                <h4 id={`memory-year-${year.key}`} className="memory-year-label">{year.label}</h4>
+                {year.months.map((month) => (
+                  <div key={month.key} className="memory-month">
+                    <h5 className="memory-month-label">{month.label}</h5>
+                    <div className="memory-month-items">
+                      {month.items.map(({ item, timestamp }, index) => {
+                        const topic = item.topic?.trim()
+                        return (
+                          <button
+                            key={`${item.id}-${index}`}
+                            type="button"
+                            className={`memory-river-node${item.pinned ? ' is-pinned' : ''}`}
+                            onClick={() => openDetail(item)}
+                          >
+                            <span className="memory-river-dot" aria-hidden="true" />
+                            <span className="memory-river-paper">
+                              <span className="memory-river-text">{item.text}</span>
+                              <span className="memory-river-meta">
+                                {formatDate(timestamp)}
+                                {topic ? <span className="memory-topic">{topic}</span> : null}
+                              </span>
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </section>
+            ))}
+          </div>
+          <p className="memory-river-end">这是 TA 目前记得的最早一件事。</p>
+        </section>
       )}
     </div>
   )

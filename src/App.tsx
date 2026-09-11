@@ -33,20 +33,21 @@ import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh } from './lib/forceRefresh'
 import Home from './components/Home'
 import SpaceLife from './components/SpaceLife'
+import Memory from './components/Memory'
 
-type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
+type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
 // 底部三 tab 的常显范围：主视图（TA/空间/我的及二级页）带底部导航；全屏页（欢迎/指南/选角色/角色管理/加载等）不带。
 // 用函数判断避免 TS 对嵌套 view 比较做过度收窄（误报不可达比较）。
 function isNavView(v: View): boolean {
-  return v === 'home' || v === 'chat' || v === 'aispace' || v === 'settings'
+  return v === 'home' || v === 'chat' || v === 'aispace' || v === 'settings' || v === 'memory'
 }
 
 // 三 tab 高亮：TA 高亮首页/聊天；空间高亮 TA 空间；我的高亮设置页（角色管理已独立成页，不高亮任何 tab）
 function navTabActive(v: View, tab: 'ta' | 'space' | 'mine'): boolean {
   if (tab === 'ta') return v === 'home' || v === 'chat' || v === 'spacelife'
   if (tab === 'space') return v === 'aispace'
-  return v === 'settings'
+  return v === 'settings' || v === 'memory'
 }
 
 // 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
@@ -613,9 +614,7 @@ export default function App() {
                 onGoWorkChat={() => navigate('chat')}
                 onGoRoles={() => navigate('roles')}
                 onGoMemory={() => {
-                  setSpaceFrom('settings')
-                  setSpaceInitialPage('memories')
-                  navigate('aispace')
+                  navigate('memory')
                 }}
                 onGoAboutMe={() => {
                   setDetailFrom('settings')
@@ -639,6 +638,7 @@ export default function App() {
                 onGoMine={() => navigate('settings')}
               />
             )}
+            {view === 'memory' && <Memory onBack={() => navigate('settings')} />}
           </main>
 
           {isNavView(view) && (
