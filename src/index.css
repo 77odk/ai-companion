@@ -8146,3 +8146,12 @@ html, body {
   justify-content: flex-end;
   gap: 10px;
 }
+
+/* ===== TASK-HOME-BIG-DAY-V2：首页时间关系卡 · 里程碑轨迹 ===== */
+.home-anniv-milestone { margin-top: 16px; padding-top: 13px; border-top: 1px solid rgba(127,127,127,.18); }
+.home-anniv-milestone-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.home-anniv-day { color: var(--home-ink-soft); font-size: 12px; white-space: nowrap; }
+.home-anniv-day strong { color: var(--home-ink); font-size: 15px; font-weight: 650; }
+.home-anniv-next { color: var(--home-ink-soft); font-size: 11px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-anniv-track { margin-top: 11px; height: 4px; border-radius: 99px; background: rgba(127,127,127,.22); overflow: hidden; }
+.home-anniv-track-fill { display: block; height: 100%; border-radius: 99px; background: var(--color-primary); opacity: .55; }
