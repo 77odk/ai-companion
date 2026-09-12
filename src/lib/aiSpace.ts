@@ -47,6 +47,27 @@ import { notifyDataChanged } from './dataChange.ts'
 import { loadPersona, loadSettings } from './storage.ts'
 import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
 import { migrateGlobalToDefaultSession } from './roleData.ts'
+import { detectLang } from './langDetect.ts'
+
+/**
+ * 会话语言解析（TASK-SPACE-LANG）：
+ * 与 Chat 同源的 canonical（ai_companion_lang_<sid>，Chat send 时按"人设优先+消息多数"写入）优先；
+ * 未存过 → 人设检测（与 Chat 人设优先语义一致）；人设空 → 默认中文。
+ * 直接读现有 key 原始值（区分"未存"与"存 zh"），不新增任何 storage key。
+ */
+export function resolveSpaceLang(sessionId: string | undefined, persona: string): 'zh' | 'en' {
+  if (sessionId) {
+    try {
+      const raw = localStorage.getItem(`ai_companion_lang_${sessionId}`)
+      if (raw === 'en' || raw === 'zh') return raw
+    } catch {
+      // 读不到按人设检测
+    }
+  }
+  const p = String(persona ?? '').trim()
+  if (!p) return 'zh'
+  return detectLang(p)
+}
 
 /**
  * 会话人设（2026-09-05 乔修）：有会话 → 用该会话自己的 persona（角色隔离，阳阳回复串成律师案子的根因）；
@@ -265,13 +286,14 @@ export function refreshSpace(
 
   // 没人设：不调 LLM。空间为空时用模板兜底生成 1 条保证空间不空（受账本当天配额约束），其余交给「先写人设」引导
   if (!persona.trim()) {
+    const lang = resolveSpaceLang(sessionId, persona)
     const posts = [...prev.posts]
     const used = { ...prev.used }
     let created = 0
     const todayKey = dayKeyOf(now)
     const tLedger = getLedgerEntry(ledger, todayKey)
     if (prev.posts.length === 0 && tLedger.daily < MAX_POSTS_PER_DAY) {
-      const g = generatePost(vars, used, now - 3 * 60 * 1000)
+      const g = generatePost(vars, used, now - 3 * 60 * 1000, Math.random, 'daily', lang)
       used[g.templateKey] = now
       posts.unshift(g.post)
       recordLedger([g.post], sessionId, now)
@@ -281,6 +303,9 @@ export function refreshSpace(
     saveState(state, sessionId)
     return { posts: state.posts, mode: 'no-persona', created, pending: [], used: state.used }
   }
+
+  // 会话语言（canonical 优先，回退人设检测）——模板/LLM 两条路径共用
+  const spaceLang = resolveSpaceLang(sessionId, persona)
 
   // 有人设 + 有 key：LLM 路径。先推进 lastVisit 占位防重复，新动态异步补
   if (canUseLlm(persona, settings)) {
@@ -296,7 +321,7 @@ export function refreshSpace(
   }
 
   // 有人设但没 key：降级模板，同步生成（纯文字动态）
-  const { state, created } = advanceTimeline(prev, vars, now, activeDays, Math.random, ledger)
+  const { state, created } = advanceTimeline(prev, vars, now, activeDays, Math.random, ledger, spaceLang)
   const posts = state.posts
   // 模板路径也记账：本次实际新增的动态按 at 自然日 + source 落账
   const prevIds = new Set(prev.posts.map((p) => p.id))
@@ -330,6 +355,8 @@ export async function generatePendingPosts(
   const persona = sessionPersona(sessionId)
   const settings = loadSettings()
   const vars = buildVars(taName, yourName, now)
+  // 会话语言（canonical 优先，回退人设检测）——LLM 与模板降级两条路径共用
+  const spaceLang = resolveSpaceLang(sessionId, persona)
   // v3 素材注入：TA 最近自己发过的 1-2 条动态原文（宁缺毋滥）——别重复，生活继续往前
   const recent = plan.posts.slice(0, 2).map((p) => p.text)
   // 事件触发：最近聊天话题（带日期）注入 LLM，让 TA 只在「当天相关」时呼应（2026-08-26 七七拍板）
@@ -397,20 +424,23 @@ export async function generatePendingPosts(
         season: getSeason(at),
         timeWord: getTimeWord(at),
       }
-      const messages = buildLlmMessages({
-        taName,
-        yourName,
-        persona,
-        season: atVars.season,
-        timeWord: atVars.timeWord,
-        weatherWord: atVars.weatherWord,
-        recent,
-        chatTopics,
-        atDateStr,
-        // v3 时刻锚 + 事件通道标记（事件动态提示词按「那天共同的事」写，日常仍写自己的生活）
-        nowAnchor,
-        postSource: source,
-      })
+      const messages = buildLlmMessages(
+        {
+          taName,
+          yourName,
+          persona,
+          season: atVars.season,
+          timeWord: atVars.timeWord,
+          weatherWord: atVars.weatherWord,
+          recent,
+          chatTopics,
+          atDateStr,
+          // v3 时刻锚 + 事件通道标记（事件动态提示词按「那天共同的事」写，日常仍写自己的生活）
+          nowAnchor,
+          postSource: source,
+        },
+        spaceLang,
+      )
       try {
         const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })
         const cleaned = cleanLlmText(raw)
@@ -430,7 +460,7 @@ export async function generatePendingPosts(
     if (!made) {
       // 模板降级也按 at 的时段/季节 + 来源通道生成（回填昨天就用昨天的时段词，不穿帮）
       const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(at), season: getSeason(at) }
-      const g = generatePost(dayVars, used, at, rand, source)
+      const g = generatePost(dayVars, used, at, rand, source, spaceLang)
       used[g.templateKey] = now
       made = { post: g.post, templateKey: g.templateKey }
       usedFallback = true
