@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { inferTopic, loadMemory, type MemoryItem } from '../lib/memory'
+import { loadMemory, type MemoryItem } from '../lib/memory'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 
 interface DatedMemory {
@@ -140,7 +140,6 @@ export default function Memory() {
   }
 
   if (view === 'detail' && selected) {
-    const topic = selected.item.topic?.trim() || inferTopic(selected.item.text)
     const pinned = selected.item.pinned === true
     return (
       <div className="page memory-page memory-detail-page">
@@ -167,11 +166,6 @@ export default function Memory() {
           {selected.item.source?.trim() ? (
             <p className="memory-detail-quote">
               当时你说 ·「{selected.item.source.trim()}」
-            </p>
-          ) : null}
-          {topic ? (
-            <p className="memory-detail-topic">
-              <span aria-hidden="true">·</span> {topic}
             </p>
           ) : null}
           <p className="memory-detail-note">这是 TA 在与你相处时留下的一段记忆。</p>
@@ -225,7 +219,6 @@ export default function Memory() {
                     </h5>
                     <div className="memory-month-entries">
                       {month.items.map(({ item, timestamp }, index) => {
-                        const topic = item.topic?.trim()
                         const explicit = item.explicit === true
                         const pinned = item.pinned === true
                         const entryClass = [
@@ -252,7 +245,6 @@ export default function Memory() {
                               ) : null}
                               <span className="memory-entry-meta">
                                 <span className="memory-entry-date">{formatDate(timestamp)}</span>
-                                {topic ? <span className="memory-entry-topic">{topic}</span> : null}
                               </span>
                             </span>
                           </button>
