@@ -389,7 +389,7 @@ function mergeSettings(localRaw: string | null, cloud: SyncSettings | undefined)
 /**
  * 把拉下来的云端数据写回 localStorage。
  * messages / memory 做并集去重合并；其余字段按「本地全空且云端有数据 → 用云端（新设备首次登录）；
- * 本地有数据 → 本地优先（老设备继续用）」
+ * 本地有数据 → 本地优先（老设备继续用）」。
  */
 export function applyData(data: SyncData): void {
   const d = data ?? ({} as SyncData)
