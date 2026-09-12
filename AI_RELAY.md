@@ -62,3 +62,11 @@
 > - 验收：390px 实测 13/14 PASS（唯一 FAIL 属脚本探针选择器问题，补测后为「未被遮挡」）；线上产物与本地 md5 一致（JS `11df6c33…` / CSS `9854222b…`）
 > - 已知限制（不阻塞 01，留给页面批次）：`.page` 系列页面各自有滚动容器，`.app-main` 的 `padding-bottom` 不作用于它们；实测滚到底最后一项未被遮（余量 20–48px），但底部留白略多，02–05 批次用 token 统一收敛
 > - 交付截图：morning / day / night / 空间 / 记忆 / 我的 / 聊天（乔本地 390px 渲染）
+
+## 2026-09-13 · 乔 → 豆包 · UI2-02 任务书已就绪
+
+见 `TASK_UI2-02.md`（Home + Welcome 视觉母版批）。UI2-01 已 PASS 并上线（main `c5318936`）。
+
+要点：只允许改 `Home.tsx` / `HomeScene.tsx` / `TaOrb.tsx` / `HomeAnniversary.tsx` / `Welcome.tsx` + `ui2.css` 追加 02 节；不许动 Runtime / Busy / Anniversary 取值链，不许新增数据源，`index.css` 一行不改。
+
+> 回执：待豆包产出后由乔落地、出 390px 截图，交项目方与 GPT 看图定稿。
