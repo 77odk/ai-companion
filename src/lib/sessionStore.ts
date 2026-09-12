@@ -542,10 +542,26 @@ export async function flushPendingOps(token: string): Promise<void> {
 
 // ---- 回复拆分（2026-08-25 七七拍板：微信式多条短气泡） ----
 
+/** 中文句号/问号/感叹号/省略号（句子边界） */
+const SENT_END_ZH = '。！？!?…'
+/** 自然停顿标点（非句子边界，句内可停顿处） */
+const PAUSE_PUNCT = '，、；：,;:'
+
+/** 单个字符是否为「安全断点」：句子标点 / 停顿标点 / 空白 */
+function isSafeBreakChar(ch: string): boolean {
+  return SENT_END_ZH.includes(ch) || PAUSE_PUNCT.includes(ch) || /\s/.test(ch)
+}
+
 /**
- * 第二批⑨：超长文本折行不丢弃——把超过 maxLen 的文本拆成多条，每条不超过 maxLen 字。
- * 优先在标点/空格处断（保句子完整），无标点硬折；最后残余哪怕几个字也保留；不加省略号。
- * 中文按标点断，英文按空格/标点断。
+ * 第二批⑨ + 拆词修复（TASK-CHAT-SPLIT）：超长文本折行不丢弃——把超过 maxLen 的文本拆成多条。
+ * maxLen=60 是目标长度，不是必须硬切的绝对边界。绝不从单词/缩写/所有格中间切开。
+ * 断点选择优先级：
+ *   1) maxLen 窗口内最后一个句子边界（。！？!?…，优先保证句子完整）
+ *   2) 窗口内最后一个自然停顿标点（，、；：,;:）
+ *   3) 窗口内最后一个词间空格
+ *   4) 窗口内没有安全断点 → 向后找最近的安全断点（宁可气泡稍长）
+ *   5) 整个剩余文本都没有安全断点（连续 token）→ 整条保留，不硬切
+ * 断点统一取在标点/空格之后：标点留在前块，空格按现有语义 trim 掉。
  */
 function chunkText(text: string, maxLen: number = 60): string[] {
   const t = String(text ?? '').trim()
@@ -558,17 +574,40 @@ function chunkText(text: string, maxLen: number = 60): string[] {
       chunks.push(remaining)
       break
     }
-    // 在 maxLen 范围内找最后一个标点/空格作为断点
     const window = remaining.slice(0, maxLen)
-    // 中文标点：。！？；，、 英文标点：.!?;, 空格
-    const breakMatch = window.match(/[。！？；，、.!?;,，][^。！？；，、.!?;,，\s]*$|\s[^\s]*$/)
-    let breakPos = maxLen
-    if (breakMatch && breakMatch.index !== undefined) {
-      // 断点在标点/空格之后，保留标点在当前 chunk
-      breakPos = breakMatch.index + breakMatch[0].length
-      if (breakPos > maxLen) breakPos = maxLen
+    // 1) 窗口内找断点：句子边界 > 停顿标点 > 空格（各自取最后一个出现位置；类型间按优先级选择）
+    let sentPos = -1
+    let punctPos = -1
+    let spacePos = -1
+    for (let i = window.length - 1; i >= 0; i--) {
+      const ch = window[i]
+      if (SENT_END_ZH.includes(ch)) {
+        if (sentPos < 0) sentPos = i + 1
+      } else if (PAUSE_PUNCT.includes(ch)) {
+        if (punctPos < 0) punctPos = i + 1
+      } else if (/\s/.test(ch)) {
+        if (spacePos < 0) spacePos = i + 1
+      }
     }
-    chunks.push(remaining.slice(0, breakPos).trim())
+    let breakPos = sentPos >= 0 ? sentPos : punctPos >= 0 ? punctPos : spacePos
+    // 2) 窗口内无安全断点 → 向后找最近的安全断点（宁可气泡稍长，不切词）
+    if (breakPos < 0) {
+      for (let i = maxLen; i < remaining.length; i++) {
+        if (isSafeBreakChar(remaining[i])) {
+          breakPos = i + 1
+          break
+        }
+      }
+    }
+    // 3) 整个剩余文本都没有安全断点（连续 token）→ 不硬切，整条收尾
+    if (breakPos < 0) {
+      chunks.push(remaining)
+      break
+    }
+    // 4) 兜底防死循环：断点必须使 remaining 前进
+    if (breakPos <= 0) breakPos = Math.min(maxLen, remaining.length)
+    const piece = remaining.slice(0, breakPos).trim()
+    if (piece) chunks.push(piece)
     remaining = remaining.slice(breakPos).trim()
   }
   return chunks.filter(Boolean)
@@ -599,12 +638,25 @@ export function splitAssistantReplies(content: string, ts: number): StoredMessag
     }
     return result
   }
-  // 2) 没换行（一整段）：按句子拆——句号/问号/感叹号/省略号断句，一条一句，
-  //    不让一大段直接甩脸上；单句超 60 字折行不丢弃（第二批⑨）
-  const sentences = text
-    .split(/(?<=[。！？!?…])/)
-    .map((s) => s.trim())
-    .filter(Boolean)
+  // 2) 没换行（一整段）：按句子拆——中英文句号/问号/感叹号/省略号断句，一条一句，
+  //    不让一大段直接甩脸上；英文半角句点后须跟空白或结尾才断（避免拆小数/缩写）；
+  //    单句超 60 字折行不丢弃（第二批⑨ / TASK-CHAT-SPLIT）
+  const sentenceParts: string[] = []
+  {
+    let start = 0
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i]
+      const isSentEnd =
+        SENT_END_ZH.includes(ch) ||
+        (ch === '.' && (i === text.length - 1 || /\s/.test(text[i + 1])))
+      if (isSentEnd) {
+        sentenceParts.push(text.slice(start, i + 1).trim())
+        start = i + 1
+      }
+    }
+    if (start < text.length) sentenceParts.push(text.slice(start).trim())
+  }
+  const sentences = sentenceParts.filter(Boolean)
   if (sentences.length <= 1) {
     // 单句超长也折行
     return chunkText(text, 60).map((c) => ({ role: 'assistant' as const, content: c, ts }))
