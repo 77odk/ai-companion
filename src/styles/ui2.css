@@ -23,20 +23,20 @@
    ========================================================================== */
 :root {
   /* ---- Material：稳定中性材质（不随主题整体染色） ---- */
-  --ui2-canvas: #f8f6f3;
-  --ui2-surface: #ffffff;
-  --ui2-surface-elevated: #ffffff;
-  --ui2-text: #2c2a28;
-  --ui2-text-secondary: #8b8781;
-  --ui2-hairline: rgba(44, 42, 40, 0.1);
-  --ui2-glass: rgba(255, 255, 255, 0.72);
-  --ui2-shadow: 0 12px 32px rgba(64, 48, 34, 0.1);
-  --ui2-nav-material: rgba(255, 255, 255, 0.62);
+  --ui2-canvas: #f7f4ef;
+  --ui2-surface: rgba(255, 255, 255, 0.58);
+  --ui2-surface-elevated: rgba(255, 255, 255, 0.82);
+  --ui2-text: #332b28;
+  --ui2-text-secondary: #817773;
+  --ui2-hairline: rgba(51, 43, 40, 0.1);
+  --ui2-glass: rgba(248, 246, 242, 0.46);
+  --ui2-shadow: 0 12px 40px rgba(38, 31, 28, 0.08);
+  --ui2-nav-material: rgba(247, 244, 239, 0.76);
 
-  /* ---- Eluvin Warm：忆文固定品牌暖橘（沿用默认蜜桃暖 primary 系） ---- */
-  --eluvin-warm: #ff8a5c;
-  --eluvin-warm-soft: #ffd3b6;
-  --eluvin-warm-deep: #e96f3e;
+  /* ---- Eluvin Warm：忆文固定品牌暖橘（不随用户 ThemeState 改变） ---- */
+  --eluvin-warm: #d8875f;
+  --eluvin-warm-soft: rgba(216, 135, 95, 0.12);
+  --eluvin-warm-deep: #b96f4c;
 
   /* ---- TA Accent：双轨映射用户主题色（纯 CSS alias，不碰 theme.ts）。
          带暖橘 fallback：主题变量未就绪时也不会塌成无效值。 ---- */
@@ -44,10 +44,15 @@
   --ta-accent-soft: var(--color-primary-soft, #ffd3b6);
   --ta-accent-deep: var(--color-primary-deep, #e96f3e);
 
+  /* ---- 节奏 / 留白：后续批次消费，本批只定义 ---- */
+  --ui2-page-x: 22px;
+  --ui2-section-gap: 36px;
+  --ui2-item-gap: 18px;
+
   /* ---- App Shell / Nav：纯 presentation token ---- */
   --ui2-nav-height: 56px;
   --ui2-nav-safe-height: calc(var(--ui2-nav-height) + env(safe-area-inset-bottom));
-  --ui2-blur: 18px;
+  --ui2-blur: 16px;
 }
 
 /* ==========================================================================
@@ -92,8 +97,9 @@
 /* 3. 真正可点的按钮恢复 pointer-events */
 .app-nav .nav-btn {
   pointer-events: auto;
+  position: relative; /* 微光点绝对定位，不撑高 Nav（高度必须恒定） */
   flex: 1;
-  padding: 10px 0;
+  padding: 10px 0 16px;
   border: none;
   border-radius: var(--radius-sm, 10px);
   background: transparent;
@@ -110,13 +116,16 @@
   font-weight: 600;
 }
 
-/* active 微光点：按钮下方一条短线，用 TA 留下的颜色，克制、无动画 */
+/* active 微光点：按钮下方一条短线，用 TA 留下的颜色，克制、无动画。
+   绝对定位（不参与布局），保证 Nav 高度恒定、不被 active 状态撑高。 */
 .app-nav .nav-btn.active::after {
   content: '';
-  display: block;
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
   width: 16px;
   height: 3px;
-  margin: 6px auto 0;
   border-radius: 999px;
   background: var(--ta-accent);
 }
