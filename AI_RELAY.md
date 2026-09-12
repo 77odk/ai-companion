@@ -56,4 +56,9 @@
 
 见 `TASK_UI2-01.md`。本批只允许改两个文件：新增 `src/styles/ui2.css`、`src/main.tsx` 加一行 import。不改任何组件、不改 `index.css`、不新增依赖。
 
-> 回执：待豆包产出后由乔落地并回填。
+> 回执 2026-09-13 · 乔：已落地、已部署。
+> - main = `a9acacc1`（合并 `feat/ui2-foundation-01`，含乔的修正 `bea7414f`）
+> - 乔的修正两项：① token 值对齐母版 V1，并补上 `--ui2-page-x / --ui2-section-gap / --ui2-item-gap`；② active 微光点改绝对定位（原实现会把 Nav 撑高 5px，Nav 高度必须恒定）
+> - 验收：390px 实测 13/14 PASS（唯一 FAIL 属脚本探针选择器问题，补测后为「未被遮挡」）；线上产物与本地 md5 一致（JS `11df6c33…` / CSS `9854222b…`）
+> - 已知限制（不阻塞 01，留给页面批次）：`.page` 系列页面各自有滚动容器，`.app-main` 的 `padding-bottom` 不作用于它们；实测滚到底最后一项未被遮（余量 20–48px），但底部留白略多，02–05 批次用 token 统一收敛
+> - 交付截图：morning / day / night / 空间 / 记忆 / 我的 / 聊天（乔本地 390px 渲染）
