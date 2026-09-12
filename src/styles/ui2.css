@@ -1,25 +1,22 @@
 /* ==========================================================================
-   UI2 · Eluvin UI 2.0 视觉基础层（Foundation）
-   批次：UI2-FOUNDATION-01 —— 只立地基，不做页面视觉迁移
+   UI2 · Eluvin UI 2.0 视觉基础层
+   批次：
+   · UI2-01 Foundation —— Material/Warm/Accent tokens + Transparent Nav
+   · UI2-02 Visual Motherboard —— Home + Welcome（本批新增 02 / 03 section）
    加载顺序：本文件必须在 src/index.css 之后加载（见 src/main.tsx import 顺序）
 
-   职责：
-   · 00  UI2 Material Tokens —— 三层颜色/材质基础（Material / Warm / Accent）
-   · 01  App Shell / Transparent Nav —— 透视式底部导航
-
-   后续批次按 section 追加（Home / Welcome / Space / Memory / ...），
-   本批不写任何页面视觉。
+   三层职责（母规则）：
+   · Material 属于忆文（不随用户主题整体染色）
+   · Warm 属于品牌（忆文固定暖橘，品牌温度）
+   · Accent 属于这个 TA（映射现有 ThemeState，只做局部强调）
    ========================================================================== */
 
 /* ==========================================================================
    00 — UI2 Material Tokens
    --------------------------------------------------------------------------
-   Material = Eluvin 长什么样（稳定产品材质，不随用户主题整体染色）
-   Warm     = 忆文品牌温度（固定暖橘，不跟 ThemeState 改变）
-   Accent   = 这个 TA 留下什么颜色（映射现有 ThemeState 主题色，仅局部强调）
-
    现有 --color-* 变量由 theme.ts 继续输出，语义不变，全部保留；
-   本批只新增 token，不迁移、不删除、不改 key、不碰 theme.ts。
+   本批只新增/微调 token，不迁移、不删除、不改 key、不碰 theme.ts。
+   数值以 UI2_MASTERPLAN V1 冻结值为准（允许视觉验收后微调一次）。
    ========================================================================== */
 :root {
   /* ---- Material：稳定中性材质（不随主题整体染色） ---- */
@@ -32,42 +29,33 @@
   --ui2-glass: rgba(248, 246, 242, 0.46);
   --ui2-shadow: 0 12px 40px rgba(38, 31, 28, 0.08);
   --ui2-nav-material: rgba(247, 244, 239, 0.76);
+  --ui2-blur: 6px;
 
-  /* ---- Eluvin Warm：忆文固定品牌暖橘（不随用户 ThemeState 改变） ---- */
-  --eluvin-warm: #d8875f;
-  --eluvin-warm-soft: rgba(216, 135, 95, 0.12);
-  --eluvin-warm-deep: #b96f4c;
-
-  /* ---- TA Accent：双轨映射用户主题色（纯 CSS alias，不碰 theme.ts）。
-         带暖橘 fallback：主题变量未就绪时也不会塌成无效值。 ---- */
-  --ta-accent: var(--color-primary, #ff8a5c);
-  --ta-accent-soft: var(--color-primary-soft, #ffd3b6);
-  --ta-accent-deep: var(--color-primary-deep, #e96f3e);
-
-  /* ---- 节奏 / 留白：后续批次消费，本批只定义 ---- */
+  /* ---- 页面节奏 token ---- */
   --ui2-page-x: 22px;
   --ui2-section-gap: 36px;
   --ui2-item-gap: 18px;
 
+  /* ---- Eluvin Warm：忆文固定品牌暖橘（不属于用户主题） ---- */
+  --eluvin-warm: #d8875f;
+  --eluvin-warm-soft: rgba(216, 135, 95, 0.12);
+  --eluvin-warm-deep: #b96f47;
+
+  /* ---- TA Accent：双轨映射用户主题色（纯 CSS alias，不碰 theme.ts）。
+         带暖橘 fallback：主题变量未就绪时也不会塌成无效值。 ---- */
+  --ta-accent: var(--color-primary, #d8875f);
+  --ta-accent-soft: var(--color-primary-soft, rgba(216, 135, 95, 0.16));
+  --ta-accent-deep: var(--color-primary-deep, #b96f47);
+
   /* ---- App Shell / Nav：纯 presentation token ---- */
   --ui2-nav-height: 56px;
   --ui2-nav-safe-height: calc(var(--ui2-nav-height) + env(safe-area-inset-bottom));
-  --ui2-blur: 16px;
 }
 
 /* ==========================================================================
    01 — App Shell / Transparent Nav
    --------------------------------------------------------------------------
-   透视式导航：
-     页面内容继续存在 → 从 Nav 后方经过 → Nav 图标浮在内容上
-   不是「页面 + 一块毛玻璃导航栏」。
-
-   本批不迁移任何页面视觉，只建立 Shell 能力：
-   · .app 成为 Nav 的定位上下文（CSS-only，不改 App.tsx）
-   · Nav 脱离文档流，浮在底部，内容可延伸到 Nav 后方
-   · 容器透明不吞点击，真正按钮恢复可点
-   · 底部安全空间由统一 token 管理，页面不各写魔法数字
-   · 全屏 overlay（lightbox / modal 等 z-index 100~310）仍在 Nav 之上
+   透视式导航：内容从 Nav 后方经过，Nav 浮在内容上。
    ========================================================================== */
 
 /* 1. .app 成为 Nav 的定位上下文 */
@@ -76,8 +64,8 @@
 }
 
 /* 2. Nav 脱离文档流，浮在底部。
-      视觉：transparent → 底部 nav material 的渐变 + 轻 blur；
-      无白色大底板、无 pill、无大面积主题色/暖橘填充。 */
+      透 ≠ 毛玻璃：blur 只做极轻的局部软化（16px→6px），
+      视觉主体仍是「内容从 Nav 后方经过」。 */
 .app-nav {
   position: absolute;
   left: 0;
@@ -89,15 +77,17 @@
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   border-top: none;
   background: linear-gradient(to top, var(--ui2-nav-material), transparent);
-  backdrop-filter: blur(var(--ui2-blur));
-  -webkit-backdrop-filter: blur(var(--ui2-blur));
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   pointer-events: none; /* 透明容器不吞下方页面点击 */
 }
 
-/* 3. 真正可点的按钮恢复 pointer-events */
+/* 3. 真正可点的按钮恢复 pointer-events。
+      position: relative + active::after 绝对定位：indicator 不参与布局，
+      保证 Nav 高度恒定、active/inactive 无 vertical shift（UI2-01 已验证）。 */
 .app-nav .nav-btn {
   pointer-events: auto;
-  position: relative; /* 微光点绝对定位，不撑高 Nav（高度必须恒定） */
+  position: relative;
   flex: 1;
   padding: 10px 0 16px;
   border: none;
@@ -109,7 +99,7 @@
   transition: color 0.15s;
 }
 
-/* 4. active：TA Accent 克制强调（无底板、无大面积主题色） */
+/* 4. active：TA Accent 克制强调 */
 .app-nav .nav-btn.active {
   background: transparent;
   color: var(--ta-accent-deep);
@@ -130,15 +120,29 @@
   background: var(--ta-accent);
 }
 
-/* 5. 内容底部安全空间：统一 token 管理。
-      只作用于带 Nav 的 view（.app 内存在 .app-nav 时）；
-      保证滚到底时最后一项不被 Nav 永久遮挡，且不产生双 padding。 */
+/* 4b. Home 场景（HomeScene 延伸到屏幕最底部）：Nav 完全透明 + 无 blur，
+       Nav 后必须清楚看到同一张 Scene。只留极轻底部渐变辅助 icon/text 对比。 */
+.app:has(.home-page) .app-nav {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: linear-gradient(to top, rgba(247, 244, 239, 0.12), transparent);
+}
+
+/* 4c. 场景明暗 → Nav 文字对比：morning/day 亮场景用深色文字，night 暗场景用浅色文字 */
+.app:has(.home-scene-night) .app-nav .nav-btn {
+  color: #f2f0eb;
+}
+
+.app:has(.home-scene-night) .app-nav .nav-btn.active {
+  color: var(--ta-accent);
+}
+
+/* 5. 内容底部安全空间：统一 token 管理（只作用于带 Nav 的 view） */
 .app:has(> .app-nav) .app-main {
   padding-bottom: var(--ui2-nav-safe-height);
 }
 
-/* 兜底：不支持 :has() 的旧浏览器无法精确限定「带 Nav 的 view」，
-      统一留安全空间（宁可底部多留白，也不遮住最后一项内容）。 */
+/* 兜底：不支持 :has() 的旧浏览器统一留安全空间 */
 @supports not (selector(:has(*))) {
   .app-main {
     padding-bottom: var(--ui2-nav-safe-height);
@@ -148,6 +152,479 @@
 /* 6. 兼容 prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   .app-nav .nav-btn {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   02 — Home 2.0（视觉母版）
+   --------------------------------------------------------------------------
+   核心定义：Scene 就是 Home 的画布。不是「图片后面垫着 UI」，
+   而是「UI 活在图片里面」——场景延伸到屏幕最底部（含 Transparent Nav 后）。
+
+   原则：
+   · 主要内容不套 Card；可读性靠位置、阴影、局部渐变
+   · TaOrb 是视觉中心，TA Accent 最明显处
+   · Important Date 是「时间关系」，不是白色纪念日卡
+   · surface 是例外，不是默认容器
+   ========================================================================== */
+
+/* ---- 滚动结构：场景固定铺满，内容在其上滚动 ----
+   原 .home-page 是滚动容器（背景会随内容滚走，底部露出底色）。
+   UI2 改为：场景不滚动，home-inner 内部滚动 → 场景永远延伸到屏幕底部。 */
+.home-page {
+  height: 100%;
+  overflow: hidden;
+  padding: max(18px, env(safe-area-inset-top)) var(--ui2-page-x) 0;
+}
+
+/* 内容滚动层：保留 index.css 的 flex column 语义，显式接管高度/滚动 */
+.home-inner {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  scrollbar-width: none;
+}
+
+.home-inner::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- 品牌区 ---- */
+.home-brand {
+  margin: 2px 0 clamp(30px, 9vh, 64px);
+}
+
+.home-brand-mark {
+  border-color: color-mix(in srgb, var(--home-ink) 22%, transparent);
+  background: color-mix(in srgb, var(--home-ink) 8%, transparent);
+}
+
+.home-brand small {
+  color: var(--home-ink-soft);
+  letter-spacing: 0.32em;
+}
+
+/* ---- 时间关系：问候 + 第 N 天 ---- */
+.home-time h1 {
+  font-weight: 520;
+  letter-spacing: 0.02em;
+}
+
+/* 天数不再用主题色染色（场景文字属于场景，不属于 TA Accent） */
+.home-time h1 strong {
+  color: var(--home-ink);
+  font-weight: 700;
+}
+
+.home-time > p:last-child {
+  color: var(--home-ink-soft);
+  letter-spacing: 0.05em;
+}
+
+/* ---- TA Presence：TaOrb 视觉中心 + 此刻 ----
+   去卡：无背景、无 blur、无 padding 大块。 */
+.home-companion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: 8px 0 28px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  backdrop-filter: none;
+}
+
+.home-moment-copy {
+  align-self: center;
+  text-align: center;
+}
+
+.home-moment-copy h2 {
+  margin: 0 0 5px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--home-ink-soft);
+}
+
+.home-moment-copy p {
+  min-height: 0;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--home-ink);
+}
+
+/* ---- TaOrb：TA Accent 的主要消费点 ---- */
+.ta-orb {
+  width: 168px;
+  height: 168px;
+  margin: 0 0 8px;
+}
+
+.ta-orb svg {
+  filter: drop-shadow(0 12px 30px color-mix(in srgb, var(--ta-accent) 32%, transparent));
+}
+
+.ta-orb-track {
+  stroke: color-mix(in srgb, var(--ta-accent) 46%, transparent);
+}
+
+.ta-orb-dot {
+  fill: var(--ta-accent);
+}
+
+.ta-orb-core {
+  fill: color-mix(in srgb, var(--ta-accent) 26%, transparent);
+  stroke: color-mix(in srgb, var(--ta-accent) 55%, transparent);
+}
+
+.ta-orb-night .ta-orb-core {
+  fill: color-mix(in srgb, var(--ta-accent) 32%, transparent);
+}
+
+/* ---- Important Date：时间关系行（去卡） ---- */
+.home-anniversary {
+  margin: 30px 0 26px;
+  padding: 18px 0 20px;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--home-ink) 16%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--home-ink) 16%, transparent);
+  border-radius: 0;
+  background: none;
+  backdrop-filter: none;
+  text-align: center;
+}
+
+.home-eyebrow {
+  color: var(--home-ink-soft);
+  letter-spacing: 0.24em;
+}
+
+.home-anniversary h2 {
+  margin: 9px 0 3px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.home-anniversary strong {
+  font-size: 30px;
+  font-weight: 650;
+}
+
+.home-anniversary time {
+  color: var(--home-ink-soft);
+}
+
+.home-anniversary-empty {
+  color: var(--home-ink-soft);
+}
+
+.home-anniversary-view {
+  float: none;
+  display: inline-block;
+  margin: 10px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--home-ink-soft);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* milestone 进度：细线 + TA Accent 光（只做小状态） */
+.home-anniv-milestone {
+  margin-top: 13px;
+  border-top: none;
+}
+
+/* 「第 N 天」必须保持横向单行：不换行、不逐字拆散、不压缩。
+   兼容 1～4 位甚至更长数字；右侧「下一个 X 天」窄时收敛为省略号，不挤压左侧。 */
+.home-anniv-milestone-line {
+  color: var(--home-ink-soft);
+  font-size: 12px;
+  flex-wrap: nowrap;
+}
+
+.home-anniv-day,
+.home-anniv-day strong {
+  white-space: nowrap;
+  letter-spacing: normal;
+}
+
+.home-anniv-day {
+  flex-shrink: 0;
+}
+
+.home-anniv-day strong {
+  color: var(--home-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-anniv-next {
+  min-width: 0;
+}
+
+.home-anniv-track {
+  margin-top: 9px;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--home-ink) 14%, transparent);
+}
+
+.home-anniv-track-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ta-accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ta-accent) 50%, transparent);
+}
+
+/* ---- Chat entrance：明确可点击的主交互，但不巨大主题色 ---- */
+.home-talk {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 2px auto 0;
+  padding: 12px 24px;
+  border: 1px solid color-mix(in srgb, var(--home-ink) 20%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--home-ink) 8%, transparent);
+  color: var(--home-ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 550;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+.home-talk span {
+  margin-left: 0;
+  color: var(--ta-accent);
+  font-size: 15px;
+}
+
+/* ---- 真实生活入口（TA 的生活） ---- */
+.home-shortcuts {
+  margin-top: 26px;
+}
+
+.home-shortcuts button {
+  padding: 8px 15px;
+  border: 1px solid color-mix(in srgb, var(--home-ink) 18%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--home-ink) 6%, transparent);
+  backdrop-filter: none;
+  color: var(--home-ink-soft);
+  font-size: 12.5px;
+}
+
+/* ---- Web 更新 ↻（页头级小入口，复用 forceRefresh） ---- */
+.home-web-refresh {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  right: var(--ui2-page-x);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid color-mix(in srgb, var(--home-ink) 16%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--home-ink) 7%, transparent);
+  color: var(--home-ink-soft);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.home-web-refresh svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ==========================================================================
+   03 — Welcome 2.0（进入 Eluvin 世界之前的一扇门）
+   --------------------------------------------------------------------------
+   Welcome 与 Home 同一种视觉母语：Material 画布 + Eluvin Warm 品牌光 +
+   时间轨迹，不复制 Home 场景结构。无人物、无 feature pills、无工具堆叠。
+   ========================================================================== */
+.welcome-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding: max(22px, env(safe-area-inset-top)) var(--ui2-page-x) 40px;
+  text-align: center;
+  color: var(--ui2-text);
+  background:
+    radial-gradient(120% 55% at 50% -12%, color-mix(in srgb, var(--eluvin-warm) 18%, transparent), transparent 62%),
+    var(--ui2-canvas);
+}
+
+.welcome-inner {
+  margin: auto;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ---- 品牌 logo：Warm 光（不是主题色油漆） ---- */
+.welcome-logo {
+  width: 88px;
+  height: 88px;
+  border-radius: 30px;
+  margin-bottom: 22px;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--eluvin-warm) 26%, #fff), var(--eluvin-warm));
+  color: #fff;
+  box-shadow: 0 14px 40px color-mix(in srgb, var(--eluvin-warm) 32%, transparent);
+}
+
+.welcome-logo-mark {
+  font-size: 42px;
+}
+
+/* ---- 名称层级：ELUVIN 在上（品牌），忆文在下 ---- */
+.welcome-en {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.36em;
+  color: var(--eluvin-warm-deep);
+}
+
+.welcome-name {
+  margin: 0 0 12px;
+  font-size: 27px;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  color: var(--ui2-text);
+}
+
+.welcome-slogan {
+  margin: 0 0 8px;
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  color: var(--ui2-text);
+}
+
+/* ---- 时间轨迹：两条逐渐靠近的线 + 微弱节点（Warm 品牌光） ---- */
+.welcome-track {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(232px, 72%);
+  margin: 4px 0 34px;
+}
+
+.welcome-track-line {
+  height: 1px;
+  flex: 1;
+}
+
+.welcome-track-line-l {
+  background: linear-gradient(to left, color-mix(in srgb, var(--eluvin-warm) 55%, transparent), transparent);
+}
+
+.welcome-track-line-r {
+  background: linear-gradient(to right, color-mix(in srgb, var(--eluvin-warm) 55%, transparent), transparent);
+}
+
+.welcome-track-node {
+  width: 7px;
+  height: 7px;
+  margin: 0 6px;
+  border-radius: 50%;
+  background: var(--eluvin-warm);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--eluvin-warm) 60%, transparent);
+}
+
+/* ---- 主 CTA：进入行为的门，不巨大主题色 ---- */
+.welcome-start {
+  width: min(240px, 100%);
+  padding: 13px 0;
+  border: 1px solid color-mix(in srgb, var(--eluvin-warm) 34%, transparent);
+  border-radius: 999px;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--eluvin-warm) 14%, #fff), color-mix(in srgb, var(--eluvin-warm) 24%, #fff));
+  color: var(--eluvin-warm-deep);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--eluvin-warm) 16%, transparent);
+  cursor: pointer;
+}
+
+/* ---- 使用指南入口 ---- */
+.welcome-guide-link {
+  margin: 20px 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ui2-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.welcome-guide-link:hover {
+  color: var(--eluvin-warm-deep);
+}
+
+.welcome-foot {
+  margin: 28px 0 0;
+  font-size: 12.5px;
+  color: var(--ui2-text-secondary);
+}
+
+.welcome-count {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--ui2-text-secondary);
+  opacity: 0.85;
+}
+
+/* ---- Web 更新 ↻：页头右上小入口（复用 forceRefresh） ---- */
+.welcome-refresh {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: var(--ui2-page-x);
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--ui2-hairline);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui2-surface) 60%, transparent);
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--ui2-text-secondary);
+  cursor: pointer;
+}
+
+.welcome-refresh:hover {
+  color: var(--eluvin-warm-deep);
+}
+
+/* ==========================================================================
+   prefers-reduced-motion：全 UI2 动效收敛
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .app-nav .nav-btn,
+  .home-talk,
+  .welcome-start,
+  .welcome-refresh {
     transition: none;
   }
 }

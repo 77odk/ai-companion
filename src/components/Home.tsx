@@ -87,6 +87,19 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
 
   return (
     <HomeScene scene={scene}>
+      {/* UI2-02：Web 更新 ↻（页头级小入口，复用现有 forceRefresh；区别于 ChatProfile「刷新对话」） */}
+      <button
+        type="button"
+        className="home-web-refresh"
+        onClick={() => void import('../lib/forceRefresh').then((m) => m.forceRefresh())}
+        aria-label="检查页面更新"
+        title="检查页面更新"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+          <path d="M20 4v4h-4" />
+        </svg>
+      </button>
       <div className="home-inner">
         <header className="home-brand">
           <span className="home-brand-mark" aria-hidden="true">忆</span>
@@ -99,6 +112,15 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
           <p>{fmtFull(firstSeen)} → 今天</p>
         </section>
 
+        {/* UI2-02：TA Presence —— TaOrb 视觉中心，Accent 最明显处 */}
+        <section className="home-companion" aria-labelledby="home-moment-title">
+          <TaOrb label={taName} scene={scene.id} avatar={taAvatar} />
+          <div className="home-moment-copy">
+            <h2 id="home-moment-title">{taName} 此刻</h2>
+            <p>{momentText}</p>
+          </div>
+        </section>
+
         <HomeAnniversary
           label={bigDay?.label}
           count={bigDay ? formatCountdown(bigDay) : undefined}
@@ -108,14 +130,9 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
           onView={onGoAnniversary}
         />
 
-        <section className="home-companion" aria-labelledby="home-moment-title">
-          <div className="home-moment-copy">
-            <h2 id="home-moment-title">{taName} 此刻</h2>
-            <p>{momentText}</p>
-          </div>
-          <TaOrb label={taName} scene={scene.id} avatar={taAvatar} />
-          <button type="button" className="home-talk" onClick={onGoChat}>和 {taName} 说说话 <span>→</span></button>
-        </section>
+        <button type="button" className="home-talk" onClick={onGoChat}>
+          和 {taName} 说说话 <span>→</span>
+        </button>
 
         <nav className="home-shortcuts" aria-label="首页快捷入口">
           <button type="button" onClick={onGoLife}>{taName} 的生活</button>
