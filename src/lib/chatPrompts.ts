@@ -76,6 +76,7 @@ const MEMORY_INSTRUCTION =
   '对方没明说，但聊到了值得长期记住的事——个人喜好、作息时间、身体情况、重要经历、个人习惯——也要自动提炼成记忆；' +
   '临时玩笑、一次性的随口吐槽，不用存。' +
   '只保存客观事实，不保存主观闲聊；已经记过的内容不要再次新增。' +
+  '记下的内容只写对方明确说出的那件事本身：不加主语（不写"对方/TA/名字"）、不解释、不推断、不补充他没说的结论，保持简洁、稳定，适合长期记忆。' +
   '记忆属于当前这段对话，别把别的会话里的事混进来。' +
   '每次提取完，都在回复末尾单独一整行输出【记忆·主题】要记住的内容，主题用几个字概括这一类' +
   '（比如：饮食、宠物、家人、健康、工作、日子、其他，或你觉得更贴切的词），同一类内容永远用同一个主题词，方便归拢。' +
@@ -90,6 +91,7 @@ const MEMORY_INSTRUCTION_EN =
   'Even when they don\'t explicitly ask, if the conversation touches on things worth long-term remembering — personal preferences, sleep schedule, health conditions, important experiences, personal habits — automatically extract them as memories. ' +
   'Temporary jokes and one-off casual rants don\'t need saving. ' +
   'Only save objective facts, not subjective chit-chat. Don\'t re-add things you\'ve already remembered. ' +
+  'The memory content must be exactly the fact they explicitly stated — no added subject (don\'t write "they/you/their name"), no explanation, no inference, no extra conclusions. Keep it short and stable for long-term memory. ' +
   'Memories belong to this current conversation. Don\'t mix in things from other conversations. ' +
   'After each extraction, output [Memory: Topic] the thing to remember on its own line at the end of your reply. The topic should be a few words summarizing the category ' +
   '(e.g. Food, Pets, Family, Health, Work, Dates, Other, or whatever fits better). Always use the same topic word for the same category to keep things organized. ' +
