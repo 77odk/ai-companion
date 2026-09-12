@@ -3,20 +3,22 @@ import { getActiveSessionId, getBusyState, getSessionsCache, getSessionLang } fr
 import { getFirstSeen, loadAIProfile } from '../lib/storage'
 import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import {
+  addAnniversary,
   formatAnniversaryDate,
   formatCountdown,
+  formatPeriodEstimate,
   getAnniversaries,
-  mergeDuplicateAnniversaries,
+  isValidAnniversaryDate,
+  updateAnniversary,
   type Anniversary,
 } from '../lib/anniversary'
-import { getMilestoneProgress, pickHomeBigDay } from '../lib/homeBigDay'
+import { getMilestoneProgress } from '../lib/homeBigDay'
 import { getKnownDays } from '../lib/milestone'
 import { MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { loadCurrentPosts } from '../lib/aiSpace'
 import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from '../lib/taRuntime'
 import { displaySessionName } from '../lib/sessionFlow'
 import HomeScene, { getHomeScene } from './HomeScene'
-import HomeAnniversary from './HomeAnniversary'
 import TaOrb from './TaOrb'
 
 interface Props {
@@ -52,7 +54,25 @@ function fmtLifeTime(ts: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
-export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
+/* 我的生日展示：日期（不带年，每年循环）+ 强制倒计时（还剩 N 天）。只改展示，不改存储。 */
+function birthdayDisplay(a: Anniversary, now: number): string {
+  const d = formatAnniversaryDate(a.date).replace(/^\d+年/, '')
+  const c = formatCountdown({ ...a, countMode: 'countdown' }, now)
+  return c ? `${d} · ${c}` : d
+}
+
+/* 我的生理期展示：复用现有周期估算（预计 X 月 X 日来 / 该更新啦） */
+function periodDisplay(a: Anniversary, now: number): string {
+  return formatPeriodEstimate(a, now)
+}
+
+type TimeKind = 'birthday' | 'period'
+type TimeEditor =
+  | { mode: 'add'; kind: TimeKind }
+  | { mode: 'edit'; kind: TimeKind; id: string }
+  | null
+
+export default function Home({ onGoChat, onGoLife }: Props) {
   const sid = getActiveSessionId() || undefined
   const now = useMemo(() => new Date(), [])
   const scene = getHomeScene(now)
@@ -86,10 +106,18 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   // 表现优先级：active Busy → Runtime（按会话语言取展示文案）→ Space Post → 静态 fallback
   const momentText = busyNow ?? (runtime ? runtimeDisplayLabel(runtime, homeLang) : null) ?? momentPost?.text ?? '正过着安静而寻常的一天，也在等你来。'
 
+  // FINAL-CLOSURE：我的时间 = 生日 + 生理期（personal 全局资料，所有角色共享）。
+  // 废弃 Home 单一 bigDay 展示；数据源仍是 getAnniversaries（全局 personal + 当前角色 couple 并集），
+  // 只读展示层筛选，不改 Anniversary 数据、不改存储、不改同步。
   const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() => getAnniversaries(sid))
-  const bigDay = useMemo(
-    () => pickHomeBigDay(mergeDuplicateAnniversaries(anniversaries), now.getTime()),
-    [anniversaries, now],
+  const personal = useMemo(() => anniversaries.filter((a) => a.kind === 'personal'), [anniversaries])
+  const birthday = useMemo(
+    () => personal.find((a) => !a.periodDays && /生日/.test(a.label ?? '')),
+    [personal],
+  )
+  const period = useMemo(
+    () => personal.find((a) => a.periodDays != null && a.periodDays > 0),
+    [personal],
   )
   const milestone = useMemo(() => getMilestoneProgress(getKnownDays(now.getTime(), sid)), [sid, now])
 
@@ -104,6 +132,68 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
       window.removeEventListener('storage', refresh)
     }
   }, [])
+
+  // ---- 我的时间：添加 / 编辑（轻量 sheet，复用 anniversary.ts 数据层与广播；不复制设置页） ----
+  const [editor, setEditor] = useState<TimeEditor>(null)
+  const [formKind, setFormKind] = useState<TimeKind>('birthday')
+  const [formDate, setFormDate] = useState('')
+  const [formPeriodDays, setFormPeriodDays] = useState('28')
+
+  const openAdd = (kind: TimeKind) => {
+    setFormKind(kind)
+    setFormDate('')
+    setFormPeriodDays('28')
+    setEditor({ mode: 'add', kind })
+  }
+  const openEdit = (kind: TimeKind) => {
+    const target = kind === 'period' ? period : birthday
+    if (!target) return
+    setFormKind(kind)
+    // type="date" 只能回填 YYYY-MM-DD；老 MM-DD 数据留空（保存时用当前日期值）
+    setFormDate(/^\d{4}-\d{2}-\d{2}$/.test(target.date) ? target.date : '')
+    setFormPeriodDays(target.periodDays ? String(target.periodDays) : '28')
+    setEditor({ mode: 'edit', kind, id: target.id })
+  }
+  const closeEditor = () => setEditor(null)
+
+  const saveTime = () => {
+    if (!editor) return
+    const d = formDate.trim()
+    if (!d || !isValidAnniversaryDate(d)) return
+    if (editor.mode === 'add') {
+      if (editor.kind === 'period') {
+        const n = Math.max(1, Math.min(90, Number(formPeriodDays) || 28))
+        addAnniversary('生理期', d, { kind: 'personal', periodDays: n }, undefined)
+      } else {
+        addAnniversary('我的生日', d, { kind: 'personal', countMode: 'countdown' }, undefined)
+      }
+    } else {
+      const target = editor.kind === 'period' ? period : birthday
+      if (!target) return
+      if (editor.kind === 'period') {
+        const n = Math.max(1, Math.min(90, Number(formPeriodDays) || 28))
+        updateAnniversary(
+          target.id,
+          target.label || '生理期',
+          d,
+          { kind: 'personal', periodDays: n, color: target.color },
+          undefined,
+        )
+      } else {
+        updateAnniversary(
+          target.id,
+          target.label || '我的生日',
+          d,
+          { kind: 'personal', countMode: 'countdown', color: target.color },
+          undefined,
+        )
+      }
+    }
+    closeEditor()
+  }
+
+  const birthdayText = birthday ? birthdayDisplay(birthday, now.getTime()) : '还没记过，点一下写下'
+  const periodText = period ? periodDisplay(period, now.getTime()) : '还没记过，点一下写下'
 
   return (
     <HomeScene scene={scene}>
@@ -132,15 +222,50 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
           <p>{fmtFull(firstSeen)} → 今天</p>
         </section>
 
-        {/* QA2 最终顺序：品牌/第 N 天 → Important Date/milestone → TA Presence → CTA → TA 的生活 */}
-        <HomeAnniversary
-          label={bigDay?.label}
-          count={bigDay ? formatCountdown(bigDay) : undefined}
-          date={bigDay ? formatAnniversaryDate(bigDay.date) : undefined}
-          dateValue={bigDay?.date}
-          milestone={milestone}
-          onView={onGoAnniversary}
-        />
+        {/* FINAL-CLOSURE 最终顺序：品牌/第 N 天 → 【我的时间：生日 + 生理期 + milestone】→ TA Presence → CTA → TA 的生活。
+            废弃单一 bigDay 展示形态（homeBigDay 模块保留给其他调用者，Home 不再使用）。 */}
+        <section className="home-my-time" aria-label="我的时间">
+          <div className="home-my-time-head">
+            <span className="home-eyebrow">MY TIME</span>
+            <button type="button" className="home-my-time-add" onClick={() => openAdd('birthday')} aria-label="添加我的时间">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </div>
+
+          <button type="button" className="home-my-time-row" onClick={() => openEdit('birthday')}>
+            <span className="home-my-time-k">生日</span>
+            <span className="home-my-time-v">{birthdayText}</span>
+          </button>
+
+          <button type="button" className="home-my-time-row" onClick={() => openEdit('period')}>
+            <span className="home-my-time-k">生理期</span>
+            <span className="home-my-time-v">{periodText}</span>
+          </button>
+
+          {/* milestone 关系轨迹：真横排（flex row + inline-flex day；不竖字、不逐字换行） */}
+          <div className="home-anniv-milestone" aria-label={`认识 ${milestone.day} 天`}>
+            <div className="home-anniv-milestone-line">
+              <span className="home-anniv-day">第 <strong>{milestone.day}</strong> 天</span>
+              {milestone.next != null ? (
+                milestone.reached ? (
+                  <span className="home-anniv-next">今天正好 {milestone.next} 天</span>
+                ) : (
+                  <span className="home-anniv-next">下一个 {milestone.next} 天 · 还差 {milestone.next - milestone.day} 天</span>
+                )
+              ) : (
+                <span className="home-anniv-next">一路走到今天</span>
+              )}
+            </div>
+            <div className="home-anniv-track" aria-hidden="true">
+              <span
+                className="home-anniv-track-fill"
+                style={{ width: `${Math.round(Math.min(1, Math.max(0, milestone.progress)) * 100)}%` }}
+              />
+            </div>
+          </div>
+        </section>
 
         {/* UI2-02：TA Presence —— TaOrb 视觉中心，Accent 最明显处 */}
         <section className="home-companion" aria-labelledby="home-moment-title">
@@ -173,6 +298,72 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
           )}
         </section>
       </div>
+
+      {/* 我的时间：添加/编辑轻量 sheet（复用 anniversary.ts 持久化与广播；Home 内联，不复制设置页） */}
+      {editor && (
+        <div className="home-time-mask" onClick={closeEditor}>
+          <div className="home-time-sheet" onClick={(e) => e.stopPropagation()}>
+            <h3 className="home-time-sheet-title">
+              {editor.mode === 'edit' ? (editor.kind === 'period' ? '编辑生理期' : '编辑生日') : '写下我的时间'}
+            </h3>
+
+            <div className="home-time-types">
+              <button
+                type="button"
+                className={`home-time-type${formKind === 'birthday' ? ' is-active' : ''}`}
+                onClick={() => setFormKind('birthday')}
+              >
+                生日
+              </button>
+              <button
+                type="button"
+                className={`home-time-type${formKind === 'period' ? ' is-active' : ''}`}
+                onClick={() => setFormKind('period')}
+              >
+                生理期
+              </button>
+            </div>
+
+            {formKind === 'birthday' ? (
+              <>
+                <p className="home-time-hint">选你的生日，每年到了 TA 都会记得</p>
+                <input
+                  className="home-time-input"
+                  type="date"
+                  value={formDate}
+                  onChange={(e) => setFormDate(e.target.value)}
+                />
+              </>
+            ) : (
+              <>
+                <p className="home-time-hint">上次来潮是哪天？周期大概多少天？TA 会帮你估算下次</p>
+                <input
+                  className="home-time-input"
+                  type="date"
+                  value={formDate}
+                  onChange={(e) => setFormDate(e.target.value)}
+                />
+                <div className="home-time-period-row">
+                  <span className="home-time-period-label">周期</span>
+                  <input
+                    className="home-time-input home-time-period-input"
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={formPeriodDays}
+                    onChange={(e) => setFormPeriodDays(e.target.value)}
+                  />
+                  <span className="home-time-period-label">天</span>
+                </div>
+              </>
+            )}
+
+            <button type="button" className="home-time-save" onClick={saveTime}>
+              保存
+            </button>
+          </div>
+        </div>
+      )}
     </HomeScene>
   )
 }
