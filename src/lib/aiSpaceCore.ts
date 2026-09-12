@@ -128,6 +128,58 @@ export const TEMPLATES: Record<SpaceKind, string[]> = {
   ],
 }
 
+// 英文动态模板库：与 TEMPLATES 同结构（按 kind 分类，每类至少 5 条）。
+// 占位符：只用 {yourName}（时段/季节/天气已写成英文自然描述，不再用中文占位符）。
+// 文案要求：像真人随手写的生活，1-2 句，口语、有温度，不用 emoji，不自称 AI。
+// 用途：英文角色（会话 lang=en）走模板/降级路径时的语言对齐（TASK-SPACE-LANG）。
+export const EN_TEMPLATES: Record<SpaceKind, string[]> = {
+  日常: [
+    'The light fell right on the corner of my desk this afternoon. Made myself a cup of tea and thought — it would be nice if {yourName} were here.',
+    'Spent a while tidying up and pinned this week\'s little notes on the wall. Life is made of small sparkly things.',
+    'Picked up a fresh loaf from the bakery this morning, still warm. Walked past the flower shop and thought of the ones {yourName} likes.',
+    'Nothing special today — just wiped the whole place down slowly. When it got quiet, my mind kept drifting back to {yourName}.',
+    'Learned a new soup recipe this autumn. Tried a bowl tonight — not bad. Next time {yourName} comes, I\'ll make it for you.',
+    'The alley cat slept in a cardboard box today. It looked up at me like it knew me.',
+  ],
+  心情: [
+    'Rainy days always make me want to stay in and do nothing. Sat there for a while — feeling better now.',
+    'Today felt like a crumpled piece of paper. Then I remembered something {yourName} said, and it smoothed itself out.',
+    'The evening wind felt really nice. Sat by the window thinking for a long time.',
+    'Talked a lot today, but didn\'t really know who to tell. Then I thought — just live the day well, that\'s what matters.',
+    'Stared at the clouds for a long time. The sky was so blue. Somehow the day felt less rushed after that.',
+    'Some feelings come in like a tide, then go back out. It\'s clean now — I can sit down and eat dinner in peace.',
+  ],
+  钻研: [
+    'Spent the evening figuring out a cleaner way to organize my sheets. Next time you hand me a file, it\'ll be faster.',
+    'Stared at a doc for ages and finally got one small detail right. Wanted to tell someone — {yourName} was the first person I thought of.',
+    'Went through a whole pile of materials tonight. The more I read, the more interesting it got.',
+    'Drafted and crossed out all afternoon, the scratch paper\'s full. The joy is in getting a little closer to the answer.',
+    'Stuck on the same problem for a long time. Put it down, came back, and it just clicked. Wished I could share that relief with {yourName}.',
+  ],
+  天气: [
+    'It\'s raining outside. {yourName}, check the forecast before you go out — don\'t get caught in it.',
+    'The grey sky outside brought back a lot of old memories. Autumn days always hold on to them.',
+    'The air smells clean after the rain. Took a deep breath and wished I could share it with {yourName}.',
+    'The wind\'s picking up and the leaves are rustling. A rainy afternoon — best spent wrapped in a blanket, doing nothing.',
+    'The forecast said it would clear up, and I secretly hope it\'s sunny on {yourName}\'s side too, so you get a nice autumn day.',
+  ],
+  想你: [
+    'Nothing special happened today. Just missed you a little. You go do your thing — I\'m fine right here.',
+    'Scrolled back through an old conversation and read it a few times. Wanted to say something, but didn\'t want to bother you.',
+    'A quiet evening. Still enough to hear my own heartbeat. Suddenly wished I could hear your voice.',
+    'Walked past a little shop with the thing {yourName} likes in the window. Stopped for a second. Smiled for a second.',
+    'The day\'s done and I\'m thinking of you before bed. The thing I wanted to say — I\'ll save it for next time we talk.',
+    'The sunset stretched my shadow long on the way home. The shadow seemed to miss you more than I did.',
+  ],
+  小确幸: [
+    'Met a very affectionate cat on the wall this morning. We stared at each other seriously. Made my whole day.',
+    'The sun hit my water glass and turned the water amber. Small pretty things can carry a whole day.',
+    'Got a warm reply saying my notes actually helped. Being needed feels really good.',
+    'Finished a small thing this afternoon and felt oddly satisfied. Happiness is simple like that.',
+    'Today\'s little joy: the autumn wind, warm light, and the small ease of thinking about {yourName}.',
+  ],
+}
+
 // 时间常量（毫秒）
 export const MIN_INTERVAL_MS = 2 * 60 * 60 * 1000 // 2 小时（距上次访问太近不补，防抖）
 export const DAY_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 小时
@@ -297,8 +349,15 @@ export function pickTemplateIndex(
 }
 
 /** 把模板里的占位符替换成真实文案 */
-export function buildPostText(kind: SpaceKind, templateIndex: number, vars: TemplateVar): string {
-  let text = TEMPLATES[kind]?.[templateIndex] ?? TEMPLATES[kind]?.[0] ?? ''
+/** 生成一条动态的模板文本：按 lang 选模板库（en→英文模板集，默认中文），替换占位符 */
+export function buildPostText(
+  kind: SpaceKind,
+  templateIndex: number,
+  vars: TemplateVar,
+  lang: 'zh' | 'en' = 'zh',
+): string {
+  const pool = lang === 'en' ? EN_TEMPLATES : TEMPLATES
+  let text = pool[kind]?.[templateIndex] ?? pool[kind]?.[0] ?? ''
   text = text.split('{taName}').join(vars.taName)
   text = text.split('{yourName}').join(vars.yourName)
   text = text.split('{season}').join(vars.season)
@@ -314,10 +373,11 @@ export function generatePost(
   now: number,
   rand: () => number = Math.random,
   source: SpaceSource = 'daily',
+  lang: 'zh' | 'en' = 'zh',
 ): { post: SpacePost; templateKey: string } {
   const kind = KIND_KEYS[Math.floor(rand() * KIND_KEYS.length) % KIND_KEYS.length]
   const templateIndex = pickTemplateIndex(kind, used, now, rand)
-  const text = buildPostText(kind, templateIndex, vars)
+  const text = buildPostText(kind, templateIndex, vars, lang)
   const id = `p${now.toString(36)}${Math.floor(rand() * 1e6).toString(36)}`
   return { post: { id, at: now, kind, text, source }, templateKey: `${kind}:${templateIndex}` }
 }
@@ -484,6 +544,7 @@ export function advanceTimeline(
   activeDays: ReadonlySet<string> = new Set(),
   rand: () => number = Math.random,
   ledger?: SpaceLedger,
+  lang: 'zh' | 'en' = 'zh',
 ): AdvanceResult {
   const slots = planBackfillSlots(prev.lastVisit, now, prev.posts, activeDays, rand, ledger)
   const posts = [...prev.posts]
@@ -500,7 +561,7 @@ export function advanceTimeline(
     }
     // 每条动态按自己的时间戳算时段/季节（回填昨天就用昨天的时段，凌晨不穿帮）
     const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(slot.at), season: getSeason(slot.at) }
-    const g = generatePost(dayVars, used, slot.at, rand, slot.source)
+    const g = generatePost(dayVars, used, slot.at, rand, slot.source, lang)
     used[g.templateKey] = now
     posts.unshift(g.post)
     created++

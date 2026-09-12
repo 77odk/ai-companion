@@ -55,9 +55,15 @@ export function canUseLlm(persona: string, settings: LlmSettings): boolean {
  * 素材换血（2026-09-04 七七拍板）：动态九成写 TA 自己的生活，从人设里长出来；
  * 用户话题只是偶尔引子——3~4 条里最多 1 条提到对方，且只在真的一起经历了什么时。
  */
-export function buildLlmMessages(ctx: LlmContext): ApiMessage[] {
-  // 2026-09-05 夜乔修：Sam 发中文动态——动态生成没跟角色语言走。英文人设 → 英文模板
-  const en = /[\u4e00-\u9fff]/.test(ctx.persona ?? '') === false && /[a-zA-Z]/.test(ctx.persona ?? '')
+export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessage[] {
+  // 语言判定（TASK-SPACE-LANG）：显式 lang 优先（会话 canonical，与 Chat 一致）；
+  // 未传时保留旧启发式（人设完全无中文字符且含英文字符 → en），向后兼容单测与老调用。
+  const en =
+    lang === 'en'
+      ? true
+      : lang === 'zh'
+        ? false
+        : /[\u4e00-\u9fff]/.test(ctx.persona ?? '') === false && /[a-zA-Z]/.test(ctx.persona ?? '')
   const isEvent = ctx.postSource === 'event'
   if (en) {
     const system =
