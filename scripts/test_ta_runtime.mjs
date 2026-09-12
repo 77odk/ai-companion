@@ -11,6 +11,7 @@ import {
   getOrAdvanceTaRuntime,
   getSessionPersona,
   getTaRuntime,
+  runtimeDisplayLabel,
   runtimeSlot,
 } from '../src/lib/taRuntime.ts'
 
@@ -302,6 +303,58 @@ group('H. Chat / Home 一致性')
   ok(syncSrc.includes('taRuntime: collectAllTaRuntime()'), 'H-sync collectData 接 Runtime')
   ok(syncSrc.includes('applyCloudTaRuntime(d.taRuntime)'), 'H-sync applyData 接 Runtime')
   ok(/taRuntime\?: Record<string, TaRuntimeState>/.test(syncSrc), 'H-sync SyncData 可选字段（向后兼容）')
+}
+
+// ============ I. PATCH-LANG：zh/en 展示语言一致性 ============
+group('I. PATCH-LANG：zh/en 展示语言一致性')
+{
+  const zhState = {
+    activityId: 'reading',
+    label: '正在看书',
+    startedAt: 1,
+    plannedUntil: new Date(2026, 8, 15, 22, 30).getTime(),
+    updatedAt: 1,
+    source: 'routine',
+  }
+  // I1 活动池每条都有英文文案，且不含中文（en 上下文绝不出现中文 label）
+  for (const a of ACTIVITIES) {
+    ok(typeof a.labelEn === 'string' && a.labelEn.trim().length > 0, `I1 ${a.id} labelEn 非空`)
+    ok(!/[\u4e00-\u9fa5]/.test(a.labelEn), `I1 ${a.id} labelEn 无中文`)
+  }
+  // I2 中文 context：用持久化中文 label（zh 行为不变）
+  const zhCtx = buildTaRuntimeContext(zhState, 'zh')
+  ok(zhCtx.includes('正在看书') && zhCtx.includes('【TA 此刻】') && zhCtx.includes('22:30'), 'I2 zh context 用中文 label')
+  // I3 英文 context：老数据 label 是中文，按 activityId 映射英文；整块必须纯英文
+  const enCtx = buildTaRuntimeContext(zhState, 'en')
+  ok(enCtx.includes('Reading a book') && enCtx.includes('until around 22:30'), 'I3 en context 映射英文 label')
+  ok(!/[\u4e00-\u9fa5]/.test(enCtx), 'I3 en context 整块纯英文（无任何中文字符）')
+  // I4 runtimeDisplayLabel：zh→持久化中文；en→英文映射；null→空串
+  eq(runtimeDisplayLabel(zhState, 'zh'), '正在看书', 'I4 displayLabel zh = 持久化中文 label')
+  eq(runtimeDisplayLabel(zhState, 'en'), 'Reading a book', 'I4 displayLabel en = activityId 映射英文')
+  eq(runtimeDisplayLabel(null, 'en'), '', 'I4 displayLabel null → 空串')
+  // I5 同一 activityId 只改变展示、不改变 Runtime 生命周期：调用展示函数后状态原样、不推进
+  clearLS()
+  const created = getOrAdvanceTaRuntime('sL', '', NOW_MORNING, RAND_HALF)
+  const before = { ...created }
+  runtimeDisplayLabel(created, 'zh')
+  runtimeDisplayLabel(created, 'en')
+  const after = getTaRuntime('sL')
+  eq(after.activityId, before.activityId, 'I5 展示调用后 activityId 不变（不重抽）')
+  eq(after.startedAt, before.startedAt, 'I5 展示调用后 startedAt 不变（不失效）')
+  eq(after.plannedUntil, before.plannedUntil, 'I5 展示调用后 plannedUntil 不变（不失效）')
+  eq(after.updatedAt, before.updatedAt, 'I5 展示调用后 updatedAt 不变（不推进）')
+  // I6 zh 行为不变：创建出的 label 仍是中文（表驱动），en 映射仅展示层
+  eq(runtimeDisplayLabel(created, 'zh'), created.label, 'I6 displayLabel zh 与持久化 label 一致')
+  ok(!/[\u4e00-\u9fa5]/.test(runtimeDisplayLabel(created, 'en')), 'I6 displayLabel en 无中文')
+  // I7 Home 用现有语言来源 getSessionLang 决定 Runtime 显示文案
+  ok(homeSrc.includes('getSessionLang'), 'I7 Home 用项目现有语言来源 getSessionLang')
+  ok(homeSrc.includes('runtimeDisplayLabel(runtime, homeLang)'), 'I7 Home 用 runtimeDisplayLabel 按会话语言显示')
+  // I8 Chat en context 不依赖 label 字段是否已是英文（老数据也能出纯英文）
+  const enCtxOld = buildTaRuntimeContext(
+    { activityId: 'movie', label: '正在看电影', startedAt: 1, plannedUntil: new Date(2026, 8, 15, 21, 0).getTime(), updatedAt: 1, source: 'routine' },
+    'en',
+  )
+  ok(enCtxOld.includes('Watching a movie') && !/[\u4e00-\u9fa5]/.test(enCtxOld), 'I8 老数据中文 label → en context 仍纯英文')
 }
 
 console.log(`\n结果：${pass} 通过，${fail} 失败`)
