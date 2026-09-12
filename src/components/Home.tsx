@@ -121,6 +121,11 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
           </div>
         </section>
 
+        {/* UI2-02 部署返修：CTA 紧跟 TA Presence，成为 Presence 后第一主交互（390px 首屏完整可见） */}
+        <button type="button" className="home-talk" onClick={onGoChat}>
+          和 {taName} 说说话 <span>→</span>
+        </button>
+
         <HomeAnniversary
           label={bigDay?.label}
           count={bigDay ? formatCountdown(bigDay) : undefined}
@@ -129,10 +134,6 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
           milestone={milestone}
           onView={onGoAnniversary}
         />
-
-        <button type="button" className="home-talk" onClick={onGoChat}>
-          和 {taName} 说说话 <span>→</span>
-        </button>
 
         <nav className="home-shortcuts" aria-label="首页快捷入口">
           <button type="button" onClick={onGoLife}>{taName} 的生活</button>

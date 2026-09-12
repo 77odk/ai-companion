@@ -65,7 +65,9 @@
 
 /* 2. Nav 脱离文档流，浮在底部。
       透 ≠ 毛玻璃：blur 只做极轻的局部软化（16px→6px），
-      视觉主体仍是「内容从 Nav 后方经过」。 */
+      视觉主体仍是「内容从 Nav 后方经过」。
+      注意：-webkit- 前缀必须写在标准属性之前 —— Vite/esbuild 压缩 CSS 时
+      对同一属性族只保留最后一条声明，标准在后才能两份都进产物。 */
 .app-nav {
   position: absolute;
   left: 0;
@@ -77,8 +79,8 @@
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   border-top: none;
   background: linear-gradient(to top, var(--ui2-nav-material), transparent);
-  backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   pointer-events: none; /* 透明容器不吞下方页面点击 */
 }
 
@@ -121,10 +123,11 @@
 }
 
 /* 4b. Home 场景（HomeScene 延伸到屏幕最底部）：Nav 完全透明 + 无 blur，
-       Nav 后必须清楚看到同一张 Scene。只留极轻底部渐变辅助 icon/text 对比。 */
+       Nav 后必须清楚看到同一张 Scene。只留极轻底部渐变辅助 icon/text 对比。
+       前缀在前、标准在后（esbuild 只保留同一属性族最后一条声明）。 */
 .app:has(.home-page) .app-nav {
-  backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   background: linear-gradient(to top, rgba(247, 244, 239, 0.12), transparent);
 }
 
@@ -402,8 +405,8 @@
   font: inherit;
   font-size: 15px;
   font-weight: 550;
-  backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   cursor: pointer;
 }
 
