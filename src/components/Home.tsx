@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getActiveSessionId, getBusyState, getSessionsCache } from '../lib/sessionStore'
+import { getActiveSessionId, getBusyState, getSessionsCache, getSessionLang } from '../lib/sessionStore'
 import { getFirstSeen, loadAIProfile } from '../lib/storage'
 import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import {
@@ -13,7 +13,7 @@ import { getMilestoneProgress, pickHomeBigDay } from '../lib/homeBigDay'
 import { getKnownDays } from '../lib/milestone'
 import { MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { loadCurrentPosts } from '../lib/aiSpace'
-import { getOrAdvanceTaRuntime, getSessionPersona } from '../lib/taRuntime'
+import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from '../lib/taRuntime'
 import { displaySessionName } from '../lib/sessionFlow'
 import HomeScene, { getHomeScene } from './HomeScene'
 import HomeAnniversary from './HomeAnniversary'
@@ -55,14 +55,16 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
     () => getOrAdvanceTaRuntime(sid, personaText, now.getTime()),
     [sid, personaText, now],
   )
+  // PATCH-LANG：显示语言走项目现有语言来源 getSessionLang(sid)（Chat 存会话语言）；英文会话显示英文 label
+  const homeLang = useMemo(() => getSessionLang(sid), [sid])
   // Busy（仅展示优先级最高；只读现有 getBusyState，不写、不影响 Busy 数据层）
   const busyNow = useMemo(() => {
     if (!sid) return null
     const b = getBusyState(sid)
     return b.status === 'busy' && b.busyUntil > Date.now() && b.busyReason ? b.busyReason : null
   }, [sid])
-  // 表现优先级：active Busy → Runtime → Space Post → 静态 fallback
-  const momentText = busyNow ?? runtime?.label ?? momentPost?.text ?? '正过着安静而寻常的一天，也在等你来。'
+  // 表现优先级：active Busy → Runtime（按会话语言取展示文案）→ Space Post → 静态 fallback
+  const momentText = busyNow ?? (runtime ? runtimeDisplayLabel(runtime, homeLang) : null) ?? momentPost?.text ?? '正过着安静而寻常的一天，也在等你来。'
 
   const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() => getAnniversaries(sid))
   const bigDay = useMemo(
