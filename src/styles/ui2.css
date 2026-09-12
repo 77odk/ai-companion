@@ -1,0 +1,153 @@
+/* ==========================================================================
+   UI2 · Eluvin UI 2.0 视觉基础层（Foundation）
+   批次：UI2-FOUNDATION-01 —— 只立地基，不做页面视觉迁移
+   加载顺序：本文件必须在 src/index.css 之后加载（见 src/main.tsx import 顺序）
+
+   职责：
+   · 00  UI2 Material Tokens —— 三层颜色/材质基础（Material / Warm / Accent）
+   · 01  App Shell / Transparent Nav —— 透视式底部导航
+
+   后续批次按 section 追加（Home / Welcome / Space / Memory / ...），
+   本批不写任何页面视觉。
+   ========================================================================== */
+
+/* ==========================================================================
+   00 — UI2 Material Tokens
+   --------------------------------------------------------------------------
+   Material = Eluvin 长什么样（稳定产品材质，不随用户主题整体染色）
+   Warm     = 忆文品牌温度（固定暖橘，不跟 ThemeState 改变）
+   Accent   = 这个 TA 留下什么颜色（映射现有 ThemeState 主题色，仅局部强调）
+
+   现有 --color-* 变量由 theme.ts 继续输出，语义不变，全部保留；
+   本批只新增 token，不迁移、不删除、不改 key、不碰 theme.ts。
+   ========================================================================== */
+:root {
+  /* ---- Material：稳定中性材质（不随主题整体染色） ---- */
+  --ui2-canvas: #f7f4ef;
+  --ui2-surface: rgba(255, 255, 255, 0.58);
+  --ui2-surface-elevated: rgba(255, 255, 255, 0.82);
+  --ui2-text: #332b28;
+  --ui2-text-secondary: #817773;
+  --ui2-hairline: rgba(51, 43, 40, 0.1);
+  --ui2-glass: rgba(248, 246, 242, 0.46);
+  --ui2-shadow: 0 12px 40px rgba(38, 31, 28, 0.08);
+  --ui2-nav-material: rgba(247, 244, 239, 0.76);
+
+  /* ---- Eluvin Warm：忆文固定品牌暖橘（不随用户 ThemeState 改变） ---- */
+  --eluvin-warm: #d8875f;
+  --eluvin-warm-soft: rgba(216, 135, 95, 0.12);
+  --eluvin-warm-deep: #b96f4c;
+
+  /* ---- TA Accent：双轨映射用户主题色（纯 CSS alias，不碰 theme.ts）。
+         带暖橘 fallback：主题变量未就绪时也不会塌成无效值。 ---- */
+  --ta-accent: var(--color-primary, #ff8a5c);
+  --ta-accent-soft: var(--color-primary-soft, #ffd3b6);
+  --ta-accent-deep: var(--color-primary-deep, #e96f3e);
+
+  /* ---- 节奏 / 留白：后续批次消费，本批只定义 ---- */
+  --ui2-page-x: 22px;
+  --ui2-section-gap: 36px;
+  --ui2-item-gap: 18px;
+
+  /* ---- App Shell / Nav：纯 presentation token ---- */
+  --ui2-nav-height: 56px;
+  --ui2-nav-safe-height: calc(var(--ui2-nav-height) + env(safe-area-inset-bottom));
+  --ui2-blur: 16px;
+}
+
+/* ==========================================================================
+   01 — App Shell / Transparent Nav
+   --------------------------------------------------------------------------
+   透视式导航：
+     页面内容继续存在 → 从 Nav 后方经过 → Nav 图标浮在内容上
+   不是「页面 + 一块毛玻璃导航栏」。
+
+   本批不迁移任何页面视觉，只建立 Shell 能力：
+   · .app 成为 Nav 的定位上下文（CSS-only，不改 App.tsx）
+   · Nav 脱离文档流，浮在底部，内容可延伸到 Nav 后方
+   · 容器透明不吞点击，真正按钮恢复可点
+   · 底部安全空间由统一 token 管理，页面不各写魔法数字
+   · 全屏 overlay（lightbox / modal 等 z-index 100~310）仍在 Nav 之上
+   ========================================================================== */
+
+/* 1. .app 成为 Nav 的定位上下文 */
+.app {
+  position: relative;
+}
+
+/* 2. Nav 脱离文档流，浮在底部。
+      视觉：transparent → 底部 nav material 的渐变 + 轻 blur；
+      无白色大底板、无 pill、无大面积主题色/暖橘填充。 */
+.app-nav {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  border-top: none;
+  background: linear-gradient(to top, var(--ui2-nav-material), transparent);
+  backdrop-filter: blur(var(--ui2-blur));
+  -webkit-backdrop-filter: blur(var(--ui2-blur));
+  pointer-events: none; /* 透明容器不吞下方页面点击 */
+}
+
+/* 3. 真正可点的按钮恢复 pointer-events */
+.app-nav .nav-btn {
+  pointer-events: auto;
+  position: relative; /* 微光点绝对定位，不撑高 Nav（高度必须恒定） */
+  flex: 1;
+  padding: 10px 0 16px;
+  border: none;
+  border-radius: var(--radius-sm, 10px);
+  background: transparent;
+  color: var(--ui2-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+
+/* 4. active：TA Accent 克制强调（无底板、无大面积主题色） */
+.app-nav .nav-btn.active {
+  background: transparent;
+  color: var(--ta-accent-deep);
+  font-weight: 600;
+}
+
+/* active 微光点：按钮下方一条短线，用 TA 留下的颜色，克制、无动画。
+   绝对定位（不参与布局），保证 Nav 高度恒定、不被 active 状态撑高。 */
+.app-nav .nav-btn.active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--ta-accent);
+}
+
+/* 5. 内容底部安全空间：统一 token 管理。
+      只作用于带 Nav 的 view（.app 内存在 .app-nav 时）；
+      保证滚到底时最后一项不被 Nav 永久遮挡，且不产生双 padding。 */
+.app:has(> .app-nav) .app-main {
+  padding-bottom: var(--ui2-nav-safe-height);
+}
+
+/* 兜底：不支持 :has() 的旧浏览器无法精确限定「带 Nav 的 view」，
+      统一留安全空间（宁可底部多留白，也不遮住最后一项内容）。 */
+@supports not (selector(:has(*))) {
+  .app-main {
+    padding-bottom: var(--ui2-nav-safe-height);
+  }
+}
+
+/* 6. 兼容 prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .app-nav .nav-btn {
+    transition: none;
+  }
+}
