@@ -27,6 +27,7 @@ import { collectAllAnniversaries, loadAnniversaries, getMainAnniversaryId, type 
 import { collectAllSpacePosts } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
 import { collectAllEvents, applyCloudEvents, type CompanionEvent } from './eventStore.ts'
+import { collectAllTaRuntime, applyCloudTaRuntime, type TaRuntimeState } from './taRuntime.ts'
 import { THEME_KEY, loadThemeState, saveThemeState, applyTheme, type ThemeState } from './theme.ts'
 /** 后端服务地址（本地写死一个出口常量：同步接口与会话接口共用，别各自写死） */
 export const API_BASE = 'https://api.eluvin.space'
@@ -64,6 +65,8 @@ export interface SyncData {
   events?: CompanionEvent[]
   /** 主题状态（TASK_THEME）：localStorage ai_companion_theme，云同步换设备不丢 */
   theme?: ThemeState
+  /** TA Runtime（TASK-TA-RUNTIME-V1）：sid → Runtime 状态，走全量 blob；旧 blob 无此字段自然跳过（向后兼容） */
+  taRuntime?: Record<string, TaRuntimeState>
 }
 const ACCOUNT_KEY = 'ai_companion_account'
 const SETTINGS_KEY = 'ai_companion_settings'
@@ -311,6 +314,7 @@ export function collectData(): SyncData {
     spacePosts: collectAllSpacePosts(),
     events: collectAllEvents(),
     theme: loadThemeState(),
+    taRuntime: collectAllTaRuntime(),
   }
 }
 // ---- 合并策略（纯函数，可单测） ----
@@ -437,6 +441,8 @@ export function applyData(data: SyncData): void {
   if (Array.isArray(d.events) && d.events.length > 0) {
     applyCloudEvents(d.events)
   }
+  // TA Runtime（TASK-TA-RUNTIME-V1）：按 updatedAt 更新者胜；旧 blob 无 taRuntime → 跳过（不清本地）
+  applyCloudTaRuntime(d.taRuntime)
   // 主题：本地没配过且云端有 → 用云端，并立即应用（TASK_THEME）
   if (localStorage.getItem(THEME_KEY) == null && d.theme && (d.theme.type === 'preset' || d.theme.type === 'custom')) {
     saveThemeState(d.theme)
