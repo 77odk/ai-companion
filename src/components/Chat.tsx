@@ -687,12 +687,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       if (lang === 'en') {
         apiMessages.push({
           role: 'system',
-          content: `They just asked you to remember: ${memInstr.fact ?? text}. At the end of your reply, output a separate line with [Memory: Topic] marker (topic word summarizes the category), write this fact as the content, and briefly confirm in your reply that you've noted it.`,
+          content: `They just asked you to remember: ${memInstr.fact ?? text}. Write ONLY the fact they explicitly stated — no added subject (don't write "they/you/their name"), no explanation, no inference, no extra conclusions. Keep it short and stable for long-term memory. At the end of your reply, output a separate line with [Memory: Topic] marker (topic word summarizes the category), write this fact as the content, and briefly confirm in your reply that you've noted it.`,
         })
       } else {
         apiMessages.push({
           role: 'system',
-          content: `用户刚要求你记住：${memInstr.fact ?? text}。请在回复末尾单独一行输出【记忆·主题】标记（主题词概括类别），内容写这条事实，并在回复里简短确认已经记下。`,
+          content: `用户刚要求你记住：${memInstr.fact ?? text}。只写用户明确说出的这句事实本身：不加主语（不要写"用户/对方/TA/名字"）、不解释、不推断、不补充他没说的结论，保持简洁、稳定，适合长期记忆。请在回复末尾单独一行输出【记忆·主题】标记（主题词概括类别），内容写这条事实，并在回复里简短确认已经记下。`,
         })
       }
     } else if (isRetort) {
@@ -700,13 +700,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         apiMessages.push({
           role: 'system',
           content:
-            'They just reminded you to note down something mentioned earlier. Extract facts worth long-term remembering from the recent conversation (schedule, preferences, health conditions, important experiences, etc.), output a separate [Memory: Topic] line at the end of your reply, and confirm you\'ve noted it.',
+            'They just reminded you to note down something mentioned earlier. Extract facts worth long-term remembering from the recent conversation (schedule, preferences, health conditions, important experiences, etc.). Write only the facts they actually stated — no added subjects, no explanation, no inference, no extra conclusions. Keep them short and stable. Output a separate [Memory: Topic] line at the end of your reply, and confirm you\'ve noted it.',
         })
       } else {
         apiMessages.push({
           role: 'system',
           content:
-            '用户刚才在提醒你记下之前提到的信息。从最近的对话里提取值得长期记住的事实（作息、喜好、身体情况、重要经历等），在回复末尾单独一行输出【记忆·主题】标记，并确认已经记下。',
+            '用户刚才在提醒你记下之前提到的信息。从最近的对话里提取值得长期记住的事实（作息、喜好、身体情况、重要经历等）。每条只写用户实际说过的那些事实本身：不加主语、不解释、不推断、不补充，保持简洁稳定。在回复末尾单独一行输出【记忆·主题】标记，并确认已经记下。',
         })
       }
     }

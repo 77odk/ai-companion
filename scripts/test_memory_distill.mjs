@@ -3,7 +3,7 @@
 //       source 真实性、中英文 marker 解析、同轮无双写、跨轮去重不受影响。
 // 跑法：node scripts/test_memory_distill.mjs（npm test 会自动纳入 scripts/test_*.mjs）
 
-import { isSimilarMemory, extractMemories, matchMarkerToCandidate, planMemoryWrites, stripMemoryMarkers } from '../src/lib/memory.ts'
+import { detectMemoryInstruction, extractMemories, isSimilarMemory, matchMarkerToCandidate, planMemoryWrites, stripMemoryMarkers } from '../src/lib/memory.ts'
 
 let passed = 0
 let failed = 0
@@ -190,6 +190,26 @@ console.log('\n[16] 多候选部分匹配：匹配的走提炼版、未匹配的
   const sched = plans.find((p) => p.text.includes('八点'))
   ok(ta && isExplicit(ta) && ta.text === '对方养了一只猫', '匹配候选 = 提炼版 explicit')
   ok(sched && isExplicit(sched) && sched.text === '我每天八点上班', '未匹配候选 = fallback explicit')
+}
+
+console.log('\n[17] V1.1：instruction 候选前导标点清洗（detectMemoryInstruction）')
+{
+  eq(detectMemoryInstruction('记住，我不喜欢别人替我做决定。').fact, '我不喜欢别人替我做决定。', '“记住，”前导逗号被清')
+  eq(detectMemoryInstruction('帮我记一下，我生日是8月5号。').fact, '我生日是8月5号。', '“帮我记一下，”前导逗号被清')
+  eq(detectMemoryInstruction('记住 明天八点上班').fact, '明天八点上班', '前导空格被清')
+  eq(detectMemoryInstruction('帮我记一下我早班7:50-15:50上班').fact, '我早班7:50-15:50上班', '无标点原样保留')
+  eq(detectMemoryInstruction('今天天气不错').fact, null, '非指令 → fact null')
+}
+
+console.log('\n[18] V1.1：candidate + 无关 marker → 2 条（candidate explicit + marker inferred）')
+{
+  const plans = planMemoryWrites([cand], extractMemories('【记忆·日子】TA 觉得今天天气不错'), userText)
+  eq(plans.length, 2, 'candidate + 无关 marker → 2 条')
+  const exp = plans.find(isExplicit)
+  const inf = plans.find(isInferred)
+  ok(!!exp && exp.text === cand.text, 'candidate 以 explicit 写入，text=用户事实')
+  ok(!!inf && inf.text === 'TA 觉得今天天气不错', '无关 marker 保持 inferred 写入')
+  ok(!!exp && exp.source === userText, 'candidate source=用户原话')
 }
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)

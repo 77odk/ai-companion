@@ -521,7 +521,11 @@ export function detectMemoryInstruction(text: string): { isInstruction: boolean;
     // 英文关键词转小写匹配（用户可能输入 Remember This），中文关键词原样匹配
     const idx = /[a-zA-Z]/.test(kw) ? tLower.indexOf(kw.toLowerCase()) : t.indexOf(kw)
     if (idx < 0) continue
-    const fact = (t.slice(0, idx) + t.slice(idx + kw.length)).trim()
+    // TASK-MEM-DISTILL-V1.1：去掉指令词后清除残留的前导分隔标点/空白
+    // （"记住，我不喜欢…" → "我不喜欢…"，不带前导逗号；不做通用 NLP 重写）
+    let fact = (t.slice(0, idx) + t.slice(idx + kw.length))
+      .replace(/^[\s，,。.、；;：:！!？?…~～\-—]+/, '')
+      .trim()
     return { isInstruction: true, fact: fact.length >= 4 ? fact : null }
   }
   return { isInstruction: false, fact: null }
