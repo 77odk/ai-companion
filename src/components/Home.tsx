@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getActiveSessionId, getSessionsCache } from '../lib/sessionStore'
+import { getActiveSessionId, getBusyState, getSessionsCache } from '../lib/sessionStore'
 import { getFirstSeen, loadAIProfile } from '../lib/storage'
 import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import {
@@ -13,6 +13,7 @@ import { getMilestoneProgress, pickHomeBigDay } from '../lib/homeBigDay'
 import { getKnownDays } from '../lib/milestone'
 import { MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { loadCurrentPosts } from '../lib/aiSpace'
+import { getOrAdvanceTaRuntime, getSessionPersona } from '../lib/taRuntime'
 import { displaySessionName } from '../lib/sessionFlow'
 import HomeScene, { getHomeScene } from './HomeScene'
 import HomeAnniversary from './HomeAnniversary'
@@ -46,6 +47,22 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   const posts = useMemo(() => loadCurrentPosts(sid), [sid])
   const taAvatar = useMemo(() => loadAIProfile(sid).avatar, [sid])
   const momentPost = useMemo(() => posts.find((p) => p.source === 'event') ?? posts[0], [posts])
+
+  // TASK-TA-RUNTIME-V1：TA 此刻主数据源 = Persistent Runtime（与 Chat 同一份持久状态、同一 lazy getter）。
+  // 刷新/切 Tab/重进未到 plannedUntil 不换活动；到期才在读取时惰性推进。零额外 LLM。
+  const personaText = useMemo(() => getSessionPersona(sid), [sid])
+  const runtime = useMemo(
+    () => getOrAdvanceTaRuntime(sid, personaText, now.getTime()),
+    [sid, personaText, now],
+  )
+  // Busy（仅展示优先级最高；只读现有 getBusyState，不写、不影响 Busy 数据层）
+  const busyNow = useMemo(() => {
+    if (!sid) return null
+    const b = getBusyState(sid)
+    return b.status === 'busy' && b.busyUntil > Date.now() && b.busyReason ? b.busyReason : null
+  }, [sid])
+  // 表现优先级：active Busy → Runtime → Space Post → 静态 fallback
+  const momentText = busyNow ?? runtime?.label ?? momentPost?.text ?? '正过着安静而寻常的一天，也在等你来。'
 
   const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() => getAnniversaries(sid))
   const bigDay = useMemo(
@@ -92,7 +109,7 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
         <section className="home-companion" aria-labelledby="home-moment-title">
           <div className="home-moment-copy">
             <h2 id="home-moment-title">{taName} 此刻</h2>
-            <p>{momentPost?.text ?? '正过着安静而寻常的一天，也在等你来。'}</p>
+            <p>{momentText}</p>
           </div>
           <TaOrb label={taName} scene={scene.id} avatar={taAvatar} />
           <button type="button" className="home-talk" onClick={onGoChat}>和 {taName} 说说话 <span>→</span></button>
