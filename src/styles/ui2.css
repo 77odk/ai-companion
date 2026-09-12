@@ -29,7 +29,7 @@
   --ui2-glass: rgba(248, 246, 242, 0.46);
   --ui2-shadow: 0 12px 40px rgba(38, 31, 28, 0.08);
   --ui2-nav-material: rgba(247, 244, 239, 0.76);
-  --ui2-blur: 16px;
+  --ui2-blur: 6px;
 
   /* ---- 页面节奏 token ---- */
   --ui2-page-x: 22px;
@@ -63,7 +63,9 @@
   position: relative;
 }
 
-/* 2. Nav 脱离文档流，浮在底部。 */
+/* 2. Nav 脱离文档流，浮在底部。
+      透 ≠ 毛玻璃：blur 只做极轻的局部软化（16px→6px），
+      视觉主体仍是「内容从 Nav 后方经过」。 */
 .app-nav {
   position: absolute;
   left: 0;
@@ -75,16 +77,19 @@
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   border-top: none;
   background: linear-gradient(to top, var(--ui2-nav-material), transparent);
-  backdrop-filter: blur(var(--ui2-blur));
-  -webkit-backdrop-filter: blur(var(--ui2-blur));
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   pointer-events: none; /* 透明容器不吞下方页面点击 */
 }
 
-/* 3. 真正可点的按钮恢复 pointer-events */
+/* 3. 真正可点的按钮恢复 pointer-events。
+      position: relative + active::after 绝对定位：indicator 不参与布局，
+      保证 Nav 高度恒定、active/inactive 无 vertical shift（UI2-01 已验证）。 */
 .app-nav .nav-btn {
   pointer-events: auto;
+  position: relative;
   flex: 1;
-  padding: 10px 0;
+  padding: 10px 0 16px;
   border: none;
   border-radius: var(--radius-sm, 10px);
   background: transparent;
@@ -101,15 +106,35 @@
   font-weight: 600;
 }
 
-/* active 微光点：按钮下方一条短线，用 TA 留下的颜色 */
+/* active 微光点：按钮下方一条短线，用 TA 留下的颜色，克制、无动画。
+   绝对定位（不参与布局），保证 Nav 高度恒定、不被 active 状态撑高。 */
 .app-nav .nav-btn.active::after {
   content: '';
-  display: block;
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
   width: 16px;
   height: 3px;
-  margin: 6px auto 0;
   border-radius: 999px;
   background: var(--ta-accent);
+}
+
+/* 4b. Home 场景（HomeScene 延伸到屏幕最底部）：Nav 完全透明 + 无 blur，
+       Nav 后必须清楚看到同一张 Scene。只留极轻底部渐变辅助 icon/text 对比。 */
+.app:has(.home-page) .app-nav {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: linear-gradient(to top, rgba(247, 244, 239, 0.12), transparent);
+}
+
+/* 4c. 场景明暗 → Nav 文字对比：morning/day 亮场景用深色文字，night 暗场景用浅色文字 */
+.app:has(.home-scene-night) .app-nav .nav-btn {
+  color: #f2f0eb;
+}
+
+.app:has(.home-scene-night) .app-nav .nav-btn.active {
+  color: var(--ta-accent);
 }
 
 /* 5. 内容底部安全空间：统一 token 管理（只作用于带 Nav 的 view） */
@@ -319,15 +344,34 @@
 /* milestone 进度：细线 + TA Accent 光（只做小状态） */
 .home-anniv-milestone {
   margin-top: 13px;
+  border-top: none;
 }
 
+/* 「第 N 天」必须保持横向单行：不换行、不逐字拆散、不压缩。
+   兼容 1～4 位甚至更长数字；右侧「下一个 X 天」窄时收敛为省略号，不挤压左侧。 */
 .home-anniv-milestone-line {
   color: var(--home-ink-soft);
   font-size: 12px;
+  flex-wrap: nowrap;
+}
+
+.home-anniv-day,
+.home-anniv-day strong {
+  white-space: nowrap;
+  letter-spacing: normal;
+}
+
+.home-anniv-day {
+  flex-shrink: 0;
 }
 
 .home-anniv-day strong {
   color: var(--home-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-anniv-next {
+  min-width: 0;
 }
 
 .home-anniv-track {
