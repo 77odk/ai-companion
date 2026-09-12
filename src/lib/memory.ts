@@ -271,6 +271,106 @@ export function extractMemories(text: string): ExtractedMemory[] {
   return out
 }
 
+// ---- 同轮记忆归并（TASK-MEM-DISTILL：本地显式检测 + 模型 marker 只写一条） ----
+// 问题背景：一轮用户消息里，本地检测（帮我记/偏好/作息/短答追问）立即写一条 explicit 原话，
+// 模型回复的【记忆·主题】marker 又写一条 inferred 提炼版 → 同轮双写两条同义记忆。
+// 归并原则：candidate 先收集不写；marker 与 candidate 对应 → 只写一条提炼版 explicit
+// （text=模型提炼内容、explicit=true、source=用户真实原话）；有 candidate 无对应 marker →
+// fallback 写本地 candidate（explicit=true）；只有 marker → 保持 inferred，不自动升级。
+
+/** 本地显式检测产出的候选（用户明确说过的事实，explicit 身份来自用户证据） */
+export interface ExplicitCandidate {
+  /** 事实文本（无 marker 时 fallback 写入用的 text） */
+  text: string
+  /** 用户真实输入/真实上下文证据（source 只来自这里，禁止模型生成） */
+  source: string
+  /** 现有合法 topic（不扩 schema） */
+  topic: string
+}
+
+/** 归并后的一条写入计划（Chat 按计划执行写入） */
+export interface MemoryWritePlan {
+  text: string
+  source: string
+  topic?: string
+  /** true=用户明确事实；undefined=模型推断（inferred） */
+  explicit?: boolean
+}
+
+/** 视角词集合：同轮候选（用户原话，第一人称）与模型 marker（常转成 TA/对方/你）归一化前统一剔除，避免视角差异挡掉匹配 */
+const VIEW_WORDS_RE = /对方|用户|人家|咱们|我们|TA|ta|你|我/g
+
+/**
+ * 判定模型 marker 与本轮某条 explicit candidate 是否对应（TASK-MEM-DISTILL）：
+ * 先剔除视角词（我/你/TA/对方/用户），再归一化——完全相同 / 互相包含 / isSimilar 高度相似
+ * （复用现有去重判定，不调低阈值）。返回命中的 candidate；无命中返回 null。
+ * 只做同轮归并判定，不影响跨轮去重。
+ */
+export function matchMarkerToCandidate(candidates: ExplicitCandidate[], markerText: string): ExplicitCandidate | null {
+  const mt = String(markerText ?? '').trim()
+  if (!mt || !Array.isArray(candidates) || candidates.length === 0) return null
+  const normM = normalize(mt.replace(VIEW_WORDS_RE, ''))
+  if (!normM) return null
+  for (const cand of candidates) {
+    if (cand == null || typeof cand.text !== 'string' || !cand.text.trim()) continue
+    const normC = normalize(cand.text.replace(VIEW_WORDS_RE, ''))
+    if (!normC) continue
+    if (normM === normC) return cand
+    if (normM.includes(normC) || normC.includes(normM)) return cand
+    if (isSimilar(normC, normM)) return cand
+  }
+  return null
+}
+
+/**
+ * 同轮归并：candidates + markers → 写入计划列表（TASK-MEM-DISTILL）。
+ * 顺序：markers 先（对应候选的为提炼版 explicit，无对应的为 inferred），未匹配候选 fallback 后。
+ * 同一轮绝不产生「原话 + 提炼」两条同义写入——匹配上的候选只以提炼版写一次；
+ * fallback 走 upsertMemoryCache 现有判重，与已写 marker 同义时自然被挡住（双保险）。
+ * fallbackSource：纯 marker 场景（无候选）时 inferred 条目的 source（调用方传用户消息原文）。
+ */
+export function planMemoryWrites(
+  candidates: ExplicitCandidate[],
+  markers: ExtractedMemory[],
+  fallbackSource: string,
+): MemoryWritePlan[] {
+  const list = Array.isArray(candidates) ? candidates : []
+  const ms = Array.isArray(markers) ? markers : []
+  const writes: MemoryWritePlan[] = []
+  const matched = new Set<ExplicitCandidate>()
+  for (const mem of ms) {
+    if (mem == null || typeof mem.text !== 'string' || !mem.text.trim()) continue
+    const cand = matchMarkerToCandidate(list, mem.text)
+    if (cand) {
+      matched.add(cand)
+      writes.push({
+        text: mem.text.trim(),
+        source: cand.source || fallbackSource,
+        ...(mem.topic?.trim() || cand.topic ? { topic: mem.topic?.trim() || cand.topic } : {}),
+        explicit: true,
+      })
+    } else {
+      writes.push({
+        text: mem.text.trim(),
+        source: fallbackSource,
+        ...(mem.topic?.trim() ? { topic: mem.topic.trim() } : {}),
+        explicit: undefined,
+      })
+    }
+  }
+  for (const cand of list) {
+    if (cand == null || typeof cand.text !== 'string' || !cand.text.trim()) continue
+    if (matched.has(cand)) continue
+    writes.push({
+      text: cand.text.trim(),
+      source: cand.source || fallbackSource,
+      ...(cand.topic?.trim() ? { topic: cand.topic.trim() } : {}),
+      explicit: true,
+    })
+  }
+  return writes
+}
+
 /** 去掉回复里的记忆标记行（中文「【记忆】」和英文「[Memory:]」都剥，仅展示用；存储里保留原文） */
 export function stripMemoryMarkers(text: string): string {
   return text
