@@ -34,6 +34,24 @@ function fmtFull(ts: number): string {
   return `${d.getFullYear()}.${pad2(d.getMonth() + 1)}.${pad2(d.getDate())}`
 }
 
+/* TA 的生活 preview 时间：与 SpaceLife timeAgo 同一语义（今天显时刻/刚刚，昨天前天，N 天前，跨月显日期） */
+function fmtLifeTime(ts: number): string {
+  const now = new Date()
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const days = Math.floor((startOfDay(now) - startOfDay(d)) / 86400000)
+  if (days <= 0) {
+    const m = Math.floor((now.getTime() - ts) / 60000)
+    return m < 1 ? '刚刚' : hm
+  }
+  if (days === 1) return `昨天 ${hm}`
+  if (days === 2) return `前天 ${hm}`
+  if (days < 30) return `${days} 天前`
+  return `${d.getMonth() + 1}月${d.getDate()}日`
+}
+
 export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   const sid = getActiveSessionId() || undefined
   const now = useMemo(() => new Date(), [])
@@ -47,6 +65,8 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   const posts = useMemo(() => loadCurrentPosts(sid), [sid])
   const taAvatar = useMemo(() => loadAIProfile(sid).avatar, [sid])
   const momentPost = useMemo(() => posts.find((p) => p.source === 'event') ?? posts[0], [posts])
+  // QA2：TA 的生活 preview = 最新一条真实 Space Post（posts 最新在前；无则 null，走空态，不编造）
+  const lifePreview = useMemo(() => posts[0] ?? null, [posts])
 
   // TASK-TA-RUNTIME-V1：TA 此刻主数据源 = Persistent Runtime（与 Chat 同一份持久状态、同一 lazy getter）。
   // 刷新/切 Tab/重进未到 plannedUntil 不换活动；到期才在读取时惰性推进。零额外 LLM。
@@ -112,20 +132,7 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
           <p>{fmtFull(firstSeen)} → 今天</p>
         </section>
 
-        {/* UI2-02：TA Presence —— TaOrb 视觉中心，Accent 最明显处 */}
-        <section className="home-companion" aria-labelledby="home-moment-title">
-          <TaOrb label={taName} scene={scene.id} avatar={taAvatar} />
-          <div className="home-moment-copy">
-            <h2 id="home-moment-title">{taName} 此刻</h2>
-            <p>{momentText}</p>
-          </div>
-        </section>
-
-        {/* UI2-02 部署返修：CTA 紧跟 TA Presence，成为 Presence 后第一主交互（390px 首屏完整可见） */}
-        <button type="button" className="home-talk" onClick={onGoChat}>
-          和 {taName} 说说话 <span>→</span>
-        </button>
-
+        {/* QA2 最终顺序：品牌/第 N 天 → Important Date/milestone → TA Presence → CTA → TA 的生活 */}
         <HomeAnniversary
           label={bigDay?.label}
           count={bigDay ? formatCountdown(bigDay) : undefined}
@@ -135,9 +142,36 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
           onView={onGoAnniversary}
         />
 
-        <nav className="home-shortcuts" aria-label="首页快捷入口">
-          <button type="button" onClick={onGoLife}>{taName} 的生活</button>
-        </nav>
+        {/* UI2-02：TA Presence —— TaOrb 视觉中心，Accent 最明显处 */}
+        <section className="home-companion" aria-labelledby="home-moment-title">
+          <TaOrb label={taName} scene={scene.id} avatar={taAvatar} />
+          <div className="home-moment-copy">
+            <h2 id="home-moment-title">{taName} 此刻</h2>
+            <p>{momentText}</p>
+          </div>
+        </section>
+
+        {/* QA2：CTA 紧跟 TA Presence，成为 Presence 后第一主交互（390px 首屏完整可见） */}
+        <button type="button" className="home-talk" onClick={onGoChat}>
+          和 {taName} 说说话 <span>→</span>
+        </button>
+
+        {/* QA2：TA 的生活 → 正式生活预览区（非小圆钮/快捷入口）。
+            只读真实 Space Post（posts[0]），无则空态；点击整区进 onGoLife。 */}
+        <section className="home-life" aria-label={`${taName} 的生活`}>
+          <button type="button" className="home-life-head" onClick={onGoLife}>
+            <span className="home-life-title">{taName} 的生活</span>
+            <span className="home-life-more">看看 ›</span>
+          </button>
+          {lifePreview ? (
+            <div className="home-life-preview">
+              <p className="home-life-text">{lifePreview.text}</p>
+              <time className="home-life-time">{fmtLifeTime(lifePreview.at)}</time>
+            </div>
+          ) : (
+            <p className="home-life-empty">{taName} 还没有留下生活痕迹。</p>
+          )}
+        </section>
       </div>
     </HomeScene>
   )
