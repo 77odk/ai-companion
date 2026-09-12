@@ -8155,3 +8155,11 @@ html, body {
 .home-anniv-next { color: var(--home-ink-soft); font-size: 11px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-anniv-track { margin-top: 11px; height: 4px; border-radius: 99px; background: rgba(127,127,127,.22); overflow: hidden; }
 .home-anniv-track-fill { display: block; height: 100%; border-radius: 99px; background: var(--color-primary); opacity: .55; }
+
+/* ===== TASK-SPACE-DAYS-V2：空间「重要的日子 / DAYS」 ===== */
+.ai-space-days { display: flex; flex-direction: column; }
+.ai-space-day { display: flex; align-items: baseline; gap: 12px; padding: 10px 2px; border-bottom: 1px solid var(--color-border); }
+.ai-space-day:last-child { border-bottom: 0; }
+.ai-space-day-date { min-width: 46px; font-size: 12px; color: var(--color-text-muted); white-space: nowrap; }
+.ai-space-day-label { flex: 1; font-size: 14px; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-space-day-count { font-size: 12px; color: var(--color-text-muted); white-space: nowrap; }
