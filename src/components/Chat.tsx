@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildBusyReturnPrompt, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
-import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, notifyMemoryUpdated, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem } from '../lib/memory'
+import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem, type ExplicitCandidate } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { getToken } from '../lib/auth'
 import { getSession, listMemories, postMemory, postMessage, type Session } from '../lib/sessionApi'
@@ -508,28 +508,43 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       notifyMemoryUpdated()
     }
 
+    // TASK-MEM-DISTILL：本轮候选 + 模型 marker 统一归并写入。
+    // 唯一写入出口：send 里不再抢先写；finalize / busy 截断 / 失败路径都从这里落库。
+    // 同一轮绝不产生「原话 + 提炼」两条同义记忆（planMemoryWrites 内部归并 + 落库判重双保险）。
+    const flushMemoryWrites = (rawText: string) => {
+      if (explicitCandidates.length === 0 && !rawText) return
+      const plans = planMemoryWrites(explicitCandidates, rawText ? extractMemories(rawText) : [], userMsg.content.trim())
+      let saved = false
+      for (const p of plans) {
+        writeMemory(p.text, { source: p.source || userMsg.content.trim(), topic: p.topic, explicit: p.explicit })
+        if (p.explicit) saved = true
+      }
+      if (saved) userMsg.memorySaved = true
+    }
+
     const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
     recordChatTopic(text, getActiveSessionId() || undefined)
+    // TASK-MEM-DISTILL：本地显式检测先收集候选、不抢先写——等模型回复的【记忆】marker 到达后统一归并
+    // （有 marker 对应 → 只写一条提炼版 explicit；无对应 marker → fallback 写本地候选；只有 marker → 保持 inferred）
+    // 候选的 explicit 身份来自用户证据（用户明确说过），text 若被 marker 匹配则采用模型提炼 wording。
+    const explicitCandidates: ExplicitCandidate[] = []
     const memInstr = detectMemoryInstruction(text)
     const isRetort = !memInstr.isInstruction && isMemoryRetort(text)
     if (memInstr.isInstruction) {
       const content = (memInstr.fact ?? stripMemoryKeyword(text)).trim()
       if (content.length >= 4) {
-        writeMemory(content, { source: text, topic: inferTopic(content), explicit: true })
-        userMsg.memorySaved = true
+        explicitCandidates.push({ text: content, source: text, topic: inferTopic(content) })
       }
     }
-    if (!userMsg.memorySaved) {
+    if (explicitCandidates.length === 0) {
       const pref = detectPreferenceFact(text)
       if (pref) {
-        writeMemory(pref, { source: text, topic: inferTopic(pref), explicit: true })
-        userMsg.memorySaved = true
+        explicitCandidates.push({ text: pref, source: text, topic: inferTopic(pref) })
       } else {
         // 作息自动记（2026-09-09 七七拍板）：稳定作息类（上晚班/几点上下班/几点睡）保底提取，补偏好正则的漏网
         const sched = detectScheduleFact(text)
         if (sched) {
-          writeMemory(sched, { source: text, topic: '工作', explicit: true })
-          userMsg.memorySaved = true
+          explicitCandidates.push({ text: sched, source: text, topic: '工作' })
         } else if (text.trim().length >= 1 && text.trim().length <= 8) {
         const prevAi = visibleMessages.filter((m) => m.role === 'assistant').slice(-1)[0]
         const askText = prevAi ? stripMemoryMarkers(prevAi.content) : ''
@@ -538,8 +553,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
           const short = text.trim()
           if (askAsk && short.length >= 1) {
             const fact = short.length <= 4 ? `喜欢${short}` : short
-            writeMemory(fact, { source: `TA问：${askText.slice(0, 30)}\n我答：${text}`, topic: inferTopic(fact), explicit: true })
-            userMsg.memorySaved = true
+            // source 用户实际回答在前：writeMemory 的 20 字截断优先保住用户原话（TASK-MEM-DISTILL）
+            explicitCandidates.push({
+              text: fact,
+              source: `我答：${text}${askText ? `\nTA问：${askText.slice(0, 30)}` : ''}`,
+              topic: inferTopic(fact),
+            })
           }
         }
       }
@@ -752,32 +771,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
         busyTriggeredRef.current = true
         const cut = findBusyCutoff(raw)
         const busyText = cut > 0 && cut < raw.length ? raw.slice(0, cut) : raw
+        // TASK-MEM-DISTILL：忙碌截断前先把本轮候选/已到 marker 归并落库（模型给完整回复前 = 无对应 marker → fallback）
+        flushMemoryWrites(raw)
         enterBusyRef.current(busyText)
         return
       }
-      if (raw) {
-        const memories = extractMemories(raw)
-        if (memories.length > 0) {
-          const source = userMsg.content.trim()
-          const snippet = source.length > 20 ? `${source.slice(0, 20)}…` : source
-          if (activeSessionId) {
-            const token = getToken()
-            for (const mem of memories) {
-              const item = upsertMemoryCache(activeSessionId, mem.text, snippet, mem.topic)
-              if (item && token) {
-                postMemory(token, activeSessionId, { content: mem.text }).then((res) => {
-                  if (res.ok) reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
-                })
-              }
-            }
-          } else {
-            for (const mem of memories) {
-              upsertMemoryItem(mem.text, snippet, mem.topic)
-            }
-          }
-          notifyMemoryUpdated()
-        }
-      }
+      // TASK-MEM-DISTILL：唯一归并写入出口——candidate + marker 只写一条；无 marker 的候选 fallback 落库
+      flushMemoryWrites(raw)
       // 模块三·内心戏：提取思考链原文（存到 thinking 字段），正文剥离思考链
       // 第27条：合并两个来源——①正文里 `` 泄漏的思考 ②模型独立字段 reasoning_content
       const thinkFromContent = extractThinkBlocks(raw)
@@ -885,6 +885,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
             if (cutoff > 0 && cutoff < assistantText.current.length) {
               assistantText.current = assistantText.current.slice(0, cutoff)
             }
+            // TASK-MEM-DISTILL：流式 busy 命中后 abort 会直接 return（不进 finalize），
+            // 先在 abort 前把本轮候选/已到 marker 归并落库，否则记忆候选会丢
+            flushMemoryWrites(assistantText.current)
             // 停流：abort 后 catch 里会直接 return，不会触发 onError
             controllerRef.current?.abort()
             streamEndedRef.current = true
