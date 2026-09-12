@@ -145,6 +145,16 @@
   padding-bottom: var(--ui2-nav-safe-height);
 }
 
+/* 5b. QA2：Home 场景例外 —— Scene 必须物理覆盖整个 viewport（含 Nav 后方）。
+       原因：.app-main 的 padding-bottom（56px+safe-area）会砍掉
+       .home-page(height:100%) 的可视高度 —— Scene 提前结束于 padding 上方，
+       Nav 后方露出 .app 浅色底（部署实测 Scene≈y880 结束、Nav y874–936）。
+       Home 的滚动 clearance 由 .home-inner 自带 padding-bottom 承担，
+       不依赖 .app-main 的 padding；Nav 仍 absolute 浮在 Scene 上。 */
+.app:has(.home-page) .app-main {
+  padding-bottom: 0;
+}
+
 /* 兜底：不支持 :has() 的旧浏览器统一留安全空间 */
 @supports not (selector(:has(*))) {
   .app-main {
@@ -178,7 +188,7 @@
 .home-page {
   height: 100%;
   overflow: hidden;
-  padding: max(18px, env(safe-area-inset-top)) var(--ui2-page-x) 0;
+  padding: max(14px, env(safe-area-inset-top)) var(--ui2-page-x) 0;
 }
 
 /* 内容滚动层：保留 index.css 的 flex column 语义，显式接管高度/滚动 */
@@ -198,7 +208,7 @@
 
 /* ---- 品牌区 ---- */
 .home-brand {
-  margin: 2px 0 clamp(30px, 9vh, 64px);
+  margin: 2px 0 clamp(16px, 4.5vh, 32px);
 }
 
 .home-brand-mark {
@@ -235,7 +245,7 @@
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  margin: 8px 0 28px;
+  margin: 6px 0 12px;
   padding: 0;
   border-radius: 0;
   background: none;
@@ -248,7 +258,7 @@
 }
 
 .home-moment-copy h2 {
-  margin: 0 0 5px;
+  margin: 0 0 4px;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.18em;
@@ -258,7 +268,7 @@
 .home-moment-copy p {
   min-height: 0;
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.6;
   color: var(--home-ink);
 }
@@ -293,8 +303,8 @@
 
 /* ---- Important Date：时间关系行（去卡） ---- */
 .home-anniversary {
-  margin: 30px 0 26px;
-  padding: 18px 0 20px;
+  margin: 16px 0 12px;
+  padding: 9px 0 11px;
   border: none;
   border-top: 1px solid color-mix(in srgb, var(--home-ink) 16%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--home-ink) 16%, transparent);
@@ -310,13 +320,13 @@
 }
 
 .home-anniversary h2 {
-  margin: 9px 0 3px;
+  margin: 6px 0 2px;
   font-size: 15px;
   font-weight: 600;
 }
 
 .home-anniversary strong {
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 650;
 }
 
@@ -331,7 +341,7 @@
 .home-anniversary-view {
   float: none;
   display: inline-block;
-  margin: 10px 0 0;
+  margin: 6px 0 0;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -346,7 +356,7 @@
 
 /* milestone 进度：细线 + TA Accent 光（只做小状态） */
 .home-anniv-milestone {
-  margin-top: 13px;
+  margin-top: 8px;
   border-top: none;
 }
 
@@ -378,7 +388,7 @@
 }
 
 .home-anniv-track {
-  margin-top: 9px;
+  margin-top: 6px;
   height: 2px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--home-ink) 14%, transparent);
@@ -397,7 +407,7 @@
   align-items: center;
   gap: 7px;
   margin: 2px auto 0;
-  padding: 12px 24px;
+  padding: 11px 22px;
   border: 1px solid color-mix(in srgb, var(--home-ink) 20%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--home-ink) 8%, transparent);
@@ -416,19 +426,70 @@
   font-size: 15px;
 }
 
-/* ---- 真实生活入口（TA 的生活） ---- */
-.home-shortcuts {
-  margin-top: 26px;
+/* ---- QA2：TA 的生活 → 正式生活预览区（替代旧快捷小圆钮） ----
+   较大内容区域，住在场景里：半透 surface + 细边框 + 大圆角。
+   不是「图标+标题+小字+白底圆角卡」，也不是设置入口。
+   只读真实 Space Post（posts[0]）；无则空态，不编造。点击整区进 onGoLife。 */
+.home-life {
+  margin: 30px 0 8px;
+  padding: 18px 18px 16px;
+  border: 1px solid color-mix(in srgb, var(--home-ink) 14%, transparent);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--home-ink) 5%, transparent);
+  backdrop-filter: none;
 }
 
-.home-shortcuts button {
-  padding: 8px 15px;
-  border: 1px solid color-mix(in srgb, var(--home-ink) 18%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--home-ink) 6%, transparent);
-  backdrop-filter: none;
+.home-life-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--home-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.home-life-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.home-life-more {
   color: var(--home-ink-soft);
-  font-size: 12.5px;
+  font-size: 12px;
+}
+
+.home-life-preview {
+  margin-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--home-ink) 12%, transparent);
+  padding-top: 12px;
+}
+
+.home-life-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--home-ink);
+}
+
+.home-life-time {
+  display: block;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--home-ink-soft);
+}
+
+.home-life-empty {
+  margin: 12px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--home-ink) 12%, transparent);
+  padding-top: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--home-ink-soft);
 }
 
 /* ---- Web 更新 ↻（页头级小入口，复用 forceRefresh） ---- */
