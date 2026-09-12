@@ -37,6 +37,7 @@ import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELI
 import { buildFutureAgendaBlock } from '../lib/futureAgenda'
 import { buildSelfTimelineBlock } from '../lib/selfTimeline'
 import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYourMoment } from '../lib/yourMoment'
+import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona } from '../lib/taRuntime'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -632,6 +633,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     const timelineBlock = buildSelfTimelineBlock(base, Date.now(), lang)
     if (timelineBlock) {
       apiMessages.push({ role: 'system', content: timelineBlock })
+    }
+    // TA Runtime（TASK-TA-RUNTIME-V1）：Home 与 Chat 读同一份持久状态、同一 lazy getter。
+    // 未到期取同一 activity；到期由 getter 推进，之后 Home 再读也是同一新状态。零额外 LLM。
+    const runtime = getOrAdvanceTaRuntime(
+      activeSessionId || undefined,
+      getSessionPersona(activeSessionId || undefined),
+      Date.now(),
+    )
+    const runtimeCtx = buildTaRuntimeContext(runtime, lang)
+    if (runtimeCtx) {
+      apiMessages.push({ role: 'system', content: runtimeCtx })
     }
     const weeklyList = getWeeklyReviews(activeSessionId || undefined)
     if (weeklyList.length > 0) {
