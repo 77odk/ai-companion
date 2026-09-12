@@ -207,8 +207,8 @@ export default function App() {
   const [detailFrom, setDetailFrom] = useState<View>('chat')
   // 角色管理「角色详情」只看不切：临时查看的会话 id（chatprofile 优先读它；聊天/我的入口进资料卡时为 null）
   const [profileTarget, setProfileTarget] = useState<string | null>(null)
-  // 进空间时的初始子页：「我的 → TA 记得的」进记忆墙，其余入口进空间主页
-  const [spaceInitialPage, setSpaceInitialPage] = useState<'home' | 'memories'>('home')
+  // 进空间时的初始子页：统一从空间主页进入（原「我的 → TA 记得的」记忆墙入口已移除，记忆入口唯一为底部「记忆」Tab）
+  const [spaceInitialPage, setSpaceInitialPage] = useState<'home'>('home')
   // 从「我的 → TA 记得的」进记忆墙时，底部高亮算在「我的」上（旧记账项修复）；其余入口算「空间」
   const [spaceFrom, setSpaceFrom] = useState<'space' | 'settings'>('space')
   const navActive = (tab: 'ta' | 'space' | 'memory' | 'mine'): boolean => {
