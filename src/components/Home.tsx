@@ -5,12 +5,12 @@ import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import {
   formatAnniversaryDate,
   formatCountdown,
-  isMilestoneAnniversary,
+  getAnniversaries,
   mergeDuplicateAnniversaries,
-  readRoleAnniversaries,
-  resolveMainAnniversary,
   type Anniversary,
 } from '../lib/anniversary'
+import { getMilestoneProgress, pickHomeBigDay } from '../lib/homeBigDay'
+import { getKnownDays } from '../lib/milestone'
 import { MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { loadCurrentPosts } from '../lib/aiSpace'
 import { displaySessionName } from '../lib/sessionFlow'
@@ -47,21 +47,16 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   const taAvatar = useMemo(() => loadAIProfile(sid).avatar, [sid])
   const momentPost = useMemo(() => posts.find((p) => p.source === 'event') ?? posts[0], [posts])
 
-  const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() =>
-    readRoleAnniversaries(sid).filter((item) => item.kind !== 'personal'),
+  const [anniversaries, setAnniversaries] = useState<Anniversary[]>(() => getAnniversaries(sid))
+  const bigDay = useMemo(
+    () => pickHomeBigDay(mergeDuplicateAnniversaries(anniversaries), now.getTime()),
+    [anniversaries, now],
   )
-  const mainAnniversary = useMemo(() => {
-    const candidates = mergeDuplicateAnniversaries(
-      anniversaries.filter((item) => !isMilestoneAnniversary(item)),
-    )
-    return resolveMainAnniversary(candidates, sid)
-  }, [anniversaries, sid])
+  const milestone = useMemo(() => getMilestoneProgress(getKnownDays(now.getTime(), sid)), [sid, now])
 
   useEffect(() => {
     const refresh = () => {
-      setAnniversaries(
-        readRoleAnniversaries(getActiveSessionId() || undefined).filter((item) => item.kind !== 'personal'),
-      )
+      setAnniversaries(getAnniversaries(getActiveSessionId() || undefined))
     }
     window.addEventListener(MEMORY_UPDATED_EVENT, refresh)
     window.addEventListener('storage', refresh)
@@ -86,10 +81,11 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
         </section>
 
         <HomeAnniversary
-          label={mainAnniversary?.label}
-          count={mainAnniversary ? formatCountdown(mainAnniversary) : undefined}
-          date={mainAnniversary ? formatAnniversaryDate(mainAnniversary.date) : undefined}
-          dateValue={mainAnniversary?.date}
+          label={bigDay?.label}
+          count={bigDay ? formatCountdown(bigDay) : undefined}
+          date={bigDay ? formatAnniversaryDate(bigDay.date) : undefined}
+          dateValue={bigDay?.date}
+          milestone={milestone}
           onView={onGoAnniversary}
         />
 
