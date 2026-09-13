@@ -24,6 +24,15 @@ import {
 } from './lib/sessionStore'
 import { hasLocalLegacyData, hasMigratedFlag, runLocalMigration, setLocalMigratedFlag } from './lib/migrateLocal'
 import {
+  clearVisitWelcome,
+  getLastPrimaryView,
+  isPrimaryView,
+  isVisitWelcome,
+  markPrimaryView,
+  markVisitWelcome,
+  shouldShowWelcomeOnEntry,
+} from './lib/visitState'
+import {
   decideLoginTarget,
   displaySessionName,
   resolveActiveSession,
@@ -37,10 +46,11 @@ import Memory from './components/Memory'
 
 type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
-// 底部四 tab 的常显范围：主视图（TA/空间/记忆/我的）带底部导航；全屏页不带。
+// 底部四 tab 的常显范围：主视图（TA/空间/记忆/我的）带底部导航；Chat 等全屏页不带。
+// UI2-02 NAV-03：Chat 是 Secondary 全屏 view，Bottom Nav 只属于 home/aispace/memory/settings。
 // 用函数判断避免 TS 对嵌套 view 比较做过度收窄（误报不可达比较）。
 function isNavView(v: View): boolean {
-  return v === 'home' || v === 'chat' || v === 'aispace' || v === 'settings' || v === 'memory'
+  return v === 'home' || v === 'aispace' || v === 'settings' || v === 'memory'
 }
 
 // 四 tab 高亮：TA=首页/聊天，空间=AI Space，记忆=独立 Memory，我的=设置。
@@ -54,34 +64,13 @@ function navTabActive(v: View, tab: 'ta' | 'space' | 'memory' | 'mine'): boolean
 // 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
 type MigrationState = 'idle' | 'running' | 'failed'
 
-// ---- 开机页判定：新会话或隔太久（>6 小时）才算重新开机 ----
-const BOOT_INTERVAL_MS = 6 * 60 * 60 * 1000
-const SESSION_BOOT_KEY = 'eluvin_boot_seen'
-const LAST_VISIT_KEY = 'eluvin_last_visit_at'
-
-function decideBoot(): boolean {
-  const now = Date.now()
-  try {
-    const seen = sessionStorage.getItem(SESSION_BOOT_KEY)
-    if (!seen) {
-      // 新会话（关过标签/浏览器再开）：这次算开机
-      sessionStorage.setItem(SESSION_BOOT_KEY, '1')
-      localStorage.setItem(LAST_VISIT_KEY, String(now))
-      return true
-    }
-    const last = Number(localStorage.getItem(LAST_VISIT_KEY) || 0)
-    if (last && now - last > BOOT_INTERVAL_MS) {
-      // 距上次访问超过 6 小时：也算重新开机
-      localStorage.setItem(LAST_VISIT_KEY, String(now))
-      return true
-    }
-    // 刷新、短时间来回：直接进主界面
-    localStorage.setItem(LAST_VISIT_KEY, String(now))
-    return false
-  } catch {
-    return true
-  }
-}
+// ---- 开机页判定：交给 visitState（新会话 / 距上次活跃超过 6 小时算 fresh visit） ----
+// 模块加载时判一次，保证先读标记再渲染，也不会被 StrictMode 的二次初始化干扰。
+// 优先级：fresh visit / 本会话正停留在 Welcome / 游客 → 欢迎页；
+//         已登录用户异步拉会话分流（loading 过渡，不白屏）。
+// 已登录不再用 needsRolePick 判初始页：有没有会话由云端 sessions 决定，拉回结果后再恢复主视图/进聊天/选角色。
+const showWelcomeOnEntry = shouldShowWelcomeOnEntry()
+const initialView: View = showWelcomeOnEntry || isVisitWelcome() || !isLoggedIn() ? 'welcome' : 'loading'
 
 // 是否需要先选角色：没有专属人设且没有聊天记录 = 全新用户，进聊天前必须选一个 TA
 function needsRolePick(): boolean {
@@ -91,12 +80,6 @@ function needsRolePick(): boolean {
     return false
   }
 }
-
-// 模块加载时判一次开机页，保证先读标记再渲染，也不会被 StrictMode 的二次初始化干扰
-const bootWelcome = decideBoot()
-// 优先级：开机页 > 游客先看欢迎页（逛展示内容）> 已登录用户异步拉会话分流（loading 过渡，不白屏）
-// 已登录不再用 needsRolePick 判初始页：有没有会话由云端 sessions 决定，拉回结果后再进聊天/选角色
-const initialView: View = bootWelcome ? 'welcome' : !isLoggedIn() ? 'welcome' : 'loading'
 
 // ---- 监听登录状态变化：登录/登出后重算登录墙与已登录态 ----
 function useAuthState(): boolean {
@@ -203,6 +186,17 @@ export default function App() {
     restoreScroll(view)
   }, [view, restoreScroll])
 
+  // UI2-02 NAV：主视图记 lastPrimaryView（只允许 home/aispace/memory/settings）；
+  // Welcome 记当前会话 visit marker（登录用户在 Welcome 刷新仍停留 Welcome），离开 Welcome 即清除。
+  useEffect(() => {
+    if (view === 'welcome') {
+      markVisitWelcome()
+    } else if (view !== 'loading') {
+      clearVisitWelcome()
+    }
+    if (isPrimaryView(view)) markPrimaryView(view)
+  }, [view])
+
   // 二级页（资料卡/关于我/周记）的来源：从哪进返回哪（聊天/忆览/空间/我的）
   const [detailFrom, setDetailFrom] = useState<View>('chat')
   // 角色管理「角色详情」只看不切：临时查看的会话 id（chatprofile 优先读它；聊天/我的入口进资料卡时为 null）
@@ -304,10 +298,10 @@ export default function App() {
       setSessionsCache(sessions)
       const active = resolveActiveSession(sessions, getActiveSessionId())
       if (active) {
-        // 有云端会话 → 进首页（回家；聊天/空间都从首页进）
+        // 有云端会话 → 按上次主视图恢复（无合法记录回首页）；聊天/空间都从首页进
         setActiveSessionId(String(active.id))
         setMigration('idle')
-        replaceView('home')
+        replaceView(getLastPrimaryView() ?? 'home')
       } else if (!hasMigratedFlag() && hasLocalLegacyData()) {
         // 无云端会话 + 本地有旧数据 + 没迁过 → 自动把本地数据搬成第一个会话
         setActiveSessionId('')
@@ -405,8 +399,9 @@ export default function App() {
     void redirectBySessions()
   }
 
-  // 欢迎页「开始使用」：登录用户按云端会话分流；游客维持原流程（选角色或直接聊天）
+  // 欢迎页「开始使用」：离开 Welcome（清会话级 visit marker）；登录用户按云端会话分流；游客维持原流程（选角色或直接聊天）
   const handleWelcomeStart = () => {
+    clearVisitWelcome()
     if (isLoggedIn()) {
       void redirectBySessions()
     } else {
