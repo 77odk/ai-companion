@@ -18,8 +18,18 @@ import { MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { loadCurrentPosts } from '../lib/aiSpace'
 import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from '../lib/taRuntime'
 import { displaySessionName } from '../lib/sessionFlow'
+import {
+  clampCycleDays,
+  dayOptions,
+  monthOptions,
+  parseDateForPicker,
+  periodYearOptions,
+  toFullDate,
+  toMonthDay,
+} from '../lib/timeInteraction'
 import HomeScene, { getHomeScene } from './HomeScene'
 import TaOrb from './TaOrb'
+import TimeWheel from './TimeWheel'
 
 interface Props {
   onGoChat: () => void
@@ -59,9 +69,9 @@ function fmtLifeTime(ts: number): string {
    生理期主数字：优先「距预计经期 N 天」（现有 daysUntilPeriod），否则现有估算兜底；
    副文案：现有 formatPeriodEstimate / 「预计经期开始」。 */
 function dateMD(date: string): { m: string; d: string } | null {
-  const iso = date.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const iso = date.match(/^(\d{4})-(\d{2})-(\d{2})$/) as RegExpMatchArray | null
   if (iso) return { m: iso[2], d: iso[3] }
-  const md = date.match(/^(\d{2})-(\d{2})$/)
+  const md = date.match(/^(\d{2})-(\d{2})$/) as RegExpMatchArray | null
   return md ? { m: md[1], d: md[2] } : null
 }
 
@@ -93,10 +103,7 @@ function periodSub(a: Anniversary, now: number): string {
 }
 
 type TimeKind = 'birthday' | 'period'
-type TimeEditor =
-  | { mode: 'add'; kind: TimeKind }
-  | { mode: 'edit'; kind: TimeKind; id: string }
-  | null
+type TimeSheet = { kind: TimeKind; mode: 'add' | 'edit'; id?: string } | null
 
 export default function Home({ onGoChat, onGoLife }: Props) {
   const sid = getActiveSessionId() || undefined
@@ -159,66 +166,112 @@ export default function Home({ onGoChat, onGoLife }: Props) {
     }
   }, [])
 
-  // ---- 我的时间：添加 / 编辑（轻量 sheet，复用 anniversary.ts 数据层与广播；不复制设置页） ----
-  const [editor, setEditor] = useState<TimeEditor>(null)
-  const [formKind, setFormKind] = useState<TimeKind>('birthday')
-  const [formDate, setFormDate] = useState('')
-  const [formPeriodDays, setFormPeriodDays] = useState('28')
+  // ---- 我的时间：生日 Sheet / 生理期 Sheet（各自独立，无类型切换 tab；复用 anniversary.ts 数据层） ----
+  // 展示层拆分后：empty 直接进 add、有数据进 edit；sheet 类型固定，Review-Fix-01 的 kind 切换问题自然消失。
+  const [sheet, setSheet] = useState<TimeSheet>(null)
+  const [bMonth, setBMonth] = useState('09')
+  const [bDay, setBDay] = useState('28')
+  const [pYear, setPYear] = useState(String(new Date().getFullYear()))
+  const [pMonth, setPMonth] = useState('09')
+  const [pDay, setPDay] = useState('12')
+  const [pCycle, setPCycle] = useState(28)
 
-  const openAdd = (kind: TimeKind) => {
-    setFormKind(kind)
-    setFormDate('')
-    setFormPeriodDays('28')
-    setEditor({ mode: 'add', kind })
-  }
-  const openEdit = (kind: TimeKind) => {
-    const target = kind === 'period' ? period : birthday
-    if (!target) return
-    setFormKind(kind)
-    // type="date" 只能回填 YYYY-MM-DD；老 MM-DD 数据留空（保存时用当前日期值）
-    setFormDate(/^\d{4}-\d{2}-\d{2}$/.test(target.date) ? target.date : '')
-    setFormPeriodDays(target.periodDays ? String(target.periodDays) : '28')
-    setEditor({ mode: 'edit', kind, id: target.id })
-  }
-  const closeEditor = () => setEditor(null)
-
-  const saveTime = () => {
-    if (!editor) return
-    const d = formDate.trim()
-    if (!d || !isValidAnniversaryDate(d)) return
-    // REVIEW-FIX-01：保存类型必须以「sheet 当前所选」为准，而非打开时的 editor.kind。
-    // add 模式跟随 formKind（可切换）；edit 模式锁定 editor.kind（JSX 已隐藏类型切换，防记录类型迁移）。
-    const kind = editor.mode === 'add' ? formKind : editor.kind
-    if (editor.mode === 'add') {
-      if (kind === 'period') {
-        const n = Math.max(1, Math.min(90, Number(formPeriodDays) || 28))
-        addAnniversary('生理期', d, { kind: 'personal', periodDays: n }, undefined)
-      } else {
-        addAnniversary('我的生日', d, { kind: 'personal', countMode: 'countdown' }, undefined)
+  const openBirthday = () => {
+    const target = birthday
+    if (target) {
+      const p = parseDateForPicker(target.date)
+      if (p) {
+        setBMonth(pad2(p.month))
+        setBDay(pad2(p.day))
       }
     } else {
-      const target = kind === 'period' ? period : birthday
-      if (!target) return
-      if (kind === 'period') {
-        const n = Math.max(1, Math.min(90, Number(formPeriodDays) || 28))
+      const t = new Date()
+      setBMonth(pad2(t.getMonth() + 1))
+      setBDay(pad2(t.getDate()))
+    }
+    setSheet({ kind: 'birthday', mode: target ? 'edit' : 'add', id: target?.id })
+  }
+  const openPeriod = () => {
+    const target = period
+    if (target) {
+      const p = parseDateForPicker(target.date)
+      if (p) {
+        setPYear(String(p.year ?? new Date().getFullYear()))
+        setPMonth(pad2(p.month))
+        setPDay(pad2(p.day))
+      }
+      setPCycle(clampCycleDays(target.periodDays ?? 28))
+    } else {
+      const t = new Date()
+      setPYear(String(t.getFullYear()))
+      setPMonth(pad2(t.getMonth() + 1))
+      setPDay(pad2(t.getDate()))
+      setPCycle(28)
+    }
+    setSheet({ kind: 'period', mode: target ? 'edit' : 'add', id: target?.id })
+  }
+  const closeSheet = () => setSheet(null)
+
+  // Escape（桌面）关闭 sheet
+  useEffect(() => {
+    if (!sheet) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSheet(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sheet])
+
+  // 月份/年份切换后，若当前日超过新月份天数 → clamp 到月末（4/31 这类非法日期从 UI 上不可能产生）
+  const onBirthdayMonth = (m: string) => {
+    setBMonth(m)
+    const max = m === '02' ? 29 : new Date(new Date().getFullYear(), Number(m), 0).getDate()
+    if (Number(bDay) > max) setBDay(pad2(max))
+  }
+  const onPeriodYear = (y: string) => {
+    setPYear(y)
+    const max = new Date(Number(y), Number(pMonth), 0).getDate()
+    if (Number(pDay) > max) setPDay(pad2(max))
+  }
+  const onPeriodMonth = (m: string) => {
+    setPMonth(m)
+    const max = new Date(Number(pYear), Number(m), 0).getDate()
+    if (Number(pDay) > max) setPDay(pad2(max))
+  }
+
+  const saveSheet = () => {
+    if (!sheet) return
+    if (sheet.kind === 'birthday') {
+      const d = toMonthDay(Number(bMonth), Number(bDay))
+      if (!isValidAnniversaryDate(d)) return
+      if (sheet.mode === 'add') {
+        addAnniversary('我的生日', d, { kind: 'personal', countMode: 'countdown' }, undefined)
+      } else if (birthday) {
         updateAnniversary(
-          target.id,
-          target.label || '生理期',
+          birthday.id,
+          birthday.label || '我的生日',
           d,
-          { kind: 'personal', periodDays: n, color: target.color },
+          { kind: 'personal', countMode: 'countdown', color: birthday.color },
           undefined,
         )
-      } else {
+      }
+    } else {
+      const d = toFullDate(Number(pYear), Number(pMonth), Number(pDay))
+      if (!isValidAnniversaryDate(d)) return
+      const n = clampCycleDays(pCycle)
+      if (sheet.mode === 'add') {
+        addAnniversary('生理期', d, { kind: 'personal', periodDays: n }, undefined)
+      } else if (period) {
         updateAnniversary(
-          target.id,
-          target.label || '我的生日',
+          period.id,
+          period.label || '生理期',
           d,
-          { kind: 'personal', countMode: 'countdown', color: target.color },
+          { kind: 'personal', periodDays: n, color: period.color },
           undefined,
         )
       }
     }
-    closeEditor()
+    closeSheet()
   }
 
   const milestonePct = Math.round(Math.min(1, Math.max(0, milestone.progress)) * 100)
@@ -263,7 +316,7 @@ export default function Home({ onGoChat, onGoLife }: Props) {
             <button
               type="button"
               className="home-time-window"
-              onClick={() => (birthday ? openEdit('birthday') : openAdd('birthday'))}
+              onClick={openBirthday}
             >
               <span className="home-time-window-k">我的生日</span>
               <span className="home-time-window-num">{birthday ? birthdayNum(birthday) : '— —'}</span>
@@ -273,7 +326,7 @@ export default function Home({ onGoChat, onGoLife }: Props) {
             <button
               type="button"
               className="home-time-window"
-              onClick={() => (period ? openEdit('period') : openAdd('period'))}
+              onClick={openPeriod}
             >
               <span className="home-time-window-k">生理期</span>
               <span className="home-time-window-num">{period ? periodNum(period, now.getTime()) : '— —'}</span>
@@ -349,70 +402,74 @@ export default function Home({ onGoChat, onGoLife }: Props) {
         </section>
       </div>
 
-      {/* 我的时间：添加/编辑轻量 sheet（复用 anniversary.ts 持久化与广播；Home 内联，不复制设置页） */}
-      {editor && (
-        <div className="home-time-mask" onClick={closeEditor}>
+      {/* 我的生日：专属 Bottom Sheet（双列 Wheel：月/日，无年份、无 HTML date input、无类型切换 tab） */}
+      {sheet?.kind === 'birthday' && (
+        <div className="home-time-mask" onClick={closeSheet}>
           <div className="home-time-sheet" onClick={(e) => e.stopPropagation()}>
-            <h3 className="home-time-sheet-title">
-              {editor.mode === 'edit' ? (editor.kind === 'period' ? '编辑生理期' : '编辑生日') : '写下我的时间'}
-            </h3>
-
-            {/* REVIEW-FIX-01：edit 模式锁定当前 kind（不显示类型切换，防把 birthday 迁成 period 或反之）；add 模式允许切换 */}
-            {editor.mode === 'add' && (
-              <div className="home-time-types">
-                <button
-                  type="button"
-                  className={`home-time-type${formKind === 'birthday' ? ' is-active' : ''}`}
-                  onClick={() => setFormKind('birthday')}
-                >
-                  生日
-                </button>
-                <button
-                  type="button"
-                  className={`home-time-type${formKind === 'period' ? ' is-active' : ''}`}
-                  onClick={() => setFormKind('period')}
-                >
-                  生理期
-                </button>
-              </div>
-            )}
-
-            {formKind === 'birthday' ? (
-              <>
-                <p className="home-time-hint">选你的生日，每年到了 TA 都会记得</p>
-                <input
-                  className="home-time-input"
-                  type="date"
-                  value={formDate}
-                  onChange={(e) => setFormDate(e.target.value)}
-                />
-              </>
-            ) : (
-              <>
-                <p className="home-time-hint">上次来潮是哪天？周期大概多少天？TA 会帮你估算下次</p>
-                <input
-                  className="home-time-input"
-                  type="date"
-                  value={formDate}
-                  onChange={(e) => setFormDate(e.target.value)}
-                />
-                <div className="home-time-period-row">
-                  <span className="home-time-period-label">周期</span>
-                  <input
-                    className="home-time-input home-time-period-input"
-                    type="number"
-                    min={1}
-                    max={90}
-                    value={formPeriodDays}
-                    onChange={(e) => setFormPeriodDays(e.target.value)}
-                  />
-                  <span className="home-time-period-label">天</span>
-                </div>
-              </>
-            )}
-
-            <button type="button" className="home-time-save" onClick={saveTime}>
+            <h3 className="home-time-sheet-title">我的生日</h3>
+            <p className="home-time-sub">TA 会记得这一天</p>
+            <div className="tw-row">
+              <TimeWheel options={monthOptions()} value={bMonth} onChange={onBirthdayMonth} ariaLabel="选择月份" />
+              <TimeWheel
+                options={dayOptions(undefined, Number(bMonth))}
+                value={bDay}
+                onChange={setBDay}
+                ariaLabel="选择日期"
+              />
+            </div>
+            <button type="button" className="home-time-save" onClick={saveSheet}>
               保存
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 我的周期：专属 Bottom Sheet（年/月/日三列 Wheel + 周期 stepper；真实日期保存，不出现 HTML date input） */}
+      {sheet?.kind === 'period' && (
+        <div className="home-time-mask" onClick={closeSheet}>
+          <div className="home-time-sheet" onClick={(e) => e.stopPropagation()}>
+            <h3 className="home-time-sheet-title">我的周期</h3>
+            <p className="home-time-sub">上次经期开始</p>
+            <div className="tw-row">
+              <TimeWheel
+                className="tw-col-year"
+                options={periodYearOptions().map(String)}
+                value={pYear}
+                onChange={onPeriodYear}
+                ariaLabel="选择年份"
+              />
+              <TimeWheel options={monthOptions()} value={pMonth} onChange={onPeriodMonth} ariaLabel="选择月份" />
+              <TimeWheel
+                options={dayOptions(Number(pYear), Number(pMonth))}
+                value={pDay}
+                onChange={setPDay}
+                ariaLabel="选择日期"
+              />
+            </div>
+            <div className="home-period-cycle" aria-label="平均周期">
+              <button
+                type="button"
+                className="home-cycle-btn"
+                aria-label="减少周期天数"
+                onClick={() => setPCycle(clampCycleDays(pCycle - 1))}
+              >
+                −
+              </button>
+              <span className="home-cycle-num">
+                {pCycle} <small>天</small>
+              </span>
+              <button
+                type="button"
+                className="home-cycle-btn"
+                aria-label="增加周期天数"
+                onClick={() => setPCycle(clampCycleDays(pCycle + 1))}
+              >
+                ＋
+              </button>
+            </div>
+            <p className="home-period-note">TA 会根据这次记录估算下一次</p>
+            <button type="button" className="home-time-save" onClick={saveSheet}>
+              保存记录
             </button>
           </div>
         </div>
