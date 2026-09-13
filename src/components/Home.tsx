@@ -21,8 +21,12 @@ import { displaySessionName } from '../lib/sessionFlow'
 import {
   clampCycleDays,
   dayOptions,
+  isFutureOnset,
+  monthDayCount,
   monthOptions,
   parseDateForPicker,
+  periodDayOptions,
+  periodMonthOptions,
   periodYearOptions,
   toFullDate,
   toMonthDay,
@@ -196,9 +200,17 @@ export default function Home({ onGoChat, onGoLife }: Props) {
     if (target) {
       const p = parseDateForPicker(target.date)
       if (p) {
-        setPYear(String(p.year ?? new Date().getFullYear()))
-        setPMonth(pad2(p.month))
-        setPDay(pad2(p.day))
+        // REVIEW-FIX-01 防御：存量数据若为未来日期（异常），回填时 clamp 到今天
+        const t = new Date()
+        const cy = t.getFullYear()
+        const cm = t.getMonth() + 1
+        const cd = t.getDate()
+        const y = p.year ?? cy
+        const m = p.month
+        const d = Math.min(p.day, y === cy && m === cm ? cd : monthDayCount(y, m))
+        setPYear(String(y))
+        setPMonth(pad2(m))
+        setPDay(pad2(d))
       }
       setPCycle(clampCycleDays(target.periodDays ?? 28))
     } else {
@@ -228,15 +240,40 @@ export default function Home({ onGoChat, onGoLife }: Props) {
     const max = m === '02' ? 29 : new Date(new Date().getFullYear(), Number(m), 0).getDate()
     if (Number(bDay) > max) setBDay(pad2(max))
   }
+  // REVIEW-FIX-01：生理期 year/month/day 切换时，未来 onset 不可达。
+  // 今年月份 > 当前月 → clamp 到当前月；今年当前月日期 > 当前日 → clamp 到当前日。
+  // 去年：任何已发生日期都合法，仅按真实月天数 clamp。
   const onPeriodYear = (y: string) => {
     setPYear(y)
-    const max = new Date(Number(y), Number(pMonth), 0).getDate()
-    if (Number(pDay) > max) setPDay(pad2(max))
+    const yy = Number(y)
+    const t = new Date()
+    const cy = t.getFullYear()
+    const cm = t.getMonth() + 1
+    const cd = t.getDate()
+    let mm = Number(pMonth)
+    if (yy === cy && mm > cm) {
+      mm = cm
+      setPMonth(pad2(mm))
+    }
+    if (yy === cy && mm === cm) {
+      if (Number(pDay) > cd) setPDay(pad2(cd))
+    } else if (Number(pDay) > monthDayCount(yy, mm)) {
+      setPDay(pad2(monthDayCount(yy, mm)))
+    }
   }
   const onPeriodMonth = (m: string) => {
     setPMonth(m)
-    const max = new Date(Number(pYear), Number(m), 0).getDate()
-    if (Number(pDay) > max) setPDay(pad2(max))
+    const yy = Number(pYear)
+    const mm = Number(m)
+    const t = new Date()
+    const cy = t.getFullYear()
+    const cm = t.getMonth() + 1
+    const cd = t.getDate()
+    if (yy === cy && mm === cm) {
+      if (Number(pDay) > cd) setPDay(pad2(cd))
+    } else if (Number(pDay) > monthDayCount(yy, mm)) {
+      setPDay(pad2(monthDayCount(yy, mm)))
+    }
   }
 
   const saveSheet = () => {
@@ -258,6 +295,8 @@ export default function Home({ onGoChat, onGoLife }: Props) {
     } else {
       const d = toFullDate(Number(pYear), Number(pMonth), Number(pDay))
       if (!isValidAnniversaryDate(d)) return
+      // REVIEW-FIX-01 最终防御：selected onset > 本地今天 → 不保存（本地日历比较，不走 UTC）
+      if (isFutureOnset(Number(pYear), Number(pMonth), Number(pDay))) return
       const n = clampCycleDays(pCycle)
       if (sheet.mode === 'add') {
         addAnniversary('生理期', d, { kind: 'personal', periodDays: n }, undefined)
@@ -438,9 +477,14 @@ export default function Home({ onGoChat, onGoLife }: Props) {
                 onChange={onPeriodYear}
                 ariaLabel="选择年份"
               />
-              <TimeWheel options={monthOptions()} value={pMonth} onChange={onPeriodMonth} ariaLabel="选择月份" />
               <TimeWheel
-                options={dayOptions(Number(pYear), Number(pMonth))}
+                options={periodMonthOptions(Number(pYear))}
+                value={pMonth}
+                onChange={onPeriodMonth}
+                ariaLabel="选择月份"
+              />
+              <TimeWheel
+                options={periodDayOptions(Number(pYear), Number(pMonth))}
                 value={pDay}
                 onChange={setPDay}
                 ariaLabel="选择日期"

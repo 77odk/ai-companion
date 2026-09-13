@@ -76,8 +76,40 @@ export function dayOptions(year: number | undefined, month: number): string[] {
   return Array.from({ length: max }, (_, i) => pad2(i + 1))
 }
 
-/** 生理期年份选项：去年 / 今年 / 明年（真实发生日期不会太远） */
+/* ---- 生理期（Period Record V1）：禁止未来 onset ----
+   "上次经期开始"是已经发生的 actual onset：
+   - 今天允许、过去允许、未来不允许；
+   - 明年不可选；今年只到当前月/当前日。
+   比较一律用本地日历（getFullYear/getMonth/getDate），不用 UTC 字符串，
+   避免跨时区偏一天。 */
+
+/** 本地日历 YYYY-MM-DD 的数值键（y*10000+m*100+d，零填充字符串字典序 = 日期序） */
+export function localDateKey(y: number, m: number, d: number): number {
+  return y * 10000 + m * 100 + d
+}
+
+/** 该日期相对本地 today 是否为未来（> 今天 = 未来 onset，禁止保存） */
+export function isFutureOnset(y: number, m: number, d: number, now: Date = new Date()): boolean {
+  return localDateKey(y, m, d) > localDateKey(now.getFullYear(), now.getMonth() + 1, now.getDate())
+}
+
+/** 生理期年份选项：去年 / 今年（明年不能作为可选年份 —— 未来 onset 不允许） */
 export function periodYearOptions(now: Date = new Date()): number[] {
   const y = now.getFullYear()
-  return [y - 1, y, y + 1]
+  return [y - 1, y]
+}
+
+/** 生理期月份选项：去年全年 12 个月；今年只到当前月（未来月份不可选） */
+export function periodMonthOptions(year: number, now: Date = new Date()): string[] {
+  const count = year < now.getFullYear() ? 12 : now.getMonth() + 1
+  return Array.from({ length: count }, (_, i) => pad2(i + 1))
+}
+
+/** 生理期日选项：今年当前月只到当前日；其它（去年任意月、今年已过月份）按真实月天数 */
+export function periodDayOptions(year: number, month: number, now: Date = new Date()): string[] {
+  const max =
+    year === now.getFullYear() && month === now.getMonth() + 1
+      ? now.getDate()
+      : monthDayCount(year, month)
+  return Array.from({ length: max }, (_, i) => pad2(i + 1))
 }

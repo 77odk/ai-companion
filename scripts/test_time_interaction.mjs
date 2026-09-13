@@ -17,6 +17,10 @@ import {
   monthOptions,
   dayOptions,
   periodYearOptions,
+  periodMonthOptions,
+  periodDayOptions,
+  isFutureOnset,
+  localDateKey,
 } from '../src/lib/timeInteraction.ts'
 import { isValidAnniversaryDate, formatCountdown, formatPeriodEstimate } from '../src/lib/anniversary.ts'
 
@@ -82,11 +86,48 @@ assert.equal(dayOptions(undefined, 4).length, 30)
 assert.equal(dayOptions(2026, 2).length, 28)
 assert.equal(dayOptions(2024, 2).length, 29)
 ok('生日 2 月始终 29（循环）；生理期按真实闰性')
-const ys = periodYearOptions(new Date('2026-09-13T12:00:00Z'))
-assert.deepEqual(ys, [2025, 2026, 2027])
-ok('生理期年份选项 = 去年/今年/明年')
+const ys = periodYearOptions(new Date(2026, 8, 13, 12, 0, 0))
+assert.deepEqual(ys, [2025, 2026])
+ok('生理期年份选项 = 去年/今年（明年不可选 —— future onset 禁止）')
 
-console.log('6. Anniversary 数据层兼容（不改 schema 的前提下保存格式合法）')
+console.log('6. REVIEW-FIX-01：未来 onset 防御（本地日历，不走 UTC）')
+// now 用本地时间构造（任何时区下本地年月日都是 2026-09-13）
+const R = new Date(2026, 8, 13, 12, 0, 0)
+assert.equal(R.getFullYear(), 2026)
+assert.equal(R.getMonth() + 1, 9)
+assert.equal(R.getDate(), 13)
+assert.equal(localDateKey(2026, 9, 13), 20260913)
+assert.equal(localDateKey(2026, 1, 1), 20260101)
+ok('localDateKey 数值键（YYYYMMDD）')
+assert.equal(isFutureOnset(2026, 9, 13, R), false)
+ok('today → PASS（允许保存）')
+assert.equal(isFutureOnset(2026, 9, 12, R), false)
+ok('yesterday → PASS')
+assert.equal(isFutureOnset(2026, 9, 14, R), true)
+ok('tomorrow → FAIL（禁止保存）')
+assert.equal(isFutureOnset(2026, 10, 1, R), true)
+ok('future month → FAIL')
+assert.equal(isFutureOnset(2027, 1, 1, R), true)
+ok('next year → FAIL（且年份选项里不存在）')
+assert.deepEqual(periodMonthOptions(2026, R), ['01', '02', '03', '04', '05', '06', '07', '08', '09'])
+assert.deepEqual(periodMonthOptions(2025, R), monthOptions())
+ok('periodMonthOptions：今年只到当前月 09；去年全年 12 个月')
+assert.equal(periodDayOptions(2026, 9, R).length, 13)
+assert.equal(periodDayOptions(2026, 8, R).length, 31)
+assert.equal(periodDayOptions(2025, 2, R).length, 28)
+ok('periodDayOptions：今年当前月只到当前日 13；已过月份按真实天数；去年按真实闰性')
+// 本地边界：实现必须用 getFullYear/getMonth/getDate（本地日历）。
+// 反例（错误实现）：若用 date.toISOString().slice(0,10)（UTC），本地 2026-09-13 06:00
+// 会被截成 2026-09-12，把「今天」误判成「未来」—— 本断言锁死本地日历语义。
+const boundary = new Date(2026, 8, 13, 6, 0, 0)
+assert.equal(boundary.getFullYear(), 2026)
+assert.equal(boundary.getMonth() + 1, 9)
+assert.equal(boundary.getDate(), 13)
+assert.equal(isFutureOnset(2026, 9, 13, boundary), false)
+assert.equal(isFutureOnset(2026, 9, 14, boundary), true)
+ok('local date boundary：本地日历比较，不用 UTC 字符串')
+
+console.log('7. Anniversary 数据层兼容（不改 schema 的前提下保存格式合法）')
 assert.equal(isValidAnniversaryDate('09-28'), true)
 assert.equal(isValidAnniversaryDate('02-29'), true)
 assert.equal(isValidAnniversaryDate('2026-09-12'), true)
