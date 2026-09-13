@@ -1,15 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadMemory, type MemoryItem } from '../lib/memory'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
+import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
 
-// UI2-03 · Memory —— 「时间是目录，记忆是正文。」
-// 纯展示层改版：数据源 / 排序 / 分组 / 隔离 / 角色边界一律不动。
-// 数据：global explicit memories + active session memories，按 createdAt 排序（原逻辑）。
-
-interface DatedMemory {
-  item: MemoryItem
-  timestamp: number | null
-}
+// UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
+// 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
+// 本文件为展示层：River（找得到）/ Detail（看明白）/ Book（重新经历）。
+// 新增数据字段 taReply 只在 memory.ts / sessionStore.ts / Chat.tsx 写入链最小扩展（可选、向后兼容）。
 
 interface MemoryMonth {
   key: string
@@ -64,21 +61,10 @@ function groupMemories(items: DatedMemory[]): MemoryYear[] {
   }))
 }
 
-function pad2(n: number): string {
-  return String(n).padStart(2, '0')
-}
-
-/** 短日期：9月13日（river entry 用；年份由章节承载） */
 function shortDate(timestamp: number | null): string {
   if (timestamp == null) return '日期未知'
   const d = new Date(timestamp)
   return `${d.getMonth() + 1}月${d.getDate()}日`
-}
-
-function monthKeyOf(timestamp: number | null): string {
-  if (timestamp == null) return 'unknown'
-  const d = new Date(timestamp)
-  return `${d.getFullYear()}-${d.getMonth()}`
 }
 
 /** 年份导航点击：滚动到对应年份章节（不筛选、不跳转） */
@@ -89,6 +75,13 @@ function scrollToYear(yearKey: string): void {
     block: 'start',
   })
 }
+
+// ---- Memory Book 阅读序列（纯函数在 src/lib/memoryBook.ts，可单测） ----
+
+// ---- 渐进渲染阈值：条目总数超过该值启用分批渲染（章节完整，条目渐进出现） ----
+const RIVER_FULL_LIMIT = 200
+/** 渐进渲染每批条数 */
+const RIVER_BATCH = 120
 
 export default function Memory() {
   const sessionId = getActiveSessionId()
@@ -112,17 +105,70 @@ export default function Memory() {
   const riverItems = useMemo(() => [...chronological].reverse(), [chronological])
   const years = useMemo(() => groupMemories(riverItems), [riverItems])
   const earliest = chronological.find((memory) => memory.timestamp != null)?.timestamp ?? null
+
+  // ---- 渐进渲染：少量全量；海量时章节完整、条目分批（lightweight，无依赖） ----
+  const needsWindowing = riverItems.length > RIVER_FULL_LIMIT
+  const [visibleCount, setVisibleCount] = useState(needsWindowing ? RIVER_BATCH : riverItems.length)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const itemOrder = useMemo(() => {
+    const map = new Map<MemoryItem, number>()
+    riverItems.forEach((m, i) => map.set(m.item, i))
+    return map
+  }, [riverItems])
+
+  useEffect(() => {
+    if (!needsWindowing) setVisibleCount(riverItems.length)
+  }, [needsWindowing, riverItems.length])
+
+  useEffect(() => {
+    if (!needsWindowing || visibleCount >= riverItems.length) return
+    const el = sentinelRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisibleCount((v) => Math.min(riverItems.length, v + RIVER_BATCH))
+        }
+      },
+      { rootMargin: '600px 0px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [needsWindowing, visibleCount, riverItems.length])
+
   const [view, setView] = useState<'river' | 'detail' | 'book'>('river')
   const [bookStage, setBookStage] = useState<'cover' | 'body'>('cover')
   const [bookFrom, setBookFrom] = useState<'cover' | 'detail'>('cover')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const selected = chronological[selectedIndex] ?? null
+  const bookPages = useMemo(() => buildBookPages(chronological), [chronological])
 
+  // ---- Detail → back 保持 River 位置 ----
+  const pageRef = useRef<HTMLDivElement>(null)
+  const riverScrollRef = useRef(0)
   const openDetail = (item: MemoryItem) => {
+    riverScrollRef.current = pageRef.current?.scrollTop ?? 0
     const index = chronological.findIndex((memory) => memory.item === item)
     setSelectedIndex(index >= 0 ? index : 0)
     setView('detail')
   }
+  useEffect(() => {
+    if (view !== 'river') return
+    const target = riverScrollRef.current
+    if (target <= 0) return
+    const frame = requestAnimationFrame(() => {
+      const el = pageRef.current
+      if (el) el.scrollTop = target
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [view])
+
+  // ---- Book：page sequence + 3D 翻页 ----
+  const [bookPageIdx, setBookPageIdx] = useState(0)
+  const [flip, setFlip] = useState<{ dir: 'next' | 'prev'; target: number } | null>(null)
+  const touchX = useRef<number | null>(null)
+  const prefersReduced =
+    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
   const openBookCover = () => {
     setBookStage('cover')
@@ -131,9 +177,29 @@ export default function Memory() {
   }
 
   const openBookHere = () => {
+    const idx = bookPages.findIndex((p) => p.type === 'memory' && p.index === selectedIndex)
+    setBookPageIdx(idx >= 0 ? idx : 0)
+    setFlip(null)
     setBookStage('body')
     setBookFrom('detail')
     setView('book')
+  }
+
+  const turnBook = (dir: 'next' | 'prev') => {
+    if (flip) return
+    const target = dir === 'next' ? bookPageIdx + 1 : bookPageIdx - 1
+    if (target < 0 || target >= bookPages.length) return
+    if (prefersReduced) {
+      setBookPageIdx(target)
+      return
+    }
+    setFlip({ dir, target })
+  }
+
+  const commitFlip = () => {
+    if (!flip) return
+    setBookPageIdx(flip.target)
+    setFlip(null)
   }
 
   // cover 年份范围：由真实 createdAt 派生；单年只显示单年；无法可靠确定 → 不显示
@@ -146,7 +212,7 @@ export default function Memory() {
     return min === max ? `${min}` : `${min} — ${max}`
   })()
 
-  // hero meta：37 段记忆，从 2025 年 11 月开始。
+  // hero meta：37 段记忆，从 2025 年 11 月开始。（安静小字）
   const heroMeta = useMemo(() => {
     if (memories.length === 0) return null
     const base = `${memories.length} 段记忆`
@@ -169,7 +235,15 @@ export default function Memory() {
             {yearRange ? <p className="memory-book-cover-years">{yearRange}</p> : null}
             <p className="memory-book-cover-line">那些被记住的小事，</p>
             <p className="memory-book-cover-line">后来都有了自己的位置。</p>
-            <button type="button" className="memory-book-open" onClick={() => { setSelectedIndex(0); setBookStage('body') }}>
+            <button
+              type="button"
+              className="memory-book-open"
+              onClick={() => {
+                setBookPageIdx(0)
+                setFlip(null)
+                setBookStage('body')
+              }}
+            >
               开始翻阅
               <span aria-hidden="true">→</span>
             </button>
@@ -181,73 +255,107 @@ export default function Memory() {
       )
     }
 
-    const d = selected?.timestamp == null ? null : new Date(selected.timestamp)
-    const prevTs = selectedIndex > 0 ? chronological[selectedIndex - 1].timestamp : null
-    const curTs = selected?.timestamp ?? null
-    const showYearChapter =
-      selectedIndex === 0
-        ? d != null
-        : curTs != null && (prevTs == null || new Date(prevTs).getFullYear() !== new Date(curTs).getFullYear())
-    const showMonthChapter =
-      !showYearChapter && d != null && prevTs != null && monthKeyOf(prevTs) !== monthKeyOf(curTs)
+    const currentPage = bookPages[bookPageIdx] ?? null
+    const flipPage = flip ? bookPages[flip.target] ?? null : null
+    const atStart = bookPageIdx <= 0
+    const atEnd = bookPageIdx >= bookPages.length - 1
 
-    const chapterYear = d?.getFullYear() ?? null
-    const chapterMonth = d?.getMonth() ?? null
+    const renderBookPage = (page: BookPage) => {
+      if (page.type === 'year') {
+        return (
+          <div className="memory-book-page memory-book-year-page" key={`y-${page.year}`}>
+            <p className="memory-book-year-num">{page.year}</p>
+            <p className="memory-book-year-zh">我们的记忆从这里</p>
+            <p className="memory-book-year-zh">慢慢留下来</p>
+          </div>
+        )
+      }
+      if (page.type === 'month') {
+        return (
+          <div className="memory-book-page memory-book-month-page" key={`m-${page.year}-${page.month}`}>
+            <p className="memory-book-month-roman">{MONTHS_ROMAN[page.month]}</p>
+            <p className="memory-book-month-zh">{page.month + 1} 月</p>
+            <p className="memory-book-month-note">{page.count} 段被记住的事</p>
+          </div>
+        )
+      }
+      const mem = chronological[page.index]
+      const d = mem?.timestamp == null ? null : new Date(mem.timestamp)
+      return (
+        <div className="memory-book-page memory-book-memory-page" key={`mem-${page.index}`}>
+          {d ? (
+            <p className="memory-book-meta">
+              {MONTHS_EN[d.getMonth()]} · {d.getDate()} · {d.getFullYear()}
+            </p>
+          ) : (
+            <p className="memory-book-meta">日期未知</p>
+          )}
+          <p className="memory-book-page-text">{mem?.item.text}</p>
+          {mem?.item.source?.trim() ? (
+            <>
+              <span className="memory-book-page-sep" aria-hidden="true">·</span>
+              <p className="memory-book-page-quote">「{mem.item.source.trim()}」</p>
+            </>
+          ) : null}
+          {mem?.item.taReply?.trim() ? (
+            <div className="memory-book-page-reply">
+              <span className="memory-book-page-reply-label">TA 当时回应</span>
+              <p className="memory-book-page-reply-text">{mem.item.taReply}</p>
+            </div>
+          ) : null}
+        </div>
+      )
+    }
 
     return (
       <div className="memory-book-overlay" role="dialog" aria-modal="true" aria-label="记忆书正文">
         <div className="memory-book-body-page">
-          {showYearChapter ? (
-            <div className="memory-book-chapter memory-book-chapter-year" aria-hidden="true">
-              <span className="memory-book-chapter-num">{chapterYear}</span>
-              <span className="memory-book-chapter-zh">我们的记忆从这里</span>
-              <span className="memory-book-chapter-zh">慢慢留下来</span>
-            </div>
-          ) : showMonthChapter && chapterMonth != null ? (
-            <div className="memory-book-chapter memory-book-chapter-month" aria-hidden="true">
-              <span className="memory-book-chapter-roman">{MONTHS_ROMAN[chapterMonth]}</span>
-              <span className="memory-book-chapter-zh">{chapterMonth + 1} 月</span>
-              <span className="memory-book-chapter-note">一段被记住的时间</span>
-            </div>
-          ) : null}
-
-          <div className="memory-book-sheet" key={selectedIndex}>
-            <div className="memory-book-head">
-              <span className="memory-book-day">{d ? pad2(d.getDate()) : '··'}</span>
-              <span className="memory-book-year">{d ? d.getFullYear() : ''}</span>
-            </div>
-            {d ? (
-              <p className="memory-book-month">{MONTHS_EN[d.getMonth()]}</p>
+          <div
+            className="memory-book-stage"
+            onTouchStart={(e) => {
+              touchX.current = e.touches[0]?.clientX ?? null
+            }}
+            onTouchEnd={(e) => {
+              if (touchX.current == null) return
+              const dx = (e.changedTouches[0]?.clientX ?? 0) - touchX.current
+              touchX.current = null
+              if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(e.changedTouches[0]?.clientY ?? 0)) {
+                turnBook(dx < 0 ? 'next' : 'prev')
+              }
+            }}
+          >
+            {flipPage ? (
+              <div className="memory-book-face is-back" aria-hidden="true">
+                {renderBookPage(flipPage)}
+              </div>
             ) : null}
-            <h3 className="memory-book-title">{d ? d.getDate() : '日期未知'}</h3>
-            <p className="memory-book-text">{selected?.item.text}</p>
-            {selected?.item.source?.trim() ? (
-              <>
-                <span className="memory-book-sep" aria-hidden="true">·</span>
-                <p className="memory-book-quote">「{selected.item.source.trim()}」</p>
-              </>
-            ) : null}
+            <div
+              className={`memory-book-face is-front${flip ? ` is-flipping-${flip.dir}` : ''}`}
+              onAnimationEnd={flip ? commitFlip : undefined}
+            >
+              {currentPage ? renderBookPage(currentPage) : null}
+            </div>
           </div>
 
           <div className="memory-book-foot">
             <button
               type="button"
               className="memory-book-turn"
-              onClick={() => setSelectedIndex((index) => Math.max(0, index - 1))}
-              disabled={selectedIndex === 0}
-              aria-label="上一条记忆"
+              onClick={() => turnBook('prev')}
+              disabled={atStart || !!flip}
+              aria-label="上一页"
             >
               ‹
             </button>
             <span className="memory-book-count">
-              {selectedIndex + 1} / {chronological.length}
+              {bookPageIdx + 1} / {bookPages.length}
             </span>
             <button
               type="button"
               className="memory-book-turn"
-              onClick={() => setSelectedIndex((index) => Math.min(chronological.length - 1, index + 1))}
-              disabled={selectedIndex === chronological.length - 1}
-              aria-label="下一条记忆"
+              onClick={() => turnBook('next')}
+              disabled={atEnd || !!flip}
+              aria-label="下一页"
             >
               ›
             </button>
@@ -270,7 +378,7 @@ export default function Memory() {
     const pinned = selected.item.pinned === true
     const d = selected.timestamp == null ? null : new Date(selected.timestamp)
     return (
-      <div className="page memory-page memory-detail-page">
+      <div className="page memory-page memory-detail-page" ref={pageRef}>
         <div className="memory-local-bar">
           <button type="button" className="memory-back" onClick={() => setView('river')}>
             ‹ 记忆长河
@@ -279,14 +387,11 @@ export default function Memory() {
         </div>
         <article className="memory-detail-layout">
           {d ? (
-            <>
-              <p className="memory-detail-year">{d.getFullYear()}</p>
-              <p className="memory-detail-date">
-                {pad2(d.getMonth() + 1)} <span aria-hidden="true">·</span> {pad2(d.getDate())}
-              </p>
-            </>
+            <p className="memory-detail-meta">
+              {MONTHS_EN[d.getMonth()]} · {d.getDate()} · {d.getFullYear()}
+            </p>
           ) : (
-            <p className="memory-detail-date">日期未知</p>
+            <p className="memory-detail-meta">日期未知</p>
           )}
           <p className="memory-detail-text">{selected.item.text}</p>
           <span className="memory-detail-rule" aria-hidden="true" />
@@ -294,6 +399,12 @@ export default function Memory() {
             <div className="memory-detail-source">
               <p className="memory-detail-source-label">当时你说</p>
               <p className="memory-detail-source-text">「{selected.item.source.trim()}」</p>
+            </div>
+          ) : null}
+          {selected.item.taReply?.trim() ? (
+            <div className="memory-detail-reply">
+              <p className="memory-detail-reply-label">TA 当时回应</p>
+              <p className="memory-detail-reply-text">「{selected.item.taReply.trim()}」</p>
             </div>
           ) : null}
           {pinned ? (
@@ -316,22 +427,32 @@ export default function Memory() {
 
   // ---- River ----
   return (
-    <div className="page memory-page">
-      <header className="memory-hero">
-        <span className="memory-hero-kicker">MEMORY</span>
-        <h2 className="memory-page-title">TA 记得的你</h2>
-        {heroMeta ? <p className="memory-hero-meta">{heroMeta}</p> : null}
-        <div className="memory-hero-entries" role="group" aria-label="记忆入口">
-          <span className="memory-hero-entry is-current">
-            <span className="memory-hero-entry-dot" aria-hidden="true" />
-            记忆长河
-          </span>
-          <button type="button" className="memory-hero-entry" onClick={openBookCover}>
-            翻开记忆书
-            <span aria-hidden="true">→</span>
-          </button>
-        </div>
+    <div className="page memory-page" ref={pageRef}>
+      <button
+        type="button"
+        className="home-web-refresh"
+        onClick={() => void import('../lib/forceRefresh').then((m) => m.forceRefresh())}
+        aria-label="检查页面更新"
+        title="检查页面更新"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+          <path d="M20 4v4h-4" />
+        </svg>
+      </button>
+
+      <header className="memory-head">
+        <span className="memory-title">TA 记得的你</span>
+        <button type="button" className="memory-book-tag" onClick={openBookCover} aria-label="翻开记忆书">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 5h6.5A1.5 1.5 0 0 1 12 6.5V20a2 2 0 0 0-2-2H4Z" />
+            <path d="M20 5h-6.5A1.5 1.5 0 0 0 12 6.5V20a2 2 0 0 1 2-2h6Z" />
+            <path d="M12 6.5V20" />
+          </svg>
+          记忆书
+        </button>
       </header>
+      {heroMeta ? <p className="memory-head-meta">{heroMeta}</p> : null}
 
       {memories.length === 0 ? (
         <div className="memory-empty">
@@ -375,43 +496,48 @@ export default function Memory() {
                       <span className="memory-month-count">{month.items.length} 段记忆</span>
                     </h5>
                     <div className="memory-month-entries">
-                      {month.items.map(({ item, timestamp }, index) => {
-                        const explicit = item.explicit === true
-                        const pinned = item.pinned === true
-                        const entryClass = [
-                          'memory-entry',
-                          pinned ? 'is-pinned' : '',
-                          explicit ? 'is-explicit' : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')
-                        return (
-                          <button
-                            key={`${item.id}-${index}`}
-                            type="button"
-                            className={entryClass}
-                            onClick={() => openDetail(item)}
-                          >
-                            <span className="memory-entry-dot" aria-hidden="true">
-                              {pinned ? (
-                                <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true">
-                                  <path d="M12 0l2.6 7.4L22 10l-7.4 2.6L12 20l-2.6-7.4L2 10l7.4-2.6Z" />
-                                </svg>
-                              ) : null}
-                            </span>
-                            <span className="memory-entry-body">
-                              <span className="memory-entry-text">{item.text}</span>
-                              <span className="memory-entry-date">{shortDate(timestamp)}</span>
-                            </span>
-                          </button>
-                        )
-                      })}
+                      {month.items
+                        .filter(({ item }) => (itemOrder.get(item) ?? Infinity) < visibleCount)
+                        .map(({ item, timestamp }, index) => {
+                          const explicit = item.explicit === true
+                          const pinned = item.pinned === true
+                          const entryClass = [
+                            'memory-entry',
+                            pinned ? 'is-pinned' : '',
+                            explicit ? 'is-explicit' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')
+                          return (
+                            <button
+                              key={`${item.id}-${index}`}
+                              type="button"
+                              className={entryClass}
+                              onClick={() => openDetail(item)}
+                            >
+                              <span className="memory-entry-dot" aria-hidden="true">
+                                {pinned ? (
+                                  <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true">
+                                    <path d="M12 0l2.6 7.4L22 10l-7.4 2.6L12 20l-2.6-7.4L2 10l7.4-2.6Z" />
+                                  </svg>
+                                ) : null}
+                              </span>
+                              <span className="memory-entry-body">
+                                <span className="memory-entry-text">{item.text}</span>
+                                <span className="memory-entry-date">{shortDate(timestamp)}</span>
+                              </span>
+                            </button>
+                          )
+                        })}
                     </div>
                   </div>
                 ))}
               </section>
             ))}
           </div>
+          {needsWindowing && visibleCount < riverItems.length ? (
+            <div className="memory-river-sentinel" ref={sentinelRef} aria-hidden="true" />
+          ) : null}
           <div className="memory-river-end" aria-hidden="true">
             <span className="memory-river-end-dot" />
           </div>

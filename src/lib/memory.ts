@@ -13,6 +13,8 @@ export interface MemoryItem {
   topic?: string
   /** 来源：哪次对话的摘要（TA 记住时记下，手动添加的没有此项） */
   source?: string
+  /** TA 当时回应的短快照（仅详情/记忆书追溯展示用，不进注入逻辑；旧数据没有 = 不显示） */
+  taReply?: string
   /** 兼容旧数据：旧版本去重更新时刷新过的时间，现在不再使用 */
   updatedAt?: number
   /** 重要记忆：用户在记忆页置顶标记，注入时永远排最前、永不进入遗忘/淡化逻辑（旧数据没有 = 不置顶） */
@@ -194,7 +196,7 @@ function isSimilar(a: string, b: string): boolean {
  * 不新增、不改 createdAt、不刷日期、不累计次数（首次记住的时间永远不变）。
  * 真没有相同内容才新增一条。返回更新后的全部记忆。
  */
-export function upsertMemoryItem(text: string, source?: string, topic?: string, explicit?: boolean): MemoryItem[] {
+export function upsertMemoryItem(text: string, source?: string, topic?: string, explicit?: boolean, taReply?: string): MemoryItem[] {
   const trimmed = text.trim()
   if (!trimmed) return loadMemory()
   const items = loadMemory()
@@ -209,6 +211,7 @@ export function upsertMemoryItem(text: string, source?: string, topic?: string, 
     source,
     ...(topic?.trim() ? { topic: topic.trim() } : {}),
     ...(explicit === true ? { explicit: true } : {}),
+    ...(taReply?.trim() ? { taReply: taReply.trim() } : {}),
   }
   const next = [item, ...items]
   saveMemory(next)
