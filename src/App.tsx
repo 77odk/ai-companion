@@ -542,7 +542,9 @@ export default function App() {
         </div>
       ) : (
         <>
-          {view === 'home' ? null : (
+          {/* UI2-03 Visual Closure V2 / BUG-B：Memory 页删除旧全局品牌题头「忆文 / 忆过往，成文思」——
+              不渲染、不占位（Home 本就无 header；memory 不再渲染，其余视图品牌展示不受影响） */}
+          {view === 'home' || view === 'memory' ? null : (
             <header className="app-header">
               {view === 'chat' && loggedIn && (
                 <button

@@ -428,29 +428,32 @@ export default function Memory() {
   // ---- River ----
   return (
     <div className="page memory-page" ref={pageRef}>
-      <button
-        type="button"
-        className="home-web-refresh"
-        onClick={() => void import('../lib/forceRefresh').then((m) => m.forceRefresh())}
-        aria-label="检查页面更新"
-        title="检查页面更新"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M20 12a8 8 0 1 1-2.34-5.66" />
-          <path d="M20 4v4h-4" />
-        </svg>
-      </button>
-
+      {/* UI2-03 Visual Closure V2 / BUG-C：Refresh 与「记忆书」同处 head actions 行内并排，
+          各自独立 hit area，bounding rect 不相交（不再 absolute 浮在右上与 book-tag 重叠） */}
       <header className="memory-head">
         <span className="memory-title">TA 记得的你</span>
-        <button type="button" className="memory-book-tag" onClick={openBookCover} aria-label="翻开记忆书">
+        <span className="memory-head-actions">
+          <button
+            type="button"
+            className="home-web-refresh"
+            onClick={() => void import('../lib/forceRefresh').then((m) => m.forceRefresh())}
+            aria-label="检查页面更新"
+            title="检查页面更新"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+              <path d="M20 4v4h-4" />
+            </svg>
+          </button>
+          <button type="button" className="memory-book-tag" onClick={openBookCover} aria-label="翻开记忆书">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 5h6.5A1.5 1.5 0 0 1 12 6.5V20a2 2 0 0 0-2-2H4Z" />
             <path d="M20 5h-6.5A1.5 1.5 0 0 0 12 6.5V20a2 2 0 0 1 2-2h6Z" />
             <path d="M12 6.5V20" />
           </svg>
           记忆书
-        </button>
+          </button>
+        </span>
       </header>
       {heroMeta ? <p className="memory-head-meta">{heroMeta}</p> : null}
 
