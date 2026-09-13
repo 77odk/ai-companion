@@ -997,3 +997,793 @@
     transition: none;
   }
 }
+
+/* ==========================================================================
+   04 — Memory 2.0（时间留下的精神空间）
+   --------------------------------------------------------------------------
+   核心母题：「时间是目录，记忆是正文。」
+   三层：Material 纸面 + Time Trace（连续时间线）+ Memory Artwork（书籍沉浸）。
+
+   结构：
+   · River —— 连续时间页面（寻找）
+   · Detail —— 连续排版，text 为主角（理解）
+   · Book —— 固定 Artwork + 深色阅读面（沉浸阅读），全屏 overlay 盖住 Bottom Nav
+   Artwork 消费强度：River 0%（仅极弱 CSS 暖残影）→ Detail 0-8% → Book Cover 100% → Book Body 0-15%。
+   ========================================================================== */
+
+/* ---- 页面基底：纸面（Material），整页连续，不用图 ---- */
+.memory-page {
+  --memory-ink: var(--ui2-text);
+  --memory-muted: var(--ui2-text-secondary);
+  --memory-line: color-mix(in srgb, var(--ui2-text) 12%, transparent);
+  --memory-accent: var(--ta-accent);
+  padding: max(18px, env(safe-area-inset-top)) var(--ui2-page-x) 0;
+  color: var(--memory-ink);
+  background:
+    radial-gradient(120% 40% at 50% -6%, color-mix(in srgb, var(--eluvin-warm) 7%, transparent), transparent 60%),
+    var(--ui2-canvas);
+}
+
+/* ---- Hero：收敛，不堆解释层 ---- */
+.memory-hero {
+  margin: 8px 0 4px;
+}
+
+.memory-hero-kicker,
+.memory-local-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  color: var(--memory-muted);
+}
+
+.memory-page-title {
+  margin: 6px 0 8px;
+  font-size: 30px;
+  font-weight: 720;
+  letter-spacing: 0.02em;
+  color: var(--memory-ink);
+}
+
+.memory-hero-meta {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--memory-muted);
+}
+
+/* ---- Hero 入口行：轻量阅读入口（不是 segmented control / pill / 大按钮） ---- */
+.memory-hero-entries {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin: 20px 0 4px;
+  font-size: 13.5px;
+}
+
+.memory-hero-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--memory-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.memory-hero-entry.is-current {
+  color: var(--memory-ink);
+  font-weight: 600;
+}
+
+.memory-hero-entry-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--memory-accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--memory-accent) 45%, transparent);
+}
+
+.memory-hero-entry:hover {
+  color: var(--memory-ink);
+}
+
+/* ---- 年份导航：>=2 年才出现；极轻横向，无筛选语义 ---- */
+.memory-year-nav {
+  display: flex;
+  gap: 6px;
+  margin: 22px 0 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--memory-line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.memory-year-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.memory-year-nav-btn {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--memory-muted);
+  font: inherit;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.memory-year-nav-btn.is-current {
+  color: var(--memory-accent);
+  font-weight: 650;
+  background: color-mix(in srgb, var(--memory-accent) 8%, transparent);
+}
+
+/* ---- 长河：连续时间页面 ---- */
+.memory-river {
+  padding-top: 8px;
+}
+
+.memory-river-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* 年份 = 大章节：大数字 + 大量留白 */
+.memory-year-chapter {
+  padding-top: 30px;
+}
+
+.memory-year-chapter + .memory-year-chapter {
+  margin-top: 14px;
+  border-top: 1px solid var(--memory-line);
+  padding-top: 34px;
+}
+
+.memory-year-chapter-label {
+  margin: 0 0 18px;
+}
+
+.memory-year-chapter-num {
+  display: block;
+  font-size: 58px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--memory-ink);
+  opacity: 0.9;
+}
+
+/* 月份 = 小章节 */
+.memory-month-chapter {
+  margin: 0 0 20px;
+}
+
+.memory-month-chapter + .memory-month-chapter {
+  margin-top: 26px;
+}
+
+.memory-month-chapter-label {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding-left: 22px;
+}
+
+.memory-month-name {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--memory-ink);
+}
+
+.memory-month-count {
+  font-size: 11.5px;
+  color: var(--memory-muted);
+}
+
+/* 条目：连续时间线（细线贯穿），一条 Memory 一个按钮行，无 Card */
+.memory-month-entries {
+  position: relative;
+  padding-left: 22px;
+}
+
+.memory-month-entries::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 7px;
+  bottom: 7px;
+  width: 1px;
+  background: var(--memory-line);
+}
+
+.memory-entry {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 4px 12px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: var(--memory-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.memory-entry:hover,
+.memory-entry:focus-visible {
+  background: color-mix(in srgb, var(--memory-ink) 3.5%, transparent);
+  outline: none;
+}
+
+/* 节点：ordinary 小点 / explicit 略实 / pinned 中心点 + halo + 四角星芒 */
+.memory-entry-dot {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 11px;
+  height: 11px;
+  margin-top: 4px;
+  border: 1.5px solid var(--memory-muted);
+  border-radius: 50%;
+  background: var(--ui2-canvas);
+  color: var(--memory-accent);
+}
+
+.memory-entry.is-explicit .memory-entry-dot {
+  border-color: var(--memory-ink);
+  background: var(--memory-ink);
+  box-shadow: none;
+}
+
+.memory-entry.is-pinned .memory-entry-dot {
+  border-color: var(--memory-accent);
+  background: color-mix(in srgb, var(--memory-accent) 14%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--memory-accent) 12%, transparent), 0 0 10px color-mix(in srgb, var(--memory-accent) 35%, transparent);
+}
+
+.memory-entry.is-pinned .memory-entry-dot svg {
+  width: 9px;
+  height: 9px;
+  color: var(--memory-accent);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--memory-accent) 60%, transparent));
+}
+
+.memory-entry-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.memory-entry-text {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--memory-ink);
+  overflow-wrap: break-word;
+}
+
+.memory-entry-date {
+  font-size: 11.5px;
+  color: var(--memory-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.memory-river-end {
+  display: flex;
+  justify-content: center;
+  padding: 34px 0 40px;
+}
+
+.memory-river-end-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--memory-line);
+}
+
+/* ---- Empty：安静，不设大按钮 ---- */
+.memory-empty {
+  padding: 76px 0 90px;
+  text-align: center;
+}
+
+.memory-empty-trace {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 30px;
+}
+
+.memory-empty-node {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--memory-muted);
+  opacity: 0.7;
+}
+
+.memory-empty-line {
+  width: 1px;
+  height: 46px;
+  background: var(--memory-line);
+}
+
+.memory-empty-title {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--memory-ink);
+}
+
+.memory-empty-copy {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--memory-muted);
+}
+
+/* ==========================================================================
+   04b — Memory Detail（理解这段记忆；连续排版，不拆 Card）
+   ========================================================================== */
+.memory-detail-page {
+  background:
+    radial-gradient(120% 40% at 50% -6%, color-mix(in srgb, var(--eluvin-warm) 7%, transparent), transparent 60%),
+    var(--ui2-canvas);
+}
+
+.memory-local-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 30px;
+}
+
+.memory-back {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--memory-muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.memory-back:hover {
+  color: var(--memory-ink);
+}
+
+.memory-detail-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 320px;
+  padding: 0 4px;
+}
+
+.memory-detail-year {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  color: var(--memory-muted);
+}
+
+.memory-detail-date {
+  margin: 0 0 34px;
+  font-size: 38px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--memory-ink);
+}
+
+.memory-detail-date span {
+  color: var(--memory-muted);
+  margin: 0 2px;
+}
+
+.memory-detail-text {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.75;
+  letter-spacing: 0.01em;
+  color: var(--memory-ink);
+  overflow-wrap: break-word;
+}
+
+.memory-detail-rule {
+  display: block;
+  width: 34px;
+  height: 1px;
+  margin: 34px 0 26px;
+  background: var(--memory-line);
+}
+
+.memory-detail-source {
+  margin-bottom: 22px;
+}
+
+.memory-detail-source-label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--memory-muted);
+}
+
+.memory-detail-source-text {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--memory-muted);
+}
+
+.memory-detail-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--memory-accent) 9%, transparent);
+  color: var(--memory-accent);
+  font-size: 12px;
+}
+
+.memory-book-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 34px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--memory-ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.memory-book-entry span {
+  color: var(--memory-accent);
+  transition: transform 0.15s;
+}
+
+.memory-book-entry:hover span {
+  transform: translateX(3px);
+}
+
+/* ==========================================================================
+   04c — Memory Book（沉浸阅读；全屏 overlay，盖住 Bottom Nav，零 App 改动）
+   ========================================================================== */
+.memory-book-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #241f1b;
+  color: #f1ece5;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---- Cover：Artwork 主消费页（60-100%）---- */
+.memory-book-cover-art {
+  position: absolute;
+  inset: 0;
+  background-image: url('/memory/memory-book-cover.webp');
+  background-size: cover;
+  background-position: center 22%;
+  opacity: 0.9;
+}
+
+.memory-book-cover-veil {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgba(36, 31, 27, 0.28), rgba(36, 31, 27, 0.55) 46%, rgba(36, 31, 27, 0.92) 100%);
+}
+
+.memory-book-cover-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: calc(64px + env(safe-area-inset-top)) var(--ui2-page-x) calc(48px + env(safe-area-inset-bottom));
+  text-align: center;
+}
+
+.memory-book-cover-en {
+  margin: 0 0 18px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.52em;
+  color: rgba(241, 236, 229, 0.82);
+}
+
+.memory-book-cover-title {
+  margin: 0 0 12px;
+  font-size: 32px;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  color: #f6f1ea;
+}
+
+.memory-book-cover-name {
+  margin: 0 0 14px;
+  font-size: 12px;
+  letter-spacing: 0.42em;
+  color: rgba(241, 236, 229, 0.62);
+}
+
+.memory-book-cover-years {
+  margin: 0 0 30px;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--eluvin-warm) 72%, #f6f1ea);
+}
+
+.memory-book-cover-line {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.9;
+  letter-spacing: 0.04em;
+  color: rgba(241, 236, 229, 0.85);
+}
+
+.memory-book-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 38px;
+  padding: 12px 26px;
+  border: 1px solid rgba(241, 236, 229, 0.34);
+  border-radius: 999px;
+  background: rgba(241, 236, 229, 0.08);
+  color: #f6f1ea;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 550;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.memory-book-open span {
+  color: var(--eluvin-warm);
+}
+
+.memory-book-close {
+  margin-top: 22px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(241, 236, 229, 0.6);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ---- Body：深色阅读面 + 极弱 Artwork residual（0-15%）---- */
+.memory-book-body-page {
+  position: relative;
+  min-height: 100%;
+  padding: calc(20px + env(safe-area-inset-top)) 24px calc(30px + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(90% 34% at 50% -8%, rgba(216, 135, 95, 0.12), transparent 62%),
+    linear-gradient(rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.025)),
+    #241f1b;
+}
+
+/* Chapter：跨年/跨月的视觉过渡（inline，Artwork 第二消费位，纯 CSS） */
+.memory-book-chapter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 46vh;
+  margin: calc(env(safe-area-inset-top) * -1) -24px 0;
+  padding: 10vh 24px 6vh;
+  text-align: center;
+  background:
+    linear-gradient(to bottom, rgba(36, 31, 27, 0.1), rgba(36, 31, 27, 0.86)),
+    radial-gradient(80% 60% at 50% 18%, rgba(216, 135, 95, 0.2), transparent 66%),
+    url('/memory/memory-book-cover.webp');
+  background-size: cover;
+  background-position: center 30%;
+}
+
+.memory-book-chapter-num {
+  font-size: 96px;
+  font-weight: 820;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: rgba(246, 241, 234, 0.92);
+  text-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.memory-book-chapter-roman {
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: 0.28em;
+  color: rgba(246, 241, 234, 0.9);
+  text-shadow: 0 6px 26px rgba(0, 0, 0, 0.42);
+}
+
+.memory-book-chapter-zh {
+  margin-top: 14px;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  color: rgba(241, 236, 229, 0.8);
+}
+
+.memory-book-chapter-note {
+  margin-top: 8px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: rgba(241, 236, 229, 0.55);
+}
+
+/* 正文页：翻页动画 200ms（translate + fade）；reduced-motion 取消 */
+.memory-book-sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 52px 0 10px;
+  text-align: center;
+  animation: memory-page-in 200ms ease-out both;
+}
+
+@keyframes memory-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.memory-book-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 34px;
+}
+
+.memory-book-day {
+  font-size: 22px;
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+  color: rgba(241, 236, 229, 0.88);
+}
+
+.memory-book-year {
+  font-size: 12.5px;
+  letter-spacing: 0.22em;
+  color: rgba(241, 236, 229, 0.5);
+}
+
+.memory-book-month {
+  margin: 0 0 16px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  color: rgba(241, 236, 229, 0.5);
+}
+
+.memory-book-title {
+  margin: 0 0 30px;
+  font-size: 40px;
+  font-weight: 760;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #f6f1ea;
+}
+
+.memory-book-text {
+  margin: 0;
+  max-width: 380px;
+  font-size: 19px;
+  line-height: 1.85;
+  letter-spacing: 0.015em;
+  color: rgba(246, 241, 234, 0.94);
+  overflow-wrap: break-word;
+}
+
+.memory-book-sep {
+  display: block;
+  margin: 32px 0 24px;
+  font-size: 15px;
+  color: rgba(241, 236, 229, 0.42);
+}
+
+.memory-book-quote {
+  margin: 0;
+  max-width: 360px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: rgba(241, 236, 229, 0.68);
+  overflow-wrap: break-word;
+}
+
+.memory-book-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 300px;
+  margin: 52px auto 0;
+  padding-top: 18px;
+  border-top: 1px solid rgba(241, 236, 229, 0.12);
+}
+
+.memory-book-turn {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(241, 236, 229, 0.22);
+  border-radius: 50%;
+  background: transparent;
+  color: #f1ece5;
+  font-size: 17px;
+  cursor: pointer;
+}
+
+.memory-book-turn:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.memory-book-count {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(241, 236, 229, 0.6);
+}
+
+.memory-book-exit {
+  display: block;
+  margin: 26px auto 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(241, 236, 229, 0.5);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Book 的 reduced-motion：切页无位移动画 */
+@media (prefers-reduced-motion: reduce) {
+  .memory-book-sheet {
+    animation: none;
+  }
+  .memory-book-entry:hover span {
+    transform: none;
+  }
+}
