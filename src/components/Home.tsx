@@ -59,9 +59,9 @@ function fmtLifeTime(ts: number): string {
    生理期主数字：优先「距预计经期 N 天」（现有 daysUntilPeriod），否则现有估算兜底；
    副文案：现有 formatPeriodEstimate / 「预计经期开始」。 */
 function dateMD(date: string): { m: string; d: string } | null {
-  const iso = date.match(/^(\d{4})-(\d{2})-(\d{2})$/)!
+  const iso = date.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (iso) return { m: iso[2], d: iso[3] }
-  const md = date.match(/^(\d{2})-(\d{2})$/)!
+  const md = date.match(/^(\d{2})-(\d{2})$/)
   return md ? { m: md[1], d: md[2] } : null
 }
 
