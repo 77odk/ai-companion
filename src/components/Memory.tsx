@@ -461,20 +461,45 @@ export default function Memory() {
         </div>
       ) : (
         <>
-          {/* UI2-03-POLISH-03：Memory Book Portal —— 一册放页面里的实体记忆书（纯 CSS：封面/书脊/纸页/厚度）。
+          {/* UI2-03-POLISH-04：Memory Book Portal —— 一册横放、有厚度的实体记忆书（纯 CSS：封底/纸页层/封面/书脊/装帧）。
               整本可点击，复用现有 openBookCover；Book 层级在 Year 上方、River 是 Primary。 */}
           <button type="button" className="memory-book-portal" onClick={openBookCover} aria-label="翻开记忆书">
-            <span className="memory-book-portal-spine" aria-hidden="true" />
-            <span className="memory-book-portal-cover">
-              <span className="memory-book-portal-kicker">MEMORY BOOK</span>
-              <span className="memory-book-portal-title">记忆书</span>
-              <span className="memory-book-portal-copy">
-                <span>有些记忆，</span>
-                <span>适合重新翻开。</span>
+            <span className="mbp-back" aria-hidden="true" />
+            <span className="mbp-paper mbp-paper-1" aria-hidden="true" />
+            <span className="mbp-paper mbp-paper-2" aria-hidden="true" />
+            <span className="mbp-cover">
+              <span className="mbp-spine" aria-hidden="true">
+                <span className="mbp-spine-brand">ELUVIN</span>
+                <span className="mbp-spine-mark" aria-hidden="true">
+                  <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+                    <path d="M6 0l1.4 3.6L11 5 7.4 6.4 6 10 4.6 6.4 1 5l3.6-1.4Z" />
+                  </svg>
+                </span>
               </span>
-              <span className="memory-book-portal-open">
-                翻开
-                <span aria-hidden="true">→</span>
+              <span className="mbp-bookmark" aria-hidden="true">
+                <svg viewBox="0 0 24 40" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M12 38 C 11 26, 13 16, 12 4" />
+                  <path d="M13 14 C 19 13, 22 9, 23 4" />
+                  <path d="M11 20 C 6 19, 3 16, 2 11" />
+                  <circle cx="12" cy="3" r="2.2" />
+                </svg>
+              </span>
+              <span className="mbp-main">
+                <span className="mbp-kicker">MEMORY BOOK</span>
+                <span className="mbp-title">记忆书</span>
+                <span className="mbp-copy">
+                  <span>有些记忆，</span>
+                  <span>适合重新翻开。</span>
+                </span>
+              </span>
+              <span className="mbp-side">
+                <svg className="mbp-side-star" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 3l2 5.4L19.5 10 14 11.6 12 17l-2-5.4L4.5 10 10 8.4Z" />
+                </svg>
+                <span className="mbp-open">
+                  翻开
+                  <span aria-hidden="true">→</span>
+                </span>
               </span>
             </span>
           </button>

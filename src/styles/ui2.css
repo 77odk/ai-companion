@@ -1076,11 +1076,17 @@
    第一眼是「一本书」，不是普通 Card / Banner / Feature Tile / 抽象线框。
    层级：Page Identity（TA 记得的你 + Refresh）→ Book Object → Year Nav → River。
    ========================================================================== */
+/* ==========================================================================
+   UI2-03-POLISH-04：Memory Book Portal —— 一册横放、有厚度的实体记忆书
+   参照用户确认视觉母版：横向偏扁（约 2.4:1）、书脊/封面/右侧页边/底部纸页堆叠/封底。
+   视觉层（z 从低到高）：.mbp-back（封底）→ .mbp-paper-1/2（纸页）→ .mbp-cover（封面+书脊）。
+   第一眼是「一本书」，不是白色 Card + 左竖条 + 底部两根线。
+   ========================================================================== */
 .memory-book-portal {
   position: relative;
   display: block;
   width: 100%;
-  margin: 20px 0 6px;
+  margin: 22px 0 12px;
   padding: 0;
   border: none;
   background: transparent;
@@ -1089,80 +1095,152 @@
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  perspective: 900px;
+  perspective: 1100px;
 }
 
-/* ---- Paper stack：书底 2–3 层纸页错层（::before/::after，形成厚度） ---- */
-.memory-book-portal::before,
-.memory-book-portal::after {
-  content: '';
+/* ---- 封底 / Depth：把纸页收住，书成为完整物体 ---- */
+.mbp-back {
   position: absolute;
-  height: 5px;
-  border-radius: 2px 8px 8px 2px;
+  left: 30px;
+  right: -11px;
+  top: 11px;
+  bottom: -16px;
+  z-index: 0;
+  border-radius: 4px 12px 12px 4px;
+  background: linear-gradient(180deg, #dbd0bc, #c0b196);
+  box-shadow: 0 1px 2px rgba(51, 43, 40, 0.12);
 }
 
-.memory-book-portal::before {
-  bottom: -9px;
-  left: 18px;
-  right: -8px;
-  background: linear-gradient(90deg, #d8cfc0, #e2dacd);
-  box-shadow: 0 1px 1px rgba(51, 43, 40, 0.09);
+/* ---- 纸页层 1 / 2：右侧 + 底部错位递增，长度与明暗不同 ---- */
+.mbp-paper {
+  position: absolute;
+  border-radius: 4px 11px 11px 4px;
 }
 
-.memory-book-portal::after {
-  bottom: -5px;
-  left: 20px;
-  right: -5px;
-  background: linear-gradient(90deg, #e0d8cb, #e9e2d6);
-  box-shadow: 0 1px 1px rgba(51, 43, 40, 0.07);
+.mbp-paper-1 {
+  left: 26px;
+  right: -7px;
+  top: 8px;
+  bottom: -10px;
+  z-index: 1;
+  background: linear-gradient(180deg, #efe8dc, #e2d7c4);
+  box-shadow: 0 1px 1px rgba(51, 43, 40, 0.06);
 }
 
-/* ---- Cover：主要视觉面（纸张 tone + 极弱纹理 + TA Accent 光；书本式边缘，非标准四角圆角 Card） ---- */
-.memory-book-portal-cover {
+.mbp-paper-2 {
+  left: 28px;
+  right: -4px;
+  top: 6px;
+  bottom: -6px;
+  z-index: 2;
+  background: linear-gradient(180deg, #f4eee3, #eae1d1);
+}
+
+/* ---- Cover：主要视觉面（奶纸 + 极弱纹理 + TA Accent 光；书本式边缘）。
+        grid 两栏：左 58% 主区（标题/文案），右 42% 侧区（装帧 + 翻开 →）。 ---- */
+.mbp-cover {
   position: relative;
-  display: block;
-  padding: 14px 18px 13px 22px;
-  border-radius: 3px 9px 9px 3px;
+  display: grid;
+  grid-template-columns: 58fr 42fr;
+  align-items: stretch;
+  z-index: 3;
+  border-radius: 4px 12px 12px 4px;
   background:
-    radial-gradient(120% 60% at 8% 0%, color-mix(in srgb, var(--ta-accent) 9%, transparent), transparent 55%),
-    repeating-linear-gradient(0deg, rgba(51, 43, 40, 0.012) 0 1px, transparent 1px 4px),
-    linear-gradient(180deg, #faf7f1, #f1ece2);
+    radial-gradient(120% 70% at 10% 0%, color-mix(in srgb, var(--ta-accent) 10%, transparent), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(51, 43, 40, 0.011) 0 1px, transparent 1px 5px),
+    linear-gradient(168deg, #fcf9f3, #f1eadc);
   color: var(--ui2-text);
-  /* 接触阴影：只服务 Book Object Depth（贴地 + 微厚度），不是 Card Elevation 整块漂浮 */
+  /* 阴影只服务 Book Object Depth：封面压纸 + 贴地接触；不是 Card Elevation */
   box-shadow:
-    0 1px 1px rgba(51, 43, 40, 0.10),
-    0 4px 8px -3px rgba(51, 43, 40, 0.14);
-  transform: rotateX(0.6deg) rotateZ(-0.3deg);
+    0 1px 1px rgba(51, 43, 40, 0.12),
+    0 3px 6px -2px rgba(51, 43, 40, 0.16),
+    0 8px 12px -6px rgba(51, 43, 40, 0.18);
+  transform: rotateX(0.8deg) rotateZ(-0.4deg);
 }
 
-/* ---- Spine：左侧书脊（略深于封面 + TA Accent 极细边光；不是彩色大竖条）。
-        z-index:1 保证书脊可见于封面之上（DOM 顺序 cover 在后，默认会盖住 spine）。 ---- */
-.memory-book-portal-spine {
+/* ---- Spine：真正书脊（宽、材质、弧度、内侧折痕 + Accent 柔和染色 + 边缘光） ---- */
+.mbp-spine {
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
   z-index: 1;
-  width: 14px;
-  border-radius: 3px 0 0 3px;
-  transform: translateZ(2px);
-  background: linear-gradient(90deg, rgba(51, 43, 40, 0.28), rgba(51, 43, 40, 0.10) 60%, rgba(51, 43, 40, 0.02));
-  box-shadow: inset -1px 0 0 rgba(51, 43, 40, 0.10);
+  width: 30px;
+  border-radius: 4px 0 0 4px;
+  transform: translateZ(3px);
+  background: linear-gradient(100deg,
+    color-mix(in srgb, var(--ta-accent) 30%, #8d8374) 0%,
+    color-mix(in srgb, var(--ta-accent) 14%, #b3a896) 38%,
+    color-mix(in srgb, var(--ta-accent) 22%, #a39787) 74%,
+    color-mix(in srgb, var(--ta-accent) 34%, #8f8372) 100%);
+  box-shadow:
+    inset 1px 0 1px rgba(255, 255, 255, 0.20),
+    inset -2px 0 3px rgba(0, 0, 0, 0.14);
 }
 
-.memory-book-portal-spine::after {
-  content: '';
+/* 书脊竖排 ELUVIN（装帧用途，非产品 slogan） */
+.mbp-spine-brand {
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: color-mix(in srgb, var(--ta-accent) 55%, transparent);
-  opacity: 0.65;
+  top: 13px;
+  left: 50%;
+  transform: translateX(-50%) rotate(180deg);
+  writing-mode: vertical-rl;
+  font-size: 7.5px;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  color: color-mix(in srgb, var(--ta-accent) 72%, #3c342c);
+  opacity: 0.88;
+  white-space: nowrap;
 }
 
-/* ---- Editorial Typography ---- */
-.memory-book-portal-kicker {
+/* 书脊底部小星芒（极小装帧符号） */
+.mbp-spine-mark {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  color: color-mix(in srgb, var(--ta-accent) 78%, #4a4036);
+  opacity: 0.8;
+}
+
+.mbp-spine-mark svg {
+  display: block;
+  width: 10px;
+  height: 10px;
+}
+
+/* ---- Bookmark：书脊旁植物线稿（纯装帧，非真实照片/经历） ---- */
+.mbp-bookmark {
+  position: absolute;
+  left: 32px;
+  top: 11px;
+  z-index: 1;
+  width: 24px;
+  height: 40px;
+  color: color-mix(in srgb, var(--ta-accent) 62%, #4a4036);
+  opacity: 0.85;
+}
+
+.mbp-bookmark svg {
+  display: block;
+  width: 24px;
+  height: 40px;
+}
+
+/* ---- 主区：左 58% 标题与文案 ---- */
+.mbp-main {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  padding: 15px 6px 14px 46px;
+}
+
+.mbp-kicker {
   display: block;
   margin-bottom: 4px;
   font-size: 10.5px;
@@ -1171,65 +1249,93 @@
   color: color-mix(in srgb, var(--ui2-text) 58%, transparent);
 }
 
-.memory-book-portal-title {
+.mbp-title {
   display: block;
   margin-bottom: 7px;
-  font-size: 19px;
+  font-size: 21px;
   font-weight: 740;
   letter-spacing: 0.06em;
   color: var(--ui2-text);
 }
 
-.memory-book-portal-copy {
+.mbp-copy {
   display: block;
-  margin-bottom: 10px;
 }
 
-.memory-book-portal-copy span {
+.mbp-copy span {
   display: block;
   font-size: 12px;
   line-height: 1.65;
   color: color-mix(in srgb, var(--ui2-text) 72%, transparent);
 }
 
-.memory-book-portal-open {
+/* ---- 侧区：右 42% 装帧 + 「翻开 →」右下锚点 ---- */
+.mbp-side {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 13px 17px 14px 4px;
+}
+
+.mbp-side-star {
+  width: 15px;
+  height: 15px;
+  color: color-mix(in srgb, var(--ta-accent) 58%, transparent);
+  opacity: 0.75;
+}
+
+.mbp-open {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 620;
   letter-spacing: 0.04em;
   color: var(--ta-accent);
+  border-bottom: 1px solid color-mix(in srgb, var(--ta-accent) 40%, transparent);
+  padding-bottom: 2px;
 }
 
-.memory-book-portal-open span {
+.mbp-open span {
   transition: transform 0.18s ease;
 }
 
 /* ---- Press / Hover / Focus：轻实体反馈（不是普通 button scale） ---- */
-.memory-book-portal:active .memory-book-portal-cover {
-  transform: rotateX(0.6deg) rotateZ(-0.3deg) translateY(1px);
+.memory-book-portal:active .mbp-cover {
+  transform: rotateX(0.8deg) rotateZ(-0.4deg) translateY(1px);
 }
 
-.memory-book-portal:hover .memory-book-portal-cover,
-.memory-book-portal:focus-visible .memory-book-portal-cover {
+.memory-book-portal:hover .mbp-cover,
+.memory-book-portal:focus-visible .mbp-cover {
   background:
-    radial-gradient(120% 60% at 8% 0%, color-mix(in srgb, var(--ta-accent) 13%, transparent), transparent 55%),
-    repeating-linear-gradient(0deg, rgba(51, 43, 40, 0.012) 0 1px, transparent 1px 4px),
-    linear-gradient(180deg, #faf7f1, #f1ece2);
+    radial-gradient(120% 70% at 10% 0%, color-mix(in srgb, var(--ta-accent) 14%, transparent), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(51, 43, 40, 0.011) 0 1px, transparent 1px 5px),
+    linear-gradient(168deg, #fcf9f3, #f1eadc);
   outline: none;
 }
 
-.memory-book-portal:hover .memory-book-portal-open span,
-.memory-book-portal:focus-visible .memory-book-portal-open span {
+.memory-book-portal:hover .mbp-open span,
+.memory-book-portal:focus-visible .mbp-open span {
   transform: translateX(2px);
+}
+
+.memory-book-portal:hover .mbp-bookmark,
+.memory-book-portal:focus-visible .mbp-bookmark {
+  opacity: 1;
 }
 
 /* ---- reduced-motion：静态状态仍然清楚是一本书 ---- */
 @media (prefers-reduced-motion: reduce) {
-  .memory-book-portal-cover,
-  .memory-book-portal-open span {
+  .mbp-cover,
+  .mbp-open span,
+  .mbp-bookmark {
     transition: none;
+    transform: none;
+  }
+  .mbp-spine {
     transform: none;
   }
 }
