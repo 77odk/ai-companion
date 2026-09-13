@@ -534,24 +534,29 @@
   pointer-events: none;
 }
 
-/* ---- 我的时间：生日 Sheet / 生理期 Sheet（独立 Bottom Sheet + Wheel Picker；无 HTML date input、无类型切换 tab） ---- */
+/* ---- 我的时间：生日 Sheet / 生理期 Sheet（独立 Bottom Sheet + Wheel Picker；无 HTML date input、无类型切换 tab） ----
+   DEPLOY-FIX-02：确认按钮是 Sheet 内容，不是 viewport footer。
+   mask 不再把 sheet 钉在屏幕底部（align-items:flex-end → center），sheet 按内容自然收口居中，
+   保存按钮随内容流位于 Wheel/stepper 之后，天然远离 Bottom Nav 操作区；不靠 z-index、不用 bottom:0。 */
 .home-time-mask {
   position: fixed;
   inset: 0;
   z-index: 60;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: center;
   background: rgba(20, 18, 16, 0.32);
 }
 
 .home-time-sheet {
-  width: 100%;
-  padding: 18px var(--ui2-page-x) calc(20px + env(safe-area-inset-bottom));
-  border-radius: 24px 24px 0 0;
+  width: min(100% - 32px, 420px);
+  padding: 20px 22px 22px;
+  border-radius: 24px;
   background: var(--ui2-surface-elevated);
   color: var(--ui2-text);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
+  box-shadow: var(--ui2-shadow);
 }
 
 .home-time-sheet-title {
