@@ -534,7 +534,7 @@
   pointer-events: none;
 }
 
-/* ---- 我的时间：添加/编辑 sheet（轻量、Material surface，Home 场景内唯一的例外交互面） ---- */
+/* ---- 我的时间：生日 Sheet / 生理期 Sheet（独立 Bottom Sheet + Wheel Picker；无 HTML date input、无类型切换 tab） ---- */
 .home-time-mask {
   position: fixed;
   inset: 0;
@@ -555,67 +555,127 @@
 }
 
 .home-time-sheet-title {
-  margin: 0 0 14px;
+  margin: 0 0 4px;
   font-size: 17px;
   font-weight: 650;
 }
 
-.home-time-types {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.home-time-type {
-  padding: 7px 16px;
-  border: 1px solid var(--ui2-hairline);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ui2-text-secondary);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.home-time-type.is-active {
-  border-color: color-mix(in srgb, var(--ta-accent) 45%, transparent);
-  background: color-mix(in srgb, var(--ta-accent) 10%, transparent);
-  color: var(--ta-accent-deep);
-}
-
-.home-time-hint {
-  margin: 0 0 10px;
+.home-time-sub {
+  margin: 0 0 12px;
   font-size: 12px;
   color: var(--ui2-text-secondary);
 }
 
-.home-time-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 11px 12px;
-  border: 1px solid var(--ui2-hairline);
-  border-radius: 12px;
-  background: #fff;
-  color: var(--ui2-text);
-  font: inherit;
-  font-size: 15px;
+/* ---- Wheel Picker（双列/三列；原生 touch 滚动 + scroll-snap 吸附，选中行 = 容器中线） ---- */
+.tw-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
 }
 
-.home-time-period-row {
+.tw-col {
+  position: relative;
+  width: 92px;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto;
+}
+
+.tw-col::-webkit-scrollbar {
+  display: none;
+}
+
+/* 选中指示线：容器中线（accent，极细；不挡滚动、不挡点击） */
+.tw-col::before {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 50%;
+  height: 1.5px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: var(--ta-accent);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tw-col-year {
+  width: 64px;
+}
+
+.tw-item {
+  height: 44px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 10px;
+  justify-content: center;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui2-text-secondary);
+  scroll-snap-align: center;
+  transition: color 0.15s ease, font-size 0.15s ease, font-weight 0.15s ease;
 }
 
-.home-time-period-label {
-  font-size: 13px;
+.tw-item.is-selected {
+  color: var(--ui2-text);
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.tw-spacer {
+  flex: none;
+}
+
+/* ---- 生理期周期天数 stepper（小型；范围沿用现有 1–90，默认 28） ---- */
+.home-period-cycle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 16px 0 2px;
+}
+
+.home-cycle-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ui2-hairline);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ui2-text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.home-cycle-btn:active {
+  background: color-mix(in srgb, var(--ta-accent) 12%, transparent);
+}
+
+.home-cycle-num {
+  min-width: 56px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-cycle-num small {
+  font-size: 12px;
+  font-weight: 450;
   color: var(--ui2-text-secondary);
 }
 
-.home-time-period-input {
-  width: 84px;
+.home-period-note {
+  margin: 0 0 16px;
   text-align: center;
+  font-size: 11.5px;
+  color: var(--ui2-text-secondary);
 }
 
 .home-time-save {
