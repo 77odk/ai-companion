@@ -84,6 +84,20 @@
   pointer-events: none; /* 透明容器不吞下方页面点击 */
 }
 
+/* 2b. Nav 上缘「空气过渡」：约 26px 极淡渐变（页面 → Nav 的层级边界）。
+       不是 divider / 色带；pointer-events 继承 Nav 的 none，不挡正文点击。
+       纯 CSS ::before，无新增 DOM。 */
+.app-nav::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 26px;
+  background: linear-gradient(to top, rgba(247, 244, 239, 0.34), transparent);
+  pointer-events: none;
+}
+
 /* 3. 真正可点的按钮恢复 pointer-events。
       position: relative + active::after 绝对定位：indicator 不参与布局，
       保证 Nav 高度恒定、active/inactive 无 vertical shift（UI2-01 已验证）。 */
@@ -122,13 +136,14 @@
   background: var(--ta-accent);
 }
 
-/* 4b. Home 场景（HomeScene 延伸到屏幕最底部）：Nav 完全透明 + 无 blur，
-       Nav 后必须清楚看到同一张 Scene。只留极轻底部渐变辅助 icon/text 对比。
+/* 4b. Home 场景（HomeScene 延伸到屏幕最底部）：Nav 只保留「一点点」blur（3px，
+       用户原话“一点点一点点”——空气稍厚、能看出页面结束导航开始，但不是毛玻璃），
+       配极低透明 Material 渐变；Scene 在 Nav 后仍清晰可辨。
        前缀在前、标准在后（esbuild 只保留同一属性族最后一条声明）。 */
 .app:has(.home-page) .app-nav {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  background: linear-gradient(to top, rgba(247, 244, 239, 0.12), transparent);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  background: linear-gradient(to top, rgba(247, 244, 239, 0.16), transparent);
 }
 
 /* 4c. 场景明暗 → Nav 文字对比：morning/day 亮场景用深色文字，night 暗场景用浅色文字 */
@@ -208,7 +223,7 @@
 
 /* ---- 品牌区 ---- */
 .home-brand {
-  margin: 2px 0 clamp(16px, 4.5vh, 32px);
+  margin: 2px 0 clamp(12px, 3.2vh, 24px);
 }
 
 .home-brand-mark {
@@ -245,7 +260,7 @@
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  margin: 6px 0 12px;
+  margin: 4px 0 10px;
   padding: 0;
   border-radius: 0;
   background: none;
@@ -358,8 +373,8 @@
    数据：personal 全局纪念日（getAnniversaries 只读筛选），编辑走 anniversary.ts 数据层。
    视觉：与 HomeScene 共存——半透 surface + 细边框 + 大圆角，是"关系时间"区，不是 SaaS 卡。 */
 .home-my-time {
-  margin: 14px 0 10px;
-  padding: 14px 16px 12px;
+  margin: 10px 0 8px;
+  padding: 11px 16px 11px;
   border: 1px solid color-mix(in srgb, var(--home-ink) 14%, transparent);
   border-radius: 20px;
   background: color-mix(in srgb, var(--home-ink) 5%, transparent);
@@ -370,65 +385,69 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
-/* 轻量添加入口：极简线条 ＋，不做大按钮 */
-.home-my-time-add {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid color-mix(in srgb, var(--home-ink) 16%, transparent);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--home-ink) 7%, transparent);
-  color: var(--home-ink-soft);
-  cursor: pointer;
-}
-
-.home-my-time-add svg {
-  width: 13px;
-  height: 13px;
-}
-
-.home-my-time-row {
+/* UI2-VISUAL-CLOSURE：双大数字时间窗 —— 并排、约 1:1、透明语言。
+   极淡 transparent surface + 极细边界；大数字是视觉中心，标题/小字降存在感。
+   不是厚白 Dashboard card，不做重 glass。 */
+.home-time-windows {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 9px 0;
-  border: none;
-  border-top: 1px solid color-mix(in srgb, var(--home-ink) 10%, transparent);
-  background: none;
+  gap: 10px;
+}
+
+.home-time-window {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 12px 9px;
+  border: 1px solid color-mix(in srgb, var(--home-ink) 13%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--home-ink) 4%, transparent);
   color: var(--home-ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background 0.15s;
 }
 
-.home-my-time-k {
-  flex: 0 0 auto;
-  font-size: 12.5px;
+.home-time-window:hover {
+  background: color-mix(in srgb, var(--home-ink) 7%, transparent);
+}
+
+.home-time-window-k {
+  font-size: 11.5px;
   font-weight: 550;
-  letter-spacing: 0.06em;
-  color: var(--home-ink);
+  letter-spacing: 0.05em;
+  color: var(--home-ink-soft);
+  white-space: nowrap;
 }
 
-.home-my-time-v {
-  flex: 1 1 auto;
-  min-width: 0;
-  text-align: right;
-  font-size: 12.5px;
+.home-time-window-num {
+  font-size: 27px;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--home-ink);
+  white-space: nowrap;
+}
+
+.home-time-window-sub {
+  max-width: 100%;
+  font-size: 11px;
   color: var(--home-ink-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* milestone 进度：细线 + TA Accent 光（只做小状态） */
+/* milestone 进度：关系时间轨迹（5–6px track + 当前进度节点，TA Accent 克制光） */
 .home-anniv-milestone {
-  margin-top: 8px;
+  margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid color-mix(in srgb, var(--home-ink) 12%, transparent);
 }
@@ -475,18 +494,44 @@
   text-align: right;
 }
 
+/* 轨迹：6px 视觉重量。track-inner 左右各留 8px —— fill 与 node 共用同一参照系
+   （0% = inner 左端、100% = inner 右端），保证 0%/100% 时节点不被裁切出 track。 */
 .home-anniv-track {
-  margin-top: 8px;
-  height: 2px;
+  position: relative;
+  margin-top: 12px;
+  height: 6px;
+}
+
+.home-anniv-track-inner {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 0;
+  bottom: 0;
   border-radius: 999px;
   background: color-mix(in srgb, var(--home-ink) 14%, transparent);
 }
 
 .home-anniv-track-fill {
+  display: block;
   height: 100%;
   border-radius: 999px;
   background: var(--ta-accent);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--ta-accent) 50%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ta-accent) 40%, transparent);
+}
+
+/* 当前关系节点：自绘极简 SVG（核心圆 + 极淡 halo + 四角星芒），
+   跟随真实 progress 定位在轨迹上；不新增资产、不使用 emoji/第三方 icon。 */
+.home-milestone-node {
+  position: absolute;
+  top: 50%;
+  /* 0%/100% 不裁切：left 被 clamp 在 [8px, 100%-8px]，节点永远完整落在 track 内 */
+  left: max(8px, min(var(--node-p, 50%), calc(100% - 8px)));
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  color: var(--ta-accent);
+  pointer-events: none;
 }
 
 /* ---- 我的时间：添加/编辑 sheet（轻量、Material surface，Home 场景内唯一的例外交互面） ---- */
