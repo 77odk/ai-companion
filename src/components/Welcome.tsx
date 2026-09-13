@@ -4,18 +4,10 @@ interface Props {
 }
 
 // UI2-02 返修：Web ↻ 语义 = 更新当前 Web 客户端，不是「确认已看过 Welcome」。
-// Root cause：forceRefresh() 走 location.reload()，reload 不清 sessionStorage；
-// 而 App.tsx 的 boot seen 标记（eluvin_boot_seen）存在 sessionStorage，
-// 刷新后标记仍在 → decideBoot() 判定已看过 → 跳过 Welcome 直进主界面。
-// 最小修复：强刷前只复位这一个会话级标记（不动 localStorage、不新增 key、
-// 不清用户数据、不改 auth/consent/boot 机制），reload 后停留 Welcome；
-// 用户点「开始遇见 TA」仍走既有 onStart 流程，之后刷新行为与原来完全一致。
+// UI2-02 NAV：Welcome 刷新保持 Welcome 由 visitState 的会话级 visit marker 承担
+// （进入 Welcome 时写入 eluvin_visit_view，刷新后 App 读到仍停留 Welcome），
+// 这里不再手工删除任何 boot key；forceRefresh 只负责更新当前 Web 客户端。
 function handleRefresh(): void {
-  try {
-    sessionStorage.removeItem('eluvin_boot_seen')
-  } catch {
-    // 忽略：sessionStorage 不可用时退化为普通刷新
-  }
   void import('../lib/forceRefresh').then((m) => m.forceRefresh())
 }
 
