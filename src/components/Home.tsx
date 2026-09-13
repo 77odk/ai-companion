@@ -4,7 +4,7 @@ import { getFirstSeen, loadAIProfile } from '../lib/storage'
 import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import {
   addAnniversary,
-  formatAnniversaryDate,
+  daysUntilPeriod,
   formatCountdown,
   formatPeriodEstimate,
   getAnniversaries,
@@ -54,16 +54,42 @@ function fmtLifeTime(ts: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
-/* 我的生日展示：日期（不带年，每年循环）+ 强制倒计时（还剩 N 天）。只改展示，不改存储。 */
-function birthdayDisplay(a: Anniversary, now: number): string {
-  const d = formatAnniversaryDate(a.date).replace(/^\d+年/, '')
-  const c = formatCountdown({ ...a, countMode: 'countdown' }, now)
-  return c ? `${d} · ${c}` : d
+/* UI2-VISUAL-CLOSURE：大数字时间窗的展示拆解（纯展示，不造新算法）。
+   生日主数字：MM · DD（从 date 提取）；副文案：现有 formatCountdown 倒计时（强制 countdown 口径）。
+   生理期主数字：优先「距预计经期 N 天」（现有 daysUntilPeriod），否则现有估算兜底；
+   副文案：现有 formatPeriodEstimate / 「预计经期开始」。 */
+function dateMD(date: string): { m: string; d: string } | null {
+  const iso = date.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (iso) return { m: iso[2], d: iso[3] }
+  const md = date.match(/^(\d{2})-(\d{2})$/)
+  return md ? { m: md[1], d: md[2] } : null
 }
 
-/* 我的生理期展示：复用现有周期估算（预计 X 月 X 日来 / 该更新啦） */
-function periodDisplay(a: Anniversary, now: number): string {
-  return formatPeriodEstimate(a, now)
+function birthdayNum(a: Anniversary): string {
+  const md = dateMD(a.date)
+  return md ? `${md.m} · ${md.d}` : '— —'
+}
+
+function birthdaySub(a: Anniversary, now: number): string {
+  return formatCountdown({ ...a, countMode: 'countdown' }, now) || '每年都会记得'
+}
+
+function periodNum(a: Anniversary, now: number): string {
+  const n = daysUntilPeriod(a, now)
+  if (n != null && n > 0) return `${n} 天`
+  const est = formatPeriodEstimate(a, now)
+  if (est && est !== '该更新啦') {
+    const md = dateMD(a.date)
+    return md ? `${md.m} · ${md.d}` : '— —'
+  }
+  return '— —'
+}
+
+function periodSub(a: Anniversary, now: number): string {
+  const n = daysUntilPeriod(a, now)
+  if (n != null && n > 0) return '预计经期开始'
+  const est = formatPeriodEstimate(a, now)
+  return est || '记录一次'
 }
 
 type TimeKind = 'birthday' | 'period'
@@ -195,8 +221,7 @@ export default function Home({ onGoChat, onGoLife }: Props) {
     closeEditor()
   }
 
-  const birthdayText = birthday ? birthdayDisplay(birthday, now.getTime()) : '还没记过，点一下写下'
-  const periodText = period ? periodDisplay(period, now.getTime()) : '还没记过，点一下写下'
+  const milestonePct = Math.round(Math.min(1, Math.max(0, milestone.progress)) * 100)
 
   return (
     <HomeScene scene={scene}>
@@ -226,28 +251,38 @@ export default function Home({ onGoChat, onGoLife }: Props) {
         </section>
 
         {/* FINAL-CLOSURE 最终顺序：品牌/第 N 天 → 【我的时间：生日 + 生理期 + milestone】→ TA Presence → CTA → TA 的生活。
-            废弃单一 bigDay 展示形态（homeBigDay 模块保留给其他调用者，Home 不再使用）。 */}
+            废弃单一 bigDay 展示形态（homeBigDay 模块保留给其他调用者，Home 不再使用）。
+            UI2-VISUAL-CLOSURE：两条 row → 两个并排大数字时间窗；右上＋删除（窗口本身承担添加/编辑入口）。 */}
         <section className="home-my-time" aria-label="我的时间">
           <div className="home-my-time-head">
             <span className="home-eyebrow">MY TIME</span>
-            <button type="button" className="home-my-time-add" onClick={() => openAdd('birthday')} aria-label="添加我的时间">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
+          </div>
+
+          {/* 双大数字时间窗：生日 + 生理期并排、约 1:1、透明语言；空态可点击进入现有添加流程 */}
+          <div className="home-time-windows">
+            <button
+              type="button"
+              className="home-time-window"
+              onClick={() => (birthday ? openEdit('birthday') : openAdd('birthday'))}
+            >
+              <span className="home-time-window-k">我的生日</span>
+              <span className="home-time-window-num">{birthday ? birthdayNum(birthday) : '— —'}</span>
+              <span className="home-time-window-sub">{birthday ? birthdaySub(birthday, now.getTime()) : '点一下写下'}</span>
+            </button>
+
+            <button
+              type="button"
+              className="home-time-window"
+              onClick={() => (period ? openEdit('period') : openAdd('period'))}
+            >
+              <span className="home-time-window-k">生理期</span>
+              <span className="home-time-window-num">{period ? periodNum(period, now.getTime()) : '— —'}</span>
+              <span className="home-time-window-sub">{period ? periodSub(period, now.getTime()) : '记录一次'}</span>
             </button>
           </div>
 
-          <button type="button" className="home-my-time-row" onClick={() => openEdit('birthday')}>
-            <span className="home-my-time-k">生日</span>
-            <span className="home-my-time-v">{birthdayText}</span>
-          </button>
-
-          <button type="button" className="home-my-time-row" onClick={() => openEdit('period')}>
-            <span className="home-my-time-k">生理期</span>
-            <span className="home-my-time-v">{periodText}</span>
-          </button>
-
-          {/* milestone 关系轨迹：真横排（flex row + inline-flex day；不竖字、不逐字换行） */}
+          {/* milestone 关系轨迹：真横排（flex row + inline-flex day；不竖字、不逐字换行）+
+              当前进度节点（自绘 SVG，跟随真实 progress；0%/100% 靠 track 左右 margin 防裁切） */}
           <div className="home-anniv-milestone" aria-label={`认识 ${milestone.day} 天`}>
             <div className="home-anniv-milestone-line">
               <span className="home-anniv-day">第 <strong>{milestone.day}</strong> 天</span>
@@ -262,10 +297,22 @@ export default function Home({ onGoChat, onGoLife }: Props) {
               )}
             </div>
             <div className="home-anniv-track" aria-hidden="true">
-              <span
-                className="home-anniv-track-fill"
-                style={{ width: `${Math.round(Math.min(1, Math.max(0, milestone.progress)) * 100)}%` }}
-              />
+              <span className="home-anniv-track-inner">
+                <span className="home-anniv-track-fill" style={{ width: `${milestonePct}%` }} />
+                <span className="home-milestone-node" style={{ '--node-p': `${milestonePct}%` } as React.CSSProperties}>
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true">
+                    <circle cx="12" cy="12" r="7.5" stroke="currentColor" strokeWidth="1" opacity="0.35" />
+                    <path
+                      d="M12 3.2v2.6M12 18.2v2.6M3.2 12h2.6M18.2 12h2.6"
+                      stroke="currentColor"
+                      strokeWidth="1.3"
+                      strokeLinecap="round"
+                      opacity="0.6"
+                    />
+                    <circle cx="12" cy="12" r="3.1" fill="currentColor" />
+                  </svg>
+                </span>
+              </span>
             </div>
           </div>
         </section>
