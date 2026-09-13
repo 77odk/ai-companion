@@ -493,13 +493,18 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     const writeMemory = (content: string, opts: { source?: string; topic?: string; explicit?: boolean; taReply?: string } = {}) => {
       const trimmed = content.trim()
       if (!trimmed) return
-      const src = opts.source?.trim()
-      const snippet = src && src.length > 20 ? `${src.slice(0, 20)}…` : src
+      // PATCH-01：source 保存完整真实用户原话——不再做 20 字截断，不摘要、不改写。
+      // 空/纯空白时保持 undefined（旧数据兼容：无 source 不显示）。
+      const snippet = opts.source?.trim() || undefined
       if (activeSessionId) {
         const token = getToken()
         const item = upsertMemoryCache(activeSessionId, trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
         if (item && token) {
-          postMemory(token, activeSessionId, { content: trimmed }).then((res) => {
+          postMemory(token, activeSessionId, {
+            content: trimmed,
+            ...(snippet ? { source: snippet } : {}),
+            ...(opts.taReply?.trim() ? { taReply: opts.taReply.trim() } : {}),
+          }).then((res) => {
             if (res.ok) reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
           })
         }

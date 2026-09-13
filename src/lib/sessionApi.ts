@@ -34,11 +34,15 @@ export interface SessionMessage {
   thinking?: string
 }
 
-/** 会话记忆（后端 memories 表） */
+/** 会话记忆（后端 memories 表；source/taReply 为 optional 追溯字段，旧记录没有 = 不显示） */
 export interface SessionMemory {
   id: number
   content: string
   createdAt: string
+  /** 来源：用户真实原话（PATCH-01 起随请求持久化；旧记录可能没有） */
+  source?: string
+  /** TA 当时回应的短快照（PATCH-01 起随请求持久化；旧记录可能没有） */
+  taReply?: string
 }
 
 /** GET /api/sessions/:id 的返回结构 */
@@ -142,11 +146,11 @@ export function listMemories(token: string, sessionId: string | number): Promise
   return request<{ memories: SessionMemory[] }>(`/api/sessions/${sessionId}/memories`, { token, method: 'GET' })
 }
 
-/** 会话内加一条记忆 */
+/** 会话内加一条记忆（PATCH-01：source/taReply 为 optional 追溯字段，随请求持久化） */
 export function postMemory(
   token: string,
   sessionId: string | number,
-  body: { content: string },
+  body: { content: string; source?: string; taReply?: string },
 ): Promise<ApiResult<SessionMemory>> {
   return request<SessionMemory>(`/api/sessions/${sessionId}/memories`, { token, method: 'POST', body })
 }

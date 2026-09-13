@@ -292,19 +292,23 @@ export function getUnreadCount(
 
 // ---- 后端记忆 ↔ 缓存对账（后端权威，缓存保留增强字段） ----
 
-/** 后端记忆 → 缓存条目：id 用后端数字 id 的字符串形式，text=content，createdAt 解析 ISO */
-export function sessionMemoryToItem(mem: { id: number; content: string; createdAt: string }): MemoryItem {
+/** 后端记忆 → 缓存条目：id 用后端数字 id 的字符串形式，text=content，createdAt 解析 ISO；source/taReply 为 optional（后端回显时恢复，旧记录没有 = 不显示） */
+export function sessionMemoryToItem(mem: { id: number; content: string; createdAt: string; source?: string; taReply?: string }): MemoryItem {
   const ts = Date.parse(mem.createdAt)
   return {
     id: String(mem.id),
     text: mem.content,
     createdAt: Number.isFinite(ts) ? ts : 0,
+    ...(typeof mem.source === 'string' && mem.source.trim() ? { source: mem.source } : {}),
+    ...(typeof mem.taReply === 'string' && mem.taReply.trim() ? { taReply: mem.taReply } : {}),
   }
 }
 
 /**
  * 后端记忆列表与本地缓存合并（挂载拉回后端后填充缓存）：
  * - 同 id（后端 id 转字符串）以后端内容为准（权威），但保留本地缓存的增强字段（topic/source/pinned/explicit/lastMentionedAt）
+ * - PATCH-01：source/taReply 以「后端回显 ?? 本地缓存」取——换设备时本地为空，后端持久化的 source/taReply 仍可恢复；
+ *   本地缓存有增强字段（本机会话内刚写、后端尚未回显）时也不丢。
  * - 缓存里后端还没有的乐观条目（刚新增、上传未成功）保留在列表最前，不丢
  */
 export function mergeSessionMemories(cache: MemoryItem[], cloud: MemoryItem[]): MemoryItem[] {
@@ -320,8 +324,8 @@ export function mergeSessionMemories(cache: MemoryItem[], cloud: MemoryItem[]): 
         ? {
             ...cm,
             topic: local.topic,
-            source: local.source,
-            taReply: local.taReply,
+            source: local.source ?? cm.source,
+            taReply: local.taReply ?? cm.taReply,
             pinned: local.pinned,
             explicit: local.explicit,
             lastMentionedAt: local.lastMentionedAt,
