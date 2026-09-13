@@ -1025,9 +1025,16 @@
   position: relative;
   padding: max(18px, env(safe-area-inset-top)) var(--ui2-page-x) 0;
   color: var(--memory-ink);
+  /* UI2-03 Visual Closure V2 / BUG-A：Memory 主环境色必须真正跟随 TA Accent。
+     Material base（--ui2-canvas 暖米）保持稳定，但整体环境 tint 由 Accent 派生并肉眼可辨：
+     6.5% 全页均匀基底（主基调随 TA 变化）+ 顶部大 halo（16%）+ 侧向微光（8%）+ 底部缓光（9%）。
+     合计仍远低于「整页染色」（基底半透明叠在暖米上，视觉主体仍是 Material），
+     换 Theme 后同一页面肉眼即可分辨是不同 TA 的环境。 */
   background:
-    radial-gradient(120% 40% at 50% -6%, color-mix(in srgb, var(--ta-accent) 5%, transparent), transparent 60%),
-    radial-gradient(120% 45% at 50% 112%, color-mix(in srgb, var(--ta-accent) 3.5%, transparent), transparent 55%),
+    radial-gradient(130% 42% at 50% -8%, color-mix(in srgb, var(--ta-accent) 16%, transparent), transparent 60%),
+    radial-gradient(90% 30% at 14% 34%, color-mix(in srgb, var(--ta-accent) 8%, transparent), transparent 58%),
+    radial-gradient(120% 45% at 50% 112%, color-mix(in srgb, var(--ta-accent) 9%, transparent), transparent 55%),
+    linear-gradient(color-mix(in srgb, var(--ta-accent) 6.5%, transparent), color-mix(in srgb, var(--ta-accent) 6.5%, transparent)),
     var(--ui2-canvas);
 }
 
@@ -1040,6 +1047,22 @@
   margin: 8px 0 4px;
 }
 
+/* UI2-03 Visual Closure V2 / BUG-C：Refresh 与「记忆书」同一行并排、独立 hit area。
+   仅 Memory 页内把 .home-web-refresh 从 absolute 右上改为 flow 行内元素，
+   Home 页该按钮的 absolute 定位与全局样式完全不受影响。 */
+.memory-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.memory-page .home-web-refresh {
+  position: static;
+  top: auto;
+  right: auto;
+  z-index: auto;
+}
+
 .memory-title {
   font-size: 22px;
   font-weight: 720;
@@ -1047,15 +1070,17 @@
   color: var(--memory-ink);
 }
 
-/* 记忆书：小书标签（Secondary Entry；小书视觉 + Warm 光，不抢 River Primary） */
+/* 记忆书：小书标签（Secondary Entry；小书视觉 + Warm 光，不抢 River Primary）。
+   UI2-03 V2：边框/底/焦点随 TA Accent 走（Book Entry 关键视觉跟随 Theme），
+   icon 保留 Eluvin Warm 品牌光。 */
 .memory-book-tag {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 7px 13px;
-  border: 1px solid color-mix(in srgb, var(--memory-accent) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--memory-accent) 38%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--memory-accent) 7%, transparent);
+  background: color-mix(in srgb, var(--memory-accent) 10%, transparent);
   color: var(--memory-ink);
   font: inherit;
   font-size: 13px;
@@ -1072,8 +1097,8 @@
 
 .memory-book-tag:hover,
 .memory-book-tag:focus-visible {
-  border-color: color-mix(in srgb, var(--memory-accent) 45%, transparent);
-  background: color-mix(in srgb, var(--memory-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--memory-accent) 60%, transparent);
+  background: color-mix(in srgb, var(--memory-accent) 16%, transparent);
   outline: none;
 }
 
@@ -1225,11 +1250,13 @@
 
 .memory-entry:hover,
 .memory-entry:focus-visible {
-  background: color-mix(in srgb, var(--memory-ink) 3.5%, transparent);
+  background: color-mix(in srgb, var(--memory-accent) 6%, transparent);
   outline: none;
 }
 
-/* 节点：ordinary 小点 / explicit 略实 / pinned 中心点 + halo + 四角星芒 */
+/* 节点：ordinary 小点 / explicit 略实 / pinned 中心点 + halo + 四角星芒。
+   UI2-03 V2：ordinary/explicit 均消费 TA Accent（不再固定灰黑），
+   换 Theme 后时间线节点随 TA 的光变化。 */
 .memory-entry-dot {
   position: relative;
   flex: 0 0 auto;
@@ -1238,16 +1265,16 @@
   width: 11px;
   height: 11px;
   margin-top: 4px;
-  border: 1.5px solid var(--memory-muted);
+  border: 1.5px solid color-mix(in srgb, var(--memory-accent) 48%, transparent);
   border-radius: 50%;
-  background: var(--ui2-canvas);
+  background: color-mix(in srgb, var(--memory-accent) 9%, transparent);
   color: var(--memory-accent);
 }
 
 .memory-entry.is-explicit .memory-entry-dot {
-  border-color: var(--memory-ink);
-  background: var(--memory-ink);
-  box-shadow: none;
+  border-color: var(--memory-accent);
+  background: var(--memory-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--memory-accent) 14%, transparent);
 }
 
 .memory-entry.is-pinned .memory-entry-dot {
@@ -1349,9 +1376,12 @@
    04b — Memory Detail（理解这段记忆；连续排版，不拆 Card）
    ========================================================================== */
 .memory-detail-page {
+  /* UI2-03 V2：与 River 同一套 Accent 环境 tint（Detail 也随 TA Theme） */
   background:
-    radial-gradient(120% 40% at 50% -6%, color-mix(in srgb, var(--ta-accent) 5%, transparent), transparent 60%),
-    radial-gradient(120% 45% at 50% 112%, color-mix(in srgb, var(--ta-accent) 3.5%, transparent), transparent 55%),
+    radial-gradient(130% 42% at 50% -8%, color-mix(in srgb, var(--ta-accent) 16%, transparent), transparent 60%),
+    radial-gradient(90% 30% at 14% 34%, color-mix(in srgb, var(--ta-accent) 8%, transparent), transparent 58%),
+    radial-gradient(120% 45% at 50% 112%, color-mix(in srgb, var(--ta-accent) 9%, transparent), transparent 55%),
+    linear-gradient(color-mix(in srgb, var(--ta-accent) 6.5%, transparent), color-mix(in srgb, var(--ta-accent) 6.5%, transparent)),
     var(--ui2-canvas);
 }
 
