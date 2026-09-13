@@ -445,14 +445,6 @@ export default function Memory() {
               <path d="M20 4v4h-4" />
             </svg>
           </button>
-          <button type="button" className="memory-book-tag" onClick={openBookCover} aria-label="翻开记忆书">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M4 5h6.5A1.5 1.5 0 0 1 12 6.5V20a2 2 0 0 0-2-2H4Z" />
-            <path d="M20 5h-6.5A1.5 1.5 0 0 0 12 6.5V20a2 2 0 0 1 2-2h6Z" />
-            <path d="M12 6.5V20" />
-          </svg>
-          记忆书
-          </button>
         </span>
       </header>
       {heroMeta ? <p className="memory-head-meta">{heroMeta}</p> : null}
@@ -468,7 +460,26 @@ export default function Memory() {
           <p className="memory-empty-copy">以后被记住的那些小事，会慢慢留在这里。</p>
         </div>
       ) : (
-        <section className="memory-river" aria-label="记忆长河">
+        <>
+          {/* UI2-03-POLISH-03：Memory Book Portal —— 一册放页面里的实体记忆书（纯 CSS：封面/书脊/纸页/厚度）。
+              整本可点击，复用现有 openBookCover；Book 层级在 Year 上方、River 是 Primary。 */}
+          <button type="button" className="memory-book-portal" onClick={openBookCover} aria-label="翻开记忆书">
+            <span className="memory-book-portal-spine" aria-hidden="true" />
+            <span className="memory-book-portal-cover">
+              <span className="memory-book-portal-kicker">MEMORY BOOK</span>
+              <span className="memory-book-portal-title">记忆书</span>
+              <span className="memory-book-portal-copy">
+                <span>有些记忆，</span>
+                <span>适合重新翻开。</span>
+              </span>
+              <span className="memory-book-portal-open">
+                翻开
+                <span aria-hidden="true">→</span>
+              </span>
+            </span>
+          </button>
+
+          <section className="memory-river" aria-label="记忆长河">
           {years.length >= 2 ? (
             <nav className="memory-year-nav" aria-label="年份导航">
               {years
@@ -526,7 +537,13 @@ export default function Memory() {
                                 ) : null}
                               </span>
                               <span className="memory-entry-body">
-                                <span className="memory-entry-text">{item.text}</span>
+                                {/* UI2-03-POLISH-03：River 条目主体容器（Image-ready seam）。
+                                    未来真实 Media 接入后，在 content 内追加 .memory-entry-media
+                                    （thumb 约 72–88px、object-fit:cover、小圆角、无 Card shadow）。
+                                    当前数据层无 media 字段：不渲染任何空容器/占位。 */}
+                                <span className="memory-entry-content">
+                                  <span className="memory-entry-text">{item.text}</span>
+                                </span>
                                 <span className="memory-entry-date">{shortDate(timestamp)}</span>
                               </span>
                             </button>
@@ -544,7 +561,8 @@ export default function Memory() {
           <div className="memory-river-end" aria-hidden="true">
             <span className="memory-river-end-dot" />
           </div>
-        </section>
+          </section>
+        </>
       )}
     </div>
   )
