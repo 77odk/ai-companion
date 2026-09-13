@@ -160,17 +160,20 @@ export default function Home({ onGoChat, onGoLife }: Props) {
     if (!editor) return
     const d = formDate.trim()
     if (!d || !isValidAnniversaryDate(d)) return
+    // REVIEW-FIX-01：保存类型必须以「sheet 当前所选」为准，而非打开时的 editor.kind。
+    // add 模式跟随 formKind（可切换）；edit 模式锁定 editor.kind（JSX 已隐藏类型切换，防记录类型迁移）。
+    const kind = editor.mode === 'add' ? formKind : editor.kind
     if (editor.mode === 'add') {
-      if (editor.kind === 'period') {
+      if (kind === 'period') {
         const n = Math.max(1, Math.min(90, Number(formPeriodDays) || 28))
         addAnniversary('生理期', d, { kind: 'personal', periodDays: n }, undefined)
       } else {
         addAnniversary('我的生日', d, { kind: 'personal', countMode: 'countdown' }, undefined)
       }
     } else {
-      const target = editor.kind === 'period' ? period : birthday
+      const target = kind === 'period' ? period : birthday
       if (!target) return
-      if (editor.kind === 'period') {
+      if (kind === 'period') {
         const n = Math.max(1, Math.min(90, Number(formPeriodDays) || 28))
         updateAnniversary(
           target.id,
@@ -307,22 +310,25 @@ export default function Home({ onGoChat, onGoLife }: Props) {
               {editor.mode === 'edit' ? (editor.kind === 'period' ? '编辑生理期' : '编辑生日') : '写下我的时间'}
             </h3>
 
-            <div className="home-time-types">
-              <button
-                type="button"
-                className={`home-time-type${formKind === 'birthday' ? ' is-active' : ''}`}
-                onClick={() => setFormKind('birthday')}
-              >
-                生日
-              </button>
-              <button
-                type="button"
-                className={`home-time-type${formKind === 'period' ? ' is-active' : ''}`}
-                onClick={() => setFormKind('period')}
-              >
-                生理期
-              </button>
-            </div>
+            {/* REVIEW-FIX-01：edit 模式锁定当前 kind（不显示类型切换，防把 birthday 迁成 period 或反之）；add 模式允许切换 */}
+            {editor.mode === 'add' && (
+              <div className="home-time-types">
+                <button
+                  type="button"
+                  className={`home-time-type${formKind === 'birthday' ? ' is-active' : ''}`}
+                  onClick={() => setFormKind('birthday')}
+                >
+                  生日
+                </button>
+                <button
+                  type="button"
+                  className={`home-time-type${formKind === 'period' ? ' is-active' : ''}`}
+                  onClick={() => setFormKind('period')}
+                >
+                  生理期
+                </button>
+              </div>
+            )}
 
             {formKind === 'birthday' ? (
               <>
