@@ -490,21 +490,21 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       return
     }
 
-    const writeMemory = (content: string, opts: { source?: string; topic?: string; explicit?: boolean } = {}) => {
+    const writeMemory = (content: string, opts: { source?: string; topic?: string; explicit?: boolean; taReply?: string } = {}) => {
       const trimmed = content.trim()
       if (!trimmed) return
       const src = opts.source?.trim()
       const snippet = src && src.length > 20 ? `${src.slice(0, 20)}…` : src
       if (activeSessionId) {
         const token = getToken()
-        const item = upsertMemoryCache(activeSessionId, trimmed, snippet, opts.topic, opts.explicit)
+        const item = upsertMemoryCache(activeSessionId, trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
         if (item && token) {
           postMemory(token, activeSessionId, { content: trimmed }).then((res) => {
             if (res.ok) reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
           })
         }
       } else {
-        upsertMemoryItem(trimmed, snippet, opts.topic, opts.explicit)
+        upsertMemoryItem(trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
       }
       notifyMemoryUpdated()
     }
@@ -515,9 +515,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     const flushMemoryWrites = (rawText: string) => {
       if (explicitCandidates.length === 0 && !rawText) return
       const plans = planMemoryWrites(explicitCandidates, rawText ? extractMemories(rawText) : [], userMsg.content.trim())
+      // 当轮 TA 回应短快照（仅追溯展示；去记忆标记/思考链后截断，不整段复制聊天历史）
+      const replySnapshot = rawText
+        ? stripMemoryMarkers(stripThinkBlocks(rawText, lang)).trim().slice(0, 160) || undefined
+        : undefined
       let saved = false
       for (const p of plans) {
-        writeMemory(p.text, { source: p.source || userMsg.content.trim(), topic: p.topic, explicit: p.explicit })
+        writeMemory(p.text, { source: p.source || userMsg.content.trim(), topic: p.topic, explicit: p.explicit, taReply: replySnapshot })
         if (p.explicit) saved = true
       }
       if (saved) userMsg.memorySaved = true

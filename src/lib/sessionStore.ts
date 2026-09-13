@@ -321,6 +321,7 @@ export function mergeSessionMemories(cache: MemoryItem[], cloud: MemoryItem[]): 
             ...cm,
             topic: local.topic,
             source: local.source,
+            taReply: local.taReply,
             pinned: local.pinned,
             explicit: local.explicit,
             lastMentionedAt: local.lastMentionedAt,
@@ -370,6 +371,7 @@ export function upsertMemoryCache(
   source?: string,
   topic?: string,
   explicit?: boolean,
+  taReply?: string,
 ): MemoryItem | null {
   const trimmed = text.trim()
   if (!trimmed) return null
@@ -381,6 +383,7 @@ export function upsertMemoryCache(
     source,
     ...(topic?.trim() ? { topic: topic.trim() } : {}),
     ...(explicit === true ? { explicit: true } : {}),
+    ...(taReply?.trim() ? { taReply: taReply.trim() } : {}),
   }
   saveMemoriesCache(sessionId, [item, ...getMemoriesCache(sessionId)])
   return item
