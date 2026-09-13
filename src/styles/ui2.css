@@ -1047,34 +1047,168 @@
   color: var(--memory-ink);
 }
 
-/* 记忆书：小书标签（Secondary Entry；小书视觉 + Warm 光，不抢 River Primary） */
-.memory-book-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 13px;
-  border: 1px solid color-mix(in srgb, var(--memory-accent) 22%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--memory-accent) 7%, transparent);
-  color: var(--memory-ink);
+/* ==========================================================================
+   UI2-03-POLISH-03：Memory Book Portal —— 页面里的一册实体记忆书
+   纯 CSS：封面 / 书脊 / 纸页堆叠 / 厚度 / 接触阴影 / 轻微立体。
+   第一眼是「一本书」，不是普通 Card / Banner / Feature Tile / 抽象线框。
+   层级：Page Identity（TA 记得的你 + Refresh）→ Book Object → Year Nav → River。
+   ========================================================================== */
+.memory-book-portal {
+  position: relative;
+  display: block;
+  width: 100%;
+  margin: 20px 0 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
   font: inherit;
-  font-size: 13px;
-  font-weight: 550;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  perspective: 900px;
 }
 
-.memory-book-tag svg {
+/* ---- Paper stack：书底 2–3 层纸页错层（::before/::after，形成厚度） ---- */
+.memory-book-portal::before,
+.memory-book-portal::after {
+  content: '';
+  position: absolute;
+  height: 5px;
+  border-radius: 2px 8px 8px 2px;
+}
+
+.memory-book-portal::before {
+  bottom: -9px;
+  left: 18px;
+  right: -8px;
+  background: linear-gradient(90deg, #d8cfc0, #e2dacd);
+  box-shadow: 0 1px 1px rgba(51, 43, 40, 0.09);
+}
+
+.memory-book-portal::after {
+  bottom: -5px;
+  left: 20px;
+  right: -5px;
+  background: linear-gradient(90deg, #e0d8cb, #e9e2d6);
+  box-shadow: 0 1px 1px rgba(51, 43, 40, 0.07);
+}
+
+/* ---- Cover：主要视觉面（纸张 tone + 极弱纹理 + TA Accent 光；书本式边缘，非标准四角圆角 Card） ---- */
+.memory-book-portal-cover {
+  position: relative;
+  display: block;
+  padding: 14px 18px 13px 22px;
+  border-radius: 3px 9px 9px 3px;
+  background:
+    radial-gradient(120% 60% at 8% 0%, color-mix(in srgb, var(--ta-accent) 9%, transparent), transparent 55%),
+    repeating-linear-gradient(0deg, rgba(51, 43, 40, 0.012) 0 1px, transparent 1px 4px),
+    linear-gradient(180deg, #faf7f1, #f1ece2);
+  color: var(--ui2-text);
+  /* 接触阴影：只服务 Book Object Depth（贴地 + 微厚度），不是 Card Elevation 整块漂浮 */
+  box-shadow:
+    0 1px 1px rgba(51, 43, 40, 0.10),
+    0 4px 8px -3px rgba(51, 43, 40, 0.14);
+  transform: rotateX(0.6deg) rotateZ(-0.3deg);
+}
+
+/* ---- Spine：左侧书脊（略深于封面 + TA Accent 极细边光；不是彩色大竖条）。
+        z-index:1 保证书脊可见于封面之上（DOM 顺序 cover 在后，默认会盖住 spine）。 ---- */
+.memory-book-portal-spine {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
   width: 14px;
-  height: 14px;
-  color: var(--eluvin-warm);
+  border-radius: 3px 0 0 3px;
+  transform: translateZ(2px);
+  background: linear-gradient(90deg, rgba(51, 43, 40, 0.28), rgba(51, 43, 40, 0.10) 60%, rgba(51, 43, 40, 0.02));
+  box-shadow: inset -1px 0 0 rgba(51, 43, 40, 0.10);
 }
 
-.memory-book-tag:hover,
-.memory-book-tag:focus-visible {
-  border-color: color-mix(in srgb, var(--memory-accent) 45%, transparent);
-  background: color-mix(in srgb, var(--memory-accent) 12%, transparent);
+.memory-book-portal-spine::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: color-mix(in srgb, var(--ta-accent) 55%, transparent);
+  opacity: 0.65;
+}
+
+/* ---- Editorial Typography ---- */
+.memory-book-portal-kicker {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  color: color-mix(in srgb, var(--ui2-text) 58%, transparent);
+}
+
+.memory-book-portal-title {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 19px;
+  font-weight: 740;
+  letter-spacing: 0.06em;
+  color: var(--ui2-text);
+}
+
+.memory-book-portal-copy {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.memory-book-portal-copy span {
+  display: block;
+  font-size: 12px;
+  line-height: 1.65;
+  color: color-mix(in srgb, var(--ui2-text) 72%, transparent);
+}
+
+.memory-book-portal-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  color: var(--ta-accent);
+}
+
+.memory-book-portal-open span {
+  transition: transform 0.18s ease;
+}
+
+/* ---- Press / Hover / Focus：轻实体反馈（不是普通 button scale） ---- */
+.memory-book-portal:active .memory-book-portal-cover {
+  transform: rotateX(0.6deg) rotateZ(-0.3deg) translateY(1px);
+}
+
+.memory-book-portal:hover .memory-book-portal-cover,
+.memory-book-portal:focus-visible .memory-book-portal-cover {
+  background:
+    radial-gradient(120% 60% at 8% 0%, color-mix(in srgb, var(--ta-accent) 13%, transparent), transparent 55%),
+    repeating-linear-gradient(0deg, rgba(51, 43, 40, 0.012) 0 1px, transparent 1px 4px),
+    linear-gradient(180deg, #faf7f1, #f1ece2);
   outline: none;
+}
+
+.memory-book-portal:hover .memory-book-portal-open span,
+.memory-book-portal:focus-visible .memory-book-portal-open span {
+  transform: translateX(2px);
+}
+
+/* ---- reduced-motion：静态状态仍然清楚是一本书 ---- */
+@media (prefers-reduced-motion: reduce) {
+  .memory-book-portal-cover,
+  .memory-book-portal-open span {
+    transition: none;
+    transform: none;
+  }
 }
 
 .memory-head-meta {
@@ -1269,6 +1403,17 @@
   gap: 3px;
   min-width: 0;
   flex: 1;
+}
+
+/* ---- UI2-03-POLISH-03：River 条目主体（Image-ready presentation seam）。
+       未来真实 Media 接入后：.memory-entry-media（thumb 约 72–88px、object-fit:cover、
+       小圆角、无 Card shadow）作为 Memory 内容的一部分横向排在 text 旁。
+       当前数据层无 media：不渲染任何空容器/占位（下方规则仅定义未来可选 seam 的布局）。 ---- */
+.memory-entry-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
 }
 
 .memory-entry-text {
