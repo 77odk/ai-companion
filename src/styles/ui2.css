@@ -170,6 +170,15 @@
   padding-bottom: 0;
 }
 
+/* UI2-02 NAV-03：Chat 全屏（Bottom Nav 只属于 home/aispace/memory/settings）。
+   Chat 时 .app-nav 不再渲染 → .app-main 的 nav padding 不生效，
+   composer 原依赖 .app-nav 兜底 safe-area（index.css .composer 注释），
+   这里由 Chat 页面自己承担：只留合理 bottom spacing + env(safe-area-inset-bottom)，
+   不保留原 Nav 56px 空白；键盘打开时 safe-area 归零，输入框仍可见。 */
+.chat-page {
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+}
+
 /* 兜底：不支持 :has() 的旧浏览器统一留安全空间 */
 @supports not (selector(:has(*))) {
   .app-main {
