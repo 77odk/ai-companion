@@ -19,7 +19,12 @@ interface Props {
   /** 选角色页用途：first=首次/游客新建；current=换个TA·当前会话换人设；new=换个TA·开新会话换TA */
   mode: RolePickMode
   /** 会话已建好/换好后调用，由 App 跳进聊天页（游客则触发登录墙）；新建会话时带上标题供 App 头部即时显示 */
-  onDone: (info?: { title?: string }) => void
+  onDone: (info?: { title?: string; startChat?: boolean }) => void
+  /** 游客 Natural 表单只在 App 内存中暂存，登录成功后再建会话。 */
+  onNaturalLogin?: (setup: NaturalSetup) => void
+  /** 登录后自动建会话失败时，重新打开 Natural 弹窗并回填。 */
+  initialNatural?: NaturalSetup
+  initialNaturalError?: string
   /** 返回上一页（换 TA 进来退回原页；首次进来退回欢迎页）；不传则不显示返回键 */
   onBack?: () => void
   /** 底部「已有账号直接登录」小字链接：游客点击弹登录墙（登录后按云端会话分流） */
@@ -35,6 +40,15 @@ interface RoleSetupState {
   personality: string
   background: string
   opening: string
+}
+
+type RoleSetupKind = 'natural' | 'template' | 'custom'
+
+export interface NaturalSetup {
+  avatar: string
+  nickname: string
+  remark: string
+  gender: AIGender
 }
 
 /** 自定义已确认的表单（含头像/备注/性别，创建失败重试时回填） */
@@ -95,17 +109,39 @@ function customMarker(form: CustomFormState): string {
   return p.length > 8 ? `${p.slice(0, 8)}…` : p
 }
 
-export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
+export default function RolePicker({
+  mode,
+  onDone,
+  onNaturalLogin,
+  initialNatural,
+  initialNaturalError,
+  onBack,
+  onLogin,
+}: Props) {
   // 选中的角色：模板 id 或 'custom'；没选中时【开始】置灰
   const [selected, setSelected] = useState<string | null>(null)
   // 自定义已确认的表单；模板的设定草稿按模板 id 缓存（创建失败重开弹窗不丢编辑）
   const [customForm, setCustomForm] = useState<CustomFormState>(EMPTY_FORM)
   const [templateDraft, setTemplateDraft] = useState<{ state: RoleSetupState; templateId: string } | null>(null)
-  // 设定弹窗：template 非 null = 模板模式；null = 自定义模式
-  const [setup, setSetup] = useState<{ open: boolean; template: RoleTemplate | null; initial: RoleSetupState } | null>(null)
+  // 设定弹窗：Natural / 模板 / 自定义复用同一份表单，kind 只控制字段可见性与校验。
+  const [setup, setSetup] = useState<{
+    open: boolean
+    kind: RoleSetupKind
+    template: RoleTemplate | null
+    initial: RoleSetupState
+  } | null>(() =>
+    initialNatural
+      ? {
+          open: true,
+          kind: 'natural',
+          template: null,
+          initial: { ...EMPTY_FORM, ...initialNatural },
+        }
+      : null,
+  )
   // 建/换会话的进行中状态与错误提示（登录用户点「确认使用」后先建后端会话再进聊天）
   const [submitting, setSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(initialNaturalError ?? null)
 
   const pickTemplate = (t: RoleTemplate) => {
     setSelected(t.id)
@@ -114,6 +150,7 @@ export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
   const openCustom = () => {
     setSetup({
       open: true,
+      kind: 'custom',
       template: null,
       initial: {
         avatar: customForm.avatar,
@@ -127,12 +164,21 @@ export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
     })
   }
 
+  const openNatural = () => {
+    setSetup({
+      open: true,
+      kind: 'natural',
+      template: null,
+      initial: { ...EMPTY_FORM },
+    })
+  }
+
   const openTemplateSetup = () => {
     if (!selected || selected === 'custom') return
     const t = ROLE_TEMPLATES.find((x) => x.id === selected)
     if (!t) return
     const draft = templateDraft && templateDraft.templateId === t.id ? templateDraft.state : templateDefaults(t)
-    setSetup({ open: true, template: t, initial: draft })
+    setSetup({ open: true, kind: 'template', template: t, initial: draft })
   }
 
   /** 选定后保存：ai_companion_persona 存人设原文，备注/性别存各自 key。
@@ -153,12 +199,18 @@ export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
    * 登录用户按用途建/换会话：current 换当前会话人设（无当前会话则兜底开新会话），first/new 新建会话；
    * 游客不建会话，交给 App 触发登录墙。会话标题用 TA 姓名（取姓名优先）。
    */
-  const proceed = async (persona: string, s: RoleSetupState, roleKey: string | null) => {
-    if (submitting) return
-    if (!persona.trim()) return
+  const proceed = async (
+    persona: string,
+    s: RoleSetupState,
+    roleKey: string | null,
+    allowEmptyPersona = false,
+  ): Promise<boolean> => {
+    if (submitting) return false
+    if (!allowEmptyPersona && !persona.trim()) return false
     setSubmitting(true)
     setSubmitError(null)
-    persistSetup(persona)
+    // Template / Custom 保持原有全局兜底落盘时机；Natural 不在 session 成功前清空它。
+    if (!allowEmptyPersona) persistSetup(persona)
     const title = s.nickname.trim() || resolveSessionName(persona, roleKey ?? undefined)
     try {
       let createdTitle: string | undefined
@@ -188,20 +240,38 @@ export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
           saveProfileForSession(s, String(res.data.id))
         }
       } else {
-        // 游客：不建会话，头像/姓名写全局兜底（登录后会按角色隔离）
-        saveProfileForSession(s)
+        if (allowEmptyPersona) {
+          // Natural 游客：只交给 App 内存态，不靠 persona/假消息触发老数据迁移。
+          onNaturalLogin?.({
+            avatar: s.avatar,
+            nickname: s.nickname.trim(),
+            remark: s.remark.trim(),
+            gender: s.gender,
+          })
+        } else {
+          // 其他游客流程保持原有全局兜底。
+          saveProfileForSession(s)
+        }
       }
-      onDone(createdTitle ? { title: createdTitle } : undefined)
+      if (isLoggedIn() && allowEmptyPersona) persistSetup('')
+      onDone(createdTitle || allowEmptyPersona ? { title: createdTitle, startChat: allowEmptyPersona } : undefined)
+      return true
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : '创建会话失败，请稍后重试')
+      return false
     } finally {
       setSubmitting(false)
     }
   }
 
   /** 设定弹窗确认：模板 → 缓存草稿；自定义 → 存表单并选中；都直接建/换会话 */
-  const handleSetupConfirm = (s: RoleSetupState) => {
+  const handleSetupConfirm = async (s: RoleSetupState) => {
     if (!setup) return
+    if (setup.kind === 'natural') {
+      const succeeded = await proceed('', s, null, true)
+      if (succeeded) setSetup(null)
+      return
+    }
     const template = setup.template
     const isTemplate = template !== null
     if (isTemplate && template) {
@@ -268,8 +338,17 @@ export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
             <span aria-hidden="true" />
           </div>
         )}
-        <h1 className="role-title">选择你想要的 TA</h1>
-        <p className="role-sub">仅更换人设性格，历史聊天与记忆不会清除</p>
+        <h1 className="role-title">{mode === 'current' ? '选择你想要的 TA' : '认识你的 TA'}</h1>
+        <p className="role-sub">
+          {mode === 'current' ? '仅更换人设性格，历史聊天与记忆不会清除' : '可以直接开始相处，也可以先设定 TA。'}
+        </p>
+
+        {mode !== 'current' && (
+          <button type="button" className="role-card role-natural" onClick={openNatural}>
+            <span className="role-card-name">直接认识 TA</span>
+            <span className="role-card-tagline">不预设性格，先从认识开始。</span>
+          </button>
+        )}
 
         <div className="role-templates">
           {ROLE_TEMPLATES.map((t) => (
@@ -316,13 +395,16 @@ export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
 
       {setup?.open && (
         <RoleSetupModal
-          title={setup.template ? '设定 TA' : '自定义 TA'}
+          title={setup.kind === 'natural' ? '认识 TA' : setup.template ? '设定 TA' : '自定义 TA'}
+          kind={setup.kind}
           initial={setup.initial}
           backgroundHint={
             setup.template ? '选填，不填就用模板自带的' : '选填，描述你们的关系与 TA 的经历、相处细节'
           }
           onClose={() => setSetup(null)}
-          onConfirm={handleSetupConfirm}
+          onConfirm={(state) => void handleSetupConfirm(state)}
+          submitting={submitting}
+          error={submitError}
         />
       )}
     </div>
@@ -330,21 +412,27 @@ export default function RolePicker({ mode, onDone, onBack, onLogin }: Props) {
 }
 
 /**
- * 设定弹窗：模板预填 / 自定义 共用一套字段（TA头像 / TA姓名 / TA备注 / 性别 / 性格特质 / 关系&背景 / 开场第一句）。
- * 只留表单，高级文本编辑已下线（TASK-UI1）。
+ * 设定弹窗：Natural 只展示基础资料；模板 / 自定义保留完整字段。
+ * 三种入口共用同一份表单，高级文本编辑已下线（TASK-UI1）。
  */
 function RoleSetupModal({
   title,
+  kind,
   initial,
   backgroundHint,
   onClose,
   onConfirm,
+  submitting,
+  error,
 }: {
   title: string
+  kind: RoleSetupKind
   initial: RoleSetupState
   backgroundHint: string
   onClose: () => void
   onConfirm: (state: RoleSetupState) => void
+  submitting: boolean
+  error: string | null
 }) {
   const [form, setForm] = useState<RoleSetupState>(initial)
 
@@ -352,8 +440,9 @@ function RoleSetupModal({
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  // TA姓名 + 性格特质 必填，其余选填
-  const valid = form.nickname.trim() !== '' && form.personality.trim() !== ''
+  // Natural 只要求姓名；模板 / 自定义继续保持原有的姓名 + 性格必填。
+  const isNatural = kind === 'natural'
+  const valid = form.nickname.trim() !== '' && (isNatural || form.personality.trim() !== '')
 
   return (
     <div className="role-modal-overlay" role="dialog" aria-modal="true" aria-label={title}>
@@ -402,11 +491,11 @@ function RoleSetupModal({
           </div>
           <div className="field">
             <label>
-              性别 <span className="required-mark">必填</span>
+              性别 <span className={isNatural ? 'optional-mark' : 'required-mark'}>{isNatural ? '选填' : '必填'}</span>
             </label>
             <GenderSelect value={form.gender} onChange={(g) => setField('gender', g)} />
           </div>
-          <div className="field">
+          {!isNatural && <div className="field">
             <label htmlFor="setup-personality">
               性格特质 <span className="required-mark">必填</span>
             </label>
@@ -418,8 +507,8 @@ function RoleSetupModal({
               onChange={(e) => setField('personality', e.target.value)}
               rows={3}
             />
-          </div>
-          <div className="field">
+          </div>}
+          {!isNatural && <div className="field">
             <label htmlFor="setup-background">
               关系&背景设定 <span className="optional-mark">选填</span>
             </label>
@@ -432,8 +521,8 @@ function RoleSetupModal({
               rows={3}
             />
             <p className="hint role-modal-hint">{backgroundHint}</p>
-          </div>
-          <div className="field">
+          </div>}
+          {!isNatural && <div className="field">
             <label htmlFor="setup-opening">
               开场第一句 <span className="optional-mark">选填</span>
             </label>
@@ -445,17 +534,23 @@ function RoleSetupModal({
               onChange={(e) => setField('opening', e.target.value)}
               autoComplete="off"
             />
-          </div>
+          </div>}
         </div>
 
         <div className="role-modal-footer">
-          {!valid && <span className="role-modal-required-hint">请填写 TA 姓名和角色性格</span>}
+          {error ? (
+            <span className="role-modal-required-hint">{error}</span>
+          ) : !valid && (
+            <span className="role-modal-required-hint">
+              {isNatural ? '请填写 TA 姓名' : '请填写 TA 姓名和角色性格'}
+            </span>
+          )}
           <div className="role-modal-actions">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>
+            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={submitting}>
               取消
             </button>
-            <button type="button" className="btn btn-primary" onClick={() => onConfirm(form)} disabled={!valid}>
-              确认使用
+            <button type="button" className="btn btn-primary" onClick={() => onConfirm(form)} disabled={!valid || submitting}>
+              {submitting ? '正在创建…' : isNatural ? '开始认识' : '确认使用'}
             </button>
           </div>
         </div>
