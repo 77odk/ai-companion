@@ -8163,3 +8163,83 @@ html, body {
 .ai-space-day-date { min-width: 46px; font-size: 12px; color: var(--color-text-muted); white-space: nowrap; }
 .ai-space-day-label { flex: 1; font-size: 14px; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-space-day-count { font-size: 12px; color: var(--color-text-muted); white-space: nowrap; }
+
+
+/* 服务商配置页：我存过的配置卡片（点一下直接切换） */
+.saved-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.saved-config-card {
+  position: relative;
+  padding: 10px 34px 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-card);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.saved-config-card:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+.saved-config-card.active {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+}
+.saved-config-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+  outline-offset: 1px;
+}
+.saved-config-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.saved-config-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.saved-config-badge {
+  font-size: 11px;
+  color: var(--color-primary-deep);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.saved-config-meta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saved-config-del {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.saved-config-del:hover {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary-deep);
+}
+.saved-config-namer {
+  margin-bottom: 10px;
+}
+.saved-config-namer-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import ProviderSelect from './ProviderSelect'
+import { defaultConfigName, isActiveConfig, loadSavedConfigs, removeConfig, saveConfig, type SavedConfig } from '../lib/savedConfigs'
 import AvatarPicker from './AvatarPicker'
 import DefaultAvatar from './DefaultAvatar'
 import Account from './Account'
@@ -798,6 +799,10 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
   const [saved, setSaved] = useState(false)
   const [testState, setTestState] = useState<TestState>('idle')
   const [testMsg, setTestMsg] = useState('')
+  // 已保存的服务商配置卡片（存一次，下次点一下直接切换）
+  const [savedConfigs, setSavedConfigs] = useState<SavedConfig[]>(() => loadSavedConfigs())
+  const [saveNameOpen, setSaveNameOpen] = useState(false)
+  const [saveName, setSaveName] = useState('')
 
   const handleProviderChange = (p: Provider) => {
     setProvider(p)
@@ -874,6 +879,38 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
     }
   }
 
+  /** 点已保存的卡片：把这套配置填上并直接生效 */
+  const handleUseSaved = (c: SavedConfig) => {
+    setProvider(c.provider)
+    setApiKey(c.apiKey)
+    setBaseUrl(c.baseUrl)
+    setModel(c.model)
+    setAdvancedOpen(c.provider === 'custom' || c.provider === 'openai')
+    setKeyHint(keyFormatHint(c.provider, c.apiKey))
+    setTestState('idle')
+    setTestMsg('')
+    saveSettings({ provider: c.provider, apiKey: c.apiKey, baseUrl: c.baseUrl, model: c.model })
+    saveModelHistory(c.model)
+    setModelHistory(loadModelHistory())
+    // 切模型/配置=显式切换点，通知 Chat abort 旧请求（第一批①）
+    window.dispatchEvent(new CustomEvent('model-settings-changed'))
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  /** 把当前填的这套存成一张卡片 */
+  const handleSaveAsConfig = () => {
+    if (!apiKey.trim() || !baseUrl.trim() || !model.trim()) {
+      setTestState('error')
+      setTestMsg('先把 Key、地址、模型都填上，再存下来')
+      return
+    }
+    setSavedConfigs(saveConfig({ name: saveName, provider, apiKey, baseUrl, model }))
+    setSaveNameOpen(false)
+    setTestState('success')
+    setTestMsg('已存到上面「我存过的」，下次点一下就切过来')
+  }
+
   const resultClass =
     testState === 'success' ? 'test-result success' : testState === 'error' ? 'test-result error' : 'test-result'
 
@@ -892,6 +929,51 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
         <div className="field">
           <ProviderSelect value={provider} onChange={handleProviderChange} />
         </div>
+
+        {savedConfigs.length > 0 && (
+          <div className="field">
+            <label>我存过的</label>
+            <div className="saved-config-list">
+              {savedConfigs.map((c) => {
+                const active = isActiveConfig({ provider, baseUrl, model }, c)
+                return (
+                  <div
+                    key={c.id}
+                    className={`saved-config-card${active ? ' active' : ''}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleUseSaved(c)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        handleUseSaved(c)
+                      }
+                    }}
+                  >
+                    <div className="saved-config-head">
+                      <span className="saved-config-name">{c.name}</span>
+                      {active && <span className="saved-config-badge">使用中</span>}
+                      <button
+                        type="button"
+                        className="saved-config-del"
+                        aria-label="删除这个配置"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSavedConfigs(removeConfig(c.id))
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="saved-config-meta">{c.baseUrl.replace(/^https?:\/\//, '')}</div>
+                    <div className="saved-config-meta">{c.model}</div>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="hint">点一下卡片直接切过来，不用重新填</p>
+          </div>
+        )}
 
         <div className="field">
           <label htmlFor="api-key">API Key</label>
@@ -1023,9 +1105,40 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
         )}
       </div>
 
+      {saveNameOpen && (
+        <div className="saved-config-namer">
+          <input
+            className="input"
+            type="text"
+            placeholder="给这套配置起个名字（比如 慧慧云）"
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            autoComplete="off"
+            aria-label="配置名字"
+          />
+          <div className="saved-config-namer-actions">
+            <button className="btn btn-primary" onClick={handleSaveAsConfig}>
+              存下来
+            </button>
+            <button className="btn btn-ghost" onClick={() => setSaveNameOpen(false)}>
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="settings-actions">
         <button className="btn btn-primary" onClick={handleSave}>
           {saved ? '已保存' : '保存设置'}
+        </button>
+        <button
+          className="btn btn-ghost"
+          onClick={() => {
+            setSaveName(defaultConfigName({ provider, baseUrl }))
+            setSaveNameOpen(true)
+          }}
+        >
+          存为配置
         </button>
         <button className="btn btn-ghost" onClick={handleTest} disabled={testState === 'testing'}>
           {testState === 'testing' ? '测试中…' : '测试连接'}
