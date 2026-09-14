@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Welcome from './components/Welcome'
-import RolePicker from './components/RolePicker'
+import RolePicker, { type NaturalSetup } from './components/RolePicker'
 import Chat from './components/Chat'
 import Settings, { type SettingsPage } from './components/Settings'
 import AISpace from './components/AISpace'
@@ -13,9 +13,18 @@ import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
 import { getAccount } from './lib/sync'
 import RolesPage from './components/RolesPage'
 import { PlanetIcon } from './components/spaceIcons'
-import { loadMessages, loadPersona, loadAIProfile, loadUserProfile } from './lib/storage'
+import {
+  loadMessages,
+  loadPersona,
+  loadAIProfile,
+  loadUserProfile,
+  saveAIProfile,
+  saveAIRemark,
+  saveAIGender,
+  savePersona,
+} from './lib/storage'
 import { getToken, isLoggedIn, isPublicView } from './lib/auth'
-import { listSessions } from './lib/sessionApi'
+import { createSession, listSessions } from './lib/sessionApi'
 import {
   getActiveSessionId,
   getSessionsCache,
@@ -217,6 +226,9 @@ export default function App() {
   const [gateTarget, setGateTarget] = useState<View | null>(null)
   // 从登录墙去逛指南时，暂时收起来的回跳目标（指南返回时放回登录墙）
   const [pendingTarget, setPendingTarget] = useState<View | null>(null)
+  // Natural 游客草稿只存当前 App 内存；刷新丢失时按 V1 要求回正常 RolePicker。
+  const [pendingNatural, setPendingNatural] = useState<NaturalSetup | null>(null)
+  const [pendingNaturalError, setPendingNaturalError] = useState<string | null>(null)
   // 使用指南独立 view：返回时回到来源（欢迎页 / 我的 / 登录墙）
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate'>('welcome')
   // 选角色页的用途：first=首次/游客新建；current=换个TA·当前会话换人设；new=换个TA·开新会话换TA
@@ -393,10 +405,37 @@ export default function App() {
 
   // 登录墙登录成功：按云端会话分流（有会话进聊天，无会话进选角色新建），
   // 不再硬回登录前的 gateTarget——游客点聊天被拦，登录后也是"有会话的聊天"或"选角色"
-  const handleGateDone = () => {
+  const handleGateDone = async () => {
     setGateTarget(null)
     setPendingTarget(null)
-    void redirectBySessions()
+    const natural = pendingNatural
+    if (!natural) {
+      void redirectBySessions()
+      return
+    }
+
+    const activeBefore = getActiveSessionId()
+    const created = await createSession(getToken(), { persona: '', title: natural.nickname })
+    if (!created.ok) {
+      // 不动 activeSession；回 RolePicker 恢复原表单，用户可直接重试。
+      setActiveSessionId(activeBefore)
+      setPendingNaturalError(created.message)
+      setRoleMode('first')
+      setRoleBack('welcome')
+      replaceView('role')
+      return
+    }
+
+    const sid = String(created.data.id)
+    setActiveSessionId(sid)
+    saveAIProfile({ nickname: natural.nickname, avatar: natural.avatar }, sid)
+    saveAIRemark(natural.remark, sid)
+    saveAIGender(natural.gender, sid)
+    savePersona('')
+    setSessionsCache([...getSessionsCache().filter((session) => String(session.id) !== sid), created.data])
+    setPendingNatural(null)
+    setPendingNaturalError(null)
+    replaceView('chat')
   }
 
   // 欢迎页「开始使用」：离开 Welcome（清会话级 visit marker）；登录用户按云端会话分流；游客维持原流程（选角色或直接聊天）
@@ -413,6 +452,8 @@ export default function App() {
   const handleGateBack = () => {
     setGateTarget(null)
     setPendingTarget(null)
+    setPendingNatural(null)
+    setPendingNaturalError(null)
     replaceView('welcome')
   }
 
@@ -482,10 +523,20 @@ export default function App() {
           mode={roleMode}
           onDone={(info) => {
             // Natural 创建后直接进聊天；其他登录用户保留新建后回首页的原流程。
+            if (info?.startChat) {
+              setPendingNatural(null)
+              setPendingNaturalError(null)
+            }
             navigate(info?.startChat || !loggedIn ? 'chat' : 'home')
             // 新建会话后顺手拉一次列表：角色列表/头部入口都能立刻显示新角色名
             void refreshSessions()
           }}
+          onNaturalLogin={(setup) => {
+            setPendingNatural(setup)
+            setPendingNaturalError(null)
+          }}
+          initialNatural={pendingNatural ?? undefined}
+          initialNaturalError={pendingNaturalError ?? undefined}
           onBack={() => navigate(loggedIn && roleBack === 'welcome' ? 'home' : roleBack)}
           onLogin={() => setGateTarget('chat')}
         />
