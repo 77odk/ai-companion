@@ -260,9 +260,10 @@ export function extractMemories(text: string): ExtractedMemory[] {
   const out: ExtractedMemory[] = []
   for (const line of text.split('\n')) {
     // 中文格式：【记忆·主题】内容 或 【记忆】内容
-    const mZh = /^\s*【记忆(?:[·・]\s*([^】]+))?】\s*(.+?)\s*$/.exec(line)
-    if (mZh && mZh[2]) {
-      out.push({ ...(mZh[1]?.trim() ? { topic: mZh[1].trim() } : {}), text: mZh[2].trim() })
+    const mZh = /^\s*(?:【记忆(?:[·・]\s*([^】]+))?】|〖记忆(?:[·・]\s*([^〗]+))?〗)\s*(.+?)\s*$/.exec(line)
+    if (mZh && mZh[3]) {
+      const topic = (mZh[1] || mZh[2])?.trim()
+      out.push({ ...(topic ? { topic } : {}), text: mZh[3].trim() })
       continue
     }
     // 英文格式：[Memory: Topic] content 或 [Memory] content
@@ -378,7 +379,7 @@ export function planMemoryWrites(
 export function stripMemoryMarkers(text: string): string {
   return text
     .split('\n')
-    .filter((line) => !/^\s*【记忆/.test(line) && !/^\s*\[Memory/i.test(line))
+    .filter((line) => !/^\s*[【〖]记忆/.test(line) && !/^\s*\[Memory/i.test(line))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()

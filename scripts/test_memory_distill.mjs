@@ -131,6 +131,19 @@ console.log('\n[11] 任务8/9：中英文 marker 解析（extractMemories 保持
   eq(en.length, 1, '英文 marker 提取 1 条')
   eq(en[0].topic, 'Food', '英文 topic')
   eq(en[0].text, 'They like plum-flavored ribs', '英文 text')
+
+  const compatibleZh = extractMemories([
+    '〖记忆·饮食〗用户喜欢拿铁',
+    '〖记忆〗用户喜欢拿铁',
+    '〖记忆・饮食〗用户喜欢拿铁',
+  ].join('\n'))
+  eq(compatibleZh.length, 3, '兼容中文 marker 提取 3 条')
+  eq(compatibleZh[0].topic, '饮食', '兼容中文 topic')
+  eq(compatibleZh[0].text, '用户喜欢拿铁', '兼容中文 text')
+  eq(compatibleZh[1].topic, undefined, '兼容中文无 topic')
+  eq(compatibleZh[1].text, '用户喜欢拿铁', '兼容中文无 topic 时提取正文')
+  eq(compatibleZh[2].topic, '饮食', '兼容中文异体点号 topic')
+  eq(compatibleZh[2].text, '用户喜欢拿铁', '兼容中文异体点号 text')
 }
 
 console.log('\n[12] 任务10：同轮不产生“原话 + 提炼”两条同义 Memory')
@@ -178,6 +191,13 @@ console.log('\n[15] 任务16：Memory marker 仍从用户可见正文正确剥�
   ok(!stripped.includes('【记忆'), '中文 marker 已剥离')
   ok(!stripped.includes('[Memory'), '英文 marker 已剥离')
   ok(stripped.includes('正文') && stripped.includes('结尾'), '正文保留')
+
+  eq(
+    stripMemoryMarkers('好，我记住了。\n〖记忆·饮食〗用户喜欢拿铁'),
+    '好，我记住了。',
+    '兼容中文 marker 已剥离',
+  )
+  eq(stripMemoryMarkers('普通的 〖内容〗 字符'), '普通的 〖内容〗 字符', '非 Memory 的兼容括号正文保留')
 }
 
 console.log('\n[16] 多候选部分匹配：匹配的走提炼版、未匹配的 fallback explicit')
