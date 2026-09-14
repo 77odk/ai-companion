@@ -65,4 +65,4 @@ npm run build    # tsc + vite + PWA + 混淆
 
 没有署名、抹掉出处、或拿去商用的，我会向平台投诉下架，并保留追究责任的权利。
 
-商用授权与合作请联系：GitHub Issues
+商用授权与合作请联系：yw_eluvin@163.com
