@@ -518,13 +518,18 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     retriedRef.current = false
     busyTriggeredRef.current = false
 
-    // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看最近5条用户消息多数语言），存 sessionStore
+    const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
+
+    // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看最近5条历史用户消息 + 当前消息的多数语言），存 sessionStore
     const personaText = persona?.trim() || ''
     let lang: Lang
     if (personaText) {
       lang = detectLang(personaText)
     } else {
-      const recentUserMsgs = visibleMessages.filter((m) => m.role === 'user').slice(-5).map((m) => m.content)
+      const recentUserMsgs = [
+        ...visibleMessages.filter((m) => m.role === 'user').slice(-5).map((m) => m.content),
+        userMsg.content,
+      ]
       const zhCount = recentUserMsgs.filter((m) => detectLang(m) === 'zh').length
       lang = zhCount > recentUserMsgs.length / 2 ? 'zh' : 'en'
     }
@@ -578,7 +583,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       if (saved) userMsg.memorySaved = true
     }
 
-    const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
     recordChatTopic(text, getActiveSessionId() || undefined)
     // TASK-MEM-DISTILL：本地显式检测先收集候选、不抢先写——等模型回复的【记忆】marker 到达后统一归并
     // （有 marker 对应 → 只写一条提炼版 explicit；无对应 marker → fallback 写本地候选；只有 marker → 保持 inferred）
