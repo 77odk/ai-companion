@@ -34,6 +34,7 @@ import {
 import { containsBusyKeyword, findBusyCutoff, inferBusyReason, pickBusyReply, randomBusyDurationMs, serializeBusyContext, type BusyState } from '../lib/aiBusy'
 import { loadCurrentPosts } from '../lib/aiSpace'
 import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELINE_EN } from '../lib/spaceChatInject'
+import { commitPartialReply } from '../lib/partialReply'
 import { buildFutureAgendaBlock } from '../lib/futureAgenda'
 import { buildSelfTimelineBlock } from '../lib/selfTimeline'
 import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYourMoment } from '../lib/yourMoment'
@@ -121,6 +122,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
   const assistantText = useRef('')
   // 第27条：模型独立思考字段 reasoning_content 累积（DeepSeek/Qwen/Kimi/豆包等），finalize 时合并到 thinking
   const reasoningRef = useRef('')
+  // 2026-09-14：生成中途关页面/切后台的兜底（七七实测「退出去再进来，回复没过来」）。
+  // partialTsRef = 本轮 assistant 占位消息的 ts（null = 当前没有在生成的回复）；streamingRef 镜像 streaming state
+  const partialTsRef = useRef<number | null>(null)
+  const streamingRef = useRef(false)
   // 忙碌状态相关 ref
   const busyTimerRef = useRef<number | null>(null)
   const busyTriggeredRef = useRef(false)
@@ -364,6 +369,47 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     }
   }, [activeSessionId])
 
+  /**
+   * 2026-09-14（七七实测：生成到一半退出去，回来那条回复凭空消失）：
+   * 页面被关掉/切到后台时，把已经生成出来的半截回复先落库，再排进 pendingOps 待上传队列。
+   * 关页面时来不及等网络，所以这里不直接发请求——Chat 挂载时的 flushPendingOps 会自动补传。
+   * 监听器挂在 window（全局只留一份，后挂覆盖先挂）：离开聊天页之后才关页面也能兜住。
+   */
+  useEffect(() => {
+    const commitPartialOnHide = (leaving: boolean) => {
+      const ts = partialTsRef.current
+      if (ts == null || finishedRef.current) return
+      const raw = assistantText.current
+      if (!raw || !raw.trim()) return
+      if (leaving) {
+        // 页面真的要走了（关页面/离开）：立防重入标记，这次之后不再重复落库
+        finishedRef.current = true
+        streamingRef.current = false
+        partialTsRef.current = null
+      }
+      const sid = getActiveSessionId()
+      const lang = sid ? getSessionLang(sid) : 'zh'
+      const text = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)))
+      const parts = commitPartialReply(sid, ts, text, leaving)
+      if (!parts.length) return
+      if (leaving) window.dispatchEvent(new CustomEvent('yiwem:ai-reply-committed', { detail: { sid } }))
+    }
+    const w = window as unknown as Record<string, unknown>
+    const prevPage = w.__yiwemHideCommit
+    if (typeof prevPage === 'function') window.removeEventListener('pagehide', prevPage as EventListener)
+    const prevVis = w.__yiwemVisCommit
+    if (typeof prevVis === 'function') document.removeEventListener('visibilitychange', prevVis as EventListener)
+    const onPageHide = () => commitPartialOnHide(true)
+    const onVisible = () => {
+      // 只是切到后台：先把已生成的内容落本地兜住（不排队列、不打断正在跑的流）
+      if (document.visibilityState === 'hidden') commitPartialOnHide(false)
+    }
+    w.__yiwemHideCommit = onPageHide
+    w.__yiwemVisCommit = onVisible
+    window.addEventListener('pagehide', onPageHide)
+    document.addEventListener('visibilitychange', onVisible)
+  }, [])
+
   useEffect(() => {
     if (!activeSessionId) return
     const token = getToken()
@@ -582,6 +628,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
     setInput('')
     setError(null)
     setStreaming(true)
+    partialTsRef.current = assistantTs
+    streamingRef.current = true
 
     if (activeSessionId) {
       persistMessages([...messages, userMsg])
@@ -779,6 +827,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
       if (!mountedRef.current) {
         window.dispatchEvent(new CustomEvent('yiwem:ai-reply-committed', { detail: { sid: getActiveSessionId() } }))
       }
+      partialTsRef.current = null
+      streamingRef.current = false
     }
 
     const finalize = () => {
