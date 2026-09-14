@@ -19,6 +19,13 @@ const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 
 assert.match(rolePicker, /mode !== 'current' && \([\s\S]*直接认识 TA/)
 assert.match(rolePicker, /mode === 'current' \? '选择你想要的 TA' : '认识你的 TA'/)
+// Natural 弹窗标题 === '认识 TA'；入口卡片仍叫「直接认识 TA」，说明文案不变。
+assert.match(
+  rolePicker,
+  /title=\{setup\.kind === 'natural' \? '认识 TA' : setup\.template \? '设定 TA' : '自定义 TA'\}/,
+)
+assert.match(rolePicker, /<span className="role-card-name">直接认识 TA<\/span>/)
+assert.match(rolePicker, /<span className="role-card-tagline">不预设性格，先从认识开始。<\/span>/)
 assert.match(rolePicker, /kind === 'natural'[\s\S]*!isNatural && <div className="field">[\s\S]*setup-personality/)
 assert.match(rolePicker, /const valid = form\.nickname\.trim\(\) !== '' && \(isNatural \|\| form\.personality\.trim\(\) !== ''\)/)
 assert.match(rolePicker, /setup\.kind === 'natural'[\s\S]*proceed\('', s, null, true\)/)

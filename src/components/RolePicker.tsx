@@ -395,7 +395,7 @@ export default function RolePicker({
 
       {setup?.open && (
         <RoleSetupModal
-          title={setup.kind === 'natural' ? '直接认识 TA' : setup.template ? '设定 TA' : '自定义 TA'}
+          title={setup.kind === 'natural' ? '认识 TA' : setup.template ? '设定 TA' : '自定义 TA'}
           kind={setup.kind}
           initial={setup.initial}
           backgroundHint={
