@@ -36,7 +36,9 @@ check(
 console.log('\n[BUG-C] Refresh 与「记忆书」同 head 行内、独立 hit area')
 check('Memory.tsx 有 .memory-head-actions 容器', memoryTsx.includes('className="memory-head-actions"'))
 check('home-web-refresh 移入 memory-head-actions 内', /<span className="memory-head-actions">\s*<button[\s\S]*?className="home-web-refresh"/.test(memoryTsx))
-check('book-tag 与 refresh 同属 actions（book-tag 在 refresh 之后）', /className="home-web-refresh"[\s\S]*?className="memory-book-tag"/.test(memoryTsx))
+// UI2-03-POLISH-03 集成：Book 从 head actions 移出、改为 Year Nav 上方的实体 Portal，
+// 所以这条断言按新层级更新（旧：「book-tag 在 refresh 之后同属 actions」已随层级修正作废）。
+check('head-actions 内只剩 Refresh；旧 book-tag 已删除（Book 改为 Portal）', /className="home-web-refresh"/.test(memoryTsx) && !memoryTsx.includes('memory-book-tag'))
 check('ui2.css 有 .memory-head-actions 布局', /\.memory-head-actions\s*\{[\s\S]*?inline-flex/.test(ui2Css))
 check('ui2.css Memory 页内 refresh 转 flow（position:static）', /\.memory-page \.home-web-refresh\s*\{[\s\S]*?position:\s*static/.test(ui2Css))
 check('ui2.css 中 home-web-refresh 全局 absolute 定义仍在（Home 不受影响）', /\.home-web-refresh\s*\{[\s\S]*?position:\s*absolute/.test(ui2Css))
