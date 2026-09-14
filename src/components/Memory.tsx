@@ -4,6 +4,7 @@ import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
 import { getToken } from '../lib/auth'
 import { correctMemoryText, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
+import { findChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
 // 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
@@ -96,7 +97,12 @@ const RIVER_FULL_LIMIT = 200
 /** 渐进渲染每批条数 */
 const RIVER_BATCH = 120
 
-export default function Memory() {
+interface MemoryProps {
+  /** UI2-03B-1「看原对话」：把一次性 jump target 交给 App，由 App 切到 chat 并转交 Chat 消费 */
+  onJumpToChat?: (target: ChatJumpTarget) => void
+}
+
+export default function Memory({ onJumpToChat }: MemoryProps = {}) {
   const sessionId = getActiveSessionId()
   const readMemories = (): SourcedMemory[] => {
     const globalExplicit = loadMemory().filter((memory) => memory.explicit === true)
@@ -164,6 +170,30 @@ export default function Memory() {
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  // UI2-03B-1「看原对话」：失败提示（不撑坏 Detail），短暂显示后自动消失
+  const [jumpNotice, setJumpNotice] = useState<string | null>(null)
+  const jumpNoticeTimer = useRef<number | null>(null)
+  const showJumpNotice = (text: string) => {
+    setJumpNotice(text)
+    if (jumpNoticeTimer.current !== null) window.clearTimeout(jumpNoticeTimer.current)
+    jumpNoticeTimer.current = window.setTimeout(() => setJumpNotice(null), 2600)
+  }
+
+  // UI2-03B-1：只允许「session Memory + source 非空」跳原对话；unique 才跳，not_found/ambiguous 就地提示。
+  const handleJumpToChat = () => {
+    if (!selected || !onJumpToChat) return
+    const result = findChatJumpTarget(sessionId, selected.item.source ?? '')
+    if (result.status === 'unique' && result.target) {
+      setJumpNotice(null)
+      onJumpToChat(result.target)
+      return
+    }
+    if (result.status === 'ambiguous') {
+      showJumpNotice('这句话你们说过好几次，没办法确定是哪一次')
+      return
+    }
+    showJumpNotice('原对话已不在了')
+  }
 
   // ---- Detail → back 保持 River 位置 ----
   const pageRef = useRef<HTMLDivElement>(null)
@@ -463,6 +493,22 @@ export default function Memory() {
               <p className="memory-detail-source-empty">没有保留当时原文</p>
             )}
           </div>
+          {selected.kind === 'session' && selected.item.source?.trim() ? (
+            <div className="memory-jump-row">
+              <button
+                type="button"
+                className="memory-jump-trigger"
+                onClick={handleJumpToChat}
+                disabled={!onJumpToChat}
+              >
+                看原对话
+                <span aria-hidden="true">→</span>
+              </button>
+              {jumpNotice ? (
+                <p className="memory-jump-notice" role="status">{jumpNotice}</p>
+              ) : null}
+            </div>
+          ) : null}
           {selected.item.taReply?.trim() ? (
             <div className="memory-detail-reply">
               <p className="memory-detail-reply-label">TA 当时回应</p>

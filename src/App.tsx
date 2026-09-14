@@ -13,6 +13,7 @@ import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
 import { getAccount } from './lib/sync'
 import RolesPage from './components/RolesPage'
 import { PlanetIcon } from './components/spaceIcons'
+import type { ChatJumpTarget } from './lib/chatJump'
 import {
   loadMessages,
   loadPersona,
@@ -222,6 +223,9 @@ export default function App() {
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
+  // UI2-03B-1「看原对话」：Memory → App 的一次性 jump target（transient，不持久化）；
+  // Chat 消费（成功滚动或失败提示）后清空。
+  const [pendingChatJump, setPendingChatJump] = useState<ChatJumpTarget | null>(null)
   // 游客想进需登录页时记下的目标 view：仅登录墙展示用（登录成功后改为按云端会话分流，不再硬回跳）
   const [gateTarget, setGateTarget] = useState<View | null>(null)
   // 从登录墙去逛指南时，暂时收起来的回跳目标（指南返回时放回登录墙）
@@ -677,6 +681,8 @@ export default function App() {
                   setDetailFrom('chat')
                   goView('chatprofile')
                 }}
+                pendingJump={pendingChatJump}
+                onJumpConsumed={() => setPendingChatJump(null)}
               />
             )}
             {view === 'settings' && (
@@ -711,7 +717,15 @@ export default function App() {
                 onGoMine={() => navigate('settings')}
               />
             )}
-            {view === 'memory' && <Memory key={memoryRootKey} />}
+            {view === 'memory' && (
+              <Memory
+                key={memoryRootKey}
+                onJumpToChat={(target) => {
+                  setPendingChatJump(target)
+                  goView('chat')
+                }}
+              />
+            )}
           </main>
 
           {isNavView(view) && (

@@ -1805,6 +1805,54 @@
   opacity: 0.72;
 }
 
+/* UI2-03B-1「看原对话」：轻量入口，不抢「纠正」视觉；失败文案就地轻提示，不撑坏 Detail */
+.memory-jump-row {
+  margin: -8px 0 22px;
+}
+
+.memory-jump-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--memory-accent);
+  cursor: pointer;
+  opacity: 0.9;
+  transition: opacity 0.15s ease;
+}
+
+.memory-jump-trigger:hover {
+  opacity: 1;
+}
+
+.memory-jump-trigger:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--memory-accent) 50%, transparent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.memory-jump-trigger:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.memory-jump-trigger span {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.memory-jump-notice {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--memory-muted);
+  opacity: 0.85;
+}
+
 .memory-detail-reply {
   margin-bottom: 22px;
 }
@@ -2385,4 +2433,48 @@
   font-size: 12px;
   letter-spacing: 0.02em;
   color: rgba(51, 43, 40, 0.45);
+}
+
+/* ===== UI2-03B-1「看原对话」 ===== */
+/* Chat 轻量失败提示：不借用 send error 横幅，fixed 于 composer 上方 */
+.chat-jump-notice {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 104px;
+  z-index: 40;
+  padding: 8px 15px;
+  border-radius: 999px;
+  background: rgba(20, 20, 24, 0.86);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* 目标消息临时高亮：仅视觉（row 左侧 accent 竖线 + 轻 tint + 气泡 2px 描边），不改变气泡尺寸；
+   index.css 为保护文件，bubble 底色在此以 override + transition 实现淡出 */
+.message-row.msg-jump-highlight {
+  background: color-mix(in srgb, var(--memory-accent, var(--color-primary)) 9%, transparent);
+  box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--memory-accent, var(--color-primary)) 85%, transparent);
+  border-radius: 10px;
+  transition: background-color 0.5s ease, box-shadow 0.5s ease;
+}
+
+.message-row.msg-jump-highlight .bubble-user {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--memory-accent, var(--color-primary)) 85%, transparent);
+}
+
+.message-row.msg-jump-highlight .bubble-assistant {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--memory-accent, var(--color-primary)) 55%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-jump-notice,
+  .memory-jump-trigger,
+  .memory-jump-notice {
+    transition: none;
+  }
 }

@@ -3,6 +3,7 @@ import MessageBubble from './MessageBubble'
 import { buildBusyReturnPrompt, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem, type ExplicitCandidate } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
+import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
 import { getSession, listMemories, postMemory, postMessage, type Session } from '../lib/sessionApi'
 import {
@@ -77,9 +78,13 @@ interface Props {
   onGoGuide: () => void
   /** 点 TA 的头像 → 打开聊天头像资料卡 */
   onOpenProfile: () => void
+  /** UI2-03B-1「看原对话」：Memory 传来的一次性 jump target（transient，不持久化） */
+  pendingJump?: ChatJumpTarget | null
+  /** 消费完成（成功滚动或失败提示）后由 App 清空 pending */
+  onJumpConsumed?: () => void
 }
 
-export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) {
+export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJump, onJumpConsumed }: Props) {
   const activeSessionId = getActiveSessionId()
 
   const [messages, setMessages] = useState<StoredMessage[]>(() =>
@@ -105,6 +110,18 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  // UI2-03B-1：pending jump 时让 scroll-bottom 让位一次（不能先滚到底再跳，也不能跳完被拉回）
+  const jumpSuppressRef = useRef(false)
+  // 防重复消费同一 pending target（StrictMode 双跑 / deps 抖动时只处理一次）
+  const jumpHandledRef = useRef(false)
+  // 轻量失败提示：不借用 send error 横幅，避免干扰既有错误流
+  const [jumpNotice, setJumpNotice] = useState<string | null>(null)
+  const jumpNoticeTimer = useRef<number | null>(null)
+  const showJumpNotice = (text: string) => {
+    setJumpNotice(text)
+    if (jumpNoticeTimer.current !== null) window.clearTimeout(jumpNoticeTimer.current)
+    jumpNoticeTimer.current = window.setTimeout(() => setJumpNotice(null), 2600)
+  }
   const controllerRef = useRef<AbortController | null>(null)
   const thinkTimerRef = useRef<number | null>(null)
   const playTimerRef = useRef<number | null>(null)
@@ -280,8 +297,46 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
 
   useEffect(() => {
     const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (!el) return
+    // UI2-03B-1：pending jump 生效期间让位一次，由 jump 滚动接管
+    if (jumpSuppressRef.current) return
+    el.scrollTop = el.scrollHeight
   }, [visibleMessages, busyReplyText])
+
+  // UI2-03B-1「看原对话」：消费 App 传来的一次性 jump target。
+  // 二次校验（session 未变 + visibleMessages 中 ts/content 完全一致的唯一 user 消息）通过才滚动；
+  // 失败 → 清 pending + 轻量提示，绝不滚到别的消息。
+  useEffect(() => {
+    if (!pendingJump) return
+    if (jumpHandledRef.current) return
+    if (!activeSessionId) return
+    jumpHandledRef.current = true
+    if (!verifyChatJumpTarget(pendingJump, activeSessionId, visibleMessages)) {
+      onJumpConsumed?.()
+      showJumpNotice('原对话已不在了')
+      return
+    }
+    // 让 auto-scroll 让位：本轮滚动由 jump 接管
+    jumpSuppressRef.current = true
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const ts = pendingJump.ts
+        const el = scrollRef.current?.querySelector<HTMLElement>(`[data-msg-ts="${ts}"]`)
+        if (el) {
+          el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+          el.classList.add('msg-jump-highlight')
+          window.setTimeout(() => el.classList.remove('msg-jump-highlight'), 1800)
+        } else {
+          showJumpNotice('原对话已不在了')
+        }
+        jumpSuppressRef.current = false
+        onJumpConsumed?.()
+      })
+    })
+    return () => {
+      if (jumpNoticeTimer.current !== null) window.clearTimeout(jumpNoticeTimer.current)
+    }
+  }, [pendingJump, activeSessionId, visibleMessages])
 
   useEffect(() => {
     const el = inputRef.current
@@ -1065,6 +1120,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
           </>
         )}
       </div>
+
+      {jumpNotice && (
+        <div className="chat-jump-notice" role="status">{jumpNotice}</div>
+      )}
 
       {error && (
         <div className="chat-error-wrap">
