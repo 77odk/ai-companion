@@ -4,6 +4,7 @@
 // 覆盖：unique / not_found / ambiguous / substring 禁止 / 角色隔离 /
 //       sessionStart 过滤 / verifyChatJumpTarget 二次校验（ts / content / session / 多命中）
 
+import { readFileSync } from 'node:fs'
 import { findChatJumpTarget, verifyChatJumpTarget } from '../src/lib/chatJump.ts'
 import { getMessagesCache, saveMessagesCache } from '../src/lib/sessionStore.ts'
 
@@ -142,6 +143,70 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
   const target = { sessionId: 'A', ts: 1000, source: '我喜欢拿铁' }
   const shifted = [uid('我喜欢拿铁', 2000)]
   ok(verifyChatJumpTarget(target, 'A', shifted) === false, 'ts 变化但内容相同 → false（不凭 content 就滚）')
+}
+
+// ---- H：pending jump 必须让第一次 auto-scroll 让位（源码级断言） ----
+{
+  const chatSrc = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+  const anchor = chatSrc.indexOf('el.scrollTop = el.scrollHeight')
+  const effectStart = chatSrc.lastIndexOf('useEffect(() => {', anchor)
+  const effectBody = chatSrc.slice(effectStart, anchor)
+  ok(effectStart > -1 && effectBody.includes('jumpAtMountRef.current'), 'H1 auto-scroll effect 内先判 jumpAtMountRef（挂载期 pending jump）')
+  ok(effectBody.includes('jumpHoldRef.current'), 'H2 auto-scroll effect 内同时判跳转保护窗口 jumpHoldRef')
+  ok(effectBody.includes('jumpSuppressRef.current'), 'H3 auto-scroll effect 同时保留 jumpSuppressRef 让位')
+  ok(
+    /if \(jumpAtMountRef\.current \|\| jumpHoldRef\.current \|\| jumpSuppressRef\.current\) return\s*\n\s*el\.scrollTop = el\.scrollHeight/.test(chatSrc),
+    'H4 让位判断紧贴在 scroll-bottom 之前（先判断、后滚动）',
+  )
+  ok(
+    chatSrc.includes('const jumpAtMountRef = useRef(Boolean(pendingJump))') &&
+      chatSrc.includes('const jumpHoldRef = useRef(Boolean(pendingJump))'),
+    'H5 挂载时按 pendingJump 快照初始化（不依赖 effect 声明顺序）',
+  )
+  const releases = chatSrc.match(/releaseJumpHold\(\)/g) || []
+  ok(releases.length >= 3, `H6 失败 / 无 session / 用户发消息三条路径都会解除保护（实测 ${releases.length} 处）`)
+  ok(
+    /jumpHoldTimerRef\.current = window\.setTimeout\([\s\S]{0,200}?2500\)/.test(chatSrc),
+    'H7 跳转成功后进入保护窗口（超时自动解除，不会永久压住滚到底）',
+  )
+  const jumpStart = chatSrc.indexOf('// 二次校验（session 未变')
+  const cleanupStart = chatSrc.indexOf('return () => {', jumpStart)
+  const cleanupEnd = chatSrc.indexOf('}, [pendingJump, activeSessionId])', cleanupStart)
+  const cleanupRegion = cleanupStart > -1 && cleanupEnd > cleanupStart ? chatSrc.slice(cleanupStart, cleanupEnd) : null
+  ok(
+    cleanupRegion !== null && !cleanupRegion.includes('clearTimeout(jumpHoldTimerRef'),
+    'H8 jump effect 的 cleanup 不会提前清掉保护窗口（保证活过随后的消息更新）',
+  )
+  ok(
+    /\}, \[pendingJump, activeSessionId\]\)/.test(chatSrc) && chatSrc.includes('visibleMessagesRef.current'),
+    'H9 jump effect 只依赖 pendingJump/session，消息列表走 ref（避免消息更新触发 cleanup）',
+  )
+}
+
+// ---- I：DOM 定位必须锁 user role（源码级断言 + 纯逻辑） ----
+{
+  const chatSrc = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+  const bubbleSrc = readFileSync(new URL('../src/components/MessageBubble.tsx', import.meta.url), 'utf8')
+  ok(
+    chatSrc.includes('`[data-msg-role="user"][data-msg-ts="${ts}"]`'),
+    'I1 querySelector 同时锁 data-msg-role="user" 与 data-msg-ts',
+  )
+  ok(
+    !/querySelector<HTMLElement>\(\s*`\[data-msg-ts=/.test(chatSrc),
+    'I2 不再存在只按 data-msg-ts 定位的旧写法',
+  )
+  ok(bubbleSrc.includes('data-msg-ts={message.ts}'), 'I3 MessageBubble 仍渲染 data-msg-ts')
+  ok(bubbleSrc.includes('data-msg-role={message.role}'), 'I4 MessageBubble 仍渲染 data-msg-role')
+
+  // 同 ts 下存在 assistant 行 → 业务判定与 DOM 一样只认 user 行，不产生歧义
+  resetStore()
+  saveMessagesCache('A', [uid('我喜欢拿铁', 1000), msg('assistant', '我喜欢拿铁', 1000)])
+  const r = findChatJumpTarget('A', '我喜欢拿铁')
+  ok(r.status === 'unique' && r.target && r.target.ts === 1000, 'I5 同 ts 同内容的 assistant 行不算命中（仍 unique）')
+  ok(verifyChatJumpTarget({ sessionId: 'A', ts: 1000, source: '我喜欢拿铁' }, 'A', [uid('我喜欢拿铁', 1000), msg('assistant', '我喜欢拿铁', 1000)]) === true, 'I6 二次校验同样只认 user 行 → true')
+
+  // 同 ts 两条 user（异常数据）→ 依旧不跳
+  ok(verifyChatJumpTarget({ sessionId: 'A', ts: 1000, source: '我喜欢拿铁' }, 'A', [uid('我喜欢拿铁', 1000), uid('我喜欢拿铁', 1000)]) === false, 'I7 同 ts 两条 user → 不跳（多命中）')
 }
 
 console.log(`\nchatJump: ${passed} passed, ${failed} failed`)

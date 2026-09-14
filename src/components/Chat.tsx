@@ -107,11 +107,29 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     () => filterSessionMessages(messages, sessionStart),
     [messages, sessionStart],
   )
+  // UI2-03B-1：jump effect 只依赖 pendingJump/session，消息列表通过 ref 读取最新值 ——
+  // 这样消息每次更新都不会重跑 jump effect（否则 cleanup 会把跳转保护窗口的定时器提前清掉）
+  const visibleMessagesRef = useRef(visibleMessages)
+  visibleMessagesRef.current = visibleMessages
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   // UI2-03B-1：pending jump 时让 scroll-bottom 让位一次（不能先滚到底再跳，也不能跳完被拉回）
   const jumpSuppressRef = useRef(false)
+  // UI2-03B-1：本次 mount 是否带 pending jump —— 挂载时快照，保证「第一次 scroll-bottom」就让位
+  // （auto-scroll effect 声明在 jump effect 之前，靠 jumpSuppressRef 来不及）
+  const jumpAtMountRef = useRef(Boolean(pendingJump))
+  // UI2-03B-1：跳转保护窗口。跳完立即放开会被同帧/随后的异步更新（busy 状态、云端消息合并）再次拉到底，
+  // 所以跳转成功后保持保护，直到用户自己发了消息或窗口超时（2.5s）自动解除。
+  const jumpHoldRef = useRef(Boolean(pendingJump))
+  const jumpHoldTimerRef = useRef<number | null>(null)
+  const releaseJumpHold = () => {
+    jumpHoldRef.current = false
+    if (jumpHoldTimerRef.current !== null) {
+      window.clearTimeout(jumpHoldTimerRef.current)
+      jumpHoldTimerRef.current = null
+    }
+  }
   // 防重复消费同一 pending target（StrictMode 双跑 / deps 抖动时只处理一次）
   const jumpHandledRef = useRef(false)
   // 轻量失败提示：不借用 send error 横幅，避免干扰既有错误流
@@ -298,8 +316,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    // UI2-03B-1：pending jump 生效期间让位一次，由 jump 滚动接管
-    if (jumpSuppressRef.current) return
+    // UI2-03B-1：用户自己发了消息 → 立刻解除跳转保护，正常滚到底
+    if (jumpHoldRef.current) {
+      const last = visibleMessages[visibleMessages.length - 1]
+      if (last && last.role === 'user') releaseJumpHold()
+    }
+    // UI2-03B-1：本次 mount 带 pending jump / 跳转保护窗口内，scroll-bottom 让位（由 jump 接管定位）
+    if (jumpAtMountRef.current || jumpHoldRef.current || jumpSuppressRef.current) return
     el.scrollTop = el.scrollHeight
   }, [visibleMessages, busyReplyText])
 
@@ -309,9 +332,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   useEffect(() => {
     if (!pendingJump) return
     if (jumpHandledRef.current) return
-    if (!activeSessionId) return
+    if (!activeSessionId) {
+      releaseJumpHold()
+      jumpAtMountRef.current = false
+      jumpSuppressRef.current = false
+      return
+    }
     jumpHandledRef.current = true
-    if (!verifyChatJumpTarget(pendingJump, activeSessionId, visibleMessages)) {
+    if (!verifyChatJumpTarget(pendingJump, activeSessionId, visibleMessagesRef.current)) {
+      releaseJumpHold()
+      jumpAtMountRef.current = false
+      jumpSuppressRef.current = false
       onJumpConsumed?.()
       showJumpNotice('原对话已不在了')
       return
@@ -321,7 +352,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const ts = pendingJump.ts
-        const el = scrollRef.current?.querySelector<HTMLElement>(`[data-msg-ts="${ts}"]`)
+        // DOM 定位必须同时锁 role=user + ts：同 ts 下可能存在 assistant 行，不能只靠 ts
+        const el = scrollRef.current?.querySelector<HTMLElement>(
+          `[data-msg-role="user"][data-msg-ts="${ts}"]`,
+        )
         if (el) {
           el.scrollIntoView({ block: 'center', behavior: 'smooth' })
           el.classList.add('msg-jump-highlight')
@@ -329,14 +363,23 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         } else {
           showJumpNotice('原对话已不在了')
         }
+        jumpAtMountRef.current = false
         jumpSuppressRef.current = false
+        // 跳转保护窗口：挡住跳完之后同帧/随后的异步更新（busy 状态、云端消息合并）再次把列表拉到底
+        if (jumpHoldTimerRef.current !== null) window.clearTimeout(jumpHoldTimerRef.current)
+        jumpHoldTimerRef.current = window.setTimeout(() => {
+          jumpHoldRef.current = false
+          jumpHoldTimerRef.current = null
+        }, 2500)
         onJumpConsumed?.()
       })
     })
     return () => {
       if (jumpNoticeTimer.current !== null) window.clearTimeout(jumpNoticeTimer.current)
+      // 注意：故意的——不在这里清 jumpHoldTimerRef：
+      // 跳转保护窗口必须活过之后的若干次消息更新（busy 状态、云端合并），提前清掉就会被拉到底。
     }
-  }, [pendingJump, activeSessionId, visibleMessages])
+  }, [pendingJump, activeSessionId])
 
   useEffect(() => {
     const el = inputRef.current
