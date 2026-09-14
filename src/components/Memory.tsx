@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadMemory, type MemoryItem } from '../lib/memory'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
+import { getToken } from '../lib/auth'
+import { correctMemoryText, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
 // 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
@@ -85,11 +87,15 @@ const RIVER_BATCH = 120
 
 export default function Memory() {
   const sessionId = getActiveSessionId()
-  const memories = useMemo(() => {
+  const globalItemsRef = useRef(new WeakSet<MemoryItem>())
+  const readMemories = () => {
     const globalExplicit = loadMemory().filter((memory) => memory.explicit === true)
+    globalItemsRef.current = new WeakSet(globalExplicit)
     const sessionMemories = sessionId ? getMemoriesCache(sessionId) : []
     return [...globalExplicit, ...sessionMemories]
-  }, [sessionId])
+  }
+  const [memories, setMemories] = useState(readMemories)
+  useEffect(() => setMemories(readMemories()), [sessionId])
 
   const chronological = useMemo<DatedMemory[]>(() => {
     return memories
@@ -142,6 +148,10 @@ export default function Memory() {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const selected = chronological[selectedIndex] ?? null
   const bookPages = useMemo(() => buildBookPages(chronological), [chronological])
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   // ---- Detail → back 保持 River 位置 ----
   const pageRef = useRef<HTMLDivElement>(null)
@@ -150,7 +160,40 @@ export default function Memory() {
     riverScrollRef.current = pageRef.current?.scrollTop ?? 0
     const index = chronological.findIndex((memory) => memory.item === item)
     setSelectedIndex(index >= 0 ? index : 0)
+    setEditing(false)
+    setSaveError('')
     setView('detail')
+  }
+
+  const beginCorrection = () => {
+    if (!selected) return
+    setDraft(selected.item.text)
+    setSaveError('')
+    setEditing(true)
+  }
+
+  const saveCorrection = async () => {
+    if (!selected || saving) return
+    const text = draft.trim()
+    if (!text) {
+      setSaveError('记住的内容不能为空')
+      return
+    }
+    const target: MemoryCorrectionTarget = globalItemsRef.current.has(selected.item)
+      ? { kind: 'global', item: selected.item }
+      : { kind: 'session', sessionId, item: selected.item, token: getToken() }
+    setSaving(true)
+    setSaveError('')
+    const result = await correctMemoryText(target, text)
+    setSaving(false)
+    if (!result.ok) {
+      setSaveError(result.message)
+      return
+    }
+    if (result.changed) {
+      setMemories((items) => items.map((item) => (item === selected.item ? result.item : item)))
+    }
+    setEditing(false)
   }
   useEffect(() => {
     if (view !== 'river') return
@@ -393,20 +436,69 @@ export default function Memory() {
           ) : (
             <p className="memory-detail-meta">日期未知</p>
           )}
-          <p className="memory-detail-text">{selected.item.text}</p>
           <span className="memory-detail-rule" aria-hidden="true" />
-          {selected.item.source?.trim() ? (
-            <div className="memory-detail-source">
-              <p className="memory-detail-source-label">当时你说</p>
+          <div className="memory-detail-source">
+            <p className="memory-detail-source-label">当时你说</p>
+            {selected.item.source?.trim() ? (
               <p className="memory-detail-source-text">「{selected.item.source.trim()}」</p>
-            </div>
-          ) : null}
+            ) : (
+              <p className="memory-detail-source-empty">没有保留当时原文</p>
+            )}
+          </div>
           {selected.item.taReply?.trim() ? (
             <div className="memory-detail-reply">
               <p className="memory-detail-reply-label">TA 当时回应</p>
+              <p className="memory-detail-reply-note">当时回应的记录</p>
               <p className="memory-detail-reply-text">「{selected.item.taReply.trim()}」</p>
             </div>
           ) : null}
+          <div className="memory-detail-remembered">
+            <div className="memory-detail-remembered-head">
+              <p className="memory-detail-remembered-label">TA 最后记住</p>
+              {!editing ? (
+                <button type="button" className="memory-correction-trigger" onClick={beginCorrection}>纠正</button>
+              ) : null}
+            </div>
+            {editing ? (
+              <div className="memory-correction-editor">
+                <textarea
+                  className="memory-correction-input"
+                  value={draft}
+                  onChange={(event) => {
+                    setDraft(event.target.value)
+                    setSaveError('')
+                  }}
+                  rows={4}
+                  autoFocus
+                  aria-label="纠正 TA 最后记住的内容"
+                />
+                {saveError ? <p className="memory-correction-error" role="alert">{saveError}</p> : null}
+                <div className="memory-correction-actions">
+                  <button
+                    type="button"
+                    className="memory-correction-cancel"
+                    onClick={() => {
+                      setEditing(false)
+                      setSaveError('')
+                    }}
+                    disabled={saving}
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    className="memory-correction-save"
+                    onClick={() => void saveCorrection()}
+                    disabled={saving || !draft.trim()}
+                  >
+                    {saving ? '保存中…' : '保存'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="memory-detail-text">{selected.item.text}</p>
+            )}
+          </div>
           {pinned ? (
             <p className="memory-detail-pin">
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
