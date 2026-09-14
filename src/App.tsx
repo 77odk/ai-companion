@@ -480,9 +480,9 @@ export default function App() {
       ) : view === 'role' ? (
         <RolePicker
           mode={roleMode}
-          onDone={() => {
-            // 登录用户新建完角色回首页（TA 主页）；游客维持原流程直接进聊天
-            navigate(loggedIn ? 'home' : 'chat')
+          onDone={(info) => {
+            // Natural 创建后直接进聊天；其他登录用户保留新建后回首页的原流程。
+            navigate(info?.startChat || !loggedIn ? 'chat' : 'home')
             // 新建会话后顺手拉一次列表：角色列表/头部入口都能立刻显示新角色名
             void refreshSessions()
           }}
@@ -516,7 +516,7 @@ export default function App() {
           aiNickname={loadAIProfile(getActiveSessionId() || undefined).nickname}
           yourName={loadUserProfile().nickname || '你'}
           sessionId={getActiveSessionId() || undefined}
-          hasPersona={Boolean(loadPersona().trim())}
+          hasPersona={Boolean(getActiveSessionId()) || Boolean(loadPersona().trim())}
           onGoMine={() => openSettings('main')}
           onBack={() => goView('home')}
         />

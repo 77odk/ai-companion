@@ -4623,6 +4623,12 @@ textarea.persona-input {
   gap: 10px;
 }
 
+.role-natural {
+  margin-bottom: 16px;
+  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-card));
+}
+
 .role-card {
   width: 100%;
   display: flex;
