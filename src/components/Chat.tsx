@@ -326,6 +326,18 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     el.scrollTop = el.scrollHeight
   }, [visibleMessages, busyReplyText])
 
+  // UI2-03B-1：「看原对话」失败提示的定时器只随 Chat 真正卸载清理。
+  // 不能在 jump effect 的 cleanup 里清：失败路径会先 onJumpConsumed() → App 把 pendingJump 置 null
+  // → 该 effect cleanup 触发 → 提示定时器被提前清掉、提示永久留在页面上。
+  useEffect(() => {
+    return () => {
+      if (jumpNoticeTimer.current !== null) {
+        window.clearTimeout(jumpNoticeTimer.current)
+        jumpNoticeTimer.current = null
+      }
+    }
+  }, [])
+
   // UI2-03B-1「看原对话」：消费 App 传来的一次性 jump target。
   // 二次校验（session 未变 + visibleMessages 中 ts/content 完全一致的唯一 user 消息）通过才滚动；
   // 失败 → 清 pending + 轻量提示，绝不滚到别的消息。
@@ -333,9 +345,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (!pendingJump) return
     if (jumpHandledRef.current) return
     if (!activeSessionId) {
+      // 无会话：跳不了，消费掉 pending 并给同样的轻量提示，避免 pending 残留 / 死状态
       releaseJumpHold()
       jumpAtMountRef.current = false
       jumpSuppressRef.current = false
+      showJumpNotice('原对话已不在了')
+      onJumpConsumed?.()
       return
     }
     jumpHandledRef.current = true
@@ -374,11 +389,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         onJumpConsumed?.()
       })
     })
-    return () => {
-      if (jumpNoticeTimer.current !== null) window.clearTimeout(jumpNoticeTimer.current)
-      // 注意：故意的——不在这里清 jumpHoldTimerRef：
-      // 跳转保护窗口必须活过之后的若干次消息更新（busy 状态、云端合并），提前清掉就会被拉到底。
-    }
+    // 注意：跳转 effect 故意不写 cleanup —— 失败路径会当场消费 pending（pendingJump → null）触发 cleanup，
+    // 若在这里清 jumpNoticeTimer，提示会被提前清掉；提示定时器改由上面的 unmount-only effect 负责。
   }, [pendingJump, activeSessionId])
 
   useEffect(() => {

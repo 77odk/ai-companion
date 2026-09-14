@@ -169,13 +169,29 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
     /jumpHoldTimerRef\.current = window\.setTimeout\([\s\S]{0,200}?2500\)/.test(chatSrc),
     'H7 跳转成功后进入保护窗口（超时自动解除，不会永久压住滚到底）',
   )
-  const jumpStart = chatSrc.indexOf('// 二次校验（session 未变')
-  const cleanupStart = chatSrc.indexOf('return () => {', jumpStart)
-  const cleanupEnd = chatSrc.indexOf('}, [pendingJump, activeSessionId])', cleanupStart)
-  const cleanupRegion = cleanupStart > -1 && cleanupEnd > cleanupStart ? chatSrc.slice(cleanupStart, cleanupEnd) : null
+  const jumpStart = chatSrc.indexOf('// UI2-03B-1「看原对话」：消费 App 传来的一次性 jump target。')
+  const jumpEnd = chatSrc.indexOf('}, [pendingJump, activeSessionId])', jumpStart)
+  const jumpRegion = jumpStart > -1 && jumpEnd > jumpStart ? chatSrc.slice(jumpStart, jumpEnd) : null
   ok(
-    cleanupRegion !== null && !cleanupRegion.includes('clearTimeout(jumpHoldTimerRef'),
-    'H8 jump effect 的 cleanup 不会提前清掉保护窗口（保证活过随后的消息更新）',
+    jumpRegion !== null &&
+      !jumpRegion.includes('return () => {') &&
+      !jumpRegion.includes('clearTimeout(jumpNoticeTimer'),
+    'H8 jump effect 内不写 cleanup、不动提示定时器（pendingJump→null 不会把提示提前清掉）',
+  )
+  ok(
+    /useEffect\(\(\) => \{\s*\n\s*return \(\) => \{\s*\n\s*if \(jumpNoticeTimer\.current !== null\)/.test(chatSrc),
+    'H10 提示定时器有独立的 unmount-only cleanup（Chat 真卸载时才清）',
+  )
+  const noSessionStart = chatSrc.indexOf('if (!activeSessionId) {')
+  const noSessionEnd = chatSrc.indexOf('jumpHandledRef.current = true', noSessionStart)
+  const noSessionRegion = noSessionStart > -1 && noSessionEnd > noSessionStart ? chatSrc.slice(noSessionStart, noSessionEnd) : null
+  ok(
+    noSessionRegion !== null && noSessionRegion.includes('onJumpConsumed?.()'),
+    'H11 无 session 分支也消费 pending（不残留 pendingChatJump）',
+  )
+  ok(
+    noSessionRegion !== null && noSessionRegion.includes("showJumpNotice('原对话已不在了')"),
+    'H12 无 session 分支给出同样的轻量提示',
   )
   ok(
     /\}, \[pendingJump, activeSessionId\]\)/.test(chatSrc) && chatSrc.includes('visibleMessagesRef.current'),
