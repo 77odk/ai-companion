@@ -8243,3 +8243,8 @@ html, body {
   gap: 8px;
   margin-top: 8px;
 }
+
+/* 我存过的：放在测试连接下面 */
+.saved-configs-bottom {
+  margin-top: 18px;
+}

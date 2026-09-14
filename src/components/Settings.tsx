@@ -908,7 +908,7 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
     setSavedConfigs(saveConfig({ name: saveName, provider, apiKey, baseUrl, model }))
     setSaveNameOpen(false)
     setTestState('success')
-    setTestMsg('已存到上面「我存过的」，下次点一下就切过来')
+    setTestMsg('已存到下面「我存过的」，下次点一下就切过来')
   }
 
   const resultClass =
@@ -929,51 +929,6 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
         <div className="field">
           <ProviderSelect value={provider} onChange={handleProviderChange} />
         </div>
-
-        {savedConfigs.length > 0 && (
-          <div className="field">
-            <label>我存过的</label>
-            <div className="saved-config-list">
-              {savedConfigs.map((c) => {
-                const active = isActiveConfig({ provider, baseUrl, model }, c)
-                return (
-                  <div
-                    key={c.id}
-                    className={`saved-config-card${active ? ' active' : ''}`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleUseSaved(c)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        handleUseSaved(c)
-                      }
-                    }}
-                  >
-                    <div className="saved-config-head">
-                      <span className="saved-config-name">{c.name}</span>
-                      {active && <span className="saved-config-badge">使用中</span>}
-                      <button
-                        type="button"
-                        className="saved-config-del"
-                        aria-label="删除这个配置"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSavedConfigs(removeConfig(c.id))
-                        }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <div className="saved-config-meta">{c.baseUrl.replace(/^https?:\/\//, '')}</div>
-                    <div className="saved-config-meta">{c.model}</div>
-                  </div>
-                )
-              })}
-            </div>
-            <p className="hint">点一下卡片直接切过来，不用重新填</p>
-          </div>
-        )}
 
         <div className="field">
           <label htmlFor="api-key">API Key</label>
@@ -1146,6 +1101,51 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
       </div>
 
       {testMsg && <p className={resultClass}>{testMsg}</p>}
+
+        {savedConfigs.length > 0 && (
+          <div className="field saved-configs-bottom">
+            <label>我存过的</label>
+            <div className="saved-config-list">
+              {savedConfigs.map((c) => {
+                const active = isActiveConfig({ provider, baseUrl, model }, c)
+                return (
+                  <div
+                    key={c.id}
+                    className={`saved-config-card${active ? ' active' : ''}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleUseSaved(c)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        handleUseSaved(c)
+                      }
+                    }}
+                  >
+                    <div className="saved-config-head">
+                      <span className="saved-config-name">{c.name}</span>
+                      {active && <span className="saved-config-badge">使用中</span>}
+                      <button
+                        type="button"
+                        className="saved-config-del"
+                        aria-label="删除这个配置"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSavedConfigs(removeConfig(c.id))
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="saved-config-meta">{c.baseUrl.replace(/^https?:\/\//, '')}</div>
+                    <div className="saved-config-meta">{c.model}</div>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="hint">点一下卡片直接切过来，不用重新填</p>
+          </div>
+        )}
     </div>
   )
 }
