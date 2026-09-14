@@ -13,13 +13,24 @@ import { correctMemoryText, type MemoryCorrectionTarget } from '../lib/memoryCor
 interface MemoryMonth {
   key: string
   label: string
-  items: DatedMemory[]
+  items: DatedSourcedMemory[]
 }
 
 interface MemoryYear {
   key: string
   label: string
   months: MemoryMonth[]
+}
+
+type MemoryKind = 'global' | 'session'
+
+interface SourcedMemory {
+  item: MemoryItem
+  kind: MemoryKind
+}
+
+interface DatedSourcedMemory extends DatedMemory {
+  kind: MemoryKind
 }
 
 const MONTHS_EN = [
@@ -34,7 +45,7 @@ function validTimestamp(value: unknown): number | null {
     : null
 }
 
-function groupMemories(items: DatedMemory[]): MemoryYear[] {
+function groupMemories(items: DatedSourcedMemory[]): MemoryYear[] {
   const years = new Map<string, { label: string; months: Map<string, MemoryMonth> }>()
 
   for (const memory of items) {
@@ -87,19 +98,20 @@ const RIVER_BATCH = 120
 
 export default function Memory() {
   const sessionId = getActiveSessionId()
-  const globalItemsRef = useRef(new WeakSet<MemoryItem>())
-  const readMemories = () => {
+  const readMemories = (): SourcedMemory[] => {
     const globalExplicit = loadMemory().filter((memory) => memory.explicit === true)
-    globalItemsRef.current = new WeakSet(globalExplicit)
     const sessionMemories = sessionId ? getMemoriesCache(sessionId) : []
-    return [...globalExplicit, ...sessionMemories]
+    return [
+      ...globalExplicit.map((item) => ({ item, kind: 'global' as const })),
+      ...sessionMemories.map((item) => ({ item, kind: 'session' as const })),
+    ]
   }
   const [memories, setMemories] = useState(readMemories)
   useEffect(() => setMemories(readMemories()), [sessionId])
 
-  const chronological = useMemo<DatedMemory[]>(() => {
+  const chronological = useMemo<DatedSourcedMemory[]>(() => {
     return memories
-      .map((item) => ({ item, timestamp: validTimestamp(item.createdAt) }))
+      .map(({ item, kind }) => ({ item, kind, timestamp: validTimestamp(item.createdAt) }))
       .sort((a, b) => {
         if (a.timestamp == null && b.timestamp == null) return 0
         if (a.timestamp == null) return -1
@@ -117,8 +129,8 @@ export default function Memory() {
   const [visibleCount, setVisibleCount] = useState(needsWindowing ? RIVER_BATCH : riverItems.length)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const itemOrder = useMemo(() => {
-    const map = new Map<MemoryItem, number>()
-    riverItems.forEach((m, i) => map.set(m.item, i))
+    const map = new Map<DatedSourcedMemory, number>()
+    riverItems.forEach((memory, index) => map.set(memory, index))
     return map
   }, [riverItems])
 
@@ -156,9 +168,11 @@ export default function Memory() {
   // ---- Detail → back 保持 River 位置 ----
   const pageRef = useRef<HTMLDivElement>(null)
   const riverScrollRef = useRef(0)
-  const openDetail = (item: MemoryItem) => {
+  const openDetail = (memory: DatedSourcedMemory) => {
     riverScrollRef.current = pageRef.current?.scrollTop ?? 0
-    const index = chronological.findIndex((memory) => memory.item === item)
+    const index = chronological.findIndex(
+      (candidate) => candidate.kind === memory.kind && candidate.item.id === memory.item.id,
+    )
     setSelectedIndex(index >= 0 ? index : 0)
     setEditing(false)
     setSaveError('')
@@ -179,7 +193,7 @@ export default function Memory() {
       setSaveError('记住的内容不能为空')
       return
     }
-    const target: MemoryCorrectionTarget = globalItemsRef.current.has(selected.item)
+    const target: MemoryCorrectionTarget = selected.kind === 'global'
       ? { kind: 'global', item: selected.item }
       : { kind: 'session', sessionId, item: selected.item, token: getToken() }
     setSaving(true)
@@ -191,7 +205,11 @@ export default function Memory() {
       return
     }
     if (result.changed) {
-      setMemories((items) => items.map((item) => (item === selected.item ? result.item : item)))
+      setMemories((items) => items.map((memory) => (
+        memory.kind === selected.kind && memory.item.id === selected.item.id
+          ? { ...memory, item: result.item }
+          : memory
+      )))
     }
     setEditing(false)
   }
@@ -636,8 +654,9 @@ export default function Memory() {
                     </h5>
                     <div className="memory-month-entries">
                       {month.items
-                        .filter(({ item }) => (itemOrder.get(item) ?? Infinity) < visibleCount)
-                        .map(({ item, timestamp }, index) => {
+                        .filter((memory) => (itemOrder.get(memory) ?? Infinity) < visibleCount)
+                        .map((memory, index) => {
+                          const { item, timestamp } = memory
                           const explicit = item.explicit === true
                           const pinned = item.pinned === true
                           const entryClass = [
@@ -652,7 +671,7 @@ export default function Memory() {
                               key={`${item.id}-${index}`}
                               type="button"
                               className={entryClass}
-                              onClick={() => openDetail(item)}
+                              onClick={() => openDetail(memory)}
                             >
                               <span className="memory-entry-dot" aria-hidden="true">
                                 {pinned ? (

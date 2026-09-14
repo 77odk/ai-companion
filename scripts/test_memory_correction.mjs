@@ -67,6 +67,13 @@ check('全局保存成功并 trim', globalResult.ok && savedGlobal.text === '用
 for (const field of ['source', 'taReply', 'createdAt', 'explicit', 'pinned', 'topic', 'lastMentionedAt']) {
   check(`全局 correction 不改 ${field}`, savedGlobal[field] === original[field])
 }
+const globalResultAgain = await correctMemoryText(
+  { kind: 'global', item: globalResult.ok ? globalResult.item : savedGlobal },
+  '用户偶尔会喝加奶的咖啡',
+)
+check('同一 global Memory 可连续纠正两次', globalResultAgain.ok && globalResultAgain.item.text === '用户偶尔会喝加奶的咖啡')
+check('两次 global correction 都不发 PATCH', requests.length === 0)
+check('组件不再使用 WeakSet 或对象引用判断来源', !component.includes('WeakSet') && component.includes("selected.kind === 'global'"))
 
 console.log('\n[3] 空字符串和未变化不写')
 const beforeNoop = store.get('ai_companion_memory')
@@ -95,6 +102,13 @@ for (const field of ['source', 'taReply', 'createdAt', 'explicit', 'pinned', 'to
   check(`session correction 不改 ${field}`, savedSession[field] === original[field])
 }
 check('角色 B Memory 不变', getMemoriesCache('role-b')[0].text === '角色 B 的独立记忆')
+const sessionResultAgain = await correctMemoryText(
+  { kind: 'session', sessionId: 'role-a', item: sessionResult.ok ? sessionResult.item : savedSession, token: 'token-1' },
+  '用户会喝加奶的咖啡',
+)
+check('同一 session Memory 可连续纠正两次', sessionResultAgain.ok && sessionResultAgain.item.text === '用户会喝加奶的咖啡')
+check('两次 session correction 都走 PATCH', requests.length === 2 && requests.every((request) => request.method === 'PATCH'))
+check('连续纠正仍只影响当前 session', getMemoriesCache('role-b')[0].text === '角色 B 的独立记忆')
 
 console.log('\n[5] PATCH 失败保留原缓存')
 responseStatus = 500
