@@ -574,6 +574,60 @@ export function loadAIGenderState(sessionId?: string): { gender: AIGender; locke
   }
 }
 
+/** 云同步里全局兜底那条的 key（各角色用 sid） */
+const GENDER_SYNC_GLOBAL = '__global'
+
+/**
+ * 收集本机全部性别记录（全局兜底 + 每个角色），供 /api/sync 全量 blob 带走。
+ * 2026-09-14 七七拍板：性别上云，换设备/清缓存不再丢。
+ */
+export function collectAllGenders(): Record<string, { g: AIGender; locked: boolean }> {
+  const out: Record<string, { g: AIGender; locked: boolean }> = {}
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const k = localStorage.key(i)
+      if (!k) continue
+      if (k === AI_GENDER_KEY) {
+        const rec = parseGenderRecord(localStorage.getItem(k))
+        if (rec) out[GENDER_SYNC_GLOBAL] = { g: rec.gender, locked: rec.locked }
+      } else if (k.startsWith(`${AI_GENDER_KEY}_`)) {
+        const sid = k.slice(AI_GENDER_KEY.length + 1)
+        const rec = parseGenderRecord(localStorage.getItem(k))
+        if (rec && sid) out[sid] = { g: rec.gender, locked: rec.locked }
+      }
+    }
+  } catch {
+    // 读不到就当没同步过，不影响本地
+  }
+  return out
+}
+
+/**
+ * 应用云端的性别记录。规则（只增不改，绝不把用户选好的覆盖掉）：
+ * - 本地这条没有 → 用云端的
+ * - 本地有、但没锁；云端锁了 → 用云端那份（用户明确选过的那次为准，换设备就是靠这条带回锁定态）
+ * - 本地已锁定 → 一律不动
+ * - unknown / 脏数据一律跳过
+ */
+export function applyCloudGenders(cloud?: Record<string, { g?: unknown; locked?: unknown }> | null): void {
+  if (!cloud || typeof cloud !== 'object') return
+  try {
+    for (const [sid, raw] of Object.entries(cloud)) {
+      const g = raw?.g
+      if (g !== 'male' && g !== 'female') continue
+      const rec = { gender: g as AIGender, locked: raw?.locked === true }
+      const key = sid === GENDER_SYNC_GLOBAL ? AI_GENDER_KEY : `${AI_GENDER_KEY}_${sid}`
+      const local = parseGenderRecord(localStorage.getItem(key))
+      if (!local || (!local.locked && rec.locked)) {
+        localStorage.setItem(key, JSON.stringify({ g: rec.gender, locked: rec.locked }))
+      }
+    }
+    notifyDataChanged()
+  } catch {
+    // 单条坏数据不影响其余
+  }
+}
+
 /**
  * 保存 TA 性别 = 用户明确选定 → 直接锁定（会话级；无会话才落全局兜底）。
  * 注意：这里绝不额外写全局 —— 否则一个角色选过的性别会串给所有没有自己记录的角色（2026-09-14 修）。
