@@ -8,10 +8,12 @@
 //   7. 老全局裸值迁移到默认角色（幂等）
 //   8. 新格式 JSON 与老格式混读兼容；损坏值降级 unknown 不崩
 
-import { loadAIGender, loadAIGenderState, saveAIGender } from '../src/lib/storage.ts'
+import { loadAIGender, loadAIGenderState, saveAIGender, collectAllGenders, applyCloudGenders } from '../src/lib/storage.ts'
 
 const memStore = new Map()
 globalThis.localStorage = {
+  get length() { return memStore.size },
+  key: (i) => [...memStore.keys()][i] ?? null,
   getItem: (k) => (memStore.has(k) ? memStore.get(k) : null),
   setItem: (k, v) => memStore.set(k, String(v)),
   removeItem: (k) => memStore.delete(k),
@@ -90,6 +92,48 @@ localStorage.setItem(`${GKEY}_1003`, '{"g":"??","locked":true}')
 check('非法值降级 unknown 不崩', loadAIGenderState('1003').gender === 'unknown')
 localStorage.setItem(`${GKEY}_1004`, 'not-json{{{')
 check('损坏值降级 unknown 不崩', loadAIGenderState('1004').gender === 'unknown' && loadAIGenderState('1004').locked === false)
+
+console.log('[8] 云同步：收集本机性别（各角色 + __global 兜底）')
+reset()
+saveAIGender('male', '1001')
+saveAIGender('female', '1002')
+saveAIGender('female')
+const collected = collectAllGenders()
+check('收集到两个角色 + 全局兜底', Object.keys(collected).length === 3 && collected['1001'].g === 'male' && collected['1002'].g === 'female' && collected.__global.g === 'female', JSON.stringify(collected))
+check('收集值带 locked', collected['1001']?.locked === true)
+
+console.log('[9] 云同步：应用云端性别（只增不改）')
+reset()
+localStorage.setItem(SESSIONS, JSON.stringify([{ id: 1001, title: '饺子' }]))
+applyCloudGenders({ '1001': { g: 'male', locked: true }, '1002': { g: 'female', locked: true }, __global: { g: 'male', locked: true } })
+check('本机没有 → 用云端的（新设备首次登录）', loadAIGenderState('1001').gender === 'male' && loadAIGenderState('1001').locked === true)
+check('另一个角色也带回锁定态', loadAIGenderState('1002').gender === 'female' && loadAIGenderState('1002').locked === true)
+check('游客兜底（__global）也带回', loadAIGenderState().gender === 'male')
+// 本地未锁 + 云端锁 → 用云端
+reset()
+localStorage.setItem(`${GKEY}_1001`, 'female') // 老格式裸值 = 未锁
+applyCloudGenders({ '1001': { g: 'male', locked: true } })
+check('本地未锁、云端锁定 → 用云端那份', loadAIGenderState('1001').gender === 'male' && loadAIGenderState('1001').locked === true)
+// 本地已锁 → 不动
+reset()
+saveAIGender('female', '1001')
+applyCloudGenders({ '1001': { g: 'male', locked: true } })
+check('本地已锁定 → 云端不覆盖（选好的不会被改）', loadAIGenderState('1001').gender === 'female')
+// 脏数据跳过、不误删
+reset()
+saveAIGender('male', '1001')
+applyCloudGenders({ '1002': { g: 'unknown', locked: true }, '1003': { g: '???' }, '1004': null })
+check('unknown / 脏数据一律跳过', loadAIGenderState('1002').gender === 'unknown' && loadAIGenderState('1003').gender === 'unknown')
+check('跳过时不动本地已有记录', loadAIGenderState('1001').gender === 'male')
+applyCloudGenders(null)
+check('云端没有这个字段（旧 blob）→ 安全跳过', loadAIGenderState('1001').gender === 'male')
+
+console.log('[10] 静态检查：sync 全量 blob 真的带上了性别')
+const fs = await import('node:fs')
+const syncSrc = fs.readFileSync(new URL('../src/lib/sync.ts', import.meta.url), 'utf8')
+check('collectData 带 genders', /genders:\s*collectAllGenders\(\)/.test(syncSrc))
+check('applyData 调 applyCloudGenders', /applyCloudGenders\(d\.genders\)/.test(syncSrc))
+check('SyncData 声明 genders 可选字段', /genders\?:\s*Record<string,\s*\{\s*g:\s*AIGender;\s*locked:\s*boolean\s*\}>/.test(syncSrc))
 
 console.log(`\n结果：${passed} passed, ${failed} failed`)
 process.exit(failed === 0 ? 0 : 1)
