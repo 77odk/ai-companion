@@ -1796,15 +1796,28 @@
   color: var(--memory-muted);
 }
 
+.memory-detail-source-empty,
+.memory-detail-reply-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--memory-muted);
+  opacity: 0.72;
+}
+
 .memory-detail-reply {
   margin-bottom: 22px;
 }
 
 .memory-detail-reply-label {
-  margin: 0 0 8px;
+  margin: 0 0 2px;
   font-size: 12px;
   letter-spacing: 0.12em;
   color: var(--memory-muted);
+}
+
+.memory-detail-reply-note {
+  margin-bottom: 8px;
 }
 
 .memory-detail-reply-text {
@@ -1816,6 +1829,102 @@
   color: var(--memory-ink);
   opacity: 0.92;
   overflow-wrap: break-word;
+}
+
+.memory-detail-remembered {
+  width: 100%;
+  margin-bottom: 22px;
+}
+
+.memory-detail-remembered-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.memory-detail-remembered-label {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--memory-muted);
+}
+
+.memory-correction-trigger,
+.memory-correction-cancel,
+.memory-correction-save {
+  border: 0;
+  background: none;
+  color: var(--memory-accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.memory-correction-editor {
+  width: 100%;
+}
+
+.memory-correction-input {
+  display: block;
+  width: 100%;
+  min-height: 112px;
+  max-height: 40vh;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 12px 13px;
+  border: 1px solid color-mix(in srgb, var(--memory-accent) 28%, var(--memory-line));
+  border-radius: 10px;
+  outline: none;
+  background: color-mix(in srgb, var(--ui2-canvas) 88%, transparent);
+  color: var(--memory-ink);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.65;
+  overflow-wrap: break-word;
+}
+
+.memory-correction-input:focus {
+  border-color: color-mix(in srgb, var(--memory-accent) 58%, var(--memory-line));
+}
+
+.memory-correction-error {
+  margin: 7px 0 0;
+  color: #9b5147;
+  font-size: 12.5px;
+}
+
+.memory-correction-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 10px 0 2px;
+  background: linear-gradient(transparent, var(--ui2-canvas) 28%);
+}
+
+.memory-correction-cancel,
+.memory-correction-save {
+  min-width: 58px;
+  min-height: 38px;
+  padding: 7px 13px;
+  border-radius: 999px;
+}
+
+.memory-correction-cancel {
+  color: var(--memory-muted);
+}
+
+.memory-correction-save {
+  background: color-mix(in srgb, var(--memory-accent) 13%, transparent);
+}
+
+.memory-correction-save:disabled,
+.memory-correction-cancel:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .memory-detail-pin {
