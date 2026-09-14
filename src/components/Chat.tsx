@@ -520,16 +520,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile }: Props) 
 
     const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
 
-    // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看最近5条历史用户消息 + 当前消息的多数语言），存 sessionStore
+    // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看包含当前消息的最近5条用户消息），存 sessionStore
     const personaText = persona?.trim() || ''
     let lang: Lang
     if (personaText) {
       lang = detectLang(personaText)
     } else {
       const recentUserMsgs = [
-        ...visibleMessages.filter((m) => m.role === 'user').slice(-5).map((m) => m.content),
+        ...visibleMessages.filter((m) => m.role === 'user').map((m) => m.content),
         userMsg.content,
-      ]
+      ].slice(-5)
       const zhCount = recentUserMsgs.filter((m) => detectLang(m) === 'zh').length
       lang = zhCount > recentUserMsgs.length / 2 ? 'zh' : 'en'
     }
