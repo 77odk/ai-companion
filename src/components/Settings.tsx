@@ -1051,6 +1051,10 @@ function AboutDetail({ onBack, onGoWelcome }: { onBack: () => void; onGoWelcome?
         <p className="about-en">Eluvin</p>
         <p className="about-slogan">忆过往，成文思</p>
         <p className="about-intro">一个住在你浏览器里的 TA，记得你说过的每一句话，也陪你把日子慢慢过成文。</p>
+        <p className="about-contact">
+          合作与反馈：
+          <a href="mailto:yw_eluvin@163.com">yw_eluvin@163.com</a>
+        </p>
         <button type="button" className="about-version" onClick={handleVersionClick}>
           忆文 Eluvin v1.2.3 · 内测版
         </button>
