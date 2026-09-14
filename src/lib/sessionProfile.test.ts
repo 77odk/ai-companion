@@ -40,6 +40,7 @@ const sessions = [
   makeSession({ id: 1, title: '阿叙', persona: '阿叙的人设' }),
   makeSession({ id: 2, title: '小乖', persona: '角色昵称：小乖' }),
   makeSession({ id: 3, title: '我们的开始', persona: '角色昵称：阿温' }),
+  makeSession({ id: 4, title: 'Natural', persona: '' }),
 ]
 
 console.log('\n[1] findSessionById：按 id 找会话（字符串/数字兼容）')
@@ -61,6 +62,7 @@ eq(resolveRoleName('', [], '   '), 'TA', '全局空白 → TA')
 
 console.log('\n[3] resolveRolePersona：有会话取会话 persona，无会话兜底全局')
 eq(resolveRolePersona('1', sessions, 'g'), '阿叙的人设', '有会话 → 会话 persona')
+eq(resolveRolePersona('4', sessions, '全局旧人设'), '', 'Natural 会话命中 + persona 空 → 保留空串')
 eq(resolveRolePersona('', sessions, 'g'), 'g', '无会话 → 全局 persona')
 eq(resolveRolePersona('99', sessions, 'g'), 'g', '会话未命中 → 全局 persona')
 eq(resolveRolePersona('', sessions, ''), '', '全局空 → 空串')

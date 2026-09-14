@@ -9,6 +9,7 @@
 // 存储：单一 key ai_companion_ta_runtime（Record<sid, TaRuntimeState>），只经本文件读写，组件禁止直连。
 
 import { getSessionsCache } from './sessionStore.ts'
+import { resolveRolePersona } from './sessionProfile.ts'
 import { loadPersona } from './storage.ts'
 import type { Lang } from './langDetect.ts'
 
@@ -114,17 +115,8 @@ export function getTaRuntime(sessionId?: string): TaRuntimeState | null {
 
 /** 按项目既有链取当前角色 persona：getSessionsCache → session.persona；找不到 → loadPersona() 兜底 */
 export function getSessionPersona(sessionId?: string): string {
-  if (sessionId) {
-    try {
-      const s = getSessionsCache().find((x) => String(x.id) === sessionId)
-      if (s && typeof s.persona === 'string' && s.persona.trim()) return s.persona
-    } catch {
-      // 缓存异常走兜底
-    }
-  }
   try {
-    const g = loadPersona()
-    return typeof g === 'string' ? g : ''
+    return resolveRolePersona(sessionId ?? '', getSessionsCache(), loadPersona())
   } catch {
     return ''
   }

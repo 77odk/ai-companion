@@ -21,6 +21,7 @@ import { loadCurrentPosts } from '../lib/aiSpace'
 import { loadChatTopics } from '../lib/chatTopics'
 import { dayKeyOf } from '../lib/aiSpaceCore'
 import { getActiveSessionId, getMemoriesCache, getMessagesCache, getSessionsCache } from '../lib/sessionStore'
+import { resolveRolePersona } from '../lib/sessionProfile'
 import { loadMemory } from '../lib/memory'
 import { getEventsForWeek } from '../lib/eventStore'
 
@@ -158,8 +159,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   // 周记口吻：优先当前会话的人设（侧边栏会话缓存里有），没有回落到全局人设
   const persona = useMemo(() => {
     const sid = getActiveSessionId()
-    const sessionPersona = sid ? getSessionsCache().find((s) => String(s.id) === sid)?.persona : ''
-    return (sessionPersona || loadPersona()).trim()
+    return resolveRolePersona(sid, getSessionsCache(), loadPersona()).trim()
   }, [])
 
   const openDetail = (r: WeeklyReview) => {
