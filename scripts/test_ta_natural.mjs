@@ -89,4 +89,51 @@ assert.equal(space.mode, 'no-persona', 'Natural AI Space 不调用额外 LLM')
 assert.ok(loadCurrentPosts('101').length > 0, 'Natural AI Space 可正常读取兜底内容')
 assert.equal(loadCurrentPosts('102').length, 0, 'Natural AI Space 不串到 Template session')
 
+// ---- 游客 Natural 真实状态链（TA-NATURAL-01 blocker：游客草稿不能在 LoginGate 被清掉）----
+// 契约一：只有「已登录 + 真的建出 Natural session」才清草稿
+assert.match(
+  app,
+  /if \(info\?\.startChat && loggedIn\) \{\s*setPendingNatural\(null\)\s*setPendingNaturalError\(null\)\s*\}/,
+  'App.tsx 只在 startChat 且已登录时清 pendingNatural',
+)
+// 契约二：旧的「只看 startChat 就清」写法不许回来（那正是游客草稿被清、登录后白填的原因）
+assert.doesNotMatch(
+  app,
+  /if \(info\?\.startChat\) \{\s*setPendingNatural\(null\)/,
+  'App.tsx 不能退回「只判 startChat 就清草稿」',
+)
+// 契约三：游客路径先把草稿存下来（onNaturalLogin），不是清掉
+assert.match(app, /onNaturalLogin=\{\(setup\) => \{\s*setPendingNatural\(setup\)\s*setPendingNaturalError\(null\)/, 'onNaturalLogin 保存草稿')
+// 契约四：只有「从登录门返回」才清草稿
+assert.match(app, /const handleGateBack = \(\) => \{[\s\S]*setPendingNatural\(null\)[\s\S]*replaceView\('welcome'\)/, 'handleGateBack 才清草稿')
+
+// 真跑一遍游客「填资料 → 登录 → 建成 session」的状态链：落点必须在新角色上，别串、别写脏
+store.clear()
+setSessionsCache(sessions)
+const draft = { nickname: '星野', avatar: 'data:natural-avatar-2', remark: '游客草稿', gender: 'female' }
+const activeBefore = getActiveSessionId()
+assert.equal(activeBefore, '', '游客初始没有 active session（草稿只在内存里）')
+
+const { savePersona, loadPersona } = await import('../src/lib/storage.ts')
+const newSid = '104'
+setActiveSessionId(newSid)
+saveAIProfile({ nickname: draft.nickname, avatar: draft.avatar }, newSid)
+saveAIRemark(draft.remark, newSid)
+saveAIGender(draft.gender, newSid)
+savePersona('')
+assert.equal(getActiveSessionId(), newSid, '登录后 active session 指向新建的 Natural 角色')
+assert.equal(loadAIProfile(newSid).nickname, '星野', '游客草稿昵称落到新角色')
+assert.equal(loadAIProfile(newSid).avatar, 'data:natural-avatar-2', '游客草稿头像落到新角色')
+assert.equal(loadAIRemark(newSid), '游客草稿', '游客草稿备注落到新角色')
+assert.equal(loadAIGender(newSid), 'female', '游客草稿性别落到新角色')
+assert.equal(loadPersona(), '', 'Natural 空 persona 不被写脏')
+assert.notEqual(loadAIProfile('101').nickname, '星野', '游客草稿没有串到既有会话 101 上')
+
+// 重新种一份既有会话，确认新角色落点不串到别人身上
+setSessionsCache(sessions)
+saveAIProfile({ nickname: '星光', avatar: 'data:natural-avatar' }, '101')
+assert.equal(getActiveSessionId(), newSid, '仍停在新角色')
+assert.equal(loadAIProfile('101').nickname, '星光', '既有会话读自己的资料')
+assert.equal(loadAIProfile(newSid).nickname, '星野', '新角色读自己的资料，两者不串')
+
 console.log('TA-NATURAL-01: all assertions passed')

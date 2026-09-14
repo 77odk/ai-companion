@@ -523,7 +523,9 @@ export default function App() {
           mode={roleMode}
           onDone={(info) => {
             // Natural 创建后直接进聊天；其他登录用户保留新建后回首页的原流程。
-            if (info?.startChat) {
+            // 游客 Natural 填完资料会走 LoginGate：这时 info?.startChat 也可能为真，
+            // 但不能把待用的草稿清掉——只有已登录并真的建出 Natural session 才清（TA-NATURAL-01 blocker）。
+            if (info?.startChat && loggedIn) {
               setPendingNatural(null)
               setPendingNaturalError(null)
             }
