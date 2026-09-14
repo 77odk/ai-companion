@@ -16,6 +16,7 @@ globalThis.localStorage = {
 
 const rolePicker = readFileSync(new URL('../src/components/RolePicker.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
+const chatProfile = readFileSync(new URL('../src/components/ChatProfile.tsx', import.meta.url), 'utf8')
 
 assert.match(rolePicker, /mode !== 'current' && \([\s\S]*直接认识 TA/)
 assert.match(rolePicker, /mode === 'current' \? '选择你想要的 TA' : '认识你的 TA'/)
@@ -44,6 +45,7 @@ assert.match(rolePicker, /buildCustomPersona\(\{/)
 assert.doesNotMatch(rolePicker, /personaMode/)
 assert.doesNotMatch(app, /personaMode/)
 assert.match(app, /hasPersona=\{Boolean\(getActiveSessionId\(\)\) \|\| Boolean\(loadPersona\(\)\.trim\(\)\)\}/)
+assert.match(chatProfile, /const hasPersona = Boolean\(sessionId\) \|\| Boolean\(loadPersona\(\)\.trim\(\)\)/)
 assert.match(app, /navigate\(info\?\.startChat \|\| !loggedIn \? 'chat' : 'home'\)/)
 assert.match(app, /const \[pendingNatural, setPendingNatural\] = useState<NaturalSetup \| null>\(null\)/)
 assert.match(app, /createSession\(getToken\(\), \{ persona: '', title: natural\.nickname \}\)/)
