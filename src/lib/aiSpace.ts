@@ -46,6 +46,7 @@ import { chatCompletion } from './api.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { loadPersona, loadSettings } from './storage.ts'
 import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
+import { resolveRolePersona } from './sessionProfile.ts'
 import { migrateGlobalToDefaultSession } from './roleData.ts'
 import { detectLang } from './langDetect.ts'
 
@@ -71,14 +72,10 @@ export function resolveSpaceLang(sessionId: string | undefined, persona: string)
 
 /**
  * 会话人设（2026-09-05 乔修）：有会话 → 用该会话自己的 persona（角色隔离，阳阳回复串成律师案子的根因）；
- * 无会话/会话无 persona → 回落全局（游客/过渡态兼容）。
+ * 无会话/会话未命中 → 回落全局（游客/过渡态兼容）。
  */
 function sessionPersona(sessionId?: string): string {
-  if (sessionId) {
-    const s = getSessionsCache().find((x) => String(x.id) === String(sessionId))
-    if (s && typeof s.persona === 'string' && s.persona.trim()) return s.persona
-  }
-  return loadPersona()
+  return resolveRolePersona(sessionId ?? '', getSessionsCache(), loadPersona())
 }
 
 const POSTS_KEY = 'ai_space_posts'
