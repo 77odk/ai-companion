@@ -1919,3 +1919,23 @@
   border-bottom: 1px solid rgba(51, 43, 40, 0.24);
   padding-bottom: 1px;
 }
+
+/* 性别：已选定锁定态（2026-09-14 七七拍板：选一次就定，不再改来改去） */
+.gender-locked {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 2px 0 0;
+}
+
+.gender-locked-value {
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: rgba(51, 43, 40, 0.9);
+}
+
+.gender-locked-note {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: rgba(51, 43, 40, 0.45);
+}

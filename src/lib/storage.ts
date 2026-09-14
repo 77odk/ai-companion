@@ -492,6 +492,21 @@ const aiRemarkKey = (sessionId?: string): string =>
 const aiGenderKey = (sessionId?: string): string =>
   sessionId ? `${AI_GENDER_KEY}_${sessionId}` : AI_GENDER_KEY
 
+/** 解析性别记录：兼容老格式裸值（'male'/'female'/'unknown'，未锁定=旧角色给一次机会）与新格式 JSON */
+function parseGenderRecord(raw: string | null): { gender: AIGender; locked: boolean } | null {
+  if (raw == null) return null
+  const t = raw.trim()
+  if (t === 'male' || t === 'female' || t === 'unknown') return { gender: t, locked: false }
+  try {
+    const o = JSON.parse(t) as { g?: unknown; gender?: unknown; locked?: unknown }
+    const g = (o.g ?? o.gender) as AIGender
+    if (g !== 'male' && g !== 'female' && g !== 'unknown') return null
+    return { gender: g, locked: o.locked === true }
+  } catch {
+    return null
+  }
+}
+
 /** 首次按会话读取时，把老全局性别迁到「默认角色」（幂等；全局 key 保留兜底） */
 function ensureSessionGender(_sessionId: string): void {
   try {
@@ -528,27 +543,45 @@ export function saveAIRemark(remark: string, sessionId?: string): void {
   notifyDataChanged()
 }
 
-/** 读取 TA 性别（会话感知：有会话读会话 key，没设置回落全局/unknown） */
+/**
+ * 读取 TA 性别（会话感知：有会话读会话 key，没设置回落全局/unknown）
+ * 兼容两种存法：老格式裸值（'male'/'female'/'unknown'）与新格式 JSON {g, locked}
+ */
 export function loadAIGender(sessionId?: string): AIGender {
+  return loadAIGenderState(sessionId).gender
+}
+
+/**
+ * 性别完整状态（2026-09-14 七七拍板：选一次就锁定，不再让人改来改去）：
+ * - own：该角色自己有没有性别记录（没有 = 老角色，给一次选择机会）
+ * - locked：已选定并锁定（'unknown' 不算选定，永远可再选）
+ * 隔离规则：有自己记录就只看自己的；没有自己的才回落全局（游客 / 老角色显示用），
+ * 但「别人锁过」不影响本角色 —— 每个角色各自锁各自。
+ */
+export function loadAIGenderState(sessionId?: string): { gender: AIGender; locked: boolean; own: boolean } {
   try {
     if (sessionId) {
       ensureSessionGender(sessionId)
-      const v = localStorage.getItem(aiGenderKey(sessionId))
-      if (v != null) {
-        return v === 'male' || v === 'female' ? v : 'unknown'
-      }
-      const g = localStorage.getItem(AI_GENDER_KEY)
-      return g === 'male' || g === 'female' ? g : 'unknown'
+      const own = parseGenderRecord(localStorage.getItem(aiGenderKey(sessionId)))
+      if (own) return { gender: own.gender, locked: own.locked, own: true }
+      const fallback = parseGenderRecord(localStorage.getItem(AI_GENDER_KEY))
+      return { gender: fallback ? fallback.gender : 'unknown', locked: false, own: false }
     }
-    const v = localStorage.getItem(AI_GENDER_KEY)
-    return v === 'male' || v === 'female' ? v : 'unknown'
+    const g = parseGenderRecord(localStorage.getItem(AI_GENDER_KEY))
+    return g ? { gender: g.gender, locked: g.locked, own: true } : { gender: 'unknown', locked: false, own: false }
   } catch {
-    return 'unknown'
+    return { gender: 'unknown', locked: false, own: false }
   }
 }
 
+/**
+ * 保存 TA 性别 = 用户明确选定 → 直接锁定（会话级；无会话才落全局兜底）。
+ * 注意：这里绝不额外写全局 —— 否则一个角色选过的性别会串给所有没有自己记录的角色（2026-09-14 修）。
+ * 'unknown' 视为「还没选」，不锁。
+ */
 export function saveAIGender(gender: AIGender, sessionId?: string): void {
-  localStorage.setItem(aiGenderKey(sessionId), gender)
+  const payload = JSON.stringify({ g: gender, locked: gender !== 'unknown' })
+  localStorage.setItem(aiGenderKey(sessionId), payload)
   notifyDataChanged()
 }
 

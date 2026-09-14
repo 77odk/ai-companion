@@ -109,7 +109,8 @@ export default function ChatProfile({ onClose, onGoMine, fromRoles = false, onCh
 
   // 子页面：整页替换（各自带返回条），资料卡 home 才是这层的主页
   if (page === 'profile') {
-    return <AIDetail onBack={goHome} />
+    // 传当前看的角色：从角色管理进来时看的是它自己的资料卡（不自作主张改当前会话那个）
+    return <AIDetail onBack={goHome} sessionId={sessionId || undefined} />
   }
   if (page === 'bg') {
     return <ChatBgSetting sessionId={sessionId || undefined} onBack={goHome} />

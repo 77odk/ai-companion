@@ -15,7 +15,8 @@ import {
   loadUserProfile,
   loadAIProfile,
   loadAIRemark,
-  loadAIGender,
+  AIGENDER_LABELS,
+  loadAIGenderState,
   saveSettings,
   savePersona,
   saveUserProfile,
@@ -459,13 +460,18 @@ const JourneyIcon = () => (
  * 姓名/头像存 ai_companion_ai_profile，备注 ai_companion_ai_remark，性别 ai_companion_ai_gender，
  * 性格/背景/开场白拼回 ai_companion_persona。
  */
-export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSpace?: () => void }) {
+export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => void; onOpenSpace?: () => void; sessionId?: string }) {
   const [sessions, setSessions] = useState<Session[]>(() => getSessionsCache())
-  // TA 资料按会话隔离：有当前会话 → 读该会话自己的头像/姓名；无会话回落全局（游客/过渡态）
-  const [ai, setAI] = useState<AIProfile>(() => loadAIProfile(getActiveSessionId() || undefined))
+  // 正在看的角色：角色管理「角色详情」会把该角色的 sessionId 传进来；不传 = 当前会话。
+  // 2026-09-14 修串号：以前一律读当前会话，导致「看 A 的资料卡、改的却是 B」。
+  const viewSessionId = sessionId ?? getActiveSessionId()
+  // TA 资料按会话隔离：有会话 → 读该会话自己的头像/姓名；无会话回落全局（游客/过渡态）
+  const [ai, setAI] = useState<AIProfile>(() => loadAIProfile(viewSessionId || undefined))
   const [globalPersona, setGlobalPersona] = useState(() => loadPersona())
-  const [remark, setRemark] = useState(() => loadAIRemark(getActiveSessionId() || undefined))
-  const [gender, setGender] = useState<AIGender>(() => loadAIGender(getActiveSessionId() || undefined))
+  const [remark, setRemark] = useState(() => loadAIRemark(viewSessionId || undefined))
+  // 性别：选一次锁定（2026-09-14 七七拍板）；locked = 已选定不再给改
+  const [genderState, setGenderState] = useState(() => loadAIGenderState(viewSessionId || undefined))
+  const gender = genderState.gender
   // 各字段草稿：null = 还没动过，显示当前值（会话刷新后自动跟着变）；改过才进草稿
   const [nameDraft, setNameDraft] = useState<string | null>(null)
   const [personalityDraft, setPersonalityDraft] = useState<string | null>(null)
@@ -478,7 +484,7 @@ export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSp
   // 本页已保存过改动：拉列表回来的旧数据别覆盖本地刚存的新值（防竞态）
   const dirtyRef = useRef(false)
 
-  const activeSessionId = getActiveSessionId()
+  const activeSessionId = viewSessionId
   // 有会话 id（哪怕缓存还没拉到）= 有角色；无会话/游客 → 引导 + 全局兜底
   const hasSession = Boolean(activeSessionId)
   const roleName = resolveRoleName(activeSessionId, sessions, ai.nickname)
@@ -552,17 +558,18 @@ export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSp
   const handleSaveRemark = () => {
     const v = remarkValue.trim()
     setRemark(v)
-    saveAIRemark(v, getActiveSessionId() || undefined)
+    saveAIRemark(v, activeSessionId || undefined)
     dirtyRef.current = true
     setRemarkDraft(v)
     flashSaved('remark')
   }
 
-  // 改性别：按会话写（角色隔离）+ 全局也写一份（2026-09-05 乔修：选一次全局锁住，新角色/老角色都默认记住，不用每次重设）
+  // 改性别：只写这个角色自己的 key，选定即锁定（2026-09-14 七七拍板）。
+  // 以前这里额外写了一份全局，导致一个角色改完、所有没自己记录的角色跟着变——去掉。
+  // 'unknown'（还没选）不锁，仍可再选。
   const handleSaveGender = (g: AIGender) => {
-    setGender(g)
-    saveAIGender(g, getActiveSessionId() || undefined)
-    saveAIGender(g)
+    saveAIGender(g, activeSessionId || undefined)
+    setGenderState({ gender: g, locked: g !== 'unknown', own: true })
     dirtyRef.current = true
     flashSaved('gender')
   }
@@ -688,8 +695,17 @@ export function AIDetail({ onBack, onOpenSpace }: { onBack: () => void; onOpenSp
 
         <div className="field">
           <label>性别</label>
-          <GenderSelect value={gender} onChange={handleSaveGender} />
-          {savedField === 'gender' && <p className="hint">已保存</p>}
+          {genderState.locked ? (
+            <p className="gender-locked">
+              <span className="gender-locked-value">{AIGENDER_LABELS[gender]}</span>
+              <span className="gender-locked-note">已选定，不再修改</span>
+            </p>
+          ) : (
+            <>
+              <GenderSelect value={gender} onChange={handleSaveGender} />
+              <p className="hint">选一次就定下来，之后不能再改</p>
+            </>
+          )}
         </div>
 
         <div className="field">
