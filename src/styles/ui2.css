@@ -1065,9 +1065,11 @@
 
 .memory-title {
   font-size: 22px;
-  font-weight: 720;
-  letter-spacing: 0.02em;
+  font-weight: 660;
+  letter-spacing: 0.04em;
   color: var(--memory-ink);
+  /* UI2-03-POLISH-05：编辑/纪念册气质的轻 serif（系统字体栈，不新增字体依赖） */
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
 }
 
 /* ==========================================================================
@@ -1109,9 +1111,10 @@
   border-radius: 4px 12px 12px 4px;
   background: linear-gradient(180deg, #dbd0bc, #c0b196);
   box-shadow: 0 1px 2px rgba(51, 43, 40, 0.12);
+  transform: rotateZ(0.18deg);
 }
 
-/* ---- 纸页层 1 / 2：右侧 + 底部错位递增，长度与明暗不同 ---- */
+/* ---- 纸页层 1 / 2：右侧 + 底部错位递增；每层极轻微 rotate 差异，避免机械平行 ---- */
 .mbp-paper {
   position: absolute;
   border-radius: 4px 11px 11px 4px;
@@ -1125,6 +1128,7 @@
   z-index: 1;
   background: linear-gradient(180deg, #efe8dc, #e2d7c4);
   box-shadow: 0 1px 1px rgba(51, 43, 40, 0.06);
+  transform: rotateZ(-0.22deg);
 }
 
 .mbp-paper-2 {
@@ -1134,6 +1138,7 @@
   bottom: -6px;
   z-index: 2;
   background: linear-gradient(180deg, #f4eee3, #eae1d1);
+  transform: rotateZ(0.12deg);
 }
 
 /* ---- Cover：主要视觉面（奶纸 + 极弱纹理 + TA Accent 光；书本式边缘）。
@@ -1148,6 +1153,7 @@
   background:
     radial-gradient(120% 70% at 10% 0%, color-mix(in srgb, var(--ta-accent) 10%, transparent), transparent 60%),
     repeating-linear-gradient(0deg, rgba(51, 43, 40, 0.011) 0 1px, transparent 1px 5px),
+    radial-gradient(90% 60% at 78% 100%, rgba(51, 43, 40, 0.05), transparent 62%),
     linear-gradient(168deg, #fcf9f3, #f1eadc);
   color: var(--ui2-text);
   /* 阴影只服务 Book Object Depth：封面压纸 + 贴地接触；不是 Card Elevation */
@@ -1158,7 +1164,7 @@
   transform: rotateX(0.8deg) rotateZ(-0.4deg);
 }
 
-/* ---- Spine：真正书脊（宽、材质、弧度、内侧折痕 + Accent 柔和染色 + 边缘光） ---- */
+/* ---- Spine：Album Binding / 布脊装订（布料纤维纹理 + 纵向明暗 + 自然内折 + 柔和收口） ---- */
 .mbp-spine {
   position: absolute;
   left: 0;
@@ -1166,16 +1172,31 @@
   bottom: 0;
   z-index: 1;
   width: 30px;
-  border-radius: 4px 0 0 4px;
+  border-radius: 6px 0 0 6px;
   transform: translateZ(3px);
-  background: linear-gradient(100deg,
-    color-mix(in srgb, var(--ta-accent) 30%, #8d8374) 0%,
-    color-mix(in srgb, var(--ta-accent) 14%, #b3a896) 38%,
-    color-mix(in srgb, var(--ta-accent) 22%, #a39787) 74%,
-    color-mix(in srgb, var(--ta-accent) 34%, #8f8372) 100%);
+  background:
+    repeating-linear-gradient(100deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 3px),
+    linear-gradient(100deg,
+      color-mix(in srgb, var(--ta-accent) 30%, #8d8374) 0%,
+      color-mix(in srgb, var(--ta-accent) 14%, #b3a896) 38%,
+      color-mix(in srgb, var(--ta-accent) 22%, #a39787) 74%,
+      color-mix(in srgb, var(--ta-accent) 34%, #8f8372) 100%);
   box-shadow:
     inset 1px 0 1px rgba(255, 255, 255, 0.20),
     inset -2px 0 3px rgba(0, 0, 0, 0.14);
+}
+
+/* 布脊上下收口：极轻弧光，让边缘不像纯矩形色条 */
+.mbp-spine::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 7px;
+  border-radius: 6px 0 0 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), transparent);
+  pointer-events: none;
 }
 
 /* 书脊竖排 ELUVIN（装帧用途，非产品 slogan） */
@@ -1211,22 +1232,24 @@
   height: 10px;
 }
 
-/* ---- Bookmark：书脊旁植物线稿（纯装帧，非真实照片/经历） ---- */
-.mbp-bookmark {
+/* ---- Botanical：封面中部偏右的完整植物花枝（细线 + 极轻填色，压花/印刷感）。
+        纯装帧元素，非真实照片/经历；位于文字区与「翻开 →」之间，不与标题相撞。 ---- */
+.mbp-botanical {
   position: absolute;
-  left: 32px;
-  top: 11px;
+  left: 52%;
+  top: 50%;
   z-index: 1;
-  width: 24px;
-  height: 40px;
-  color: color-mix(in srgb, var(--ta-accent) 62%, #4a4036);
-  opacity: 0.85;
+  width: 56px;
+  height: 84px;
+  transform: translate(-50%, -50%) rotate(-2deg);
+  color: color-mix(in srgb, var(--ta-accent) 66%, #5c5245);
+  opacity: 0.9;
 }
 
-.mbp-bookmark svg {
+.mbp-botanical svg {
   display: block;
-  width: 24px;
-  height: 40px;
+  width: 56px;
+  height: 84px;
 }
 
 /* ---- 主区：左 58% 标题与文案 ---- */
@@ -1243,19 +1266,21 @@
 .mbp-kicker {
   display: block;
   margin-bottom: 4px;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.3em;
-  color: color-mix(in srgb, var(--ui2-text) 58%, transparent);
+  letter-spacing: 0.32em;
+  color: color-mix(in srgb, var(--ui2-text) 55%, transparent);
 }
 
 .mbp-title {
   display: block;
   margin-bottom: 7px;
   font-size: 21px;
-  font-weight: 740;
-  letter-spacing: 0.06em;
+  font-weight: 640;
+  letter-spacing: 0.08em;
   color: var(--ui2-text);
+  /* 封面标题的编辑/宋体气质（系统字体栈） */
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
 }
 
 .mbp-copy {
@@ -1269,22 +1294,58 @@
   color: color-mix(in srgb, var(--ui2-text) 72%, transparent);
 }
 
-/* ---- 侧区：右 42% 装帧 + 「翻开 →」右下锚点 ---- */
+/* ---- 侧区：右 42% 装帧（竖排字 + 小相纸位）+ 「翻开 →」右下锚点 ---- */
 .mbp-side {
   grid-column: 2;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: space-between;
+  justify-content: flex-end;
   min-width: 0;
   padding: 13px 17px 14px 4px;
 }
 
-.mbp-side-star {
-  width: 15px;
-  height: 15px;
-  color: color-mix(in srgb, var(--ta-accent) 58%, transparent);
-  opacity: 0.75;
+/* 右侧竖排装帧小字（母版构图：封面右侧一列竖排装饰字；用品牌名，非 slogan） */
+.mbp-side-vertical {
+  position: absolute;
+  right: 16px;
+  top: 13px;
+  writing-mode: vertical-rl;
+  font-size: 7.5px;
+  font-weight: 500;
+  letter-spacing: 0.34em;
+  color: color-mix(in srgb, var(--ta-accent) 45%, #6d6357);
+  opacity: 0.62;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+/* 小相纸位：克制空相纸框（presentation-only，不接任何图片数据） */
+.mbp-photo-slot {
+  position: absolute;
+  right: 46px;
+  top: 14px;
+  width: 50px;
+  height: 36px;
+  border: 1px solid color-mix(in srgb, var(--ta-accent) 30%, rgba(51, 43, 40, 0.10));
+  border-radius: 2px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--ta-accent) 7%, transparent), transparent 55%),
+    rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
+/* 相纸角标：极小的贴纸/纸角提示 */
+.mbp-photo-slot-corner {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ta-accent) 55%, transparent);
+  opacity: 0.7;
 }
 
 .mbp-open {
@@ -1292,20 +1353,22 @@
   align-items: center;
   gap: 5px;
   font-size: 13px;
-  font-weight: 620;
-  letter-spacing: 0.04em;
-  color: var(--ta-accent);
-  border-bottom: 1px solid color-mix(in srgb, var(--ta-accent) 40%, transparent);
+  font-weight: 560;
+  letter-spacing: 0.05em;
+  /* 主文字 ink 色（封面排版的一部分，非 CTA） */
+  color: color-mix(in srgb, var(--ui2-text) 82%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--ta-accent) 34%, transparent);
   padding-bottom: 2px;
 }
 
 .mbp-open span {
+  color: var(--ta-accent);
   transition: transform 0.18s ease;
 }
 
 /* ---- Press / Hover / Focus：轻实体反馈（不是普通 button scale） ---- */
 .memory-book-portal:active .mbp-cover {
-  transform: rotateX(0.8deg) rotateZ(-0.4deg) translateY(1px);
+  transform: rotateX(0.6deg) rotateZ(-0.35deg) translateY(1px);
 }
 
 .memory-book-portal:hover .mbp-cover,
@@ -1313,6 +1376,7 @@
   background:
     radial-gradient(120% 70% at 10% 0%, color-mix(in srgb, var(--ta-accent) 14%, transparent), transparent 60%),
     repeating-linear-gradient(0deg, rgba(51, 43, 40, 0.011) 0 1px, transparent 1px 5px),
+    radial-gradient(90% 60% at 78% 100%, rgba(51, 43, 40, 0.05), transparent 62%),
     linear-gradient(168deg, #fcf9f3, #f1eadc);
   outline: none;
 }
@@ -1322,16 +1386,22 @@
   transform: translateX(2px);
 }
 
-.memory-book-portal:hover .mbp-bookmark,
-.memory-book-portal:focus-visible .mbp-bookmark {
+.memory-book-portal:hover .mbp-botanical,
+.memory-book-portal:focus-visible .mbp-botanical {
   opacity: 1;
 }
 
-/* ---- reduced-motion：静态状态仍然清楚是一本书 ---- */
+.memory-book-portal:hover .mbp-photo-slot,
+.memory-book-portal:focus-visible .mbp-photo-slot {
+  border-color: color-mix(in srgb, var(--ta-accent) 46%, rgba(51, 43, 40, 0.10));
+}
+
+/* ---- reduced-motion：静态状态仍然清楚是一册 Memory Book ---- */
 @media (prefers-reduced-motion: reduce) {
   .mbp-cover,
   .mbp-open span,
-  .mbp-bookmark {
+  .mbp-botanical,
+  .mbp-photo-slot {
     transition: none;
     transform: none;
   }
@@ -1370,21 +1440,40 @@
 
 .memory-year-nav-btn {
   flex: 0 0 auto;
-  padding: 6px 12px;
+  position: relative;
+  padding: 6px 2px 7px;
   border: none;
-  border-radius: 999px;
+  border-radius: 0;
   background: transparent;
   color: var(--memory-muted);
   font: inherit;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
+  transition: color 0.18s ease;
 }
 
+.memory-year-nav-btn:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--memory-accent) 50%, transparent);
+  outline-offset: 3px;
+}
+
+/* UI2-03-POLISH-05：当前年份 = 纯文字 + 细 Accent underline（相册目录式时间索引，非 pill） */
 .memory-year-nav-btn.is-current {
   color: var(--memory-accent);
-  font-weight: 650;
-  background: color-mix(in srgb, var(--memory-accent) 8%, transparent);
+  font-weight: 620;
+  background: transparent;
+}
+
+.memory-year-nav-btn.is-current::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.5px;
+  border-radius: 1px;
+  background: var(--memory-accent);
 }
 
 /* ---- 长河：连续时间页面 ---- */

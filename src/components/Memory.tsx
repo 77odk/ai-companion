@@ -461,8 +461,8 @@ export default function Memory() {
         </div>
       ) : (
         <>
-          {/* UI2-03-POLISH-04：Memory Book Portal —— 一册横放、有厚度的实体记忆书（纯 CSS：封底/纸页层/封面/书脊/装帧）。
-              整本可点击，复用现有 openBookCover；Book 层级在 Year 上方、River 是 Primary。 */}
+          {/* UI2-03-POLISH-05：Memory Book Portal —— 相册/纪念册气质收敛（保持比例与交互，只调整装帧语言）。
+              母版式：布脊装订 + 封面植物花枝（中部偏右）+ 右侧竖排装帧字 + 小相纸位 + 纸页自然错落。 */}
           <button type="button" className="memory-book-portal" onClick={openBookCover} aria-label="翻开记忆书">
             <span className="mbp-back" aria-hidden="true" />
             <span className="mbp-paper mbp-paper-1" aria-hidden="true" />
@@ -476,12 +476,19 @@ export default function Memory() {
                   </svg>
                 </span>
               </span>
-              <span className="mbp-bookmark" aria-hidden="true">
-                <svg viewBox="0 0 24 40" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" aria-hidden="true">
-                  <path d="M12 38 C 11 26, 13 16, 12 4" />
-                  <path d="M13 14 C 19 13, 22 9, 23 4" />
-                  <path d="M11 20 C 6 19, 3 16, 2 11" />
-                  <circle cx="12" cy="3" r="2.2" />
+              <span className="mbp-botanical" aria-hidden="true">
+                <svg viewBox="0 0 64 96" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
+                  <path d="M32 92 C 30 70, 34 48, 30 14" />
+                  <path d="M31 62 C 20 58, 12 50, 8 38" />
+                  <path d="M8 38 C 14 40, 22 46, 28 52" />
+                  <path d="M33 46 C 44 42, 52 34, 56 22" />
+                  <path d="M56 22 C 49 24, 41 30, 36 36" />
+                  <path d="M34 72 C 46 68, 54 60, 58 48" />
+                  <path d="M58 48 C 51 50, 43 56, 38 62" />
+                  <circle cx="30" cy="13" r="3.1" fill="currentColor" stroke="none" opacity="0.85" />
+                  <circle cx="30" cy="13" r="1.1" fill="var(--ui2-canvas)" stroke="none" />
+                  <circle cx="8" cy="36" r="2.2" fill="currentColor" stroke="none" opacity="0.6" />
+                  <path d="M55 18 q 4 -2 3 -6" />
                 </svg>
               </span>
               <span className="mbp-main">
@@ -493,9 +500,10 @@ export default function Memory() {
                 </span>
               </span>
               <span className="mbp-side">
-                <svg className="mbp-side-star" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M12 3l2 5.4L19.5 10 14 11.6 12 17l-2-5.4L4.5 10 10 8.4Z" />
-                </svg>
+                <span className="mbp-side-vertical" aria-hidden="true">MEMORY BOOK</span>
+                <span className="mbp-photo-slot" aria-hidden="true">
+                  <span className="mbp-photo-slot-corner" />
+                </span>
                 <span className="mbp-open">
                   翻开
                   <span aria-hidden="true">→</span>
