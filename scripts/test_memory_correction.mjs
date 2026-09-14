@@ -120,5 +120,46 @@ const failedResult = await correctMemoryText(
 check('接口失败不报成功', !failedResult.ok)
 check('接口失败不破坏原 Memory', JSON.stringify(getMemoriesCache('role-a')) === beforeFailure)
 
+console.log('\n[6] mounted stale 临时 ID 使用 reconcile 后的服务端 ID')
+responseStatus = 200
+requests.length = 0
+const staleOptimistic = { ...original, id: '1788211200000-local' }
+const reconciled = { ...staleOptimistic, id: '902' }
+saveMemoriesCache('role-stale', [reconciled])
+const staleResult = await correctMemoryText(
+  { kind: 'session', sessionId: 'role-stale', item: staleOptimistic, token: 'token-1' },
+  '使用最新服务端 ID 保存',
+)
+check('stale 页面条目可解析到最新 cache 条目', staleResult.ok && staleResult.item.id === '902')
+check('PATCH 使用 reconcile 后的 server id', requests.length === 1 && requests[0].url.endsWith('/api/memories/902'))
+check('绝不 PATCH 旧临时 id', !requests.some((request) => request.url.includes(staleOptimistic.id)))
+check('成功后 cache 保持 server id', getMemoriesCache('role-stale')[0].id === '902')
+check('成功后 cache text 已更新', getMemoriesCache('role-stale')[0].text === '使用最新服务端 ID 保存')
+
+console.log('\n[7] 尚未 reconcile 的纯本地 Memory 不发送 PATCH')
+requests.length = 0
+saveMemoriesCache('role-pending', [staleOptimistic])
+const pendingBefore = JSON.stringify(getMemoriesCache('role-pending'))
+const pendingResult = await correctMemoryText(
+  { kind: 'session', sessionId: 'role-pending', item: staleOptimistic, token: 'token-1' },
+  '这段草稿应当保留在编辑框',
+)
+check('未同步 Memory 返回明确失败', !pendingResult.ok && pendingResult.message === '这段记忆还没同步完成，请稍后再试')
+check('未同步 Memory 不发送 PATCH', requests.length === 0)
+check('未同步 Memory cache 原样不变', JSON.stringify(getMemoriesCache('role-pending')) === pendingBefore)
+
+console.log('\n[8] reconcile 匹配不唯一时不猜测')
+requests.length = 0
+saveMemoriesCache('role-ambiguous', [
+  { ...staleOptimistic, id: '903' },
+  { ...staleOptimistic, id: '904' },
+])
+const ambiguousResult = await correctMemoryText(
+  { kind: 'session', sessionId: 'role-ambiguous', item: staleOptimistic, token: 'token-1' },
+  '不能猜是哪一条',
+)
+check('多个候选时返回未同步失败', !ambiguousResult.ok && ambiguousResult.message === '这段记忆还没同步完成，请稍后再试')
+check('多个候选时不发送 PATCH', requests.length === 0)
+
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed) process.exit(1)

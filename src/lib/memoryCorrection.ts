@@ -10,6 +10,30 @@ export type MemoryCorrectionResult =
   | { ok: true; changed: boolean; item: MemoryItem }
   | { ok: false; message: string }
 
+const MEMORY_NOT_SYNCED = '这段记忆还没同步完成，请稍后再试'
+
+function isServerMemoryId(id: string): boolean {
+  return /^[1-9]\d*$/.test(id)
+}
+
+/** reconcileMemoryCacheId only changes id, so these fields identify its pre/post cache entry. */
+function sameReconciledMemory(current: MemoryItem, stale: MemoryItem): boolean {
+  return current.text === stale.text
+    && current.createdAt === stale.createdAt
+    && current.source === stale.source
+    && current.topic === stale.topic
+    && current.taReply === stale.taReply
+}
+
+function resolveCurrentSessionMemory(cache: MemoryItem[], stale: MemoryItem): MemoryItem | null {
+  const sameId = cache.filter((memory) => memory.id === stale.id)
+  if (sameId.length === 1) return sameId[0]
+  if (sameId.length > 1) return null
+
+  const reconciled = cache.filter((memory) => sameReconciledMemory(memory, stale))
+  return reconciled.length === 1 ? reconciled[0] : null
+}
+
 /**
  * Correct only the distilled memory text. Global explicit memories keep using the
  * existing full-blob sync path; session memories are cached only after PATCH succeeds.
@@ -31,17 +55,17 @@ export async function correctMemoryText(
   }
 
   if (!target.token) return { ok: false, message: '登录状态已失效，请重新登录后再试' }
-  const response = await patchMemory(target.token, target.item.id, { content: text })
+  const cached = getMemoriesCache(target.sessionId)
+  const current = resolveCurrentSessionMemory(cached, target.item)
+  if (!current || !isServerMemoryId(current.id)) return { ok: false, message: MEMORY_NOT_SYNCED }
+
+  const response = await patchMemory(target.token, current.id, { content: text })
   if (!response.ok) return { ok: false, message: response.message || '保存失败，请重试' }
 
-  const item = { ...target.item, text }
-  const cached = getMemoriesCache(target.sessionId)
-  if (!cached.some((memory) => memory.id === target.item.id)) {
-    return { ok: false, message: '没有找到这段记忆，请刷新后重试' }
-  }
+  const item = { ...current, text }
   saveMemoriesCache(
     target.sessionId,
-    cached.map((memory) => (memory.id === target.item.id ? item : memory)),
+    cached.map((memory) => (memory.id === current.id ? item : memory)),
   )
   return { ok: true, changed: true, item }
 }
