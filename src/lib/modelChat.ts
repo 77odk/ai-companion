@@ -61,7 +61,21 @@ async function fetchOrThrow(url: string, init: RequestInit): Promise<Response> {
   return lastResp as Response
 }
 
-function mapHttpError(status: number): ChatError {
+function mapHttpError(status: number, bodyText = ''): ChatError {
+  // 有些服务商（New API 类中转站）把「模型不存在/没开」也返回 404，
+  // 和「地址填错」的 404 长得一样——读一下响应体，给用户说准原因。
+  const body = bodyText.toLowerCase()
+  const modelMissing =
+    body.includes('model_not_found') ||
+    body.includes('not supported') ||
+    body.includes('model not found') ||
+    (body.includes('模型') && body.includes('不存在'))
+  if (status === 404 && modelMissing) {
+    return new ChatError(
+      'bad-request',
+      '服务商说没有这个模型（404）：检查「模型名称」有没有填对，或者你的 Key 分组里没有开这个模型',
+    )
+  }
   if (status === 401 || status === 403) {
     return new ChatError('unauthorized', 'Key 无效或没有权限，去「我的 → 服务商配置」检查一下 API Key 有没有填对')
   }
@@ -108,7 +122,7 @@ export async function testConnection(settings: ModelSettings): Promise<void> {
     throw new ChatError('unknown', '连接失败，请检查设置')
   }
 
-  if (!resp.ok) throw mapHttpError(resp.status)
+  if (!resp.ok) throw mapHttpError(resp.status, await resp.text().catch(() => ''))
 
   try {
     const data = await resp.json()
@@ -172,7 +186,7 @@ export async function chatCompletion(
     clearTimeout(timer)
   }
 
-  if (!resp.ok) throw mapHttpError(resp.status)
+  if (!resp.ok) throw mapHttpError(resp.status, await resp.text().catch(() => ''))
 
   try {
     const data = await resp.json()
@@ -219,7 +233,8 @@ export function streamChat(
     }
 
     if (!resp.ok) {
-      handlers.onError(mapHttpError(resp.status))
+      const bodyText = await resp.text().catch(() => '')
+      handlers.onError(mapHttpError(resp.status, bodyText))
       return
     }
     if (!resp.body) {

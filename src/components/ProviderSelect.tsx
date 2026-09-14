@@ -52,7 +52,7 @@ export default function ProviderSelect({ value, onChange }: Props) {
       </select>
       {value === 'volcengine' ? (
         <p className="hint">
-          免费 · 推荐：每天 200 万 token 额度（次日返还），实名开通即可用，聊天稳定不挤。默认模型 doubao-seed-character · 地址{' '}
+          免费 · 推荐：实名开通送 50 万 token 免费额度（一次性，用完后按量计费），聊天稳定不挤。默认模型 doubao-seed-character · 地址{' '}
           {DEFAULT_SETTINGS.volcengine.baseUrl}
         </p>
       ) : value === 'zhipu' ? (
