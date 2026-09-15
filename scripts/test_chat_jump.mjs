@@ -155,8 +155,12 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
   ok(effectBody.includes('jumpHoldRef.current'), 'H2 auto-scroll effect 内同时判跳转保护窗口 jumpHoldRef')
   ok(effectBody.includes('jumpSuppressRef.current'), 'H3 auto-scroll effect 同时保留 jumpSuppressRef 让位')
   ok(
-    /if \(jumpAtMountRef\.current \|\| jumpHoldRef\.current \|\| jumpSuppressRef\.current\) return\s*\n\s*el\.scrollTop = el\.scrollHeight/.test(chatSrc),
+    /if \(jumpAtMountRef\.current \|\| jumpHoldRef\.current \|\| jumpSuppressRef\.current \|\| isChatJumpHolding\(\)\) return\s*\n\s*el\.scrollTop = el\.scrollHeight/.test(chatSrc),
     'H4 让位判断紧贴在 scroll-bottom 之前（先判断、后滚动）',
+  )
+  ok(
+    chatSrc.includes('let chatJumpHoldUntil = 0') && chatSrc.includes('markChatJumpHold(2500)'),
+    'H4b 跳转保护窗口用模块级时间戳（跨 dev StrictMode remount 存活，第一帧定位不被覆盖）',
   )
   ok(
     chatSrc.includes('const jumpAtMountRef = useRef(Boolean(pendingJump))') &&
@@ -164,7 +168,7 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
     'H5 挂载时按 pendingJump 快照初始化（不依赖 effect 声明顺序）',
   )
   const releases = chatSrc.match(/releaseJumpHold\(\)/g) || []
-  ok(releases.length >= 3, `H6 失败 / 无 session / 用户发消息三条路径都会解除保护（实测 ${releases.length} 处）`)
+  ok(releases.length >= 2, `H6 失败路径 / 用户发消息都会解除保护（实测 ${releases.length} 处）`)
   ok(
     /jumpHoldTimerRef\.current = window\.setTimeout\([\s\S]{0,200}?2500\)/.test(chatSrc),
     'H7 跳转成功后进入保护窗口（超时自动解除，不会永久压住滚到底）',
@@ -178,20 +182,27 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
       !jumpRegion.includes('clearTimeout(jumpNoticeTimer'),
     'H8 jump effect 内不写 cleanup、不动提示定时器（pendingJump→null 不会把提示提前清掉）',
   )
+  const appSrcNotice = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
   ok(
-    /useEffect\(\(\) => \{\s*\n\s*return \(\) => \{\s*\n\s*if \(jumpNoticeTimer\.current !== null\)/.test(chatSrc),
-    'H10 提示定时器有独立的 unmount-only cleanup（Chat 真卸载时才清）',
+    /chatJumpNoticeTimerRef\.current !== null\) window\.clearTimeout\(chatJumpNoticeTimerRef\.current\)/.test(appSrcNotice),
+    'H10 提示定时器改由 App 持有，并在 App 卸载时统一清理',
   )
   const noSessionStart = chatSrc.indexOf('if (!activeSessionId) {')
   const noSessionEnd = chatSrc.indexOf('jumpHandledRef.current = true', noSessionStart)
   const noSessionRegion = noSessionStart > -1 && noSessionEnd > noSessionStart ? chatSrc.slice(noSessionStart, noSessionEnd) : null
+  const failStart = chatSrc.indexOf('const fail = () => {')
+  const failEnd = failStart > -1 ? chatSrc.indexOf('}', failStart) : -1
+  const failRegion = failStart > -1 && failEnd > failStart ? chatSrc.slice(failStart, failEnd + 1) : null
   ok(
-    noSessionRegion !== null && noSessionRegion.includes('onJumpConsumed?.()'),
-    'H11 无 session 分支也消费 pending（不残留 pendingChatJump）',
+    noSessionRegion !== null &&
+      noSessionRegion.includes('fail()') &&
+      failRegion !== null &&
+      failRegion.includes('onJumpConsumed?.()'),
+    'H11 无 session 分支走统一失败路径并消费 pending（不残留 pendingChatJump）',
   )
   ok(
-    noSessionRegion !== null && noSessionRegion.includes("showJumpNotice('原对话已不在了')"),
-    'H12 无 session 分支给出同样的轻量提示',
+    failRegion !== null && failRegion.includes("onJumpNotice?.('原对话已不在了')"),
+    'H12 无 session 分支给出同样的轻量提示（统一上报 App）',
   )
   ok(
     /\}, \[pendingJump, activeSessionId\]\)/.test(chatSrc) && chatSrc.includes('visibleMessagesRef.current'),
@@ -223,6 +234,34 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
 
   // 同 ts 两条 user（异常数据）→ 依旧不跳
   ok(verifyChatJumpTarget({ sessionId: 'A', ts: 1000, source: '我喜欢拿铁' }, 'A', [uid('我喜欢拿铁', 1000), uid('我喜欢拿铁', 1000)]) === false, 'I7 同 ts 两条 user → 不跳（多命中）')
+}
+
+// ---- J：B/C 与 notice 修复的源码契约（防回归） ----
+{
+  const chatSrc = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+  const appSrc = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
+
+  // B/C：首次 jump 必须 paint 前 instant 定位
+  ok(chatSrc.includes('useLayoutEffect('), 'J1 Chat 用 useLayoutEffect 执行首次 jump')
+  ok(
+    /scrollIntoView\(\{\s*block:\s*'center',\s*behavior:\s*'auto'\s*\}\)/.test(chatSrc),
+    "J2 首次定位 behavior: 'auto'（instant）",
+  )
+  ok(!chatSrc.includes("behavior: 'smooth'"), 'J3 首次跳转不再用 smooth')
+  ok(!chatSrc.includes('requestAnimationFrame'), 'J4 已移除双 rAF 延迟')
+
+  // 失败路径：consume + 上报（App 展示）
+  ok(chatSrc.includes("onJumpNotice?.('原对话已不在了')"), 'J5 失败时上报提示文本')
+  ok(!chatSrc.includes('showJumpNotice'), 'J6 Chat 不再本地展示 notice')
+  ok(!chatSrc.includes('jumpNoticeTimer'), 'J7 Chat 不再本地持 notice timer')
+
+  // App：接管 notice + restoreScroll 跳过
+  ok(appSrc.includes('chatJumpNotice') && appSrc.includes('showChatJumpNotice'), 'J8 App 持有 chatJumpNotice 与展示函数')
+  ok(
+    /if \(v === 'chat' && pendingChatJumpRef\.current\) return/.test(appSrc),
+    'J9 restoreScroll 在 pending jump 时跳过 chat 的旧位置恢复',
+  )
+  ok(appSrc.includes('pendingJump={pendingChatJump}') && appSrc.includes('onJumpNotice={showChatJumpNotice}'), 'J10 App 把 pendingJump / notice 回调一起传给 Chat')
 }
 
 console.log(`\nchatJump: ${passed} passed, ${failed} failed`)

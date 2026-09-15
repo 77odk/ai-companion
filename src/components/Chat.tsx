@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildBusyReturnPrompt, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem, type ExplicitCandidate } from '../lib/memory'
@@ -82,9 +82,26 @@ interface Props {
   pendingJump?: ChatJumpTarget | null
   /** 消费完成（成功滚动或失败提示）后由 App 清空 pending */
   onJumpConsumed?: () => void
+  /** UI2-03B-1：失败提示由 App 持有（跨 remount / StrictMode 双跑存活并自行收尾），Chat 只渲染 */
+  jumpNotice?: string | null
+  /** UI2-03B-1：失败时上报提示文本，由 App 统一展示 */
+  onJumpNotice?: (text: string) => void
 }
 
-export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJump, onJumpConsumed }: Props) {
+// UI2-03B-1：「看原对话」跳转保护窗口（模块级时间戳）——
+// dev StrictMode 会模拟卸载/重挂载，组件内 ref 快照会被重置成 false，
+// 于是 auto-scroll 立刻把列表拉回底部、覆盖 jump 的第一帧定位。
+// 模块级时间戳不受 remount 影响；用户发消息时由 releaseJumpHold 立刻清掉。
+let chatJumpHoldUntil = 0
+const markChatJumpHold = (ms: number) => {
+  chatJumpHoldUntil = Date.now() + ms
+}
+const isChatJumpHolding = () => Date.now() < chatJumpHoldUntil
+const clearChatJumpHold = () => {
+  chatJumpHoldUntil = 0
+}
+
+export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJump, onJumpConsumed, jumpNotice, onJumpNotice }: Props) {
   const activeSessionId = getActiveSessionId()
 
   const [messages, setMessages] = useState<StoredMessage[]>(() =>
@@ -125,6 +142,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const jumpHoldTimerRef = useRef<number | null>(null)
   const releaseJumpHold = () => {
     jumpHoldRef.current = false
+    clearChatJumpHold()
     if (jumpHoldTimerRef.current !== null) {
       window.clearTimeout(jumpHoldTimerRef.current)
       jumpHoldTimerRef.current = null
@@ -132,14 +150,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }
   // 防重复消费同一 pending target（StrictMode 双跑 / deps 抖动时只处理一次）
   const jumpHandledRef = useRef(false)
-  // 轻量失败提示：不借用 send error 横幅，避免干扰既有错误流
-  const [jumpNotice, setJumpNotice] = useState<string | null>(null)
-  const jumpNoticeTimer = useRef<number | null>(null)
-  const showJumpNotice = (text: string) => {
-    setJumpNotice(text)
-    if (jumpNoticeTimer.current !== null) window.clearTimeout(jumpNoticeTimer.current)
-    jumpNoticeTimer.current = window.setTimeout(() => setJumpNotice(null), 2600)
-  }
+  // UI2-03B-1：失败提示状态已上移到 App（Props.jumpNotice / onJumpNotice）——
+  // Chat 不再本地持 notice state / timer：dev StrictMode 提前跑 cleanup 曾把 timer 清掉
+  // 而 state 还在，导致提示永久驻留。现在提示由 App 持有并自行 2.6s 收尾。
   const controllerRef = useRef<AbortController | null>(null)
   const thinkTimerRef = useRef<number | null>(null)
   const playTimerRef = useRef<number | null>(null)
@@ -316,81 +329,66 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    // UI2-03B-1：用户自己发了消息 → 立刻解除跳转保护，正常滚到底
-    if (jumpHoldRef.current) {
-      const last = visibleMessages[visibleMessages.length - 1]
-      if (last && last.role === 'user') releaseJumpHold()
-    }
     // UI2-03B-1：本次 mount 带 pending jump / 跳转保护窗口内，scroll-bottom 让位（由 jump 接管定位）
-    if (jumpAtMountRef.current || jumpHoldRef.current || jumpSuppressRef.current) return
+    if (jumpAtMountRef.current || jumpHoldRef.current || jumpSuppressRef.current || isChatJumpHolding()) return
     el.scrollTop = el.scrollHeight
   }, [visibleMessages, busyReplyText])
 
-  // UI2-03B-1：「看原对话」失败提示的定时器只随 Chat 真正卸载清理。
-  // 不能在 jump effect 的 cleanup 里清：失败路径会先 onJumpConsumed() → App 把 pendingJump 置 null
-  // → 该 effect cleanup 触发 → 提示定时器被提前清掉、提示永久留在页面上。
-  useEffect(() => {
-    return () => {
-      if (jumpNoticeTimer.current !== null) {
-        window.clearTimeout(jumpNoticeTimer.current)
-        jumpNoticeTimer.current = null
-      }
-    }
-  }, [])
-
   // UI2-03B-1「看原对话」：消费 App 传来的一次性 jump target。
+  // 用 useLayoutEffect：DOM commit 后、paint 前直接定位 —— 第一可见帧就在目标附近，
+  // 不再出现「先看到底部，再 smooth 滑回来」。首次定位必须 instant（behavior: 'auto'）。
   // 二次校验（session 未变 + visibleMessages 中 ts/content 完全一致的唯一 user 消息）通过才滚动；
-  // 失败 → 清 pending + 轻量提示，绝不滚到别的消息。
-  useEffect(() => {
+  // 失败 → 清 pending + 上报提示（由 App 展示），绝不滚到别的消息。
+  useLayoutEffect(() => {
     if (!pendingJump) return
     if (jumpHandledRef.current) return
-    if (!activeSessionId) {
-      // 无会话：跳不了，消费掉 pending 并给同样的轻量提示，避免 pending 残留 / 死状态
+    // 失败路径统一：释放保护 → 消费 pending → 上报提示（App 展示），绝不滚动
+    const fail = () => {
       releaseJumpHold()
       jumpAtMountRef.current = false
       jumpSuppressRef.current = false
-      showJumpNotice('原对话已不在了')
       onJumpConsumed?.()
+      onJumpNotice?.('原对话已不在了')
+    }
+    if (!activeSessionId) {
+      // 无会话：跳不了，同样消费 pending + 提示，避免 pending 残留 / 死状态
+      fail()
       return
     }
     jumpHandledRef.current = true
     if (!verifyChatJumpTarget(pendingJump, activeSessionId, visibleMessagesRef.current)) {
-      releaseJumpHold()
-      jumpAtMountRef.current = false
-      jumpSuppressRef.current = false
-      onJumpConsumed?.()
-      showJumpNotice('原对话已不在了')
+      fail()
       return
     }
     // 让 auto-scroll 让位：本轮滚动由 jump 接管
     jumpSuppressRef.current = true
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const ts = pendingJump.ts
-        // DOM 定位必须同时锁 role=user + ts：同 ts 下可能存在 assistant 行，不能只靠 ts
-        const el = scrollRef.current?.querySelector<HTMLElement>(
-          `[data-msg-role="user"][data-msg-ts="${ts}"]`,
-        )
-        if (el) {
-          el.scrollIntoView({ block: 'center', behavior: 'smooth' })
-          el.classList.add('msg-jump-highlight')
-          window.setTimeout(() => el.classList.remove('msg-jump-highlight'), 1800)
-        } else {
-          showJumpNotice('原对话已不在了')
-        }
-        jumpAtMountRef.current = false
-        jumpSuppressRef.current = false
-        // 跳转保护窗口：挡住跳完之后同帧/随后的异步更新（busy 状态、云端消息合并）再次把列表拉到底
-        if (jumpHoldTimerRef.current !== null) window.clearTimeout(jumpHoldTimerRef.current)
-        jumpHoldTimerRef.current = window.setTimeout(() => {
-          jumpHoldRef.current = false
-          jumpHoldTimerRef.current = null
-        }, 2500)
-        onJumpConsumed?.()
-      })
-    })
-    // 注意：跳转 effect 故意不写 cleanup —— 失败路径会当场消费 pending（pendingJump → null）触发 cleanup，
-    // 若在这里清 jumpNoticeTimer，提示会被提前清掉；提示定时器改由上面的 unmount-only effect 负责。
+    const ts = pendingJump.ts
+    // DOM 定位必须同时锁 role=user + ts：同 ts 下可能存在 assistant 行，不能只靠 ts
+    const el = scrollRef.current?.querySelector<HTMLElement>(
+      `[data-msg-role="user"][data-msg-ts="${ts}"]`,
+    )
+    if (el) {
+      // paint 前 instant 落位：第一眼就在原文附近（不再用 smooth 二次滚动）
+      el.scrollIntoView({ block: 'center', behavior: 'auto' })
+      el.classList.add('msg-jump-highlight')
+      window.setTimeout(() => el.classList.remove('msg-jump-highlight'), 1800)
+    } else {
+      // 目标节点不存在（数据/渲染异常）：仍要消费 pending 并提示，不滚错位置
+      onJumpNotice?.('原对话已不在了')
+    }
+    jumpAtMountRef.current = false
+    jumpSuppressRef.current = false
+    // 跳转保护窗口：挡住跳完之后同帧/随后的异步更新（busy 状态、云端消息合并）再次把列表拉到底
+    if (jumpHoldTimerRef.current !== null) window.clearTimeout(jumpHoldTimerRef.current)
+    markChatJumpHold(2500)
+    jumpHoldTimerRef.current = window.setTimeout(() => {
+      jumpHoldRef.current = false
+      chatJumpHoldUntil = 0
+      jumpHoldTimerRef.current = null
+    }, 2500)
+    onJumpConsumed?.()
+    // 注意：这里故意不写 cleanup —— 失败路径会当场消费 pending（pendingJump → null）触发 cleanup；
+    // 提示状态由 App 持有，不受本 effect 生命周期影响。
   }, [pendingJump, activeSessionId])
 
   useEffect(() => {
@@ -615,6 +613,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }, [])
 
   const send = useCallback((raw: string) => {
+    // UI2-03B-1：用户自己发了消息 → 立刻解除「看原对话」的跳转保护，恢复正常滚到底。
+    // 必须在这里显式释放：不能靠 auto-scroll 里猜「最后一条是不是 user」——
+    // 历史最后一条本来就常是 user，那样会在挂载瞬间误解除保护，把列表拉到底。
+    releaseJumpHold()
     const text = raw.trim()
     if (!text || streaming) return
 
