@@ -39,6 +39,8 @@ export function normalizeBusyState(state: BusyState, now: number): BusyState {
     busyStartedAt: Number.isFinite(state.busyStartedAt) && (state.busyStartedAt ?? 0) > 0 ? state.busyStartedAt : inferredStart,
     retryCount: Number.isInteger(state.retryCount) && (state.retryCount ?? 0) >= 0 ? state.retryCount : 0,
     lastAttemptAt: Number.isFinite(state.lastAttemptAt) && (state.lastAttemptAt ?? 0) > 0 ? state.lastAttemptAt : 0,
+    activityOwner: 'SELF',
+    triggerEvidence: typeof state.triggerEvidence === 'string' ? state.triggerEvidence : undefined,
   }
 }
 

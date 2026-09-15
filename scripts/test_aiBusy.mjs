@@ -127,9 +127,9 @@ const ctx = serializeBusyContext([
   { role: 'assistant', content: '那你去忙吧' },
   { role: 'user', content: '我说我现在休息一会' },
 ])
-ok(ctx.includes('我：我休息一会要去上班呢'), '含用户消息（标我）')
-ok(ctx.includes('TA：那你去忙吧'), '含 TA 消息（标 TA）')
-ok(ctx.includes('我：我说我现在休息一会'), '含最新用户消息')
+ok(ctx.includes('USER：我休息一会要去上班呢'), '含用户消息（标 USER）')
+ok(ctx.includes('SELF：那你去忙吧'), '含 TA 消息（标 SELF）')
+ok(ctx.includes('USER：我说我现在休息一会'), '含最新用户消息')
 ok(ctx.split('\n').length <= 3, '最多 3 条')
 const longCtx = serializeBusyContext([
   { role: 'user', content: 'x'.repeat(200) },

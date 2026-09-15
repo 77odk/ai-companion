@@ -80,6 +80,8 @@ test('K user message cancellation stops pending return', async () => {
 
 test('L legacy missing fields normalizes safely; invalid time ends safely', async () => {
   const old = normalizeBusyState({ status: 'busy', busyUntil: NOW + 60_000, busyReason: '', busyContext: '', returnSent: false }, NOW); assert.equal(old.retryCount, 0); assert.ok(old.busyStartedAt > 0)
+  assert.equal(old.activityOwner, 'SELF')
+  const owned = normalizeBusyState(fresh({ activityOwner: 'SELF', triggerEvidence: '等我一下，我马上回来' }), NOW); assert.equal(owned.triggerEvidence, '等我一下，我马上回来')
   const r = rig({ status: 'busy', busyUntil: 0, busyReason: '', busyContext: '', returnSent: false }); assert.equal(await triggerBusyReturn('A', r.deps), 'expired'); assert.equal(r.calls(), 0)
 })
 

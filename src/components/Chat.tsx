@@ -31,8 +31,9 @@ import {
   upsertMemoryCache,
   type PendingOp,
 } from '../lib/sessionStore'
-import { containsBusyKeyword, findBusyCutoff, inferBusyReason, pickBusyReply, randomBusyDurationMs, serializeBusyContext, type BusyState } from '../lib/aiBusy'
+import { findBusyCutoff, inferBusyReason, pickBusyReply, randomBusyDurationMs, serializeBusyContext, type BusyState } from '../lib/aiBusy'
 import { busyCycleId, cancelBusyReturn, triggerBusyReturn } from '../lib/busyReturn'
+import { busyReturnFallback, classifyAvailability, isGroundedBusyReturn, type AvailabilityDecision } from '../lib/availability'
 import { loadCurrentPosts } from '../lib/aiSpace'
 import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELINE_EN } from '../lib/spaceChatInject'
 import { commitPartialReply } from '../lib/partialReply'
@@ -178,7 +179,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const busyTimerRef = useRef<number | null>(null)
   const busyTriggeredRef = useRef(false)
   const busyRepliedRef = useRef(false)
-  const enterBusyRef = useRef<(text: string) => void>(() => {})
+  const enterBusyRef = useRef<(text: string, decision: AvailabilityDecision) => void>(() => {})
   const sendBusyReturnRef = useRef<(runId: number, sid: string, state: BusyState) => Promise<void>>(async () => {})
 
   const persistMessages = useCallback((msgs: StoredMessage[]) => {
@@ -212,7 +213,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }, [])
 
   // ---- 忙碌状态：进入忙碌 ----
-  const enterBusy = (triggerText: string) => {
+  const enterBusy = (triggerText: string, decision: AvailabilityDecision) => {
     const sid = getActiveSessionId()
     const duration = randomBusyDurationMs()
     const busyUntil = Date.now() + duration
@@ -226,6 +227,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       busyReason: reason,
       busyContext: context,
       returnSent: false,
+      activityOwner: 'SELF',
+      triggerEvidence: decision.evidence,
     }
     if (sid) saveBusyState(sid, state)
     setIsBusy(true)
@@ -278,12 +281,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           content: stripThinkBlocks(stripMemoryMarkers(message.content), busyLang),
         }))
         const latestContext = serializeBusyContext(tail) || state.busyContext
-        const busyPrompt = buildBusyReturnPrompt(state.busyReason, latestContext, busyLang)
+        const selfActivity = state.triggerEvidence || state.busyReason
+        const busyPrompt = buildBusyReturnPrompt(state.busyReason, latestContext, busyLang, selfActivity)
         const content = await chatCompletion(settings, [
           { role: 'system', content: systemPrompt },
           { role: 'system', content: busyPrompt },
         ], { maxTokens: 150, temperature: 0.9 })
-        return stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(content), busyLang))).trim() || null
+        const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(content), busyLang))).trim()
+        return isGroundedBusyReturn(cleaned, selfActivity) ? cleaned : busyReturnFallback(busyLang)
       },
       commit: async (targetSid, content) => {
         const latest = getBusyState(targetSid)
@@ -1000,13 +1005,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const raw = assistantText.current
       // 非流式/流式漏网兜底（2026-09-05 晚）：部分中转站（doi 等）不给标准 SSE 逐字流，onToken 忙碌检测跑不到——
       // 完整文本到 finalize 时再查一次，命中照样截断进忙碌（忙语句之后的尾巴不落库）
-      if (!busyTriggeredRef.current && raw && containsBusyKeyword(raw)) {
+      const availability = classifyAvailability(raw)
+      if (!busyTriggeredRef.current && raw && availability.state === 'unavailable' && availability.owner === 'SELF') {
         busyTriggeredRef.current = true
         const cut = findBusyCutoff(raw)
         const busyText = cut > 0 && cut < raw.length ? raw.slice(0, cut) : raw
         // TASK-MEM-DISTILL：忙碌截断前先把本轮候选/已到 marker 归并落库（模型给完整回复前 = 无对应 marker → fallback）
         flushMemoryWrites(raw)
-        enterBusyRef.current(busyText)
+        enterBusyRef.current(busyText, availability)
         return
       }
       // TASK-MEM-DISTILL：唯一归并写入出口——candidate + marker 只写一条；无 marker 的候选 fallback 落库
@@ -1116,7 +1122,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           if (runId !== runIdRef.current) return
           assistantText.current += t
           // 忙碌关键词检测：流式累积层截断，不是显示层
-          if (!busyTriggeredRef.current && containsBusyKeyword(assistantText.current)) {
+          const availability = classifyAvailability(assistantText.current)
+          if (!busyTriggeredRef.current && availability.state === 'unavailable' && availability.owner === 'SELF') {
             busyTriggeredRef.current = true
             const cutoff = findBusyCutoff(assistantText.current)
             if (cutoff > 0 && cutoff < assistantText.current.length) {
@@ -1129,7 +1136,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             controllerRef.current?.abort()
             streamEndedRef.current = true
             // 进入忙碌状态（用 ref 避免闭包）
-            enterBusyRef.current(assistantText.current)
+            enterBusyRef.current(assistantText.current, availability)
           }
         },
         onDone: (reasoning) => {
