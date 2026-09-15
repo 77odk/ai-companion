@@ -3,8 +3,12 @@ import test from 'node:test'
 
 class StorageMock {
   #values = new Map()
+  failMetadataWrites = false
   getItem(key) { return this.#values.has(key) ? this.#values.get(key) : null }
-  setItem(key, value) { this.#values.set(key, String(value)) }
+  setItem(key, value) {
+    if (this.failMetadataWrites && key === 'ai_companion_cloud_state_metadata') return
+    this.#values.set(key, String(value))
+  }
   removeItem(key) { this.#values.delete(key) }
   clear() { this.#values.clear() }
 }
@@ -36,10 +40,11 @@ function entity(entityId, version, extra = {}) {
 
 function clearState(account = 'account-a') {
   localStorage.clear()
+  localStorage.failMetadataWrites = false
   login(account)
 }
 
-test('A/D/E/F: pull applies before cursor, is idempotent, consumes unknown kinds, and dispatches tombstones', async () => {
+test('A/D/E/F/V1: pull applies before cursor, is idempotent, preserves unknown kinds, and dispatches tombstones', async () => {
   clearState()
   const applied = []
   const deleted = []
@@ -57,11 +62,105 @@ test('A/D/E/F: pull applies before cursor, is idempotent, consumes unknown kinds
   assert.equal(cloud.getCloudStateCursor(), 3)
   assert.deepEqual(applied, ['one'])
   assert.deepEqual(deleted, ['gone'])
-  assert.equal(cloud.getCloudStateVersion('future_kind', 'new'), 2)
+  assert.equal(cloud.getCloudStateVersion('future_kind', 'new'), 0)
+  assert.deepEqual(cloud.getCloudStateInbox('future_kind'), [{ kind: 'future_kind', entityId: 'new', version: 2 }])
   await cloud.pullCloudState()
   assert.deepEqual(applied, ['one'])
   assert.deepEqual(deleted, ['gone'])
   unregister()
+})
+
+test('V2/V7: registering an adapter replays an unknown production entity without another server change', async () => {
+  clearState()
+  const historical = {
+    kind: 'space_post', entityId: 'post-10', sessionId: 'session-1', generationSlotId: 'slot-1',
+    version: 10, deleted: false, payload: { text: 'historical post' },
+  }
+  globalThis.fetch = async () => jsonResponse(pullBody(10, [historical]))
+  await cloud.pullCloudState()
+  assert.equal(cloud.getCloudStateCursor(), 10)
+  assert.deepEqual(cloud.getCloudStateInbox('space_post'), [historical])
+
+  const applied = []
+  const unregister = cloud.registerCloudStateAdapter('space_post', {
+    apply(value, context) { applied.push([value, context]) },
+    delete() {},
+  })
+  await cloud.replayCloudStateInbox('space_post')
+  assert.deepEqual(applied, [[historical, { source: 'cloud', silent: true }]])
+  assert.deepEqual(cloud.getCloudStateInbox('space_post'), [])
+  assert.equal(cloud.getCloudStateVersion('space_post', 'post-10'), 10)
+
+  globalThis.fetch = async () => jsonResponse(pullBody(10, []))
+  await cloud.pullCloudState()
+  assert.equal(applied.length, 1)
+  unregister()
+})
+
+test('V3: a newer unknown tombstone replaces the older normal entity', async () => {
+  clearState()
+  globalThis.fetch = async () => jsonResponse(pullBody(2, [
+    { kind: 'unknown_delete', entityId: 'same', version: 1, payload: { old: true } },
+    { kind: 'unknown_delete', entityId: 'same', version: 2, deleted: true },
+  ]))
+  await cloud.pullCloudState()
+  assert.deepEqual(cloud.getCloudStateInbox('unknown_delete'), [
+    { kind: 'unknown_delete', entityId: 'same', version: 2, deleted: true },
+  ])
+  const calls = []
+  const unregister = cloud.registerCloudStateAdapter('unknown_delete', {
+    apply() { calls.push('apply') },
+    delete(value) { calls.push(`delete:${value.version}`) },
+  })
+  await cloud.replayCloudStateInbox('unknown_delete')
+  assert.deepEqual(calls, ['delete:2'])
+  unregister()
+})
+
+test('V4: registering an adapter under account B cannot consume account A inbox', async () => {
+  clearState('A')
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [{ kind: 'account_kind', entityId: 'a', version: 1 }]))
+  await cloud.pullCloudState()
+  login('B')
+  const applied = []
+  const unregister = cloud.registerCloudStateAdapter('account_kind', {
+    apply(value) { applied.push(value.entityId) }, delete() {},
+  })
+  await cloud.replayCloudStateInbox('account_kind')
+  assert.deepEqual(applied, [])
+  assert.deepEqual(cloud.getCloudStateInbox('account_kind'), [])
+  login('A')
+  await cloud.replayCloudStateInbox('account_kind')
+  assert.deepEqual(applied, ['a'])
+  unregister()
+})
+
+test('V5: failed replay remains in inbox and is removed only after success', async () => {
+  clearState()
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [{ kind: 'retry_kind', entityId: 'retry', version: 5 }]))
+  await cloud.pullCloudState()
+  let fail = true
+  const unregister = cloud.registerCloudStateAdapter('retry_kind', {
+    apply() { if (fail) throw new Error('not ready') }, delete() {},
+  })
+  await cloud.replayCloudStateInbox('retry_kind')
+  assert.equal(cloud.getCloudStateInbox('retry_kind').length, 1)
+  assert.equal(cloud.getCloudStateVersion('retry_kind', 'retry'), 0)
+  fail = false
+  await cloud.replayCloudStateInbox('retry_kind')
+  assert.deepEqual(cloud.getCloudStateInbox('retry_kind'), [])
+  assert.equal(cloud.getCloudStateVersion('retry_kind', 'retry'), 5)
+  unregister()
+})
+
+test('V6: unknown inbox persistence failure prevents page cursor advancement', async () => {
+  clearState()
+  localStorage.failMetadataWrites = true
+  globalThis.fetch = async () => jsonResponse(pullBody(9, [{ kind: 'cannot_store', entityId: 'lost', version: 9 }]))
+  await assert.rejects(cloud.pullCloudState(), /not_persisted/)
+  localStorage.failMetadataWrites = false
+  assert.equal(cloud.getCloudStateCursor(), 0)
+  assert.deepEqual(cloud.getCloudStateInbox('cannot_store'), [])
 })
 
 test('B: hasMore pulls every page without jumping to serverRevision', async () => {
@@ -175,6 +274,7 @@ test('M/N: concurrent pulls share one flight and a later pull rereads the latest
 
 test('O: cursor, versions, and queued cloud ops are isolated by account', async () => {
   clearState('A')
+  const unregister = cloud.registerCloudStateAdapter('test_kind', { apply() {}, delete() {} })
   globalThis.fetch = async () => jsonResponse(pullBody(7, [entity('shared', 3)]))
   await cloud.pullCloudState()
   cloud.enqueueCloudStateOp({ opId: 'a-only', kind: 'test_kind', entityId: 'a', baseVersion: 0 })
@@ -188,6 +288,7 @@ test('O: cursor, versions, and queued cloud ops are isolated by account', async 
   login('A')
   assert.equal(cloud.getCloudStateCursor(), 7)
   assert.equal(cloud.getCloudStateVersion('test_kind', 'shared'), 3)
+  unregister()
 })
 
 test('Q/R: cloud apply is explicitly silent and session cache does not emit legacy data change', async () => {

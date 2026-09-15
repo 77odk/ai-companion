@@ -35,6 +35,8 @@ export interface CloudStateAdapter {
 interface AccountMetadata {
   cursor: number
   versions: Record<string, number>
+  /** Server-seen entities whose business adapter was unavailable at pull time. */
+  inbox: Record<string, CloudStateEntity>
 }
 
 interface MetadataRoot {
@@ -62,6 +64,7 @@ const adapters = new Map<string, CloudStateAdapter>()
 const localFlights = new Map<string, Promise<boolean>>()
 const syncFlights = new Map<string, Promise<void>>()
 const flushFlights = new Map<string, Promise<void>>()
+const replayFlights = new Map<string, Promise<void>>()
 let triggerTimer: ReturnType<typeof setTimeout> | null = null
 let listenersStarted = false
 
@@ -97,6 +100,7 @@ function readMetadata(account: string): AccountMetadata {
   return {
     cursor: Number.isFinite(saved?.cursor) && saved.cursor >= 0 ? saved.cursor : 0,
     versions: saved?.versions && typeof saved.versions === 'object' ? { ...saved.versions } : {},
+    inbox: saved?.inbox && typeof saved.inbox === 'object' ? { ...saved.inbox } : {},
   }
 }
 
@@ -106,12 +110,29 @@ function writeMetadata(account: string, metadata: AccountMetadata): void {
   localStorage.setItem(METADATA_KEY, JSON.stringify(root))
 }
 
+function writeMetadataReliably(account: string, metadata: AccountMetadata): void {
+  const root = readRoot()
+  root.accounts[accountKey(account)] = metadata
+  const serialized = JSON.stringify(root)
+  localStorage.setItem(METADATA_KEY, serialized)
+  if (localStorage.getItem(METADATA_KEY) !== serialized) throw new Error('cloud_state_metadata_not_persisted')
+}
+
 export function getCloudStateCursor(account = getAccount()?.account): number {
   return account ? readMetadata(account).cursor : 0
 }
 
 export function getCloudStateVersion(kind: string, entityId: string, account = getAccount()?.account): number {
   return account ? (readMetadata(account).versions[entityKey(kind, entityId)] ?? 0) : 0
+}
+
+/** Test/debug surface and future adapter support; returns a copy in stable replay order. */
+export function getCloudStateInbox(kind?: string, account = getAccount()?.account): CloudStateEntity[] {
+  if (!account) return []
+  return Object.values(readMetadata(account).inbox)
+    .filter(entity => kind == null || entity.kind === kind)
+    .sort((a, b) => a.version - b.version || a.kind.localeCompare(b.kind) || a.entityId.localeCompare(b.entityId))
+    .map(entity => ({ ...entity }))
 }
 
 function saveVersion(account: string, entity: CloudStateEntity): void {
@@ -123,21 +144,84 @@ function saveVersion(account: string, entity: CloudStateEntity): void {
 
 export function registerCloudStateAdapter(kind: string, adapter: CloudStateAdapter): () => void {
   adapters.set(kind, adapter)
+  void replayCloudStateInbox(kind)
   return () => {
     if (adapters.get(kind) === adapter) adapters.delete(kind)
   }
+}
+
+function normalizedEntity(entity: CloudStateEntity): CloudStateEntity {
+  return {
+    kind: entity.kind,
+    entityId: entity.entityId,
+    ...(entity.sessionId === undefined ? {} : { sessionId: entity.sessionId }),
+    ...(entity.generationSlotId === undefined ? {} : { generationSlotId: entity.generationSlotId }),
+    version: entity.version,
+    ...(entity.deleted === undefined ? {} : { deleted: entity.deleted }),
+    ...(entity.payload === undefined ? {} : { payload: entity.payload }),
+  }
+}
+
+function saveUnknownEntity(account: string, entity: CloudStateEntity): void {
+  const metadata = readMetadata(account)
+  const key = entityKey(entity.kind, entity.entityId)
+  const existing = metadata.inbox[key]
+  if (existing && existing.version >= entity.version) return
+  metadata.inbox[key] = normalizedEntity(entity)
+  // Cursor may advance only if the unknown entity is durably recoverable later.
+  writeMetadataReliably(account, metadata)
+}
+
+async function replayInboxForAccount(account: Account, kind?: string): Promise<void> {
+  for (const entity of getCloudStateInbox(kind, account.account)) {
+    if (!isCurrentAccount(account)) return
+    const adapter = adapters.get(entity.kind)
+    if (!adapter) continue
+    const key = entityKey(entity.kind, entity.entityId)
+    try {
+      const appliedVersion = getCloudStateVersion(entity.kind, entity.entityId, account.account)
+      if (entity.version > appliedVersion) {
+        const context: CloudStateApplyContext = { source: 'cloud', silent: true }
+        if (entity.deleted) await adapter.delete(entity, context)
+        else await adapter.apply(entity, context)
+        saveVersion(account.account, entity)
+      }
+      const metadata = readMetadata(account.account)
+      // Do not delete a newer entity that arrived while an async adapter was running.
+      if (metadata.inbox[key]?.version === entity.version) {
+        delete metadata.inbox[key]
+        writeMetadataReliably(account.account, metadata)
+      }
+    } catch (error) {
+      console.warn('Cloud State inbox replay failed', entity.kind, entity.entityId, error)
+      // This entity remains durable; other entities can still make progress.
+    }
+  }
+}
+
+export function replayCloudStateInbox(kind?: string): Promise<void> {
+  const account = getAccount()
+  if (!account) return Promise.resolve()
+  const key = accountKey(account.account)
+  const previous = replayFlights.get(key) ?? Promise.resolve()
+  const flight = previous.catch(() => {}).then(() => replayInboxForAccount(account, kind)).finally(() => {
+    if (replayFlights.get(key) === flight) replayFlights.delete(key)
+  })
+  replayFlights.set(key, flight)
+  return flight
 }
 
 async function applyEntity(account: string, entity: CloudStateEntity): Promise<void> {
   const knownVersion = getCloudStateVersion(entity.kind, entity.entityId, account)
   if (Number.isFinite(entity.version) && entity.version <= knownVersion) return
   const adapter = adapters.get(entity.kind)
-  if (adapter) {
-    const context: CloudStateApplyContext = { source: 'cloud', silent: true }
-    if (entity.deleted) await adapter.delete(entity, context)
-    else await adapter.apply(entity, context)
+  if (!adapter) {
+    saveUnknownEntity(account, entity)
+    return
   }
-  // Unknown kinds are deliberately consumed so an older client cannot pin its cursor forever.
+  const context: CloudStateApplyContext = { source: 'cloud', silent: true }
+  if (entity.deleted) await adapter.delete(entity, context)
+  else await adapter.apply(entity, context)
   saveVersion(account, entity)
 }
 
@@ -322,12 +406,15 @@ export function syncCloudState(): Promise<void> {
   const active = syncFlights.get(key)
   if (active) return active
   const flight = (async () => {
+    // A previously failed inbox replay is independent of network availability.
+    await replayCloudStateInbox()
     try {
       const pulled = await pullCloudState()
       if (!pulled) return // Another tab owns this round; it will commit the shared cursor.
     } catch {
       return // Pull must succeed before pushing stale local operations.
     }
+    await replayCloudStateInbox()
     await flushCloudStatePendingOps()
   })().finally(() => syncFlights.delete(key))
   syncFlights.set(key, flight)
