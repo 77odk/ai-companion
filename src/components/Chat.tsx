@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildBusyReturnPrompt, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
-import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem, type ExplicitCandidate } from '../lib/memory'
+import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem, type ExplicitCandidate } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
@@ -688,16 +688,18 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       return
     }
 
-    const writeMemory = (content: string, opts: { source?: string; topic?: string; explicit?: boolean; taReply?: string } = {}) => {
+    const writeMemory = (content: string, opts: { source?: string; topic?: string; explicit?: boolean; taReply?: string } = {}): boolean => {
       const trimmed = content.trim()
-      if (!trimmed) return
+      if (!trimmed) return false
       // PATCH-01：source 保存完整真实用户原话——不再做 20 字截断，不摘要、不改写。
       // 空/纯空白时保持 undefined（旧数据兼容：无 source 不显示）。
       const snippet = opts.source?.trim() || undefined
       if (activeSessionId) {
         const token = getToken()
         const item = upsertMemoryCache(activeSessionId, trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
-        if (item && token) {
+        // 本地写失败（回读不一致）→ upsertMemoryCache 返回 null：不写云端、也不当作成功
+        if (!item) return false
+        if (token) {
           postMemory(token, activeSessionId, {
             content: trimmed,
             ...(snippet ? { source: snippet } : {}),
@@ -706,10 +708,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             if (res.ok) reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
           })
         }
-      } else {
-        upsertMemoryItem(trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
+        notifyMemoryUpdated()
+        return true
       }
+      const beforeGlobal = loadMemory().length
+      const afterGlobal = upsertMemoryItem(trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
       notifyMemoryUpdated()
+      // global 侧同样要确认真多了一条，而不是只看函数返回（写失败时返回的是未变更列表）
+      return afterGlobal.length > beforeGlobal
     }
 
     // TASK-MEM-DISTILL：本轮候选 + 模型 marker 统一归并写入。
@@ -724,10 +730,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         : undefined
       let saved = false
       for (const p of plans) {
-        writeMemory(p.text, { source: p.source || userMsg.content.trim(), topic: p.topic, explicit: p.explicit, taReply: replySnapshot })
-        if (p.explicit) saved = true
+        const wrote = writeMemory(p.text, { source: p.source || userMsg.content.trim(), topic: p.topic, explicit: p.explicit, taReply: replySnapshot })
+        // 只有「真的写进本地」且是用户明说的，才算保存成功 —— 写失败绝不提示成功
+        if (wrote && p.explicit) saved = true
       }
       if (saved) userMsg.memorySaved = true
+      return saved
     }
 
     recordChatTopic(text, getActiveSessionId() || undefined)
@@ -999,7 +1007,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         return
       }
       // TASK-MEM-DISTILL：唯一归并写入出口——candidate + marker 只写一条；无 marker 的候选 fallback 落库
-      flushMemoryWrites(raw)
+      const memoryWroteThisTurn = flushMemoryWrites(raw)
       // 模块三·内心戏：提取思考链原文（存到 thinking 字段），正文剥离思考链
       // 第27条：合并两个来源——①正文里 `` 泄漏的思考 ②模型独立字段 reasoning_content
       const thinkFromContent = extractThinkBlocks(raw)
@@ -1048,6 +1056,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 思考链存到第一条 assistant 消息的 thinking 字段（内心戏展示用）
       if (assistantMsgs.length > 0 && thinking) {
         assistantMsgs[0].thinking = thinking
+      }
+      // 「已记住」徽标必须绑真实写入结果：只有本轮记忆真的落地，才标到 TA 消息上
+      if (memoryWroteThisTurn && assistantMsgs.length > 0) {
+        assistantMsgs[0].memorySaved = true
       }
       const final: StoredMessage[] = [...messages, userMsg, ...assistantMsgs]
       commitFinal(final)

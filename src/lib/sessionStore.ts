@@ -153,11 +153,16 @@ export function getMemoriesCache(sessionId: string): MemoryItem[] {
 }
 
 /** 写入某会话的记忆缓存 */
-export function saveMemoriesCache(sessionId: string, items: MemoryItem[]): void {
+export function saveMemoriesCache(sessionId: string, items: MemoryItem[]): boolean {
+  const payload = JSON.stringify(Array.isArray(items) ? items : [])
+  const key = memsKey(sessionId)
   try {
-    localStorage.setItem(memsKey(sessionId), JSON.stringify(Array.isArray(items) ? items : []))
+    localStorage.setItem(key, payload)
+    // 回读确认：localStorage 满 / 被拦时写入会静默失败，只有回读一致才算真写成功
+    return localStorage.getItem(key) === payload
   } catch {
-    // 存不下（localStorage 满）不弹窗不打断
+    // 存不下（localStorage 满）不弹窗不打断，但必须让调用方知道没存上
+    return false
   }
 }
 
@@ -368,7 +373,8 @@ export function addMemoryCacheItem(
     topic: topic?.trim() || '其他',
     ...(explicit === true ? { explicit: true } : {}),
   }
-  saveMemoriesCache(sessionId, [item, ...getMemoriesCache(sessionId)])
+  const nextA = [item, ...getMemoriesCache(sessionId)]
+  if (!saveMemoriesCache(sessionId, nextA)) return null
   return item
 }
 
@@ -393,7 +399,8 @@ export function upsertMemoryCache(
     ...(explicit === true ? { explicit: true } : {}),
     ...(taReply?.trim() ? { taReply: taReply.trim() } : {}),
   }
-  saveMemoriesCache(sessionId, [item, ...getMemoriesCache(sessionId)])
+  const nextB = [item, ...getMemoriesCache(sessionId)]
+  if (!saveMemoriesCache(sessionId, nextB)) return null
   return item
 }
 
