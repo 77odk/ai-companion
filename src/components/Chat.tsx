@@ -8,7 +8,6 @@ import { getToken } from '../lib/auth'
 import { getSession, listMemories, postMemory, postMessage, type Session } from '../lib/sessionApi'
 import {
   addPendingOp,
-  clearBusyState,
   confirmMessageInCache,
   flushPendingOps,
   getActiveSessionId,
@@ -33,6 +32,7 @@ import {
   type PendingOp,
 } from '../lib/sessionStore'
 import { containsBusyKeyword, findBusyCutoff, inferBusyReason, pickBusyReply, randomBusyDurationMs, serializeBusyContext, type BusyState } from '../lib/aiBusy'
+import { busyCycleId, cancelBusyReturn, triggerBusyReturn } from '../lib/busyReturn'
 import { loadCurrentPosts } from '../lib/aiSpace'
 import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELINE_EN } from '../lib/spaceChatInject'
 import { commitPartialReply } from '../lib/partialReply'
@@ -221,6 +221,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const state: BusyState = {
       status: 'busy',
       busyUntil,
+      busyStartedAt: Date.now(),
+      retryCount: 0,
       busyReason: reason,
       busyContext: context,
       returnSent: false,
@@ -234,81 +236,105 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     const triggerRunId = runIdRef.current
     busyTimerRef.current = window.setTimeout(() => {
+      setIsBusy(false)
       void sendBusyReturnRef.current(triggerRunId, sid, state)
     }, duration)
   }
   enterBusyRef.current = enterBusy
 
   // ---- 忙碌状态：忙完回来自动发消息 ----
-  const sendBusyReturn = async (triggerRunId: number, sid: string, state: BusyState) => {
-    // runId + sessionId 双重校验：切角色/发新消息后旧定时器作废
-    if (triggerRunId !== runIdRef.current) return
-    if (sid !== getActiveSessionId()) return
-    // 标记已发，防重复补发
-    if (sid) {
-      saveBusyState(sid, { ...state, returnSent: true })
-    } else {
-      clearBusyState('')
-    }
-    setIsBusy(false)
-    setBusyReplyText(null)
-    if (busyTimerRef.current !== null) {
-      clearTimeout(busyTimerRef.current)
-      busyTimerRef.current = null
-    }
-    const settings = loadSettings()
-    if (!settings.apiKey || !settings.baseUrl || !settings.model) return
-    // TASK-ENGLISH-MODE：从 sessionStore 读会话语言
-    const busyLang: Lang = sid ? getSessionLang(sid) : 'zh'
-    const nameForPrompt = (() => {
-      if (!sid) return loadAIProfile().nickname
-      const cached = getSessionsCache().find((s) => String(s.id) === sid)
-      const t = (cached?.title || activeSession?.title || '').trim()
-      if (!t || t === '新会话' || t === '我们的开始') return loadAIProfile(sid).nickname
-      return t
-    })()
-    const systemPrompt = buildSystemPrompt(persona, nameForPrompt, undefined, sid || undefined, busyLang)
-    // 生成"忙完回来"前重新读缓存：busy 期间用户可能又发了消息（handleBusySend 只落库没进 busyContext），
-    // 不带上的话 TA 回来会接不上用户最新的内容（2026-09-04 乔部署审查抓到）。
-    // 取最近 3 条（含 busy 期间用户新发的），有新的用新的，没有退回进 busy 时存的 context。
-    let latestContext = state.busyContext
-    try {
-      const cache = sid ? getMessagesCache(sid) : loadMessages()
-      const tail = cache.slice(-3).map((m) => ({
-        role: m.role,
-        content: stripThinkBlocks(stripMemoryMarkers(m.content), busyLang),
-      }))
-      const fresh = serializeBusyContext(tail)
-      if (fresh) latestContext = fresh
-    } catch {
-      // 读缓存失败就用进 busy 时的快照
-    }
-    const busyPrompt = buildBusyReturnPrompt(state.busyReason, latestContext, busyLang)
-    try {
-      const content = await chatCompletion(
-        settings,
-        [
+  const sendBusyReturn = async (_triggerRunId: number, sid: string, _snapshot: BusyState) => {
+    if (!sid) return
+    await triggerBusyReturn<string>(sid, {
+      now: Date.now,
+      getState: getBusyState,
+      saveState: saveBusyState,
+      isCurrent: (targetSid, cycleId) => {
+        if (targetSid !== getActiveSessionId()) return false
+        if (!getSessionsCache().some((item) => String(item.id) === targetSid)) return false
+        const latest = getBusyState(targetSid)
+        return latest.status === 'busy' && !latest.returnSent && busyCycleId(targetSid, latest) === cycleId
+      },
+      schedule: (callback, delayMs) => {
+        if (busyTimerRef.current !== null) window.clearTimeout(busyTimerRef.current)
+        busyTimerRef.current = window.setTimeout(callback, delayMs)
+        return busyTimerRef.current
+      },
+      generate: async (targetSid, state) => {
+        const settings = loadSettings()
+        if (!settings.apiKey || !settings.baseUrl || !settings.model) throw new Error('Busy Return model settings unavailable')
+        const busyLang = getSessionLang(targetSid)
+        const cachedSession = getSessionsCache().find((item) => String(item.id) === targetSid)
+        if (!cachedSession) throw new Error('Busy Return session no longer exists')
+        const sessionPersona = getSessionPersona(targetSid)
+        const title = (cachedSession.title || '').trim()
+        const nameForPrompt = !title || title === '新会话' || title === '我们的开始'
+          ? loadAIProfile(targetSid).nickname
+          : title
+        const systemPrompt = buildSystemPrompt(sessionPersona, nameForPrompt, undefined, targetSid, busyLang)
+        const cache = getMessagesCache(targetSid)
+        const tail = cache.slice(-3).map((message) => ({
+          role: message.role,
+          content: stripThinkBlocks(stripMemoryMarkers(message.content), busyLang),
+        }))
+        const latestContext = serializeBusyContext(tail) || state.busyContext
+        const busyPrompt = buildBusyReturnPrompt(state.busyReason, latestContext, busyLang)
+        const content = await chatCompletion(settings, [
           { role: 'system', content: systemPrompt },
           { role: 'system', content: busyPrompt },
-        ],
-        { maxTokens: 150, temperature: 0.9 },
-      )
-      const cleaned = stripActionMarkers(stripEmoji(content)).trim()
-      if (!cleaned) return
-      const msg: StoredMessage = { role: 'assistant', content: cleaned, ts: Date.now() }
-      const current = sid ? getMessagesCache(sid) : loadMessages()
-      const next = [...current, msg]
-      if (sid) {
-        saveMessagesCache(sid, next)
-        markRead(sid)
-      } else {
-        saveMessages(next)
-      }
-      setMessages(next)
-      void uploadMessage(msg)
-    } catch {
-      // 生成失败静默，不打扰用户
-    }
+        ], { maxTokens: 150, temperature: 0.9 })
+        return stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(content), busyLang))).trim() || null
+      },
+      commit: async (targetSid, content) => {
+        const latest = getBusyState(targetSid)
+        if (targetSid !== getActiveSessionId() || latest.status !== 'busy') return 'cancelled-before-commit'
+        const msg: StoredMessage = { role: 'assistant', content, ts: Date.now() }
+        const current = getMessagesCache(targetSid)
+        const next = [...current, msg]
+        saveMessagesCache(targetSid, next)
+        const persisted = getMessagesCache(targetSid)
+        if (!persisted.some((item) => item.role === 'assistant' && item.ts === msg.ts && item.content === msg.content)) return 'failed'
+
+        const token = getToken()
+        if (token) {
+          // 最后一次 stale 检查必须发生在不可逆的远端写入之前。
+          if (targetSid !== getActiveSessionId() || getBusyState(targetSid).status !== 'busy') {
+            saveMessagesCache(targetSid, getMessagesCache(targetSid).filter((item) => !(item.ts === msg.ts && item.role === msg.role && item.content === msg.content)))
+            return 'cancelled-before-commit'
+          }
+          const op: PendingOp = {
+            id: newPendingOpId(), type: 'message', sessionId: targetSid,
+            payload: { role: msg.role, content: msg.content, thinking: '' }, ts: msg.ts,
+          }
+          addPendingOp(op)
+          const response = await postMessage(token, targetSid, { role: msg.role, content: msg.content })
+          if (!response.ok) {
+            saveMessagesCache(targetSid, getMessagesCache(targetSid).filter((item) => !(item.ts === msg.ts && item.role === msg.role && item.content === msg.content)))
+            return 'failed'
+          }
+          // response.ok=true 是不可逆 commit point：保留 A 的确认消息，不再用 active session/cancel 降级结果。
+          removePendingOp(op.id)
+          confirmMessageInCache(targetSid, op, response.data)
+        }
+        if (targetSid === getActiveSessionId() && mountedRef.current) {
+          markRead(targetSid)
+          setMessages(getMessagesCache(targetSid))
+        }
+        return 'committed'
+      },
+      onIdle: (targetSid) => {
+        if (targetSid !== getActiveSessionId() || !mountedRef.current) return
+        setIsBusy(false)
+        setBusyReplyText(null)
+        if (busyTimerRef.current !== null) {
+          window.clearTimeout(busyTimerRef.current)
+          busyTimerRef.current = null
+        }
+      },
+      onFailure: (_targetSid, error) => {
+        console.warn('Busy Return attempt failed', error)
+      },
+    })
   }
   sendBusyReturnRef.current = sendBusyReturn
 
@@ -428,6 +454,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           const remaining = state.busyUntil - Date.now()
           const triggerRunId = runIdRef.current
           busyTimerRef.current = window.setTimeout(() => {
+            setIsBusy(false)
             void sendBusyReturnRef.current(triggerRunId, activeSessionId, state)
           }, remaining)
         } else {
@@ -619,6 +646,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     releaseJumpHold()
     const text = raw.trim()
     if (!text || streaming) return
+
+    // busy 已到期且 Return 尚未落地时，用户主动回来优先：取消旧 cycle，避免紧跟一条自动“回来”。
+    if (activeSessionId && !isBusy) {
+      const pendingBusy = getBusyState(activeSessionId)
+      if (pendingBusy.status === 'busy' && !pendingBusy.returnSent) {
+        cancelBusyReturn(activeSessionId, pendingBusy, { saveState: saveBusyState, onIdle: () => setIsBusy(false) })
+      }
+    }
 
     // 忙碌中：不调 API，只回一句"在忙"
     if (isBusy) {

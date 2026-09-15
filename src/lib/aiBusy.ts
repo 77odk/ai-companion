@@ -61,6 +61,12 @@ export interface BusyState {
   busyContext: string
   /** 忙完回来的消息是否已发（防重复补发） */
   returnSent: boolean
+  /** 当前 busy cycle 开始时间；旧数据缺失时由读取层安全推断 */
+  busyStartedAt?: number
+  /** 已失败的 Return 尝试次数（最多 3 次总尝试） */
+  retryCount?: number
+  /** 最近一次 Return 尝试时间 */
+  lastAttemptAt?: number
 }
 
 /** 默认空闲状态 */
