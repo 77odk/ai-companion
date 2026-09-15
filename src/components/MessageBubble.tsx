@@ -123,7 +123,11 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
   }
 
   return (
-    <div className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}>
+    <div
+      className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}
+      data-msg-ts={message.ts}
+      data-msg-role={message.role}
+    >
       {!isUser &&
         (onAvatarClick ? (
           <button

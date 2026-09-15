@@ -13,6 +13,7 @@ import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
 import { getAccount } from './lib/sync'
 import RolesPage from './components/RolesPage'
 import { PlanetIcon } from './components/spaceIcons'
+import type { ChatJumpTarget } from './lib/chatJump'
 import {
   loadMessages,
   loadPersona,
@@ -112,6 +113,8 @@ export default function App() {
   viewRef.current = view
   const viewStackRef = useRef<View[]>([])
   const scrollPosRef = useRef<Map<string, { cls: string; idx: number; top: number }[]>>(new Map())
+  // UI2-03B-1：restoreScroll 需要读到最新的 pending jump（用 ref，避免把 state 塞进 useCallback 依赖）
+  const pendingChatJumpRef = useRef<ChatJumpTarget | null>(null)
 
   const captureScroll = useCallback((v: View) => {
     if (!v) return
@@ -132,6 +135,10 @@ export default function App() {
   }, [])
 
   const restoreScroll = useCallback((v: View) => {
+    // UI2-03B-1：本次是「看原对话」跳回 chat —— 跳过旧的滚动位置恢复。
+    // 否则它的 setTimeout(0) 会早于 Chat jump 把列表恢复到底部（先到底再跳）。
+    // 只跳过这一种组合：普通进入 chat 的恢复行为完全保持。
+    if (v === 'chat' && pendingChatJumpRef.current) return
     const items = scrollPosRef.current.get(v)
     if (!items || items.length === 0) return
     window.setTimeout(() => {
@@ -222,6 +229,29 @@ export default function App() {
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
+  // UI2-03B-1「看原对话」：Memory → App 的一次性 jump target（transient，不持久化）；
+  // Chat 消费（成功滚动或失败提示）后清空。
+  const [pendingChatJump, setPendingChatJump] = useState<ChatJumpTarget | null>(null)
+  // UI2-03B-1：每次渲染把最新 pending 同步给 ref（restoreScroll 读取）
+  pendingChatJumpRef.current = pendingChatJump
+  // UI2-03B-1：「看原对话」失败提示由 App 持有（跨 Chat remount / StrictMode 双跑存活），
+  // 由 App 自己的 2.6s 定时器收尾 —— Chat 只上报文本，不再本地持状态。
+  const [chatJumpNotice, setChatJumpNotice] = useState<string | null>(null)
+  const chatJumpNoticeTimerRef = useRef<number | null>(null)
+  const showChatJumpNotice = useCallback((text: string) => {
+    setChatJumpNotice(text)
+    if (chatJumpNoticeTimerRef.current !== null) window.clearTimeout(chatJumpNoticeTimerRef.current)
+    chatJumpNoticeTimerRef.current = window.setTimeout(() => {
+      setChatJumpNotice(null)
+      chatJumpNoticeTimerRef.current = null
+    }, 2600)
+  }, [])
+  useEffect(
+    () => () => {
+      if (chatJumpNoticeTimerRef.current !== null) window.clearTimeout(chatJumpNoticeTimerRef.current)
+    },
+    [],
+  )
   // 游客想进需登录页时记下的目标 view：仅登录墙展示用（登录成功后改为按云端会话分流，不再硬回跳）
   const [gateTarget, setGateTarget] = useState<View | null>(null)
   // 从登录墙去逛指南时，暂时收起来的回跳目标（指南返回时放回登录墙）
@@ -677,6 +707,10 @@ export default function App() {
                   setDetailFrom('chat')
                   goView('chatprofile')
                 }}
+                pendingJump={pendingChatJump}
+                onJumpConsumed={() => setPendingChatJump(null)}
+                jumpNotice={chatJumpNotice}
+                onJumpNotice={showChatJumpNotice}
               />
             )}
             {view === 'settings' && (
@@ -711,7 +745,15 @@ export default function App() {
                 onGoMine={() => navigate('settings')}
               />
             )}
-            {view === 'memory' && <Memory key={memoryRootKey} />}
+            {view === 'memory' && (
+              <Memory
+                key={memoryRootKey}
+                onJumpToChat={(target) => {
+                  setPendingChatJump(target)
+                  goView('chat')
+                }}
+              />
+            )}
           </main>
 
           {isNavView(view) && (
