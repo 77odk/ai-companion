@@ -26,6 +26,7 @@ const sync = await import('../src/lib/sync.ts')
 const resources = await import('../src/lib/cloudStateResources.ts')
 const storage = await import('../src/lib/storage.ts')
 const theme = await import('../src/lib/theme.ts')
+const anniversary = await import('../src/lib/anniversary.ts')
 
 function login(account = 'account-a') {
   localStorage.setItem('ai_companion_account', JSON.stringify({ account, token: `token-${account}` }))
@@ -330,7 +331,7 @@ test('U: legacy syncNow still pulls and pushes /api/sync', async () => {
   ])
 })
 
-test('W: registering the four production adapters replays historical inbox entities silently', async () => {
+test('W: registering production adapters replays historical inbox entities and tombstones silently', async () => {
   clearState()
   localStorage.setItem('ai_companion_settings', JSON.stringify({
     provider: 'deepseek',
@@ -338,6 +339,9 @@ test('W: registering the four production adapters replays historical inbox entit
   }))
   localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
     { id: 'couple', label: '认识 TA', date: '01-01', createdAt: 1 },
+  ]))
+  localStorage.setItem('ai_companion_anniversaries_role-old', JSON.stringify([
+    { id: 'gone', label: '待删除', date: '01-02', createdAt: 1 },
   ]))
   const historical = [
     { kind: 'theme', entityId: 'global', version: 1, payload: { type: 'preset', presetId: 'mist' } },
@@ -349,10 +353,13 @@ test('W: registering the four production adapters replays historical inbox entit
     { kind: 'personal_day', entityId: 'global', version: 1, payload: [
       { id: 'birthday', label: '我的生日', date: '02-03', createdAt: 2, kind: 'personal' },
     ] },
+    { kind: 'anniversary', entityId: 'global:seeded', version: 1,
+      payload: { id: 'seeded', label: '历史账号纪念日', date: '03-04', createdAt: 3 } },
+    { kind: 'anniversary', entityId: 'role-old:gone', sessionId: 'role-old', version: 1, deleted: true },
   ]
-  globalThis.fetch = async () => jsonResponse(pullBody(4, historical))
+  globalThis.fetch = async () => jsonResponse(pullBody(6, historical))
   await cloud.pullCloudState()
-  assert.equal(cloud.getCloudStateInbox().length, 4)
+  assert.equal(cloud.getCloudStateInbox().length, 6)
   let legacyChanges = 0
   window.addEventListener('eluvin-data-change', () => { legacyChanges++ }, { once: true })
   resources.initCloudStateResourceAdapters()
@@ -367,7 +374,8 @@ test('W: registering the four production adapters replays historical inbox entit
   assert.equal(settings.apiKey, 'local-key')
   assert.equal(JSON.stringify(readStoredSettings()).includes('hostile'), false)
   const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
-  assert.deepEqual(days.map(day => day.id), ['birthday', 'couple'])
+  assert.deepEqual(days.map(day => day.id), ['seeded', 'birthday', 'couple'])
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_anniversaries_role-old')), [])
 })
 
 function cloudOps(kind) {
@@ -462,4 +470,119 @@ test('AA: cloud resource metadata and pending operations do not cross accounts',
   assert.equal(cloudOps('gender').filter(op => op.accountId === 'B').length, 1)
   login('A')
   assert.equal(cloud.getCloudStateVersion('theme', 'global'), 7)
+})
+
+test('AB: local global/session anniversary writes, edits, main selection, and tombstones create scoped ops', () => {
+  clearState('A')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+
+  anniversary.addAnniversary('账号纪念日', '06-01')
+  let ops = cloudOps('anniversary')
+  assert.equal(ops.length, 1)
+  assert.match(ops[0].entityId, /^global:ann-/)
+  assert.equal(ops[0].sessionId, undefined)
+  assert.equal(ops[0].baseVersion, 0)
+  const globalId = ops[0].payload.id
+
+  anniversary.addAnniversary('在一起', '07-02', undefined, 'session-a')
+  ops = cloudOps('anniversary')
+  const sessionOp = ops.at(-1)
+  assert.equal(sessionOp.entityId, `session-a:${sessionOp.payload.id}`)
+  assert.equal(sessionOp.sessionId, 'session-a')
+  assert.notEqual(sessionOp.opId, ops[0].opId)
+
+  localStorage.setItem('ai_companion_cloud_state_metadata', JSON.stringify({ accounts: { A: {
+    cursor: 0, inbox: {}, versions: { [`anniversary\u0000global:${globalId}`]: 7 },
+  } } }))
+  anniversary.updateAnniversary(globalId, '账号纪念日（新）', '06-02')
+  ops = cloudOps('anniversary')
+  assert.equal(ops.at(-1).baseVersion, 7)
+  assert.notEqual(ops.at(-1).opId, ops[0].opId)
+
+  anniversary.setMainAnniversaryId(globalId)
+  assert.equal(cloudOps('anniversary').at(-1).payload.mainAnniversary, true)
+  anniversary.removeAnniversary(globalId)
+  const tombstone = cloudOps('anniversary').at(-1)
+  assert.equal(tombstone.entityId, `global:${globalId}`)
+  assert.equal(tombstone.deleted, true)
+  assert.equal(localStorage.getItem('ai_companion_main_anniversary'), null)
+})
+
+test('AC: cloud anniversary apply and tombstone are silent, session-isolated, and preserve personal_day', async () => {
+  clearState()
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'birthday', label: '我的生日', date: '02-03', createdAt: 1, kind: 'personal' },
+  ]))
+  localStorage.setItem('ai_companion_anniversaries_session-b', JSON.stringify([
+    { id: 'same', label: 'B 的纪念日', date: '03-04', createdAt: 2 },
+  ]))
+  let legacyChanges = 0
+  window.addEventListener('eluvin-data-change', () => { legacyChanges++ })
+  globalThis.fetch = async () => jsonResponse(pullBody(3, [
+    { kind: 'anniversary', entityId: 'global:account-day', version: 1,
+      payload: { id: 'account-day', label: '账号纪念日', date: '05-06', createdAt: 3 } },
+    { kind: 'anniversary', entityId: 'session-a:same', sessionId: 'session-a', version: 1,
+      payload: { id: 'same', label: 'A 的纪念日', date: '07-08', createdAt: 4, mainAnniversary: true } },
+    { kind: 'anniversary', entityId: 'global:duplicate-birthday', version: 1,
+      payload: { id: 'duplicate-birthday', label: '重复生日', date: '02-03', createdAt: 5, kind: 'personal' } },
+  ]))
+  await cloud.pullCloudState()
+  const globalDays = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.deepEqual(globalDays.map(item => item.id).sort(), ['account-day', 'birthday'])
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_anniversaries_session-a')).map(item => item.label), ['A 的纪念日'])
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_anniversaries_session-b')).map(item => item.label), ['B 的纪念日'])
+  assert.equal(localStorage.getItem('ai_companion_main_anniversary_session-a'), 'same')
+  assert.equal(legacyChanges, 0)
+  assert.equal(cloudOps('anniversary').length, 0)
+
+  globalThis.fetch = async () => jsonResponse(pullBody(4, [
+    { kind: 'anniversary', entityId: 'session-a:same', sessionId: 'session-a', version: 2, deleted: true },
+  ]))
+  await cloud.pullCloudState()
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_anniversaries_session-a')), [])
+  assert.equal(localStorage.getItem('ai_companion_main_anniversary_session-a'), null)
+  assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_session-b'))[0].id, 'same')
+  assert.equal(legacyChanges, 0)
+  assert.equal(cloudOps('anniversary').length, 0)
+})
+
+test('AD: historical anniversary inbox replays after adapter registration without a server resend', async () => {
+  clearState('inbox-account')
+  // Simulate data pulled by Client Core before this release registered the production adapter.
+  const metadata = { accounts: { 'inbox-account': { cursor: 9, versions: {}, inbox: {
+    'anniversary\u0000session-history:old': {
+      kind: 'anniversary', entityId: 'session-history:old', sessionId: 'session-history', version: 9,
+      payload: { id: 'old', label: '历史纪念日', date: '09-09', createdAt: 9 },
+    },
+  } } } }
+  localStorage.setItem('ai_companion_cloud_state_metadata', JSON.stringify(metadata))
+  await cloud.replayCloudStateInbox('anniversary')
+  assert.deepEqual(cloud.getCloudStateInbox('anniversary'), [])
+  assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_session-history'))[0].id, 'old')
+  assert.equal(cloudOps('anniversary').length, 0)
+})
+
+test('AE: stale anniversary conflict accepts the server entity without cloud or legacy echo', async () => {
+  clearState('conflict-account')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  localStorage.setItem('ai_companion_anniversaries_session-c', JSON.stringify([
+    { id: 'shared', label: '本地版本', date: '01-01', createdAt: 1 },
+  ]))
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  const localOp = cloudOps('anniversary')[0]
+  assert.equal(localOp.baseVersion, 0)
+  let legacyChanges = 0
+  window.addEventListener('eluvin-data-change', () => { legacyChanges++ })
+  globalThis.fetch = async () => jsonResponse({ results: [{
+    opId: localOp.opId, status: 'conflict', entity: {
+      kind: 'anniversary', entityId: 'session-c:shared', sessionId: 'session-c', version: 5,
+      payload: { id: 'shared', label: '服务端版本', date: '02-02', createdAt: 1 },
+    },
+  }] })
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_session-c'))[0].label, '服务端版本')
+  assert.equal(cloudOps('anniversary').length, 0)
+  assert.equal(cloud.getCloudStateVersion('anniversary', 'session-c:shared'), 5)
+  assert.equal(legacyChanges, 0)
 })
