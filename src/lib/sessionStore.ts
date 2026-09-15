@@ -192,6 +192,9 @@ export function getBusyState(sessionId: string): BusyState {
       busyReason: typeof obj.busyReason === 'string' ? obj.busyReason : '',
       busyContext: typeof obj.busyContext === 'string' ? obj.busyContext : '',
       returnSent: obj.returnSent === true,
+      busyStartedAt: typeof obj.busyStartedAt === 'number' && Number.isFinite(obj.busyStartedAt) ? obj.busyStartedAt : undefined,
+      retryCount: typeof obj.retryCount === 'number' && Number.isInteger(obj.retryCount) && obj.retryCount >= 0 ? obj.retryCount : 0,
+      lastAttemptAt: typeof obj.lastAttemptAt === 'number' && Number.isFinite(obj.lastAttemptAt) ? obj.lastAttemptAt : undefined,
     }
   } catch {
     return { ...IDLE_BUSY }
@@ -199,11 +202,12 @@ export function getBusyState(sessionId: string): BusyState {
 }
 
 /** 写入某会话的忙碌状态 */
-export function saveBusyState(sessionId: string, state: BusyState): void {
+export function saveBusyState(sessionId: string, state: BusyState): boolean {
   try {
     localStorage.setItem(busyKey(sessionId), JSON.stringify(state))
+    return localStorage.getItem(busyKey(sessionId)) === JSON.stringify(state)
   } catch {
-    // 存不下不影响功能
+    return false
   }
 }
 
