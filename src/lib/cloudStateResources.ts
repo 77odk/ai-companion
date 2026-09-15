@@ -36,7 +36,7 @@ function queue(kind: string, entityId: string, payload?: unknown, deleted?: bool
   if (!getAccount()) return
   enqueueCloudStateOp({
     opId: opId(), kind, entityId,
-    baseVersion: getCloudStateVersion(kind, entityId),
+    baseVersion: getCloudStateVersion(kind, entityId, undefined, sessionId),
     ...(sessionId ? { sessionId } : {}),
     ...(deleted ? { deleted: true } : { payload }),
   })
@@ -57,8 +57,8 @@ function validAnniversary(value: unknown): AnniversaryCloudPayload | null {
   return item as AnniversaryCloudPayload
 }
 
-function anniversaryEntityId(id: string, sessionId?: string): string {
-  return `${sessionId || GLOBAL}:${id}`
+function anniversaryEntityId(id: string): string {
+  return id
 }
 
 function anniversaryStorageKey(sessionId?: string): string {
@@ -70,14 +70,8 @@ function mainAnniversaryStorageKey(sessionId?: string): string {
 }
 
 function anniversaryScope(entity: CloudStateEntity): { id: string; sessionId?: string } | null {
-  if (entity.sessionId) {
-    const prefix = `${entity.sessionId}:`
-    return { id: entity.entityId.startsWith(prefix) ? entity.entityId.slice(prefix.length) : entity.entityId, sessionId: entity.sessionId }
-  }
-  if (entity.entityId.startsWith(`${GLOBAL}:`)) return { id: entity.entityId.slice(GLOBAL.length + 1) }
-  const split = entity.entityId.indexOf(':')
-  if (split <= 0) return null
-  return { sessionId: entity.entityId.slice(0, split), id: entity.entityId.slice(split + 1) }
+  if (!entity.entityId) return null
+  return { id: entity.entityId, ...(entity.sessionId ? { sessionId: entity.sessionId } : {}) }
 }
 
 function storedAnniversaries(sessionId?: string): JsonRecord[] {
@@ -94,8 +88,8 @@ function sessionIdsWithAnniversaries(): string[] {
   return [...ids]
 }
 
-function anniversaryEntities(): Map<string, { payload: AnniversaryCloudPayload; sessionId?: string }> {
-  const entities = new Map<string, { payload: AnniversaryCloudPayload; sessionId?: string }>()
+function anniversaryEntities(): Map<string, { entityId: string; payload: AnniversaryCloudPayload; sessionId?: string }> {
+  const entities = new Map<string, { entityId: string; payload: AnniversaryCloudPayload; sessionId?: string }>()
   const collect = (sessionId?: string) => {
     const mainId = localStorage.getItem(mainAnniversaryStorageKey(sessionId)) || null
     for (const raw of storedAnniversaries(sessionId)) {
@@ -103,7 +97,8 @@ function anniversaryEntities(): Map<string, { payload: AnniversaryCloudPayload; 
       // personal_day is the only owner of personal records.
       if (!item || item.kind === 'personal') continue
       const payload = { ...item, ...(mainId === item.id ? { mainAnniversary: true } : {}) }
-      entities.set(anniversaryEntityId(item.id, sessionId), { payload, ...(sessionId ? { sessionId } : {}) })
+      const entityId = anniversaryEntityId(item.id)
+      entities.set(`${sessionId || ''}\u0000${entityId}`, { entityId, payload, ...(sessionId ? { sessionId } : {}) })
     }
   }
   collect()
@@ -111,7 +106,7 @@ function anniversaryEntities(): Map<string, { payload: AnniversaryCloudPayload; 
   return entities
 }
 
-let anniversarySnapshot = new Map<string, { payload: AnniversaryCloudPayload; sessionId?: string }>()
+let anniversarySnapshot = new Map<string, { entityId: string; payload: AnniversaryCloudPayload; sessionId?: string }>()
 function resetAnniversarySnapshot(): void {
   anniversarySnapshot = anniversaryEntities()
 }
@@ -122,14 +117,14 @@ function refreshAnniversaryViews(): void {
 
 function captureAnniversaries(): void {
   const next = anniversaryEntities()
-  for (const [entityId, value] of next) {
-    const previous = anniversarySnapshot.get(entityId)
+  for (const [key, value] of next) {
+    const previous = anniversarySnapshot.get(key)
     if (!previous || JSON.stringify(previous.payload) !== JSON.stringify(value.payload)) {
-      queue('anniversary', entityId, value.payload, false, value.sessionId)
+      queue('anniversary', value.entityId, value.payload, false, value.sessionId)
     }
   }
-  for (const [entityId, value] of anniversarySnapshot) {
-    if (!next.has(entityId)) queue('anniversary', entityId, undefined, true, value.sessionId)
+  for (const [key, value] of anniversarySnapshot) {
+    if (!next.has(key)) queue('anniversary', value.entityId, undefined, true, value.sessionId)
   }
   anniversarySnapshot = next
 }

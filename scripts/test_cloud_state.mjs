@@ -95,7 +95,7 @@ test('V2/V7: registering an adapter replays an unknown production entity without
   await cloud.replayCloudStateInbox('space_post')
   assert.deepEqual(applied, [[historical, { source: 'cloud', silent: true }]])
   assert.deepEqual(cloud.getCloudStateInbox('space_post'), [])
-  assert.equal(cloud.getCloudStateVersion('space_post', 'post-10'), 10)
+  assert.equal(cloud.getCloudStateVersion('space_post', 'post-10', undefined, 'session-1'), 10)
 
   globalThis.fetch = async () => jsonResponse(pullBody(10, []))
   await cloud.pullCloudState()
@@ -353,13 +353,18 @@ test('W: registering production adapters replays historical inbox entities and t
     { kind: 'personal_day', entityId: 'global', version: 1, payload: [
       { id: 'birthday', label: '我的生日', date: '02-03', createdAt: 2, kind: 'personal' },
     ] },
-    { kind: 'anniversary', entityId: 'global:seeded', version: 1,
+    { kind: 'anniversary', entityId: 'seeded', version: 1,
       payload: { id: 'seeded', label: '历史账号纪念日', date: '03-04', createdAt: 3 } },
-    { kind: 'anniversary', entityId: 'role-old:gone', sessionId: 'role-old', version: 1, deleted: true },
+    { kind: 'anniversary', entityId: 'gone', sessionId: 'role-old', version: 1, deleted: true },
+    { kind: 'anniversary', entityId: 'same', sessionId: 'A', version: 3,
+      payload: { id: 'same', label: 'A 同 ID', date: '04-05', createdAt: 4 } },
+    { kind: 'anniversary', entityId: 'same', sessionId: 'B', version: 8,
+      payload: { id: 'same', label: 'B 同 ID', date: '05-06', createdAt: 5 } },
   ]
-  globalThis.fetch = async () => jsonResponse(pullBody(6, historical))
+  globalThis.fetch = async () => jsonResponse(pullBody(8, historical))
   await cloud.pullCloudState()
-  assert.equal(cloud.getCloudStateInbox().length, 6)
+  assert.equal(cloud.getCloudStateInbox().length, 8)
+  assert.equal(cloud.getCloudStateInbox('anniversary').filter(item => item.entityId === 'same').length, 2)
   let legacyChanges = 0
   window.addEventListener('eluvin-data-change', () => { legacyChanges++ }, { once: true })
   resources.initCloudStateResourceAdapters()
@@ -376,6 +381,10 @@ test('W: registering production adapters replays historical inbox entities and t
   const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
   assert.deepEqual(days.map(day => day.id), ['seeded', 'birthday', 'couple'])
   assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_anniversaries_role-old')), [])
+  assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_A'))[0].label, 'A 同 ID')
+  assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_B'))[0].label, 'B 同 ID')
+  assert.equal(cloud.getCloudStateVersion('anniversary', 'same', undefined, 'A'), 3)
+  assert.equal(cloud.getCloudStateVersion('anniversary', 'same', undefined, 'B'), 8)
 })
 
 function cloudOps(kind) {
@@ -479,7 +488,7 @@ test('AB: local global/session anniversary writes, edits, main selection, and to
   anniversary.addAnniversary('账号纪念日', '06-01')
   let ops = cloudOps('anniversary')
   assert.equal(ops.length, 1)
-  assert.match(ops[0].entityId, /^global:ann-/)
+  assert.match(ops[0].entityId, /^ann-/)
   assert.equal(ops[0].sessionId, undefined)
   assert.equal(ops[0].baseVersion, 0)
   const globalId = ops[0].payload.id
@@ -487,12 +496,12 @@ test('AB: local global/session anniversary writes, edits, main selection, and to
   anniversary.addAnniversary('在一起', '07-02', undefined, 'session-a')
   ops = cloudOps('anniversary')
   const sessionOp = ops.at(-1)
-  assert.equal(sessionOp.entityId, `session-a:${sessionOp.payload.id}`)
+  assert.equal(sessionOp.entityId, sessionOp.payload.id)
   assert.equal(sessionOp.sessionId, 'session-a')
   assert.notEqual(sessionOp.opId, ops[0].opId)
 
   localStorage.setItem('ai_companion_cloud_state_metadata', JSON.stringify({ accounts: { A: {
-    cursor: 0, inbox: {}, versions: { [`anniversary\u0000global:${globalId}`]: 7 },
+    cursor: 0, inbox: {}, versions: { [`anniversary\u0000\u0000${globalId}`]: 7 },
   } } }))
   anniversary.updateAnniversary(globalId, '账号纪念日（新）', '06-02')
   ops = cloudOps('anniversary')
@@ -503,7 +512,7 @@ test('AB: local global/session anniversary writes, edits, main selection, and to
   assert.equal(cloudOps('anniversary').at(-1).payload.mainAnniversary, true)
   anniversary.removeAnniversary(globalId)
   const tombstone = cloudOps('anniversary').at(-1)
-  assert.equal(tombstone.entityId, `global:${globalId}`)
+  assert.equal(tombstone.entityId, globalId)
   assert.equal(tombstone.deleted, true)
   assert.equal(localStorage.getItem('ai_companion_main_anniversary'), null)
 })
@@ -520,11 +529,11 @@ test('AC: cloud anniversary apply and tombstone are silent, session-isolated, an
   let legacyChanges = 0
   window.addEventListener('eluvin-data-change', () => { legacyChanges++ })
   globalThis.fetch = async () => jsonResponse(pullBody(3, [
-    { kind: 'anniversary', entityId: 'global:account-day', version: 1,
+    { kind: 'anniversary', entityId: 'account-day', version: 1,
       payload: { id: 'account-day', label: '账号纪念日', date: '05-06', createdAt: 3 } },
-    { kind: 'anniversary', entityId: 'session-a:same', sessionId: 'session-a', version: 1,
+    { kind: 'anniversary', entityId: 'same', sessionId: 'session-a', version: 1,
       payload: { id: 'same', label: 'A 的纪念日', date: '07-08', createdAt: 4, mainAnniversary: true } },
-    { kind: 'anniversary', entityId: 'global:duplicate-birthday', version: 1,
+    { kind: 'anniversary', entityId: 'duplicate-birthday', version: 1,
       payload: { id: 'duplicate-birthday', label: '重复生日', date: '02-03', createdAt: 5, kind: 'personal' } },
   ]))
   await cloud.pullCloudState()
@@ -537,7 +546,7 @@ test('AC: cloud anniversary apply and tombstone are silent, session-isolated, an
   assert.equal(cloudOps('anniversary').length, 0)
 
   globalThis.fetch = async () => jsonResponse(pullBody(4, [
-    { kind: 'anniversary', entityId: 'session-a:same', sessionId: 'session-a', version: 2, deleted: true },
+    { kind: 'anniversary', entityId: 'same', sessionId: 'session-a', version: 2, deleted: true },
   ]))
   await cloud.pullCloudState()
   assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_anniversaries_session-a')), [])
@@ -550,16 +559,23 @@ test('AC: cloud anniversary apply and tombstone are silent, session-isolated, an
 test('AD: historical anniversary inbox replays after adapter registration without a server resend', async () => {
   clearState('inbox-account')
   // Simulate data pulled by Client Core before this release registered the production adapter.
+  const globalId = 'default-08-25-1787593664030'
+  const sessionId = 'default-09-11-1789064142210'
   const metadata = { accounts: { 'inbox-account': { cursor: 9, versions: {}, inbox: {
-    'anniversary\u0000session-history:old': {
-      kind: 'anniversary', entityId: 'session-history:old', sessionId: 'session-history', version: 9,
-      payload: { id: 'old', label: '历史纪念日', date: '09-09', createdAt: 9 },
+    [`anniversary\u0000${globalId}`]: {
+      kind: 'anniversary', entityId: globalId, version: 8,
+      payload: { id: globalId, label: '历史账号纪念日', date: '08-25', createdAt: 8 },
+    },
+    [`anniversary\u0000${sessionId}`]: {
+      kind: 'anniversary', entityId: sessionId, sessionId: '53', version: 9,
+      payload: { id: sessionId, label: '历史关系纪念日', date: '09-11', createdAt: 9 },
     },
   } } } }
   localStorage.setItem('ai_companion_cloud_state_metadata', JSON.stringify(metadata))
   await cloud.replayCloudStateInbox('anniversary')
   assert.deepEqual(cloud.getCloudStateInbox('anniversary'), [])
-  assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_session-history'))[0].id, 'old')
+  assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries'))[0].id, globalId)
+  assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_53'))[0].id, sessionId)
   assert.equal(cloudOps('anniversary').length, 0)
 })
 
@@ -576,13 +592,84 @@ test('AE: stale anniversary conflict accepts the server entity without cloud or 
   window.addEventListener('eluvin-data-change', () => { legacyChanges++ })
   globalThis.fetch = async () => jsonResponse({ results: [{
     opId: localOp.opId, status: 'conflict', entity: {
-      kind: 'anniversary', entityId: 'session-c:shared', sessionId: 'session-c', version: 5,
+      kind: 'anniversary', entityId: 'shared', sessionId: 'session-c', version: 5,
       payload: { id: 'shared', label: '服务端版本', date: '02-02', createdAt: 1 },
     },
   }] })
   await cloud.flushCloudStatePendingOps()
   assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_session-c'))[0].label, '服务端版本')
   assert.equal(cloudOps('anniversary').length, 0)
-  assert.equal(cloud.getCloudStateVersion('anniversary', 'session-c:shared'), 5)
+  assert.equal(cloud.getCloudStateVersion('anniversary', 'shared', undefined, 'session-c'), 5)
   assert.equal(legacyChanges, 0)
+})
+
+test('AF: same anniversary id keeps versions, baseVersions, conflict, and tombstone isolated by session', async () => {
+  clearState('same-id-account')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  globalThis.fetch = async () => jsonResponse(pullBody(2, [
+    { kind: 'anniversary', entityId: 'same', sessionId: 'A', version: 3,
+      payload: { id: 'same', label: 'A 本地', date: '01-01', createdAt: 1 } },
+    { kind: 'anniversary', entityId: 'same', sessionId: 'B', version: 8,
+      payload: { id: 'same', label: 'B 本地', date: '02-02', createdAt: 2 } },
+  ]))
+  await cloud.pullCloudState()
+  assert.equal(cloud.getCloudStateVersion('anniversary', 'same', undefined, 'A'), 3)
+  assert.equal(cloud.getCloudStateVersion('anniversary', 'same', undefined, 'B'), 8)
+
+  anniversary.updateAnniversary('same', 'A 编辑', '03-03', undefined, 'A')
+  anniversary.updateAnniversary('same', 'B 编辑', '04-04', undefined, 'B')
+  const aOp = cloudOps('anniversary').find(op => op.sessionId === 'A' && op.entityId === 'same')
+  const bOp = cloudOps('anniversary').find(op => op.sessionId === 'B' && op.entityId === 'same')
+  assert.equal(aOp.sessionId, 'A')
+  assert.equal(aOp.baseVersion, 3)
+  assert.equal(bOp.sessionId, 'B')
+  assert.equal(bOp.baseVersion, 8)
+
+  globalThis.fetch = async () => jsonResponse({ results: [
+    { opId: aOp.opId, status: 'conflict', entity: { kind: 'anniversary', entityId: 'same', sessionId: 'A', version: 4,
+      payload: { id: 'same', label: 'A 服务端', date: '05-05', createdAt: 1 } } },
+    { opId: bOp.opId, status: 'error' },
+  ] })
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(cloud.getCloudStateVersion('anniversary', 'same', undefined, 'A'), 4)
+  assert.equal(cloud.getCloudStateVersion('anniversary', 'same', undefined, 'B'), 8)
+  assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_A'))[0].label, 'A 服务端')
+  assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_B'))[0].label, 'B 编辑')
+
+  globalThis.fetch = async () => jsonResponse(pullBody(3, [
+    { kind: 'anniversary', entityId: 'same', sessionId: 'A', version: 5, deleted: true },
+  ]))
+  await cloud.pullCloudState()
+  assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_A')).some(item => item.id === 'same'), false)
+  assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_B'))[0].id, 'same')
+  assert.equal(cloud.getCloudStateVersion('anniversary', 'same', undefined, 'A'), 5)
+  assert.equal(cloud.getCloudStateVersion('anniversary', 'same', undefined, 'B'), 8)
+})
+
+test('AG: deployed metadata keys migrate lazily without resetting cursor or duplicating Batch A ops', async () => {
+  clearState('legacy-metadata')
+  localStorage.setItem('ai_companion_cloud_state_metadata', JSON.stringify({ accounts: { 'legacy-metadata': {
+    cursor: 42,
+    versions: { ['theme\u0000global']: 7, ['legacy_unknown\u0000old']: 9 },
+    inbox: { ['legacy_unknown\u0000old']: { kind: 'legacy_unknown', entityId: 'old', version: 9, payload: { ok: true } } },
+  } } }))
+  assert.equal(cloud.getCloudStateCursor(), 42)
+  assert.equal(cloud.getCloudStateVersion('theme', 'global'), 7)
+  let metadata = JSON.parse(localStorage.getItem('ai_companion_cloud_state_metadata')).accounts['legacy-metadata']
+  assert.equal(metadata.versions['theme\u0000\u0000global'], 7)
+  assert.equal(metadata.versions['theme\u0000global'], undefined)
+  assert.equal(cloud.getCloudStateInbox('legacy_unknown').length, 1)
+  metadata = JSON.parse(localStorage.getItem('ai_companion_cloud_state_metadata')).accounts['legacy-metadata']
+  assert.ok(metadata.inbox['legacy_unknown\u0000\u0000old'])
+  assert.equal(metadata.inbox['legacy_unknown\u0000old'], undefined)
+
+  let applied = 0
+  const unregister = cloud.registerCloudStateAdapter('legacy_unknown', { apply() { applied++ }, delete() {} })
+  await cloud.replayCloudStateInbox('legacy_unknown')
+  await cloud.replayCloudStateInbox('legacy_unknown')
+  assert.equal(applied, 0)
+  assert.equal(cloud.getCloudStateCursor(), 42)
+  assert.deepEqual(cloud.getCloudStateInbox('legacy_unknown'), [])
+  assert.equal(store.getPendingOps().length, 0)
+  unregister()
 })
