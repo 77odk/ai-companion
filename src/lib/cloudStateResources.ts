@@ -7,12 +7,16 @@ import {
 } from './cloudState.ts'
 import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE } from './dataChange.ts'
 import { getAccount } from './sync.ts'
+import { getSessionsCache } from './sessionStore.ts'
 
 const GLOBAL = 'global'
 const THEME_KEY = 'ai_companion_theme'
 const SETTINGS_KEY = 'ai_companion_settings'
 const GENDER_KEY = 'ai_companion_ai_gender'
 const PERSONAL_DAYS_KEY = 'ai_companion_anniversaries'
+const ANNIVERSARIES_PREFIX = 'ai_companion_anniversaries_'
+const MAIN_ANNIVERSARY_KEY = 'ai_companion_main_anniversary'
+const ANNIVERSARY_VIEW_UPDATE = 'memory-updated'
 
 type JsonRecord = Record<string, unknown>
 
@@ -28,14 +32,133 @@ function opId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `cloud-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function queue(kind: string, entityId: string, payload?: unknown, deleted?: boolean): void {
+function queue(kind: string, entityId: string, payload?: unknown, deleted?: boolean, sessionId?: string): void {
   if (!getAccount()) return
   enqueueCloudStateOp({
     opId: opId(), kind, entityId,
-    baseVersion: getCloudStateVersion(kind, entityId),
+    baseVersion: getCloudStateVersion(kind, entityId, undefined, sessionId),
+    ...(sessionId ? { sessionId } : {}),
     ...(deleted ? { deleted: true } : { payload }),
   })
   requestCloudStateSync()
+}
+
+interface AnniversaryCloudPayload extends JsonRecord {
+  id: string
+  label: string
+  date: string
+  createdAt: number
+  mainAnniversary?: boolean
+}
+
+function validAnniversary(value: unknown): AnniversaryCloudPayload | null {
+  const item = record(value)
+  if (!item || typeof item.id !== 'string' || typeof item.label !== 'string' || typeof item.date !== 'string' || typeof item.createdAt !== 'number') return null
+  return item as AnniversaryCloudPayload
+}
+
+function anniversaryEntityId(id: string): string {
+  return id
+}
+
+function anniversaryStorageKey(sessionId?: string): string {
+  return sessionId ? `${ANNIVERSARIES_PREFIX}${sessionId}` : PERSONAL_DAYS_KEY
+}
+
+function mainAnniversaryStorageKey(sessionId?: string): string {
+  return sessionId ? `${MAIN_ANNIVERSARY_KEY}_${sessionId}` : MAIN_ANNIVERSARY_KEY
+}
+
+function anniversaryScope(entity: CloudStateEntity): { id: string; sessionId?: string } | null {
+  if (!entity.entityId) return null
+  return { id: entity.entityId, ...(entity.sessionId ? { sessionId: entity.sessionId } : {}) }
+}
+
+function storedAnniversaries(sessionId?: string): JsonRecord[] {
+  const value = readJson(anniversaryStorageKey(sessionId))
+  return Array.isArray(value) ? value.filter(item => record(item) != null) as JsonRecord[] : []
+}
+
+function sessionIdsWithAnniversaries(): string[] {
+  const ids = new Set(getSessionsCache().map(session => String(session.id)).filter(Boolean))
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index)
+    if (key?.startsWith(ANNIVERSARIES_PREFIX)) ids.add(key.slice(ANNIVERSARIES_PREFIX.length))
+  }
+  return [...ids]
+}
+
+function anniversaryEntities(): Map<string, { entityId: string; payload: AnniversaryCloudPayload; sessionId?: string }> {
+  const entities = new Map<string, { entityId: string; payload: AnniversaryCloudPayload; sessionId?: string }>()
+  const collect = (sessionId?: string) => {
+    const mainId = localStorage.getItem(mainAnniversaryStorageKey(sessionId)) || null
+    for (const raw of storedAnniversaries(sessionId)) {
+      const item = validAnniversary(raw)
+      // personal_day is the only owner of personal records.
+      if (!item || item.kind === 'personal') continue
+      const payload = { ...item, ...(mainId === item.id ? { mainAnniversary: true } : {}) }
+      const entityId = anniversaryEntityId(item.id)
+      entities.set(`${sessionId || ''}\u0000${entityId}`, { entityId, payload, ...(sessionId ? { sessionId } : {}) })
+    }
+  }
+  collect()
+  for (const sessionId of sessionIdsWithAnniversaries()) collect(sessionId)
+  return entities
+}
+
+let anniversarySnapshot = new Map<string, { entityId: string; payload: AnniversaryCloudPayload; sessionId?: string }>()
+function resetAnniversarySnapshot(): void {
+  anniversarySnapshot = anniversaryEntities()
+}
+
+function refreshAnniversaryViews(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(ANNIVERSARY_VIEW_UPDATE))
+}
+
+function captureAnniversaries(): void {
+  const next = anniversaryEntities()
+  for (const [key, value] of next) {
+    const previous = anniversarySnapshot.get(key)
+    if (!previous || JSON.stringify(previous.payload) !== JSON.stringify(value.payload)) {
+      queue('anniversary', value.entityId, value.payload, false, value.sessionId)
+    }
+  }
+  for (const [key, value] of anniversarySnapshot) {
+    if (!next.has(key)) queue('anniversary', value.entityId, undefined, true, value.sessionId)
+  }
+  anniversarySnapshot = next
+}
+
+function applyAnniversaryEntity(entity: CloudStateEntity): void {
+  const scope = anniversaryScope(entity)
+  const payloadRecord = record(entity.payload)
+  const item = validAnniversary(payloadRecord?.anniversary ?? entity.payload)
+  if (!scope || !item || item.kind === 'personal') return
+  const list = storedAnniversaries(scope.sessionId)
+  const index = list.findIndex(value => value.id === scope.id)
+  const stored = { ...item, id: scope.id }
+  delete stored.mainAnniversary
+  if (index >= 0) list[index] = stored
+  else list.unshift(stored)
+  localStorage.setItem(anniversaryStorageKey(scope.sessionId), JSON.stringify(list))
+  const isMain = item.mainAnniversary === true || payloadRecord?.mainAnniversary === true || payloadRecord?.main === true
+  const mainKey = mainAnniversaryStorageKey(scope.sessionId)
+  if (isMain) localStorage.setItem(mainKey, scope.id)
+  else if (localStorage.getItem(mainKey) === scope.id) localStorage.removeItem(mainKey)
+  resetAnniversarySnapshot()
+  refreshAnniversaryViews()
+}
+
+function deleteAnniversaryEntity(entity: CloudStateEntity): void {
+  const scope = anniversaryScope(entity)
+  if (!scope) return
+  const key = anniversaryStorageKey(scope.sessionId)
+  const list = storedAnniversaries(scope.sessionId)
+  localStorage.setItem(key, JSON.stringify(list.filter(item => item.id !== scope.id || item.kind === 'personal')))
+  const mainKey = mainAnniversaryStorageKey(scope.sessionId)
+  if (localStorage.getItem(mainKey) === scope.id) localStorage.removeItem(mainKey)
+  resetAnniversarySnapshot()
+  refreshAnniversaryViews()
 }
 
 export function queueThemeCloudChange(payload: unknown): void {
@@ -173,6 +296,7 @@ export function initCloudStateResourceAdapters(): void {
   if (initialized) return
   initialized = true
   resetPersonalSnapshot()
+  resetAnniversarySnapshot()
   registerCloudStateAdapter('theme', {
     apply: applyThemeEntity,
     delete() { localStorage.setItem(THEME_KEY, JSON.stringify({ type: 'preset', presetId: 'peach' })); void import('./theme.ts').then(({ applyTheme }) => applyTheme()) },
@@ -189,6 +313,11 @@ export function initCloudStateResourceAdapters(): void {
     apply(entity) { replacePersonalDays(entity.payload); personalSnapshot = JSON.stringify(personalDays()) },
     delete() { replacePersonalDays([]); personalSnapshot = '[]' },
   })
+  registerCloudStateAdapter('anniversary', {
+    apply: applyAnniversaryEntity,
+    delete: deleteAnniversaryEntity,
+  })
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, capturePersonalDays)
-  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, resetPersonalSnapshot)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAnniversaries)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot() })
 }

@@ -74,7 +74,15 @@ function accountKey(account: string): string {
   return account.trim()
 }
 
-function entityKey(kind: string, entityId: string): string {
+function normalizedSessionId(sessionId?: string | null): string {
+  return sessionId || ''
+}
+
+function entityKey(kind: string, entityId: string, sessionId?: string | null): string {
+  return `${kind}\u0000${normalizedSessionId(sessionId)}\u0000${entityId}`
+}
+
+function legacyEntityKey(kind: string, entityId: string): string {
   return `${kind}\u0000${entityId}`
 }
 
@@ -97,11 +105,24 @@ function readRoot(): MetadataRoot {
 
 function readMetadata(account: string): AccountMetadata {
   const saved = readRoot().accounts[accountKey(account)]
-  return {
+  const metadata = {
     cursor: Number.isFinite(saved?.cursor) && saved.cursor >= 0 ? saved.cursor : 0,
     versions: saved?.versions && typeof saved.versions === 'object' ? { ...saved.versions } : {},
     inbox: saved?.inbox && typeof saved.inbox === 'object' ? { ...saved.inbox } : {},
   }
+  // Deployed metadata keyed inbox entries by kind+entityId. Inbox values retain
+  // sessionId, so they can be migrated losslessly without resetting the cursor.
+  let changed = false
+  for (const [key, entity] of Object.entries(metadata.inbox)) {
+    const scopedKey = entityKey(entity.kind, entity.entityId, entity.sessionId)
+    if (key === scopedKey) continue
+    const existing = metadata.inbox[scopedKey]
+    if (!existing || existing.version < entity.version) metadata.inbox[scopedKey] = entity
+    delete metadata.inbox[key]
+    changed = true
+  }
+  if (changed) writeMetadata(account, metadata)
+  return metadata
 }
 
 function writeMetadata(account: string, metadata: AccountMetadata): void {
@@ -122,8 +143,19 @@ export function getCloudStateCursor(account = getAccount()?.account): number {
   return account ? readMetadata(account).cursor : 0
 }
 
-export function getCloudStateVersion(kind: string, entityId: string, account = getAccount()?.account): number {
-  return account ? (readMetadata(account).versions[entityKey(kind, entityId)] ?? 0) : 0
+export function getCloudStateVersion(kind: string, entityId: string, account = getAccount()?.account, sessionId?: string): number {
+  if (!account) return 0
+  const metadata = readMetadata(account)
+  const key = entityKey(kind, entityId, sessionId)
+  const current = metadata.versions[key]
+  if (current != null) return current
+  const legacyKey = legacyEntityKey(kind, entityId)
+  const legacy = metadata.versions[legacyKey]
+  if (legacy == null) return 0
+  metadata.versions[key] = legacy
+  delete metadata.versions[legacyKey]
+  writeMetadata(account, metadata)
+  return legacy
 }
 
 /** Test/debug surface and future adapter support; returns a copy in stable replay order. */
@@ -138,7 +170,8 @@ export function getCloudStateInbox(kind?: string, account = getAccount()?.accoun
 function saveVersion(account: string, entity: CloudStateEntity): void {
   if (!Number.isFinite(entity.version)) return
   const metadata = readMetadata(account)
-  metadata.versions[entityKey(entity.kind, entity.entityId)] = entity.version
+  metadata.versions[entityKey(entity.kind, entity.entityId, entity.sessionId)] = entity.version
+  delete metadata.versions[legacyEntityKey(entity.kind, entity.entityId)]
   writeMetadata(account, metadata)
 }
 
@@ -164,7 +197,7 @@ function normalizedEntity(entity: CloudStateEntity): CloudStateEntity {
 
 function saveUnknownEntity(account: string, entity: CloudStateEntity): void {
   const metadata = readMetadata(account)
-  const key = entityKey(entity.kind, entity.entityId)
+  const key = entityKey(entity.kind, entity.entityId, entity.sessionId)
   const existing = metadata.inbox[key]
   if (existing && existing.version >= entity.version) return
   metadata.inbox[key] = normalizedEntity(entity)
@@ -177,9 +210,9 @@ async function replayInboxForAccount(account: Account, kind?: string): Promise<v
     if (!isCurrentAccount(account)) return
     const adapter = adapters.get(entity.kind)
     if (!adapter) continue
-    const key = entityKey(entity.kind, entity.entityId)
+    const key = entityKey(entity.kind, entity.entityId, entity.sessionId)
     try {
-      const appliedVersion = getCloudStateVersion(entity.kind, entity.entityId, account.account)
+      const appliedVersion = getCloudStateVersion(entity.kind, entity.entityId, account.account, entity.sessionId)
       if (entity.version > appliedVersion) {
         const context: CloudStateApplyContext = { source: 'cloud', silent: true }
         if (entity.deleted) await adapter.delete(entity, context)
@@ -212,7 +245,7 @@ export function replayCloudStateInbox(kind?: string): Promise<void> {
 }
 
 async function applyEntity(account: string, entity: CloudStateEntity): Promise<void> {
-  const knownVersion = getCloudStateVersion(entity.kind, entity.entityId, account)
+  const knownVersion = getCloudStateVersion(entity.kind, entity.entityId, account, entity.sessionId)
   if (Number.isFinite(entity.version) && entity.version <= knownVersion) return
   const adapter = adapters.get(entity.kind)
   if (!adapter) {

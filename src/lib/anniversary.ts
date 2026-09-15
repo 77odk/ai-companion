@@ -276,6 +276,7 @@ export function removeAnniversary(id: string, sessionId?: string): Anniversary[]
   if (currentKey != null) {
     const currentSid = currentKey === ANNIVERSARIES_KEY ? undefined : sessionId
     saveAnniversaries(readRaw(currentSid).filter((a) => a.id !== id), currentSid)
+    if (getMainAnniversaryId(currentSid) === id) setMainAnniversaryId(null, currentSid)
     broadcastAnniversariesUpdated()
   }
   return getAnniversaries(sessionId)
