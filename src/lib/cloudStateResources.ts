@@ -279,6 +279,21 @@ function replacePersonalDays(payload: unknown): void {
   localStorage.setItem(PERSONAL_DAYS_KEY, JSON.stringify([...incoming, ...couples]))
 }
 
+/**
+ * personal_day 生产存在两种合法 payload：
+ *  A. 聚合数组 [ {id,label,date,kind:'personal'}, ... ]
+ *  B. legacy/import 逐条实体 { id,label,date,kind:'personal', ... }
+ * 数组原样返回；单个合法 personal 对象规范化为单元素数组；
+ * 非法 payload（非数组且非合法 personal 对象，含 kind!=='personal'）返回 null，
+ * 由调用方安全忽略，绝不借此清空本机个人节日。
+ */
+function normalizePersonalDaysPayload(payload: unknown): unknown[] | null {
+  if (Array.isArray(payload)) return payload
+  const item = record(payload)
+  if (item && item.kind === 'personal') return [payload]
+  return null
+}
+
 let personalSnapshot = ''
 function resetPersonalSnapshot(): void {
   personalSnapshot = JSON.stringify(personalDays())
@@ -310,7 +325,13 @@ export function initCloudStateResourceAdapters(): void {
     delete: resetModelSettingsEntity,
   })
   registerCloudStateAdapter('personal_day', {
-    apply(entity) { replacePersonalDays(entity.payload); personalSnapshot = JSON.stringify(personalDays()) },
+    apply(entity) {
+      const days = normalizePersonalDaysPayload(entity.payload)
+      // 非法 payload：安全忽略该实体，绝不清空本机现有个人节日。
+      if (days === null) return
+      replacePersonalDays(days)
+      personalSnapshot = JSON.stringify(personalDays())
+    },
     delete() { replacePersonalDays([]); personalSnapshot = '[]' },
   })
   registerCloudStateAdapter('anniversary', {

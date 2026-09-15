@@ -673,3 +673,131 @@ test('AG: deployed metadata keys migrate lazily without resetting cursor or dupl
   assert.equal(store.getPendingOps().length, 0)
   unregister()
 })
+
+test('AA: personal_day array payload applies normally', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'couple', label: '认识 TA', date: '01-01', kind: 'couple', createdAt: 1 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload: [
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+      { id: 'memorial', label: '纪念日', date: '03-04', kind: 'personal', createdAt: 3 },
+    ] },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.deepEqual(days.map(day => day.id).sort(), ['birthday', 'couple', 'memorial'])
+  assert.equal(cloud.getCloudStateVersion('personal_day', 'global'), 1)
+})
+
+test('AB: personal_day single personal object payload applies as [payload]', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'couple', label: '认识 TA', date: '01-01', kind: 'couple', createdAt: 1 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload:
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 } },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.deepEqual(days.map(day => day.id).sort(), ['birthday', 'couple'])
+  assert.equal(days.find(day => day.id === 'birthday').label, '我的生日')
+})
+
+test('AC: array(v1) then single object(v2) keeps personal days, never clears to []', async () => {
+  clearState()
+  const changes1 = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload: [
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    ] },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes1))
+  await cloud.pullCloudState()
+  const changes2 = [
+    { kind: 'personal_day', entityId: 'global', version: 2, payload:
+      { id: 'birthday', label: '我的生日（改）', date: '02-04', kind: 'personal', createdAt: 3 } },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(2, changes2))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.equal(days.filter(day => day.kind === 'personal').length, 1)
+  assert.equal(days.find(day => day.id === 'birthday').label, '我的生日（改）')
+  assert.ok(days.length > 0, 'personal days must not become []')
+})
+
+test('AD: invalid object payload is safely ignored and never clears existing personal days', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    { id: 'couple', label: '认识 TA', date: '01-01', kind: 'couple', createdAt: 1 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload: { broken: true, no: 'fields' } },
+    { kind: 'personal_day', entityId: 'global', version: 2, payload: null },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(2, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.equal(days.filter(day => day.kind === 'personal').length, 1)
+  assert.equal(days.find(day => day.id === 'birthday').label, '我的生日')
+  assert.equal(days.find(day => day.id === 'couple').label, '认识 TA')
+})
+
+test('AE: single object apply never overwrites couple/relationship anniversaries', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'anniv', label: '周年纪念', date: '06-06', kind: 'couple', createdAt: 1 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload:
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 } },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.deepEqual(days.map(day => day.id).sort(), ['anniv', 'birthday'])
+  assert.equal(days.find(day => day.id === 'anniv').label, '周年纪念')
+})
+
+test('AF: same-id re-apply does not duplicate entries', async () => {
+  clearState()
+  const changes1 = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload: [
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    ] },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes1))
+  await cloud.pullCloudState()
+  const changes2 = [
+    { kind: 'personal_day', entityId: 'global', version: 2, payload: [
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    ] },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(2, changes2))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.equal(days.filter(day => day.kind === 'personal' && day.id === 'birthday').length, 1)
+})
+
+test('AG: personal_day cloud apply is silent — no legacy echo, no duplicate cloud op', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([]))
+  let legacyChanges = 0
+  window.addEventListener('eluvin-data-change', () => { legacyChanges++ }, { once: true })
+  const changes = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload: [
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    ] },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes))
+  await cloud.pullCloudState()
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(legacyChanges, 0)
+  assert.equal(store.getPendingOps().filter(op => op.kind === 'personal_day').length, 0)
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.equal(days.filter(day => day.kind === 'personal').length, 1)
+})
