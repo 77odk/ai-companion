@@ -287,17 +287,21 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       },
       commit: async (targetSid, content) => {
         const latest = getBusyState(targetSid)
-        if (targetSid !== getActiveSessionId() || latest.status !== 'busy') return false
+        if (targetSid !== getActiveSessionId() || latest.status !== 'busy') return 'cancelled-before-commit'
         const msg: StoredMessage = { role: 'assistant', content, ts: Date.now() }
         const current = getMessagesCache(targetSid)
         const next = [...current, msg]
         saveMessagesCache(targetSid, next)
         const persisted = getMessagesCache(targetSid)
-        if (!persisted.some((item) => item.role === 'assistant' && item.ts === msg.ts && item.content === msg.content)) return false
+        if (!persisted.some((item) => item.role === 'assistant' && item.ts === msg.ts && item.content === msg.content)) return 'failed'
 
         const token = getToken()
-        let confirmedTs = msg.ts
         if (token) {
+          // 最后一次 stale 检查必须发生在不可逆的远端写入之前。
+          if (targetSid !== getActiveSessionId() || getBusyState(targetSid).status !== 'busy') {
+            saveMessagesCache(targetSid, getMessagesCache(targetSid).filter((item) => !(item.ts === msg.ts && item.role === msg.role && item.content === msg.content)))
+            return 'cancelled-before-commit'
+          }
           const op: PendingOp = {
             id: newPendingOpId(), type: 'message', sessionId: targetSid,
             payload: { role: msg.role, content: msg.content, thinking: '' }, ts: msg.ts,
@@ -306,19 +310,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           const response = await postMessage(token, targetSid, { role: msg.role, content: msg.content })
           if (!response.ok) {
             saveMessagesCache(targetSid, getMessagesCache(targetSid).filter((item) => !(item.ts === msg.ts && item.role === msg.role && item.content === msg.content)))
-            return false
+            return 'failed'
           }
+          // response.ok=true 是不可逆 commit point：保留 A 的确认消息，不再用 active session/cancel 降级结果。
           removePendingOp(op.id)
           confirmMessageInCache(targetSid, op, response.data)
-          confirmedTs = Date.parse(response.data.createdAt)
         }
-        if (targetSid !== getActiveSessionId() || getBusyState(targetSid).status !== 'busy') {
-          saveMessagesCache(targetSid, getMessagesCache(targetSid).filter((item) => !(item.role === msg.role && item.content === msg.content && (item.ts === msg.ts || item.ts === confirmedTs))))
-          return false
+        if (targetSid === getActiveSessionId() && mountedRef.current) {
+          markRead(targetSid)
+          setMessages(getMessagesCache(targetSid))
         }
-        markRead(targetSid)
-        if (mountedRef.current) setMessages(getMessagesCache(targetSid))
-        return true
+        return 'committed'
       },
       onIdle: (targetSid) => {
         if (targetSid !== getActiveSessionId() || !mountedRef.current) return

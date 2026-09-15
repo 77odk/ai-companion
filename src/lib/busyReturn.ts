@@ -6,13 +6,14 @@ export const RETURN_RETRY_DELAYS_MS = [10_000, 30_000] as const
 export const MAX_BUSY_RETURN_AGE = 6 * 60 * 60 * 1000
 
 export type BusyReturnOutcome = 'success' | 'retrying' | 'exhausted' | 'expired' | 'cancelled' | 'ignored'
+export type BusyReturnCommitResult = 'committed' | 'failed' | 'cancelled-before-commit'
 
 export interface BusyReturnDeps<T> {
   now: () => number
   getState: (sessionId: string) => BusyState
   saveState: (sessionId: string, state: BusyState) => boolean
   generate: (sessionId: string, state: BusyState) => Promise<T | null>
-  commit: (sessionId: string, value: T, state: BusyState) => Promise<boolean>
+  commit: (sessionId: string, value: T, state: BusyState) => Promise<BusyReturnCommitResult>
   isCurrent: (sessionId: string, cycleId: string) => boolean
   schedule: (callback: () => void, delayMs: number) => unknown
   onIdle?: (sessionId: string) => void
@@ -83,9 +84,14 @@ export async function triggerBusyReturn<T>(sessionId: string, deps: BusyReturnDe
     const value = await deps.generate(sessionId, attemptState)
     if (value == null) throw new Error('Busy Return returned no usable content')
     if (cancelledCycles.has(cycleId) || !deps.isCurrent(sessionId, cycleId)) return 'cancelled'
-    const committed = await deps.commit(sessionId, value, attemptState)
-    if (!committed) throw new Error('Busy Return message was not persisted')
-    if (cancelledCycles.has(cycleId) || !deps.isCurrent(sessionId, cycleId)) return 'cancelled'
+    const commitResult = await deps.commit(sessionId, value, attemptState)
+    if (commitResult === 'failed') throw new Error('Busy Return message was not persisted')
+    if (commitResult === 'cancelled-before-commit') {
+      deps.saveState(sessionId, { ...attemptState, status: 'idle', returnSent: false })
+      deps.onIdle?.(sessionId)
+      return 'cancelled'
+    }
+    // commitResult=committed 是不可逆提交点：之后的 UI 切换/取消不能把成功降级为失败或触发 retry。
     deps.saveState(sessionId, { ...attemptState, status: 'idle', returnSent: true })
     deps.onIdle?.(sessionId)
     return 'success'
