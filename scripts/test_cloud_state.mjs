@@ -11,6 +11,8 @@ class StorageMock {
   }
   removeItem(key) { this.#values.delete(key) }
   clear() { this.#values.clear() }
+  key(index) { return [...this.#values.keys()][index] ?? null }
+  get length() { return this.#values.size }
 }
 
 globalThis.localStorage = new StorageMock()
@@ -21,6 +23,9 @@ Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} }
 const cloud = await import('../src/lib/cloudState.ts')
 const store = await import('../src/lib/sessionStore.ts')
 const sync = await import('../src/lib/sync.ts')
+const resources = await import('../src/lib/cloudStateResources.ts')
+const storage = await import('../src/lib/storage.ts')
+const theme = await import('../src/lib/theme.ts')
 
 function login(account = 'account-a') {
   localStorage.setItem('ai_companion_account', JSON.stringify({ account, token: `token-${account}` }))
@@ -323,4 +328,138 @@ test('U: legacy syncNow still pulls and pushes /api/sync', async () => {
   assert.deepEqual(calls.map(([url, method]) => [new URL(url).pathname, method]), [
     ['/api/sync', 'GET'], ['/api/sync', 'POST'],
   ])
+})
+
+test('W: registering the four production adapters replays historical inbox entities silently', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_settings', JSON.stringify({
+    provider: 'deepseek',
+    providers: { deepseek: { apiKey: 'local-key', baseUrl: 'local-url', model: 'local-model' } },
+  }))
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'couple', label: '认识 TA', date: '01-01', createdAt: 1 },
+  ]))
+  const historical = [
+    { kind: 'theme', entityId: 'global', version: 1, payload: { type: 'preset', presetId: 'mist' } },
+    { kind: 'gender', entityId: 'role-1', version: 1, payload: { g: 'female', locked: true } },
+    { kind: 'model_settings', entityId: 'global', version: 1, payload: {
+      provider: 'deepseek', baseUrl: 'remote-url', model: 'remote-model', apiKey: 'hostile-key',
+      providers: { deepseek: { baseUrl: 'remote-url', model: 'remote-model', token: 'hostile-token' } },
+    } },
+    { kind: 'personal_day', entityId: 'global', version: 1, payload: [
+      { id: 'birthday', label: '我的生日', date: '02-03', createdAt: 2, kind: 'personal' },
+    ] },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(4, historical))
+  await cloud.pullCloudState()
+  assert.equal(cloud.getCloudStateInbox().length, 4)
+  let legacyChanges = 0
+  window.addEventListener('eluvin-data-change', () => { legacyChanges++ }, { once: true })
+  resources.initCloudStateResourceAdapters()
+  await cloud.replayCloudStateInbox()
+  assert.deepEqual(cloud.getCloudStateInbox(), [])
+  assert.equal(legacyChanges, 0)
+  assert.equal(theme.loadThemeState().presetId, 'mist')
+  assert.equal(storage.loadAIGender('role-1'), 'female')
+  const settings = storage.loadSettings()
+  assert.equal(settings.model, 'remote-model')
+  assert.equal(settings.baseUrl, 'remote-url')
+  assert.equal(settings.apiKey, 'local-key')
+  assert.equal(JSON.stringify(readStoredSettings()).includes('hostile'), false)
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.deepEqual(days.map(day => day.id), ['birthday', 'couple'])
+})
+
+function cloudOps(kind) {
+  return store.getPendingOps().filter(op => op.type === 'cloud-state' && op.kind === kind)
+}
+
+function readStoredSettings() {
+  return JSON.parse(localStorage.getItem('ai_companion_settings') ?? '{}')
+}
+
+test('X: local theme, gender, model settings, and personal-day writes create scoped cloud ops', () => {
+  clearState('A')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  theme.saveThemeState({ type: 'custom', customColor: '#123456' })
+  resources.queueThemeCloudChange(theme.loadThemeState())
+  storage.saveAIGender('male', 'role-a')
+  storage.saveSettings({ provider: 'openai', apiKey: 'sk-local', baseUrl: 'https://models.test', model: 'model-a' })
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'period', label: '生理期', date: '2026-09-01', createdAt: 3, kind: 'personal', periodDays: 28 },
+  ]))
+  window.dispatchEvent(new Event('eluvin-data-change'))
+
+  assert.equal(cloudOps('theme').length, 1)
+  assert.equal(cloudOps('gender')[0].entityId, 'role-a')
+  assert.equal(cloudOps('personal_day').length, 1)
+  const modelOp = cloudOps('model_settings')[0]
+  assert.equal(modelOp.entityId, 'global')
+  assert.equal(modelOp.baseVersion, 0)
+  assert.notEqual(modelOp.opId, cloudOps('theme')[0].opId)
+  assert.equal(JSON.stringify(modelOp.payload).includes('sk-local'), false)
+})
+
+test('Y: model payload scrub removes credential spellings recursively', () => {
+  const dirty = {
+    apiKey: 'a', api_key: 'b', apikey: 'c', apiSecret: 'd', api_secret: 'e', secret: 'f', token: 'g',
+    accessToken: 'h', access_token: 'i', authToken: 'j', auth_token: 'k', password: 'l',
+    providers: { custom: { model: 'safe', Authorization: 'm', credentials: { token: 'n' } } },
+  }
+  assert.deepEqual(resources.scrubModelSettings(dirty), { providers: { custom: { model: 'safe' } } })
+})
+
+test('Z: cloud applies and tombstones stay silent, preserve credentials, and restore existing empty/default states', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_settings', JSON.stringify({
+    provider: 'custom', providers: { custom: { apiKey: 'keep-me', baseUrl: 'old', model: 'old' } },
+  }))
+  let legacyChanges = 0
+  window.addEventListener('eluvin-data-change', () => { legacyChanges++ })
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [
+    { kind: 'theme', entityId: 'global', version: 2, payload: { type: 'preset', presetId: 'clay' } },
+    { kind: 'gender', entityId: 'role-z', version: 2, payload: { g: 'male', locked: true } },
+    { kind: 'model_settings', entityId: 'global', version: 2, payload: {
+      provider: 'custom', providers: { custom: { apiKey: 'remote-bad', baseUrl: 'new', model: 'new' } },
+    } },
+    { kind: 'personal_day', entityId: 'global', version: 2, payload: [
+      { id: 'birthday-z', label: '我的生日', date: '04-05', createdAt: 4, kind: 'personal' },
+    ] },
+  ]))
+  await cloud.pullCloudState()
+  assert.equal(legacyChanges, 0)
+  assert.equal(store.getPendingOps().length, 0)
+  assert.equal(storage.loadSettings().apiKey, 'keep-me')
+  assert.equal(storage.loadSettings().model, 'new')
+
+  globalThis.fetch = async () => jsonResponse(pullBody(2, [
+    { kind: 'theme', entityId: 'global', version: 3, deleted: true },
+    { kind: 'gender', entityId: 'role-z', version: 3, deleted: true },
+    { kind: 'model_settings', entityId: 'global', version: 3, deleted: true },
+    { kind: 'personal_day', entityId: 'global', version: 3, deleted: true },
+  ]))
+  await cloud.pullCloudState()
+  assert.equal(theme.loadThemeState().presetId, 'peach')
+  assert.equal(storage.loadAIGenderState('role-z').own, false)
+  assert.equal(storage.loadSettings().provider, 'zhipu')
+  assert.equal(readStoredSettings().providers.custom.apiKey, 'keep-me')
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_anniversaries')), [])
+  assert.equal(legacyChanges, 0)
+  assert.equal(store.getPendingOps().length, 0)
+})
+
+test('AA: cloud resource metadata and pending operations do not cross accounts', async () => {
+  clearState('A')
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [
+    { kind: 'theme', entityId: 'global', version: 7, payload: { type: 'preset', presetId: 'ink' } },
+  ]))
+  await cloud.pullCloudState()
+  storage.saveAIGender('female', 'role-a')
+  login('B')
+  assert.equal(cloud.getCloudStateVersion('theme', 'global'), 0)
+  assert.equal(cloudOps('gender').filter(op => op.accountId === 'B').length, 0)
+  storage.saveAIGender('male', 'role-b')
+  assert.equal(cloudOps('gender').filter(op => op.accountId === 'B').length, 1)
+  login('A')
+  assert.equal(cloud.getCloudStateVersion('theme', 'global'), 7)
 })
