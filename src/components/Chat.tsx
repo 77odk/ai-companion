@@ -775,8 +775,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const memory = recallSessionMemories(activeSessionId, contextText)
     if (memory.length > 0) {
       const memoryHeader = lang === 'en'
-        ? 'Facts about them you already remember:\n'
-        : '关于对方你已经记住的事实：\n'
+        ? 'Memories about them that are still relevant now:\n'
+        : '关于对方，以下是当前仍可参考的记忆：\n'
       apiMessages.push({
         role: 'system',
         content: memoryHeader + memory.map((m) => `- ${toPromptPerspective(m.text)}`).join('\n'),

@@ -3,6 +3,7 @@
 
 import { notifyDataChanged } from './dataChange.ts'
 import type { Lang } from './langDetect.ts'
+import { isMemoryActive } from './memoryTemporal.ts'
 
 export interface MemoryItem {
   id: string
@@ -17,7 +18,7 @@ export interface MemoryItem {
   taReply?: string
   /** 兼容旧数据：旧版本去重更新时刷新过的时间，现在不再使用 */
   updatedAt?: number
-  /** 重要记忆：用户在记忆页置顶标记，注入时永远排最前、永不进入遗忘/淡化逻辑（旧数据没有 = 不置顶） */
+  /** 重要记忆：用户在记忆页置顶标记；仍有效时注入排序最前（旧数据没有 = 不置顶） */
   pinned?: boolean
   /** 最近一次被「想起/提起」的时间戳：很久没提的活跃度低，注入排序时自然沉底，但条目永不被删除（旧数据没有 = 从未被提起过） */
   lastMentionedAt?: number
@@ -733,7 +734,8 @@ export interface RecallOptions {
 /**
  * 按需召回：对话注入时只带与当前话题相关的记忆 + 重要记忆，其余省略。
  * 匹配规则（简单可靠）：
- * 1. pinned 恒全量包含（重要记忆永远带）
+ * 0. 先过滤已过期的临时记忆；pinned / explicit 都不能绕过时效。
+ * 1. pinned 在仍有效的记忆中全量包含
  * 2. 主题命中：contextText 出现某个主题词（吃/猫/家人…）→ 该主题全部记忆带上
  *    （旧数据无 topic 字段的按 inferTopic 推断，避免「养猫」这类记忆落空）
  * 3. 关键词命中：记忆 text 与 contextText 有 ≥1 个共同实词（长度 ≥2 的字/词，单独的单字实词也算）
@@ -750,7 +752,8 @@ export function recallRelevantMemories(
   const now = opts.now ?? Date.now()
   const fallbackCount = opts.fallbackCount ?? 10
   const valid = (Array.isArray(items) ? items : []).filter(
-    (m): m is MemoryItem => m != null && typeof m.text === 'string',
+    (m): m is MemoryItem =>
+      m != null && typeof m.text === 'string' && isMemoryActive(m, now),
   )
   if (valid.length === 0) return []
 
