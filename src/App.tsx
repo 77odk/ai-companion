@@ -53,6 +53,7 @@ import { forceRefresh } from './lib/forceRefresh'
 import Home from './components/Home'
 import SpaceLife from './components/SpaceLife'
 import Memory from './components/Memory'
+import { initCloudStateSync, syncCloudState } from './lib/cloudState'
 
 type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
@@ -105,6 +106,10 @@ function useAuthState(): boolean {
 
 export default function App() {
   const [view, setView] = useState<View>(initialView)
+
+  useEffect(() => {
+    initCloudStateSync()
+  }, [])
 
   // ---- 导航历史 + 滚动位置（修正批第 2/3 条）----
   // 浏览器后退/侧滑返回不白屏：goView 入栈 + pushState，popstate 时弹出上一页，栈空回首页。
@@ -273,6 +278,10 @@ export default function App() {
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
+
+  useEffect(() => {
+    if (loggedIn) void syncCloudState()
+  }, [loggedIn])
   // ConsentGate V1：首次使用先过「开始之前」安全说明（本机已同意当前版本则直接跳过）
   const [firstConsentDone, setFirstConsentDone] = useState<boolean>(() => !consentGateNeeded())
   // 老用户轻量补确认：已登录但服务端无 consent 记录（或版本过期）时盖一层 light

@@ -3,7 +3,6 @@
 // 上传失败进 pendingOps 队列，联网自动补传。消息缓存按会话分 key，切换会话互不干扰。
 // 纯逻辑都抽成可被 Node 单测的导出函数；localStorage 读写只在函数内，导入不触发。
 
-import { notifyDataChanged } from './dataChange.ts'
 import { postMessage, postMemory, type Session } from './sessionApi.ts'
 import type { StoredMessage } from './storage.ts'
 import { isSimilarMemory, loadMemory, newMemoryItemId, recallRelevantMemories, type MemoryItem, type RecallOptions } from './memory.ts'
@@ -16,7 +15,7 @@ const msgsKey = (sessionId: string) => `ai_companion_msgs_${sessionId}`
 const memsKey = (sessionId: string) => `ai_companion_mem_${sessionId}`
 
 /** 待补传操作：上传失败先落队列，联网后按序重试 */
-export interface PendingOp {
+export interface SessionPendingOp {
   id: string
   type: 'message' | 'memory'
   sessionId: string
@@ -25,6 +24,26 @@ export interface PendingOp {
   /** 本地写入时的时间戳（消息按这个 ts 跟缓存里的乐观条目对上号） */
   ts: number
 }
+
+/** Cloud State 与会话补传共用同一个 outbox，避免出现两套重试顺序。 */
+export interface CloudStatePendingOp {
+  id: string
+  type: 'cloud-state'
+  opId: string
+  kind: string
+  entityId: string
+  sessionId?: string
+  generationSlotId?: string
+  baseVersion: number
+  deleted?: boolean
+  payload?: unknown
+  createdAt: number
+  ts: number
+  /** 创建操作时的登录账号；只用于本地队列隔离，绝不发送给 API。 */
+  accountId?: string
+}
+
+export type PendingOp = SessionPendingOp | CloudStatePendingOp
 
 // ---- 当前会话 ----
 
@@ -109,17 +128,15 @@ export function getMessagesCache(sessionId: string): StoredMessage[] {
 }
 
 /**
- * 写入某会话的消息缓存，写后广播 dataChange（账号同步监听到会防抖上传，网络失败静默）。
- * broadcast=false 用于「对账」类写入（confirmMessageInCache 只改 ts，内容没变）——
- * 不广播避免同一条消息触发两次同步/UI 刷新（review3 新-1 双同步）。
+ * 写入某会话的消息缓存。会话消息由 session API / pendingOps 同步，不能触发 legacy 整包同步。
+ * broadcast 参数仅为兼容旧调用签名保留；UI 读取缓存的流程不依赖全局 dataChange 事件。
  */
-export function saveMessagesCache(sessionId: string, msgs: StoredMessage[], broadcast = true): void {
+export function saveMessagesCache(sessionId: string, msgs: StoredMessage[], _broadcast = true): void {
   try {
     localStorage.setItem(msgsKey(sessionId), JSON.stringify(Array.isArray(msgs) ? msgs : []))
   } catch {
     // 存不下（localStorage 满）不弹窗不打断，聊天照常
   }
-  if (broadcast) notifyDataChanged()
 }
 
 /** 删除会话时同步清该会话的消息缓存 */
@@ -448,11 +465,20 @@ export function getPendingOps(): PendingOp[] {
       (op): op is PendingOp =>
         op != null &&
         typeof op.id === 'string' &&
-        (op.type === 'message' || op.type === 'memory') &&
-        typeof op.sessionId === 'string' &&
-        op.payload != null &&
-        typeof op.payload === 'object' &&
-        typeof op.ts === 'number',
+        typeof op.ts === 'number' &&
+        ((
+          (op.type === 'message' || op.type === 'memory') &&
+          typeof op.sessionId === 'string' &&
+          op.payload != null &&
+          typeof op.payload === 'object'
+        ) || (
+          op.type === 'cloud-state' &&
+          typeof op.opId === 'string' &&
+          typeof op.kind === 'string' &&
+          typeof op.entityId === 'string' &&
+          typeof op.baseVersion === 'number' &&
+          typeof op.createdAt === 'number'
+        )),
     )
   } catch {
     return []
@@ -517,7 +543,7 @@ export function mergeSessionMessages(local: StoredMessage[], cloud: StoredMessag
  */
 export function confirmMessageInCache(
   sessionId: string,
-  op: PendingOp,
+  op: SessionPendingOp,
   serverMsg: { role: 'user' | 'assistant'; content: string; createdAt: string },
 ): void {
   const list = getMessagesCache(sessionId)
@@ -538,6 +564,7 @@ export function confirmMessageInCache(
 /** 依次重试队列里的上传；成功移除，网络失败留在队列下次再试，401 则停（已登出） */
 export async function flushPendingOps(token: string): Promise<void> {
   for (const op of getPendingOps()) {
+    if (op.type === 'cloud-state') continue
     if (op.type === 'message') {
       const res = await postMessage(token, op.sessionId, {
         role: op.payload.role as 'user' | 'assistant',
