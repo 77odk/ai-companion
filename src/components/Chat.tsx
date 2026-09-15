@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildBusyReturnPrompt, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
-import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem, type ExplicitCandidate } from '../lib/memory'
+import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
@@ -688,17 +688,19 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       return
     }
 
-    const writeMemory = (content: string, opts: { source?: string; topic?: string; explicit?: boolean; taReply?: string } = {}): boolean => {
+    const writeMemory = (content: string, opts: { source?: string; topic?: string; explicit?: boolean; taReply?: string } = {}): MemoryWriteResult => {
       const trimmed = content.trim()
-      if (!trimmed) return false
+      if (!trimmed) return { ok: false, created: false }
       // PATCH-01：source 保存完整真实用户原话——不再做 20 字截断，不摘要、不改写。
       // 空/纯空白时保持 undefined（旧数据兼容：无 source 不显示）。
       const snippet = opts.source?.trim() || undefined
       if (activeSessionId) {
+        // 命中已有（含相似）→ 链路成功但不算新增：不提示「新记下」
+        if (isSimilarMemory(getMemoriesCache(activeSessionId), trimmed)) return { ok: true, created: false }
         const token = getToken()
         const item = upsertMemoryCache(activeSessionId, trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
         // 本地写失败（回读不一致）→ upsertMemoryCache 返回 null：不写云端、也不当作成功
-        if (!item) return false
+        if (!item) return { ok: false, created: false }
         if (token) {
           postMemory(token, activeSessionId, {
             content: trimmed,
@@ -709,13 +711,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           })
         }
         notifyMemoryUpdated()
-        return true
+        return { ok: true, created: true }
       }
+      if (isSimilarMemory(loadMemory(), trimmed)) return { ok: true, created: false }
       const beforeGlobal = loadMemory().length
       const afterGlobal = upsertMemoryItem(trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
       notifyMemoryUpdated()
       // global 侧同样要确认真多了一条，而不是只看函数返回（写失败时返回的是未变更列表）
-      return afterGlobal.length > beforeGlobal
+      return afterGlobal.length > beforeGlobal ? { ok: true, created: true } : { ok: false, created: false }
     }
 
     // TASK-MEM-DISTILL：本轮候选 + 模型 marker 统一归并写入。
@@ -728,14 +731,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const replySnapshot = rawText
         ? stripMemoryMarkers(stripThinkBlocks(rawText, lang)).trim().slice(0, 160) || undefined
         : undefined
-      let saved = false
+      let created = false
       for (const p of plans) {
-        const wrote = writeMemory(p.text, { source: p.source || userMsg.content.trim(), topic: p.topic, explicit: p.explicit, taReply: replySnapshot })
-        // 只有「真的写进本地」且是用户明说的，才算保存成功 —— 写失败绝不提示成功
-        if (wrote && p.explicit) saved = true
+        const res = writeMemory(p.text, { source: p.source || userMsg.content.trim(), topic: p.topic, explicit: p.explicit, taReply: replySnapshot })
+        // 只要这一轮真实新增过 ≥1 条就给一次轻量成功反馈（不再要求必须 explicit）；去重命中 / 写失败都不算
+        if (res.created) created = true
       }
-      if (saved) userMsg.memorySaved = true
-      return saved
+      if (created) userMsg.memorySaved = true
+      return created
     }
 
     recordChatTopic(text, getActiveSessionId() || undefined)

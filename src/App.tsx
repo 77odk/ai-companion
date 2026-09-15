@@ -13,7 +13,7 @@ import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
 import { getAccount } from './lib/sync'
 import RolesPage from './components/RolesPage'
 import { PlanetIcon } from './components/spaceIcons'
-import type { ChatJumpTarget } from './lib/chatJump'
+import type { ChatJumpTarget, MemoryReturnTarget } from './lib/chatJump'
 import {
   loadMessages,
   loadPersona,
@@ -232,6 +232,8 @@ export default function App() {
   // UI2-03B-1「看原对话」：Memory → App 的一次性 jump target（transient，不持久化）；
   // Chat 消费（成功滚动或失败提示）后清空。
   const [pendingChatJump, setPendingChatJump] = useState<ChatJumpTarget | null>(null)
+  // 「看原对话」的返回目标：只存内存（不进 localStorage / sync / backend / URL），Chat 返回时由 Memory 消费一次即清
+  const [pendingMemoryReturn, setPendingMemoryReturn] = useState<MemoryReturnTarget | null>(null)
   // UI2-03B-1：每次渲染把最新 pending 同步给 ref（restoreScroll 读取）
   pendingChatJumpRef.current = pendingChatJump
   // UI2-03B-1：「看原对话」失败提示由 App 持有（跨 Chat remount / StrictMode 双跑存活），
@@ -748,10 +750,14 @@ export default function App() {
             {view === 'memory' && (
               <Memory
                 key={memoryRootKey}
-                onJumpToChat={(target) => {
+                onJumpToChat={(target, returnTarget) => {
                   setPendingChatJump(target)
+                  // 只有真的跳转成功才记录返回目标（失败路径不会走到这里，不会污染 target）
+                  setPendingMemoryReturn(returnTarget ?? null)
                   goView('chat')
                 }}
+                initialDetail={pendingMemoryReturn}
+                onInitialDetailConsumed={() => setPendingMemoryReturn(null)}
               />
             )}
           </main>
