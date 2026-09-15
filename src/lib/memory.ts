@@ -52,9 +52,16 @@ export function loadMemory(): MemoryItem[] {
   }
 }
 
-export function saveMemory(items: MemoryItem[]): void {
-  localStorage.setItem(MEMORY_KEY, JSON.stringify(items))
-  notifyDataChanged()
+export function saveMemory(items: MemoryItem[]): boolean {
+  const payload = JSON.stringify(items)
+  try {
+    localStorage.setItem(MEMORY_KEY, payload)
+    notifyDataChanged()
+    // 回读确认：只有真的写进去才算成功（localStorage 满 / 被拦时 setItem 可能静默失败）
+    return localStorage.getItem(MEMORY_KEY) === payload
+  } catch {
+    return false
+  }
 }
 
 function newId(): string {
@@ -215,7 +222,8 @@ export function upsertMemoryItem(text: string, source?: string, topic?: string, 
     ...(taReply?.trim() ? { taReply: taReply.trim() } : {}),
   }
   const next = [item, ...items]
-  saveMemory(next)
+  // 写失败（回读不一致）→ 返回未变更列表：调用方按「有没有多出这条」判断真实结果
+  if (!saveMemory(next)) return items
   return next
 }
 
