@@ -2,6 +2,7 @@
 // 顶部预览卡 + 5 套默认预设 + 自定义主色取色器。
 // 选完即时应用即时存 localStorage，云同步字段见 sync.ts。
 import { useState } from 'react'
+import { queueThemeCloudChange } from '../lib/cloudStateResources'
 import {
   THEME_PRESETS,
   DEFAULT_THEME_STATE,
@@ -19,6 +20,7 @@ export default function Appearance({ onBack }: Props) {
   const apply = (next: ThemeState) => {
     setTheme(next)
     saveThemeState(next)
+    queueThemeCloudChange(next)
     applyTheme()
   }
   const vars = resolveThemeVars(theme)

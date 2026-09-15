@@ -6,6 +6,7 @@ import { notifyDataChanged } from './dataChange.ts'
 import type { SpacePost } from './aiSpaceCore'
 import type { MemoryItem } from './memory'
 import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
+import { queueCurrentModelSettingsCloudChange, queueGenderCloudChange } from './cloudStateResources.ts'
 
 export type Provider = 'deepseek' | 'zhipu' | 'openai' | 'custom' | 'volcengine'
 
@@ -169,6 +170,7 @@ export function saveSettings(settings: ModelSettings): void {
     JSON.stringify({ provider: settings.provider, providers }),
   )
   notifyDataChanged()
+  queueCurrentModelSettingsCloudChange()
 }
 
 // ---- 历史消息 ----
@@ -637,6 +639,7 @@ export function saveAIGender(gender: AIGender, sessionId?: string): void {
   const payload = JSON.stringify({ g: gender, locked: gender !== 'unknown' })
   localStorage.setItem(aiGenderKey(sessionId), payload)
   notifyDataChanged()
+  queueGenderCloudChange(gender, sessionId)
 }
 
 // ---- TA 的详情页 · firstSeen（认识 TA 的第一天） ----

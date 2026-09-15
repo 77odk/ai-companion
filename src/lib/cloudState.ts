@@ -430,6 +430,11 @@ function scheduleCloudStateSync(): void {
   }, 300)
 }
 
+/** Queue a non-blocking sync after a local business-resource write. */
+export function requestCloudStateSync(): void {
+  scheduleCloudStateSync()
+}
+
 /** Install debounced online/visible retry hooks once; initial local rendering is never awaited. */
 export function initCloudStateSync(): void {
   if (typeof window === 'undefined' || listenersStarted) return
