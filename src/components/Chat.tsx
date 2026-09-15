@@ -227,7 +227,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       busyReason: reason,
       busyContext: context,
       returnSent: false,
-      activityOwner: decision.owner,
+      activityOwner: 'SELF',
       triggerEvidence: decision.evidence,
     }
     if (sid) saveBusyState(sid, state)
