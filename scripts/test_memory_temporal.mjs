@@ -84,5 +84,28 @@ localStorage.setItem('ai_companion_memory', JSON.stringify([stable, active, expi
 recallRelevantMemories(loadMemory(), '', { now: createdAt })
 eq(loadMemory().map((m) => m.id), ['stable', 'active', 'expired'], '召回后原三条仍全部存在')
 
+console.log('\n[N] semantic priority + “刚 + life event” coverage (V1 final)')
+// 优先级：recent（明确阶段词）→ recent（刚+事件）→ current → day → stable
+eq(state('我最近正在失眠', 0).kind, 'recent', '最近 + 正在 → recent（recent 压过 current）')
+eq(state('我这周正在加班', 0).kind, 'recent', '这周 + 正在 → recent')
+eq(state('我今天刚下班', 0).kind, 'current', '今天 + 刚下班 → current（当下状态不被拉长）')
+eq(state('我今天正在开会', 0).kind, 'current', '今天 + 正在 → current')
+eq((state('我最近正在失眠', 0).expiresAt ?? 0) - createdAt, 14 * DAY, 'recent 时长 = 14d')
+eq((state('我今天刚下班', 0).expiresAt ?? 0) - createdAt, 1 * DAY, 'current 时长 = 24h')
+for (const t of ['我刚分手了', '我刚搬家', '我刚辞职', '我刚离职', '我刚入职', '我刚结婚', '我刚离婚', '我刚搬到武汉', '我刚换工作', '我刚失业', '我刚毕业']) {
+  eq(state(t, 0).kind, 'recent', `刚+事件 → recent：${t}`)
+}
+eq(state('I just broke up', 0).kind, 'recent', '英文 just broke up → recent')
+eq(state('I just moved', 0).kind, 'recent', '英文 just moved → recent')
+eq(state('I just quit', 0).kind, 'recent', '英文 just quit → recent')
+eq(state('I just got married', 0).kind, 'recent', '英文 just got married → recent（不被 just got 拉成 current）')
+for (const t of ['我最近正在失眠', '我这周正在加班', '我刚分手了', '我刚搬家', '我刚辞职']) {
+  eq(state(t, 15 * DAY).expired, true, `15d 后 expired：${t}`)
+  eq(state(t, 13 * DAY).expired, false, `13d 仍 active：${t}`)
+}
+ok(state('我刚下班', 0).kind === 'current' && state('我刚到家', 0).kind === 'current' && state('我刚起床', 0).kind === 'current', '刚下班 / 刚到 / 刚起床 仍为 current（24h）')
+eq(state('我喜欢《今天》这首歌', 100 * DAY).kind, 'stable', '《今天》标题保护仍 PASS')
+eq(state('他说「我最近很忙」', 100 * DAY).kind, 'stable', '引号内阶段词保护仍 PASS')
+
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)
