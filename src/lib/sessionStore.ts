@@ -200,6 +200,8 @@ export function getBusyState(sessionId: string): BusyState {
       busyStartedAt: typeof obj.busyStartedAt === 'number' && Number.isFinite(obj.busyStartedAt) ? obj.busyStartedAt : undefined,
       retryCount: typeof obj.retryCount === 'number' && Number.isInteger(obj.retryCount) && obj.retryCount >= 0 ? obj.retryCount : 0,
       lastAttemptAt: typeof obj.lastAttemptAt === 'number' && Number.isFinite(obj.lastAttemptAt) ? obj.lastAttemptAt : undefined,
+      activityOwner: 'SELF',
+      triggerEvidence: typeof obj.triggerEvidence === 'string' ? obj.triggerEvidence : undefined,
     }
   } catch {
     return { ...IDLE_BUSY }

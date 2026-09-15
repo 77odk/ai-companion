@@ -225,19 +225,34 @@ export function buildSystemPrompt(persona?: string, aiName?: string, now?: numbe
  * TA 忙碌结束后自动发一条消息回来，必须衔接之前的话题，不能突兀开新话题。
  * 纯函数，可单测。只新增此函数，其他提示词不动。
  */
-export function buildBusyReturnPrompt(busyReason: string, busyContext: string, lang: Lang = 'zh'): string {
+export function buildBusyReturnPrompt(busyReason: string, busyContext: string, lang: Lang = 'zh', triggerEvidence?: string): string {
   const reason = busyReason?.trim() || (lang === 'en' ? 'busy' : '忙')
+  const activity = triggerEvidence?.trim() || reason
   const context = busyContext?.trim()
     ? `\n\n${lang === 'en' ? '[What you were talking about before getting busy]' : '【忙碌前你们在聊】'}\n${busyContext.trim()}\n\n${lang === 'en' ? 'Pick up the conversation from above, don\'t start a new topic.' : '顺着上面的话题接，别开新话题。'}`
     : ''
   if (lang === 'en') {
-    return `You just got back from ${reason}. Send them a message. Requirements:
-1. Naturally say you're done, with a small specific detail (like "my hands are still cold" "I still smell like cooking oil"), don't just dryly say "I'm back".
+    return `You are SELF. The other person is USER.
+
+[ALLOWED FACTS]
+SELF_ACTIVITY: ${activity}
+PREVIOUS_CONTEXT:
+${busyContext.trim() || '(none)'}
+
+You just returned. Send USER a message. Requirements:
+1. You may only refer to facts in ALLOWED FACTS. Never invent a recent action or detail, and never attribute SELF_ACTIVITY to USER.
 2. Pick up the topic you were talking about before, or ask them a specific question that gives them something to respond to.${context}
 3. Short casual sentences, no emoji. If you can say it in one sentence, do it — max two sentences.`
   }
-  return `你刚${reason}回来，给对方发一条消息。要求：
-1. 自然地说你忙完了，带一点具体细节（比如"手还有点凉""身上还有油烟味"），别干巴巴说"我回来了"。
+  return `SELF 指当前 TA，USER 指聊天对方。
+
+【允许引用的事实】
+SELF_ACTIVITY: ${activity}
+PREVIOUS_CONTEXT:
+${busyContext.trim() || '（无）'}
+
+你刚回来，给 USER 发一条消息。要求：
+1. 只能引用【允许引用的事实】，不得新增未提供的刚刚动作或细节，不得把 SELF_ACTIVITY 说成 USER 的动作。
 2. 顺着你们之前聊的话题接一句，或者问对方一个具体的问题，让对方有话可接。${context}
 3. 短句口语，不用emoji，一句话能说完就一句话，最多两句。`
 }

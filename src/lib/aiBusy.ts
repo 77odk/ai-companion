@@ -67,6 +67,10 @@ export interface BusyState {
   retryCount?: number
   /** 最近一次 Return 尝试时间 */
   lastAttemptAt?: number
+  /** Busy activity is always performed by the current TA; absent legacy values default to SELF. */
+  activityOwner?: 'SELF'
+  /** Exact TA reply fragment that provided explicit temporary-exit evidence. */
+  triggerEvidence?: string
 }
 
 /** 默认空闲状态 */
@@ -215,6 +219,6 @@ export function serializeBusyContext(messages: { role: string; content: string }
   if (!Array.isArray(messages) || messages.length === 0) return ''
   return messages
     .slice(-3)
-    .map((m) => `${m.role === 'user' ? '我' : 'TA'}：${String(m.content ?? '').slice(0, 100)}`)
+    .map((m) => `${m.role === 'user' ? 'USER' : 'SELF'}：${String(m.content ?? '').slice(0, 100)}`)
     .join('\n')
 }
