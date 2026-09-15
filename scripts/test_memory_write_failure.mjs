@@ -63,8 +63,8 @@ ok(dAfter.length === 0, 'D global 写失败 → 返回未变更列表（调用�
 // ---- E/F/G：两个成功提示的判定依据 ----（源码契约 + 行为）
 const chatSrc = readFileSync(SRC + '/src/components/Chat.tsx', 'utf8')
 const bubbleSrc = readFileSync(SRC + '/src/components/MessageBubble.tsx', 'utf8')
-ok(/if \(!item\) return false/.test(chatSrc), 'E1 writeMemory：本地写失败立即 return false（不再继续当成功）')
-ok(/if \(wrote && p\.explicit\) saved = true/.test(chatSrc), 'E2 flushMemoryWrites：只有真写入成功 + explicit 才置 memorySaved')
+ok(/if \(!item\) return \{ ok: false, created: false \}/.test(chatSrc), 'E1 writeMemory：本地写失败立即返回 ok:false/created:false（不再继续当成功）')
+ok(/if \(res\.created\) created = true/.test(chatSrc) && /if \(created\) userMsg\.memorySaved = true/.test(chatSrc), 'E2 flushMemoryWrites：只有「真实新增(created)」才置 memorySaved（不再要求 explicit）')
 ok(/if \(memoryWroteThisTurn && assistantMsgs\.length > 0\)/.test(chatSrc), 'E3 TA 消息的「已记住」标记也来自真实写入结果')
 ok(
   /const hasMemory = !isUser && message\.memorySaved === true && extractMemories\(message\.content\)\.length > 0/.test(bubbleSrc),

@@ -228,6 +228,12 @@ export function upsertMemoryItem(text: string, source?: string, topic?: string, 
 }
 
 /** 新内容是否与已有记忆高度相似（去重用；本地库与会话缓存共用同一套判断） */
+/** 写入结果：ok=链路成功；created=本轮真实新增（去重命中 / 写失败都是 created:false） */
+export interface MemoryWriteResult {
+  ok: boolean
+  created: boolean
+}
+
 export function isSimilarMemory(items: MemoryItem[], text: string): boolean {
   const norm = normalize(String(text ?? '').trim())
   if (!norm) return false

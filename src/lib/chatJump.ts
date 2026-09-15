@@ -11,6 +11,16 @@ import { filterSessionMessages } from './aiSpaceDetail.ts'
 export type ChatJumpStatus = 'unique' | 'not_found' | 'ambiguous'
 
 /** 一次性 jump target：只作为本次跳转的临时 UI 锚点，绝不持久化。 */
+/**
+ * 从 Memory Detail 跳 Chat 时记下的「返回目标」：只存在内存，不进 localStorage / sync / backend / URL / message schema。
+ * 用稳定 identity（memoryId + kind + sessionId）定位，返回时重新在当前数据里查，不靠 index 硬恢复。
+ */
+export interface MemoryReturnTarget {
+  memoryId: string
+  kind: 'global' | 'session'
+  sessionId?: string
+}
+
 export interface ChatJumpTarget {
   sessionId: string
   ts: number

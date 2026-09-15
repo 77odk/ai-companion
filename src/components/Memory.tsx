@@ -4,7 +4,7 @@ import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
 import { getToken } from '../lib/auth'
 import { correctMemoryText, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
-import { findChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
+import { findChatJumpTarget, type ChatJumpTarget, type MemoryReturnTarget } from '../lib/chatJump'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
 // 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
@@ -98,11 +98,15 @@ const RIVER_FULL_LIMIT = 200
 const RIVER_BATCH = 120
 
 interface MemoryProps {
-  /** UI2-03B-1「看原对话」：把一次性 jump target 交给 App，由 App 切到 chat 并转交 Chat 消费 */
-  onJumpToChat?: (target: ChatJumpTarget) => void
+  /** UI2-03B-1「看原对话」：把一次性 jump target 交给 App（附上返回目标），由 App 切到 chat 并转交 Chat 消费 */
+  onJumpToChat?: (target: ChatJumpTarget, returnTarget?: MemoryReturnTarget) => void
+  /** 从 Chat 返回时要恢复的详情目标（transient，只从 App 内存传入，绝不持久化） */
+  initialDetail?: MemoryReturnTarget | null
+  /** 恢复动作完成（找到或没找到都要）后通知 App 清掉 target，恢复普通返回行为 */
+  onInitialDetailConsumed?: () => void
 }
 
-export default function Memory({ onJumpToChat }: MemoryProps = {}) {
+export default function Memory({ onJumpToChat, initialDetail, onInitialDetailConsumed }: MemoryProps = {}) {
   const sessionId = getActiveSessionId()
   const readMemories = (): SourcedMemory[] => {
     const globalExplicit = loadMemory().filter((memory) => memory.explicit === true)
@@ -165,6 +169,25 @@ export default function Memory({ onJumpToChat }: MemoryProps = {}) {
   const [bookFrom, setBookFrom] = useState<'cover' | 'detail'>('cover')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const selected = chronological[selectedIndex] ?? null
+
+  // 从 Chat 返回：按稳定 identity 在当前数据里重新定位并打开详情；找不到就安全留在 River，绝不猜别的条目
+  useEffect(() => {
+    if (!initialDetail) return
+    // 数据尚未就绪（首帧 session 未恢复 / 记忆还没读入）→ 先等，不能在这时消费 target，否则会被误判成「不存在」
+    if (initialDetail.kind === 'session' && !sessionId) return
+    if (chronological.length === 0) return
+    const index = chronological.findIndex(
+      (entry) =>
+        entry.kind === initialDetail.kind &&
+        entry.item.id === initialDetail.memoryId &&
+        (initialDetail.kind !== 'session' || !initialDetail.sessionId || sessionId === initialDetail.sessionId),
+    )
+    if (index >= 0) {
+      setSelectedIndex(index)
+      setView('detail')
+    }
+    onInitialDetailConsumed?.()
+  }, [initialDetail, chronological, sessionId, onInitialDetailConsumed])
   const bookPages = useMemo(() => buildBookPages(chronological), [chronological])
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -185,7 +208,12 @@ export default function Memory({ onJumpToChat }: MemoryProps = {}) {
     const result = findChatJumpTarget(sessionId, selected.item.source ?? '')
     if (result.status === 'unique' && result.target) {
       setJumpNotice(null)
-      onJumpToChat(result.target)
+      // 记下返回目标：用稳定 identity（memoryId + kind + sessionId），绝不靠 index 硬恢复
+      onJumpToChat(result.target, {
+        memoryId: selected.item.id,
+        kind: selected.kind,
+        ...(selected.kind === 'session' && sessionId ? { sessionId } : {}),
+      })
       return
     }
     if (result.status === 'ambiguous') {
