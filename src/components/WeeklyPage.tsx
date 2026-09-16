@@ -16,7 +16,7 @@ import {
   type WeeklyReview,
 } from '../lib/weeklyReview'
 import { getKnownDays } from '../lib/milestone'
-import { getFirstSeen, isSlowLetterMode, loadMessages, loadPersona, loadSettings } from '../lib/storage'
+import { getFirstSeen, isSlowLetterMode, loadMessages, loadPersona, loadSettings, setSlowLetterMode } from '../lib/storage'
 import { chatCompletion } from '../lib/api'
 import { loadCurrentPosts } from '../lib/aiSpace'
 import { loadChatTopics } from '../lib/chatTopics'
@@ -27,17 +27,13 @@ import { loadMemory } from '../lib/memory'
 import { getEventsForWeek } from '../lib/eventStore'
 
 const REPLY_PLACEHOLDER = '把此刻的心情写下来…'
-const OPTION_IMMEDIATE = '立即回复'
-const OPTION_SEALED = '慢信模式'
-const SEALED_NOTE = '慢信不会立刻送达；会在 3–7 天后到达，到时先等你亲手拆开。'
 const SUCCESS_IMMEDIATE = '你的回信已经寄出。TA 的回信到了以后，会先等你亲手拆开。'
 const SUCCESS_SEALED = '这封慢信已经寄出，会在 3–7 天后送达。'
 const REPLY_FAILED = 'TA 暂时没回上，这封回信已经替你留好了。'
 const EMPTY_STATE = '第一封信，会在这一周结束后写给你。'
-const TOOLTIP_TEXT = '一周情书：TA 把这一周想对你说的话写成一封信。你可以立刻回信，也可以选择慢信。'
+const TOOLTIP_TEXT = '一周情书：TA 把这一周想对你说的话写成一封信。慢信模式可在这里开启或关闭。'
 const BANNER_REPLIED = '新的回信也一起到了，等你慢慢拆开。'
-const SLOW_LETTER_NOTE = '全局慢信模式已开启，这一封会在 3–7 天后送达。'
-const MODE_LOCKED_NOTE = '这封信已经寄出，回复方式不能再切换。'
+const SLOW_LETTER_NOTE = '慢信寄出后，TA 的回信会在 3–7 天后送达，到时等你亲手拆开。'
 
 const BackIcon = () => (
   <svg
@@ -110,9 +106,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
-  const [replyMode, setReplyMode] = useState<'immediate' | 'sealed'>('immediate')
-  const [modeChosen, setModeChosen] = useState(false)
-  const slowLetter = isSlowLetterMode()
+  const [slowLetter, setSlowLetter] = useState<boolean>(() => isSlowLetterMode())
   const [hint, setHint] = useState<string | null>(null)
   const [taReplying, setTaReplying] = useState(false)
   const [showTooltip, setShowTooltip] = useState(false)
@@ -137,10 +131,9 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
           ? 'sealed'
           : null))
     : null
-  const modeLocked = modeChosen || lockedMode != null
   const alreadyReplied = (r?: LetterReview | null): boolean =>
     Boolean(r?.myReply) || (Array.isArray(r?.replies) && (r?.replies ?? []).length > 0)
-  const effectiveMode = (modeChosen ? replyMode : null) ?? lockedMode ?? (slowLetter ? 'sealed' : replyMode)
+  const effectiveMode = lockedMode ?? (slowLetter ? 'sealed' : 'immediate')
 
   const persona = useMemo(() => {
     const currentSid = getActiveSessionId()
@@ -226,13 +219,14 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const openDetail = (r: LetterReview) => {
     setSelectedId(r.id)
     setReplyText('')
-    setReplyMode('immediate')
-    setModeChosen(false)
     setHint(null)
     setTaReplying(false)
     setShowTooltip(false)
     setJustReplied(false)
     setView('detail')
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('.weekly-letter-page')?.scrollTo({ top: 0, behavior: 'auto' })
+    })
   }
 
   const handleGenerate = async () => {
@@ -338,7 +332,6 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
       persist(next)
       setHint(SUCCESS_SEALED)
       setReplyText('')
-      setModeChosen(true)
       return
     }
 
@@ -350,7 +343,6 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     persist(base)
     setReplyText('')
     setHint(SUCCESS_IMMEDIATE)
-    setModeChosen(true)
     setTaReplying(true)
     try {
       const s = loadSettings()
@@ -435,6 +427,27 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
       {showTooltip && <div className="weekly-tooltip" role="tooltip">{TOOLTIP_TEXT}</div>}
       {genError && <p className="weekly-error">{genError}</p>}
 
+      <div className="slow-letter-row weekly-slow-letter-row">
+        <div className="slow-letter-text">
+          <span className="slow-letter-title">慢信模式</span>
+          <span className="slow-letter-desc">开启后，回信会在 3–7 天后送达；关闭时立即回复。</span>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={slowLetter}
+          aria-label="慢信模式"
+          className={`settings-switch${slowLetter ? ' on' : ''}`}
+          onClick={() => {
+            const next = !slowLetter
+            setSlowLetter(next)
+            setSlowLetterMode(next)
+          }}
+        >
+          <span className="settings-switch-thumb" />
+        </button>
+      </div>
+
       {!hasKey ? (
         <div className="weekly-guide-card weekly-letter-guide">
           <p className="weekly-guide-title">还没有第一封信</p>
@@ -511,7 +524,10 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
 
         <article className="weekly-letter-sheet">
           <span className="weekly-letter-watermark" aria-hidden="true">忆文</span>
-          <h1 className="weekly-letter-title">这一周，写给你。</h1>
+          <h1 className="weekly-letter-title">
+            <span className="weekly-letter-title-first">这一周</span>
+            <span className="weekly-letter-title-second">写给你</span>
+          </h1>
           <p className="weekly-letter-date">{r.weekLabel}</p>
           <div className="weekly-letter-body">
             {r.content
@@ -545,33 +561,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                 }}
               />
               <div className="weekly-letter-counter">{replyText.length}/500</div>
-              {slowLetter ? (
-                <p className="weekly-reply-mode-note">{SLOW_LETTER_NOTE}</p>
-              ) : (
-                <div className="weekly-reply-mode" role="radiogroup" aria-label="回信方式">
-                  <label className={`weekly-reply-mode-option${effectiveMode === 'immediate' ? ' selected' : ''}${modeLocked ? ' is-locked' : ''}`}>
-                    <input
-                      type="radio"
-                      name="weekly-reply-mode"
-                      checked={effectiveMode === 'immediate'}
-                      disabled={modeLocked}
-                      onChange={() => setReplyMode('immediate')}
-                    />
-                    <span>{OPTION_IMMEDIATE}</span>
-                  </label>
-                  <label className={`weekly-reply-mode-option${effectiveMode === 'sealed' ? ' selected' : ''}${modeLocked ? ' is-locked' : ''}`}>
-                    <input
-                      type="radio"
-                      name="weekly-reply-mode"
-                      checked={effectiveMode === 'sealed'}
-                      disabled={modeLocked}
-                      onChange={() => setReplyMode('sealed')}
-                    />
-                    <span>{OPTION_SEALED}</span>
-                  </label>
-                  <p className="weekly-reply-mode-note">{modeLocked ? MODE_LOCKED_NOTE : SEALED_NOTE}</p>
-                </div>
-              )}
+              {slowLetter && <p className="weekly-reply-mode-note">{SLOW_LETTER_NOTE}</p>}
               <button
                 type="button"
                 className="weekly-letter-send"

@@ -223,8 +223,6 @@ export default function App() {
   const [detailFrom, setDetailFrom] = useState<View>('chat')
   // 角色管理「角色详情」只看不切：临时查看的会话 id（chatprofile 优先读它；聊天/我的入口进资料卡时为 null）
   const [profileTarget, setProfileTarget] = useState<string | null>(null)
-  // 进空间时的初始子页：统一从空间主页进入（原「我的 → TA 记得的」记忆墙入口已移除，记忆入口唯一为底部「记忆」Tab）
-  const [spaceInitialPage, setSpaceInitialPage] = useState<'home'>('home')
   // 从「我的 → TA 记得的」进记忆墙时，底部高亮算在「我的」上（旧记账项修复）；其余入口算「空间」
   const [spaceFrom, setSpaceFrom] = useState<'space' | 'settings'>('space')
   const navActive = (tab: 'ta' | 'space' | 'memory' | 'mine'): boolean => {
@@ -413,7 +411,6 @@ export default function App() {
 
   const openSpaceRoot = () => {
     setSpaceFrom('space')
-    setSpaceInitialPage('home')
     setSpaceRootKey((key) => key + 1)
     navigate('aispace')
   }
@@ -743,7 +740,6 @@ export default function App() {
                 }}
                 onGoSpace={() => {
                   setSpaceFrom('space')
-                  setSpaceInitialPage('home')
                   navigate('aispace')
                 }}
                 onGoProfile={() => {
@@ -756,8 +752,10 @@ export default function App() {
             {view === 'aispace' && (
               <AISpace
                 key={spaceRootKey}
-                initialPage={spaceInitialPage}
-                onGoMine={() => navigate('settings')}
+                onOpenWeekly={() => {
+                  setDetailFrom('aispace')
+                  navigate('weekly')
+                }}
               />
             )}
             {view === 'memory' && (
