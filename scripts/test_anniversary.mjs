@@ -267,20 +267,30 @@ eq(nextMilestoneDay(731), null, '认识第 731 天 → 已超过全部里程碑 
 eq(formatCountdown(ms100, now), '还剩 77 天', '未来里程碑正计时兜底显示「还剩 77 天」')
 eq(formatCountdown(buildMilestoneAnniversary(msFirst, 100, now), new Date(2026, 10, 8, 12, 0).getTime()), '就是今天', '里程碑当天 → 就是今天')
 
-console.log('\n[19] getAnniversaries(会话) 首次读取自动补齐「认识 TA 的日子」+ 里程碑')
+console.log('\n[19] getAnniversaries(会话) 首次读取只自动补齐「认识 TA 的日子」')
 resetStore()
 localStorage.setItem('ai_companion_sessions_cache', JSON.stringify([{ id: 100, title: '阳阳', persona: '' }]))
-// 认识日 = 今天 → 认识第 1 天 → 里程碑 =「在一起 7 天」（确定性，不依赖运行日期）
 localStorage.setItem('ai_companion_first_seen_100', String(Date.now()))
 const roleList = getAnniversaries('100')
 eq(roleList.some((a) => a.label === '认识 TA 的日子'), true, '自动补「认识 TA 的日子」')
-eq(roleList.some((a) => isMilestoneAnniversary(a)), true, '自动补里程碑条目')
-const roleMilestone = roleList.find((a) => isMilestoneAnniversary(a))
-eq(roleMilestone.label, '在一起 7 天', '认识第 1 天 → 里程碑是「在一起 7 天」')
+eq(roleList.some((a) => isMilestoneAnniversary(a)), false, '不自动补里程碑条目')
 eq(roleList.some((a) => a.kind === 'personal'), false, '无个人节日时列表不含全局个人数据（空全局）')
 const again = getAnniversaries('100')
-eq(again.filter((a) => a.id === roleMilestone.id).length, 1, '重复读取不重复补里程碑（幂等）')
-eq(roleList.length, 2, '默认 = 认识日 + 里程碑 共 2 条')
+eq(again.some((a) => isMilestoneAnniversary(a)), false, '重复读取也不生成里程碑')
+eq(roleList.length, 1, '默认只有认识日 1 条')
+
+console.log('\n[20] getAnniversaries(会话) 清理旧里程碑及其主展示引用')
+resetStore()
+localStorage.setItem('ai_companion_anniversaries_200', JSON.stringify([
+  { id: 'ordinary', label: '生日', date: '03-15', createdAt: 1 },
+  { id: 'old-milestone', label: '在一起 100 天', date: '2026-11-08', createdAt: 2, countMode: 'forward', milestoneDay: 100 },
+]))
+localStorage.setItem('ai_companion_main_anniversary_200', 'old-milestone')
+const cleaned = getAnniversaries('200')
+eq(cleaned.map((a) => a.id), ['ordinary'], '读取后删除旧里程碑并保留普通纪念日')
+eq(getMainAnniversaryId('200'), null, '主展示指向旧里程碑时清除 stale 引用')
+const cleanedAgain = getAnniversaries('200')
+eq(cleanedAgain.map((a) => a.id), ['ordinary'], '再次读取不复活里程碑且普通纪念日仍保留')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)
