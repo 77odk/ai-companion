@@ -244,9 +244,15 @@ export function replayCloudStateInbox(kind?: string): Promise<void> {
   return flight
 }
 
-async function applyEntity(account: string, entity: CloudStateEntity): Promise<void> {
+async function applyEntity(account: string, entity: CloudStateEntity, opts: { force?: boolean } = {}): Promise<void> {
   const knownVersion = getCloudStateVersion(entity.kind, entity.entityId, account, entity.sessionId)
-  if (Number.isFinite(entity.version) && entity.version <= knownVersion) return
+  if (Number.isFinite(entity.version)) {
+    // ★ force = push 被判 conflict 后的收敛：服务端明确把「当前 canonical」交回来了，
+    //   即使它的版本号本地已经知道、也必须真跑一遍 adapter——否则本地那条「输掉的」动态
+    //   （同 slot 的 loser）不会被按 slot 清理掉，页面会同时显示 loser 与 canonical。
+    //   但绝不用更旧的实体回退本地已应用的状态（version < known 一律跳过）。
+    if (opts.force ? entity.version < knownVersion : entity.version <= knownVersion) return
+  }
   const adapter = adapters.get(entity.kind)
   if (!adapter) {
     saveUnknownEntity(account, entity)
@@ -393,7 +399,8 @@ async function flushBatch(account: Account, ops: CloudStatePendingOp[]): Promise
     if (status === 'error' || !status) continue
     if (status === 'conflict') {
       if (!result.entity) continue
-      await applyEntity(account.account, result.entity)
+      // force：conflict 收敛必须真跑 adapter（见 applyEntity 注释）——本地 loser 靠这一步被按 slot 清理
+      await applyEntity(account.account, result.entity, { force: true })
       removePendingOp(op.id)
     } else if (status === 'applied' || status === 'duplicate') {
       const entity = asEntity(result, op)
