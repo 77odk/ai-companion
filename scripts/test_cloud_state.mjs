@@ -28,6 +28,7 @@ const storage = await import('../src/lib/storage.ts')
 const theme = await import('../src/lib/theme.ts')
 const anniversary = await import('../src/lib/anniversary.ts')
 const aiSpace = await import('../src/lib/aiSpace.ts')
+const taRuntime = await import('../src/lib/taRuntime.ts')
 
 function login(account = 'account-a') {
   localStorage.setItem('ai_companion_account', JSON.stringify({ account, token: `token-${account}` }))
@@ -332,7 +333,7 @@ test('U: legacy syncNow still pulls and pushes /api/sync', async () => {
   ])
 })
 
-test('W: registering production adapters replays historical inbox entities and tombstones silently', async () => {
+test('W / RUNTIME-CS-3: registering production adapters replays historical inbox entities and tombstones silently', async () => {
   clearState()
   localStorage.setItem('ai_companion_settings', JSON.stringify({
     provider: 'deepseek',
@@ -361,10 +362,12 @@ test('W: registering production adapters replays historical inbox entities and t
       payload: { id: 'same', label: 'A 同 ID', date: '04-05', createdAt: 4 } },
     { kind: 'anniversary', entityId: 'same', sessionId: 'B', version: 8,
       payload: { id: 'same', label: 'B 同 ID', date: '05-06', createdAt: 5 } },
+    { kind: 'ta_runtime', entityId: 'runtime-history', sessionId: 'runtime-history', version: 6,
+      payload: { activityId: 'reading', label: '正在看书', startedAt: 1, plannedUntil: 10, updatedAt: 2, source: 'routine' } },
   ]
   globalThis.fetch = async () => jsonResponse(pullBody(8, historical))
   await cloud.pullCloudState()
-  assert.equal(cloud.getCloudStateInbox().length, 8)
+  assert.equal(cloud.getCloudStateInbox().length, 9)
   assert.equal(cloud.getCloudStateInbox('anniversary').filter(item => item.entityId === 'same').length, 2)
   let legacyChanges = 0
   window.addEventListener('eluvin-data-change', () => { legacyChanges++ }, { once: true })
@@ -386,6 +389,9 @@ test('W: registering production adapters replays historical inbox entities and t
   assert.equal(JSON.parse(localStorage.getItem('ai_companion_anniversaries_B'))[0].label, 'B 同 ID')
   assert.equal(cloud.getCloudStateVersion('anniversary', 'same', undefined, 'A'), 3)
   assert.equal(cloud.getCloudStateVersion('anniversary', 'same', undefined, 'B'), 8)
+  assert.equal(taRuntime.getTaRuntime('runtime-history').activityId, 'reading')
+  assert.equal(cloud.getCloudStateVersion('ta_runtime', 'runtime-history', undefined, 'runtime-history'), 6)
+  assert.equal(cloudOps('ta_runtime').length, 0)
 })
 
 function cloudOps(kind) {
@@ -395,6 +401,95 @@ function cloudOps(kind) {
 function readStoredSettings() {
   return JSON.parse(localStorage.getItem('ai_companion_settings') ?? '{}')
 }
+
+const runtimeState = (label, updatedAt = 100) => ({
+  activityId: 'reading', label, startedAt: 10, plannedUntil: 9999999999999, updatedAt, source: 'routine',
+})
+
+test('RUNTIME-CS-1/6: local create queues once, reads and unrelated changes do not, and _guest stays local', () => {
+  clearState('runtime-local')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  taRuntime.getOrAdvanceTaRuntime('A', '', 1000, () => 0.5)
+  let ops = cloudOps('ta_runtime')
+  assert.equal(ops.length, 1)
+  assert.equal(ops[0].entityId, 'A')
+  assert.equal(ops[0].sessionId, 'A')
+  assert.equal(ops[0].baseVersion, 0)
+  assert.equal(ops[0].payload.activityId, taRuntime.getTaRuntime('A').activityId)
+
+  taRuntime.getOrAdvanceTaRuntime('A', '', 1001, () => 0.9)
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  taRuntime.getOrAdvanceTaRuntime(undefined, '', 1000, () => 0.5)
+  ops = cloudOps('ta_runtime')
+  assert.equal(ops.length, 1)
+  assert.equal(ops.some(op => op.entityId === '_guest'), false)
+})
+
+test('RUNTIME-CS-2/5: canonical apply and tombstone affect only their exact session without echo', async () => {
+  clearState('runtime-exact')
+  localStorage.setItem('ai_companion_ta_runtime', JSON.stringify({ A: runtimeState('A local', 900), B: runtimeState('B local', 800) }))
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  let legacyChanges = 0
+  window.addEventListener('eluvin-data-change', () => { legacyChanges++ })
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [
+    { kind: 'ta_runtime', entityId: 'A', sessionId: 'A', version: 1, payload: runtimeState('A server', 1) },
+  ]))
+  await cloud.pullCloudState()
+  assert.equal(taRuntime.getTaRuntime('A').label, 'A server')
+  assert.equal(taRuntime.getTaRuntime('B').label, 'B local')
+  assert.equal(legacyChanges, 0)
+  assert.equal(cloudOps('ta_runtime').length, 0)
+
+  globalThis.fetch = async () => jsonResponse(pullBody(2, [
+    { kind: 'ta_runtime', entityId: 'A', sessionId: 'A', version: 2, deleted: true },
+  ]))
+  await cloud.pullCloudState()
+  assert.equal(taRuntime.getTaRuntime('A'), null)
+  assert.equal(taRuntime.getTaRuntime('B').label, 'B local')
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  assert.equal(cloudOps('ta_runtime').length, 0)
+  assert.equal(legacyChanges, 1)
+})
+
+test('RUNTIME-CS-4: conflict canonical wins even with older payload updatedAt and does not echo', async () => {
+  clearState('runtime-conflict')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  taRuntime.getOrAdvanceTaRuntime('A', '', 5000, () => 0.5)
+  localStorage.setItem('ai_companion_ta_runtime', JSON.stringify({
+    ...taRuntime.collectAllTaRuntime(), B: runtimeState('B untouched', 700),
+  }))
+  const localOp = cloudOps('ta_runtime')[0]
+  globalThis.fetch = async () => jsonResponse({ results: [{
+    opId: localOp.opId, status: 'conflict', entity: {
+      kind: 'ta_runtime', entityId: 'A', sessionId: 'A', version: 4, payload: runtimeState('A canonical', 1),
+    },
+  }] })
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(taRuntime.getTaRuntime('A').label, 'A canonical')
+  assert.equal(taRuntime.getTaRuntime('B').label, 'B untouched')
+  assert.equal(cloudOps('ta_runtime').length, 0)
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  assert.equal(cloudOps('ta_runtime').length, 0)
+})
+
+test('RUNTIME-CS legacy apply resets the V2 snapshot and malformed identities are ignored', async () => {
+  clearState('runtime-legacy')
+  localStorage.setItem('ai_companion_ta_runtime', JSON.stringify({ A: runtimeState('A old', 1), B: runtimeState('B stays', 1) }))
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  taRuntime.applyCloudTaRuntime({ A: runtimeState('A legacy', 2) })
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  assert.equal(cloudOps('ta_runtime').length, 0)
+
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [
+    { kind: 'ta_runtime', entityId: 'A', version: 1, payload: runtimeState('missing scope', 9) },
+    { kind: 'ta_runtime', entityId: 'A', sessionId: 'B', version: 1, payload: runtimeState('wrong scope', 9) },
+    { kind: 'ta_runtime', entityId: 'B', sessionId: 'B', version: 1, payload: { broken: true } },
+  ]))
+  await cloud.pullCloudState()
+  assert.equal(taRuntime.getTaRuntime('A').label, 'A legacy')
+  assert.equal(taRuntime.getTaRuntime('B').label, 'B stays')
+  assert.equal(cloudOps('ta_runtime').length, 0)
+})
 
 test('X: local theme, gender, model settings, and personal-day writes create scoped cloud ops', () => {
   clearState('A')
