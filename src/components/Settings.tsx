@@ -267,7 +267,7 @@ function MainCenter({
         <div className="slow-letter-row">
           <div className="slow-letter-text">
             <span className="slow-letter-title">开启全局慢信笔友模式</span>
-            <span className="slow-letter-desc">开启后，所有批阅强制封存，关闭即时回复，全部等待 TA 下一篇周记回信。</span>
+            <span className="slow-letter-desc">开启后，一周情书只使用慢信回复。寄出后会在 3–7 天后送达，到时等你亲手拆开。</span>
             <span className="slow-letter-hint">强书信拉扯体验，不推荐新用户开启。</span>
           </div>
           <button
