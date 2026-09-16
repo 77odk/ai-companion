@@ -25,22 +25,18 @@ import { resolveRolePersona } from '../lib/sessionProfile'
 import { loadMemory } from '../lib/memory'
 import { getEventsForWeek } from '../lib/eventStore'
 
-/* ---- 定稿文案（一字不改） ---- */
-
-const REPLY_PLACEHOLDER = '写下读完这篇周记你的感想'
-const OPTION_IMMEDIATE = '立即得到 TA 简短回复（默认）'
-const OPTION_SEALED = '封存留言，等 TA 更新下一篇周记再完整回信'
-const SEALED_NOTE = '封存模拟书信，不会立刻答复；TA 每周仅会产出一篇周记。'
-const SUCCESS_IMMEDIATE = '留言已送达，TA 读完写下了简短回复，展示在本条批阅下方。'
-const SUCCESS_SEALED = '留言已封存 TA 暂时不会回复。TA 每周只会写一篇周记，下一篇周记更新时，你会收到完整回信。'
-const REPLY_FAILED = 'TA 暂时没回上，下周周记会提到'
-const EMPTY_STATE = 'TA 还没有写下周记，TA 每周最多产出一篇，请耐心等待。'
-const TOOLTIP_TEXT = '周记：TA 自主记录内心与生活，每周最多一篇，你可以阅读留言，体验慢书信互动。'
-const BANNER_REPLIED = 'TA 更新了新周记！同时拆开了你之前封存的留言，一并写下回信。'
-const SLOW_LETTER_NOTE = '开启后，所有批阅强制封存，关闭即时回复，全部等待 TA 下一篇周记回信。'
-const MODE_LOCKED_NOTE = '已选过批阅方式，这篇周记的批阅方式已锁定，不能切换。'
-
-/* ---- 线条图标（去 emoji，跟全站同一种描边风格） ---- */
+const REPLY_PLACEHOLDER = '把此刻的心情写下来…'
+const OPTION_IMMEDIATE = '立即回复'
+const OPTION_SEALED = '慢信模式'
+const SEALED_NOTE = '慢信不会立刻送达；当前会等到下一封一周情书时一起回给你。'
+const SUCCESS_IMMEDIATE = '你的回信已经寄出。TA 的回信到了以后，会先等你亲手拆开。'
+const SUCCESS_SEALED = '这封慢信已经寄出，会等到下一封一周情书时一起送达。'
+const REPLY_FAILED = 'TA 暂时没回上，这封回信已经替你留好了。'
+const EMPTY_STATE = '第一封信，会在这一周结束后写给你。'
+const TOOLTIP_TEXT = '一周情书：TA 把这一周想对你说的话写成一封信。你可以立刻回信，也可以选择慢信。'
+const BANNER_REPLIED = '新的回信也一起到了，等你慢慢拆开。'
+const SLOW_LETTER_NOTE = '全局慢信模式已开启，这一封会等到下一封一周情书时一起送达。'
+const MODE_LOCKED_NOTE = '这封信已经寄出，回复方式不能再切换。'
 
 const BackIcon = () => (
   <svg
@@ -56,7 +52,6 @@ const BackIcon = () => (
   </svg>
 )
 
-/** 列表页头部小问号：点开看周记说明 */
 const QuestionIcon = () => (
   <svg
     viewBox="0 0 24 24"
@@ -73,7 +68,6 @@ const QuestionIcon = () => (
   </svg>
 )
 
-/** 封存留言「待回信」的信封图标：线条 SVG（红线：图标禁 emoji） */
 const EnvelopeIcon = () => (
   <svg
     viewBox="0 0 24 24"
@@ -90,37 +84,37 @@ const EnvelopeIcon = () => (
 )
 
 interface Props {
-  /** 返回记忆页 */
   onBack: () => void
-  /** 没配 key 时「去配置」跳服务商配置 */
   onGoSettings: () => void
 }
 
+type LetterReply = NonNullable<WeeklyReview['myReply']> & { openedAt?: number }
+type LetterPendingReply = NonNullable<WeeklyReview['replies']>[number] & { openedAt?: number }
+type LetterReview = Omit<WeeklyReview, 'myReply' | 'replies'> & {
+  myReply?: LetterReply
+  replies?: LetterPendingReply[]
+}
+
+function letterPreview(r: WeeklyReview): string {
+  const clean = r.content.replace(/\s+/g, ' ').trim()
+  if (!clean) return r.title
+  return clean.length > 56 ? `${clean.slice(0, 56)}…` : clean
+}
+
 export default function WeeklyPage({ onBack, onGoSettings }: Props) {
-  // TASK-UI2 会话感知：周记按当前角色隔离；无会话回落全局（老逻辑）
   const sid = getActiveSessionId() || undefined
-  const [reviews, setReviews] = useState<WeeklyReview[]>(() => getWeeklyReviews(sid))
+  const [reviews, setReviews] = useState<LetterReview[]>(() => getWeeklyReviews(sid) as LetterReview[])
   const [view, setView] = useState<'list' | 'detail'>('list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
-  // 批注编辑：editingReply = 正在改批注；replyText = 批注草稿
-  const [editingReply, setEditingReply] = useState(false)
   const [replyText, setReplyText] = useState('')
-  // 批阅模式：immediate 立即简短回复 / sealed 封存慢信（全局慢信开启时强制封存）
   const [replyMode, setReplyMode] = useState<'immediate' | 'sealed'>('immediate')
-  // 物理锁（2026-08-26 七七拍板）：批注提交后锁定，不能再改/换方式；
-  // 老数据 reviewMode 已存在（已批阅过）也锁。选中方式不锁（1 太苛刻，七七笑死）
-  const [modeChosen, setModeChosen] = useState<boolean>(false)
-  // 全局慢信开关只在设置页改，进周记页读一次即可
+  const [modeChosen, setModeChosen] = useState(false)
   const slowLetter = isSlowLetterMode()
-  // 提交成功提示（按模式）
   const [hint, setHint] = useState<string | null>(null)
-  // 立即回复：TA 正在写简短回复
   const [taReplying, setTaReplying] = useState(false)
-  // 列表页头部 tooltip
   const [showTooltip, setShowTooltip] = useState(false)
-  // 生成成功且存在封存留言 → 新周记详情页顶部的「已回信」横幅
   const [justReplied, setJustReplied] = useState(false)
 
   const settings = loadSettings()
@@ -128,14 +122,11 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const cooldown = cooldownInfo(Date.now(), sid)
   const canGenerate = cooldown.canGenerate
 
-  // 详情选中的那篇：从 reviews 里现找，批注保存后能立刻反映
   const selectedReview = useMemo(
     () => (selectedId ? reviews.find((r) => r.id === selectedId) ?? null : null),
     [reviews, selectedId],
   )
 
-  // 批阅方式锁定（TASK-UI3）：这篇已经批阅过 → 锁死当时用的方式，不能切换；
-  // 老数据没有 reviewMode 字段时按数据推导（有立即回复 → immediate；有封存留言 → sealed）
   const lockedMode = selectedReview
     ? (selectedReview.reviewMode ??
       (selectedReview.myReply
@@ -144,29 +135,26 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
           ? 'sealed'
           : null))
     : null
-
-  // 物理锁（2026-08-26 七七拍板）：点选过方式（modeChosen）或数据已锁定（lockedMode）→ 都不能再切换
   const modeLocked = modeChosen || lockedMode != null
-
-  // ★2026-09-02 修复：判定「这篇是否已批阅」必须同时看 immediate(myReply) 和 sealed(replies)，
-  // 之前只查 myReply → 封存提交后编辑框还在，能反复追加封存留言（七七实测抓到）
-  const alreadyReplied = (r?: WeeklyReview | null): boolean =>
+  const alreadyReplied = (r?: LetterReview | null): boolean =>
     Boolean(r?.myReply) || (Array.isArray(r?.replies) && (r?.replies ?? []).length > 0)
-
-  // 批阅实际生效模式：锁定优先；未锁定且全局慢信开启时强制封存
   const effectiveMode = (modeChosen ? replyMode : null) ?? lockedMode ?? (slowLetter ? 'sealed' : replyMode)
 
-  // 周记口吻：优先当前会话的人设（侧边栏会话缓存里有），没有回落到全局人设
   const persona = useMemo(() => {
-    const sid = getActiveSessionId()
-    return resolveRolePersona(sid, getSessionsCache(), loadPersona()).trim()
+    const currentSid = getActiveSessionId()
+    return resolveRolePersona(currentSid, getSessionsCache(), loadPersona()).trim()
   }, [])
 
-  const openDetail = (r: WeeklyReview) => {
+  const persist = (next: LetterReview[]) => {
+    saveWeeklyReviews(next as WeeklyReview[], sid)
+    setReviews(next)
+  }
+
+  const openDetail = (r: LetterReview) => {
     setSelectedId(r.id)
-    setEditingReply(false)
     setReplyText('')
     setReplyMode('immediate')
+    setModeChosen(false)
     setHint(null)
     setTaReplying(false)
     setShowTooltip(false)
@@ -174,14 +162,12 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     setView('detail')
   }
 
-  // 生成本周周记：调用户 key 非流式（复用 chatCompletion），成功后保存 + 跳详情；429 走现有重试逻辑。
-  // 冷却期直接拦截：canGenerate=false 时不进入（UI 也禁用了按钮），零 token。
   const handleGenerate = async () => {
     if (generating) return
     if (!cooldownInfo(Date.now(), sid).canGenerate) return
     const s = loadSettings()
     if (!s.apiKey?.trim() || !s.baseUrl?.trim() || !s.model?.trim()) {
-      setGenError('还没接上大脑，去「我的」页填一下 API Key 就能写周记了')
+      setGenError('还没接上大脑，去「我的」页填一下 API Key 就能写信了')
       return
     }
     setGenerating(true)
@@ -190,32 +176,27 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     try {
       const ts = Date.now()
       const week = getWeekRange(ts, getFirstSeen(getActiveSessionId() || undefined))
-      const sid = getActiveSessionId()
-      // 本周消息：落在本周窗口内，取最近 40 条按时间升序
-      const weekMsgs = (sid ? getMessagesCache(sid) : loadMessages())
+      const currentSid = getActiveSessionId()
+      const weekMsgs = (currentSid ? getMessagesCache(currentSid) : loadMessages())
         .filter((m) => m.ts >= week.startTs && m.ts <= week.endTs)
         .sort((a, b) => a.ts - b.ts)
         .slice(-40)
       const summaryLines = weekMsgs.map((m) => formatMessageLine(m))
-      // 本周新增记忆：该会话记忆里 createdAt 在本周内
-      const newMemories = (sid ? getMemoriesCache(sid) : loadMemory())
+      const newMemories = (currentSid ? getMemoriesCache(currentSid) : loadMemory())
         .filter((m) => m.createdAt >= week.startTs && m.createdAt <= week.endTs)
         .map((m) => m.text)
-      const curReviews = getWeeklyReviews(sid)
+      const curReviews = getWeeklyReviews(currentSid) as LetterReview[]
       const lastReply = curReviews[0]?.myReply?.content
-      // 封存留言：下一篇周记生成时一并完整回信
-      const pending = getPendingReplies(curReviews)
+      const pending = getPendingReplies(curReviews as WeeklyReview[])
       const pendingTexts = pending.map((p) => p.content)
-      // 因果链·周记回响：本周 TA 发过的动态 + 本周到期的约定，作为周记素材
-      const weekPosts = loadCurrentPosts(sid || undefined)
+      const weekPosts = loadCurrentPosts(currentSid || undefined)
         .filter((p) => p.at >= week.startTs && p.at <= week.endTs)
         .slice(0, 5)
         .map((p) => p.text)
-      const weekAgenda = loadChatTopics(sid || undefined)
+      const weekAgenda = loadChatTopics(currentSid || undefined)
         .filter((t) => typeof t.futureDay === 'string' && t.futureDay >= dayKeyOf(week.startTs) && t.futureDay <= dayKeyOf(week.endTs))
         .map((t) => `${t.t}（约在 ${t.futureDay}）`)
-      // Event（E3）：本周一起经历过的事，周记只读引用（不复制成记忆）
-      const weekEvents = getEventsForWeek(sid || undefined, week.startTs, week.endTs)
+      const weekEvents = getEventsForWeek(currentSid || undefined, week.startTs, week.endTs)
         .slice(0, 5)
         .map((e) => (e.description ? `${e.title}（${e.description}）` : e.title))
 
@@ -229,7 +210,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
               weekLabel: week.weekLabel,
               summaryLines,
               newMemories,
-              daysKnown: getKnownDays(ts, sid),
+              daysKnown: getKnownDays(ts, currentSid),
               ...(lastReply?.trim() ? { lastReply: lastReply.trim() } : {}),
               ...(pendingTexts.length > 0 ? { pendingReplies: pendingTexts } : {}),
               ...(weekPosts.length > 0 ? { weekPosts } : {}),
@@ -247,7 +228,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         setGenError('TA 这周没写出来，再试一次？')
         return
       }
-      const review: WeeklyReview = {
+      const review: LetterReview = {
         id: newWeeklyReviewId(),
         weekLabel: week.weekLabel,
         title: parsed.title,
@@ -255,15 +236,18 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         createdAt: ts,
         generatedFrom: { startTs: week.startTs, endTs: week.endTs },
       }
-      // 回信挂载：解析出的回信按顺序挂到封存留言上并标记已回信（信封标记消失）；没回上的保持待回信
       let answered = curReviews
       if (pending.length > 0) {
-        answered = answerPendingReplies(curReviews, pending, parsed.replies, ts)
+        answered = answerPendingReplies(
+          curReviews as WeeklyReview[],
+          pending,
+          parsed.replies,
+          ts,
+        ) as LetterReview[]
         setJustReplied(true)
       }
       const next = [review, ...answered]
-      saveWeeklyReviews(next, sid)
-      setReviews(next)
+      persist(next)
       setSelectedId(review.id)
       setView('detail')
     } catch (e) {
@@ -273,60 +257,51 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     }
   }
 
-  // 批注保存：按模式处理——立即回复保存 myReply + 调 key 生成一句简短回复；封存只入库不调模型
   const handleSaveReply = async () => {
     const t = replyText.trim()
     if (!t || !selectedReview || taReplying) return
-    // ★2026-09-02 修复：已批阅过（immediate 或 sealed）→ 物理拦截，杜绝第二次提交
     if (alreadyReplied(selectedReview)) return
     const now = Date.now()
+
     if (effectiveMode === 'sealed') {
-      const pending = { id: newWeeklyReviewId(), content: t, repliedAt: now }
-      const next: WeeklyReview[] = reviews.map((r) =>
+      const pending: LetterPendingReply = { id: newWeeklyReviewId(), content: t, repliedAt: now }
+      const next: LetterReview[] = reviews.map((r) =>
         r.id === selectedReview.id
           ? { ...r, reviewMode: 'sealed', replies: [...(r.replies ?? []), pending] }
           : r,
       )
-      saveWeeklyReviews(next, sid)
-      setReviews(next)
+      persist(next)
       setHint(SUCCESS_SEALED)
-      setEditingReply(false)
       setReplyText('')
-      setModeChosen(true) // 提交即锁
+      setModeChosen(true)
       return
     }
 
-    // 立即回复模式：先保存批注（myReply），再调用户 key 非流式生成一句简短回复
-    const base: WeeklyReview[] = reviews.map((r) =>
+    const base: LetterReview[] = reviews.map((r) =>
       r.id === selectedReview.id
         ? { ...r, reviewMode: 'immediate', myReply: { content: t, repliedAt: now } }
         : r,
     )
-    saveWeeklyReviews(base, sid)
-    setReviews(base)
-    setEditingReply(false)
+    persist(base)
     setReplyText('')
     setHint(SUCCESS_IMMEDIATE)
-    setModeChosen(true) // 提交即锁
+    setModeChosen(true)
     setTaReplying(true)
     try {
       const s = loadSettings()
       if (!s.apiKey?.trim() || !s.baseUrl?.trim() || !s.model?.trim()) throw new Error('no-key')
-      // 把这篇周记的标题+正文一起带给 TA，回复才贴周记内容、答在点子上（TASK-UI3 答非所问修复）
-      const reviewContext = selectedReview
-        ? `这篇周记《${selectedReview.title}》：\n${selectedReview.content}`
-        : ''
+      const reviewContext = `这封一周情书《${selectedReview.title}》：\n${selectedReview.content}`
       const reply = await chatCompletion(
         s,
         [
           { role: 'system', content: WEEKLY_REPLY_SYSTEM_PROMPT },
-          { role: 'user', content: `${reviewContext}\n\n对方在这篇周记下的批注：${t}` },
+          { role: 'user', content: `${reviewContext}\n\n对方写给你的回信：${t}` },
         ],
         { maxTokens: 100, timeoutMs: 30000 },
       )
       const clean = reply.trim()
       if (!clean) throw new Error('empty')
-      const withReply: WeeklyReview[] = reviews.map((r) =>
+      const withReply: LetterReview[] = base.map((r) =>
         r.id === selectedReview.id
           ? {
               ...r,
@@ -335,104 +310,120 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
             }
           : r,
       )
-      saveWeeklyReviews(withReply, sid)
-      setReviews(withReply)
+      persist(withReply)
     } catch {
-      // 无 key/429/网络 → 批注仍保存，回复区显示兜底文案，不阻塞
-      const failed: WeeklyReview[] = reviews.map((r) =>
+      const failed: LetterReview[] = base.map((r) =>
         r.id === selectedReview.id
           ? { ...r, reviewMode: 'immediate', myReply: { content: t, repliedAt: now, taReplyFailed: true } }
           : r,
       )
-      saveWeeklyReviews(failed, sid)
-      setReviews(failed)
+      persist(failed)
     } finally {
       setTaReplying(false)
     }
   }
 
-  // ---- 列表视图 ----
+  const openImmediateReply = (reviewId: string) => {
+    const next = reviews.map((r) =>
+      r.id === reviewId && r.myReply?.taReply
+        ? { ...r, myReply: { ...r.myReply, openedAt: r.myReply.openedAt ?? Date.now() } }
+        : r,
+    )
+    persist(next)
+  }
+
+  const openSealedReply = (reviewId: string, replyId: string) => {
+    const next = reviews.map((r) =>
+      r.id === reviewId
+        ? {
+            ...r,
+            replies: r.replies?.map((p) =>
+              p.id === replyId && p.replied
+                ? { ...p, openedAt: p.openedAt ?? Date.now() }
+                : p,
+            ),
+          }
+        : r,
+    )
+    persist(next)
+  }
+
   const renderList = () => (
-    <div className="page weekly-page">
-      <div className="detail-header">
+    <div className="page weekly-page weekly-letter-page">
+      <div className="detail-header weekly-letter-header">
         <button type="button" className="detail-back detail-back-text" onClick={onBack} aria-label="返回">
           <BackIcon />
           返回
         </button>
-        <h2 className="detail-title">TA 所写</h2>
+        <h2 className="detail-title">一周情书</h2>
         <button
           type="button"
           className="weekly-tooltip-btn"
           onClick={() => setShowTooltip((s) => !s)}
           aria-expanded={showTooltip}
-          aria-label="周记说明"
+          aria-label="一周情书说明"
         >
           <QuestionIcon />
         </button>
       </div>
 
-      {showTooltip && (
-        <div className="weekly-tooltip" role="tooltip">
-          {TOOLTIP_TEXT}
-        </div>
-      )}
-
+      {showTooltip && <div className="weekly-tooltip" role="tooltip">{TOOLTIP_TEXT}</div>}
       {genError && <p className="weekly-error">{genError}</p>}
 
       {!hasKey ? (
-        <div className="weekly-guide-card">
-          <p className="weekly-guide-title">TA 还没写过周记</p>
-          <p className="weekly-guide-desc">接上大脑后，TA 才能给你写周记。</p>
-          <button type="button" className="btn btn-primary" onClick={onGoSettings}>
-            去配置
-          </button>
+        <div className="weekly-guide-card weekly-letter-guide">
+          <p className="weekly-guide-title">还没有第一封信</p>
+          <p className="weekly-guide-desc">接上大脑后，TA 才能把这一周写成一封信。</p>
+          <button type="button" className="btn btn-primary" onClick={onGoSettings}>去配置</button>
         </div>
       ) : canGenerate ? (
-        <div className="weekly-guide-card">
-          <p className="weekly-guide-desc">{reviews.length === 0 ? EMPTY_STATE : '这周的周记还没写。'}</p>
+        <div className="weekly-guide-card weekly-letter-guide">
+          <p className="weekly-guide-desc">{reviews.length === 0 ? EMPTY_STATE : '这一周的新信还没有落笔。'}</p>
           <button type="button" className="btn btn-primary" onClick={handleGenerate} disabled={generating}>
-            {generating ? 'TA 正在写…' : '让 TA 写这周的周记'}
+            {generating ? 'TA 正在写信…' : '让 TA 写这一周'}
           </button>
         </div>
       ) : (
-        <div className="weekly-guide-card">
-          <p className="weekly-guide-desc">TA 还在沉淀思绪，每周只能写下一篇周记，距离下一篇周记还有 {cooldown.remainText}。</p>
-          <button type="button" className="btn btn-primary" disabled>
-            让 TA 写这周的周记
-          </button>
+        <div className="weekly-guide-card weekly-letter-guide">
+          <p className="weekly-guide-desc">下一封信还在慢慢酝酿，距离可以再次落笔还有 {cooldown.remainText}。</p>
+          <button type="button" className="btn btn-primary" disabled>还没到下一封</button>
         </div>
       )}
 
       {reviews.length > 0 && (
-        <ul className="weekly-list">
-          {reviews.map((r) => (
-            <li key={r.id}>
-              <button type="button" className="weekly-card" onClick={() => openDetail(r)}>
-                <span className="weekly-card-title">{r.title}</span>
-                <span className="weekly-card-foot">
-                  <span className="weekly-card-label">{r.weekLabel}</span>
-                  {r.myReply && <span className="weekly-card-reply">已批注</span>}
-                  {Array.isArray(r.replies) && r.replies.some((p) => !p.replied) && (
-                    <span className="weekly-card-reply weekly-card-reply-pending">
-                      <EnvelopeIcon /> 待回信
-                    </span>
-                  )}
-                </span>
-              </button>
-            </li>
-          ))}
+        <ul className="weekly-list weekly-letter-list">
+          {reviews.map((r) => {
+            const immediateWaiting = Boolean(r.myReply?.taReply && !r.myReply.openedAt)
+            const sealedWaiting = Boolean(r.replies?.some((p) => p.replied && !p.openedAt))
+            const sealedOnRoad = Boolean(r.replies?.some((p) => !p.replied))
+            return (
+              <li key={r.id}>
+                <button type="button" className="weekly-card weekly-envelope-card" onClick={() => openDetail(r)}>
+                  <span className="weekly-envelope-paper">
+                    <span className="weekly-card-label">{r.weekLabel}</span>
+                    <span className="weekly-card-title">{letterPreview(r)}</span>
+                  </span>
+                  <span className="weekly-envelope-flap" aria-hidden="true" />
+                  <span className="weekly-envelope-seal" aria-hidden="true">♡</span>
+                  {(immediateWaiting || sealedWaiting) && <span className="weekly-card-reply">回信待拆</span>}
+                  {sealedOnRoad && !sealedWaiting && <span className="weekly-card-reply weekly-card-reply-pending">慢信在路上</span>}
+                </button>
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>
   )
 
-  // ---- 详情视图 ----
   if (view === 'detail') {
     const r = selectedReview
-    if (!r) return renderList() // 详情数据丢失（如换了会话）→ 回列表
+    if (!r) return renderList()
+    const immediateWaiting = Boolean(r.myReply?.taReply && !r.myReply.openedAt)
+
     return (
-      <div className="page weekly-page">
-        <div className="detail-header">
+      <div className="page weekly-page weekly-letter-page">
+        <div className="detail-header weekly-letter-header">
           <button
             type="button"
             className="detail-back detail-back-text"
@@ -440,77 +431,58 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
               setView('list')
               setSelectedId(null)
             }}
-            aria-label="返回周记列表"
+            aria-label="返回一周情书"
           >
             <BackIcon />
             返回
           </button>
-          <h2 className="detail-title">{r.title}</h2>
+          <h2 className="detail-title">一周情书</h2>
           <span className="detail-spacer" aria-hidden="true" />
         </div>
-        <p className="weekly-detail-label">{r.weekLabel}</p>
 
         {justReplied && <p className="weekly-banner">{BANNER_REPLIED}</p>}
 
-        {r.content
-          .split('\n')
-          .map((p) => p.trim())
-          .filter(Boolean)
-          .map((p, i) => (
-            <p key={i} className="weekly-detail-para">
-              {p}
-            </p>
-          ))}
+        <article className="weekly-letter-sheet">
+          <span className="weekly-letter-watermark" aria-hidden="true">忆文</span>
+          <h1 className="weekly-letter-title">这一周，写给你。</h1>
+          <p className="weekly-letter-date">{r.weekLabel}</p>
+          <div className="weekly-letter-body">
+            {r.content
+              .split('\n')
+              .map((p) => p.trim())
+              .filter(Boolean)
+              .map((p, i) => <p key={i}>{p}</p>)}
+          </div>
+          <p className="weekly-letter-sign">Always with you. ♡</p>
+        </article>
 
-        <div className="weekly-reply">
-          <h3 className="weekly-reply-title">批注</h3>
+        <section className="weekly-reply weekly-letter-reply">
+          <div className="weekly-letter-reply-head">
+            <h3 className="weekly-reply-title">我也想回一封</h3>
+            <span>把此刻的心情写下来…</span>
+          </div>
 
           {hint && <p className="weekly-reply-hint">{hint}</p>}
 
-          {r.myReply && !editingReply ? (
-            <div className="weekly-reply-show">
-              <p className="weekly-reply-content">你的批注：{r.myReply.content}</p>
-              {taReplying && <p className="weekly-reply-ta">TA 正在写回复…</p>}
-              {r.myReply.taReply && <p className="weekly-reply-ta">TA 的回信：{r.myReply.taReply}</p>}
-              {!r.myReply.taReply && !r.myReply.taReplyFailed && !taReplying && (
-                <p className="weekly-reply-ta weekly-reply-ta-fail">{REPLY_FAILED}</p>
-              )}
-              {r.myReply.taReplyFailed && <p className="weekly-reply-ta weekly-reply-ta-fail">{REPLY_FAILED}</p>}
-              <div className="weekly-reply-foot">
-                <span className="weekly-reply-meta">TA 下周会看到</span>
-                {/* 批注提交后物理锁定，不可修改（2026-08-26 七七拍板，对标笺"提交即永久锁定"） */}
-              </div>
-            </div>
-          ) : alreadyReplied(r) && !r.myReply ? (
-            /* ★2026-09-02 修复：封存模式已批阅 → 不再显示编辑框，只提示已封存（原 bug：只查 myReply，封存后还能反复追加） */
-            <div className="weekly-reply-show">
-              <p className="weekly-reply-content">已封存 {r.replies?.length ?? 0} 条留言，TA 更新下一篇周记时会一并回信。</p>
-              <div className="weekly-reply-foot">
-                <span className="weekly-reply-meta">批阅方式已锁定，这篇周记不能再批</span>
-              </div>
-            </div>
-          ) : (
+          {!alreadyReplied(r) ? (
             <div className="weekly-reply-edit">
               <textarea
                 className="input weekly-reply-input"
-                rows={3}
+                rows={5}
+                maxLength={500}
                 placeholder={REPLY_PLACEHOLDER}
                 value={replyText}
                 onChange={(e) => {
                   setReplyText(e.target.value)
                   setHint(null)
                 }}
-                autoFocus={editingReply}
               />
+              <div className="weekly-letter-counter">{replyText.length}/500</div>
               {slowLetter ? (
                 <p className="weekly-reply-mode-note">{SLOW_LETTER_NOTE}</p>
               ) : (
-                <div className="weekly-reply-mode" role="radiogroup" aria-label="批阅方式">
-                  <label
-                    className={`weekly-reply-mode-option${effectiveMode === 'immediate' ? ' selected' : ''}${
-                      modeLocked ? ' is-locked' : ''
-                    }`}
-                  >
+                <div className="weekly-reply-mode" role="radiogroup" aria-label="回信方式">
+                  <label className={`weekly-reply-mode-option${effectiveMode === 'immediate' ? ' selected' : ''}${modeLocked ? ' is-locked' : ''}`}>
                     <input
                       type="radio"
                       name="weekly-reply-mode"
@@ -520,11 +492,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                     />
                     <span>{OPTION_IMMEDIATE}</span>
                   </label>
-                  <label
-                    className={`weekly-reply-mode-option${effectiveMode === 'sealed' ? ' selected' : ''}${
-                      modeLocked ? ' is-locked' : ''
-                    }`}
-                  >
+                  <label className={`weekly-reply-mode-option${effectiveMode === 'sealed' ? ' selected' : ''}${modeLocked ? ' is-locked' : ''}`}>
                     <input
                       type="radio"
                       name="weekly-reply-mode"
@@ -537,50 +505,77 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                   <p className="weekly-reply-mode-note">{modeLocked ? MODE_LOCKED_NOTE : SEALED_NOTE}</p>
                 </div>
               )}
-              <div className="weekly-reply-actions">
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => void handleSaveReply()}
-                  disabled={!replyText.trim() || taReplying}
-                >
-                  {effectiveMode === 'sealed' ? '封存留言' : '写下批注'}
-                </button>
-                {editingReply && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => {
-                      setEditingReply(false)
-                      setReplyText('')
-                    }}
-                  >
-                    取消
-                  </button>
-                )}
-              </div>
+              <button
+                type="button"
+                className="weekly-letter-send"
+                onClick={() => void handleSaveReply()}
+                disabled={!replyText.trim() || taReplying}
+              >
+                {effectiveMode === 'sealed' ? '寄出慢信' : '寄出回信'}
+              </button>
+            </div>
+          ) : (
+            <div className="weekly-reply-show weekly-letter-sent">
+              {r.myReply && <p className="weekly-reply-content">你写的回信：{r.myReply.content}</p>}
+              {Array.isArray(r.replies) && r.replies.length > 0 && (
+                <p className="weekly-reply-content">你的慢信已经寄出。</p>
+              )}
             </div>
           )}
 
-          {/* 封存留言列表：回信后信封图标消失、展示 TA 的回信 */}
+          {taReplying && <p className="weekly-reply-ta">TA 正在写回信…</p>}
+
+          {r.myReply?.taReplyFailed && <p className="weekly-reply-ta weekly-reply-ta-fail">{REPLY_FAILED}</p>}
+
+          {immediateWaiting && (
+            <button type="button" className="weekly-letter-arrived" onClick={() => openImmediateReply(r.id)}>
+              <span className="weekly-letter-arrived-icon"><EnvelopeIcon /></span>
+              <span>
+                <strong>已收到回信，等你拆开</strong>
+                <small>写下的心情，值得被好好打开。</small>
+              </span>
+              <span className="weekly-letter-arrived-action">拆开看看 ›</span>
+            </button>
+          )}
+
+          {r.myReply?.taReply && r.myReply.openedAt && (
+            <div className="weekly-letter-opened-reply">
+              <p className="weekly-letter-opened-label">TA 的回信</p>
+              <p>{r.myReply.taReply}</p>
+            </div>
+          )}
+
           {Array.isArray(r.replies) && r.replies.length > 0 && (
             <div className="weekly-reply-sealed-list">
               {r.replies.map((p) => (
                 <div className="weekly-reply-sealed" key={p.id}>
-                  <p className="weekly-reply-content">你的批注：{p.content}</p>
                   {p.replied ? (
-                    <p className="weekly-reply-ta">TA 的回信：{p.reply}</p>
+                    p.openedAt ? (
+                      <div className="weekly-letter-opened-reply">
+                        <p className="weekly-letter-opened-label">TA 的慢信</p>
+                        <p>{p.reply}</p>
+                      </div>
+                    ) : (
+                      <button type="button" className="weekly-letter-arrived" onClick={() => openSealedReply(r.id, p.id)}>
+                        <span className="weekly-letter-arrived-icon"><EnvelopeIcon /></span>
+                        <span>
+                          <strong>慢信到了，等你拆开</strong>
+                          <small>这一封，也想让你亲手打开。</small>
+                        </span>
+                        <span className="weekly-letter-arrived-action">拆开看看 ›</span>
+                      </button>
+                    )
                   ) : (
                     <span className="weekly-reply-pending">
                       <EnvelopeIcon />
-                      待回信
+                      慢信在路上
                     </span>
                   )}
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </section>
       </div>
     )
   }
