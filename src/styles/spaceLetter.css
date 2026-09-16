@@ -1,0 +1,556 @@
+/* UI2-04 Card 1A · Space archive + 一周情书
+   只用主题变量，不另造页面底色；照片墙完整重构留给 Card 2。 */
+
+/* Space 像 TA / Memory 一样不显示旧全局品牌题头；同时停用旧标题隐藏点击入口。 */
+.app:has(.ai-space-page) > .app-header {
+  display: none;
+}
+
+.app-title:not(.chat-header-name) {
+  pointer-events: none;
+}
+
+.space-archive-home,
+.weekly-letter-page {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.space-archive-home {
+  padding-top: 24px;
+}
+
+.space-archive-intro {
+  margin: 0 0 30px;
+  color: var(--color-text-muted);
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  line-height: 1.7;
+}
+
+.space-archive-section {
+  padding: 0 0 28px;
+  margin: 0 0 28px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.space-archive-section:last-child {
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
+.space-archive-home .ai-space-v2-head {
+  align-items: baseline;
+  gap: 9px;
+  margin-bottom: 15px;
+}
+
+.space-archive-home .ai-space-v2-title {
+  font-family: Georgia, 'Songti SC', 'STSong', serif;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.space-archive-home .ai-space-v2-en {
+  color: var(--color-text-muted);
+  font-family: Georgia, serif;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+}
+
+.space-archive-home .ai-space-v2-all {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* ---- Space 首页：立体信封 ---- */
+.space-letter-envelope {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 170px;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  isolation: isolate;
+}
+
+.space-letter-envelope-back {
+  position: absolute;
+  inset: 17px 2px 4px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
+  border-radius: 12px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--color-card) 94%, var(--color-bg)) 0%, var(--color-card) 100%);
+  box-shadow:
+    0 12px 28px color-mix(in srgb, var(--color-text) 10%, transparent),
+    0 2px 5px color-mix(in srgb, var(--color-text) 5%, transparent);
+}
+
+.space-letter-envelope-paper {
+  position: absolute;
+  z-index: 2;
+  left: 16px;
+  right: 16px;
+  top: 0;
+  min-height: 96px;
+  padding: 20px 22px 28px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 66%, transparent);
+  border-radius: 10px 10px 5px 5px;
+  background:
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--color-text) 2%, transparent) 0 0.6px, transparent 0.7px),
+    color-mix(in srgb, var(--color-card) 88%, var(--color-bg));
+  background-size: 9px 9px, auto;
+  box-shadow: 0 5px 13px color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.space-letter-date,
+.space-letter-preview,
+.space-letter-empty {
+  display: block;
+}
+
+.space-letter-date {
+  margin-bottom: 10px;
+  color: var(--color-text-muted);
+  font-family: Georgia, 'Songti SC', serif;
+  font-size: 12px;
+  letter-spacing: 0.07em;
+}
+
+.space-letter-preview,
+.space-letter-empty {
+  max-width: 88%;
+  font-family: Georgia, 'Songti SC', 'STSong', serif;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.space-letter-empty {
+  color: var(--color-text-muted);
+}
+
+.space-letter-envelope-flap {
+  position: absolute;
+  z-index: 3;
+  left: 2px;
+  right: 2px;
+  bottom: 4px;
+  height: 100px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  background: color-mix(in srgb, var(--color-card) 92%, var(--color-bg));
+  clip-path: polygon(0 13%, 50% 66%, 100% 13%, 100% 100%, 0 100%);
+  filter: drop-shadow(0 -3px 3px color-mix(in srgb, var(--color-text) 5%, transparent));
+}
+
+.space-letter-wax {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 37px;
+  width: 43px;
+  height: 43px;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-primary-deep) 35%, var(--color-border));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-card));
+  color: color-mix(in srgb, var(--color-primary-deep) 76%, var(--color-text));
+  font-family: Georgia, serif;
+  font-size: 20px;
+  box-shadow:
+    inset 0 0 0 4px color-mix(in srgb, var(--color-card) 44%, transparent),
+    0 4px 8px color-mix(in srgb, var(--color-text) 14%, transparent);
+}
+
+/* 本批暂不重做照片墙数据/UI，只让它和新页面节奏一致。 */
+.space-archive-home .ai-photo-grid {
+  margin-top: 4px;
+}
+
+.space-archive-home .ai-shared-timeline.is-compact .ai-shared-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.space-archive-home .ai-shared-timeline.is-compact .ai-shared-ops {
+  display: none;
+}
+
+/* ---- 一周情书：列表 ---- */
+.weekly-letter-page {
+  padding-bottom: 28px;
+}
+
+.weekly-letter-header {
+  background: transparent;
+}
+
+.weekly-letter-guide {
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  background: color-mix(in srgb, var(--color-card) 70%, var(--color-bg));
+  box-shadow: none;
+}
+
+.weekly-letter-list {
+  display: grid;
+  gap: 20px;
+  margin-top: 22px;
+}
+
+.weekly-envelope-card {
+  position: relative;
+  min-height: 154px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--color-card) 87%, var(--color-bg));
+  box-shadow: 0 9px 21px color-mix(in srgb, var(--color-text) 8%, transparent);
+  text-align: left;
+}
+
+.weekly-envelope-paper {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  min-height: 100px;
+  margin: 10px 14px 42px;
+  padding: 16px 18px 22px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--color-card) 76%, var(--color-bg));
+}
+
+.weekly-envelope-card .weekly-card-label {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.weekly-envelope-card .weekly-card-title {
+  color: var(--color-text);
+  font-family: Georgia, 'Songti SC', serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.75;
+}
+
+.weekly-envelope-flap {
+  position: absolute;
+  z-index: 3;
+  inset: auto 0 0;
+  height: 78px;
+  background: color-mix(in srgb, var(--color-card) 90%, var(--color-bg));
+  clip-path: polygon(0 21%, 50% 68%, 100% 21%, 100% 100%, 0 100%);
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.weekly-envelope-seal {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 20px;
+  width: 36px;
+  height: 36px;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-card));
+  color: var(--color-primary-deep);
+  box-shadow: 0 3px 7px color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
+.weekly-envelope-card .weekly-card-reply {
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  right: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-bg));
+  color: var(--color-primary-deep);
+  font-size: 11px;
+}
+
+/* ---- 一周情书：信纸详情 ---- */
+.weekly-letter-sheet {
+  position: relative;
+  margin: 4px 0 18px;
+  padding: 38px 28px 34px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-border) 68%, transparent);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 15% 22%, color-mix(in srgb, var(--color-text) 2.5%, transparent) 0 0.6px, transparent 0.7px),
+    radial-gradient(circle at 72% 64%, color-mix(in srgb, var(--color-primary-deep) 1.7%, transparent) 0 0.5px, transparent 0.6px),
+    color-mix(in srgb, var(--color-card) 76%, var(--color-bg));
+  background-size: 8px 8px, 11px 11px, auto;
+  box-shadow:
+    0 12px 28px color-mix(in srgb, var(--color-text) 7%, transparent),
+    inset 0 0 40px color-mix(in srgb, var(--color-bg) 55%, transparent);
+}
+
+.weekly-letter-sheet::before,
+.weekly-letter-sheet::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 9px;
+  right: 9px;
+  height: 18px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-card) 68%, var(--color-bg));
+  border: 1px solid color-mix(in srgb, var(--color-border) 56%, transparent);
+}
+
+.weekly-letter-sheet::before {
+  top: -8px;
+}
+
+.weekly-letter-sheet::after {
+  bottom: -8px;
+}
+
+.weekly-letter-watermark {
+  position: absolute;
+  top: 30px;
+  right: 22px;
+  color: color-mix(in srgb, var(--color-primary-deep) 13%, transparent);
+  font-family: 'Kaiti SC', 'STKaiti', Georgia, serif;
+  font-size: 44px;
+  font-style: italic;
+  letter-spacing: 0.08em;
+  transform: rotate(-7deg);
+  user-select: none;
+}
+
+.weekly-letter-title {
+  position: relative;
+  z-index: 1;
+  max-width: 78%;
+  margin: 0;
+  font-family: Georgia, 'Songti SC', 'STSong', serif;
+  font-size: clamp(28px, 8vw, 38px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.28;
+}
+
+.weekly-letter-date {
+  margin: 12px 0 28px;
+  color: var(--color-text-muted);
+  font-family: Georgia, serif;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.weekly-letter-body {
+  font-family: Georgia, 'Songti SC', 'STSong', serif;
+  font-size: 16px;
+  line-height: 2;
+  letter-spacing: 0.015em;
+}
+
+.weekly-letter-body p {
+  margin: 0 0 16px;
+  text-indent: 2em;
+}
+
+.weekly-letter-body p:first-child {
+  text-indent: 0;
+}
+
+.weekly-letter-sign {
+  margin: 28px 0 0;
+  color: color-mix(in srgb, var(--color-primary-deep) 48%, var(--color-text-muted));
+  font-family: Georgia, cursive;
+  font-size: 13px;
+  font-style: italic;
+  text-align: right;
+}
+
+/* ---- 回信 ---- */
+.weekly-letter-reply {
+  margin-top: 22px;
+  padding: 20px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-card) 64%, var(--color-bg));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-text) 5%, transparent);
+}
+
+.weekly-letter-reply-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 13px;
+}
+
+.weekly-letter-reply-head .weekly-reply-title {
+  margin: 0;
+  font-family: Georgia, 'Songti SC', serif;
+  font-size: 20px;
+}
+
+.weekly-letter-reply-head > span {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.weekly-letter-reply .weekly-reply-input {
+  min-height: 132px;
+  padding: 16px;
+  border-color: color-mix(in srgb, var(--color-border) 76%, transparent);
+  background: color-mix(in srgb, var(--color-card) 64%, var(--color-bg));
+  line-height: 1.7;
+  resize: vertical;
+}
+
+.weekly-letter-counter {
+  margin-top: -25px;
+  padding-right: 9px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-align: right;
+  pointer-events: none;
+}
+
+.weekly-reply-mode {
+  margin-top: 20px;
+}
+
+.weekly-letter-send {
+  width: 100%;
+  margin-top: 18px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 64%, var(--color-primary-deep));
+  color: var(--color-on-primary);
+  font-size: 15px;
+}
+
+.weekly-letter-send:disabled {
+  opacity: 0.45;
+}
+
+.weekly-letter-sent {
+  padding: 12px 0;
+}
+
+.weekly-letter-arrived {
+  width: 100%;
+  margin-top: 16px;
+  padding: 17px 16px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-card) 77%, var(--color-bg));
+  color: var(--color-text);
+  text-align: left;
+  box-shadow: 0 6px 15px color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+
+.weekly-letter-arrived-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: color-mix(in srgb, var(--color-primary-deep) 65%, var(--color-text));
+}
+
+.weekly-letter-arrived-icon svg {
+  width: 25px;
+  height: 25px;
+}
+
+.weekly-letter-arrived strong,
+.weekly-letter-arrived small {
+  display: block;
+}
+
+.weekly-letter-arrived strong {
+  margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.weekly-letter-arrived small {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.weekly-letter-arrived-action {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.weekly-letter-opened-reply {
+  margin-top: 16px;
+  padding: 18px;
+  border-left: 2px solid color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
+  background: color-mix(in srgb, var(--color-card) 50%, var(--color-bg));
+  font-family: Georgia, 'Songti SC', serif;
+  line-height: 1.85;
+}
+
+.weekly-letter-opened-label {
+  margin: 0 0 8px;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 390px) {
+  .space-archive-home {
+    padding-top: 20px;
+  }
+
+  .space-archive-home .ai-space-v2-title {
+    font-size: 22px;
+  }
+
+  .space-letter-envelope {
+    min-height: 162px;
+  }
+
+  .weekly-letter-sheet {
+    padding: 32px 22px 30px;
+  }
+
+  .weekly-letter-watermark {
+    right: 16px;
+    font-size: 38px;
+  }
+
+  .weekly-letter-body {
+    font-size: 15px;
+  }
+
+  .weekly-letter-arrived {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .weekly-letter-arrived-action {
+    grid-column: 2;
+  }
+}

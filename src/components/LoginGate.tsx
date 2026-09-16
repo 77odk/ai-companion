@@ -2,7 +2,6 @@
 // 顶部有人味的引导文案 + 复用 LoginForm 登录/注册；登录成功调 onDone 回跳目标页。
 // 提供「先看看教程」小链接，游客可以先去逛使用指南。
 
-import { useRef } from 'react'
 import LoginForm from './LoginForm'
 import { forceRefresh } from '../lib/forceRefresh'
 
@@ -16,18 +15,9 @@ interface Props {
 }
 
 export default function LoginGate({ onDone, onGoGuide, onBack }: Props) {
-  const logoClicks = useRef<number[]>([])
-
-  // 「忆文」logo 连点 3 下强刷（同顶栏逻辑）：清 caches + 注销 SW + reload，排查更新问题用
-  const handleLogoClick = () => {
-    const now = Date.now()
-    const recent = logoClicks.current.filter((t) => now - t < 2000)
-    recent.push(now)
-    logoClicks.current = recent
-    if (recent.length >= 3) {
-      logoClicks.current = []
-      void forceRefresh()
-    }
+  const handleForceRefresh = () => {
+    if (!window.confirm('强制刷新会清除页面缓存并重新加载，继续吗？')) return
+    void forceRefresh()
   }
 
   return (
@@ -50,9 +40,9 @@ export default function LoginGate({ onDone, onGoGuide, onBack }: Props) {
       </div>
 
       <div className="login-gate-inner">
-        <button type="button" className="login-gate-logo" onClick={handleLogoClick} aria-label="忆文">
+        <div className="login-gate-logo" aria-label="忆文">
           <span>忆</span>
-        </button>
+        </div>
 
         <h1 className="login-gate-title">登录后，TA 才会记得你</h1>
         <p className="login-gate-sub">
@@ -67,8 +57,11 @@ export default function LoginGate({ onDone, onGoGuide, onBack }: Props) {
           先看看教程
         </button>
 
-        <button type="button" className="login-gate-refresh" onClick={() => void forceRefresh()}>
-          页面没更新？点这里强制刷新
+        <button type="button" className="login-gate-refresh" onClick={() => location.reload()}>
+          检查更新
+        </button>
+        <button type="button" className="login-gate-refresh" onClick={handleForceRefresh}>
+          强制刷新
         </button>
       </div>
     </div>

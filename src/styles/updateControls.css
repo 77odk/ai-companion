@@ -1,0 +1,34 @@
+/* Space 子页（含一周情书）都不显示旧全局品牌题头。 */
+.app:has(.weekly-letter-page) > .app-header {
+  display: none;
+}
+
+.update-controls-inline {
+  width: 100%;
+}
+
+.update-controls-secondary {
+  display: flex;
+  gap: 8px;
+  padding: 8px 14px 14px 52px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent);
+}
+
+.update-controls-secondary .btn {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.update-controls-card {
+  margin-top: 16px;
+  padding: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 390px) {
+  .update-controls-secondary {
+    padding-left: 46px;
+    flex-wrap: wrap;
+  }
+}

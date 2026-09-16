@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import WeeklyPage from './WeeklyPage'
-import { getActiveSessionId, getMessagesCache } from '../lib/sessionStore'
+import { getActiveSessionId } from '../lib/sessionStore'
 import { getWeeklyReviews, type WeeklyReview } from '../lib/weeklyReview'
-import { getFirstSeen, loadMessages } from '../lib/storage'
-import { getAnniversaries } from '../lib/anniversary'
-import { getSpaceDays } from '../lib/spaceDays'
 import {
   loadLocalPhotos,
   addLocalPhoto,
@@ -30,7 +26,7 @@ import {
 } from '../lib/eventStore'
 
 interface Props {
-  /** 进入时的初始子页：home 空间主页（原 memories 记忆墙入口已移除，记忆入口唯一为底部「记忆」Tab） */
+  /** 进入时的初始子页：home 空间主页（记忆入口唯一为底部「记忆」Tab） */
   initialPage?: 'home'
   /** 引导「去写人设」/「去配置」跳「我的」页（App 里即 settings 视图） */
   onGoMine?: () => void
@@ -42,36 +38,30 @@ function fmtMD(ts: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
+/** 首页信封只露一小段正文，不把一周情书直接摊开。 */
+function weeklyPreview(review: WeeklyReview): string {
+  const clean = review.content.replace(/\s+/g, ' ').trim()
+  if (!clean) return review.title
+  return clean.length > 48 ? `${clean.slice(0, 48)}…` : clean
+}
+
 export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
-  // 当前会话（S2 空间按角色独立）：有会话 → 消息/首次见面全用该会话数据，无会话兜底全局
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
 
-  // 子页面路由：home 空间主页 / events 一起经历过 / weekly 周记
+  // 子页面路由：home 空间主页 / events 一起经历过 / weekly 一周情书
   const [page, setPage] = useState<'home' | 'events' | 'weekly'>(initialPage)
-
-  // 重要的日子（SPACE-DAYS-V2）：personal + couple、排除 milestone、最多 3 条；
-  // 走正常组件生命周期读取（挂载时读一次；与 Home 同源 getAnniversaries，不另做实时监听）
-  const spaceDays = useMemo(() => getSpaceDays(getAnniversaries(sid)), [sid])
-
-  // 相识天数（首页同口径：getFirstSeen + computeDaysKnown）
-  const firstSeen = useMemo(() => getFirstSeen(sid), [sid])
-  const days = useMemo(() => computeDaysKnown(firstSeen), [firstSeen])
-
-  // 周记：最近一篇（getWeeklyReviews 已按 createdAt 降序）
-  const [weekly] = useState<WeeklyReview | null>(() => getWeeklyReviews(sid)[0] ?? null)
-
-  // 聊过多少次：有会话读会话消息缓存，无会话兜底全局
-  const [messageCount] = useState<number>(() =>
-    sid ? getMessagesCache(sid).length : loadMessages().length,
+  const [weeklyVersion, setWeeklyVersion] = useState(0)
+  const weekly = useMemo<WeeklyReview | null>(
+    () => getWeeklyReviews(sid)[0] ?? null,
+    [sid, weeklyVersion],
   )
 
-  // 一起经历过：数据源 = getSharedExperiences（E3 起 = Event，按会话隔离、occurredAt 倒序）
-  // eventsVersion：手动添加/编辑/删除后自增，驱动时间轴重算
+  // 一起经历过：数据源 = Event，按会话隔离、occurredAt 倒序。
   const [eventsVersion, setEventsVersion] = useState(0)
   const timelineNodes = useMemo(() => getSharedExperiences(sid), [sid, eventsVersion])
 
-  /* ---- Event 手动添加 / 编辑 / 删除（E3：source='manual'、confidence=1、不调模型） ---- */
+  /* ---- Event 手动添加 / 编辑 / 删除（沿用 E3；本批不改 Event 语义与数据结构） ---- */
   const [eventFormOpen, setEventFormOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CompanionEvent | null>(null)
   const [formTitle, setFormTitle] = useState('')
@@ -88,7 +78,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     const d = ev ? new Date(ev.occurredAt) : new Date()
     const m = String(d.getMonth() + 1).padStart(2, '0')
     const dd = String(d.getDate()).padStart(2, '0')
-    setFormDate(ev ? `${d.getFullYear()}-${m}-${dd}` : `${d.getFullYear()}-${m}-${dd}`)
+    setFormDate(`${d.getFullYear()}-${m}-${dd}`)
     setEventFormError(null)
     setEventFormOpen(true)
   }
@@ -136,22 +126,18 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     setEventsVersion((v) => v + 1)
   }
 
-  const goHome = () => setPage('home')
+  const goHome = () => {
+    setPage('home')
+    setWeeklyVersion((v) => v + 1)
+  }
 
-  /* ---- 照片墙（第 7 批：真上传 + 网格 + 点开大图） ---- */
-
-  // 本地元数据缓存（登录用户只存 id/日期/尺寸；游客本地存 dataUrl 兜底渲染）
+  /* ---- 照片墙：本批保留现有上传 / 网格 / 大图能力，视觉重构留给 Card 2 ---- */
   const [photos, setPhotos] = useState<PhotoMeta[]>(() => loadLocalPhotos(sid))
-  // 上传中（数量）：网格里显示占位，避免重复点
   const [photoUploading, setPhotoUploading] = useState(0)
-  // 点开的大图 id（lightbox）
   const [lightboxId, setLightboxId] = useState<string | null>(null)
-  // 上传错误提示（超限/413/网络），几秒后自动消失
   const [photoError, setPhotoError] = useState<string | null>(null)
-  // 隐藏的文件选择 input（空态引导 + 网格添加入口共用）
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  // 进入空间主页时：有登录态 → 拉云端列表合并（契约：按需拉，不进 /api/sync）
   useEffect(() => {
     if (page !== 'home' || !sid) return
     const token = getToken()
@@ -173,7 +159,6 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     }
   }, [page, sid])
 
-  // 单张处理：压缩 → 上传（有 token）/ 本地存（游客）→ 更新列表
   async function handlePhotoFile(file: File) {
     let scaled: { dataUrl: string; width: number; height: number }
     try {
@@ -205,7 +190,6 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
         setPhotoError(res.message || '上传失败，稍后再试')
       }
     } else {
-      // 游客：无 token 不上云，dataUrl 落本地缓存（登录后云端列表会合并进来）
       const meta: PhotoMeta = {
         id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         sessionId: sid ?? '',
@@ -218,26 +202,22 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     }
   }
 
-  // 多选逐张串行上传（避免并发请求乱序；与聊天串行上传同一原则）
   async function handlePhotoFiles(files: FileList | null) {
     if (!files || files.length === 0) return
     const list = Array.from(files)
     setPhotoError(null)
     setPhotoUploading(list.length)
-    for (const f of list) {
-      await handlePhotoFile(f)
-    }
+    for (const f of list) await handlePhotoFile(f)
     setPhotoUploading(0)
   }
 
-  // 照片墙：空态（引导 + 添加）/ 网格（3 列 4:3，左下角日期）/ 上传中占位 / 点开大图
   function renderPhotoWall() {
     const token = getToken()
     return (
-      <section className="ai-space-v2-section">
+      <section className="ai-space-v2-section space-archive-section">
         <div className="ai-space-v2-head">
           <span className="ai-space-v2-title">照片墙</span>
-          <span className="ai-space-v2-en">PHOTOS</span>
+          <span className="ai-space-v2-en">PHOTO WALL</span>
         </div>
 
         {photos.length === 0 && photoUploading === 0 ? (
@@ -294,7 +274,6 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
 
         {photoError && <p className="ai-photo-err">{photoError}</p>}
 
-        {/* 隐藏文件选择：网格右上 + 空态引导共用 */}
         <input
           ref={fileInputRef}
           type="file"
@@ -306,7 +285,6 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
             e.target.value = ''
           }}
         />
-        {/* 网格时右上角仍留添加入口 */}
         {photos.length > 0 && (
           <button
             type="button"
@@ -317,7 +295,6 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
           </button>
         )}
 
-        {/* 点开大图 */}
         {lightboxId && (
           <div
             className="ai-photo-lightbox"
@@ -344,87 +321,57 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
 
   /* ---- 子页面渲染 ---- */
 
-  /** 空间主页（SPACE-DAYS-V2 最终顺序：顶部一句 / 周记 / 照片墙 / 重要的日子 / 一起经历过 / 底部注脚） */
   function renderHomePage() {
     return (
-      <div className="ai-space-v2">
-        <p className="ai-space-v2-line">我们已经认识 {days} 天了。</p>
+      <div className="ai-space-v2 space-archive-home">
+        <p className="space-archive-intro">那些发生过的事，慢慢留在这里。</p>
 
-        {/* 周记 */}
-        <section className="ai-space-v2-section">
+        <section className="ai-space-v2-section space-archive-section space-letter-section">
           <div className="ai-space-v2-head">
-            <span className="ai-space-v2-title">周记</span>
-            <span className="ai-space-v2-en">WEEKLY</span>
+            <span className="ai-space-v2-title">一周情书</span>
+            <span className="ai-space-v2-en">WEEKLY LETTER</span>
             <button type="button" className="ai-space-v2-all" onClick={() => setPage('weekly')}>
-              全部 ›
+              查看全部 ›
             </button>
           </div>
-          <button type="button" className="ai-space-weekly-card" onClick={() => setPage('weekly')}>
-            {weekly ? (
-              <>
-                <span className="ai-space-weekly-label">{weekly.weekLabel}</span>
-                <span className="ai-space-weekly-title">
-                  {weekly.title.length > 20 ? `${weekly.title.slice(0, 20)}…` : weekly.title}
-                </span>
-              </>
-            ) : (
-              <span className="ai-space-weekly-empty">TA 还没写过周记</span>
-            )}
+
+          <button type="button" className="space-letter-envelope" onClick={() => setPage('weekly')}>
+            <span className="space-letter-envelope-back" aria-hidden="true" />
+            <span className="space-letter-envelope-paper">
+              {weekly ? (
+                <>
+                  <span className="space-letter-date">{weekly.weekLabel}</span>
+                  <span className="space-letter-preview">{weeklyPreview(weekly)}</span>
+                </>
+              ) : (
+                <span className="space-letter-empty">第一封信，会在这一周结束后写给你。</span>
+              )}
+            </span>
+            <span className="space-letter-envelope-flap" aria-hidden="true" />
+            <span className="space-letter-wax" aria-hidden="true">♡</span>
           </button>
         </section>
 
-        {/* 照片墙（第 7 批：真上传 + 网格 + 点开大图） */}
         {renderPhotoWall()}
 
-        {/* 重要的日子：时间导航/日期目录（personal + couple，排除 milestone，最多 3 条） */}
-        <section className="ai-space-v2-section">
-          <div className="ai-space-v2-head">
-            <span className="ai-space-v2-title">重要的日子</span>
-            <span className="ai-space-v2-en">DAYS</span>
-          </div>
-          {spaceDays.length === 0 ? (
-            <p className="ai-space-empty">还没有写下重要的日子——以后值得记住的日期，会慢慢留在这里。</p>
-          ) : (
-            <div className="ai-space-days">
-              {spaceDays.map((d) => (
-                <div key={d.id} className="ai-space-day">
-                  <time
-                    className="ai-space-day-date"
-                    dateTime={d.dateValue.length === 5 ? `--${d.dateValue}` : d.dateValue}
-                  >
-                    {d.dateText}
-                  </time>
-                  <span className="ai-space-day-label">{d.label}</span>
-                  <span className="ai-space-day-count">{d.countText}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* 一起经历过：竖线时间轴（数据 = Event） */}
-        <section className="ai-space-v2-section">
+        <section className="ai-space-v2-section space-archive-section">
           <div className="ai-space-v2-head">
             <span className="ai-space-v2-title">一起经历过</span>
-            <span className="ai-space-v2-en">TIMELINE</span>
+            <span className="ai-space-v2-en">MOMENTS WE SHARED</span>
             <button type="button" className="ai-space-v2-all" onClick={() => setPage('events')}>
-              全部 ›
+              查看全部 ›
             </button>
           </div>
           {timelineNodes.length === 0 ? (
-            <p className="ai-space-empty">你们还没有一起经历过的事——从今天起，你们一起做过的事会自己留在这里。</p>
+            <p className="ai-space-empty">有些日子，后来才知道很重要。</p>
           ) : (
-            renderSharedTimeline(timelineNodes.slice(0, 3))
+            renderSharedTimeline(timelineNodes.slice(0, 3), true)
           )}
         </section>
-
-        {/* 底部注脚（聊过 0 次时隐藏那一段；Space 不再承担 Memory 入口，不显示记忆条数） */}
-        <p className="ai-space-footnote">{days} 天{messageCount > 0 ? ` · 聊过 ${messageCount} 次` : ''}</p>
       </div>
     )
   }
 
-  /** TA所记子页：你们的大小事（完整时间轴；数据源 = Event，E3） */
   function renderEventsPage() {
     return (
       <>
@@ -438,7 +385,6 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
           </button>
         </div>
 
-        {/* 手动添加 / 编辑表单（E3：标题必填、日期必填、描述/类型可选；未来日期拒绝；不调模型） */}
         {eventFormOpen && (
           <div className="ai-event-form">
             <label className="ai-event-field">
@@ -495,7 +441,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
 
         <div className="ai-space-timeline">
           {timelineNodes.length === 0 ? (
-            <p className="ai-space-empty">你们还没有一起经历过的事——从今天起，你们一起做过的事会自己留在这里。</p>
+            <p className="ai-space-empty">有些日子，后来才知道很重要。</p>
           ) : (
             renderSharedTimeline(timelineNodes)
           )}
@@ -504,11 +450,13 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     )
   }
 
-  /** 竖线时间轴：节点 = 「09月01日 · 第 N 天」+ 标题 + 描述（有才显示）；行尾编辑/删除（E3） */
-  function renderSharedTimeline(nodes: ReturnType<typeof getSharedExperiences>) {
+  function renderSharedTimeline(
+    nodes: ReturnType<typeof getSharedExperiences>,
+    compact = false,
+  ) {
     const byId = new Map(getEvents(sid).map((e) => [e.id, e]))
     return (
-      <div className="ai-shared-timeline">
+      <div className={`ai-shared-timeline${compact ? ' is-compact' : ''}`}>
         {nodes.map((n) => {
           const ev = byId.get(n.id) ?? null
           return (
@@ -520,7 +468,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
                 </span>
                 <p className="ai-shared-text">{n.title}</p>
                 {n.description ? <p className="ai-shared-desc">{n.description}</p> : null}
-                {ev && (
+                {!compact && ev && (
                   <span className="ai-shared-ops">
                     <button type="button" className="link-btn" onClick={() => openEventForm(ev)}>
                       编辑
@@ -538,7 +486,6 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     )
   }
 
-  // 相与书子页：直接整页复用周记页（不套 ai-space 滚动容器，返回回空间资料页）
   if (page === 'weekly') {
     return <WeeklyPage onBack={goHome} onGoSettings={onGoMine ?? (() => {})} />
   }
