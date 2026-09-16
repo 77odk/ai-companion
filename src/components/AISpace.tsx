@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import WeeklyPage from './WeeklyPage'
+import PhotoWallArchive from './PhotoWallArchive'
 import { getActiveSessionId } from '../lib/sessionStore'
 import { getWeeklyReviews, type WeeklyReview } from '../lib/weeklyReview'
 import {
@@ -30,12 +31,6 @@ interface Props {
   initialPage?: 'home'
   /** 引导「去写人设」/「去配置」跳「我的」页（App 里即 settings 视图） */
   onGoMine?: () => void
-}
-
-/** 时间戳 → 8月2日（照片日期用） */
-function fmtMD(ts: number): string {
-  const d = new Date(ts)
-  return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
 /** 首页信封只露一小段正文，不把一周情书直接摊开。 */
@@ -131,10 +126,9 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     setWeeklyVersion((v) => v + 1)
   }
 
-  /* ---- 照片墙：本批保留现有上传 / 网格 / 大图能力，视觉重构留给 Card 2 ---- */
+  /* ---- 照片墙：上传/数据源沿用旧实现，展示交给稳定长墙组件。 ---- */
   const [photos, setPhotos] = useState<PhotoMeta[]>(() => loadLocalPhotos(sid))
   const [photoUploading, setPhotoUploading] = useState(0)
-  const [lightboxId, setLightboxId] = useState<string | null>(null)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -214,66 +208,14 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
   function renderPhotoWall() {
     const token = getToken()
     return (
-      <section className="ai-space-v2-section space-archive-section">
-        <div className="ai-space-v2-head">
-          <span className="ai-space-v2-title">照片墙</span>
-          <span className="ai-space-v2-en">PHOTO WALL</span>
-        </div>
-
-        {photos.length === 0 && photoUploading === 0 ? (
-          <div
-            className="ai-space-photo-add"
-            role="button"
-            tabIndex={0}
-            aria-label="添加照片"
-            onClick={() => fileInputRef.current?.click()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                fileInputRef.current?.click()
-              }
-            }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            <p>从第一张开始，慢慢留下我们的日子。</p>
-          </div>
-        ) : (
-          <div className="ai-photo-grid">
-            {photos.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className="ai-photo-cell"
-                onClick={() => setLightboxId(p.id)}
-              >
-                <img
-                  src={p.dataUrl ?? photoUrl(p.id, token)}
-                  alt=""
-                  loading="lazy"
-                  className="ai-photo-img"
-                />
-                <span className="ai-photo-date">{fmtMD(p.createdAt)}</span>
-              </button>
-            ))}
-            {photoUploading > 0 && (
-              <div className="ai-photo-cell ai-photo-uploading" aria-label="上传中">
-                <span className="ai-photo-spinner" />
-              </div>
-            )}
-          </div>
-        )}
-
-        {photoError && <p className="ai-photo-err">{photoError}</p>}
-
+      <>
+        <PhotoWallArchive
+          photos={photos}
+          uploading={photoUploading}
+          error={photoError}
+          photoSrc={(photo) => photo.dataUrl ?? photoUrl(photo.id, token)}
+          onAdd={() => fileInputRef.current?.click()}
+        />
         <input
           ref={fileInputRef}
           type="file"
@@ -285,41 +227,9 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
             e.target.value = ''
           }}
         />
-        {photos.length > 0 && (
-          <button
-            type="button"
-            className="ai-photo-add-more"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            添加 ›
-          </button>
-        )}
-
-        {lightboxId && (
-          <div
-            className="ai-photo-lightbox"
-            role="dialog"
-            aria-label="查看大图"
-            onClick={() => setLightboxId(null)}
-          >
-            {(() => {
-              const p = photos.find((x) => x.id === lightboxId)
-              if (!p) return null
-              return (
-                <img
-                  src={p.dataUrl ?? photoUrl(p.id, token)}
-                  alt=""
-                  className="ai-photo-lightbox-img"
-                />
-              )
-            })()}
-          </div>
-        )}
-      </section>
+      </>
     )
   }
-
-  /* ---- 子页面渲染 ---- */
 
   function renderHomePage() {
     return (
