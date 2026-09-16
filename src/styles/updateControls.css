@@ -1,3 +1,8 @@
+/* Space 子页（含一周情书）都不显示旧全局品牌题头。 */
+.app:has(.weekly-letter-page) > .app-header {
+  display: none;
+}
+
 .update-controls-inline {
   width: 100%;
 }
