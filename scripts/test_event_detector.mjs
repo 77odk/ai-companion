@@ -5,6 +5,11 @@
 import {
   isNegativeExpression,
   coarsePass,
+  buildEventCandidateWindow,
+  coarsePassCandidateWindow,
+  buildEventCandidateUserPrompt,
+  EVENT_CANDIDATE_WINDOW_SIZE,
+  EVENT_CANDIDATE_TEXT_MAX,
   localDateKey,
   judgeQuotaKey,
   getJudgeQuotaUsed,
@@ -65,6 +70,25 @@ ok(coarsePass('我们打算去爬山') === false, '「我们打算去爬山」�
 console.log('\n[3] 时间词 / 关系词单独出现不触发')
 ok(coarsePass('今天') === false && coarsePass('刚刚') === false && coarsePass('昨天') === false, '时间词单独不算候选')
 ok(coarsePass('第一次') === false && coarsePass('终于') === false, '关系词单独不算候选')
+
+console.log('\n[3a] Candidate Window：最多 3 条用户原话，当前消息必须贡献信号')
+{
+  const w = buildEventCandidateWindow('昨天', ['第一条', '第二条', '我们一起吃了饭'])
+  ok(w.length === EVENT_CANDIDATE_WINDOW_SIZE, '窗口最多 3 条（最近 2 条 + 当前）')
+  ok(w[0] === '第二条' && w[2] === '昨天', '超出窗口时丢最旧，只保留相邻用户原话')
+
+  const long = '啊'.repeat(EVENT_CANDIDATE_TEXT_MAX + 20)
+  ok(buildEventCandidateWindow(long, [long]).every((x) => x.length === EVENT_CANDIDATE_TEXT_MAX), '单条候选截到固定上限，控制输入 token')
+
+  ok(coarsePassCandidateWindow('昨天', ['我们一起吃了饭']) === true, '跨两条：前句有主体+动作，当前补时间 → 候选')
+  ok(coarsePassCandidateWindow('去了海边', ['昨天我们']) === true, '跨两条：前句主体，当前补已发生动作 → 候选')
+  ok(coarsePassCandidateWindow('哈哈', ['我们昨天一起看了电影']) === false, '当前无事件信号 → 不拿旧候选重复触发')
+  ok(coarsePassCandidateWindow('以后我们一起去巴黎', ['我们昨天一起看了电影']) === false, '当前明显未来表达 → 窗口也直接拦截')
+
+  const p = buildEventCandidateUserPrompt('昨天', ['我们一起吃了饭'])
+  ok(p.includes('用户原话1：我们一起吃了饭') && p.includes('用户原话2：昨天'), '精判输入只标记用户原话窗口')
+  ok(p.includes('不同事情不能拼接'), '精判输入明确禁止跨事件拼接')
+}
 
 console.log('\n[4] 负向过滤（先于一切，不耗额度）')
 ok(isNegativeExpression('以后我们一起旅行') === true, '「以后我们一起旅行」→ 未来')
@@ -166,6 +190,7 @@ console.log('\n[9] Prompt 硬规则与枚举')
 {
   const p = buildEventJudgeSystemPrompt(Date.now())
   ok(p.includes('不是总结记忆') && p.includes('绝不根据记忆或计划推断事件'), 'Prompt 含不总结/不推断硬规则')
+  ok(p.includes('用户原话窗口') && p.includes('不同事情绝不能拼接'), 'Prompt 限定 Candidate Window 且禁止拼接不同事件')
   ok(p.includes('未来计划') && p.includes('不确定的回忆'), 'Prompt 含未来/不确定拒因')
   ok(p.includes('activity') && p.includes('milestone'), 'Prompt 列出类型枚举')
   ok(p.includes('{"isEvent"'), 'Prompt 要求严格 JSON')
