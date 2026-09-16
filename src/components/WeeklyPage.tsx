@@ -1,17 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  SLOW_LETTER_REPLY_SYSTEM_PROMPT,
   WEEKLY_REPLY_SYSTEM_PROMPT,
   WEEKLY_SYSTEM_PROMPT,
-  answerPendingReplies,
   buildWeeklyPrompt,
   cooldownInfo,
   formatMessageLine,
-  getPendingReplies,
   getWeekRange,
   getWeeklyReviews,
   newWeeklyReviewId,
+  isSlowLetterDue,
   parseWeeklyOutput,
   saveWeeklyReviews,
+  slowLetterDeliverAt,
   type WeeklyReview,
 } from '../lib/weeklyReview'
 import { getKnownDays } from '../lib/milestone'
@@ -28,14 +29,14 @@ import { getEventsForWeek } from '../lib/eventStore'
 const REPLY_PLACEHOLDER = '把此刻的心情写下来…'
 const OPTION_IMMEDIATE = '立即回复'
 const OPTION_SEALED = '慢信模式'
-const SEALED_NOTE = '慢信不会立刻送达；当前会等到下一封一周情书时一起回给你。'
+const SEALED_NOTE = '慢信不会立刻送达；会在 3–7 天后到达，到时先等你亲手拆开。'
 const SUCCESS_IMMEDIATE = '你的回信已经寄出。TA 的回信到了以后，会先等你亲手拆开。'
-const SUCCESS_SEALED = '这封慢信已经寄出，会等到下一封一周情书时一起送达。'
+const SUCCESS_SEALED = '这封慢信已经寄出，会在 3–7 天后送达。'
 const REPLY_FAILED = 'TA 暂时没回上，这封回信已经替你留好了。'
 const EMPTY_STATE = '第一封信，会在这一周结束后写给你。'
 const TOOLTIP_TEXT = '一周情书：TA 把这一周想对你说的话写成一封信。你可以立刻回信，也可以选择慢信。'
 const BANNER_REPLIED = '新的回信也一起到了，等你慢慢拆开。'
-const SLOW_LETTER_NOTE = '全局慢信模式已开启，这一封会等到下一封一周情书时一起送达。'
+const SLOW_LETTER_NOTE = '全局慢信模式已开启，这一封会在 3–7 天后送达。'
 const MODE_LOCKED_NOTE = '这封信已经寄出，回复方式不能再切换。'
 
 const BackIcon = () => (
@@ -116,6 +117,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const [taReplying, setTaReplying] = useState(false)
   const [showTooltip, setShowTooltip] = useState(false)
   const [justReplied, setJustReplied] = useState(false)
+  const slowAttemptedRef = useRef<Set<string>>(new Set())
 
   const settings = loadSettings()
   const hasKey = Boolean(settings.apiKey?.trim() && settings.baseUrl?.trim() && settings.model?.trim())
@@ -149,6 +151,77 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     saveWeeklyReviews(next as WeeklyReview[], sid)
     setReviews(next)
   }
+
+  // 真正慢信：到固定 deliverAt 前零调用；到点后进入本页时每封最多尝试一次。
+  useEffect(() => {
+    if (!hasKey) return
+    let alive = true
+    const attempted = slowAttemptedRef.current
+
+    const run = async () => {
+      let working = getWeeklyReviews(sid) as LetterReview[]
+      const due: Array<{ reviewId: string; pending: LetterPendingReply }> = []
+      for (const review of working) {
+        for (const pending of review.replies ?? []) {
+          if (isSlowLetterDue(pending, Date.now()) && !attempted.has(pending.id)) {
+            due.push({ reviewId: review.id, pending })
+          }
+        }
+      }
+
+      for (const item of due) {
+        if (!alive) return
+        attempted.add(item.pending.id)
+        const current = working.find((r) => r.id === item.reviewId)
+        if (!current) continue
+        const s = loadSettings()
+        if (!s.apiKey?.trim() || !s.baseUrl?.trim() || !s.model?.trim()) return
+
+        try {
+          const reviewContext = '这封一周情书《' + current.title + '》：\n' + current.content
+          const personaContext = persona ? '\n\n【你的性格】' + persona : ''
+          const raw = await chatCompletion(
+            s,
+            [
+              { role: 'system', content: SLOW_LETTER_REPLY_SYSTEM_PROMPT },
+              {
+                role: 'user',
+                content: reviewContext + '\n\n对方几天前写给你的慢信：' + item.pending.content + personaContext,
+              },
+            ],
+            { maxTokens: 300, timeoutMs: 30000 },
+          )
+          const clean = raw.trim()
+          if (!clean) throw new Error('empty')
+          const replyAt = Date.now()
+          working = working.map((r) =>
+            r.id === item.reviewId
+              ? {
+                  ...r,
+                  replies: r.replies?.map((p) =>
+                    p.id === item.pending.id && p.replied !== true
+                      ? { ...p, replied: true, reply: clean, replyAt }
+                      : p,
+                  ),
+                }
+              : r,
+          )
+          saveWeeklyReviews(working as WeeklyReview[], sid)
+          if (alive) {
+            setReviews(working)
+            setJustReplied(true)
+          }
+        } catch {
+          // 当前进入只尝试一次；失败保留原信，下次重新进入再尝试，避免循环烧 token。
+        }
+      }
+    }
+
+    void run()
+    return () => {
+      alive = false
+    }
+  }, [hasKey, persona, sid])
 
   const openDetail = (r: LetterReview) => {
     setSelectedId(r.id)
@@ -187,8 +260,6 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         .map((m) => m.text)
       const curReviews = getWeeklyReviews(currentSid) as LetterReview[]
       const lastReply = curReviews[0]?.myReply?.content
-      const pending = getPendingReplies(curReviews as WeeklyReview[])
-      const pendingTexts = pending.map((p) => p.content)
       const weekPosts = loadCurrentPosts(currentSid || undefined)
         .filter((p) => p.at >= week.startTs && p.at <= week.endTs)
         .slice(0, 5)
@@ -212,7 +283,6 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
               newMemories,
               daysKnown: getKnownDays(ts, currentSid),
               ...(lastReply?.trim() ? { lastReply: lastReply.trim() } : {}),
-              ...(pendingTexts.length > 0 ? { pendingReplies: pendingTexts } : {}),
               ...(weekPosts.length > 0 ? { weekPosts } : {}),
               ...(weekAgenda.length > 0 ? { weekAgenda } : {}),
               ...(weekEvents.length > 0 ? { weekEvents } : {}),
@@ -236,17 +306,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         createdAt: ts,
         generatedFrom: { startTs: week.startTs, endTs: week.endTs },
       }
-      let answered = curReviews
-      if (pending.length > 0) {
-        answered = answerPendingReplies(
-          curReviews as WeeklyReview[],
-          pending,
-          parsed.replies,
-          ts,
-        ) as LetterReview[]
-        setJustReplied(true)
-      }
-      const next = [review, ...answered]
+      const next = [review, ...curReviews]
       persist(next)
       setSelectedId(review.id)
       setView('detail')
@@ -264,7 +324,12 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     const now = Date.now()
 
     if (effectiveMode === 'sealed') {
-      const pending: LetterPendingReply = { id: newWeeklyReviewId(), content: t, repliedAt: now }
+      const pending: LetterPendingReply = {
+        id: newWeeklyReviewId(),
+        content: t,
+        repliedAt: now,
+        deliverAt: slowLetterDeliverAt(now),
+      }
       const next: LetterReview[] = reviews.map((r) =>
         r.id === selectedReview.id
           ? { ...r, reviewMode: 'sealed', replies: [...(r.replies ?? []), pending] }
@@ -395,7 +460,8 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
           {reviews.map((r) => {
             const immediateWaiting = Boolean(r.myReply?.taReply && !r.myReply.openedAt)
             const sealedWaiting = Boolean(r.replies?.some((p) => p.replied && !p.openedAt))
-            const sealedOnRoad = Boolean(r.replies?.some((p) => !p.replied))
+            const sealedDue = Boolean(r.replies?.some((p) => !p.replied && isSlowLetterDue(p)))
+            const sealedOnRoad = Boolean(r.replies?.some((p) => !p.replied && !isSlowLetterDue(p)))
             return (
               <li key={r.id}>
                 <button type="button" className="weekly-card weekly-envelope-card" onClick={() => openDetail(r)}>
@@ -406,7 +472,8 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                   <span className="weekly-envelope-flap" aria-hidden="true" />
                   <span className="weekly-envelope-seal" aria-hidden="true">♡</span>
                   {(immediateWaiting || sealedWaiting) && <span className="weekly-card-reply">回信待拆</span>}
-                  {sealedOnRoad && !sealedWaiting && <span className="weekly-card-reply weekly-card-reply-pending">慢信在路上</span>}
+                  {sealedDue && !sealedWaiting && <span className="weekly-card-reply weekly-card-reply-pending">TA 正在写慢信</span>}
+                  {sealedOnRoad && !sealedWaiting && !sealedDue && <span className="weekly-card-reply weekly-card-reply-pending">慢信在路上</span>}
                 </button>
               </li>
             )
@@ -568,7 +635,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                   ) : (
                     <span className="weekly-reply-pending">
                       <EnvelopeIcon />
-                      慢信在路上
+                      {isSlowLetterDue(p) ? (hasKey ? 'TA 正在写慢信…' : '慢信已到，接上大脑后再拆') : '慢信在路上'}
                     </span>
                   )}
                 </div>
