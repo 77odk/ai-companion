@@ -250,7 +250,9 @@ export interface WeeklyMessageLine {
 /** 一条消息的精简行：'8月18日 你：…' / '8月18日 TA：…'（内容压缩空白并截断到 60 字，防 prompt 膨胀） */
 export function formatMessageLine(m: WeeklyMessageLine): string {
   const d = new Date(m.ts)
-  const who = m.role === 'user' ? '你' : 'TA'
+  // 2026-09-17 修：user 的消息不能再标成「你」——指令里的「你」是写信的 TA 自己，
+  // 标反了模型就会把对方的经历写成自己做的（整封信人称反过来）。
+  const who = m.role === 'user' ? '对方' : '我'
   const text = String(m.content ?? '').replace(/\s+/g, ' ').trim()
   const clipped = text.length > 60 ? `${text.slice(0, 60)}…` : text
   return `${d.getMonth() + 1}月${d.getDate()}日 ${who}：${clipped}`
@@ -289,7 +291,8 @@ export const WEEKLY_SYSTEM_PROMPT =
   '只写你手头材料里真有的事：材料里没有的，不编、不脑补。' +
   '把这一周里真实发生的事写进去——你们聊过的天、记住的事、对方念叨过的细节，都往心里去，写进信里。' +
   '写「你们」的感受，写心不写事，不流水账、不总结数据。' +
-  '300-500 字，要真情实感、写够内心的份量，贴合你的性格说话，别凑字数、别空洞。标题用「」括起来，放在第一行。'
+  '300-500 字，要真情实感、写够内心的份量，贴合你的性格说话，别凑字数、别空洞。' +
+  '信必须有完整的结尾：最后一句要写完、自然收住，绝不能停在半句。标题用「」括起来，放在第一行。'
 
 /** 立即回复模式的系统提示词：对方刚在周记下留批注，TA 结合这篇周记的内容与对方的批注简短回应 */
 export const WEEKLY_REPLY_SYSTEM_PROMPT =
@@ -313,7 +316,7 @@ export function buildWeeklyPrompt(ctx: WeeklyPromptContext): string {
   if (identity) lines.push(identity)
   lines.push(`【本周时间段】${ctx.weekLabel}`)
 
-  lines.push('【本周聊天摘要】')
+  lines.push('【本周聊天摘要】（「对方」= 收信的人；「我」= 写信的你自己）')
   const summary = (Array.isArray(ctx.summaryLines) ? ctx.summaryLines : [])
     .map((s) => String(s ?? '').trim())
     .filter(Boolean)
@@ -332,9 +335,9 @@ export function buildWeeklyPrompt(ctx: WeeklyPromptContext): string {
     .map((s) => String(s ?? '').trim())
     .filter(Boolean)
   if (weekPosts.length > 0) {
-    lines.push('【本周你自己的生活（你自己发的动态）】')
+    lines.push('【你自己发过的动态（是「我」发的，不是对方发的）】')
     lines.push(...weekPosts.map((p) => `- ${p}`))
-    lines.push('这些是你这周发的动态、过自己的生活留下的痕迹。周记里可以自然地回响它们——动态里提过的那部电影、那碗面、那件惦记的事，这周周记接着写下去（只在动态确实写了时才提，别硬凑）。')
+    lines.push('这些是你（写信的人）这周自己发过的动态。写进信里时主语必须是「我」（例：我写过一句…），绝不能写成「你发了……」，那会把收信人当成发帖的人。只在动态确实写了时才提，别硬凑。')
   }
 
   // 因果链·周记回响：本周到期的约定是「你们共同的时间线」，周记里念叨一句（去了吗/还惦记着）
