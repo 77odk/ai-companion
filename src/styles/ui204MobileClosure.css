@@ -116,6 +116,8 @@
 
 /* Paper should read as paper, not as another generic white card. */
 .weekly-letter-sheet {
+  height: auto;
+  min-height: 0;
   border-radius: 7px;
   border-color: color-mix(in srgb, var(--color-border) 78%, #b99b7a 22%);
   background:
@@ -128,6 +130,31 @@
     0 14px 30px color-mix(in srgb, var(--color-text) 9%, transparent),
     0 2px 5px color-mix(in srgb, #8d6f52 8%, transparent),
     inset 0 0 42px color-mix(in srgb, #f4e8d5 24%, transparent);
+}
+
+.weekly-slow-letter-row {
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-card) 70%, var(--color-bg));
+}
+
+.weekly-letter-title-first,
+.weekly-letter-title-second {
+  display: block;
+}
+
+.weekly-letter-title-first {
+  font-size: 0.68em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.weekly-letter-title-second {
+  width: max-content;
+  margin-top: 0.16em;
+  margin-left: 0.8em;
+  transform: rotate(-2deg);
+  transform-origin: left center;
 }
 
 .weekly-letter-watermark {

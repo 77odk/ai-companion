@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import WeeklyPage from './WeeklyPage'
 import PhotoWallArchive from './PhotoWallArchive'
 import EventArchive from './EventArchive'
 import { getActiveSessionId } from '../lib/sessionStore'
@@ -18,10 +17,8 @@ import {
 import { getToken } from '../lib/auth'
 
 interface Props {
-  /** 进入时的初始子页：home 空间主页（记忆入口唯一为底部「记忆」Tab） */
-  initialPage?: 'home'
-  /** 引导「去写人设」/「去配置」跳「我的」页（App 里即 settings 视图） */
-  onGoMine?: () => void
+  /** 一周情书由 App 顶层 view 承载，不在 Space 内嵌子页。 */
+  onOpenWeekly: () => void
 }
 
 /** 首页信封只露一小段正文，不把一周情书直接摊开。 */
@@ -40,21 +37,14 @@ function normalizePhotoCreatedAt(value: unknown): number {
   return 0
 }
 
-export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
+export default function AISpace({ onOpenWeekly }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
 
-  const [page, setPage] = useState<'home' | 'weekly'>(initialPage)
-  const [weeklyVersion, setWeeklyVersion] = useState(0)
   const weekly = useMemo<WeeklyReview | null>(
     () => getWeeklyReviews(sid)[0] ?? null,
-    [sid, weeklyVersion],
+    [sid],
   )
-
-  const goHome = () => {
-    setPage('home')
-    setWeeklyVersion((value) => value + 1)
-  }
 
   /* ---- 照片墙：上传/数据源沿用旧实现，展示交给稳定长墙组件。 ---- */
   const [photos, setPhotos] = useState<PhotoMeta[]>(() => loadLocalPhotos(sid))
@@ -63,7 +53,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
-    if (page !== 'home' || !sid) return
+    if (!sid) return
     const token = getToken()
     if (!token) return
     let alive = true
@@ -81,7 +71,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     return () => {
       alive = false
     }
-  }, [page, sid])
+  }, [sid])
 
   async function handlePhotoFile(file: File) {
     let scaled: { dataUrl: string; width: number; height: number }
@@ -170,12 +160,12 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
           <div className="ai-space-v2-head">
             <span className="ai-space-v2-title">一周情书</span>
             <span className="ai-space-v2-en">WEEKLY LETTER</span>
-            <button type="button" className="ai-space-v2-all" onClick={() => setPage('weekly')}>
+            <button type="button" className="ai-space-v2-all" onClick={onOpenWeekly}>
               查看全部 ›
             </button>
           </div>
 
-          <button type="button" className="space-letter-envelope" onClick={() => setPage('weekly')}>
+          <button type="button" className="space-letter-envelope" onClick={onOpenWeekly}>
             <span className="space-letter-envelope-back" aria-hidden="true" />
             <span className="space-letter-envelope-paper">
               {weekly ? (
@@ -196,10 +186,6 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
         <EventArchive sessionId={sid} />
       </div>
     )
-  }
-
-  if (page === 'weekly') {
-    return <WeeklyPage onBack={goHome} onGoSettings={onGoMine ?? (() => {})} />
   }
 
   return <div className="page ai-space-page">{renderHomePage()}</div>
