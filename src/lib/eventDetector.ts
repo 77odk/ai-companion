@@ -1,7 +1,7 @@
-// Event 识别（E2）：粗筛 → 额度 → LLM 精判 → 硬过滤 → createEvent
-// 2026-09-11。成本控制：只有「共同主体 + 已发生动作」双命中的候选才消耗额度精判；
-// 明显未来/不确定表达先于一切直接 false（不耗额度）；每 session + 设备本地日期每天最多 3 次精判；
-// 模型返回严格 JSON，一次调用记一次额度（不管 true/false）；解析失败不创建不重试；无 key 静默跳过。
+// Event 识别（E2 / UI2-04 Card 3）：本地候选窗口 → 额度 → LLM 精判 → 硬过滤 → createEvent
+// 成本控制：当前用户消息必须提供事件信号；最多只拼当前 + 最近 2 条用户原话做粗筛/精判。
+// TA 文本绝不进入证据窗口；明显未来/不确定表达先于一切直接 false（不耗额度）；
+// 每 session + 设备本地日期每天最多 3 次精判；模型返回严格 JSON，解析失败不创建不重试。
 import { createEvent, EVENT_TYPES } from './eventStore.ts'
 import { loadSettings } from './storage.ts'
 import { chatCompletion } from './modelChat.ts'
@@ -45,6 +45,52 @@ export function coarsePass(text: string): boolean {
   const t = typeof text === 'string' ? text.trim() : ''
   if (!t) return false
   return SUBJECT_RE.test(t) && ACTION_RE.test(t)
+}
+
+/** Candidate Window：只允许当前 + 最近 2 条用户原话，避免整段聊天送去精判。 */
+export const EVENT_CANDIDATE_WINDOW_SIZE = 3
+export const EVENT_CANDIDATE_TEXT_MAX = 240
+
+function compactCandidateText(text: string): string {
+  return (typeof text === 'string' ? text.trim() : '').slice(0, EVENT_CANDIDATE_TEXT_MAX)
+}
+
+export function buildEventCandidateWindow(userText: string, recentUserTexts: string[] = []): string[] {
+  const current = compactCandidateText(userText)
+  if (!current) return []
+  const prior = (Array.isArray(recentUserTexts) ? recentUserTexts : [])
+    .map(compactCandidateText)
+    .filter(Boolean)
+    .slice(-(EVENT_CANDIDATE_WINDOW_SIZE - 1))
+  return [...prior, current]
+}
+
+/**
+ * 窗口粗筛：
+ * - 当前句本身命中，沿用旧行为；
+ * - 当前句没完整命中时，只有它自己至少带一个事件信号，才允许借最近用户原话补齐主体/动作；
+ * - 「嗯 / 哈哈」之类无信号消息不会拿旧候选反复消耗额度。
+ */
+export function coarsePassCandidateWindow(userText: string, recentUserTexts: string[] = []): boolean {
+  const current = compactCandidateText(userText)
+  if (!current || isNegativeExpression(current)) return false
+  if (coarsePass(current)) return true
+  const currentHasSignal =
+    SUBJECT_RE.test(current) || ACTION_RE.test(current) || TIME_BONUS_RE.test(current) || RELATION_BONUS_RE.test(current)
+  if (!currentHasSignal) return false
+  const window = buildEventCandidateWindow(current, recentUserTexts)
+  if (window.length < 2) return false
+  return coarsePass(window.join('\n'))
+}
+
+/** 给精判模型的输入：明确标成「用户原话」，最后一条是当前触发消息。 */
+export function buildEventCandidateUserPrompt(userText: string, recentUserTexts: string[] = []): string {
+  const window = buildEventCandidateWindow(userText, recentUserTexts)
+  return (
+    '【用户原话窗口】\n' +
+    window.map((line, i) => '用户原话' + (i + 1) + '：' + line).join('\n') +
+    '\n【判定约束】最后一条是当前消息。只允许把这些相邻用户原话中明确属于同一件事的信息合起来判断；不同事情不能拼接。'
+  )
 }
 
 // ---- 额度（每 session + 设备本地日期，每天最多 3 次） ----
@@ -120,7 +166,8 @@ export function buildEventJudgeSystemPrompt(now: number): string {
     '【共同经历】的、内容与时间都【可确定】的具体事件。\n' +
     `今天是 ${today}。\n` +
     '规则（硬性）：\n' +
-    '- 不是总结记忆、不是推测历史、不是根据上下文脑补；只看这一句话本身是否明确表达。\n' +
+    '- 不是总结记忆、不是推测历史、不是根据记忆或 TA 的话脑补；只看传入的【用户原话窗口】。窗口最多三条，全部是用户原话。\n' +
+    '- 可以合并窗口内相邻用户原话来补齐同一件事的主体/动作/时间，但只要无法确定它们说的是同一件事，就必须 isEvent=false；不同事情绝不能拼接。\n' +
     '- 未来计划、愿望、假设、不确定的回忆、模型推测、用户单方面经历、普通长期事实、无法确定发生或时间的内容：一律 isEvent=false。\n' +
     '- 绝不根据记忆或计划推断事件。\n' +
     '- isEvent=true 时：type 只能从以下枚举选：' +
@@ -201,6 +248,8 @@ export function applyEventHardFilter(
 export async function processEventCandidate(input: {
   sessionId?: string
   userText: string
+  /** Chat 只传最近相邻的用户原话；TA 文本不得进入。 */
+  recentUserTexts?: string[]
   now?: number
 }): Promise<void> {
   try {
@@ -209,8 +258,8 @@ export async function processEventCandidate(input: {
     if (!text) return
     // 1 负向过滤（先于一切，不耗额度）
     if (isNegativeExpression(text)) return
-    // 2 粗筛（主体 + 已发生动作 双命中才算候选）
-    if (!coarsePass(text)) return
+    // 2 Candidate Window 粗筛：当前句必须提供事件信号；最多借最近 2 条用户原话补齐。
+    if (!coarsePassCandidateWindow(text, input.recentUserTexts ?? [])) return
     // 3 额度：超限直接丢弃
     if (!consumeJudgeQuota(input.sessionId, now)) return
     // 4 无 key 静默跳过（不报错不提示）
@@ -222,7 +271,7 @@ export async function processEventCandidate(input: {
       settings,
       [
         { role: 'system', content: buildEventJudgeSystemPrompt(now) },
-        { role: 'user', content: text },
+        { role: 'user', content: buildEventCandidateUserPrompt(text, input.recentUserTexts ?? []) },
       ],
       { maxTokens: 200, temperature: 0 },
     )

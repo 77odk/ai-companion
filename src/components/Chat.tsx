@@ -803,10 +803,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       uploadMessage(userMsg)
     }
 
-    // Event（E3 一处）：用户消息落库后异步跑识别（粗筛→额度→精判→硬过滤），不阻塞、失败静默
+    // Event Candidate Window：只带最近 6 条聊天里最多 2 条历史用户原话；TA 文本永不作为 Event 证据。
+    // 本地粗筛仍先跑，只有命中才会消耗每天最多 3 次的精判额度。
+    const recentEventUserTexts = visibleMessages
+      .slice(-6)
+      .filter((m) => m.role === 'user')
+      .slice(-2)
+      .map((m) => m.content)
     void processEventCandidate({
       sessionId: activeSessionId || undefined,
       userText: userMsg.content,
+      recentUserTexts: recentEventUserTexts,
       now: userMsg.ts,
     })
 
