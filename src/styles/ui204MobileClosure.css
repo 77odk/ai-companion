@@ -114,6 +114,12 @@
   font-family: inherit;
 }
 
+/* .page is a constrained flex column. Never let Weekly children shrink to the viewport:
+   the letter must grow to its full content height and the page itself should scroll. */
+.weekly-letter-page > * {
+  flex-shrink: 0;
+}
+
 /* Paper should read as paper, not as another generic white card. */
 .weekly-letter-sheet {
   height: auto;
