@@ -217,7 +217,7 @@
 
 .photo-archive-board {
   position: relative;
-  height: 900px;
+  height: var(--photo-board-height);
   padding: 22px 14px 24px;
   border-radius: 24px;
   overflow: hidden;

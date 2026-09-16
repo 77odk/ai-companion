@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { PhotoMeta } from '../lib/photoWall'
-import { groupPhotosByMonth, layoutForPhoto } from '../lib/photoWallLayout'
+import { boardHeightForPhotos, groupPhotosByMonth, layoutForPhoto } from '../lib/photoWallLayout'
 import '../styles/photoWallArchive.css'
 
 interface Props {
@@ -16,6 +16,10 @@ type WallStyle = CSSProperties & {
   '--photo-shift': string
   '--photo-slot-x': string
   '--photo-slot-y': string
+}
+
+type BoardStyle = CSSProperties & {
+  '--photo-board-height': string
 }
 
 function fmtMD(ts: number): string {
@@ -52,6 +56,10 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
     const layout = layoutForPhoto(photo.id, photo.createdAt)
     return `photo-archive-card is-${layout.width} pin-${layout.pin}`
   }
+
+  const boardStyle = (groupPhotos: PhotoMeta[]): BoardStyle => ({
+    '--photo-board-height': `${boardHeightForPhotos(groupPhotos)}px`,
+  })
 
   return (
     <>
@@ -134,7 +142,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
               groups.map((group, groupIndex) => (
                 <section key={group.key} className="photo-archive-month">
                   <div className="photo-archive-month-label">{group.label}</div>
-                  <div className="photo-archive-board">
+                  <div className="photo-archive-board" style={boardStyle(group.photos)}>
                     {group.photos.map((photo) => (
                       <button
                         key={photo.id}

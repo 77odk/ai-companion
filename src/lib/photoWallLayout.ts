@@ -9,6 +9,9 @@ export interface PhotoWallLayout {
   slotY: number
 }
 
+export const PHOTO_WALL_CARD_SAFE_HEIGHT = 240
+const PHOTO_WALL_MIN_BOARD_HEIGHT = 390
+
 /** Stable FNV-1a style hash: same photo id => same wall position/rotation forever. */
 export function hashPhotoId(id: string): number {
   let hash = 2166136261
@@ -29,11 +32,20 @@ export function layoutForPhoto(id: string, createdAt = 0): PhotoWallLayout {
   const pin: PhotoWallLayout['pin'] = pinRoll === 0 ? 'pin' : pinRoll <= 2 ? 'tape' : 'none'
   // Calendar-relative coordinates keep an existing photo fixed when siblings change.
   const date = new Date(createdAt)
-  const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1).getTime()
+  const nextMonth = Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1)
   const ageWithinMonth = Math.max(0, (nextMonth - createdAt) / 86_400_000)
   const slotX = width === 'wide' ? 8 + ((hash >>> 18) % 13) : (hash >>> 18) % 2 === 0 ? 4 : 52
-  const slotY = 18 + ageWithinMonth * 22
+  const sameDayOffset = ((hash >>> 22) % 17) - 8
+  const slotY = 18 + ageWithinMonth * 72 + sameDayOffset
   return { rotate, shift, width, pin, slotX, slotY }
+}
+
+export function boardHeightForPhotos(photos: PhotoMeta[]): number {
+  const maxSlotY = photos.reduce(
+    (max, photo) => Math.max(max, layoutForPhoto(photo.id, photo.createdAt).slotY),
+    0,
+  )
+  return Math.max(PHOTO_WALL_MIN_BOARD_HEIGHT, Math.ceil(maxSlotY + PHOTO_WALL_CARD_SAFE_HEIGHT + 1))
 }
 
 export function photoMonthKey(ts: number): string {
