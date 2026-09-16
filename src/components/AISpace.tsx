@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import WeeklyPage from './WeeklyPage'
 import PhotoWallArchive from './PhotoWallArchive'
+import EventArchive from './EventArchive'
 import { getActiveSessionId } from '../lib/sessionStore'
 import { getWeeklyReviews, type WeeklyReview } from '../lib/weeklyReview'
 import {
@@ -15,16 +16,6 @@ import {
   type PhotoMeta,
 } from '../lib/photoWall'
 import { getToken } from '../lib/auth'
-import { getSharedExperiences, formatSharedDate } from '../lib/sharedExperiences'
-import {
-  createEvent,
-  updateEvent,
-  softDeleteEvent,
-  getEvents,
-  EVENT_TYPES,
-  type CompanionEvent,
-  type EventType,
-} from '../lib/eventStore'
 
 interface Props {
   /** 进入时的初始子页：home 空间主页（记忆入口唯一为底部「记忆」Tab） */
@@ -44,86 +35,16 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
 
-  // 子页面路由：home 空间主页 / events 一起经历过 / weekly 一周情书
-  const [page, setPage] = useState<'home' | 'events' | 'weekly'>(initialPage)
+  const [page, setPage] = useState<'home' | 'weekly'>(initialPage)
   const [weeklyVersion, setWeeklyVersion] = useState(0)
   const weekly = useMemo<WeeklyReview | null>(
     () => getWeeklyReviews(sid)[0] ?? null,
     [sid, weeklyVersion],
   )
 
-  // 一起经历过：数据源 = Event，按会话隔离、occurredAt 倒序。
-  const [eventsVersion, setEventsVersion] = useState(0)
-  const timelineNodes = useMemo(() => getSharedExperiences(sid), [sid, eventsVersion])
-
-  /* ---- Event 手动添加 / 编辑 / 删除（沿用 E3；本批不改 Event 语义与数据结构） ---- */
-  const [eventFormOpen, setEventFormOpen] = useState(false)
-  const [editingEvent, setEditingEvent] = useState<CompanionEvent | null>(null)
-  const [formTitle, setFormTitle] = useState('')
-  const [formDate, setFormDate] = useState('')
-  const [formDesc, setFormDesc] = useState('')
-  const [formType, setFormType] = useState<EventType>('activity')
-  const [eventFormError, setEventFormError] = useState<string | null>(null)
-
-  const openEventForm = (ev: CompanionEvent | null) => {
-    setEditingEvent(ev)
-    setFormTitle(ev?.title ?? '')
-    setFormDesc(ev?.description ?? '')
-    setFormType((ev?.type as EventType) ?? 'activity')
-    const d = ev ? new Date(ev.occurredAt) : new Date()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const dd = String(d.getDate()).padStart(2, '0')
-    setFormDate(`${d.getFullYear()}-${m}-${dd}`)
-    setEventFormError(null)
-    setEventFormOpen(true)
-  }
-
-  const saveEventForm = () => {
-    const title = formTitle.trim()
-    if (!title) {
-      setEventFormError('给这件事起个标题吧')
-      return
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(formDate)) {
-      setEventFormError('选一个日期')
-      return
-    }
-    const occurredAt = new Date(`${formDate}T00:00:00`).getTime()
-    if (!Number.isFinite(occurredAt) || occurredAt > Date.now()) {
-      setEventFormError('这件事还没发生，先记在计划里吧')
-      return
-    }
-    if (editingEvent) {
-      updateEvent(sid, editingEvent.id, {
-        title,
-        description: formDesc.trim() || undefined,
-        occurredAt,
-        type: formType,
-      })
-    } else {
-      createEvent({
-        sessionId: sid,
-        type: formType,
-        title,
-        ...(formDesc.trim() ? { description: formDesc.trim() } : {}),
-        occurredAt,
-        source: 'manual',
-      })
-    }
-    setEventFormOpen(false)
-    setEditingEvent(null)
-    setEventsVersion((v) => v + 1)
-  }
-
-  const deleteEvent = (ev: CompanionEvent) => {
-    if (!window.confirm(`删掉「${ev.title}」这条吗？`)) return
-    softDeleteEvent(sid, ev.id)
-    setEventsVersion((v) => v + 1)
-  }
-
   const goHome = () => {
     setPage('home')
-    setWeeklyVersion((v) => v + 1)
+    setWeeklyVersion((value) => value + 1)
   }
 
   /* ---- 照片墙：上传/数据源沿用旧实现，展示交给稳定长墙组件。 ---- */
@@ -139,12 +60,12 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     let alive = true
     listPhotos(token, sid).then((res) => {
       if (!alive || !res.ok || !res.data) return
-      const cloud: PhotoMeta[] = res.data.photos.map((p) => ({
-        id: p.id,
-        sessionId: p.sessionId,
-        width: p.width,
-        height: p.height,
-        createdAt: p.createdAt,
+      const cloud: PhotoMeta[] = res.data.photos.map((photo) => ({
+        id: photo.id,
+        sessionId: photo.sessionId,
+        width: photo.width,
+        height: photo.height,
+        createdAt: photo.createdAt,
       }))
       setPhotos((prev) => mergePhotos(prev, cloud))
     })
@@ -169,13 +90,13 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     if (token && sid) {
       const res = await uploadPhoto(token, sid, scaled.dataUrl, scaled.width, scaled.height)
       if (res.ok && res.data) {
-        const p = res.data.photo
+        const photo = res.data.photo
         const meta: PhotoMeta = {
-          id: p.id,
-          sessionId: p.sessionId,
-          width: p.width,
-          height: p.height,
-          createdAt: p.createdAt,
+          id: photo.id,
+          sessionId: photo.sessionId,
+          width: photo.width,
+          height: photo.height,
+          createdAt: photo.createdAt,
         }
         setPhotos((prev) => mergePhotos([meta], prev))
       } else if (res.status === 413) {
@@ -201,7 +122,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     const list = Array.from(files)
     setPhotoError(null)
     setPhotoUploading(list.length)
-    for (const f of list) await handlePhotoFile(f)
+    for (const file of list) await handlePhotoFile(file)
     setPhotoUploading(0)
   }
 
@@ -222,9 +143,9 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
           accept="image/*"
           multiple
           className="ai-photo-file"
-          onChange={(e) => {
-            void handlePhotoFiles(e.target.files)
-            e.target.value = ''
+          onChange={(event) => {
+            void handlePhotoFiles(event.target.files)
+            event.target.value = ''
           }}
         />
       </>
@@ -263,135 +184,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
         </section>
 
         {renderPhotoWall()}
-
-        <section className="ai-space-v2-section space-archive-section">
-          <div className="ai-space-v2-head">
-            <span className="ai-space-v2-title">一起经历过</span>
-            <span className="ai-space-v2-en">MOMENTS WE SHARED</span>
-            <button type="button" className="ai-space-v2-all" onClick={() => setPage('events')}>
-              查看全部 ›
-            </button>
-          </div>
-          {timelineNodes.length === 0 ? (
-            <p className="ai-space-empty">有些日子，后来才知道很重要。</p>
-          ) : (
-            renderSharedTimeline(timelineNodes.slice(0, 3), true)
-          )}
-        </section>
-      </div>
-    )
-  }
-
-  function renderEventsPage() {
-    return (
-      <>
-        <div className="ai-space-topbar ai-space-sub-bar">
-          <button type="button" className="link-btn ai-space-back" onClick={() => setPage('home')}>
-            ‹ 返回
-          </button>
-          <h2 className="ai-space-sub-title">一起经历过</h2>
-          <button type="button" className="ai-space-v2-all" onClick={() => openEventForm(null)}>
-            ＋ 添加一件事
-          </button>
-        </div>
-
-        {eventFormOpen && (
-          <div className="ai-event-form">
-            <label className="ai-event-field">
-              <span>标题（必填）</span>
-              <input
-                type="text"
-                value={formTitle}
-                onChange={(e) => setFormTitle(e.target.value)}
-                placeholder="比如：一起看了场电影"
-              />
-            </label>
-            <label className="ai-event-field">
-              <span>日期（必填）</span>
-              <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} />
-            </label>
-            <label className="ai-event-field">
-              <span>描述（可选）</span>
-              <input
-                type="text"
-                value={formDesc}
-                onChange={(e) => setFormDesc(e.target.value)}
-                placeholder="想起来的小细节"
-              />
-            </label>
-            <label className="ai-event-field">
-              <span>类型（可选）</span>
-              <select value={formType} onChange={(e) => setFormType(e.target.value as EventType)}>
-                {EVENT_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {eventFormError && <p className="ai-event-error">{eventFormError}</p>}
-            <div className="ai-event-actions">
-              <button
-                type="button"
-                className="link-btn"
-                onClick={() => {
-                  setEventFormOpen(false)
-                  setEditingEvent(null)
-                  setEventFormError(null)
-                }}
-              >
-                取消
-              </button>
-              <button type="button" className="ai-event-save" onClick={saveEventForm}>
-                {editingEvent ? '保存修改' : '记下来'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="ai-space-timeline">
-          {timelineNodes.length === 0 ? (
-            <p className="ai-space-empty">有些日子，后来才知道很重要。</p>
-          ) : (
-            renderSharedTimeline(timelineNodes)
-          )}
-        </div>
-      </>
-    )
-  }
-
-  function renderSharedTimeline(
-    nodes: ReturnType<typeof getSharedExperiences>,
-    compact = false,
-  ) {
-    const byId = new Map(getEvents(sid).map((e) => [e.id, e]))
-    return (
-      <div className={`ai-shared-timeline${compact ? ' is-compact' : ''}`}>
-        {nodes.map((n) => {
-          const ev = byId.get(n.id) ?? null
-          return (
-            <div key={n.id} className="ai-shared-item">
-              <span className="ai-shared-dot" aria-hidden="true" />
-              <div className="ai-shared-main">
-                <span className="ai-shared-date">
-                  {formatSharedDate(n.dateTs)} · 第 {n.day} 天
-                </span>
-                <p className="ai-shared-text">{n.title}</p>
-                {n.description ? <p className="ai-shared-desc">{n.description}</p> : null}
-                {!compact && ev && (
-                  <span className="ai-shared-ops">
-                    <button type="button" className="link-btn" onClick={() => openEventForm(ev)}>
-                      编辑
-                    </button>
-                    <button type="button" className="link-btn ai-shared-del" onClick={() => deleteEvent(ev)}>
-                      删除
-                    </button>
-                  </span>
-                )}
-              </div>
-            </div>
-          )
-        })}
+        <EventArchive sessionId={sid} />
       </div>
     )
   }
@@ -400,11 +193,5 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
     return <WeeklyPage onBack={goHome} onGoSettings={onGoMine ?? (() => {})} />
   }
 
-  const pageClass = `page ai-space-page${page === 'events' ? ' ai-space-page-sub' : ''}`
-
-  return (
-    <div className={pageClass}>
-      {page === 'events' ? renderEventsPage() : renderHomePage()}
-    </div>
-  )
+  return <div className="page ai-space-page">{renderHomePage()}</div>
 }
