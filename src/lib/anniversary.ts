@@ -10,7 +10,7 @@ import { MEMORY_UPDATED_EVENT } from './memory.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { getFirstSeen } from './storage.ts'
 import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
-import { MILESTONE_DAYS, getKnownDays } from './milestone.ts'
+import { MILESTONE_DAYS } from './milestone.ts'
 
 /** 计时模式：正计时（已经 X 天）| 倒计时（还剩 X 天） */
 export type CountMode = 'forward' | 'countdown'
@@ -36,7 +36,7 @@ export interface Anniversary {
   periodDays?: number
   /**
    * 里程碑条目专用：目标认识天数（如 100，=「在一起 100 天」）。有这个字段就是里程碑，
-   * 由 ensureRoleDefaults 自动维护（只保留下一个，认识天数过掉就换），列表打「里程碑」标，不让手动编辑/删除
+   * 旧版自动生成的里程碑标记；读取角色数据时会清理这类条目
    */
   milestoneDay?: number
 }
@@ -530,7 +530,7 @@ export function getDefaultAnniversary(sessionId?: string): Anniversary | null {
   return a
 }
 
-// ---- 里程碑条目（「在一起 X 天」，TASK-UI3 七七拍板：每个角色自动生成，只保留下一个） ----
+// ---- 里程碑条目（「在一起 X 天」；保留纯函数导出以兼容现有调用） ----
 
 /** 本地日历日加 N 天 → 'YYYY-MM-DD'（UTC 基准，避免夏令时把一天算成 23/25 小时；纯函数可单测） */
 function addLocalDays(ts: number, n: number): string {
@@ -546,7 +546,7 @@ function addLocalDays(ts: number, n: number): string {
 /**
  * 纯函数：生成「在一起 X 天」里程碑条目。targetDay = 认识第几天（认识当天 = 第 1 天，与 getKnownDays 同算法），
  * date = 那一天（firstSeen + (targetDay-1) 本地日历日），标 milestoneDay。countMode 用 forward：未来显示「还剩 N 天」，
- * 到了当天显示「就是今天」，过掉当天由 ensureRoleDefaults 换成下一个里程碑。
+ * 到了当天显示「就是今天」。
  */
 export function buildMilestoneAnniversary(firstSeen: number, targetDay: number, now: number = Date.now()): Anniversary {
   return {
@@ -571,9 +571,9 @@ export function isMilestoneAnniversary(a: Anniversary | null | undefined): boole
 }
 
 /**
- * 首次按会话读取时补默认条目（TASK-UI3，七七拍板每个角色各有一套）：
- * 1) 「认识 TA 的日子」——store key 从未存在才补（getDefaultAnniversary 语义，用户删光不复活）；
- * 2) 下一个「在一起 X 天」里程碑——认识天数过掉当前里程碑就换成下一个；全部过完（730+）移除。
+ * 首次按会话读取时补默认「认识 TA 的日子」（store key 从未存在才补，保持
+ * getDefaultAnniversary 的「用户删光不复活」语义），并清理旧版自动生成的里程碑条目。
+ * 若主展示仍指向被清理的里程碑，同时清除该引用。
  * 幂等：无变化不写不广播。只在有 sessionId 时生效（无会话 = 遗留全局模式不生成）。
  * 被 getAnniversaries 调用，因此空间页/纪念日页/聊天注入第一次读到就自动补齐。
  */
@@ -586,22 +586,14 @@ function ensureRoleDefaults(sessionId?: string): void {
     const firstSeen = getFirstSeen(sessionId)
     if (!firstSeen) return
     const now = Date.now()
-    const changed: Anniversary[] = [...list]
+    const removedMilestoneIds = new Set(list.filter(isMilestoneAnniversary).map((a) => a.id))
+    const changed: Anniversary[] = list.filter((a) => !isMilestoneAnniversary(a))
     if (neverInited) {
       changed.push(buildDefaultAnniversary(firstSeen, now))
     }
-    const knownDays = getKnownDays(now, sessionId)
-    const next = nextMilestoneDay(knownDays)
-    const existingIdx = changed.findIndex((a) => isMilestoneAnniversary(a))
-    if (next != null) {
-      const existing = existingIdx >= 0 ? changed[existingIdx] : null
-      if (!existing) {
-        changed.push(buildMilestoneAnniversary(firstSeen, next, now))
-      } else if (existing.milestoneDay !== next) {
-        changed.splice(existingIdx, 1, buildMilestoneAnniversary(firstSeen, next, now))
-      }
-    } else if (existingIdx >= 0) {
-      changed.splice(existingIdx, 1)
+    const mainId = getMainAnniversaryId(sessionId)
+    if (mainId && removedMilestoneIds.has(mainId)) {
+      setMainAnniversaryId(null, sessionId)
     }
     const same = changed.length === list.length && changed.every((a, i) => a.id === list[i].id)
     if (!same) {
