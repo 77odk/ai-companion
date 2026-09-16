@@ -41,6 +41,7 @@ import { buildFutureAgendaBlock } from '../lib/futureAgenda'
 import { buildSelfTimelineBlock } from '../lib/selfTimeline'
 import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYourMoment } from '../lib/yourMoment'
 import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona } from '../lib/taRuntime'
+import { buildIdentityContext } from '../lib/identityContext'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -875,6 +876,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const runtimeCtx = buildTaRuntimeContext(runtime, lang)
     if (runtimeCtx) {
       apiMessages.push({ role: 'system', content: runtimeCtx })
+    }
+    const identityCtx = buildIdentityContext(activeSessionId || undefined, lang)
+    if (identityCtx) {
+      apiMessages.push({ role: 'system', content: identityCtx })
     }
     const weeklyList = getWeeklyReviews(activeSessionId || undefined)
     if (weeklyList.length > 0) {

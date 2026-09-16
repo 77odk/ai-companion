@@ -6,6 +6,7 @@
 // 周记数据存 localStorage（一期不做后端）；生成走用户 key 非流式调用（调 API 在组件里做）。
 
 import { migrateGlobalToDefaultSession } from './roleData.ts'
+import { buildIdentityContext } from './identityContext.ts'
 
 export interface WeeklyReply {
   content: string
@@ -260,6 +261,8 @@ export function formatMessageLine(m: WeeklyMessageLine): string {
 export interface WeeklyPromptContext {
   /** 本周时间段文案（'第 N 周 · 8月18日-8月24日'） */
   weekLabel: string
+  /** 会话 id：注入 TA 的性别 / 备注等身份信息 */
+  sessionId?: string
   /** 本周聊天摘要：最多 40 条精简消息行（调用方已按时间升序排好） */
   summaryLines: string[]
   /** 本周新增记忆的 text 列表 */
@@ -306,6 +309,8 @@ export const SLOW_LETTER_REPLY_SYSTEM_PROMPT =
 /** 组装周记生成提示词（纯函数，可单测）：时间段 / 聊天摘要 / 本周记忆 / 相处天数 / 上篇批注 / 写作要求 */
 export function buildWeeklyPrompt(ctx: WeeklyPromptContext): string {
   const lines: string[] = []
+  const identity = buildIdentityContext(ctx.sessionId, 'zh')
+  if (identity) lines.push(identity)
   lines.push(`【本周时间段】${ctx.weekLabel}`)
 
   lines.push('【本周聊天摘要】')

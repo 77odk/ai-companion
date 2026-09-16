@@ -15,10 +15,20 @@ export interface LlmSettings {
   model: string
 }
 
+import { buildIdentityContext } from './identityContext.ts'
+
+/** 身份块（性别/称呼备注）：有内容时追加进 system，没有就原样 */
+function idSuffix(sessionId: string | undefined, en: boolean): string {
+  const block = buildIdentityContext(sessionId, en ? 'en' : 'zh')
+  return block ? '\n' + block : ''
+}
+
 /** 拼 user 提示词所需的上下文 */
 export interface LlmContext {
   /** TA 昵称 */
   taName: string
+  /** 会话 id：注入 TA 的性别 / 备注等身份信息 */
+  sessionId?: string
   /** 用户昵称（可能为默认「你」） */
   yourName: string
   /** 人设全文（非空才进 LLM 路径） */
@@ -70,7 +80,8 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
       `You are "${ctx.taName}", a real person living your own life. Post one casual status sharing what's going on with you right now. ` +
       `1-2 short sentences, casual and warm, matching your personality. ` +
       `Vary your openings — don't reuse the same starter. ` +
-      `No emoji. Never say you're an AI/assistant/model. Write like a real person's casual post, never robotic.`
+      `No emoji. Never say you're an AI/assistant/model. Write like a real person's casual post, never robotic.` +
+      idSuffix(ctx.sessionId, true)
     let user = ''
     if (ctx.nowAnchor) {
       user += `[Current Time] It is now ${ctx.nowAnchor}. `
@@ -104,7 +115,8 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     `句式要多样，别老用同一种开头——禁止用「刚把」「刚刚」「今天又」「突然」这类万能开头，` +
     `像真人随手写的一样，每条动态开口都不一样（这回想天气，下回想件小事，再下回想人）。` +
     `禁止 emoji；禁止自称 AI/助手/模型；禁止出现「设定」「人设」「朋友圈」这类词。` +
-    `就像真人随手写的生活，别让人看出是编排好的。`
+    `就像真人随手写的生活，别让人看出是编排好的。` +
+    idSuffix(ctx.sessionId, false)
 
   let user = ''
   if (ctx.nowAnchor) {
@@ -223,6 +235,8 @@ export function extractImageCaption(text: string): { text: string; caption: stri
 export interface ReplyContext {
   /** TA 昵称 */
   taName: string
+  /** 会话 id：注入 TA 的性别 / 备注等身份信息 */
+  sessionId?: string
   /** 用户昵称 */
   yourName: string
   /** 人设全文 */
@@ -246,7 +260,8 @@ export function buildReplyMessages(ctx: ReplyContext): ApiMessage[] {
       `You are "${ctx.taName}" and they just left a comment on one of your posts. ` +
       `Reply back briefly like a real person (1-2 short sentences, casual, warm, in character and on-topic). ` +
       `Keep it short — don't ask questions to drag the conversation on. ` +
-      `No emoji. Never say you're an AI/assistant/model.`
+      `No emoji. Never say you're an AI/assistant/model.` +
+      idSuffix(ctx.sessionId, true)
     const user =
       `Your personality:\n${ctx.persona.trim()}\n\n` +
       `Your post:\n${ctx.postText}\n\n` +
@@ -261,7 +276,8 @@ export function buildReplyMessages(ctx: ReplyContext): ApiMessage[] {
     `你是「${ctx.taName}」，对方刚在你的一条生活动态下留言了。` +
     `像真人一样简短地回一句（一两句话，口语化、有温度，贴合自己的性格和那条动态）。` +
     `回完就收住，不要反问回去把聊天续起来。` +
-    `禁止 emoji；禁止自称 AI/助手/模型；禁止出现「设定」「人设」这类词。`
+    `禁止 emoji；禁止自称 AI/助手/模型；禁止出现「设定」「人设」这类词。` +
+    idSuffix(ctx.sessionId, false)
 
   const user =
     `你的性格：\n${ctx.persona.trim()}\n\n` +
