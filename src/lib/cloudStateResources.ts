@@ -272,11 +272,61 @@ function personalDays(): unknown[] {
   return Array.isArray(value) ? value.filter(item => record(item)?.kind === 'personal') : []
 }
 
+/**
+ * personal_day 生产存在两种形态，语义必须分离：
+ *  A. aggregate（entityId === 'global'，payload 为数组）：远端数组即完整快照 → replace。
+ *  B. single（entityId !== 'global'，payload 为合法 personal 单对象）：逐条实体 → UPSERT，
+ *     只更新/插入 id 对应条目，绝不整表 replace。
+ * 非法 payload（global 非数组 / single 非合法 personal 对象）返回 null，调用方安全忽略，
+ * 绝不清空本机个人节日。
+ */
+interface PersonalDaysApply {
+  kind: 'aggregate'
+  payload: unknown[]
+}
+interface PersonalDaysSingleApply {
+  kind: 'single'
+  id: string
+  payload: Record<string, unknown>
+}
+type PersonalDaysResolved = PersonalDaysApply | PersonalDaysSingleApply | null
+
+function resolvePersonalDaysApply(entity: CloudStateEntity): PersonalDaysResolved {
+  if (entity.entityId === 'global') {
+    if (!Array.isArray(entity.payload)) return null
+    return { kind: 'aggregate', payload: entity.payload }
+  }
+  const item = record(entity.payload)
+  if (!item || item.kind !== 'personal' || typeof item.id !== 'string' || item.id === '') return null
+  // Cloud State identity 以 entity.entityId 为准；payload.id 规范成同一 id，避免凭空多造记录。
+  return { kind: 'single', id: entity.entityId, payload: { ...item, id: entity.entityId } }
+}
+
 function replacePersonalDays(payload: unknown): void {
   const current = readJson(PERSONAL_DAYS_KEY)
   const couples = Array.isArray(current) ? current.filter(item => record(item)?.kind !== 'personal') : []
   const incoming = Array.isArray(payload) ? payload.filter(item => record(item)?.kind === 'personal') : []
   localStorage.setItem(PERSONAL_DAYS_KEY, JSON.stringify([...incoming, ...couples]))
+}
+
+/** single 实体 UPSERT：保留所有非 personal / couple 数据与其它 personal 条目，按 id 更新或插入。 */
+function upsertPersonalDay(id: string, item: Record<string, unknown>): void {
+  const current = readJson(PERSONAL_DAYS_KEY)
+  const list = Array.isArray(current) ? current : []
+  const couples = list.filter(entry => record(entry)?.kind !== 'personal')
+  const others = list.filter(entry => record(entry)?.kind === 'personal' && record(entry)?.id !== id)
+  localStorage.setItem(PERSONAL_DAYS_KEY, JSON.stringify([{ ...item, id }, ...others, ...couples]))
+}
+
+/** single tombstone：只删 id === entity.entityId 的 personal 条目；global tombstone：清全部 personal、保留 couple。 */
+function deletePersonalDayEntity(entity: CloudStateEntity): void {
+  const current = readJson(PERSONAL_DAYS_KEY)
+  const list = Array.isArray(current) ? current : []
+  if (entity.entityId === 'global') {
+    localStorage.setItem(PERSONAL_DAYS_KEY, JSON.stringify(list.filter(entry => record(entry)?.kind !== 'personal')))
+    return
+  }
+  localStorage.setItem(PERSONAL_DAYS_KEY, JSON.stringify(list.filter(entry => !(record(entry)?.kind === 'personal' && record(entry)?.id === entity.entityId))))
 }
 
 let personalSnapshot = ''
@@ -310,8 +360,17 @@ export function initCloudStateResourceAdapters(): void {
     delete: resetModelSettingsEntity,
   })
   registerCloudStateAdapter('personal_day', {
-    apply(entity) { replacePersonalDays(entity.payload); personalSnapshot = JSON.stringify(personalDays()) },
-    delete() { replacePersonalDays([]); personalSnapshot = '[]' },
+    apply(entity) {
+      const resolved = resolvePersonalDaysApply(entity)
+      if (!resolved) return
+      if (resolved.kind === 'aggregate') replacePersonalDays(resolved.payload)
+      else upsertPersonalDay(resolved.id, resolved.payload)
+      personalSnapshot = JSON.stringify(personalDays())
+    },
+    delete(entity) {
+      deletePersonalDayEntity(entity)
+      personalSnapshot = JSON.stringify(personalDays())
+    },
   })
   registerCloudStateAdapter('anniversary', {
     apply: applyAnniversaryEntity,

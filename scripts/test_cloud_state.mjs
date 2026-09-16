@@ -673,3 +673,267 @@ test('AG: deployed metadata keys migrate lazily without resetting cursor or dupl
   assert.equal(store.getPendingOps().length, 0)
   unregister()
 })
+
+test('AA: personal_day array payload applies normally', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'couple', label: '认识 TA', date: '01-01', kind: 'couple', createdAt: 1 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload: [
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+      { id: 'memorial', label: '纪念日', date: '03-04', kind: 'personal', createdAt: 3 },
+    ] },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.deepEqual(days.map(day => day.id).sort(), ['birthday', 'couple', 'memorial'])
+  assert.equal(cloud.getCloudStateVersion('personal_day', 'global'), 1)
+})
+
+test('AB: personal_day single personal object payload applies as upsert (entityId = item id)', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'couple', label: '认识 TA', date: '01-01', kind: 'couple', createdAt: 1 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'birthday', version: 1, payload:
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 } },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.deepEqual(days.map(day => day.id).sort(), ['birthday', 'couple'])
+  assert.equal(days.find(day => day.id === 'birthday').label, '我的生日')
+})
+
+test('AC: array(v1) then single object(v2) keeps personal days, never clears to []', async () => {
+  clearState()
+  const changes1 = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload: [
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    ] },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes1))
+  await cloud.pullCloudState()
+  const changes2 = [
+    { kind: 'personal_day', entityId: 'birthday', version: 2, payload:
+      { id: 'birthday', label: '我的生日（改）', date: '02-04', kind: 'personal', createdAt: 3 } },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(2, changes2))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.equal(days.filter(day => day.kind === 'personal').length, 1)
+  assert.equal(days.find(day => day.id === 'birthday').label, '我的生日（改）')
+  assert.ok(days.length > 0, 'personal days must not become []')
+})
+
+test('AD: invalid object payload is safely ignored and never clears existing personal days', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    { id: 'couple', label: '认识 TA', date: '01-01', kind: 'couple', createdAt: 1 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload: { broken: true, no: 'fields' } },
+    { kind: 'personal_day', entityId: 'global', version: 2, payload: null },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(2, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.equal(days.filter(day => day.kind === 'personal').length, 1)
+  assert.equal(days.find(day => day.id === 'birthday').label, '我的生日')
+  assert.equal(days.find(day => day.id === 'couple').label, '认识 TA')
+})
+
+test('AE: single object apply never overwrites couple/relationship anniversaries', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'anniv', label: '周年纪念', date: '06-06', kind: 'couple', createdAt: 1 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'birthday', version: 1, payload:
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 } },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.deepEqual(days.map(day => day.id).sort(), ['anniv', 'birthday'])
+  assert.equal(days.find(day => day.id === 'anniv').label, '周年纪念')
+})
+
+test('AF: same-id re-apply does not duplicate entries', async () => {
+  clearState()
+  const changes1 = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload: [
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    ] },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes1))
+  await cloud.pullCloudState()
+  const changes2 = [
+    { kind: 'personal_day', entityId: 'global', version: 2, payload: [
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    ] },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(2, changes2))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.equal(days.filter(day => day.kind === 'personal' && day.id === 'birthday').length, 1)
+})
+
+test('AG: personal_day cloud apply is silent — no legacy echo, no duplicate cloud op', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([]))
+  let legacyChanges = 0
+  window.addEventListener('eluvin-data-change', () => { legacyChanges++ }, { once: true })
+  const changes = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload: [
+      { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    ] },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes))
+  await cloud.pullCloudState()
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(legacyChanges, 0)
+  assert.equal(store.getPendingOps().filter(op => op.kind === 'personal_day').length, 0)
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.equal(days.filter(day => day.kind === 'personal').length, 1)
+})
+
+test('P1: single birthday update keeps other personal days and couple (upsert, not replace)', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    { id: 'period', label: '生理期', date: '10-10', kind: 'personal', createdAt: 3 },
+    { id: 'couple', label: '认识 TA', date: '01-01', kind: 'couple', createdAt: 1 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'birthday', version: 2, payload:
+      { id: 'birthday', label: '我的生日（新版）', date: '02-04', kind: 'personal', createdAt: 4 } },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(2, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.deepEqual(days.map(day => day.id).sort(), ['birthday', 'couple', 'period'])
+  assert.equal(days.find(day => day.id === 'birthday').label, '我的生日（新版）')
+  assert.equal(days.find(day => day.id === 'period').label, '生理期')
+})
+
+test('P2: birthday single then period single — both survive', async () => {
+  clearState()
+  const b = { kind: 'personal_day', entityId: 'birthday', version: 1, payload: { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 } }
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [b]))
+  await cloud.pullCloudState()
+  const p = { kind: 'personal_day', entityId: 'period', version: 1, payload: { id: 'period', label: '生理期', date: '10-10', kind: 'personal', createdAt: 3 } }
+  globalThis.fetch = async () => jsonResponse(pullBody(2, [p]))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.equal(days.filter(day => day.kind === 'personal').length, 2)
+  assert.ok(days.some(day => day.id === 'birthday'))
+  assert.ok(days.some(day => day.id === 'period'))
+})
+
+test('P3: same birthday single v1 → v2 ends with exactly one entry, v2 value', async () => {
+  clearState()
+  const v1 = { kind: 'personal_day', entityId: 'birthday', version: 1, payload: { id: 'birthday', label: '生日 v1', date: '02-03', kind: 'personal', createdAt: 2 } }
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [v1]))
+  await cloud.pullCloudState()
+  const v2 = { kind: 'personal_day', entityId: 'birthday', version: 2, payload: { id: 'birthday', label: '生日 v2', date: '02-04', kind: 'personal', createdAt: 4 } }
+  globalThis.fetch = async () => jsonResponse(pullBody(2, [v2]))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.equal(days.filter(day => day.kind === 'personal' && day.id === 'birthday').length, 1)
+  assert.equal(days.find(day => day.id === 'birthday').label, '生日 v2')
+})
+
+test('P4: single birthday tombstone deletes only birthday; period + couple survive', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    { id: 'period', label: '生理期', date: '10-10', kind: 'personal', createdAt: 3 },
+    { id: 'couple', label: '认识 TA', date: '01-01', kind: 'couple', createdAt: 1 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'birthday', version: 3, deleted: true },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(3, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.deepEqual(days.map(day => day.id).sort(), ['couple', 'period'])
+  assert.equal(days.find(day => day.id === 'period').label, '生理期')
+  assert.equal(days.find(day => day.id === 'couple').label, '认识 TA')
+})
+
+test('P5: global array keeps full replace snapshot semantics', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'old', label: '旧生日', date: '02-03', kind: 'personal', createdAt: 1 },
+    { id: 'couple', label: '认识 TA', date: '01-01', kind: 'couple', createdAt: 2 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'global', version: 1, payload: [
+      { id: 'new-day', label: '新节日', date: '03-03', kind: 'personal', createdAt: 3 },
+    ] },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(1, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  // 完整快照：旧 personal 被替换，仅剩新 personal；couple 保留
+  assert.deepEqual(days.map(day => day.id).sort(), ['couple', 'new-day'])
+})
+
+test('P6: global tombstone clears all personal days but keeps couple', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    { id: 'period', label: '生理期', date: '10-10', kind: 'personal', createdAt: 3 },
+    { id: 'couple', label: '认识 TA', date: '01-01', kind: 'couple', createdAt: 1 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'global', version: 2, deleted: true },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(2, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.deepEqual(days.map(day => day.id), ['couple'])
+})
+
+test('P7: invalid single personal payload leaves existing list untouched', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+    { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 },
+    { id: 'couple', label: '认识 TA', date: '01-01', kind: 'couple', createdAt: 1 },
+  ]))
+  const changes = [
+    { kind: 'personal_day', entityId: 'bad-1', version: 1, payload: { label: '无 id', kind: 'personal' } },
+    { kind: 'personal_day', entityId: 'bad-2', version: 2, payload: { id: 'x', kind: 'couple' } },
+    { kind: 'personal_day', entityId: 'bad-3', version: 3, payload: 'not-an-object' },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(3, changes))
+  await cloud.pullCloudState()
+  const days = JSON.parse(localStorage.getItem('ai_companion_anniversaries'))
+  assert.deepEqual(days.map(day => day.id).sort(), ['birthday', 'couple'])
+  assert.equal(days.find(day => day.id === 'birthday').label, '我的生日')
+})
+
+test('P8: single apply and delete are silent — no legacy echo, no duplicate cloud op', async () => {
+  clearState()
+  localStorage.setItem('ai_companion_anniversaries', JSON.stringify([]))
+  let legacyChanges = 0
+  window.addEventListener('eluvin-data-change', () => { legacyChanges++ }, { once: true })
+  const apply = { kind: 'personal_day', entityId: 'birthday', version: 1, payload: { id: 'birthday', label: '我的生日', date: '02-03', kind: 'personal', createdAt: 2 } }
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [apply]))
+  await cloud.pullCloudState()
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(legacyChanges, 0)
+  assert.equal(store.getPendingOps().filter(op => op.kind === 'personal_day').length, 0)
+  const tomb = { kind: 'personal_day', entityId: 'birthday', version: 2, deleted: true }
+  globalThis.fetch = async () => jsonResponse(pullBody(2, [tomb]))
+  await cloud.pullCloudState()
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(legacyChanges, 0)
+  assert.equal(store.getPendingOps().filter(op => op.kind === 'personal_day').length, 0)
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_anniversaries')), [])
+})
