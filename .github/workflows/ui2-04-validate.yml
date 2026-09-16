@@ -45,5 +45,27 @@ jobs:
       - name: Build
         if: always()
         run: npm run build
+      - name: Recheck same failures on main baseline
+        if: always()
+        shell: bash
+        run: |
+          git fetch origin main --depth=1
+          git checkout --detach FETCH_HEAD
+          : > main-baseline-failed-tests.txt
+          for f in scripts/test_memory_ux_polish.mjs scripts/test_memory_write_failure.mjs; do
+            if node --test "$f"; then
+              echo "PASS $f on main"
+            else
+              echo "$f" >> main-baseline-failed-tests.txt
+              echo "FAIL $f on main"
+            fi
+          done
+      - name: Upload main baseline failure names
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-baseline-failed-tests
+          path: main-baseline-failed-tests.txt
+          if-no-files-found: ignore
 
 # Temporary validation workflow; delete before merge.
