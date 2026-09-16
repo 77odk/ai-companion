@@ -31,6 +31,15 @@ function weeklyPreview(review: WeeklyReview): string {
   return clean.length > 48 ? `${clean.slice(0, 48)}…` : clean
 }
 
+function normalizePhotoCreatedAt(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return 0
+}
+
 export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
@@ -65,7 +74,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
         sessionId: photo.sessionId,
         width: photo.width,
         height: photo.height,
-        createdAt: photo.createdAt,
+        createdAt: normalizePhotoCreatedAt(photo.createdAt),
       }))
       setPhotos((prev) => mergePhotos(prev, cloud))
     })
@@ -96,7 +105,7 @@ export default function AISpace({ initialPage = 'home', onGoMine }: Props) {
           sessionId: photo.sessionId,
           width: photo.width,
           height: photo.height,
-          createdAt: photo.createdAt,
+          createdAt: normalizePhotoCreatedAt(photo.createdAt),
         }
         setPhotos((prev) => mergePhotos([meta], prev))
       } else if (res.status === 413) {
