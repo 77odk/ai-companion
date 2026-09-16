@@ -131,7 +131,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
                 <section key={group.key} className="photo-archive-month">
                   <div className="photo-archive-month-label">{group.label}</div>
                   <div className="photo-archive-board">
-                    {group.photos.map((photo, index) => (
+                    {group.photos.map((photo) => (
                       <button
                         key={photo.id}
                         type="button"
