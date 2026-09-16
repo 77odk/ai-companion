@@ -174,6 +174,8 @@ function saveState(state: SpaceState, sessionId?: string, silent = false): void 
 }
 
 const SLOT_MARKER_PREFIX = '__generation_slot__:'
+const PROVISIONAL_SLOT_MARKER = -1
+const PERMANENT_SLOT_MARKER = 1
 function slotWasUsed(state: SpaceState, slotId: string): boolean {
   return state.posts.some(post => post.generationSlotId === slotId) || state.used[`${SLOT_MARKER_PREFIX}${slotId}`] != null
 }
@@ -182,7 +184,7 @@ function reserveSlots(state: SpaceState, slots: SpaceSlot[]): SpaceSlot[] {
   for (const slot of slots) {
     const slotId = generationSlotIdFor(slot)
     if (slotWasUsed(state, slotId)) continue
-    state.used[`${SLOT_MARKER_PREFIX}${slotId}`] = 1
+    state.used[`${SLOT_MARKER_PREFIX}${slotId}`] = PROVISIONAL_SLOT_MARKER
     pending.push(slot)
   }
   return pending
@@ -313,7 +315,7 @@ export function refreshSpace(
     const slotId = generationSlotIdFor(fallbackSlot)
     if (prev.posts.length === 0 && tLedger.daily < MAX_POSTS_PER_DAY && !slotWasUsed(prev, slotId)) {
       const g = generatePost(vars, used, now - 3 * 60 * 1000, Math.random, 'daily', lang, slotId)
-      used[`${SLOT_MARKER_PREFIX}${slotId}`] = 1
+      used[`${SLOT_MARKER_PREFIX}${slotId}`] = PERMANENT_SLOT_MARKER
       used[g.templateKey] = now
       posts.unshift({ ...g.post, ...(sessionId ? { sessionId } : {}) })
       recordLedger([g.post], sessionId, now)
@@ -347,6 +349,7 @@ export function refreshSpace(
   let created = 0
   for (const slot of eligible) {
     const g = generatePost({ ...vars, timeWord: getTimeWord(slot.at), season: getSeason(slot.at) }, state.used, slot.at, Math.random, slot.source, spaceLang, generationSlotIdFor(slot))
+    state.used[`${SLOT_MARKER_PREFIX}${generationSlotIdFor(slot)}`] = PERMANENT_SLOT_MARKER
     state.used[g.templateKey] = now
     state.posts = mergeNewPosts(state.posts, [{ ...g.post, ...(sessionId ? { sessionId } : {}) }])
     created++
@@ -505,7 +508,16 @@ export async function generatePendingPosts(
   // 合并落盘：重新读一次当前状态，避免覆盖别处写入；生成落账（模板路径与 LLM 路径一致）
   const current = loadState(sessionId)
   const posts = mergeNewPosts(current.posts, newPosts)
-  const state: SpaceState = { posts, lastVisit: current.lastVisit ?? now, used }
+  const finalUsed = { ...used }
+  for (const slot of plan.pending) {
+    const slotId = generationSlotIdFor(slot)
+    const marker = `${SLOT_MARKER_PREFIX}${slotId}`
+    const generated = newPosts.some(post => post.generationSlotId === slotId)
+    const permanentlyKnown = current.posts.some(post => post.generationSlotId === slotId) || current.used[marker] === PERMANENT_SLOT_MARKER
+    if (generated || permanentlyKnown) finalUsed[marker] = PERMANENT_SLOT_MARKER
+    else if (finalUsed[marker] === PROVISIONAL_SLOT_MARKER) delete finalUsed[marker]
+  }
+  const state: SpaceState = { posts, lastVisit: current.lastVisit ?? now, used: finalUsed }
   if (newPosts.length > 0) recordLedger(newPosts, sessionId, now)
   saveState(state, sessionId)
   return { posts: state.posts, created: newPosts.length, usedFallback }
@@ -530,8 +542,11 @@ export function applySpacePostFromCloud(post: SpacePost, sessionId: string): voi
   if (!sessionId || !post.id) return
   const state = loadState(sessionId)
   const normalized = { ...post, sessionId }
+  if (normalized.generationSlotId) {
+    state.posts = state.posts.filter(item => item.id === post.id || item.generationSlotId !== normalized.generationSlotId)
+    state.used[`${SLOT_MARKER_PREFIX}${normalized.generationSlotId}`] = PERMANENT_SLOT_MARKER
+  }
   const index = state.posts.findIndex(item => item.id === post.id)
-  if (normalized.generationSlotId) state.used[`${SLOT_MARKER_PREFIX}${normalized.generationSlotId}`] = 1
   if (index >= 0) state.posts[index] = normalized
   else state.posts.unshift(normalized)
   state.posts.sort((a, b) => b.at - a.at)
@@ -544,8 +559,8 @@ export function deleteSpacePostFromCloud(postId: string, sessionId: string, gene
   const state = loadState(sessionId)
   const existing = state.posts.find(item => item.id === postId)
   const slotId = generationSlotId || existing?.generationSlotId
-  state.posts = state.posts.filter(item => item.id !== postId)
-  if (slotId) state.used[`${SLOT_MARKER_PREFIX}${slotId}`] = 1
+  state.posts = state.posts.filter(item => item.id !== postId && (!slotId || item.generationSlotId !== slotId))
+  if (slotId) state.used[`${SLOT_MARKER_PREFIX}${slotId}`] = PERMANENT_SLOT_MARKER
   saveState(state, sessionId, true)
 }
 
