@@ -286,7 +286,16 @@ export function buildTaRuntimeContext(runtime: TaRuntimeState | null, lang: Lang
   if (!runtime || !runtime.label) return ''
   const until = formatRuntimeUntil(runtime.plannedUntil)
   if (lang === 'en') {
-    return `[What TA is doing right now]\nThis is TA's own current life state — not something they told you, not a shared memory or event:\n${runtimeDisplayLabel(runtime, 'en')}, probably until around ${until}.`
+    return [
+      '[What you are doing right now]',
+      "This is your own current life state — not something the other person told you, not a shared memory or event, and not the other person\u2019s activity.",
+      'Never restate it as what the other person is doing:',
+      `${runtimeDisplayLabel(runtime, 'en')}, probably until around ${until}.`,
+    ].join('\n')
   }
-  return `【TA 此刻】\n这是 TA 自己当前的生活状态（不是对方告诉你的，也不是你们的共同经历）：\n${runtime.label}，预计会持续到 ${until} 左右。`
+  return [
+    '【你自己此刻在做什么】',
+    '下面是你（TA）自己当前的生活状态，不是对方告诉你的，也不是你们共同的经历——更不是在说对方，绝不要把这件事写成对方在做：',
+    `${runtime.label}，预计会持续到 ${until} 左右。`,
+  ].join('\n')
 }
