@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { PhotoMeta } from '../lib/photoWall'
-import { boardHeightForPhotos, groupPhotosByMonth, layoutForPhoto } from '../lib/photoWallLayout'
+import { assignDayRows, boardHeightForPhotos, groupPhotosByMonth, layoutForPhoto } from '../lib/photoWallLayout'
 import '../styles/photoWallArchive.css'
 
 interface Props {
@@ -35,6 +35,8 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
   const sorted = useMemo(() => [...photos].sort((a, b) => b.createdAt - a.createdAt), [photos])
   const preview = sorted.slice(0, 10)
   const groups = useMemo(() => groupPhotosByMonth(sorted), [sorted])
+  // 每月「有照片的那几天」的行号（最新的一天 = 行 0）；Y 轴按行排，月份标题下面就是照片。
+  const dayRows = useMemo(() => assignDayRows(sorted), [sorted])
   const selectedIndex = selectedId ? sorted.findIndex((photo) => photo.id === selectedId) : -1
 
   const showAt = (index: number) => {
@@ -44,7 +46,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
   }
 
   const wallStyle = (photo: PhotoMeta): WallStyle => {
-    const layout = layoutForPhoto(photo.id, photo.createdAt)
+    const layout = layoutForPhoto(photo.id, photo.createdAt, dayRows.get(photo.id) ?? 0)
     return {
       '--photo-rotate': `${layout.rotate}deg`,
       '--photo-shift': `${layout.shift}px`,
@@ -55,7 +57,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
   }
 
   const wallClass = (photo: PhotoMeta): string => {
-    const layout = layoutForPhoto(photo.id, photo.createdAt)
+    const layout = layoutForPhoto(photo.id, photo.createdAt, dayRows.get(photo.id) ?? 0)
     return `photo-archive-card is-${layout.width} pin-${layout.pin}`
   }
 
@@ -90,7 +92,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
           >
             <span className="photo-stack-felt" aria-hidden="true" />
             {preview.map((photo, index) => {
-              const layout = layoutForPhoto(photo.id, photo.createdAt)
+              const layout = layoutForPhoto(photo.id, photo.createdAt, dayRows.get(photo.id) ?? 0)
               const angle = layout.rotate + (index - Math.min(preview.length, 5) / 2) * 0.6
               const x = ((index % 5) - 2) * 26 + layout.shift * 0.45
               const y = Math.floor(index / 5) * 38 + (index % 2) * 7
