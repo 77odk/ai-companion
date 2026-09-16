@@ -42,6 +42,7 @@ import { keyFormatHint } from '../lib/keyFormat'
 import { extractOpeningLine, extractPersonality, extractBackgroundLine, applyPersonaEdits } from '../lib/customPersona'
 import { listSessions, patchSession, type Session } from '../lib/sessionApi'
 import { getActiveSessionId, getSessionsCache, setSessionsCache } from '../lib/sessionStore'
+import { forceRefresh } from '../lib/forceRefresh'
 import {
   patchSessionInList,
   resolveRoleName,
@@ -297,6 +298,7 @@ function MainCenter({
         <EntryRow icon={<KeyIcon />} label="AI 服务" onClick={onOpenProvider} />
         <EntryRow icon={<WorkIcon />} label="工作台" onClick={onOpenWork} />
         <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
+        <UpdateControls />
       </ProfileGroup>
 
       <ProfileGroup title="关于忆文">
@@ -353,6 +355,58 @@ function EntryRow({
   )
 }
 
+function UpdateControls({ standalone = false }: { standalone?: boolean }) {
+  const [expanded, setExpanded] = useState(false)
+
+  const checkUpdate = () => {
+    setExpanded(true)
+    location.reload()
+  }
+
+  const doForceRefresh = () => {
+    if (!window.confirm('强制刷新会清除页面缓存并重新加载，继续吗？')) return
+    void forceRefresh()
+  }
+
+  if (standalone) {
+    return (
+      <div className="settings-card update-controls-card">
+        <button type="button" className="entry-row" onClick={() => setExpanded((v) => !v)}>
+          <span className="entry-icon"><UpdateIcon /></span>
+          <span className="entry-label">检查更新</span>
+          <svg className="entry-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </button>
+        {expanded && (
+          <div className="update-controls-secondary">
+            <button type="button" className="btn btn-ghost" onClick={checkUpdate}>重新加载检查</button>
+            <button type="button" className="btn btn-ghost" onClick={doForceRefresh}>强制刷新</button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="update-controls-inline">
+      <button type="button" className="entry-row" onClick={() => setExpanded((v) => !v)}>
+        <span className="entry-icon"><UpdateIcon /></span>
+        <span className="entry-label">检查更新</span>
+        <svg className="entry-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </button>
+      {expanded && (
+        <div className="update-controls-secondary">
+          <button type="button" className="btn btn-ghost" onClick={checkUpdate}>重新加载检查</button>
+          <button type="button" className="btn btn-ghost" onClick={doForceRefresh}>强制刷新</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ---------------- 分组入口的小图标（线条 SVG） ---------------- */
 
 const CloudSyncIcon = () => (
@@ -363,6 +417,12 @@ const CloudSyncIcon = () => (
   </svg>
 )
 
+const UpdateIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 11a8 8 0 1 0-2.3 5.7" />
+    <path d="M20 5v6h-6" />
+  </svg>
+)
 
 const KeyIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1188,6 +1248,7 @@ function AboutDetail({ onBack, onGoWelcome }: { onBack: () => void; onGoWelcome?
           忆文 Eluvin v1.2.3 · 内测版
         </button>
       </div>
+      <UpdateControls standalone />
     </div>
   )
 }
