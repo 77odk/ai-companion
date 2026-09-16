@@ -217,12 +217,7 @@
 
 .photo-archive-board {
   position: relative;
-  min-height: 390px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-flow: dense;
-  gap: 15px 12px;
-  align-items: start;
+  height: var(--photo-board-height);
   padding: 22px 14px 24px;
   border-radius: 24px;
   overflow: hidden;
@@ -235,10 +230,11 @@
 }
 
 .photo-archive-card {
-  position: relative;
-  z-index: 2;
-  width: calc(100% - 5px);
-  justify-self: center;
+  position: absolute;
+  top: var(--photo-slot-y);
+  left: var(--photo-slot-x);
+  z-index: var(--photo-z);
+  width: 43%;
   border: 0;
   border-radius: 3px;
   padding: 7px 7px 24px;
@@ -249,12 +245,11 @@
 }
 
 .photo-archive-card.is-wide {
-  grid-column: span 2;
   width: 72%;
 }
 
 .photo-archive-card.is-narrow {
-  width: 82%;
+  width: 36%;
 }
 
 .photo-archive-card:active {

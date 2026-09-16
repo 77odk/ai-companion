@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { PhotoMeta } from '../lib/photoWall'
-import { groupPhotosByMonth, layoutForPhoto } from '../lib/photoWallLayout'
+import { boardHeightForPhotos, groupPhotosByMonth, layoutForPhoto } from '../lib/photoWallLayout'
 import '../styles/photoWallArchive.css'
 
 interface Props {
@@ -14,6 +14,13 @@ interface Props {
 type WallStyle = CSSProperties & {
   '--photo-rotate': string
   '--photo-shift': string
+  '--photo-slot-x': string
+  '--photo-slot-y': string
+  '--photo-z': string
+}
+
+type BoardStyle = CSSProperties & {
+  '--photo-board-height': string
 }
 
 function fmtMD(ts: number): string {
@@ -37,17 +44,24 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
   }
 
   const wallStyle = (photo: PhotoMeta): WallStyle => {
-    const layout = layoutForPhoto(photo.id)
+    const layout = layoutForPhoto(photo.id, photo.createdAt)
     return {
       '--photo-rotate': `${layout.rotate}deg`,
       '--photo-shift': `${layout.shift}px`,
+      '--photo-slot-x': `${layout.slotX}%`,
+      '--photo-slot-y': `${layout.slotY}px`,
+      '--photo-z': `${layout.zIndex}`,
     }
   }
 
   const wallClass = (photo: PhotoMeta): string => {
-    const layout = layoutForPhoto(photo.id)
+    const layout = layoutForPhoto(photo.id, photo.createdAt)
     return `photo-archive-card is-${layout.width} pin-${layout.pin}`
   }
+
+  const boardStyle = (groupPhotos: PhotoMeta[]): BoardStyle => ({
+    '--photo-board-height': `${boardHeightForPhotos(groupPhotos)}px`,
+  })
 
   return (
     <>
@@ -76,7 +90,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
           >
             <span className="photo-stack-felt" aria-hidden="true" />
             {preview.map((photo, index) => {
-              const layout = layoutForPhoto(photo.id)
+              const layout = layoutForPhoto(photo.id, photo.createdAt)
               const angle = layout.rotate + (index - Math.min(preview.length, 5) / 2) * 0.6
               const x = ((index % 5) - 2) * 26 + layout.shift * 0.45
               const y = Math.floor(index / 5) * 38 + (index % 2) * 7
@@ -130,7 +144,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
               groups.map((group, groupIndex) => (
                 <section key={group.key} className="photo-archive-month">
                   <div className="photo-archive-month-label">{group.label}</div>
-                  <div className="photo-archive-board">
+                  <div className="photo-archive-board" style={boardStyle(group.photos)}>
                     {group.photos.map((photo) => (
                       <button
                         key={photo.id}
