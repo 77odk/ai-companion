@@ -12,6 +12,7 @@ import { getSessionsCache } from './sessionStore.ts'
 import { resolveRolePersona } from './sessionProfile.ts'
 import { loadPersona } from './storage.ts'
 import type { Lang } from './langDetect.ts'
+import { notifyDataChanged } from './dataChange.ts'
 
 /** Runtime 状态最小结构（V1 禁止扩字段：不加 mood/location/weather/description/busy 等） */
 export interface TaRuntimeState {
@@ -98,9 +99,18 @@ function loadAll(): Record<string, TaRuntimeState> {
   }
 }
 
-function saveAll(map: Record<string, TaRuntimeState>): void {
+let cloudSnapshotResetter: (() => void) | undefined
+
+/** Cloud State resource 层注册快照重置钩子，避免 legacy/V2 静默写入被后续本地事件回传。 */
+export function registerTaRuntimeCloudSnapshotResetter(resetter: () => void): void {
+  cloudSnapshotResetter = resetter
+}
+
+function saveAll(map: Record<string, TaRuntimeState>, silent = false): void {
   try {
     localStorage.setItem(RUNTIME_KEY, JSON.stringify(map))
+    if (silent) cloudSnapshotResetter?.()
+    else notifyDataChanged()
   } catch {
     // 存不下不影响
   }
@@ -210,7 +220,39 @@ export function applyCloudTaRuntime(cloud: Record<string, TaRuntimeState> | unde
       changed = true
     }
   }
-  if (changed) saveAll(map)
+  if (changed) saveAll(map, true)
+}
+
+/** Cloud State V2 canonical apply：只覆盖指定 session，不参与 legacy updatedAt 合并。 */
+export function applyTaRuntimeFromCloud(sessionId: string, state: TaRuntimeState): void {
+  if (!sessionId || sessionId === GUEST_KEY || !isTaRuntimeState(state)) return
+  const map = loadAll()
+  map[sessionId] = state
+  saveAll(map, true)
+}
+
+/** Cloud State V2 canonical tombstone：只删除指定 session。 */
+export function deleteTaRuntimeFromCloud(sessionId: string): void {
+  if (!sessionId || sessionId === GUEST_KEY) return
+  const map = loadAll()
+  if (!(sessionId in map)) {
+    cloudSnapshotResetter?.()
+    return
+  }
+  delete map[sessionId]
+  saveAll(map, true)
+}
+
+/** 单条 Runtime payload 的严格边界校验，供 Cloud State adapter 防御 malformed entity。 */
+export function isTaRuntimeState(value: unknown): value is TaRuntimeState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const state = value as Partial<TaRuntimeState>
+  return typeof state.activityId === 'string' && state.activityId.length > 0
+    && typeof state.label === 'string'
+    && typeof state.startedAt === 'number' && Number.isFinite(state.startedAt)
+    && typeof state.plannedUntil === 'number' && Number.isFinite(state.plannedUntil)
+    && typeof state.updatedAt === 'number' && Number.isFinite(state.updatedAt)
+    && (state.source === 'routine' || state.source === 'persona')
 }
 
 /** HH:mm（24 小时制） */

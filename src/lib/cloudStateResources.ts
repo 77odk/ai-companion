@@ -10,6 +10,14 @@ import { getAccount } from './sync.ts'
 import { getSessionsCache } from './sessionStore.ts'
 import { applySpacePostFromCloud, deleteSpacePostFromCloud } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
+import {
+  applyTaRuntimeFromCloud,
+  collectAllTaRuntime,
+  deleteTaRuntimeFromCloud,
+  isTaRuntimeState,
+  registerTaRuntimeCloudSnapshotResetter,
+  type TaRuntimeState,
+} from './taRuntime.ts'
 
 const GLOBAL = 'global'
 const THEME_KEY = 'ai_companion_theme'
@@ -416,6 +424,48 @@ function capturePersonalDays(): void {
   queue('personal_day', GLOBAL, days, days.length === 0)
 }
 
+function runtimeEntities(): Map<string, TaRuntimeState> {
+  const entities = new Map<string, TaRuntimeState>()
+  for (const [sessionId, state] of Object.entries(collectAllTaRuntime())) {
+    if (sessionId === '_guest' || !sessionId || !isTaRuntimeState(state)) continue
+    entities.set(sessionId, state)
+  }
+  return entities
+}
+
+let runtimeSnapshot = new Map<string, TaRuntimeState>()
+function resetRuntimeSnapshot(): void {
+  runtimeSnapshot = runtimeEntities()
+}
+
+function captureTaRuntime(): void {
+  const next = runtimeEntities()
+  for (const [sessionId, state] of next) {
+    const previous = runtimeSnapshot.get(sessionId)
+    if (!previous || JSON.stringify(previous) !== JSON.stringify(state)) {
+      queue('ta_runtime', sessionId, state, false, sessionId)
+    }
+  }
+  for (const sessionId of runtimeSnapshot.keys()) {
+    if (!next.has(sessionId)) queue('ta_runtime', sessionId, undefined, true, sessionId)
+  }
+  runtimeSnapshot = next
+}
+
+function validRuntimeScope(entity: CloudStateEntity): entity is CloudStateEntity & { entityId: string; sessionId: string } {
+  return Boolean(entity.entityId && entity.sessionId && entity.entityId === entity.sessionId && entity.sessionId !== '_guest')
+}
+
+function applyRuntimeEntity(entity: CloudStateEntity): void {
+  if (!validRuntimeScope(entity) || !isTaRuntimeState(entity.payload)) return
+  applyTaRuntimeFromCloud(entity.sessionId, entity.payload)
+}
+
+function deleteRuntimeEntity(entity: CloudStateEntity): void {
+  if (!validRuntimeScope(entity)) return
+  deleteTaRuntimeFromCloud(entity.sessionId)
+}
+
 let initialized = false
 export function initCloudStateResourceAdapters(): void {
   if (initialized) return
@@ -423,6 +473,8 @@ export function initCloudStateResourceAdapters(): void {
   resetPersonalSnapshot()
   resetAnniversarySnapshot()
   resetSpaceSnapshot()
+  resetRuntimeSnapshot()
+  registerTaRuntimeCloudSnapshotResetter(resetRuntimeSnapshot)
   registerCloudStateAdapter('theme', {
     apply: applyThemeEntity,
     delete() { localStorage.setItem(THEME_KEY, JSON.stringify({ type: 'preset', presetId: 'peach' })); void import('./theme.ts').then(({ applyTheme }) => applyTheme()) },
@@ -456,8 +508,13 @@ export function initCloudStateResourceAdapters(): void {
     apply: applySpaceEntity,
     delete: deleteSpaceEntity,
   })
+  registerCloudStateAdapter('ta_runtime', {
+    apply: applyRuntimeEntity,
+    delete: deleteRuntimeEntity,
+  })
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, capturePersonalDays)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAnniversaries)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureSpacePosts)
-  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot() })
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureTaRuntime)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot() })
 }
