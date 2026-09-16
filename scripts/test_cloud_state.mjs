@@ -1078,6 +1078,44 @@ test('SPACE-4: two-device slot collision converges loser to canonical owner and 
   assert.equal(JSON.parse(localStorage.getItem('ai_space_used_templates_S'))[`__generation_slot__:${slot}`], 1)
 })
 
+test('SPACE-7: conflict convergence still cleans the local loser when the canonical version is already known', async () => {
+  clearState('same-user')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  const slot = '2026-09-16:daily'
+  const owner = { id: 'A1', sessionId: 'S', generationSlotId: slot, at: 1, kind: '日常', text: 'device A owner', source: 'daily' }
+  const loser = { id: 'B1', sessionId: 'S', generationSlotId: slot, at: 2, kind: '日常', text: 'device B loser', source: 'daily' }
+  // 真实双设备场景：本机开机先 pull 到了对方的 canonical（version 已记录）
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [
+    { kind: 'space_post', entityId: 'A1', sessionId: 'S', generationSlotId: slot, version: 1, payload: owner },
+  ]))
+  await cloud.pullCloudState()
+  assert.equal(cloud.getCloudStateVersion('space_post', 'A1', undefined, 'S'), 1)
+
+  // 本机随后自己生成了同 slot 的另一条（loser）
+  localStorage.setItem('ai_space_posts_S', JSON.stringify([loser, owner]))
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  const loserOp = cloudOps('space_post').find((op) => op.entityId === 'B1')
+  assert.ok(loserOp, 'loser 应进入 pending 队列')
+
+  let pushes = 0
+  globalThis.fetch = async () => {
+    pushes++
+    return jsonResponse({ results: [{
+      opId: loserOp.opId,
+      status: 'conflict',
+      reason: 'slot_taken',
+      entity: { kind: 'space_post', entityId: 'A1', sessionId: 'S', generationSlotId: slot, version: 1, payload: owner },
+    }] })
+  }
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(pushes, 1)
+  assert.equal(cloudOps('space_post').length, 0)
+  // ★ 版本号已知也必须真跑一遍 adapter，否则 loser 会留在本地与 canonical 并存
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_space_posts_S')).map((post) => post.id), ['A1'])
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(pushes, 1)
+})
+
 test('SPACE-5: a generation attempt that creates no post releases only its provisional slot', async () => {
   clearState('failed-generation')
   const sessionId = 'S'
