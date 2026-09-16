@@ -22,17 +22,26 @@ jobs:
         shell: bash
         run: |
           failed=0
+          : > failed-tests.txt
           for f in scripts/test_*.mjs; do
             echo "::group::$f"
             if node --test "$f"; then
               echo "PASS $f"
             else
+              echo "$f" >> failed-tests.txt
               echo "::error file=$f,title=Test failed::$f failed"
               failed=1
             fi
             echo "::endgroup::"
           done
           exit "$failed"
+      - name: Upload failed test names
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-tests
+          path: failed-tests.txt
+          if-no-files-found: ignore
       - name: Build
         if: always()
         run: npm run build
