@@ -233,7 +233,7 @@
   position: absolute;
   top: var(--photo-slot-y);
   left: var(--photo-slot-x);
-  z-index: 2;
+  z-index: var(--photo-z);
   width: 43%;
   border: 0;
   border-radius: 3px;
@@ -249,7 +249,7 @@
 }
 
 .photo-archive-card.is-narrow {
-  width: 82%;
+  width: 36%;
 }
 
 .photo-archive-card:active {

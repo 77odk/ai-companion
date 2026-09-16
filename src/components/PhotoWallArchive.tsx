@@ -16,6 +16,7 @@ type WallStyle = CSSProperties & {
   '--photo-shift': string
   '--photo-slot-x': string
   '--photo-slot-y': string
+  '--photo-z': string
 }
 
 type BoardStyle = CSSProperties & {
@@ -49,6 +50,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
       '--photo-shift': `${layout.shift}px`,
       '--photo-slot-x': `${layout.slotX}%`,
       '--photo-slot-y': `${layout.slotY}px`,
+      '--photo-z': `${layout.zIndex}`,
     }
   }
 
