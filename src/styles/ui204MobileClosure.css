@@ -76,8 +76,8 @@
   min-height: 160px;
 }
 
-/* 360-ish Android widths: intentionally stack metadata rather than let any label break at random. */
-@media (max-width: 380px) {
+/* Phone widths: stack metadata deliberately instead of letting labels break unpredictably. */
+@media (max-width: 410px) {
   .space-archive-home .ai-space-v2-head {
     grid-template-columns: minmax(0, 1fr) max-content;
     grid-template-areas:
@@ -138,6 +138,13 @@
   background: color-mix(in srgb, var(--color-card) 70%, var(--color-bg));
 }
 
+.weekly-letter-title {
+  max-width: 88%;
+  font-family: inherit;
+  font-size: clamp(26px, 7vw, 32px);
+  line-height: 1.18;
+}
+
 .weekly-letter-title-first,
 .weekly-letter-title-second {
   display: block;
@@ -153,7 +160,9 @@
   width: max-content;
   margin-top: 0.16em;
   margin-left: 0.8em;
-  transform: rotate(-2deg);
+  font-family: 'Kaiti SC', 'STKaiti', 'KaiTi', cursive;
+  font-weight: 500;
+  transform: rotate(-4deg);
   transform-origin: left center;
 }
 
