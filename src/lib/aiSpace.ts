@@ -459,6 +459,7 @@ export async function generatePendingPosts(
       const messages = buildLlmMessages(
         {
           taName,
+          sessionId,
           yourName,
           persona,
           season: atVars.season,
@@ -613,6 +614,7 @@ export async function generateTaReply(
   if (canUseLlm(persona, settings)) {
     const messages = buildReplyMessages({
       taName: taName || 'TA',
+      sessionId,
       yourName: yourName || '你',
       persona,
       postText: post.text,

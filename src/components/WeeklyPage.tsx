@@ -272,6 +272,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
           {
             role: 'user',
             content: buildWeeklyPrompt({
+              sessionId: currentSid || undefined,
               weekLabel: week.weekLabel,
               summaryLines,
               newMemories,
