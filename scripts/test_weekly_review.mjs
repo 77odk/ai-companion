@@ -204,14 +204,14 @@ console.log('\n[3d] 慢信 3–7 天固定送达')
 console.log('\n[4] buildWeeklyPrompt 组装（含批注 / 不含）')
 const baseCtx = {
   weekLabel: '第 1 周 · 8月18日-8月24日',
-  summaryLines: ['8月18日 你：晚上吃了米粉', '8月18日 TA：那家的辣椒香不香'],
+  summaryLines: ['8月18日 对方：晚上吃了米粉', '8月18日 我：那家的辣椒香不香'],
   newMemories: ['对方喜欢吃米粉', '对方最近熬夜多'],
   daysKnown: 3,
 }
 const noReply = buildWeeklyPrompt(baseCtx)
 ok(noReply.includes('【本周时间段】第 1 周 · 8月18日-8月24日'), '含【本周时间段】与周标签')
 ok(noReply.includes('【本周聊天摘要】'), '含【本周聊天摘要】')
-ok(noReply.includes('8月18日 你：晚上吃了米粉'), '摘要行保留')
+ok(noReply.includes('8月18日 对方：晚上吃了米粉'), '摘要行保留')
 ok(noReply.includes('【本周记住的事】'), '含【本周记住的事】')
 ok(noReply.includes('- 对方喜欢吃米粉'), '记忆带 - 前缀')
 ok(noReply.includes('【相处天数】今天是你们认识的第 3 天。'), '含认识天数')
@@ -240,13 +240,20 @@ ok(!noPending.includes('【封存留言·等你回信】'), '无封存留言 →
 ok(noPending.includes('直接输出：第一行「标题」，下面接正文。'), '无封存留言 → 沿用直接输出格式')
 
 const echoCtx = buildWeeklyPrompt({ ...baseCtx, weekPosts: ['周五去看了那部电影，散场风挺凉', '试着煮了碗面'], weekAgenda: ['周末去爬山（约在 2026-09-12）'] })
-ok(echoCtx.includes('【本周你自己的生活（你自己发的动态）】'), '带动态 → 注入【本周你自己的生活】段')
+ok(echoCtx.includes('【你自己发过的动态（是「我」发的，不是对方发的）】'), '带动态 → 注入「你自己发过的动态」段')
 ok(echoCtx.includes('- 周五去看了那部电影，散场风挺凉'), '动态逐条列出')
-ok(echoCtx.includes('周记接着写下去'), '引导动态回响进周记')
+ok(echoCtx.includes('主语必须是「我」'), '引导动态回响进周记（并钉死主语是「我」）')
 ok(echoCtx.includes('【本周你们说好要做的事】'), '带约定 → 注入【本周你们说好要做的事】段')
 ok(echoCtx.includes('周末去爬山（约在 2026-09-12）'), '约定带日期列出')
-ok(!buildWeeklyPrompt(baseCtx).includes('【本周你自己的生活（你自己发的动态）】'), '不带动态 → 无动态段')
+ok(!buildWeeklyPrompt(baseCtx).includes('你自己发过的动态'), '不带动态 → 无动态段')
 ok(!buildWeeklyPrompt(baseCtx).includes('【本周你们说好要做的事】'), '不带约定 → 无约定段')
+
+// 人称冲突：指令里的「你」= 写信的 TA，产品语义里的 TA = 伴侣 → 写作要求里一律用「对方」
+const reqCtx = buildWeeklyPrompt(baseCtx)
+ok(reqCtx.includes('给对方写'), '写作要求：给对方写（不再「给 TA 写」）')
+ok(reqCtx.includes('念叨对方'), '写作要求：念叨对方（不再「念叨 TA」）')
+ok(!reqCtx.includes('给 TA 写') && !reqCtx.includes('念叨 TA'), '写作要求里不再出现「给 TA 写 / 念叨 TA」')
+ok(reqCtx.includes('优先把结尾写完'), '收尾要求：篇幅与完整结尾冲突时优先收尾')
 
 console.log('\n[5] extractTitle 标题解析')
 eq(extractTitle('「关于熬夜和米粉的一周」\n正文……', '第 1 周'), '关于熬夜和米粉的一周', '首行「」→ 取括号内')
@@ -330,18 +337,18 @@ eq(buildWeekLabel(new Date(2026, 7, 18, 0, 0).getTime(), new Date(2026, 7, 24, 2
 console.log('\n[8] formatMessageLine 消息精简行')
 eq(
   formatMessageLine({ role: 'user', content: '晚上吃了米粉，好辣', ts: new Date(2026, 7, 18, 12, 0).getTime() }),
-  '8月18日 你：晚上吃了米粉，好辣',
+  '8月18日 对方：晚上吃了米粉，好辣',
   'user → 你',
 )
 eq(
   formatMessageLine({ role: 'assistant', content: '那家的辣椒香不香', ts: new Date(2026, 7, 18, 12, 5).getTime() }),
-  '8月18日 TA：那家的辣椒香不香',
+  '8月18日 我：那家的辣椒香不香',
   'assistant → TA',
 )
 const long = '啊'.repeat(80)
 const longLine = formatMessageLine({ role: 'user', content: long, ts: now })
-ok(longLine.length < 70 && longLine.endsWith('…'), '超长内容截断到 60 字并带省略号')
-eq(formatMessageLine({ role: 'user', content: '  a\n  b  ', ts: now }).endsWith('你：a b'), true, '压缩空白')
+ok(longLine.endsWith('…') && longLine.replace(/^.*?对方：/, '').length === 61, '超长内容截断到 60 字并带省略号（正文 60 + 省略号）')
+eq(formatMessageLine({ role: 'user', content: '  a\n  b  ', ts: now }).endsWith('对方：a b'), true, '压缩空白')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

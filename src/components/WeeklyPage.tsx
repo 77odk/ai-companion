@@ -285,7 +285,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
             }),
           },
         ],
-        { maxTokens: 1200, timeoutMs: 90000 },
+        { maxTokens: 2000, timeoutMs: 120000 },
       )
 
       const parsed = parseWeeklyOutput(raw, `第 ${week.weekNumber} 周`)
