@@ -8,6 +8,8 @@ import {
 import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE } from './dataChange.ts'
 import { getAccount } from './sync.ts'
 import { getSessionsCache } from './sessionStore.ts'
+import { applySpacePostFromCloud, deleteSpacePostFromCloud } from './aiSpace.ts'
+import type { SpacePost } from './aiSpaceCore.ts'
 
 const GLOBAL = 'global'
 const THEME_KEY = 'ai_companion_theme'
@@ -32,15 +34,88 @@ function opId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `cloud-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function queue(kind: string, entityId: string, payload?: unknown, deleted?: boolean, sessionId?: string): void {
+function queue(kind: string, entityId: string, payload?: unknown, deleted?: boolean, sessionId?: string, generationSlotId?: string): void {
   if (!getAccount()) return
   enqueueCloudStateOp({
     opId: opId(), kind, entityId,
     baseVersion: getCloudStateVersion(kind, entityId, undefined, sessionId),
     ...(sessionId ? { sessionId } : {}),
+    ...(generationSlotId ? { generationSlotId } : {}),
     ...(deleted ? { deleted: true } : { payload }),
   })
   requestCloudStateSync()
+}
+
+const SPACE_POSTS_PREFIX = 'ai_space_posts_'
+
+function normalizeSpacePost(value: unknown, entityId?: string, sessionId?: string, generationSlotId?: string): SpacePost | null {
+  const outer = record(value)
+  const item = record(outer?.post) ?? outer
+  if (!item || typeof (entityId ?? item.id) !== 'string' || typeof item.at !== 'number' || typeof item.kind !== 'string' || typeof item.text !== 'string') return null
+  return {
+    ...item,
+    id: entityId ?? String(item.id),
+    ...(sessionId ? { sessionId } : {}),
+    ...((generationSlotId ?? item.generationSlotId) ? { generationSlotId: String(generationSlotId ?? item.generationSlotId) } : {}),
+  } as SpacePost
+}
+
+function spaceEntities(): Map<string, { entityId: string; sessionId: string; payload: SpacePost; generationSlotId?: string }> {
+  const entities = new Map<string, { entityId: string; sessionId: string; payload: SpacePost; generationSlotId?: string }>()
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index)
+    if (!key?.startsWith(SPACE_POSTS_PREFIX)) continue
+    const sessionId = key.slice(SPACE_POSTS_PREFIX.length)
+    if (!sessionId) continue
+    const value = readJson(key)
+    if (!Array.isArray(value)) continue
+    for (const raw of value) {
+      const post = normalizeSpacePost(raw, undefined, sessionId)
+      if (!post) continue
+      entities.set(`${sessionId}\u0000${post.id}`, {
+        entityId: post.id,
+        sessionId,
+        payload: post,
+        ...(post.generationSlotId ? { generationSlotId: post.generationSlotId } : {}),
+      })
+    }
+  }
+  return entities
+}
+
+let spaceSnapshot = new Map<string, { entityId: string; sessionId: string; payload: SpacePost; generationSlotId?: string }>()
+function resetSpaceSnapshot(): void {
+  spaceSnapshot = spaceEntities()
+}
+
+function captureSpacePosts(): void {
+  const next = spaceEntities()
+  for (const [key, value] of next) {
+    const previous = spaceSnapshot.get(key)
+    if (!previous || JSON.stringify(previous.payload) !== JSON.stringify(value.payload)) {
+      queue('space_post', value.entityId, value.payload, false, value.sessionId, value.generationSlotId)
+    }
+  }
+  for (const [key, value] of spaceSnapshot) {
+    if (!next.has(key)) queue('space_post', value.entityId, undefined, true, value.sessionId, value.generationSlotId)
+  }
+  spaceSnapshot = next
+}
+
+function applySpaceEntity(entity: CloudStateEntity): void {
+  if (!entity.sessionId || !entity.entityId) return
+  const post = normalizeSpacePost(entity.payload, entity.entityId, entity.sessionId, entity.generationSlotId)
+  if (!post) return
+  applySpacePostFromCloud(post, entity.sessionId)
+  resetSpaceSnapshot()
+}
+
+function deleteSpaceEntity(entity: CloudStateEntity): void {
+  if (!entity.sessionId || !entity.entityId) return
+  const payload = record(entity.payload)
+  const slotId = entity.generationSlotId ?? (typeof payload?.generationSlotId === 'string' ? payload.generationSlotId : undefined)
+  deleteSpacePostFromCloud(entity.entityId, entity.sessionId, slotId)
+  resetSpaceSnapshot()
 }
 
 interface AnniversaryCloudPayload extends JsonRecord {
@@ -347,6 +422,7 @@ export function initCloudStateResourceAdapters(): void {
   initialized = true
   resetPersonalSnapshot()
   resetAnniversarySnapshot()
+  resetSpaceSnapshot()
   registerCloudStateAdapter('theme', {
     apply: applyThemeEntity,
     delete() { localStorage.setItem(THEME_KEY, JSON.stringify({ type: 'preset', presetId: 'peach' })); void import('./theme.ts').then(({ applyTheme }) => applyTheme()) },
@@ -376,7 +452,12 @@ export function initCloudStateResourceAdapters(): void {
     apply: applyAnniversaryEntity,
     delete: deleteAnniversaryEntity,
   })
+  registerCloudStateAdapter('space_post', {
+    apply: applySpaceEntity,
+    delete: deleteSpaceEntity,
+  })
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, capturePersonalDays)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAnniversaries)
-  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot() })
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureSpacePosts)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot() })
 }

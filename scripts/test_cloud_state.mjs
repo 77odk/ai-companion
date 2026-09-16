@@ -27,6 +27,7 @@ const resources = await import('../src/lib/cloudStateResources.ts')
 const storage = await import('../src/lib/storage.ts')
 const theme = await import('../src/lib/theme.ts')
 const anniversary = await import('../src/lib/anniversary.ts')
+const aiSpace = await import('../src/lib/aiSpace.ts')
 
 function login(account = 'account-a') {
   localStorage.setItem('ai_companion_account', JSON.stringify({ account, token: `token-${account}` }))
@@ -936,4 +937,184 @@ test('P8: single apply and delete are silent — no legacy echo, no duplicate cl
   assert.equal(legacyChanges, 0)
   assert.equal(store.getPendingOps().filter(op => op.kind === 'personal_day').length, 0)
   assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_anniversaries')), [])
+})
+
+test('SPACE-1: same post id remains independent across sessions, including baseVersion/edit/tombstone/conflict', async () => {
+  clearState('space-account')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  const base = { id: 'same', at: 1, kind: '日常', text: 'local', source: 'daily' }
+  localStorage.setItem('ai_space_posts_A', JSON.stringify([{ ...base, sessionId: 'A', text: 'A local' }]))
+  localStorage.setItem('ai_space_posts_B', JSON.stringify([{ ...base, sessionId: 'B', text: 'B local' }]))
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  let ops = cloudOps('space_post')
+  assert.equal(ops.length, 2)
+  assert.deepEqual(ops.map(op => op.sessionId).sort(), ['A', 'B'])
+
+  globalThis.fetch = async () => jsonResponse({ results: ops.map(op => ({
+    opId: op.opId, status: 'applied', version: op.sessionId === 'A' ? 3 : 8,
+  })) })
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(cloud.getCloudStateVersion('space_post', 'same', undefined, 'A'), 3)
+  assert.equal(cloud.getCloudStateVersion('space_post', 'same', undefined, 'B'), 8)
+
+  localStorage.setItem('ai_space_posts_A', JSON.stringify([{ ...base, sessionId: 'A', text: 'A edit' }]))
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  const edit = cloudOps('space_post')[0]
+  assert.equal(edit.sessionId, 'A')
+  assert.equal(edit.baseVersion, 3)
+  assert.equal(JSON.parse(localStorage.getItem('ai_space_posts_B'))[0].text, 'B local')
+
+  globalThis.fetch = async () => jsonResponse({ results: [{ opId: edit.opId, status: 'conflict', entity: {
+    kind: 'space_post', entityId: 'same', sessionId: 'A', version: 4,
+    payload: { ...base, id: 'ignored-payload-id', text: 'A server' },
+  } }] })
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(JSON.parse(localStorage.getItem('ai_space_posts_A'))[0].text, 'A server')
+  assert.equal(JSON.parse(localStorage.getItem('ai_space_posts_B'))[0].text, 'B local')
+
+  localStorage.setItem('ai_space_posts_A', '[]')
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  const tombstone = cloudOps('space_post')[0]
+  assert.equal(tombstone.deleted, true)
+  assert.equal(tombstone.sessionId, 'A')
+  assert.equal(tombstone.baseVersion, 4)
+  assert.equal(JSON.parse(localStorage.getItem('ai_space_posts_B')).length, 1)
+})
+
+test('SPACE-2: historical live/tombstone replay is silent and generated slots stay permanently occupied per session', async () => {
+  clearState('space-history')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  const slot = '2026-09-16:daily'
+  let legacyChanges = 0
+  window.addEventListener('eluvin-data-change', () => { legacyChanges++ })
+  globalThis.fetch = async () => jsonResponse(pullBody(2, [
+    { kind: 'space_post', entityId: 'live', sessionId: 'A', generationSlotId: slot, version: 1,
+      payload: { id: 'old-id', at: Date.UTC(2026, 8, 16, 12), kind: '日常', text: 'historical live' } },
+    { kind: 'space_post', entityId: 'gone', sessionId: 'B', generationSlotId: slot, version: 1, deleted: true },
+  ]))
+  await cloud.pullCloudState()
+  assert.equal(legacyChanges, 0)
+  assert.equal(cloudOps('space_post').length, 0)
+  const a = JSON.parse(localStorage.getItem('ai_space_posts_A'))
+  assert.equal(a.length, 1)
+  assert.equal(a[0].id, 'live')
+  assert.equal(a[0].generationSlotId, slot)
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_space_posts_B')), [])
+  assert.ok(JSON.parse(localStorage.getItem('ai_space_used_templates_B'))[`__generation_slot__:${slot}`])
+})
+
+test('SPACE-3: generated slot dedupes repeated initialization, scopes by session, and ignores manual posts', () => {
+  clearState('space-slots')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  const now = new Date(2026, 8, 16, 12, 0, 0).getTime()
+  const firstA = aiSpace.refreshSpace('', '', now, 'A')
+  const secondA = aiSpace.refreshSpace('', '', now, 'A')
+  const firstB = aiSpace.refreshSpace('', '', now, 'B')
+  assert.equal(firstA.created, 1)
+  assert.equal(secondA.created, 0)
+  assert.equal(firstB.created, 1)
+  assert.equal(firstA.posts[0].generationSlotId, firstB.posts[0].generationSlotId)
+  assert.equal(firstA.posts[0].sessionId, 'A')
+  assert.equal(firstB.posts[0].sessionId, 'B')
+
+  localStorage.setItem('ai_space_posts_A', JSON.stringify([
+    ...JSON.parse(localStorage.getItem('ai_space_posts_A')),
+    { id: 'manual', sessionId: 'A', at: now + 1, kind: '日常', text: 'manual post' },
+  ]))
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  const posts = aiSpace.loadCurrentPosts('A')
+  assert.equal(posts.filter(post => post.id === 'manual').length, 1)
+  assert.equal(posts.find(post => post.id === 'manual').generationSlotId, undefined)
+  assert.equal(cloudOps('space_post').filter(op => op.sessionId === 'A' && !op.deleted).length >= 2, true)
+})
+
+test('SPACE-4: two-device slot collision converges loser to canonical owner and stops retrying', async () => {
+  clearState('same-user')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  const slot = '2026-09-16:daily'
+  const loser = { id: 'B1', sessionId: 'S', generationSlotId: slot, at: 2, kind: '日常', text: 'device B loser', source: 'daily' }
+  const owner = { id: 'A1', sessionId: 'S', generationSlotId: slot, at: 1, kind: '日常', text: 'device A owner', source: 'daily' }
+  // Device A wins the canonical slot and persists its permanent local marker.
+  localStorage.setItem('ai_space_posts_S', JSON.stringify([owner]))
+  localStorage.setItem('ai_space_used_templates_S', JSON.stringify({ [`__generation_slot__:${slot}`]: 1 }))
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  const ownerOp = cloudOps('space_post')[0]
+  globalThis.fetch = async () => jsonResponse({ results: [{ opId: ownerOp.opId, status: 'applied', version: 1 }] })
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(JSON.parse(localStorage.getItem('ai_space_used_templates_S'))[`__generation_slot__:${slot}`], 1)
+
+  // A separate device B starts from independent local storage and races with a different id.
+  clearState('same-user')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  localStorage.setItem('ai_space_posts_S', JSON.stringify([loser]))
+  localStorage.setItem('ai_space_used_templates_S', JSON.stringify({ [`__generation_slot__:${slot}`]: 1 }))
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  const loserOp = cloudOps('space_post')[0]
+  assert.equal(loserOp.entityId, 'B1')
+
+  let pushes = 0
+  globalThis.fetch = async (_url, init) => {
+    pushes++
+    const sent = JSON.parse(init.body).ops
+    assert.equal(sent.length, 1)
+    return jsonResponse({ results: [{
+      opId: loserOp.opId,
+      status: 'conflict',
+      entity: { kind: 'space_post', entityId: 'A1', sessionId: 'S', generationSlotId: slot, version: 1, payload: owner },
+    }] })
+  }
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(cloudOps('space_post').length, 0)
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_space_posts_S')).map(post => post.id), ['A1'])
+  assert.equal(JSON.parse(localStorage.getItem('ai_space_used_templates_S'))[`__generation_slot__:${slot}`], 1)
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(pushes, 1)
+
+  globalThis.fetch = async () => jsonResponse(pullBody(2, [
+    { kind: 'space_post', entityId: 'A1', sessionId: 'S', generationSlotId: slot, version: 2, deleted: true },
+  ]))
+  await cloud.pullCloudState()
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_space_posts_S')), [])
+  assert.equal(JSON.parse(localStorage.getItem('ai_space_used_templates_S'))[`__generation_slot__:${slot}`], 1)
+})
+
+test('SPACE-5: a generation attempt that creates no post releases only its provisional slot', async () => {
+  clearState('failed-generation')
+  const sessionId = 'S'
+  const now = new Date(2026, 8, 16, 12, 0, 0).getTime()
+  const slot = '2026-09-16:daily'
+  localStorage.setItem(`ai_space_posts_${sessionId}`, '[]')
+  localStorage.setItem(`ai_space_used_templates_${sessionId}`, JSON.stringify({ [`__generation_slot__:${slot}`]: -1 }))
+  localStorage.setItem(`ai_space_ledger_${sessionId}`, JSON.stringify({ '2026-09-16': { daily: 2, event: 0 } }))
+  const result = await aiSpace.generatePendingPosts({
+    posts: [], mode: 'llm', created: 1, pending: [{ at: now, source: 'daily' }],
+    used: { [`__generation_slot__:${slot}`]: -1 },
+  }, '', '', sessionId, now)
+  assert.equal(result.created, 0)
+  const used = JSON.parse(localStorage.getItem(`ai_space_used_templates_${sessionId}`))
+  assert.equal(used[`__generation_slot__:${slot}`], undefined)
+  localStorage.removeItem(`ai_space_ledger_${sessionId}`)
+  const retry = aiSpace.refreshSpace('', '', now, sessionId)
+  assert.equal(retry.created, 1)
+  assert.equal(retry.posts[0].generationSlotId, slot)
+})
+
+test('SPACE-6: identical slots in different sessions are accepted independently', async () => {
+  clearState('session-slots')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  const slot = '2026-09-16:event'
+  for (const sessionId of ['A', 'B']) {
+    localStorage.setItem(`ai_space_posts_${sessionId}`, JSON.stringify([
+      { id: `${sessionId}1`, sessionId, generationSlotId: slot, at: 1, kind: '日常', text: sessionId, source: 'event' },
+    ]))
+  }
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  const ops = cloudOps('space_post')
+  assert.deepEqual(ops.map(op => op.sessionId).sort(), ['A', 'B'])
+  globalThis.fetch = async () => jsonResponse({ results: ops.map((op, index) => ({ opId: op.opId, status: 'applied', version: index + 1 })) })
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(cloud.getCloudStateVersion('space_post', 'A1', undefined, 'A'), 1)
+  assert.equal(cloud.getCloudStateVersion('space_post', 'B1', undefined, 'B'), 2)
+  assert.equal(JSON.parse(localStorage.getItem('ai_space_posts_A')).length, 1)
+  assert.equal(JSON.parse(localStorage.getItem('ai_space_posts_B')).length, 1)
 })

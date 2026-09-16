@@ -6,7 +6,6 @@
 //   no-persona 没人设：不调 LLM，模板兜底生成 1 条保证空间不空，其余交给引导
 
 import {
-  advanceTimeline,
   planBackfillSlots,
   dayKeyOf,
   getSeason,
@@ -22,6 +21,7 @@ import {
   MAX_POSTS_PER_DAY,
   MAX_TOTAL_PER_DAY,
   pickReplyFallback,
+  generationSlotIdFor,
   KIND_KEYS,
   type SpacePost,
   type SpaceState,
@@ -133,6 +133,8 @@ function isSpacePost(p: unknown): p is SpacePost {
     typeof o.kind === 'string' &&
     (KIND_KEYS as string[]).includes(o.kind) &&
     typeof o.text === 'string' &&
+    (o.sessionId == null || typeof o.sessionId === 'string') &&
+    (o.generationSlotId == null || typeof o.generationSlotId === 'string') &&
     // art 色卡字段 v3 起不再写入；老数据有 art 也能读（可选）
     (o.art == null || typeof o.art === 'number') &&
     // source 通道 v3 起写入；老数据无 source 视同 daily
@@ -152,7 +154,9 @@ function loadState(sessionId?: string): SpaceState {
     const rawUsed = localStorage.getItem(usedKey(sessionId))
     const used = rawUsed ? (JSON.parse(rawUsed) as Record<string, number>) : {}
     return {
-      posts: Array.isArray(posts) ? posts.filter(isSpacePost) : [],
+      posts: Array.isArray(posts)
+        ? posts.filter(isSpacePost).map(post => sessionId ? { ...post, sessionId } : post)
+        : [],
       lastVisit: lastVisit != null && Number.isFinite(lastVisit) ? lastVisit : null,
       used: used != null && typeof used === 'object' ? used : {},
     }
@@ -161,11 +165,29 @@ function loadState(sessionId?: string): SpaceState {
   }
 }
 
-function saveState(state: SpaceState, sessionId?: string): void {
-  localStorage.setItem(postsKey(sessionId), JSON.stringify(state.posts))
+function saveState(state: SpaceState, sessionId?: string, silent = false): void {
+  const posts = state.posts.map(post => sessionId ? { ...post, sessionId } : post)
+  localStorage.setItem(postsKey(sessionId), JSON.stringify(posts))
   localStorage.setItem(lastVisitKey(sessionId), String(state.lastVisit ?? ''))
   localStorage.setItem(usedKey(sessionId), JSON.stringify(state.used))
-  notifyDataChanged()
+  if (!silent) notifyDataChanged()
+}
+
+const SLOT_MARKER_PREFIX = '__generation_slot__:'
+const PROVISIONAL_SLOT_MARKER = -1
+const PERMANENT_SLOT_MARKER = 1
+function slotWasUsed(state: SpaceState, slotId: string): boolean {
+  return state.posts.some(post => post.generationSlotId === slotId) || state.used[`${SLOT_MARKER_PREFIX}${slotId}`] != null
+}
+function reserveSlots(state: SpaceState, slots: SpaceSlot[]): SpaceSlot[] {
+  const pending: SpaceSlot[] = []
+  for (const slot of slots) {
+    const slotId = generationSlotIdFor(slot)
+    if (slotWasUsed(state, slotId)) continue
+    state.used[`${SLOT_MARKER_PREFIX}${slotId}`] = PROVISIONAL_SLOT_MARKER
+    pending.push(slot)
+  }
+  return pending
 }
 
 /* ---- v3 配额账本（持久层）：只记当天，读时自动过滤非今天键（跨天滚动） ---- */
@@ -289,10 +311,13 @@ export function refreshSpace(
     let created = 0
     const todayKey = dayKeyOf(now)
     const tLedger = getLedgerEntry(ledger, todayKey)
-    if (prev.posts.length === 0 && tLedger.daily < MAX_POSTS_PER_DAY) {
-      const g = generatePost(vars, used, now - 3 * 60 * 1000, Math.random, 'daily', lang)
+    const fallbackSlot = { at: now, source: 'daily' as const }
+    const slotId = generationSlotIdFor(fallbackSlot)
+    if (prev.posts.length === 0 && tLedger.daily < MAX_POSTS_PER_DAY && !slotWasUsed(prev, slotId)) {
+      const g = generatePost(vars, used, now - 3 * 60 * 1000, Math.random, 'daily', lang, slotId)
+      used[`${SLOT_MARKER_PREFIX}${slotId}`] = PERMANENT_SLOT_MARKER
       used[g.templateKey] = now
-      posts.unshift(g.post)
+      posts.unshift({ ...g.post, ...(sessionId ? { sessionId } : {}) })
       recordLedger([g.post], sessionId, now)
       created = 1
     }
@@ -306,19 +331,29 @@ export function refreshSpace(
 
   // 有人设 + 有 key：LLM 路径。先推进 lastVisit 占位防重复，新动态异步补
   if (canUseLlm(persona, settings)) {
-    const state: SpaceState = { ...prev, lastVisit: now }
+    const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
+    const pending = reserveSlots(state, slots)
     saveState(state, sessionId)
     return {
       posts: state.posts,
       mode: 'llm',
-      created: slots.length,
-      pending: slots,
+      created: pending.length,
+      pending,
       used: state.used,
     }
   }
 
   // 有人设但没 key：降级模板，同步生成（纯文字动态）
-  const { state, created } = advanceTimeline(prev, vars, now, activeDays, Math.random, ledger, spaceLang)
+  const eligible = reserveSlots(prev, slots)
+  const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
+  let created = 0
+  for (const slot of eligible) {
+    const g = generatePost({ ...vars, timeWord: getTimeWord(slot.at), season: getSeason(slot.at) }, state.used, slot.at, Math.random, slot.source, spaceLang, generationSlotIdFor(slot))
+    state.used[`${SLOT_MARKER_PREFIX}${generationSlotIdFor(slot)}`] = PERMANENT_SLOT_MARKER
+    state.used[g.templateKey] = now
+    state.posts = mergeNewPosts(state.posts, [{ ...g.post, ...(sessionId ? { sessionId } : {}) }])
+    created++
+  }
   const posts = state.posts
   // 模板路径也记账：本次实际新增的动态按 at 自然日 + source 落账
   const prevIds = new Set(prev.posts.map((p) => p.id))
@@ -445,7 +480,7 @@ export async function generatePendingPosts(
           // 纯文字动态（色卡已删）：模型如残留 [配图] 标记只剥掉做文本清洗，不再生成配图
           const { text } = extractImageCaption(cleaned)
           if (text) {
-            const post = buildLlmPost(text, at, guessKind(text), rand, source)
+            const post = buildLlmPost(text, at, guessKind(text), rand, source, generationSlotIdFor(slot))
             made = { post }
           }
         }
@@ -457,13 +492,13 @@ export async function generatePendingPosts(
     if (!made) {
       // 模板降级也按 at 的时段/季节 + 来源通道生成（回填昨天就用昨天的时段词，不穿帮）
       const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(at), season: getSeason(at) }
-      const g = generatePost(dayVars, used, at, rand, source, spaceLang)
+      const g = generatePost(dayVars, used, at, rand, source, spaceLang, generationSlotIdFor(slot))
       used[g.templateKey] = now
       made = { post: g.post, templateKey: g.templateKey }
       usedFallback = true
     }
 
-    newPosts.push(made.post)
+    newPosts.push({ ...made.post, ...(sessionId ? { sessionId } : {}) })
     bump(dk, source)
     // 把刚生成的动态纳入「最近动态」，避免同批下一条雷同（v3 克制：最多留 2 条）
     recent.unshift(made.post.text)
@@ -473,7 +508,16 @@ export async function generatePendingPosts(
   // 合并落盘：重新读一次当前状态，避免覆盖别处写入；生成落账（模板路径与 LLM 路径一致）
   const current = loadState(sessionId)
   const posts = mergeNewPosts(current.posts, newPosts)
-  const state: SpaceState = { posts, lastVisit: current.lastVisit ?? now, used }
+  const finalUsed = { ...used }
+  for (const slot of plan.pending) {
+    const slotId = generationSlotIdFor(slot)
+    const marker = `${SLOT_MARKER_PREFIX}${slotId}`
+    const generated = newPosts.some(post => post.generationSlotId === slotId)
+    const permanentlyKnown = current.posts.some(post => post.generationSlotId === slotId) || current.used[marker] === PERMANENT_SLOT_MARKER
+    if (generated || permanentlyKnown) finalUsed[marker] = PERMANENT_SLOT_MARKER
+    else if (finalUsed[marker] === PROVISIONAL_SLOT_MARKER) delete finalUsed[marker]
+  }
+  const state: SpaceState = { posts, lastVisit: current.lastVisit ?? now, used: finalUsed }
   if (newPosts.length > 0) recordLedger(newPosts, sessionId, now)
   saveState(state, sessionId)
   return { posts: state.posts, created: newPosts.length, usedFallback }
@@ -491,6 +535,33 @@ export function updatePost(
   const posts = state.posts.map((p) => (p.id === postId ? updater(p) : p))
   saveState({ ...state, posts }, sessionId)
   return posts
+}
+
+/** Cloud State server-wins apply. Exact session only; silent prevents both Cloud and legacy /api/sync echo. */
+export function applySpacePostFromCloud(post: SpacePost, sessionId: string): void {
+  if (!sessionId || !post.id) return
+  const state = loadState(sessionId)
+  const normalized = { ...post, sessionId }
+  if (normalized.generationSlotId) {
+    state.posts = state.posts.filter(item => item.id === post.id || item.generationSlotId !== normalized.generationSlotId)
+    state.used[`${SLOT_MARKER_PREFIX}${normalized.generationSlotId}`] = PERMANENT_SLOT_MARKER
+  }
+  const index = state.posts.findIndex(item => item.id === post.id)
+  if (index >= 0) state.posts[index] = normalized
+  else state.posts.unshift(normalized)
+  state.posts.sort((a, b) => b.at - a.at)
+  saveState(state, sessionId, true)
+}
+
+/** Cloud tombstones preserve the slot marker while removing only the exact scoped id. */
+export function deleteSpacePostFromCloud(postId: string, sessionId: string, generationSlotId?: string): void {
+  if (!sessionId || !postId) return
+  const state = loadState(sessionId)
+  const existing = state.posts.find(item => item.id === postId)
+  const slotId = generationSlotId || existing?.generationSlotId
+  state.posts = state.posts.filter(item => item.id !== postId && (!slotId || item.generationSlotId !== slotId))
+  if (slotId) state.used[`${SLOT_MARKER_PREFIX}${slotId}`] = PERMANENT_SLOT_MARKER
+  saveState(state, sessionId, true)
 }
 
 /** 点赞开关：点一下变已赞，再点取消 */
