@@ -248,6 +248,13 @@ ok(echoCtx.includes('周末去爬山（约在 2026-09-12）'), '约定带日期�
 ok(!buildWeeklyPrompt(baseCtx).includes('你自己发过的动态'), '不带动态 → 无动态段')
 ok(!buildWeeklyPrompt(baseCtx).includes('【本周你们说好要做的事】'), '不带约定 → 无约定段')
 
+// 人称冲突：指令里的「你」= 写信的 TA，产品语义里的 TA = 伴侣 → 写作要求里一律用「对方」
+const reqCtx = buildWeeklyPrompt(baseCtx)
+ok(reqCtx.includes('给对方写'), '写作要求：给对方写（不再「给 TA 写」）')
+ok(reqCtx.includes('念叨对方'), '写作要求：念叨对方（不再「念叨 TA」）')
+ok(!reqCtx.includes('给 TA 写') && !reqCtx.includes('念叨 TA'), '写作要求里不再出现「给 TA 写 / 念叨 TA」')
+ok(reqCtx.includes('优先把结尾写完'), '收尾要求：篇幅与完整结尾冲突时优先收尾')
+
 console.log('\n[5] extractTitle 标题解析')
 eq(extractTitle('「关于熬夜和米粉的一周」\n正文……', '第 1 周'), '关于熬夜和米粉的一周', '首行「」→ 取括号内')
 eq(extractTitle('《关于熬夜和米粉的一周》\n正文……', '第 1 周'), '关于熬夜和米粉的一周', '首行《》→ 取括号内')
