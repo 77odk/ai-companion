@@ -194,9 +194,10 @@ export function buildLlmPost(
   kind: SpaceKind,
   rand: () => number = Math.random,
   source: SpaceSource = 'daily',
+  generationSlotId?: string,
 ): SpacePost {
   const id = `p${at.toString(36)}${Math.floor(rand() * 1e6).toString(36)}`
-  return { id, at, kind, text, source }
+  return { id, at, kind, text, source, ...(generationSlotId ? { generationSlotId } : {}) }
 }
 
 /**

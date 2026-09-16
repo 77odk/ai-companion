@@ -44,6 +44,10 @@ export type SpaceSource = 'daily' | 'event'
 
 export interface SpacePost {
   id: string
+  /** Canonical owner. Legacy local rows may omit it and are normalized by aiSpace.ts. */
+  sessionId?: string
+  /** Stable idempotency key for generated posts. Manual/historical posts may omit it. */
+  generationSlotId?: string
   at: number
   kind: SpaceKind
   text: string
@@ -374,12 +378,21 @@ export function generatePost(
   rand: () => number = Math.random,
   source: SpaceSource = 'daily',
   lang: 'zh' | 'en' = 'zh',
+  generationSlotId?: string,
 ): { post: SpacePost; templateKey: string } {
   const kind = KIND_KEYS[Math.floor(rand() * KIND_KEYS.length) % KIND_KEYS.length]
   const templateIndex = pickTemplateIndex(kind, used, now, rand)
   const text = buildPostText(kind, templateIndex, vars, lang)
   const id = `p${now.toString(36)}${Math.floor(rand() * 1e6).toString(36)}`
-  return { post: { id, at: now, kind, text, source }, templateKey: `${kind}:${templateIndex}` }
+  return {
+    post: { id, at: now, kind, text, source, ...(generationSlotId ? { generationSlotId } : {}) },
+    templateKey: `${kind}:${templateIndex}`,
+  }
+}
+
+/** Stable across devices: session isolation is carried by Cloud State scope, never encoded here. */
+export function generationSlotIdFor(slot: SpaceSlot): string {
+  return `${dayKeyOf(slot.at)}:${slot.source === 'event' ? 'event' : 'daily'}`
 }
 
 /** 生成当前真实时刻的中文日期锚文本：如「2026年9月9日 星期三」（CST，补发/跨天防穿帮用） */
