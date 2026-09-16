@@ -16,17 +16,19 @@ export interface WeeklyReply {
   taReplyFailed?: boolean
 }
 
-/** 封存留言（慢信）：用户封存的一条批注，下一篇周记生成时由 TA 一并回信 */
+/** 封存留言（慢信）：寄出时固定 3–7 天后的送达时间，到点后才生成 TA 回信。 */
 export interface PendingReply {
   id: string
   content: string
-  /** 封存时间戳 */
+  /** 寄出时间戳 */
   repliedAt: number
-  /** 下一篇周记生成时 TA 写的回信（展示在该留言下方） */
+  /** 固定送达时间；旧数据没有时按寄出后第 7 天兼容。 */
+  deliverAt?: number
+  /** 到点后 TA 写的慢信回信（展示在该留言下方） */
   reply?: string
   /** 已回信：信封标记消失的依据（回信后标记而非删除，绝不丢） */
   replied?: boolean
-  /** 回信落笔时间（answerPendingReplies 写入） */
+  /** 回信落笔时间 */
   replyAt?: number
 }
 
@@ -97,6 +99,29 @@ export function newWeeklyReviewId(): string {
 
 /** 周记硬冷却：每 7 天周期 TA 仅产出 1 篇（冷却期零 token，时间没到不调模型） */
 export const WEEKLY_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000
+
+/** 慢信固定在寄出后第 3–7 天送达；寄出时只抽一次并落库。 */
+export const SLOW_LETTER_MIN_DAYS = 3
+export const SLOW_LETTER_MAX_DAYS = 7
+const DAY_MS = 24 * 60 * 60 * 1000
+
+export function slowLetterDeliverAt(sentAt: number, random: () => number = Math.random): number {
+  const raw = Number(random())
+  const safe = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 0.999999999) : 0
+  const days = SLOW_LETTER_MIN_DAYS + Math.floor(safe * (SLOW_LETTER_MAX_DAYS - SLOW_LETTER_MIN_DAYS + 1))
+  return sentAt + days * DAY_MS
+}
+
+/** 旧慢信没有 deliverAt：统一按寄出后第 7 天解释，不改写原数据。 */
+export function resolveSlowLetterDeliverAt(reply: Pick<PendingReply, 'repliedAt' | 'deliverAt'>): number {
+  if (Number.isFinite(reply.deliverAt) && (reply.deliverAt ?? 0) > 0) return reply.deliverAt as number
+  const sentAt = Number.isFinite(reply.repliedAt) ? reply.repliedAt : 0
+  return sentAt + SLOW_LETTER_MAX_DAYS * DAY_MS
+}
+
+export function isSlowLetterDue(reply: PendingReply, now: number = Date.now()): boolean {
+  return reply.replied !== true && now >= resolveSlowLetterDeliverAt(reply)
+}
 
 /** 是否需要生成新周记（会话感知）：没有周记 → true；最近一篇距今 ≥ 7 天 → true；否则 false */
 export function shouldGenerateWeekly(now: number = Date.now(), sessionId?: string): boolean {
@@ -270,6 +295,13 @@ export const WEEKLY_REPLY_SYSTEM_PROMPT =
   '仔细读这篇周记的内容和对方的批注，要回应到点子上：对方提到了哪件事、哪句话，你就着那件事回，' +
   '别答非所问，别泛泛而谈，可以带一句关心或念叨。' +
   '回应要短（50 字以内）、口语、像真人。不要复述对方的批注，不刷 emoji，不鸡汤。'
+
+/** 慢信模式：只在固定送达时间到达后调用一次，写一封比立即回复更完整的回信。 */
+export const SLOW_LETTER_REPLY_SYSTEM_PROMPT =
+  '你在给一个你在意的人回一封等了几天的慢信。你不是程序、不是 AI，别解释、别自我介绍、别谈机制。' +
+  '只根据原来那封一周情书和对方写来的慢信回应，不编造没有发生的共同经历。' +
+  '认真接住对方具体写到的情绪和事情，像隔了几天终于坐下来好好回信。' +
+  '写 80-150 字左右，自然、细腻、贴近你本来的性格；不要复述原信，不刷 emoji，不鸡汤。'
 
 /** 组装周记生成提示词（纯函数，可单测）：时间段 / 聊天摘要 / 本周记忆 / 相处天数 / 上篇批注 / 写作要求 */
 export function buildWeeklyPrompt(ctx: WeeklyPromptContext): string {

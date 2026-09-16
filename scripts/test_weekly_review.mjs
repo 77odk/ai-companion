@@ -19,6 +19,9 @@ import {
   getWeekRange,
   getWeekNumber,
   formatMessageLine,
+  slowLetterDeliverAt,
+  resolveSlowLetterDeliverAt,
+  isSlowLetterDue,
 } from '../src/lib/weeklyReview.ts'
 
 let passed = 0
@@ -180,6 +183,22 @@ eq(getPendingReplies(withReplies)[0].content, '想你了', '按下标顺序返�
 {
   const empty = answerPendingReplies(withReplies, [], [], now)
   eq(getPendingReplies(empty).length, 2, '无回信 → 全部保持待回信')
+}
+
+console.log('\n[3d] 慢信 3–7 天固定送达')
+{
+  eq(slowLetterDeliverAt(now, () => 0), now + 3 * DAY, '随机下界 → 第 3 天送达')
+  eq(slowLetterDeliverAt(now, () => 0.4), now + 5 * DAY, '中间值只在寄出时抽一次 → 第 5 天')
+  eq(slowLetterDeliverAt(now, () => 0.999999), now + 7 * DAY, '随机上界 → 第 7 天送达')
+
+  const fixed = { id: 'slow-fixed', content: '慢慢回我', repliedAt: now, deliverAt: now + 4 * DAY }
+  eq(resolveSlowLetterDeliverAt(fixed), now + 4 * DAY, '已有 deliverAt → 使用固定值，不重抽')
+  ok(isSlowLetterDue(fixed, now + 4 * DAY - 1) === false, '送达前 1ms → 仍在路上')
+  ok(isSlowLetterDue(fixed, now + 4 * DAY) === true, '到 deliverAt → 可生成慢信回信')
+
+  const legacy = { id: 'slow-old', content: '旧慢信', repliedAt: now }
+  eq(resolveSlowLetterDeliverAt(legacy), now + 7 * DAY, '旧数据无 deliverAt → 按寄出后第 7 天兼容')
+  ok(isSlowLetterDue({ ...legacy, replied: true }, now + 10 * DAY) === false, '已经回信 → 不会再次进入 due')
 }
 
 console.log('\n[4] buildWeeklyPrompt 组装（含批注 / 不含）')
