@@ -181,6 +181,51 @@ export function clearCandidateWindow(sessionId?: string): void {
   }
 }
 
+type StartupCandidateJudge = (state: EventCandidateState, now: number) => Promise<void>
+
+/**
+ * 应用启动时只尝试收口最早的一个遗留窗口。
+ * 标志在读取前就置位，确保 StrictMode、网络失败或重渲染都不会在同次 App 生命周期重试。
+ */
+export function createStartupCandidateCloser(judge: StartupCandidateJudge) {
+  let started = false
+  return async (now = Date.now()): Promise<void> => {
+    if (started) return
+    started = true
+
+    const candidates: Array<{ sessionId?: string; openedAt: number }> = []
+    try {
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i)
+        if (!key?.startsWith(`${CANDIDATE_KEY_PREFIX}:`)) continue
+        const raw = localStorage.getItem(key)
+        if (!raw) continue
+        const parsed = JSON.parse(raw) as Partial<EventCandidateState>
+        if (parsed.version !== 2 || typeof parsed.openedAt !== 'number') continue
+        candidates.push({
+          sessionId: parsed.sessionId === '_global' ? undefined : parsed.sessionId,
+          openedAt: parsed.openedAt,
+        })
+      }
+    } catch {
+      return
+    }
+
+    const oldest = candidates.sort((a, b) => a.openedAt - b.openedAt)[0]
+    if (!oldest) return
+    const state = loadCandidateWindow(oldest.sessionId, now)
+    if (!state) return
+
+    // 先清窗口再调模型：失败也不在本次启动重试，更不会继续处理第二个。
+    clearCandidateWindow(oldest.sessionId)
+    try {
+      await judge(state, now)
+    } catch {
+      // 启动收口失败静默放弃，不影响应用启动。
+    }
+  }
+}
+
 export function appendCandidateEvidence(
   state: EventCandidateState | null,
   sessionId: string | undefined,
@@ -454,6 +499,8 @@ function descriptionFromFacts(facts: EventSafeFact[]): string {
     .concat('。')
 }
 
+const SENSITIVE_DISCLOSURE_DESCRIPTION = '那次谈话里，你愿意告诉我一件平时很少对别人说的事，我们之间多了一点信任。'
+
 /**
  * 硬过滤：
  * - 不传 evidence 时保留旧接口兼容；
@@ -510,9 +557,9 @@ export function applyEventHardFilter(
     if (dimensions.intimacy?.value !== true || dimensions.relationshipChange?.value !== true) return null
   }
 
-  if (result.sensitiveDisclosure && safeFacts.some((fact) => leaksSensitiveSource(fact.text, evidence))) return null
-
-  const description = descriptionFromFacts(safeFacts)
+  const description = result.sensitiveDisclosure
+    ? SENSITIVE_DISCLOSURE_DESCRIPTION
+    : descriptionFromFacts(safeFacts)
   if (!description.trim()) return null
   return {
     sessionId,
@@ -523,6 +570,34 @@ export function applyEventHardFilter(
     confidence,
     source: 'chat',
   }
+}
+
+async function judgeCandidateState(state: EventCandidateState, now: number): Promise<void> {
+  const sessionId = state.sessionId === '_global' ? undefined : state.sessionId
+  if (getAutoEventCountThisWeek(sessionId, now) >= AUTO_EVENT_WEEKLY_LIMIT) return
+
+  const settings = loadSettings()
+  const hasKey = Boolean(settings.apiKey?.trim() && settings.baseUrl?.trim() && settings.model?.trim())
+  if (!hasKey || !consumeJudgeQuota(sessionId, now)) return
+
+  const raw = await chatCompletion(
+    settings,
+    [
+      { role: 'system', content: buildEventJudgeSystemPrompt(now) },
+      { role: 'user', content: buildEventWindowPrompt(state) },
+    ],
+    { maxTokens: 700, temperature: 0 },
+  )
+  const result = parseJudgeJson(raw)
+  if (!result) return
+  const createInput = applyEventHardFilter(result, sessionId, now, state.evidence)
+  if (createInput) createEvent(createInput)
+}
+
+const closeStartupCandidateOnce = createStartupCandidateCloser(judgeCandidateState)
+
+export function closeOldestCandidateWindowOnStartup(now = Date.now()): Promise<void> {
+  return closeStartupCandidateOnce(now)
 }
 
 /**
@@ -560,30 +635,7 @@ export async function processEventCandidate(input: {
     // 一个窗口最多一次模型调用。先清窗口，避免网络错误/重渲染导致重复烧 key。
     clearCandidateWindow(input.sessionId)
 
-    // 自动 Event 已达到本周上限：直接不精判，不“补满”。
-    if (getAutoEventCountThisWeek(input.sessionId, now) >= AUTO_EVENT_WEEKLY_LIMIT) return
-
-    // 无 key：不消耗 judge 额度，也不报错。
-    const settings = loadSettings()
-    const hasKey = Boolean(settings.apiKey?.trim() && settings.baseUrl?.trim() && settings.model?.trim())
-    if (!hasKey) return
-
-    // 有 key 且确实要收口才消耗一次 judge 额度。
-    if (!consumeJudgeQuota(input.sessionId, now)) return
-
-    const raw = await chatCompletion(
-      settings,
-      [
-        { role: 'system', content: buildEventJudgeSystemPrompt(now) },
-        { role: 'user', content: buildEventWindowPrompt(state) },
-      ],
-      { maxTokens: 700, temperature: 0 },
-    )
-    const result = parseJudgeJson(raw)
-    if (!result) return
-    const createInput = applyEventHardFilter(result, input.sessionId, now, state.evidence)
-    if (!createInput) return
-    createEvent(createInput)
+    await judgeCandidateState(state, now)
   } catch {
     // Event 永远不能阻塞聊天。
   }

@@ -54,6 +54,7 @@ import Home from './components/Home'
 import SpaceLife from './components/SpaceLife'
 import Memory from './components/Memory'
 import { initCloudStateSync, syncCloudState } from './lib/cloudState'
+import { closeOldestCandidateWindowOnStartup } from './lib/eventDetector'
 
 type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
@@ -280,7 +281,10 @@ export default function App() {
   const loggedIn = useAuthState()
 
   useEffect(() => {
-    if (loggedIn) void syncCloudState()
+    if (loggedIn) {
+      void syncCloudState()
+      void closeOldestCandidateWindowOnStartup()
+    }
   }, [loggedIn])
   // ConsentGate V1：首次使用先过「开始之前」安全说明（本机已同意当前版本则直接跳过）
   const [firstConsentDone, setFirstConsentDone] = useState<boolean>(() => !consentGateNeeded())

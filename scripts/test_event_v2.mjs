@@ -7,6 +7,7 @@ import {
   broadCandidatePass,
   candidateWindowKey,
   clearCandidateWindow,
+  createStartupCandidateCloser,
   getAutoEventCountThisWeek,
   leaksSensitiveSource,
   loadCandidateWindow,
@@ -38,7 +39,7 @@ globalThis.localStorage = {
 }
 
 console.log('\n[1] 宽候选：关系变化信号能进，普通生活不进')
-ok(broadCandidatePass('刚刚真的生你的气') === true, '冲突信号进入 Candidate')
+ok(broadCandidatePass('刚刚真的生气了') === true, '冲突信号进入 Candidate')
 ok(broadCandidatePass('这个我很少跟别人说') === true, '隐私袒露进入 Candidate')
 ok(broadCandidatePass('今天跟你聊得特别开心') === true, '软关系信号进入 Candidate')
 ok(broadCandidatePass('我们昨天一起吃了饭') === false, '普通吃饭不自动变 Event 候选')
@@ -60,6 +61,46 @@ store.clear()
   ok(loadCandidateWindow('s1', now) == null, '超过 3 天未收口直接丢弃')
   ok(localStorage.getItem(candidateWindowKey('s1')) == null, '过期窗口从本地清掉')
   clearCandidateWindow('s1')
+}
+
+console.log('\n[2a] 启动收口：只处理最早的一个，过期和失败都不重试')
+store.clear()
+{
+  const now = Date.now()
+  let judged = 0
+  const closeEmpty = createStartupCandidateCloser(async () => { judged += 1 })
+  await closeEmpty(now)
+  ok(judged === 0, '没有 Candidate 时不处理')
+
+  const expired = appendCandidateEvidence(null, 'expired', '这件事我很少跟别人说', now - EVENT_CANDIDATE_MAX_AGE_MS - 1)
+  saveCandidateWindow(expired)
+  const closeExpired = createStartupCandidateCloser(async () => { judged += 1 })
+  await closeExpired(now)
+  ok(judged === 0, '过期 Candidate 删除且 0 judge')
+  ok(localStorage.getItem(candidateWindowKey('expired')) == null, '过期 Candidate 已清理')
+
+  const oldest = appendCandidateEvidence(null, 'oldest', '这件事我很少跟别人说', now - 2000)
+  const newer = appendCandidateEvidence(null, 'newer', '刚才跟你聊得很开心', now - 1000)
+  saveCandidateWindow(newer)
+  saveCandidateWindow(oldest)
+  const judgedSessions = []
+  const closeOldest = createStartupCandidateCloser(async (state) => { judgedSessions.push(state.sessionId) })
+  await closeOldest(now)
+  await closeOldest(now)
+  ok(judgedSessions.length === 1 && judgedSessions[0] === 'oldest', '同次启动只 judge openedAt 最早的一个')
+  ok(localStorage.getItem(candidateWindowKey('newer')) != null, '不继续批量处理第二个 Candidate')
+
+  store.clear()
+  saveCandidateWindow(appendCandidateEvidence(null, 'failed', '这是一件很少提起的事', now))
+  let attempts = 0
+  const closeFailed = createStartupCandidateCloser(async () => {
+    attempts += 1
+    throw new Error('network')
+  })
+  await closeFailed(now)
+  await closeFailed(now)
+  ok(attempts === 1, '网络或解析失败后本次启动不重试')
+  ok(localStorage.getItem(candidateWindowKey('failed')) == null, '调用前已清窗口，失败不会再收口')
 }
 
 console.log('\n[3] 五维硬闸门：shared + 其余至少两维，且每个 true 都必须有 evidence')
@@ -142,7 +183,7 @@ console.log('\n[4] 软事件：必须至少两条不同证据，且 intimacy + r
   ok(applyEventHardFilter(shallow, 's1', now, evidence) == null, '软事件只有一条事实证据 => 拒绝')
 }
 
-console.log('\n[5] 敏感披露：关系层摘要可以，复刻秘密原文直接拒绝')
+console.log('\n[5] 敏感披露：具体 safeFact 只验证证据，正文固定为关系过程')
 {
   const now = Date.now()
   const source = [{ id: 's', text: '这个我很少跟别人说，其实我小时候发生过一件非常具体而私密的事情', ts: now }]
@@ -164,7 +205,18 @@ console.log('\n[5] 敏感披露：关系层摘要可以，复刻秘密原文直�
     },
     safeFacts: [{ text: '其实我小时候发生过一件非常具体而私密的事情', evidence: ['s'] }],
   }
-  ok(applyEventHardFilter(result, 's1', now, source) == null, '敏感 safeFact 复刻原文 => 整条拒绝')
+  const protectedEvent = applyEventHardFilter(result, 's1', now, source)
+  ok(protectedEvent != null, '敏感披露在证据闸门通过时仍可记录关系过程')
+  ok(protectedEvent?.description === '那次谈话里，你愿意告诉我一件平时很少对别人说的事，我们之间多了一点信任。', '敏感 Event 正文使用代码层固定关系描述')
+  ok(!protectedEvent?.description?.includes('小时候发生过'), '敏感 Event 正文不采用模型的具体 safeFact')
+
+  const paraphrased = {
+    ...result,
+    safeFacts: [{ text: '童年的私事导致后来的影响，联系邮箱 secret@example.com，账号 123456789', evidence: ['s'] }],
+  }
+  const protectedParaphrase = applyEventHardFilter(paraphrased, 's1', now, source)
+  ok(protectedParaphrase?.description === protectedEvent?.description, '换词复述、邮箱和长数字仍只产生固定关系层描述')
+  ok(!/secret@example\.com|123456789|童年的私事/.test(protectedParaphrase?.description ?? ''), '敏感具体内容不进入 Event description')
 }
 
 console.log('\n[6] 自动 Event 每周最多 3 条，不当作需要填满的配额')
