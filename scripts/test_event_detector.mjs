@@ -189,11 +189,11 @@ resetAll()
 console.log('\n[9] Prompt 硬规则与枚举')
 {
   const p = buildEventJudgeSystemPrompt(Date.now())
-  ok(p.includes('不是总结记忆') && p.includes('绝不根据记忆或计划推断事件'), 'Prompt 含不总结/不推断硬规则')
-  ok(p.includes('用户原话窗口') && p.includes('不同事情绝不能拼接'), 'Prompt 限定 Candidate Window 且禁止拼接不同事件')
-  ok(p.includes('未来计划') && p.includes('不确定的回忆'), 'Prompt 含未来/不确定拒因')
+  ok(p.includes('不是总结记忆') && p.includes('只看给你的用户原话证据') && p.includes('不同事情绝不能拼接'), 'Prompt 含不总结/只看原话证据/禁止拼接硬规则')
+  ok(p.includes('Candidate Window') && p.includes('不同事情绝不能拼接'), 'Prompt 限定 Candidate Window 且禁止拼接不同事件')
+  ok(p.includes('未来计划') && p.includes('未解决的冲突就保持未解决'), 'Prompt 含未来计划/未解决冲突硬规则')
   ok(p.includes('activity') && p.includes('milestone'), 'Prompt 列出类型枚举')
-  ok(p.includes('{"isEvent"'), 'Prompt 要求严格 JSON')
+  ok(p.includes('{"worthSaving":true,"isEvent":true'), 'Prompt 要求 Event V2 JSON 契约')
 }
 
 console.log(`\n结果：${passed} 通过 / ${failed} 失败`)

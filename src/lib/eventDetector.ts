@@ -1,55 +1,68 @@
-// Event 识别（E2 / UI2-04 Card 3）：本地候选窗口 → 额度 → LLM 精判 → 硬过滤 → createEvent
-// 成本控制：当前用户消息必须提供事件信号；最多只拼当前 + 最近 2 条用户原话做粗筛/精判。
-// TA 文本绝不进入证据窗口；明显未来/不确定表达先于一切直接 false（不耗额度）；
-// 每 session + 设备本地日期每天最多 3 次精判；模型返回严格 JSON，解析失败不创建不重试。
-import { createEvent, EVENT_TYPES } from './eventStore.ts'
+// Event V2：本地候选窗口（不上云）→ 收口时至多一次 LLM → 证据硬闸门 → createEvent
+// 原则：Candidate 可以宽，Event 必须少；AI 只能整理已经发生过的证据，不能“发动态”。
+import { createEvent, EVENT_TYPES, getEvents } from './eventStore.ts'
 import { loadSettings } from './storage.ts'
 import { chatCompletion } from './modelChat.ts'
 
-/** 精判额度：每个会话 + 设备本地日期，每天最多 3 次 */
+/** 精判额度：每个会话 + 设备本地日期，每天最多 3 次。 */
 export const EVENT_JUDGE_LIMIT = 3
-
-/** 硬过滤：confidence 阈值（模型返回后必过） */
+/** 自动写入每周硬上限；不是配额目标，允许 0 条。 */
+export const AUTO_EVENT_WEEKLY_LIMIT = 3
+/** confidence 仍保留为额外硬门槛，但不能替代五维证据。 */
 export const EVENT_CONFIDENCE_THRESHOLD = 0.75
 
 const JUDGE_QUOTA_KEY = 'ai_companion_event_judge'
+const CANDIDATE_KEY_PREFIX = 'ai_companion_event_candidate_v2'
+export const EVENT_CANDIDATE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000
+export const EVENT_CANDIDATE_EVIDENCE_MAX = 8
+export const EVENT_CANDIDATE_TEXT_MAX = 280
 
-// ---- 负向过滤（先于一切，不耗额度） ----
+// ---- 负向过滤 ----
 
-// 明显未来表达：以后/计划/愿望/假设
 const NEGATIVE_FUTURE_RE =
   /以后(?:我们|一起)|下周(?:我们|一起)?|周五我们|周末我们|好想一起|想和你|如果(?:以后|有机会)|有机会一起|打算|准备(?:和|跟)?你|要和你|希望(?:我们|以后)|等(?:我们|你)|改天(?:我们|一起)|下次我们/
-// 不确定表达：猜测/不确定回忆
 const NEGATIVE_UNCERTAIN_RE = /应该(?:是)?(?:我们|一起)?去过|可能(?:是)?(?:我们)?一起|我记得我们好像|好像(?:是)?我们|不确定(?:是不是)?我们|我们(?:好像|似乎)/
+const PAST_FUTURE_DISCUSSION_RE =
+  /(刚刚|刚才|今天|昨天|昨晚|那天|前几天).{0,14}(聊了|谈了|讨论了|聊过|谈过|说起了).{0,24}(以后|未来|将来)/
 
-/** 负向过滤：未来/不确定表达直接 false（不消耗额度） */
+/** 纯未来/愿望/不确定回忆不进入 Event；“刚刚认真聊了未来”属于已发生的谈话，不误杀。 */
 export function isNegativeExpression(text: string): boolean {
   const t = typeof text === 'string' ? text.trim() : ''
   if (!t) return true
-  return NEGATIVE_FUTURE_RE.test(t) || NEGATIVE_UNCERTAIN_RE.test(t)
+  if (NEGATIVE_UNCERTAIN_RE.test(t)) return true
+  return NEGATIVE_FUTURE_RE.test(t) && !PAST_FUTURE_DISCUSSION_RE.test(t)
 }
 
-// ---- 粗筛（成本控制核心：主体 + 已发生动作 双命中才算候选） ----
+// ---- 旧粗筛兼容 + V2 宽候选 ----
 
-/** 共同主体词（至少一个） */
 const SUBJECT_RE = /我们|一起|我们俩|你和我|咱们|跟你|和你|和TA|和 TA/
-/** 已发生动作词（至少一个；现在时/将来时的「去看/去吃」不算） */
 const ACTION_RE = /去了|去过|吃了|看了|见了|到了|回来|完成了|一起做了|一起玩了|一起看了/
-
-/** 加分项：时间词 / 关系词（只作加分，单独出现不算候选） */
 export const TIME_BONUS_RE = /今天|昨天|刚刚|刚才|上周|前几天|那天|周末/
 export const RELATION_BONUS_RE = /第一次|终于|约好了|说定了|和好了|见面了|旅行回来/
 
-/** 粗筛：必须同时命中「共同主体」和「已发生动作」 */
+/** 旧接口保留，避免破坏既有测试；生产主流程不再靠它决定是否调用模型。 */
 export function coarsePass(text: string): boolean {
   const t = typeof text === 'string' ? text.trim() : ''
   if (!t) return false
   return SUBJECT_RE.test(t) && ACTION_RE.test(t)
 }
 
-/** Candidate Window：只允许当前 + 最近 2 条用户原话，避免整段聊天送去精判。 */
+/**
+ * V2 本地宽筛：只寻找“关系价值可能发生变化”的弱信号。
+ * 不把普通“我们吃了饭/看了电影”都送模型，避免 Event 变朋友圈，也控制 BYOK 成本。
+ */
+const BROAD_RELATION_SIGNAL_RE =
+  /第一次|终于|说开|和好|吵|生气|道歉|原谅|复合|重逢|分开|秘密|很少跟别人说|一直没告诉你|没告诉过你|信任|懂我|理解我|更懂|更了解|聊得.{0,8}开心|聊了.{0,8}(很久|好久)|陪我|谢谢你.{0,8}陪|你还记得|喜欢你|想你|在乎你|舍不得|决定了|定下来|说定了|约好了|完成了|做完了|庆祝|纪念日|第\s*\d+\s*天|旅行回来|认真.{0,6}(聊|谈).{0,12}(以后|未来|将来)/
+
+export function broadCandidatePass(text: string): boolean {
+  const t = typeof text === 'string' ? text.trim() : ''
+  if (!t || isNegativeExpression(t)) return false
+  return BROAD_RELATION_SIGNAL_RE.test(t)
+}
+
+// ---- 旧三句窗口兼容接口 ----
+
 export const EVENT_CANDIDATE_WINDOW_SIZE = 3
-export const EVENT_CANDIDATE_TEXT_MAX = 240
 
 function compactCandidateText(text: string): string {
   return (typeof text === 'string' ? text.trim() : '').slice(0, EVENT_CANDIDATE_TEXT_MAX)
@@ -65,12 +78,6 @@ export function buildEventCandidateWindow(userText: string, recentUserTexts: str
   return [...prior, current]
 }
 
-/**
- * 窗口粗筛：
- * - 当前句本身命中，沿用旧行为；
- * - 当前句没完整命中时，只有它自己至少带一个事件信号，才允许借最近用户原话补齐主体/动作；
- * - 「嗯 / 哈哈」之类无信号消息不会拿旧候选反复消耗额度。
- */
 export function coarsePassCandidateWindow(userText: string, recentUserTexts: string[] = []): boolean {
   const current = compactCandidateText(userText)
   if (!current || isNegativeExpression(current)) return false
@@ -83,7 +90,6 @@ export function coarsePassCandidateWindow(userText: string, recentUserTexts: str
   return coarsePass(window.join('\n'))
 }
 
-/** 给精判模型的输入：明确标成「用户原话」，最后一条是当前触发消息。 */
 export function buildEventCandidateUserPrompt(userText: string, recentUserTexts: string[] = []): string {
   const window = buildEventCandidateWindow(userText, recentUserTexts)
   return (
@@ -93,9 +99,182 @@ export function buildEventCandidateUserPrompt(userText: string, recentUserTexts:
   )
 }
 
-// ---- 额度（每 session + 设备本地日期，每天最多 3 次） ----
+// ---- V2 Candidate Window：local-only，不触发 data-change / cloud sync ----
 
-/** 设备本地日期 key（YYYY-MM-DD） */
+export interface EventEvidenceItem {
+  id: string
+  text: string
+  ts: number
+}
+
+export interface EventCandidateState {
+  version: 2
+  sessionId: string
+  openedAt: number
+  lastTouchedAt: number
+  evidence: EventEvidenceItem[]
+}
+
+export function candidateWindowKey(sessionId?: string): string {
+  return `${CANDIDATE_KEY_PREFIX}:${sessionId?.trim() || '_global'}`
+}
+
+function evidenceHash(text: string): string {
+  let hash = 2166136261
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(36)
+}
+
+export function loadCandidateWindow(sessionId: string | undefined, now = Date.now()): EventCandidateState | null {
+  try {
+    const raw = localStorage.getItem(candidateWindowKey(sessionId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<EventCandidateState>
+    if (
+      parsed.version !== 2 ||
+      !Array.isArray(parsed.evidence) ||
+      typeof parsed.openedAt !== 'number' ||
+      typeof parsed.lastTouchedAt !== 'number'
+    ) {
+      localStorage.removeItem(candidateWindowKey(sessionId))
+      return null
+    }
+    if (now - parsed.openedAt > EVENT_CANDIDATE_MAX_AGE_MS) {
+      // 未收口超过 3 天：直接丢弃，不编造“后来解决了”。
+      localStorage.removeItem(candidateWindowKey(sessionId))
+      return null
+    }
+    const evidence = parsed.evidence
+      .filter((item): item is EventEvidenceItem =>
+        item != null && typeof item.id === 'string' && typeof item.text === 'string' && typeof item.ts === 'number',
+      )
+      .slice(-EVENT_CANDIDATE_EVIDENCE_MAX)
+    if (evidence.length === 0) return null
+    return {
+      version: 2,
+      sessionId: sessionId?.trim() || '_global',
+      openedAt: parsed.openedAt,
+      lastTouchedAt: parsed.lastTouchedAt,
+      evidence,
+    }
+  } catch {
+    return null
+  }
+}
+
+export function saveCandidateWindow(state: EventCandidateState): void {
+  try {
+    localStorage.setItem(candidateWindowKey(state.sessionId === '_global' ? undefined : state.sessionId), JSON.stringify(state))
+  } catch {
+    // local-only 临时态，存失败就放弃，不影响聊天。
+  }
+}
+
+export function clearCandidateWindow(sessionId?: string): void {
+  try {
+    localStorage.removeItem(candidateWindowKey(sessionId))
+  } catch {
+    // ignore
+  }
+}
+
+type StartupCandidateJudge = (state: EventCandidateState, now: number) => Promise<void>
+
+/**
+ * 应用启动时只尝试收口最早的一个遗留窗口。
+ * 标志在读取前就置位，确保 StrictMode、网络失败或重渲染都不会在同次 App 生命周期重试。
+ */
+export function createStartupCandidateCloser(judge: StartupCandidateJudge) {
+  let started = false
+  return async (now = Date.now()): Promise<void> => {
+    if (started) return
+    started = true
+
+    const candidates: Array<{ sessionId?: string; openedAt: number }> = []
+    try {
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i)
+        if (!key?.startsWith(`${CANDIDATE_KEY_PREFIX}:`)) continue
+        const raw = localStorage.getItem(key)
+        if (!raw) continue
+        const parsed = JSON.parse(raw) as Partial<EventCandidateState>
+        if (parsed.version !== 2 || typeof parsed.openedAt !== 'number') continue
+        candidates.push({
+          sessionId: parsed.sessionId === '_global' ? undefined : parsed.sessionId,
+          openedAt: parsed.openedAt,
+        })
+      }
+    } catch {
+      return
+    }
+
+    const oldest = candidates.sort((a, b) => a.openedAt - b.openedAt)[0]
+    if (!oldest) return
+    const state = loadCandidateWindow(oldest.sessionId, now)
+    if (!state) return
+
+    // 先清窗口再调模型：失败也不在本次启动重试，更不会继续处理第二个。
+    clearCandidateWindow(oldest.sessionId)
+    try {
+      await judge(state, now)
+    } catch {
+      // 启动收口失败静默放弃，不影响应用启动。
+    }
+  }
+}
+
+export function appendCandidateEvidence(
+  state: EventCandidateState | null,
+  sessionId: string | undefined,
+  text: string,
+  ts: number,
+): EventCandidateState {
+  const compact = compactCandidateText(text)
+  const id = `u-${ts}-${evidenceHash(compact)}`
+  const base: EventCandidateState = state ?? {
+    version: 2,
+    sessionId: sessionId?.trim() || '_global',
+    openedAt: ts,
+    lastTouchedAt: ts,
+    evidence: [],
+  }
+  const withoutSame = base.evidence.filter((item) => item.id !== id)
+  return {
+    ...base,
+    lastTouchedAt: ts,
+    evidence: [...withoutSame, { id, text: compact, ts }].slice(-EVENT_CANDIDATE_EVIDENCE_MAX),
+  }
+}
+
+const HARD_CLOSURE_RE =
+  /第一次|终于|说开了|说开啦|和好了|和好啦|道歉了|原谅了|复合了|重逢了|决定了|定下来了|说定了|完成了|做完了|庆祝了|很少跟别人说|一直没告诉你|没告诉过你|秘密|刚刚.{0,12}(聊完|谈完)|认真.{0,8}(聊了|谈了).{0,18}(以后|未来|将来)/
+const SOFT_CLOSURE_RE =
+  /感觉.{0,10}(懂我|理解我|更近|更亲)|你更懂我|更了解我|今天.{0,10}聊得.{0,8}开心|谢谢你.{0,10}陪|原来你还记得|好像.{0,8}更懂|聊完.{0,8}(轻松|开心|舒服)/
+
+/** 收口才允许调用一次模型；软关系变化至少要两条用户证据。 */
+export function shouldJudgeCandidateWindow(state: EventCandidateState, currentText: string): boolean {
+  const t = compactCandidateText(currentText)
+  if (HARD_CLOSURE_RE.test(t)) return true
+  return state.evidence.length >= 2 && SOFT_CLOSURE_RE.test(t)
+}
+
+export function buildEventWindowPrompt(state: EventCandidateState): string {
+  const lines = state.evidence.map((item) => {
+    const when = new Date(item.ts).toISOString()
+    return `[${item.id}] ${when} 用户原话：${item.text}`
+  })
+  return (
+    '【Candidate Window｜仅用户原话证据】\n' +
+    lines.join('\n') +
+    '\n【要求】只判断这些证据是否共同描述同一段值得留下的关系时刻。不同事情不能拼接。任何判断为 true 的维度和每条 safeFact 都必须引用上面的 evidence id。'
+  )
+}
+
+// ---- 额度 ----
+
 export function localDateKey(now: number): string {
   const d = new Date(now)
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -103,7 +282,6 @@ export function localDateKey(now: number): string {
   return `${d.getFullYear()}-${m}-${dd}`
 }
 
-/** 额度 key：会话（空串 = 全局）+ 日期 */
 export function judgeQuotaKey(sessionId: string | undefined, now: number): string {
   return `${sessionId?.trim() || '_global'}|${localDateKey(now)}`
 }
@@ -112,8 +290,8 @@ function readQuotaMap(): Record<string, number> {
   try {
     const raw = localStorage.getItem(JUDGE_QUOTA_KEY)
     if (!raw) return {}
-    const d = JSON.parse(raw)
-    return d && typeof d === 'object' ? (d as Record<string, number>) : {}
+    const data = JSON.parse(raw)
+    return data && typeof data === 'object' ? (data as Record<string, number>) : {}
   } catch {
     return {}
   }
@@ -123,17 +301,14 @@ function writeQuotaMap(map: Record<string, number>): void {
   try {
     localStorage.setItem(JUDGE_QUOTA_KEY, JSON.stringify(map))
   } catch {
-    // 存不下不影响
+    // ignore
   }
 }
 
-/** 已用额度（刷新页面不清零，按 key 累计） */
 export function getJudgeQuotaUsed(sessionId: string | undefined, now: number): number {
-  const map = readQuotaMap()
-  return map[judgeQuotaKey(sessionId, now)] ?? 0
+  return readQuotaMap()[judgeQuotaKey(sessionId, now)] ?? 0
 }
 
-/** 消耗一次额度：已满返回 false（超限直接丢弃，不排队、不延后、不补跑） */
 export function consumeJudgeQuota(sessionId: string | undefined, now: number): boolean {
   const key = judgeQuotaKey(sessionId, now)
   const map = readQuotaMap()
@@ -144,68 +319,143 @@ export function consumeJudgeQuota(sessionId: string | undefined, now: number): b
   return true
 }
 
-// ---- LLM 精判 ----
+function startOfLocalWeek(now: number): number {
+  const d = new Date(now)
+  d.setHours(0, 0, 0, 0)
+  const day = d.getDay() || 7
+  d.setDate(d.getDate() - day + 1)
+  return d.getTime()
+}
+
+export function getAutoEventCountThisWeek(sessionId: string | undefined, now: number): number {
+  const start = startOfLocalWeek(now)
+  const end = start + 7 * 24 * 60 * 60 * 1000
+  return getEvents(sessionId).filter(
+    (event) => event.source === 'chat' && event.createdAt >= start && event.createdAt < end,
+  ).length
+}
+
+// ---- LLM V2 ----
+
+export type EventDimensionName =
+  | 'shared'
+  | 'novelty'
+  | 'intimacy'
+  | 'emotionalIntensity'
+  | 'relationshipChange'
+
+export interface EventDimensionResult {
+  value: boolean
+  evidence: string[]
+}
+
+export interface EventSafeFact {
+  text: string
+  evidence: string[]
+}
 
 export interface EventJudgeResult {
+  /** V2 */
+  worthSaving?: boolean
+  sensitiveDisclosure?: boolean
+  dimensions?: Partial<Record<EventDimensionName, EventDimensionResult>>
+  safeFacts?: EventSafeFact[]
+  /** 兼容旧 parser / tests */
   isEvent: boolean
   type?: string
   title?: string
+  description?: string
   occurredAt?: string
   confidence?: number
   evidence?: string
 }
 
-/**
- * 精判系统提示词（硬规则）：不是总结记忆、不是推测历史；只判断文本里是否明确表达了
- * 「已发生、与当前 TA 共同经历、内容与时间可确定」的具体事件。
- */
 export function buildEventJudgeSystemPrompt(now: number): string {
   const today = localDateKey(now)
   return (
-    '你是忆文里的对话分析器。判断用户这句话里，是否明确表达了一件【已经发生】的、与当前 TA（对话对象）' +
-    '【共同经历】的、内容与时间都【可确定】的具体事件。\n' +
+    '你是忆文 Event V2 的证据整理器。你没有“发 Event”的权力，只能整理传入 Candidate Window 中已经发生的证据。\n' +
     `今天是 ${today}。\n` +
-    '规则（硬性）：\n' +
-    '- 不是总结记忆、不是推测历史、不是根据记忆或 TA 的话脑补；只看传入的【用户原话窗口】。窗口最多三条，全部是用户原话。\n' +
-    '- 可以合并窗口内相邻用户原话来补齐同一件事的主体/动作/时间，但只要无法确定它们说的是同一件事，就必须 isEvent=false；不同事情绝不能拼接。\n' +
-    '- 未来计划、愿望、假设、不确定的回忆、模型推测、用户单方面经历、普通长期事实、无法确定发生或时间的内容：一律 isEvent=false。\n' +
-    '- 绝不根据记忆或计划推断事件。\n' +
-    '- isEvent=true 时：type 只能从以下枚举选：' +
-    EVENT_TYPES.join('/') +
-    '（activity=日常一起做的事、meal=一起吃饭、trip=一起出行、celebration=庆祝/节日、milestone=第一次/里程碑）；' +
-    'title 用一句 10-20 字的人话概括这件事；occurredAt 必须是绝对日期（YYYY-MM-DD 或 ISO 格式），不能写「今天/昨天」这种相对词；' +
-    'confidence 是 0-1 的小数，表示你有多确定这是一件真实发生的共同经历。\n' +
-    '只输出一个 JSON 对象，不要任何其他文字：{"isEvent":true/false,"type":"...","title":"...","occurredAt":"...","confidence":0.0,"evidence":"一句话依据"}'
+    '目标：判断“这段互动有没有让双方的共同经历增加一块以前没有的东西”。不要求重大，但必须有变化。宁可漏，不可乱记。\n' +
+    '硬规则：\n' +
+    '1. 不是总结记忆，不读记忆，不根据 TA 的话、未来计划或常识补事实；只看给你的用户原话证据。不同事情绝不能拼接。\n' +
+    '2. 五个维度：shared(共同性)、novelty(新鲜/第一次)、intimacy(亲密/信任)、emotionalIntensity(明显情绪强度)、relationshipChange(关系理解或状态发生变化)。\n' +
+    '3. 每个 value=true 的维度必须列 evidence id；没有直接证据就必须 false。\n' +
+    '4. worthSaving=true 也不代表一定写入：代码还会要求 shared=true 且其余四维至少两项有有效证据。\n' +
+    '5. safeFacts 只能写证据支持的事实/过程，每条必须引用 evidence id；未发生的结局、心理、承诺一律不能补。未解决的冲突就保持未解决。\n' +
+    '6. 如果包含秘密、隐私袒露、很少对别人说的内容，sensitiveDisclosure=true。safeFacts 只能写关系过程，例如“那天你第一次愿意告诉我一件以前很少提起的事”，绝不能复述秘密具体内容、数字、地址、身份信息或原句。\n' +
+    '7. 普通吃饭、普通看电影、浅层开心闲聊不够；深聊/秘密/冲突修复/第一次/重要选择/明显的新理解可以。软事件至少需要持续多轮证据。\n' +
+    '8. type 只能是：' + EVENT_TYPES.join('/') + '。occurredAt 用事件开始那一天的绝对日期 YYYY-MM-DD，跨午夜也不要拆成两件。\n' +
+    '9. 不编造现实世界身体接触、地点、共同线下经历；没有证据就不写。\n' +
+    '只输出 JSON，不要解释：' +
+    '{"worthSaving":true,"isEvent":true,"type":"activity","occurredAt":"YYYY-MM-DD","confidence":0.0,"sensitiveDisclosure":false,' +
+    '"dimensions":{"shared":{"value":true,"evidence":["u-..."]},"novelty":{"value":false,"evidence":[]},"intimacy":{"value":true,"evidence":["u-..."]},"emotionalIntensity":{"value":false,"evidence":[]},"relationshipChange":{"value":true,"evidence":["u-..."]}},' +
+    '"safeFacts":[{"text":"只含证据支持的关系过程事实","evidence":["u-..."]}]}'
   )
 }
 
-/** 从模型输出里提取 JSON 对象（容忍 ```json 包裹 / 前后废话） */
+function normalizeEvidenceRefs(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string' && item.trim() !== '').map((item) => item.trim())
+}
+
+function parseDimension(value: unknown): EventDimensionResult | undefined {
+  if (value == null || typeof value !== 'object') return undefined
+  const raw = value as { value?: unknown; evidence?: unknown }
+  return { value: raw.value === true, evidence: normalizeEvidenceRefs(raw.evidence) }
+}
+
 export function parseJudgeJson(raw: string): EventJudgeResult | null {
   if (typeof raw !== 'string' || !raw.trim()) return null
-  let s = raw.trim()
-  const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fenced) s = fenced[1].trim()
-  const start = s.indexOf('{')
-  const end = s.lastIndexOf('}')
+  let text = raw.trim()
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fenced) text = fenced[1].trim()
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
   if (start < 0 || end <= start) return null
   try {
-    const d = JSON.parse(s.slice(start, end + 1))
-    if (d == null || typeof d !== 'object') return null
+    const data = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>
+    if (data == null || typeof data !== 'object') return null
+    const dimensionsRaw = data.dimensions && typeof data.dimensions === 'object'
+      ? (data.dimensions as Record<string, unknown>)
+      : null
+    const dimensions: Partial<Record<EventDimensionName, EventDimensionResult>> | undefined = dimensionsRaw
+      ? {
+          shared: parseDimension(dimensionsRaw.shared),
+          novelty: parseDimension(dimensionsRaw.novelty),
+          intimacy: parseDimension(dimensionsRaw.intimacy),
+          emotionalIntensity: parseDimension(dimensionsRaw.emotionalIntensity),
+          relationshipChange: parseDimension(dimensionsRaw.relationshipChange),
+        }
+      : undefined
+    const safeFacts: EventSafeFact[] | undefined = Array.isArray(data.safeFacts)
+      ? data.safeFacts
+          .map((item) => {
+            if (item == null || typeof item !== 'object') return null
+            const fact = item as { text?: unknown; evidence?: unknown }
+            const factText = typeof fact.text === 'string' ? fact.text.trim() : ''
+            if (!factText) return null
+            return { text: factText, evidence: normalizeEvidenceRefs(fact.evidence) }
+          })
+          .filter((item): item is EventSafeFact => item != null)
+      : undefined
     return {
-      isEvent: d.isEvent === true,
-      type: typeof d.type === 'string' ? d.type : undefined,
-      title: typeof d.title === 'string' ? d.title : undefined,
-      occurredAt: typeof d.occurredAt === 'string' ? d.occurredAt : undefined,
-      confidence:
-        typeof d.confidence === 'number' && Number.isFinite(d.confidence) ? d.confidence : undefined,
-      evidence: typeof d.evidence === 'string' ? d.evidence : undefined,
+      worthSaving: data.worthSaving === true,
+      isEvent: data.isEvent === true || data.worthSaving === true,
+      type: typeof data.type === 'string' ? data.type : undefined,
+      title: typeof data.title === 'string' ? data.title : undefined,
+      description: typeof data.description === 'string' ? data.description : undefined,
+      occurredAt: typeof data.occurredAt === 'string' ? data.occurredAt : undefined,
+      confidence: typeof data.confidence === 'number' && Number.isFinite(data.confidence) ? data.confidence : undefined,
+      evidence: typeof data.evidence === 'string' ? data.evidence : undefined,
+      sensitiveDisclosure: data.sensitiveDisclosure === true,
+      dimensions,
+      safeFacts,
     }
   } catch {
     return null
   }
 }
 
-/** 解析模型给的日期字符串 → 时间戳；失败返回 null（now 参数保留兼容旧调用，未使用） */
 export function parseOccurredAt(str: string | undefined, _now?: number): number | null {
   if (!str || typeof str !== 'string') return null
   const t = new Date(str).getTime()
@@ -213,75 +463,180 @@ export function parseOccurredAt(str: string | undefined, _now?: number): number 
   return t
 }
 
+function compatibilityTitle(description: string): string {
+  const clean = description.replace(/\s+/g, ' ').trim()
+  return clean.length > 28 ? `${clean.slice(0, 28)}…` : clean
+}
+
+function refsAreValid(refs: string[], allowed: Set<string>): boolean {
+  return refs.length > 0 && refs.every((id) => allowed.has(id))
+}
+
+function normalizeForLeakCheck(text: string): string {
+  return text.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '')
+}
+
+/** 敏感披露时，只要 safeFact 大段复刻用户原话就整条拒绝，宁可漏。 */
+export function leaksSensitiveSource(factText: string, evidence: EventEvidenceItem[]): boolean {
+  const target = normalizeForLeakCheck(factText)
+  if (!target) return false
+  for (const item of evidence) {
+    const source = normalizeForLeakCheck(item.text)
+    const chunkSize = /[\u3400-\u9fff]/u.test(source) ? 12 : 20
+    if (source.length < chunkSize) continue
+    for (let i = 0; i <= source.length - chunkSize; i += 1) {
+      if (target.includes(source.slice(i, i + chunkSize))) return true
+    }
+  }
+  return /\b\d{6,}\b/.test(factText) || /[\w.+-]+@[\w.-]+\.[a-z]{2,}/i.test(factText)
+}
+
+function descriptionFromFacts(facts: EventSafeFact[]): string {
+  return facts
+    .map((fact) => fact.text.trim().replace(/[。；;]+$/g, ''))
+    .filter(Boolean)
+    .join('；')
+    .concat('。')
+}
+
+const SENSITIVE_DISCLOSURE_DESCRIPTION = '那次谈话里，你愿意告诉我一件平时很少对别人说的事，我们之间多了一点信任。'
+
 /**
- * 硬过滤（模型返回后必过）：isEvent===true、type 合法、title 非空、
- * occurredAt 可解析且不晚于当前时间（未来直接拒）、confidence >= EVENT_CONFIDENCE_THRESHOLD。
- * 全过返回 createEvent 入参；任一不过返回 null。
+ * 硬过滤：
+ * - 不传 evidence 时保留旧接口兼容；
+ * - 生产 V2 必传 evidence，强制 shared=true + 其余四维 >=2 + 每个 true 维度有合法 evidence；
+ * - safeFacts 全部要有合法 evidence；敏感披露禁止复刻原文；软事件要求至少两条不同证据且 intimacy+relationshipChange 同时成立。
  */
 export function applyEventHardFilter(
-  r: EventJudgeResult,
+  result: EventJudgeResult,
   sessionId: string | undefined,
   now: number,
+  evidence?: EventEvidenceItem[],
 ): Parameters<typeof createEvent>[0] | null {
-  if (!r || r.isEvent !== true) return null
-  const title = (r.title ?? '').trim()
-  if (!title) return null
-  if (!EVENT_TYPES.includes(r.type as (typeof EVENT_TYPES)[number])) return null
-  const occurredAt = parseOccurredAt(r.occurredAt, now)
+  if (!result || result.isEvent !== true) return null
+  if (!EVENT_TYPES.includes(result.type as (typeof EVENT_TYPES)[number])) return null
+  const occurredAt = parseOccurredAt(result.occurredAt, now)
   if (occurredAt == null || occurredAt > now) return null
-  const confidence = r.confidence ?? 0
+  const confidence = result.confidence ?? 0
   if (!(confidence >= EVENT_CONFIDENCE_THRESHOLD)) return null
+
+  // 旧调用兼容路径，不用于 processEventCandidate V2。
+  if (!evidence) {
+    const title = (result.title ?? '').trim()
+    if (!title) return null
+    return { sessionId, type: result.type as (typeof EVENT_TYPES)[number], title, occurredAt, confidence, source: 'chat' }
+  }
+
+  if (result.worthSaving !== true || !result.dimensions || !Array.isArray(result.safeFacts) || result.safeFacts.length === 0) {
+    return null
+  }
+  const allowed = new Set(evidence.map((item) => item.id))
+  const dimensions = result.dimensions
+  const shared = dimensions.shared
+  if (!shared?.value || !refsAreValid(shared.evidence, allowed)) return null
+
+  const others: EventDimensionName[] = ['novelty', 'intimacy', 'emotionalIntensity', 'relationshipChange']
+  const passingOthers = others.filter((name) => {
+    const item = dimensions[name]
+    return item?.value === true && refsAreValid(item.evidence, allowed)
+  })
+  if (passingOthers.length < 2) return null
+
+  const safeFacts = result.safeFacts
+    .map((fact) => ({ text: fact.text.trim().slice(0, 220), evidence: fact.evidence }))
+    .filter((fact) => fact.text && refsAreValid(fact.evidence, allowed))
+  if (safeFacts.length !== result.safeFacts.length || safeFacts.length === 0) return null
+
+  const usedEvidence = new Set<string>()
+  for (const fact of safeFacts) for (const id of fact.evidence) usedEvidence.add(id)
+
+  // 软事件：不能凭一句“聊得开心”入库；至少两条证据，而且必须有亲密 + 关系变化。
+  const isSoft = dimensions.novelty?.value !== true && dimensions.emotionalIntensity?.value !== true
+  if (isSoft) {
+    if (usedEvidence.size < 2) return null
+    if (dimensions.intimacy?.value !== true || dimensions.relationshipChange?.value !== true) return null
+  }
+
+  const description = result.sensitiveDisclosure
+    ? SENSITIVE_DISCLOSURE_DESCRIPTION
+    : descriptionFromFacts(safeFacts)
+  if (!description.trim()) return null
   return {
     sessionId,
-    type: r.type as (typeof EVENT_TYPES)[number],
-    title,
+    type: result.type as (typeof EVENT_TYPES)[number],
+    title: compatibilityTitle(description),
+    description,
     occurredAt,
     confidence,
     source: 'chat',
   }
 }
 
+async function judgeCandidateState(state: EventCandidateState, now: number): Promise<void> {
+  const sessionId = state.sessionId === '_global' ? undefined : state.sessionId
+  if (getAutoEventCountThisWeek(sessionId, now) >= AUTO_EVENT_WEEKLY_LIMIT) return
+
+  const settings = loadSettings()
+  const hasKey = Boolean(settings.apiKey?.trim() && settings.baseUrl?.trim() && settings.model?.trim())
+  if (!hasKey || !consumeJudgeQuota(sessionId, now)) return
+
+  const raw = await chatCompletion(
+    settings,
+    [
+      { role: 'system', content: buildEventJudgeSystemPrompt(now) },
+      { role: 'user', content: buildEventWindowPrompt(state) },
+    ],
+    { maxTokens: 700, temperature: 0 },
+  )
+  const result = parseJudgeJson(raw)
+  if (!result) return
+  const createInput = applyEventHardFilter(result, sessionId, now, state.evidence)
+  if (createInput) createEvent(createInput)
+}
+
+const closeStartupCandidateOnce = createStartupCandidateCloser(judgeCandidateState)
+
+export function closeOldestCandidateWindowOnStartup(now = Date.now()): Promise<void> {
+  return closeStartupCandidateOnce(now)
+}
+
 /**
- * 主流程（Chat 用户消息落库后调用；异步不阻塞、失败静默）：
- * 负向过滤 → 粗筛 → 额度 → 无 key 静默 → 精判（记额度）→ JSON 解析 → 硬过滤 → createEvent。
+ * Chat 每条用户消息仍可调用本函数，但绝大多数调用只做免费 local tagging。
+ * 只有窗口出现明确收口时才会做一次模型调用；调用前检查 key、每周自动 Event 上限与每日 judge 上限。
  */
 export async function processEventCandidate(input: {
   sessionId?: string
   userText: string
-  /** Chat 只传最近相邻的用户原话；TA 文本不得进入。 */
+  /** 仅保留旧调用兼容；V2 不把这些无时间戳历史文本当硬证据。 */
   recentUserTexts?: string[]
   now?: number
 }): Promise<void> {
   try {
     const now = input.now ?? Date.now()
-    const text = (input.userText ?? '').trim()
+    const text = compactCandidateText(input.userText)
     if (!text) return
-    // 1 负向过滤（先于一切，不耗额度）
+
+    let state = loadCandidateWindow(input.sessionId, now)
+    const hasWindow = Boolean(state)
+    const opensCandidate = broadCandidatePass(text)
+
+    // 没窗口、也没有关系价值信号：0 成本退出。
+    if (!hasWindow && !opensCandidate) return
+    // 纯未来/不确定表达不作为新证据；已有窗口也不拿它“补结局”。
     if (isNegativeExpression(text)) return
-    // 2 Candidate Window 粗筛：当前句必须提供事件信号；最多借最近 2 条用户原话补齐。
-    if (!coarsePassCandidateWindow(text, input.recentUserTexts ?? [])) return
-    // 3 额度：超限直接丢弃
-    if (!consumeJudgeQuota(input.sessionId, now)) return
-    // 4 无 key 静默跳过（不报错不提示）
-    const settings = loadSettings()
-    const hasKey = Boolean(settings.apiKey?.trim() && settings.baseUrl?.trim() && settings.model?.trim())
-    if (!hasKey) return
-    // 5 精判（一次调用记一次额度，不管返回 true 还是 false）
-    const raw = await chatCompletion(
-      settings,
-      [
-        { role: 'system', content: buildEventJudgeSystemPrompt(now) },
-        { role: 'user', content: buildEventCandidateUserPrompt(text, input.recentUserTexts ?? []) },
-      ],
-      { maxTokens: 200, temperature: 0 },
-    )
-    const result = parseJudgeJson(raw)
-    if (!result) return // JSON 解析失败 → 不创建，不重试
-    // 6 硬过滤
-    const input2 = applyEventHardFilter(result, input.sessionId, now)
-    if (!input2) return
-    createEvent(input2)
+
+    // 窗口开启后允许把后续用户原话继续收进证据；最多 8 条 / 3 天。
+    state = appendCandidateEvidence(state, input.sessionId, text, now)
+    saveCandidateWindow(state)
+
+    // 没收口：只落 local-only 候选，0 模型调用。
+    if (!shouldJudgeCandidateWindow(state, text)) return
+
+    // 一个窗口最多一次模型调用。先清窗口，避免网络错误/重渲染导致重复烧 key。
+    clearCandidateWindow(input.sessionId)
+
+    await judgeCandidateState(state, now)
   } catch {
-    // 失败静默：不打扰聊天
+    // Event 永远不能阻塞聊天。
   }
 }
