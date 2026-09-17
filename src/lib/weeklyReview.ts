@@ -7,6 +7,7 @@
 
 import { migrateGlobalToDefaultSession } from './roleData.ts'
 import { buildIdentityContext } from './identityContext.ts'
+import { notifyDataChanged } from './dataChange.ts'
 
 export interface WeeklyReply {
   content: string
@@ -15,6 +16,8 @@ export interface WeeklyReply {
   taReply?: string
   /** 立即回复生成失败（无 key/429/网络）→ 展示兜底文案「TA 暂时没回上」 */
   taReplyFailed?: boolean
+  /** 回信已被用户展开；一旦存在，跨设备合并不得回退为未读。 */
+  openedAt?: number
 }
 
 /** 封存留言（慢信）：寄出时固定 3–7 天后的送达时间，到点后才生成 TA 回信。 */
@@ -31,6 +34,8 @@ export interface PendingReply {
   replied?: boolean
   /** 回信落笔时间 */
   replyAt?: number
+  /** 慢信回信已被用户展开；一旦存在，跨设备合并不得回退为未读。 */
+  openedAt?: number
 }
 
 export interface WeeklyReview {
@@ -88,9 +93,125 @@ export function getWeeklyReviews(sessionId?: string): WeeklyReview[] {
   }
 }
 
-/** 保存全部周记到指定 store（缺省全局 key；纯本地，不进账号同步，所以不广播 dataChange） */
-export function saveWeeklyReviews(list: WeeklyReview[], sessionId?: string): void {
+function writeWeeklyReviews(list: WeeklyReview[], sessionId?: string): void {
   localStorage.setItem(weeklyKey(sessionId), JSON.stringify(Array.isArray(list) ? list : []))
+}
+
+/** 保存全部周记到指定 store（缺省全局 key），并通知 Cloud State 捕获本地变化。 */
+export function saveWeeklyReviews(list: WeeklyReview[], sessionId?: string): void {
+  writeWeeklyReviews(list, sessionId)
+  notifyDataChanged()
+}
+
+/** Cloud State apply/delete 专用：落盘但不广播，避免把远端变化回声入队。 */
+export function saveWeeklyReviewsFromCloud(list: WeeklyReview[], sessionId: string): void {
+  writeWeeklyReviews(list, sessionId)
+}
+
+function nonEmpty(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function validTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function earlierTimestamp(canonical: unknown, local: unknown): number | undefined {
+  if (validTimestamp(canonical) && validTimestamp(local)) return Math.min(canonical, local)
+  if (validTimestamp(canonical)) return canonical
+  if (validTimestamp(local)) return local
+  return undefined
+}
+
+function laterTimestamp(canonical: unknown, local: unknown): number | undefined {
+  if (validTimestamp(canonical) && validTimestamp(local)) return Math.max(canonical, local)
+  if (validTimestamp(canonical)) return canonical
+  if (validTimestamp(local)) return local
+  return undefined
+}
+
+function mergePendingReply(canonical: PendingReply, local: PendingReply): PendingReply {
+  const merged: PendingReply = { ...canonical }
+  if (canonical.replied === true || local.replied === true) merged.replied = true
+  if (!nonEmpty(canonical.reply) && nonEmpty(local.reply)) merged.reply = local.reply
+  const repliedAt = earlierTimestamp(canonical.repliedAt, local.repliedAt)
+  const replyAt = laterTimestamp(canonical.replyAt, local.replyAt)
+  const openedAt = laterTimestamp(canonical.openedAt, local.openedAt)
+  if (repliedAt !== undefined) merged.repliedAt = repliedAt
+  if (replyAt !== undefined) merged.replyAt = replyAt
+  if (openedAt !== undefined) merged.openedAt = openedAt
+  if (!validTimestamp(canonical.deliverAt) && validTimestamp(local.deliverAt)) merged.deliverAt = local.deliverAt
+  return merged
+}
+
+function mergeReplies(canonical: PendingReply[] | undefined, local: PendingReply[] | undefined): PendingReply[] | undefined {
+  if (!canonical?.length && !local?.length) return canonical
+  const localById = new Map((local ?? []).filter(reply => typeof reply?.id === 'string').map(reply => [reply.id, reply]))
+  const result = (canonical ?? []).map(reply => {
+    const localReply = localById.get(reply.id)
+    localById.delete(reply.id)
+    return localReply ? mergePendingReply(reply, localReply) : reply
+  })
+  const localOnly = [...localById.values()].sort((a, b) => {
+    const aAt = validTimestamp(a.repliedAt) ? a.repliedAt : Number.POSITIVE_INFINITY
+    const bAt = validTimestamp(b.repliedAt) ? b.repliedAt : Number.POSITIVE_INFINITY
+    return aAt - bAt || a.id.localeCompare(b.id)
+  })
+  for (const reply of localOnly) {
+    result.push(reply)
+  }
+  return result
+}
+
+function mergeMyReply(canonical?: WeeklyReply, local?: WeeklyReply): WeeklyReply | undefined {
+  if (!canonical) return local
+  if (!local) return canonical
+  if (canonical.content !== local.content) {
+    const canonicalAt = validTimestamp(canonical.repliedAt) ? canonical.repliedAt : Number.POSITIVE_INFINITY
+    const localAt = validTimestamp(local.repliedAt) ? local.repliedAt : Number.POSITIVE_INFINITY
+    return localAt < canonicalAt ? local : canonical
+  }
+  const merged: WeeklyReply = { ...canonical }
+  const repliedAt = earlierTimestamp(canonical.repliedAt, local.repliedAt)
+  const openedAt = laterTimestamp(canonical.openedAt, local.openedAt)
+  if (repliedAt !== undefined) merged.repliedAt = repliedAt
+  if (openedAt !== undefined) merged.openedAt = openedAt
+  const taReply = nonEmpty(canonical.taReply) ? canonical.taReply : nonEmpty(local.taReply) ? local.taReply : undefined
+  if (taReply !== undefined) {
+    merged.taReply = taReply
+    delete merged.taReplyFailed
+  } else {
+    delete merged.taReply
+    if (canonical.taReplyFailed === true || local.taReplyFailed === true) merged.taReplyFailed = true
+  }
+  return merged
+}
+
+function inferredReviewMode(review: Pick<WeeklyReview, 'myReply' | 'replies' | 'reviewMode'>): 'immediate' | 'sealed' | undefined {
+  const immediateAt = Number.isFinite(review.myReply?.repliedAt) ? review.myReply!.repliedAt : Number.POSITIVE_INFINITY
+  const sealedAt = (review.replies ?? []).reduce((earliest, reply) => (
+    Number.isFinite(reply.repliedAt) ? Math.min(earliest, reply.repliedAt) : earliest
+  ), Number.POSITIVE_INFINITY)
+  if (immediateAt < sealedAt) return 'immediate'
+  if (sealedAt < immediateAt) return 'sealed'
+  if (immediateAt !== Number.POSITIVE_INFINITY) return review.reviewMode ?? 'immediate'
+  return review.reviewMode
+}
+
+/** Server canonical 决定正文；本地仅补回跨设备可前进的回复状态。 */
+export function mergeWeeklyReview(canonical: WeeklyReview, local?: WeeklyReview): WeeklyReview {
+  if (!local || local.id !== canonical.id) return canonical
+  const merged: WeeklyReview = {
+    ...canonical,
+    myReply: mergeMyReply(canonical.myReply, local.myReply),
+    replies: mergeReplies(canonical.replies, local.replies),
+  }
+  const mode = inferredReviewMode(merged)
+  if (mode) merged.reviewMode = mode
+  else delete merged.reviewMode
+  if (!merged.myReply) delete merged.myReply
+  if (!merged.replies) delete merged.replies
+  return merged
 }
 
 /** 生成一条周记的本地 id */
