@@ -37,7 +37,17 @@ import { getAccount } from '../lib/sync'
 import { getToken, isLoggedIn, logout } from '../lib/auth'
 import { ChatError, testConnection } from '../lib/api'
 import { keyFormatHint } from '../lib/keyFormat'
-import { extractOpeningLine, extractPersonality, extractBackgroundLine, applyPersonaEdits } from '../lib/customPersona'
+import {
+  extractOpeningLine,
+  extractPersonality,
+  extractBackgroundLine,
+  applyPersonaEdits,
+  canSavePersonaLength,
+  countPersonaCharacters,
+  hasPersonaIdentityConflict,
+  PERSONA_HARD_LIMIT,
+  PERSONA_SOFT_LIMIT,
+} from '../lib/customPersona'
 import { listSessions, patchSession, type Session } from '../lib/sessionApi'
 import { getActiveSessionId, getSessionsCache, setSessionsCache } from '../lib/sessionStore'
 import { forceRefresh } from '../lib/forceRefresh'
@@ -516,6 +526,8 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
   const [remarkDraft, setRemarkDraft] = useState<string | null>(null)
   const [savedField, setSavedField] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [identityConflictField, setIdentityConflictField] = useState<'personality' | 'background' | 'opening' | null>(null)
+  const [identityConflictAcknowledged, setIdentityConflictAcknowledged] = useState(false)
   const savedTimer = useRef<number | undefined>(undefined)
   // 本页已保存过改动：拉列表回来的旧数据别覆盖本地刚存的新值（防竞态）
   const dirtyRef = useRef(false)
@@ -530,6 +542,13 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
   const backgroundValue = backgroundDraft ?? extractBackgroundLine(rolePersona)
   const openingValue = openingDraft ?? extractOpeningLine(rolePersona)
   const remarkValue = remarkDraft ?? remark
+  const nextPersona = applyPersonaEdits(rolePersona, {
+    personality: personalityValue,
+    background: backgroundValue,
+    opening: openingValue,
+  })
+  const nextPersonaLength = countPersonaCharacters(nextPersona)
+  const personaLengthValid = canSavePersonaLength(nextPersona, rolePersona)
 
   // 打开资料卡时拉一次会话列表：别处（角色列表/换 TA）改过之后，缓存同步成后端最新
   useEffect(() => {
@@ -621,11 +640,10 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
    * 保存人设相关字段（性格/背景/开场白）：三个草稿一起拼成新 persona。
    * 有会话 patchSession persona（只影响当前角色）；全局 ai_companion_persona 始终同步（设定卡对应 key）。
    */
-  const handleSavePersonaField = async (field: 'personality' | 'background' | 'opening') => {
+  const savePersonaField = async (field: 'personality' | 'background' | 'opening') => {
     if (saving) return
     if (hasSession && !getToken()) return
-    const edits = { personality: personalityValue, background: backgroundValue, opening: openingValue }
-    const nextPersona = applyPersonaEdits(rolePersona, edits)
+    if (!personaLengthValid) return
     setSaving(true)
     try {
       if (hasSession) {
@@ -647,6 +665,15 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleSavePersonaField = (field: 'personality' | 'background' | 'opening') => {
+    if (!personaLengthValid) return
+    if (!identityConflictAcknowledged && hasPersonaIdentityConflict(nextPersona, roleName)) {
+      setIdentityConflictField(field)
+      return
+    }
+    void savePersonaField(field)
   }
 
   return (
@@ -758,8 +785,8 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
             <button
               type="button"
               className="btn btn-primary ai-save-btn"
-              onClick={() => void handleSavePersonaField('personality')}
-              disabled={saving}
+              onClick={() => handleSavePersonaField('personality')}
+              disabled={saving || !personaLengthValid}
             >
               {savedField === 'personality' ? '已保存' : '保存性格'}
             </button>
@@ -780,8 +807,8 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
             <button
               type="button"
               className="btn btn-primary ai-save-btn"
-              onClick={() => void handleSavePersonaField('background')}
-              disabled={saving}
+              onClick={() => handleSavePersonaField('background')}
+              disabled={saving || !personaLengthValid}
             >
               {savedField === 'background' ? '已保存' : '保存背景'}
             </button>
@@ -803,14 +830,51 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
             <button
               type="button"
               className="btn btn-primary ai-save-btn"
-              onClick={() => void handleSavePersonaField('opening')}
-              disabled={saving}
+              onClick={() => handleSavePersonaField('opening')}
+              disabled={saving || !personaLengthValid}
             >
               {savedField === 'opening' ? '已保存' : '保存开场白'}
             </button>
           </div>
         </div>
+        <div className="field">
+          <p className="hint">{nextPersonaLength} / {PERSONA_HARD_LIMIT}</p>
+          {nextPersonaLength > PERSONA_SOFT_LIMIT && (
+            <p className="hint">人设有点长，精简一些会更容易保持一致。</p>
+          )}
+          {!personaLengthValid && (
+            <p className="test-result error">当前人设已超过 4000 字，只能缩短或保持原长度后保存。</p>
+          )}
+        </div>
       </div>
+      {identityConflictField && (
+        <div className="role-modal-overlay" role="dialog" aria-modal="true" aria-label="检查人设身份">
+          <div className="role-modal">
+            <div className="role-modal-body">
+              <p>这张人设里好像出现了两个不同的身份。TA 可能会分不清谁是谁。你可以继续使用，也可以先检查一下人设。</p>
+            </div>
+            <div className="role-modal-footer">
+              <div className="role-modal-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setIdentityConflictField(null)}>
+                  回去看看
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    const field = identityConflictField
+                    setIdentityConflictAcknowledged(true)
+                    setIdentityConflictField(null)
+                    void savePersonaField(field)
+                  }}
+                >
+                  知道了
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
