@@ -379,6 +379,22 @@ function genderStorageKey(entityId: string): string {
   return entityId === GLOBAL ? GENDER_KEY : `${GENDER_KEY}_${entityId}`
 }
 
+/** 读本机性别记录：兼容老格式裸值（未锁）与新格式 JSON；坏值当没有。 */
+function readLocalGenderRecord(key: string): { g: string; locked: boolean } | null {
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw == null) return null
+    const text = raw.trim()
+    if (text === 'male' || text === 'female' || text === 'unknown') return { g: text, locked: false }
+    const parsed = JSON.parse(text) as { g?: unknown; gender?: unknown; locked?: unknown }
+    const g = parsed.g ?? parsed.gender
+    if (g !== 'male' && g !== 'female' && g !== 'unknown') return null
+    return { g: g as string, locked: parsed.locked === true }
+  } catch {
+    return null
+  }
+}
+
 function applyThemeEntity(entity: CloudStateEntity): void {
   const value = record(entity.payload)
   if (!value || (value.type !== 'preset' && value.type !== 'custom')) return
@@ -390,7 +406,15 @@ function applyGenderEntity(entity: CloudStateEntity): void {
   const value = record(entity.payload)
   const gender = value?.g ?? value?.gender
   if (gender !== 'male' && gender !== 'female' && gender !== 'unknown') return
-  localStorage.setItem(genderStorageKey(entity.entityId), JSON.stringify({ g: gender, locked: value?.locked === true }))
+  const key = genderStorageKey(entity.entityId)
+  const cloudLocked = value?.locked === true
+  const local = readLocalGenderRecord(key)
+  // 与 storage.applyCloudGenders 同一条规则（2026-09-14 拍板「只增不改」）：
+  // 本机已锁一律不动 —— 云端 locked:false 是把「选好就锁死」冲开的病根（云端那份可能是
+  // 9/15 从旧 blob 播种的旧值，legacy 导入规则又不许覆盖已有 V2，所以它会一直停在 false）；
+  // 本机没记录、或本机未锁而云端已锁 → 才写（换设备把「已锁」带回来靠这条）。
+  if (local && (local.locked || !cloudLocked)) return
+  localStorage.setItem(key, JSON.stringify({ g: gender, locked: cloudLocked }))
 }
 
 function modelPayloadFromLocal(): JsonRecord {
