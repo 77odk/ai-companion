@@ -112,12 +112,35 @@ function nonEmpty(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function validTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function earlierTimestamp(canonical: unknown, local: unknown): number | undefined {
+  if (validTimestamp(canonical) && validTimestamp(local)) return Math.min(canonical, local)
+  if (validTimestamp(canonical)) return canonical
+  if (validTimestamp(local)) return local
+  return undefined
+}
+
+function laterTimestamp(canonical: unknown, local: unknown): number | undefined {
+  if (validTimestamp(canonical) && validTimestamp(local)) return Math.max(canonical, local)
+  if (validTimestamp(canonical)) return canonical
+  if (validTimestamp(local)) return local
+  return undefined
+}
+
 function mergePendingReply(canonical: PendingReply, local: PendingReply): PendingReply {
   const merged: PendingReply = { ...canonical }
-  if (canonical.replied !== true && local.replied === true) merged.replied = true
+  if (canonical.replied === true || local.replied === true) merged.replied = true
   if (!nonEmpty(canonical.reply) && nonEmpty(local.reply)) merged.reply = local.reply
-  if (!Number.isFinite(canonical.replyAt) && Number.isFinite(local.replyAt)) merged.replyAt = local.replyAt
-  if (!Number.isFinite(canonical.openedAt) && Number.isFinite(local.openedAt)) merged.openedAt = local.openedAt
+  const repliedAt = earlierTimestamp(canonical.repliedAt, local.repliedAt)
+  const replyAt = laterTimestamp(canonical.replyAt, local.replyAt)
+  const openedAt = laterTimestamp(canonical.openedAt, local.openedAt)
+  if (repliedAt !== undefined) merged.repliedAt = repliedAt
+  if (replyAt !== undefined) merged.replyAt = replyAt
+  if (openedAt !== undefined) merged.openedAt = openedAt
+  if (!validTimestamp(canonical.deliverAt) && validTimestamp(local.deliverAt)) merged.deliverAt = local.deliverAt
   return merged
 }
 
@@ -129,11 +152,13 @@ function mergeReplies(canonical: PendingReply[] | undefined, local: PendingReply
     localById.delete(reply.id)
     return localReply ? mergePendingReply(reply, localReply) : reply
   })
-  for (const reply of local ?? []) {
-    if (localById.has(reply.id)) {
-      result.push(reply)
-      localById.delete(reply.id)
-    }
+  const localOnly = [...localById.values()].sort((a, b) => {
+    const aAt = validTimestamp(a.repliedAt) ? a.repliedAt : Number.POSITIVE_INFINITY
+    const bAt = validTimestamp(b.repliedAt) ? b.repliedAt : Number.POSITIVE_INFINITY
+    return aAt - bAt || a.id.localeCompare(b.id)
+  })
+  for (const reply of localOnly) {
+    result.push(reply)
   }
   return result
 }
@@ -141,16 +166,25 @@ function mergeReplies(canonical: PendingReply[] | undefined, local: PendingReply
 function mergeMyReply(canonical?: WeeklyReply, local?: WeeklyReply): WeeklyReply | undefined {
   if (!canonical) return local
   if (!local) return canonical
-  const canonicalAt = Number.isFinite(canonical.repliedAt) ? canonical.repliedAt : Number.POSITIVE_INFINITY
-  const localAt = Number.isFinite(local.repliedAt) ? local.repliedAt : Number.POSITIVE_INFINITY
-  const winner = localAt < canonicalAt ? local : canonical
-  const other = winner === canonical ? local : canonical
-  return {
-    ...winner,
-    ...(!nonEmpty(winner.taReply) && nonEmpty(other.taReply) ? { taReply: other.taReply } : {}),
-    ...(winner.taReplyFailed === true || other.taReplyFailed === true ? { taReplyFailed: true } : {}),
-    ...(!Number.isFinite(winner.openedAt) && Number.isFinite(other.openedAt) ? { openedAt: other.openedAt } : {}),
+  if (canonical.content !== local.content) {
+    const canonicalAt = validTimestamp(canonical.repliedAt) ? canonical.repliedAt : Number.POSITIVE_INFINITY
+    const localAt = validTimestamp(local.repliedAt) ? local.repliedAt : Number.POSITIVE_INFINITY
+    return localAt < canonicalAt ? local : canonical
   }
+  const merged: WeeklyReply = { ...canonical }
+  const repliedAt = earlierTimestamp(canonical.repliedAt, local.repliedAt)
+  const openedAt = laterTimestamp(canonical.openedAt, local.openedAt)
+  if (repliedAt !== undefined) merged.repliedAt = repliedAt
+  if (openedAt !== undefined) merged.openedAt = openedAt
+  const taReply = nonEmpty(canonical.taReply) ? canonical.taReply : nonEmpty(local.taReply) ? local.taReply : undefined
+  if (taReply !== undefined) {
+    merged.taReply = taReply
+    delete merged.taReplyFailed
+  } else {
+    delete merged.taReply
+    if (canonical.taReplyFailed === true || local.taReplyFailed === true) merged.taReplyFailed = true
+  }
+  return merged
 }
 
 function inferredReviewMode(review: Pick<WeeklyReview, 'myReply' | 'replies' | 'reviewMode'>): 'immediate' | 'sealed' | undefined {

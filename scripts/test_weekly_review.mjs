@@ -79,7 +79,7 @@ console.log('\n[0] Cloud State merge 确定性')
   }
   const merged = mergeWeeklyReview(canonical, local)
   eq([merged.weekLabel, merged.title, merged.content, merged.createdAt], ['server week', 'server title', 'server body', 20], '正文基础字段以 canonical 为准')
-  eq(merged.myReply, local.myReply, 'myReply 较早 repliedAt 胜并保留 openedAt')
+  eq(merged.myReply, local.myReply, 'myReply 不同 content 时较早 repliedAt 的 winner 整条胜')
   eq(merged.replies.map(reply => reply.id), ['shared', 'server-only', 'local-only'], 'replies 按 id 稳定并集')
   eq(merged.replies[0], { ...canonical.replies[0], replied: true, reply: 'slow reply', replyAt: 450, openedAt: 600 }, '同 id 状态只前进且非空 reply 不被覆盖')
   eq(merged.reviewMode, 'immediate', 'reviewMode 由最早真实回复动作决定')
@@ -89,6 +89,35 @@ console.log('\n[0] Cloud State merge 确定性')
     { ...local, myReply: { content: 'local', repliedAt: 100 }, replies: [], reviewMode: 'immediate' },
   )
   eq(tie.myReply.content, 'canonical', 'myReply 同时间 canonical 胜')
+
+  const noCrossReply = mergeWeeklyReview(
+    { ...canonical, myReply: { content: 'canonical content', repliedAt: 200, taReply: 'canonical TA', openedAt: 210 } },
+    { ...local, myReply: { content: 'local content', repliedAt: 100, taReplyFailed: true } },
+  )
+  eq(noCrossReply.myReply, { content: 'local content', repliedAt: 100, taReplyFailed: true }, 'myReply 不同 content 时不从 loser 搬 taReply/openedAt')
+
+  const sameContent = mergeWeeklyReview(
+    { ...canonical, myReply: { content: 'same', repliedAt: 200, taReply: 'canonical TA', taReplyFailed: true, openedAt: 300 } },
+    { ...local, myReply: { content: 'same', repliedAt: 100, taReply: 'local TA', taReplyFailed: true, openedAt: 400 } },
+  )
+  eq(sameContent.myReply, { content: 'same', repliedAt: 100, taReply: 'canonical TA', openedAt: 400 }, 'myReply 同 content：canonical taReply 优先、成功压过失败、时间状态确定合并')
+
+  const pendingTimes = mergeWeeklyReview(
+    { ...canonical, replies: [{ id: 'p', content: 'note', repliedAt: 200, deliverAt: 500, replied: false, reply: 'canonical reply', replyAt: 600, openedAt: 700 }] },
+    { ...local, replies: [{ id: 'p', content: 'note', repliedAt: 100, replied: true, reply: 'local reply', replyAt: 800, openedAt: 900 }] },
+  ).replies[0]
+  eq(pendingTimes, { id: 'p', content: 'note', repliedAt: 100, deliverAt: 500, replied: true, reply: 'canonical reply', replyAt: 800, openedAt: 900 }, 'PendingReply 保留 deliverAt、canonical reply，并让回复/打开状态单调前进')
+
+  const localOnlyA = [
+    { id: 'z', content: 'z', repliedAt: 500 },
+    { id: 'b', content: 'b', repliedAt: 400 },
+    { id: 'a', content: 'a', repliedAt: 400 },
+  ]
+  const localOnlyB = [localOnlyA[2], localOnlyA[0], localOnlyA[1]]
+  const stableA = mergeWeeklyReview({ ...canonical, replies: [] }, { ...local, replies: localOnlyA }).replies
+  const stableB = mergeWeeklyReview({ ...canonical, replies: [] }, { ...local, replies: localOnlyB }).replies
+  eq(stableA, stableB, 'local-only replies 不受输入数组顺序影响')
+  eq(stableA.map(reply => reply.id), ['a', 'b', 'z'], 'local-only replies 按 repliedAt + id 稳定排序')
 }
 
 // 固定「今天」：2026-08-24 周一（各周区间/周数测试的基准）
