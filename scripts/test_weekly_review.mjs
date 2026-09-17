@@ -22,6 +22,7 @@ import {
   slowLetterDeliverAt,
   resolveSlowLetterDeliverAt,
   isSlowLetterDue,
+  mergeWeeklyReview,
 } from '../src/lib/weeklyReview.ts'
 
 let passed = 0
@@ -53,6 +54,41 @@ globalThis.localStorage = {
 }
 function resetStore() {
   store.clear()
+}
+
+console.log('\n[0] Cloud State merge 确定性')
+{
+  const canonical = {
+    id: 'merge', weekLabel: 'server week', title: 'server title', content: 'server body', createdAt: 20,
+    generatedFrom: { startTs: 10, endTs: 20 },
+    myReply: { content: 'server later', repliedAt: 200, taReply: '' },
+    replies: [
+      { id: 'shared', content: 'server sealed', repliedAt: 300, replied: false, reply: '' },
+      { id: 'server-only', content: 'server only', repliedAt: 400 },
+    ],
+    reviewMode: 'sealed',
+  }
+  const local = {
+    id: 'merge', weekLabel: 'local week', title: 'local title', content: 'local body', createdAt: 10,
+    myReply: { content: 'local earlier', repliedAt: 100, taReply: 'TA reply', openedAt: 500 },
+    replies: [
+      { id: 'shared', content: 'local sealed', repliedAt: 300, replied: true, reply: 'slow reply', replyAt: 450, openedAt: 600 },
+      { id: 'local-only', content: 'local only', repliedAt: 250 },
+    ],
+    reviewMode: 'sealed',
+  }
+  const merged = mergeWeeklyReview(canonical, local)
+  eq([merged.weekLabel, merged.title, merged.content, merged.createdAt], ['server week', 'server title', 'server body', 20], '正文基础字段以 canonical 为准')
+  eq(merged.myReply, local.myReply, 'myReply 较早 repliedAt 胜并保留 openedAt')
+  eq(merged.replies.map(reply => reply.id), ['shared', 'server-only', 'local-only'], 'replies 按 id 稳定并集')
+  eq(merged.replies[0], { ...canonical.replies[0], replied: true, reply: 'slow reply', replyAt: 450, openedAt: 600 }, '同 id 状态只前进且非空 reply 不被覆盖')
+  eq(merged.reviewMode, 'immediate', 'reviewMode 由最早真实回复动作决定')
+
+  const tie = mergeWeeklyReview(
+    { ...canonical, myReply: { content: 'canonical', repliedAt: 100 }, replies: [], reviewMode: 'immediate' },
+    { ...local, myReply: { content: 'local', repliedAt: 100 }, replies: [], reviewMode: 'immediate' },
+  )
+  eq(tie.myReply.content, 'canonical', 'myReply 同时间 canonical 胜')
 }
 
 // 固定「今天」：2026-08-24 周一（各周区间/周数测试的基准）

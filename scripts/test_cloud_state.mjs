@@ -29,6 +29,7 @@ const theme = await import('../src/lib/theme.ts')
 const anniversary = await import('../src/lib/anniversary.ts')
 const aiSpace = await import('../src/lib/aiSpace.ts')
 const taRuntime = await import('../src/lib/taRuntime.ts')
+const weeklyReview = await import('../src/lib/weeklyReview.ts')
 
 function login(account = 'account-a') {
   localStorage.setItem('ai_companion_account', JSON.stringify({ account, token: `token-${account}` }))
@@ -1250,4 +1251,97 @@ test('SPACE-6: identical slots in different sessions are accepted independently'
   assert.equal(cloud.getCloudStateVersion('space_post', 'B1', undefined, 'B'), 2)
   assert.equal(JSON.parse(localStorage.getItem('ai_space_posts_A')).length, 1)
   assert.equal(JSON.parse(localStorage.getItem('ai_space_posts_B')).length, 1)
+})
+
+test('WEEKLY-CS-1: local create/edit/delete queue scoped entities with prefixed slots', () => {
+  clearState('weekly-local')
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  const review = { id: 'same', weekLabel: 'week A', title: 'A', content: 'body', createdAt: 10,
+    generatedFrom: { startTs: 1, endTs: 2 } }
+  weeklyReview.saveWeeklyReviews([review], 'A')
+  weeklyReview.saveWeeklyReviews([{ ...review, weekLabel: 'week B' }], 'B')
+  let ops = cloudOps('weekly_review')
+  assert.equal(ops.length, 2)
+  assert.deepEqual(ops.map(op => op.sessionId).sort(), ['A', 'B'])
+  assert.equal(ops.every(op => op.generationSlotId === 'weekly:1-2'), true)
+
+  store.removePendingOp(ops.find(op => op.sessionId === 'A').id)
+  store.removePendingOp(ops.find(op => op.sessionId === 'B').id)
+  weeklyReview.saveWeeklyReviews([{ ...review, title: 'edited' }], 'A')
+  ops = cloudOps('weekly_review')
+  assert.equal(ops.length, 1)
+  assert.equal(ops[0].payload.title, 'edited')
+  store.removePendingOp(ops[0].id)
+  weeklyReview.saveWeeklyReviews([], 'A')
+  ops = cloudOps('weekly_review')
+  assert.equal(ops.length, 1)
+  assert.equal(ops[0].deleted, true)
+  assert.equal(JSON.parse(localStorage.getItem('ai_companion_weekly_reviews_B')).length, 1)
+})
+
+test('WEEKLY-CS-2: cloud apply is silent, converges only same-session/same-slot loser, and snapshot does not echo', async () => {
+  clearState('weekly-apply')
+  const slot = { startTs: 10, endTs: 20 }
+  const loser = { id: 'loser', weekLabel: 'local', title: 'loser', content: 'local', createdAt: 1, generatedFrom: slot }
+  const otherWeek = { id: 'other', weekLabel: 'other', title: 'other', content: 'keep', createdAt: 2,
+    generatedFrom: { startTs: 30, endTs: 40 } }
+  const otherSession = { ...loser, id: 'other-session' }
+  localStorage.setItem('ai_companion_weekly_reviews_A', JSON.stringify([loser, otherWeek]))
+  localStorage.setItem('ai_companion_weekly_reviews_B', JSON.stringify([otherSession]))
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  let changes = 0
+  window.addEventListener('eluvin-data-change', () => { changes++ })
+  const canonical = { id: 'winner', weekLabel: 'server', title: 'winner', content: 'canonical', createdAt: 3, generatedFrom: slot }
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [{
+    kind: 'weekly_review', entityId: 'winner', sessionId: 'A', generationSlotId: 'weekly:10-20', version: 7, payload: canonical,
+  }]))
+  await cloud.pullCloudState()
+  assert.equal(changes, 0)
+  assert.deepEqual(weeklyReview.getWeeklyReviews('A').map(review => review.id).sort(), ['other', 'winner'])
+  assert.deepEqual(weeklyReview.getWeeklyReviews('B').map(review => review.id), ['other-session'])
+  assert.equal(cloudOps('weekly_review').length, 0)
+  window.dispatchEvent(new Event('eluvin-data-change'))
+  assert.equal(cloudOps('weekly_review').length, 0)
+})
+
+test('WEEKLY-CS-3: merge requeues local progress at entity.version, while identical canonical does not requeue', async () => {
+  clearState('weekly-merge')
+  const canonical = { id: 'review', weekLabel: 'server', title: 'title', content: 'body', createdAt: 10,
+    generatedFrom: { startTs: 1, endTs: 2 }, replies: [{ id: 'reply', content: 'note', repliedAt: 20 }] }
+  const local = { ...canonical, replies: [{ ...canonical.replies[0], replied: true, reply: 'answer', replyAt: 30 }] }
+  localStorage.setItem('ai_companion_weekly_reviews_A', JSON.stringify([local]))
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [{
+    kind: 'weekly_review', entityId: 'review', sessionId: 'A', generationSlotId: 'weekly:1-2', version: 9, payload: canonical,
+  }]))
+  await cloud.pullCloudState()
+  let ops = cloudOps('weekly_review')
+  assert.equal(ops.length, 1)
+  assert.equal(ops[0].baseVersion, 9)
+  assert.equal(ops[0].payload.replies[0].reply, 'answer')
+
+  store.removePendingOp(ops[0].id)
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  globalThis.fetch = async () => jsonResponse(pullBody(2, [{
+    kind: 'weekly_review', entityId: 'review', sessionId: 'A', generationSlotId: 'weekly:1-2', version: 10,
+    payload: weeklyReview.getWeeklyReviews('A')[0],
+  }]))
+  await cloud.pullCloudState()
+  assert.equal(cloudOps('weekly_review').length, 0)
+})
+
+test('WEEKLY-CS-4: tombstone deletes only exact session and invalid entities are ignored', async () => {
+  clearState('weekly-delete')
+  const review = { id: 'same', weekLabel: 'week', title: 'title', content: 'body', createdAt: 1 }
+  localStorage.setItem('ai_companion_weekly_reviews_A', JSON.stringify([review]))
+  localStorage.setItem('ai_companion_weekly_reviews_B', JSON.stringify([review]))
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  globalThis.fetch = async () => jsonResponse(pullBody(2, [
+    { kind: 'weekly_review', entityId: 'same', sessionId: 'A', version: 1, deleted: true },
+    { kind: 'weekly_review', entityId: 'wrong', sessionId: 'B', version: 2, payload: review },
+  ]))
+  await cloud.pullCloudState()
+  assert.deepEqual(weeklyReview.getWeeklyReviews('A'), [])
+  assert.deepEqual(weeklyReview.getWeeklyReviews('B').map(item => item.id), ['same'])
+  assert.equal(cloudOps('weekly_review').length, 0)
 })

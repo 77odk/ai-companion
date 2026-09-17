@@ -18,6 +18,12 @@ import {
   registerTaRuntimeCloudSnapshotResetter,
   type TaRuntimeState,
 } from './taRuntime.ts'
+import {
+  getWeeklyReviews,
+  mergeWeeklyReview,
+  saveWeeklyReviewsFromCloud,
+  type WeeklyReview,
+} from './weeklyReview.ts'
 
 const GLOBAL = 'global'
 const THEME_KEY = 'ai_companion_theme'
@@ -42,16 +48,108 @@ function opId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `cloud-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function queue(kind: string, entityId: string, payload?: unknown, deleted?: boolean, sessionId?: string, generationSlotId?: string): void {
+function queue(kind: string, entityId: string, payload?: unknown, deleted?: boolean, sessionId?: string, generationSlotId?: string, baseVersion?: number): void {
   if (!getAccount()) return
   enqueueCloudStateOp({
     opId: opId(), kind, entityId,
-    baseVersion: getCloudStateVersion(kind, entityId, undefined, sessionId),
+    baseVersion: baseVersion ?? getCloudStateVersion(kind, entityId, undefined, sessionId),
     ...(sessionId ? { sessionId } : {}),
     ...(generationSlotId ? { generationSlotId } : {}),
     ...(deleted ? { deleted: true } : { payload }),
   })
   requestCloudStateSync()
+}
+
+const WEEKLY_PREFIX = 'ai_companion_weekly_reviews_'
+
+function validWeeklyReview(value: unknown, entityId?: string): WeeklyReview | null {
+  const item = record(value)
+  if (!item || typeof item.id !== 'string' || (entityId && item.id !== entityId) ||
+    typeof item.weekLabel !== 'string' || typeof item.title !== 'string' || typeof item.content !== 'string' ||
+    typeof item.createdAt !== 'number') return null
+  return item as unknown as WeeklyReview
+}
+
+function weeklySlot(review: WeeklyReview): string | undefined {
+  const range = review.generatedFrom
+  if (!range || !Number.isFinite(range.startTs) || !Number.isFinite(range.endTs)) return undefined
+  return `weekly:${range.startTs}-${range.endTs}`
+}
+
+interface WeeklyEntity {
+  entityId: string
+  sessionId: string
+  payload: WeeklyReview
+  generationSlotId?: string
+}
+
+function weeklyEntities(): Map<string, WeeklyEntity> {
+  const entities = new Map<string, WeeklyEntity>()
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index)
+    if (!key?.startsWith(WEEKLY_PREFIX)) continue
+    const sessionId = key.slice(WEEKLY_PREFIX.length)
+    if (!sessionId) continue
+    for (const review of getWeeklyReviews(sessionId)) {
+      const generationSlotId = weeklySlot(review)
+      entities.set(`${sessionId}\u0000${review.id}`, {
+        entityId: review.id,
+        sessionId,
+        payload: review,
+        ...(generationSlotId ? { generationSlotId } : {}),
+      })
+    }
+  }
+  return entities
+}
+
+let weeklySnapshot = new Map<string, WeeklyEntity>()
+function resetWeeklySnapshot(): void {
+  weeklySnapshot = weeklyEntities()
+}
+
+function captureWeeklyReviews(): void {
+  const next = weeklyEntities()
+  for (const [key, value] of next) {
+    const previous = weeklySnapshot.get(key)
+    if (!previous || JSON.stringify(previous.payload) !== JSON.stringify(value.payload)) {
+      queue('weekly_review', value.entityId, value.payload, false, value.sessionId, value.generationSlotId)
+    }
+  }
+  for (const [key, value] of weeklySnapshot) {
+    if (!next.has(key)) queue('weekly_review', value.entityId, undefined, true, value.sessionId, value.generationSlotId)
+  }
+  weeklySnapshot = next
+}
+
+function validWeeklyEntity(entity: CloudStateEntity): entity is CloudStateEntity & { sessionId: string } {
+  return Boolean(entity.sessionId && entity.entityId)
+}
+
+function applyWeeklyEntity(entity: CloudStateEntity): void {
+  if (!validWeeklyEntity(entity)) return
+  const canonical = validWeeklyReview(entity.payload, entity.entityId)
+  if (!canonical) return
+  const canonicalSlot = weeklySlot(canonical)
+  if (entity.generationSlotId && entity.generationSlotId !== canonicalSlot) return
+  const current = getWeeklyReviews(entity.sessionId)
+  const local = current.find(review => review.id === entity.entityId)
+  const merged = mergeWeeklyReview(canonical, local)
+  const next = current.filter(review => review.id !== entity.entityId && (!canonicalSlot || weeklySlot(review) !== canonicalSlot))
+  next.push(merged)
+  saveWeeklyReviewsFromCloud(next, entity.sessionId)
+  resetWeeklySnapshot()
+  if (JSON.stringify(merged) !== JSON.stringify(canonical)) {
+    queue('weekly_review', entity.entityId, merged, false, entity.sessionId, canonicalSlot, entity.version)
+  }
+}
+
+function deleteWeeklyEntity(entity: CloudStateEntity): void {
+  if (!validWeeklyEntity(entity)) return
+  const current = getWeeklyReviews(entity.sessionId)
+  const next = current.filter(review => review.id !== entity.entityId)
+  if (next.length !== current.length) saveWeeklyReviewsFromCloud(next, entity.sessionId)
+  resetWeeklySnapshot()
 }
 
 const SPACE_POSTS_PREFIX = 'ai_space_posts_'
@@ -474,6 +572,7 @@ export function initCloudStateResourceAdapters(): void {
   resetAnniversarySnapshot()
   resetSpaceSnapshot()
   resetRuntimeSnapshot()
+  resetWeeklySnapshot()
   registerTaRuntimeCloudSnapshotResetter(resetRuntimeSnapshot)
   registerCloudStateAdapter('theme', {
     apply: applyThemeEntity,
@@ -512,9 +611,14 @@ export function initCloudStateResourceAdapters(): void {
     apply: applyRuntimeEntity,
     delete: deleteRuntimeEntity,
   })
+  registerCloudStateAdapter('weekly_review', {
+    apply: applyWeeklyEntity,
+    delete: deleteWeeklyEntity,
+  })
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, capturePersonalDays)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAnniversaries)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureSpacePosts)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureTaRuntime)
-  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot() })
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureWeeklyReviews)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot() })
 }
