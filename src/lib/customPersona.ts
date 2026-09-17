@@ -2,6 +2,81 @@
 // 表单只是 UI 层拆分：前端把四个字段拼成一段完整 persona 文本，依旧只存 ai_companion_persona 单字段。
 // 不新增存储字段、不碰后端。性格必填的校验交给 UI 层，拼接函数本身不抛错。
 
+export const PERSONA_SOFT_LIMIT = 1500
+export const PERSONA_HARD_LIMIT = 4000
+
+/**
+ * 人设统一字数口径：去掉空白与换行后计字符数。
+ * B 的“明显较长”与 C 的软/硬上限必须复用这个函数，避免同一张卡口径漂移。
+ */
+export function countPersonaCharacters(text: string): number {
+  return (text ?? '').replace(/\s/g, '').length
+}
+
+/**
+ * 保存长度规则：
+ * - 新卡 / 正常卡：<= 4000 才能保存；
+ * - 存量已超长卡：绝不截断，允许不比当前已保存内容更长（5200→5100 可，5200→5300 不可）。
+ */
+export function canSavePersonaLength(nextPersona: string, savedPersona = ''): boolean {
+  const nextLength = countPersonaCharacters(nextPersona)
+  const savedLength = countPersonaCharacters(savedPersona)
+  if (nextLength <= PERSONA_HARD_LIMIT) return true
+  return savedLength > PERSONA_HARD_LIMIT && nextLength <= savedLength
+}
+
+function normalizePersonaName(value: string): string {
+  return value
+    .trim()
+    .replace(/[。；;，,]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase()
+}
+
+function explicitNameFields(persona: string): string[] {
+  if (!persona) return []
+  const names: string[] = []
+  const re = /^\s*(?:姓名|名字)\s*[：:]\s*([^\r\n]+?)\s*$/gm
+  for (const match of persona.matchAll(re)) {
+    const normalized = normalizePersonaName(match[1] ?? '')
+    if (normalized) names.push(normalized)
+  }
+  return names
+}
+
+/**
+ * 身份冲突轻提示，只认强信号：
+ * 1) 行首/字段式「姓名：」「名字：」出现两个及以上不同值；
+ * 2) 「【她心中的我】」「【我】」分节内出现明确姓名，且与主角色名不同。
+ *
+ * 叙述中的“名字叫……”不算；主角色名为空时只走第 1 条。
+ */
+export function hasPersonaIdentityConflict(persona: string, primaryName?: string): boolean {
+  const distinctNames = new Set(explicitNameFields(persona))
+  if (distinctNames.size >= 2) return true
+
+  const primary = normalizePersonaName(primaryName ?? '')
+  if (!primary || !persona) return false
+
+  let inTargetSection = false
+  for (const rawLine of persona.split(/\r?\n/)) {
+    const heading = rawLine.match(/^\s*【([^】]+)】\s*$/)
+    if (heading) {
+      const title = (heading[1] ?? '').trim()
+      inTargetSection = title === '她心中的我' || title === '我'
+      continue
+    }
+    if (!inTargetSection) continue
+
+    const nameMatch = rawLine.match(/^\s*(?:姓名|名字)\s*[：:]\s*(.+?)\s*$/)
+    if (!nameMatch) continue
+    const sectionName = normalizePersonaName(nameMatch[1] ?? '')
+    if (sectionName && sectionName !== primary) return true
+  }
+
+  return false
+}
+
 export interface CustomPersonaInput {
   /** TA昵称（选填） */
   nickname?: string
@@ -44,7 +119,7 @@ export function extractOpeningLine(persona: string): string {
 
 /**
  * 自定义表单是否有效：性格特质 trim 后非空。
- * 校验只做「能不能确认」，不做长度上限（所有输入框不做字符上限）。
+ * 这里只做基础必填校验；长度由共用计数函数在 UI 保存前统一判断。
  */
 export function isCustomPersonaValid(input: { personality?: string }): boolean {
   return (input.personality ?? '').trim() !== ''
