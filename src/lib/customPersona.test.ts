@@ -7,6 +7,11 @@ import {
   extractPersonality,
   extractBackgroundLine,
   applyPersonaEdits,
+  countPersonaCharacters,
+  canSavePersonaLength,
+  hasPersonaIdentityConflict,
+  PERSONA_SOFT_LIMIT,
+  PERSONA_HARD_LIMIT,
 } from './customPersona.ts'
 
 let passed = 0
@@ -140,6 +145,40 @@ eq(
   applyPersonaEdits(template + '\n关系背景：旧背景', { opening: '你好呀' }),
   '你是对方的恋人，性格温柔。\n关系背景：旧背景\n初次见面开场白：你好呀',
   '只加开场白 → 背景保留，追加开场白行',
+)
+
+console.log('\n[9] 人设统一字数口径')
+eq(countPersonaCharacters(' 赫敏\n 格兰杰 '), 5, '空格与换行不计入字数')
+eq(PERSONA_SOFT_LIMIT, 1500, '软提醒阈值固定为 1500')
+eq(PERSONA_HARD_LIMIT, 4000, '硬上限固定为 4000')
+
+console.log('\n[10] 存量超长卡保存规则')
+ok(canSavePersonaLength('甲'.repeat(4000), ''), '新卡 4000 可保存')
+ok(!canSavePersonaLength('甲'.repeat(4001), ''), '新卡 4001 不可保存')
+ok(canSavePersonaLength('甲'.repeat(5100), '甲'.repeat(5200)), '存量 5200 → 5100 可保存')
+ok(!canSavePersonaLength('甲'.repeat(5300), '甲'.repeat(5200)), '存量 5200 → 5300 不可保存')
+ok(canSavePersonaLength('甲'.repeat(3900), '甲'.repeat(5200)), '存量超长卡降到 4000 内可保存')
+
+console.log('\n[11] 身份冲突只认强信号')
+ok(
+  hasPersonaIdentityConflict('姓名：赫敏·格兰杰\n性格：聪明\n名字：卡桑德拉·诺特', '赫敏·格兰杰'),
+  '两个不同姓名字段 → 命中',
+)
+ok(
+  !hasPersonaIdentityConflict('姓名：赫敏·格兰杰\n名字：赫敏·格兰杰', '赫敏·格兰杰'),
+  '两个相同姓名字段 → 不命中',
+)
+ok(
+  hasPersonaIdentityConflict('性格特质：冷静\n【她心中的我】\n姓名：卡桑德拉·诺特', '赫敏·格兰杰'),
+  '目标分节内姓名与主角色名不同 → 命中',
+)
+ok(
+  !hasPersonaIdentityConflict('性格特质：她有个朋友名字叫卡桑德拉·诺特。', '赫敏·格兰杰'),
+  '叙述中的名字叫 → 不命中',
+)
+ok(
+  !hasPersonaIdentityConflict('【我】\n姓名：卡桑德拉·诺特', ''),
+  '主角色名为空时分节规则不启用',
 )
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
