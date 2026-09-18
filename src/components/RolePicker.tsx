@@ -565,10 +565,17 @@ function RoleSetupModal({
             <div className="field">
               <p className="hint">{personaLength} / {PERSONA_HARD_LIMIT}</p>
               {personaLength > PERSONA_SOFT_LIMIT && (
-                <p className="hint">人设有点长，精简一些会更容易保持一致。</p>
+                <p className="hint">人设越长、信息越杂，TA 越容易抓不住重点、混淆身份和关系。</p>
               )}
               {personaLength > PERSONA_HARD_LIMIT && (
-                <p className="role-modal-required-hint">人设超过 4000 字，暂时不能确认使用。</p>
+                <>
+                  <p className="role-modal-required-hint">
+                    已超出 {personaLength - PERSONA_HARD_LIMIT} 字，暂时不能确认使用。
+                  </p>
+                  <p className="hint">
+                    可以合并重复的性格描述，把剧情年表改成摘要，并把“TA 是什么人”和“你们经历过什么”分开写。
+                  </p>
+                </>
               )}
             </div>
           )}
