@@ -4382,6 +4382,14 @@ textarea.persona-input {
   display: none;
 }
 
+.privacy-page {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding-bottom: calc(36px + env(safe-area-inset-bottom));
+}
+
 .privacy-detail-card {
   display: flex;
   flex-direction: column;
