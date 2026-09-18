@@ -83,7 +83,7 @@ export default function AnniversaryManager({ onBack }: Props) {
         <button type="button" className="detail-back detail-back-text" onClick={onBack} aria-label="返回">
           ‹ 返回
         </button>
-        <h2 className="detail-title">纪念日</h2>
+        <h2 className="detail-title">纪念日管理</h2>
         <span className="detail-spacer" aria-hidden="true" />
       </div>
       <p className="anniversary-manager-note">这里是你和当前 TA 的关系日期。</p>
