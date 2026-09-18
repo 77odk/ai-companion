@@ -1975,6 +1975,49 @@
   opacity: 0.45;
 }
 
+/* 记忆删除（2026-09-18）：入口克制、与「纠正」并排；确认块复用纠正的按钮与错误样式 */
+.memory-detail-remembered-label {
+  margin-right: auto;
+}
+
+.memory-delete-trigger,
+.memory-delete-confirm-btn {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.memory-delete-trigger {
+  color: var(--memory-muted);
+}
+
+.memory-delete-confirm {
+  width: 100%;
+}
+
+.memory-delete-ask {
+  margin: 0 0 2px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--memory-ink);
+}
+
+.memory-delete-confirm-btn {
+  min-width: 58px;
+  min-height: 38px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  color: #9b5147;
+  background: color-mix(in srgb, #9b5147 12%, transparent);
+}
+
+.memory-delete-confirm-btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 .memory-detail-pin {
   display: inline-flex;
   align-items: center;

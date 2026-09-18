@@ -5,6 +5,7 @@
 //      / 双源信任 explicit 排序 / 手动添加 explicit=true / setMemoryExplicit 切换
 
 import { addMemoryItem, recallRelevantMemories, setMemoryExplicit } from '../src/lib/memory.ts'
+import { buildMemoryBlock } from '../src/lib/chatPrompts.ts'
 
 // localStorage / window mock：Node 没有这两样，addMemoryItem / setMemoryExplicit 会用
 // memory.ts 只在函数体内引用它们，import 之后、任何调用之前挂上即可
@@ -176,6 +177,24 @@ eq(list[0].explicit ?? false, false, 'setMemoryExplicit 可把来源切回 TA �
 eq(list.length, 1, 'setMemoryExplicit 不改动条数')
 list = setMemoryExplicit(list[0].id, true)
 eq(list[0].explicit, true, 'setMemoryExplicit 可再切回用户明说')
+
+console.log('\n[记忆注入块：带日期 + 一行新旧说明（2026-09-18 拍板「二」）]')
+const blockItems = [
+  { id: 'a', text: '对方已婚', createdAt: Date.parse('2026-09-17T17:29:23.000Z'), lastMentionedAt: Date.parse('2026-09-17T17:29:23.000Z'), explicit: true },
+  { id: 'b', text: '对方没老公，未婚', createdAt: Date.parse('2026-09-17T17:34:27.000Z'), explicit: true },
+]
+const zhBlock = buildMemoryBlock(blockItems, 'zh')
+ok(!!zhBlock && zhBlock.includes('9月18日'), '每条带上记录日期（按本地时区显示到日）')
+ok(!!zhBlock && zhBlock.includes('越靠后越新'), '块首有一行“越靠后越新”的数据说明')
+ok(!!zhBlock && zhBlock.includes('以后者为准') || zhBlock.includes('以更新的为准'), '说明里点明冲突时以更新的为准')
+ok(!!zhBlock && zhBlock.includes('- 9月18日 对方已婚') && zhBlock.includes('未婚'), '两条都在，且顺序按传入顺序（召回层已排序）')
+ok(!zhBlock.includes('【') && !zhBlock.includes('你是'), '注入块里没有人设/规则口吻')
+const undefinedDateBlock = buildMemoryBlock([{ id: 'c', text: '没有时间戳的记忆' }], 'zh')
+ok(undefinedDateBlock.includes('（日期未知）'), '没有时间戳就写日期未知，不编日期')
+const enBlock = buildMemoryBlock([{ id: 'd', text: 'they like tea', createdAt: Date.parse('2026-09-17T17:29:23.000Z') }], 'en')
+ok(enBlock.includes('2026-09-18') && enBlock.includes('trust the newer one'), '英文模式下日期与说明也是英文（日期按本地时区）')
+ok(buildMemoryBlock([], 'zh') === null && buildMemoryBlock(null, 'zh') === null, '空列表不产出注入块')
+ok(buildMemoryBlock([{ id: 'e', text: '   ' }], 'zh') === null, '全空白记忆不产出注入块')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

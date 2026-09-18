@@ -1,5 +1,5 @@
-import { updateMemoryItemContent, type MemoryItem } from './memory.ts'
-import { patchMemory } from './sessionApi.ts'
+import { loadMemory, removeMemoryItem, updateMemoryItemContent, type MemoryItem } from './memory.ts'
+import { deleteMemory, patchMemory } from './sessionApi.ts'
 import { getMemoriesCache, saveMemoriesCache } from './sessionStore.ts'
 
 export type MemoryCorrectionTarget =
@@ -9,6 +9,8 @@ export type MemoryCorrectionTarget =
 export type MemoryCorrectionResult =
   | { ok: true; changed: boolean; item: MemoryItem }
   | { ok: false; message: string }
+
+export type MemoryRemovalResult = { ok: true } | { ok: false; message: string }
 
 const MEMORY_NOT_SYNCED = '这段记忆还没同步完成，请稍后再试'
 
@@ -68,4 +70,34 @@ export async function correctMemoryText(
     cached.map((memory) => (memory.id === current.id ? item : memory)),
   )
   return { ok: true, changed: true, item }
+}
+
+/**
+ * 删掉一条记忆（2026-09-18 七七拍板：记忆页补「删除」入口）。
+ * 全局 explicit：只动本地列表，随 /api/sync 全量 blob 同步；
+ * 会话记忆：先 DELETE 服务端（后端校验归属），成功后再从本地缓存移除 —— 失败就保留，
+ * 绝不在服务端没删掉的情况下先清本地（否则那条记忆会「假消失」再被同步带回来）。
+ */
+export async function removeMemory(target: MemoryCorrectionTarget): Promise<MemoryRemovalResult> {
+  if (target.kind === 'global') {
+    // 先确认这条真在本机列表里：不在了（比如别的设备已删）就说清楚，别假装删成功
+    const exists = loadMemory().some((memory) => memory.id === target.item.id)
+    if (!exists) return { ok: false, message: '没有找到这段记忆，请刷新后重试' }
+    removeMemoryItem(target.item.id)
+    return { ok: true }
+  }
+
+  if (!target.token) return { ok: false, message: '登录状态已失效，请重新登录后再试' }
+  const cached = getMemoriesCache(target.sessionId)
+  const current = resolveCurrentSessionMemory(cached, target.item)
+  if (!current || !isServerMemoryId(current.id)) return { ok: false, message: MEMORY_NOT_SYNCED }
+
+  const response = await deleteMemory(target.token, current.id)
+  if (!response.ok) return { ok: false, message: response.message || '删除失败，请重试' }
+
+  saveMemoriesCache(
+    target.sessionId,
+    cached.filter((memory) => memory.id !== current.id),
+  )
+  return { ok: true }
 }

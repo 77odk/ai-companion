@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildBusyReturnPrompt, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
-import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, toPromptPerspective, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
+import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, type ApiMessage, type ChatError } from '../lib/api'
+import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
@@ -833,13 +833,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       .join('\n')
     const memory = recallSessionMemories(activeSessionId, contextText)
     if (memory.length > 0) {
-      const memoryHeader = lang === 'en'
-        ? 'Memories about them that are still relevant now:\n'
-        : '关于对方，以下是当前仍可参考的记忆：\n'
-      apiMessages.push({
-        role: 'system',
-        content: memoryHeader + memory.map((m) => `- ${toPromptPerspective(m.text)}`).join('\n'),
-      })
+      const memoryBlock = buildMemoryBlock(memory, lang)
+      if (memoryBlock) {
+        apiMessages.push({ role: 'system', content: memoryBlock })
+      }
       const now = Date.now()
       for (const m of memory) {
         if (m.pinned) continue

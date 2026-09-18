@@ -3,7 +3,7 @@ import { loadMemory, type MemoryItem } from '../lib/memory'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
 import { getToken } from '../lib/auth'
-import { correctMemoryText, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
+import { correctMemoryText, removeMemory, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 import { findChatJumpTarget, type ChatJumpTarget, type MemoryReturnTarget } from '../lib/chatJump'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
@@ -193,6 +193,10 @@ export default function Memory({ onJumpToChat, initialDetail, onInitialDetailCon
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  // 2026-09-18：删除入口（二次确认 + 失败就地提示，成功回 River）
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   // UI2-03B-1「看原对话」：失败提示（不撑坏 Detail），短暂显示后自动消失
   const [jumpNotice, setJumpNotice] = useState<string | null>(null)
   const jumpNoticeTimer = useRef<number | null>(null)
@@ -241,7 +245,41 @@ export default function Memory({ onJumpToChat, initialDetail, onInitialDetailCon
     if (!selected) return
     setDraft(selected.item.text)
     setSaveError('')
+    setConfirmingDelete(false)
+    setDeleteError('')
     setEditing(true)
+  }
+
+  const beginDelete = () => {
+    setEditing(false)
+    setSaveError('')
+    setDeleteError('')
+    setConfirmingDelete(true)
+  }
+
+  const cancelDelete = () => {
+    setConfirmingDelete(false)
+    setDeleteError('')
+  }
+
+  const confirmDelete = async () => {
+    if (!selected || deleting) return
+    const target: MemoryCorrectionTarget = selected.kind === 'global'
+      ? { kind: 'global', item: selected.item }
+      : { kind: 'session', sessionId, item: selected.item, token: getToken() }
+    setDeleting(true)
+    setDeleteError('')
+    const result = await removeMemory(target)
+    setDeleting(false)
+    if (!result.ok) {
+      setDeleteError(result.message)
+      return
+    }
+    setMemories((items) => items.filter((memory) => (
+      !(memory.kind === selected.kind && memory.item.id === selected.item.id)
+    )))
+    setConfirmingDelete(false)
+    setView('river')
   }
 
   const saveCorrection = async () => {
@@ -547,10 +585,37 @@ export default function Memory({ onJumpToChat, initialDetail, onInitialDetailCon
           <div className="memory-detail-remembered">
             <div className="memory-detail-remembered-head">
               <p className="memory-detail-remembered-label">TA 最后记住</p>
-              {!editing ? (
-                <button type="button" className="memory-correction-trigger" onClick={beginCorrection}>纠正</button>
+              {!editing && !confirmingDelete ? (
+                <>
+                  <button type="button" className="memory-correction-trigger" onClick={beginCorrection}>纠正</button>
+                  <button type="button" className="memory-delete-trigger" onClick={beginDelete}>删除</button>
+                </>
               ) : null}
             </div>
+            {confirmingDelete ? (
+              <div className="memory-delete-confirm">
+                <p className="memory-delete-ask">删掉这段记忆？删了 TA 就不会再记得它。</p>
+                {deleteError ? <p className="memory-correction-error" role="alert">{deleteError}</p> : null}
+                <div className="memory-correction-actions">
+                  <button
+                    type="button"
+                    className="memory-correction-cancel"
+                    onClick={cancelDelete}
+                    disabled={deleting}
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    className="memory-delete-confirm-btn"
+                    onClick={() => void confirmDelete()}
+                    disabled={deleting}
+                  >
+                    {deleting ? '删除中…' : '确认删除'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {editing ? (
               <div className="memory-correction-editor">
                 <textarea
