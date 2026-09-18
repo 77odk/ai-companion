@@ -230,6 +230,7 @@ export default function App() {
     return navTabActive(view, tab)
   }
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
+  const [settingsPrivacyOpen, setSettingsPrivacyOpen] = useState(false)
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
@@ -730,6 +731,7 @@ export default function App() {
                 key={`${settingsTarget}-${settingsRootKey}`}
                 initialPage={settingsTarget}
                 onAnniversaryBack={settingsTarget === 'anniversary' ? () => navigate('home') : undefined}
+                onPrivacyOpenChange={setSettingsPrivacyOpen}
                 onGoWelcome={() => navigate('welcome')}
                 onGoGuide={() => openGuide('settings')}
                 onGoWorkChat={() => navigate('chat')}
@@ -773,7 +775,7 @@ export default function App() {
             )}
           </main>
 
-          {isNavView(view) && (
+          {isNavView(view) && !(view === 'settings' && settingsPrivacyOpen) && (
             <nav className="app-nav">
               <button
                 className={`nav-btn${navActive('ta') ? ' active' : ''}`}
