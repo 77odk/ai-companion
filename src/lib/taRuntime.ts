@@ -433,9 +433,10 @@ export function syncTaRuntimeFromAssistantText(
   }
 
   if (!cur) return null
-  map[key] = { ...cur, plannedUntil: now, updatedAt: now }
+  const next = createState(pickActivity(new Date(now), persona, recentIds, rand), now, rand, persona, recentIds)
+  map[key] = next
   saveAll(map)
-  return getOrAdvanceTaRuntime(sessionId, persona, now, rand)
+  return next
 }
 
 /** sync 收集：全部角色 Runtime（Record<sid, state>，保留归属） */
