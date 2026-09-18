@@ -286,4 +286,5 @@ export default function ChatProfile({ onClose, onGoMine, fromRoles = false, onCh
         {hint && <p className="ta-profile-hint">{hint}</p>}
       </div>
     </div>
-  )}
+  )
+}
