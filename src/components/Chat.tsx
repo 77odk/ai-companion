@@ -996,7 +996,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         .join('\n')
         .trim()
       if (committedAssistantText) {
-        syncTaRuntimeFromAssistantText(sid || undefined, committedAssistantText, Date.now())
+        syncTaRuntimeFromAssistantText(activeSessionId || undefined, committedAssistantText, Date.now())
       }
       const token = getToken()
       if (sid && token) {
