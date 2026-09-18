@@ -4390,6 +4390,13 @@ textarea.persona-input {
   padding-bottom: calc(36px + env(safe-area-inset-bottom));
 }
 
+/* .privacy-page 同时是 .page（flex column）：卡片作为 flex item 默认 flex-shrink:1，
+   会被压缩到视口高度；卡片自身 overflow:hidden 又把多出来的长文裁掉，于是底部永远看不到、也滚不动。
+   这里禁止收缩，让长文撑开 .page，真正可滚。 */
+.privacy-page .privacy-detail-card {
+  flex-shrink: 0;
+}
+
 .privacy-detail-card {
   display: flex;
   flex-direction: column;
