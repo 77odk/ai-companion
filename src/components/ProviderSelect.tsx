@@ -66,6 +66,11 @@ export default function ProviderSelect({ value, onChange }: Props) {
           {value === 'openai' && ' · 官方地址国内直连不稳，连不上请用中转站地址（高级设置里改）'}
         </p>
       ) : null}
+      {(value === 'custom' || value === 'openai') && (
+        <p className="hint">
+          人设写得越细，对模型的理解能力要求越高。使用自定义或中转服务时，部分模型可能更容易答偏或混淆设定。
+        </p>
+      )}
     </div>
   )
 }
