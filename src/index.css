@@ -8486,3 +8486,328 @@ html, body {
     padding: 4px 4px 20px;
   }
 }
+
+
+/* ========== TA 的资料 · 人物主页（v7 #8） ========== */
+.ta-profile-page {
+  min-height: 100%;
+  overflow-y: auto;
+  padding: 0;
+  background:
+    radial-gradient(circle at 20% 16%, color-mix(in srgb, var(--color-primary) 8%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-primary-soft) 16%, transparent), transparent 42%),
+    var(--color-bg);
+}
+
+.ta-profile-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  align-items: center;
+  min-height: 52px;
+  padding: 6px 14px;
+  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.ta-profile-topbar h1 {
+  margin: 0;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--color-text);
+}
+
+.ta-profile-back {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.ta-profile-back svg {
+  width: 22px;
+  height: 22px;
+}
+
+.ta-profile-topbar-spacer {
+  width: 36px;
+  height: 36px;
+}
+
+.ta-profile-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 26px 20px 24px;
+  text-align: center;
+}
+
+.ta-profile-avatar {
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid color-mix(in srgb, var(--color-card) 92%, white 8%);
+  box-shadow:
+    0 16px 38px color-mix(in srgb, var(--color-primary) 14%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, transparent);
+  background: var(--color-card);
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ta-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ta-profile-avatar .avatar-default {
+  width: 58%;
+  height: 58%;
+}
+
+.ta-profile-avatar-letter {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38px;
+  font-weight: 650;
+  color: var(--color-primary-deep);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-card));
+}
+
+.ta-profile-name {
+  margin: 14px 0 0;
+  font-size: 24px;
+  line-height: 1.15;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.ta-profile-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.ta-profile-meta-dot {
+  opacity: 0.65;
+}
+
+.ta-profile-days {
+  margin: 7px 0 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.ta-profile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 16px calc(24px + env(safe-area-inset-bottom));
+}
+
+.ta-profile-who,
+.ta-profile-menu,
+.ta-profile-refresh {
+  background: color-mix(in srgb, var(--color-card) 96%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.ta-profile-who {
+  padding: 16px;
+}
+
+.ta-profile-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ta-profile-section-head h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.ta-profile-who-row {
+  display: grid;
+  grid-template-columns: 28px 56px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 11px 0;
+}
+
+.ta-profile-who-row + .ta-profile-who-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.ta-profile-who-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--color-primary-deep);
+  opacity: 0.78;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ta-profile-who-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.ta-profile-who-label {
+  padding-top: 2px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.ta-profile-who-value {
+  padding-top: 1px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.ta-profile-menu-row {
+  width: 100%;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ta-profile-menu-row + .ta-profile-menu-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.ta-profile-menu-row:hover {
+  background: color-mix(in srgb, var(--color-primary) 4%, transparent);
+}
+
+.ta-profile-menu-icon {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary-deep);
+}
+
+.ta-profile-menu-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.ta-profile-menu-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.ta-profile-menu-row .ai-space-entry-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+}
+
+.ta-profile-refresh-confirm {
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.ta-profile-refresh-confirm p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+
+.ta-profile-refresh-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ta-profile-refresh-actions .btn {
+  flex: 1;
+  font-size: 13px;
+}
+
+.ta-profile-chat-cta {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--color-primary) 13%, var(--color-card));
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.ta-profile-chat-cta svg {
+  width: 19px;
+  height: 19px;
+}
+
+.ta-profile-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 390px) {
+  .ta-profile-hero {
+    padding-top: 22px;
+  }
+
+  .ta-profile-avatar {
+    width: 106px;
+    height: 106px;
+  }
+
+  .ta-profile-body {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

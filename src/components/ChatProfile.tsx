@@ -132,169 +132,158 @@ export default function ChatProfile({ onClose, onGoMine, fromRoles = false, onCh
   }
 
   return (
-    <div className="page ai-space-page">
-      <div className="ai-space-head">
-        <div className="ai-space-topbar">
-          <button type="button" className="link-btn ai-space-back" onClick={onClose}>
-            ‹ 返回
-          </button>
-          <h1 className="ai-space-title">资料卡</h1>
-          <span className="ai-space-topbar-spacer" aria-hidden="true" />
-        </div>
+    <div className="page ta-profile-page">
+      <div className="ta-profile-topbar">
+        <button type="button" className="ta-profile-back" onClick={onClose} aria-label="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <h1>TA 的资料</h1>
+        <span className="ta-profile-topbar-spacer" aria-hidden="true" />
+      </div>
 
+      <section className="ta-profile-hero">
         <button
           type="button"
-          className="ai-space-avatar chatprofile-avatar-btn"
+          className="ta-profile-avatar"
           onClick={() => setPage('profile')}
-          aria-label="更换 TA 的头像"
-          title="点这里换头像"
+          aria-label="编辑 TA 的资料"
+          title="编辑 TA 的资料"
         >
           {ai.avatar.startsWith('data:') ? (
             <img src={ai.avatar} alt="" />
           ) : profileSessionName ? (
-            <span className="ai-space-avatar-letter">{profileSessionName.slice(0, 1)}</span>
+            <span className="ta-profile-avatar-letter">{profileSessionName.slice(0, 1)}</span>
           ) : (
             <DefaultAvatar kind="ai" className="avatar-default" />
           )}
         </button>
-        <h2 className="ai-space-name">{profileSessionName || ai.nickname}</h2>
-        {/* 性别 + 备注小字（TASK-UI1 设定卡扩展字段）；都没填就不占这一行 */}
+
+        <h2 className="ta-profile-name">{profileSessionName || ai.nickname}</h2>
+
         {(aiRemark || aiGender !== 'unknown') && (
-          <p className="chatprofile-meta">
-            {aiGender !== 'unknown' && <span className="chatprofile-meta-gender">{AIGENDER_LABELS[aiGender]}</span>}
-            {aiRemark && <span className="chatprofile-meta-remark">{aiRemark}</span>}
+          <p className="ta-profile-meta">
+            {aiGender !== 'unknown' && <span>{AIGENDER_LABELS[aiGender]}</span>}
+            {aiGender !== 'unknown' && aiRemark && <span className="ta-profile-meta-dot">·</span>}
+            {aiRemark && <span>{aiRemark}</span>}
           </p>
         )}
-        {/* 相识天数大字：不带框，角色创建那天起算（文案固定） */}
-        <p className="chatprofile-days">相识的第 {daysKnown} 天</p>
-        <p className="ai-space-bio">只属于{yourName}的 TA · 你们的聊天、日子和生活都在这里</p>
-      </div>
 
-      <div className="ai-space-timeline">
-        <div className="ai-space-entry-list">
-          {/* 从角色管理进来：点角色只开资料卡，明确「和 TA 聊天」才进聊天 */}
-          {fromRoles && onChat && (
-            <button type="button" className="btn btn-primary chatprofile-chat-cta" onClick={onChat}>
-              和 TA 聊天
-            </button>
-          )}
-          {/* TA 是谁：展示态成人话（有数据才摆行），点「编辑」进表单 */}
-          {(who.personality || who.background || who.opening) ? (
-            <div className="ai-who-card">
-              <div className="ai-who-card-head">
-                <span className="ai-who-card-title">TA 是谁</span>
-                <button type="button" className="ai-who-edit" onClick={() => setPage('profile')}>
-                  编辑
-                </button>
-              </div>
-              {who.personality && (
-                <p className="ai-who-row">
-                  <span className="ai-who-row-label">性格</span>
-                  <span className="ai-who-row-value">{who.personality}</span>
-                </p>
-              )}
-              {who.background && (
-                <p className="ai-who-row">
-                  <span className="ai-who-row-label">关系背景</span>
-                  <span className="ai-who-row-value">{who.background}</span>
-                </p>
-              )}
-              {who.opening && (
-                <p className="ai-who-row">
-                  <span className="ai-who-row-label">初次见面</span>
-                  <span className="ai-who-row-value">{who.opening}</span>
-                </p>
-              )}
+        <p className="ta-profile-days">和 TA 认识的第 {daysKnown} 天</p>
+      </section>
+
+      <div className="ta-profile-body">
+        {(who.personality || who.background || who.opening) && (
+          <section className="ta-profile-who">
+            <div className="ta-profile-section-head">
+              <h3>TA 是谁</h3>
             </div>
-          ) : (
-            <button type="button" className="ai-space-entry-row" onClick={() => setPage('profile')}>
-              <span className="ai-space-entry-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="8" r="3.6" />
-                  <path d="M5 20c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6" />
-                </svg>
-              </span>
-              <span className="ai-space-entry-main">
-                <span className="ai-space-entry-title">TA 的样子</span>
-                <span className="ai-space-entry-sub">头像、名字、性格、关系背景、开场白</span>
-              </span>
-              <EntryChevron />
-            </button>
-          )}
+            {who.personality && (
+              <div className="ta-profile-who-row">
+                <span className="ta-profile-who-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="8" r="3.5" />
+                    <path d="M5.5 20c.8-3.7 3.3-5.7 6.5-5.7s5.7 2 6.5 5.7" />
+                  </svg>
+                </span>
+                <span className="ta-profile-who-label">性格</span>
+                <span className="ta-profile-who-value">{who.personality}</span>
+              </div>
+            )}
+            {who.background && (
+              <div className="ta-profile-who-row">
+                <span className="ta-profile-who-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" />
+                  </svg>
+                </span>
+                <span className="ta-profile-who-label">关系</span>
+                <span className="ta-profile-who-value">{who.background}</span>
+              </div>
+            )}
+            {who.opening && (
+              <div className="ta-profile-who-row">
+                <span className="ta-profile-who-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 4c-6 .3-10.6 3-13.2 8.3L4 20l7.7-2.8C17 14.6 19.7 10 20 4z" />
+                    <path d="M7 17l6-6" />
+                  </svg>
+                </span>
+                <span className="ta-profile-who-label">初印象</span>
+                <span className="ta-profile-who-value">{who.opening}</span>
+              </div>
+            )}
+          </section>
+        )}
 
-          {/* TA 的生活 */}
-          <button type="button" className="ai-space-entry-row" onClick={() => setPage('life')}>
-            <span className="ai-space-entry-icon" aria-hidden="true">
-              <SparkleIcon />
+        <section className="ta-profile-menu">
+          <button type="button" className="ta-profile-menu-row" onClick={() => setPage('profile')}>
+            <span className="ta-profile-menu-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20l4.3-1 10-10-3.3-3.3-10 10L4 20z" />
+                <path d="M13.8 6.8l3.4 3.4" />
+              </svg>
             </span>
-            <span className="ai-space-entry-main">
-              <span className="ai-space-entry-title">TA 的生活</span>
-              <span className="ai-space-entry-sub">TA 的日常与心情</span>
-            </span>
+            <span className="ta-profile-menu-label">编辑 TA 的资料</span>
             <EntryChevron />
           </button>
 
-          {/* 聊天记录 */}
-          <button type="button" className="ai-space-entry-row" onClick={() => setPage('chats')}>
-            <span className="ai-space-entry-icon" aria-hidden="true">
-              <ChatIcon />
-            </span>
-            <span className="ai-space-entry-main">
-              <span className="ai-space-entry-title">聊天记录</span>
-              <span className="ai-space-entry-sub">按日期归档，可回看</span>
-            </span>
+          <button type="button" className="ta-profile-menu-row" onClick={() => setPage('life')}>
+            <span className="ta-profile-menu-icon" aria-hidden="true"><SparkleIcon /></span>
+            <span className="ta-profile-menu-label">TA 的生活</span>
             <EntryChevron />
           </button>
 
-          {/* 聊天背景（微信式全屏，2026-08-25 七七拍板） */}
-          <button type="button" className="ai-space-entry-row" onClick={() => setPage('bg')}>
-            <span className="ai-space-entry-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <button type="button" className="ta-profile-menu-row" onClick={() => setPage('chats')}>
+            <span className="ta-profile-menu-icon" aria-hidden="true"><ChatIcon /></span>
+            <span className="ta-profile-menu-label">聊天记录</span>
+            <EntryChevron />
+          </button>
+
+          <button type="button" className="ta-profile-menu-row" onClick={() => setPage('bg')}>
+            <span className="ta-profile-menu-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2.5" />
                 <circle cx="9" cy="9" r="1.8" />
                 <path d="M4.5 18.5l5-5 3.5 3.5 3-3 3.5 3.5" />
               </svg>
             </span>
-            <span className="ai-space-entry-main">
-              <span className="ai-space-entry-title">聊天背景</span>
-              <span className="ai-space-entry-sub">换一张喜欢的图，全屏陪伴</span>
-            </span>
+            <span className="ta-profile-menu-label">聊天背景</span>
             <EntryChevron />
           </button>
+        </section>
 
-          {/* 刷新对话：OOC 一键修复（仅刷新上下文，聊天记录永不删除） */}
-          <div className="ai-space-refresh-card">
-            <button
-              type="button"
-              className="ai-space-entry-row ai-space-entry-refresh"
-              onClick={() => setConfirmRefresh(true)}
-              aria-expanded={confirmRefresh}
-            >
-              <span className="ai-space-entry-icon" aria-hidden="true">
-                <RefreshIcon />
-              </span>
-              <span className="ai-space-entry-main">
-                <span className="ai-space-entry-title">好像 OOC 了？点击一下一键修复</span>
-                <span className="ai-space-entry-sub">刷新对话，聊天记录归档，不会丢放心刷</span>
-              </span>
-              <EntryChevron open={confirmRefresh} />
-            </button>
-            {confirmRefresh && (
-              <div className="ai-space-refresh-confirm">
-                <p className="ai-space-refresh-confirm-text">刷新后聊天框内容清空，聊天记录内仍可查看</p>
-                <div className="ai-space-refresh-confirm-actions">
-                  <button type="button" className="btn btn-ghost" onClick={() => setConfirmRefresh(false)}>
-                    再想想
-                  </button>
-                  <button type="button" className="btn btn-primary" onClick={doRefresh}>
-                    确认刷新
-                  </button>
-                </div>
+        <section className="ta-profile-refresh">
+          <button
+            type="button"
+            className="ta-profile-menu-row ta-profile-refresh-row"
+            onClick={() => setConfirmRefresh(true)}
+            aria-expanded={confirmRefresh}
+          >
+            <span className="ta-profile-menu-icon" aria-hidden="true"><RefreshIcon /></span>
+            <span className="ta-profile-menu-label">刷新对话</span>
+            <EntryChevron open={confirmRefresh} />
+          </button>
+          {confirmRefresh && (
+            <div className="ta-profile-refresh-confirm">
+              <p>刷新后聊天框内容清空，聊天记录仍可查看。</p>
+              <div className="ta-profile-refresh-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setConfirmRefresh(false)}>再想想</button>
+                <button type="button" className="btn btn-primary" onClick={doRefresh}>确认刷新</button>
               </div>
-            )}
-          </div>
-        </div>
-        {hint && <p className="ai-space-hint">{hint}</p>}
+            </div>
+          )}
+        </section>
+
+        {fromRoles && onChat && (
+          <button type="button" className="btn ta-profile-chat-cta" onClick={onChat}>
+            <ChatIcon />
+            <span>和 TA 聊天</span>
+          </button>
+        )}
+
+        {hint && <p className="ta-profile-hint">{hint}</p>}
       </div>
     </div>
   )
