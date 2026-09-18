@@ -40,7 +40,7 @@ import { commitPartialReply } from '../lib/partialReply'
 import { buildFutureAgendaBlock } from '../lib/futureAgenda'
 import { buildSelfTimelineBlock } from '../lib/selfTimeline'
 import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYourMoment } from '../lib/yourMoment'
-import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona } from '../lib/taRuntime'
+import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTaRuntimeFromAssistantText } from '../lib/taRuntime'
 import { buildIdentityContext } from '../lib/identityContext'
 
 /**
@@ -985,6 +985,20 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
     const commitFinal = (final: StoredMessage[]) => {
       persistMessages(final)
+      // #7：最终可见回复里若 TA 明确说自己正在做/刚做完某件事，把这条事实写回同一 Runtime。
+      // 只读本轮 assistant 文本，不碰消息上传/合并/顺序；未命中时零写入。
+      const runtimeReply = final
+        .filter((m) => m.role === 'assistant' && m.ts === assistantTs)
+        .map((m) => m.content)
+        .join('\n')
+      if (runtimeReply) {
+        syncTaRuntimeFromAssistantText(
+          activeSessionId || undefined,
+          getSessionPersona(activeSessionId || undefined),
+          runtimeReply,
+          Date.now(),
+        )
+      }
       // 模块二：组件卸载后跳过 UI 更新，落库/云同步继续执行
       if (mountedRef.current) setMessages(final)
       const sid = getActiveSessionId()
