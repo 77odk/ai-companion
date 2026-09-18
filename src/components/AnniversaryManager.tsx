@@ -1,18 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ANNIVERSARY_COLORS,
   addAnniversary,
   anniversaryColorIndex,
   formatAnniversaryDate,
   formatCountdown,
-  getMainAnniversaryId,
   isMilestoneAnniversary,
   isValidAnniversaryDate,
   mergeDuplicateAnniversaries,
   readRoleAnniversaries,
   removeAnniversary,
-  resolveMainAnniversary,
-  setMainAnniversaryId,
   updateAnniversary,
   type Anniversary,
   type CountMode,
@@ -28,19 +25,15 @@ export default function AnniversaryManager({ onBack }: Props) {
     readRoleAnniversaries(sessionId).filter((item) => item.kind !== 'personal' && !isMilestoneAnniversary(item)),
   )
   const [items, setItems] = useState<Anniversary[]>(readCurrent)
-  const [mainId, setMainId] = useState(() => getMainAnniversaryId(sessionId))
   const [editing, setEditing] = useState<Anniversary | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [label, setLabel] = useState('')
   const [date, setDate] = useState('')
   const [countMode, setCountMode] = useState<CountMode>('forward')
   const [color, setColor] = useState('warm-orange')
-  const main = useMemo(() => resolveMainAnniversary(items, sessionId), [items, mainId, sessionId])
-
   useEffect(() => {
     const refresh = () => {
       setItems(readCurrent())
-      setMainId(getMainAnniversaryId(sessionId))
     }
     window.addEventListener(MEMORY_UPDATED_EVENT, refresh)
     window.addEventListener('storage', refresh)
@@ -81,16 +74,7 @@ export default function AnniversaryManager({ onBack }: Props) {
   const remove = (item: Anniversary) => {
     if (!window.confirm(`删除「${item.label}」？`)) return
     removeAnniversary(item.id, sessionId)
-    if (main?.id === item.id) {
-      setMainAnniversaryId(null, sessionId)
-      setMainId(null)
-    }
     setItems(readCurrent())
-  }
-
-  const selectMain = (item: Anniversary) => {
-    setMainAnniversaryId(item.id, sessionId)
-    setMainId(item.id)
   }
 
   return (
@@ -107,7 +91,7 @@ export default function AnniversaryManager({ onBack }: Props) {
       {items.length > 0 ? (
         <ul className="anniversary-page-list">
           {items.map((item) => (
-            <li key={item.id} className={`anniversary-page-item${main?.id === item.id ? ' is-displayed' : ''}`}>
+            <li key={item.id} className="anniversary-page-item">
               <div className="anniversary-page-info">
                 <span className="anniversary-page-label">
                   <span className={`anniversary-page-dot ann-color-${anniversaryColorIndex(item.color)}`} aria-hidden="true" />
@@ -116,9 +100,6 @@ export default function AnniversaryManager({ onBack }: Props) {
                 <span className="anniversary-page-meta">{formatAnniversaryDate(item.date)} · {formatCountdown(item)}</span>
               </div>
               <div className="anniversary-manager-actions">
-                <button type="button" onClick={() => selectMain(item)} disabled={main?.id === item.id}>
-                  {main?.id === item.id ? '首页展示中' : '设为首页展示'}
-                </button>
                 <button type="button" onClick={() => openEdit(item)}>编辑</button>
                 <button type="button" className="danger" onClick={() => remove(item)}>删除</button>
               </div>
