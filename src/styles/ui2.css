@@ -774,6 +774,69 @@
   color: var(--ui2-text-secondary);
 }
 
+.home-period-start-hint {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ui2-text-secondary);
+}
+
+.home-period-history {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui2-hairline);
+}
+
+.home-period-history-title {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--ui2-text-secondary);
+}
+
+.home-period-history-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 11.5px;
+  color: var(--ui2-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-period-history-row span {
+  min-width: 0;
+}
+
+.home-period-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.home-period-actions .home-time-save {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.home-time-save.home-period-secondary {
+  border: 1px solid color-mix(in srgb, var(--ta-accent) 55%, transparent);
+  background: transparent;
+  color: var(--ta-accent);
+}
+
+.home-period-new-start {
+  display: block;
+  margin: 10px auto 0;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ui2-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .home-time-save {
   width: 100%;
   margin-top: 16px;
