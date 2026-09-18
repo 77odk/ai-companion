@@ -257,7 +257,7 @@ function PrivacyDetail({ onBack }: { onBack: () => void }) {
 
         <section className="privacy-section">
           <h3>你的内容，只用于你正在使用的功能</h3>
-          <p>忆文不会为了广告、用户画像或与陪伴无关的用途，擅自查看或使用你的聊天、记忆和空间内容。正常使用中，这些内容只用于对话、记忆、关系连续性，以及你主动开启的同步功能。</p>
+          <p>忆文不会为了广告推荐或与陪伴无关的用途，擅自查看或使用你的聊天、记忆和空间内容。正常使用中，这些内容只用于对话、记忆、关系连续性，以及你主动开启的同步功能。</p>
         </section>
 
         <section className="privacy-section">
