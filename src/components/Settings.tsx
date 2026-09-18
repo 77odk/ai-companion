@@ -246,7 +246,7 @@ function MainCenter({
       </ProfileGroup>
 
       <ProfileGroup title="即将开放">
-        <EntryRow icon={<WorkIcon />} label="AI 工作台" status="即将开放" disabled />
+        <EntryRow icon={<WorkIcon />} label="AI 工作台" status="即将开放" onClick={onOpenWork} />
       </ProfileGroup>
 
       <ProfileGroup title="账号与隐私">
