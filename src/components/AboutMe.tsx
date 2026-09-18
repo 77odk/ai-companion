@@ -172,7 +172,7 @@ export default function AboutMe({ onBack }: Props) {
         <button type="button" className="link-btn ai-space-back" onClick={onBack}>
           ‹ 返回
         </button>
-        <h2 className="ai-space-sub-title">关于我</h2>
+        <h2 className="ai-space-sub-title">重要记录 &amp; 记忆</h2>
         <span className="ai-space-topbar-spacer" aria-hidden="true" />
       </div>
 
