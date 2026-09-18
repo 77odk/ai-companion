@@ -5,15 +5,21 @@ import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import {
   addAnniversary,
   daysUntilPeriod,
+  endPeriod,
   formatAnniversaryDate,
   formatCountdown,
   formatPeriodEstimate,
   getAnniversaries,
+  getCurrentPeriod,
   isMilestoneAnniversary,
   isValidAnniversaryDate,
+  localPeriodDate,
   mergeDuplicateAnniversaries,
+  normalizePeriodHistory,
   readRoleAnniversaries,
+  startPeriod,
   updateAnniversary,
+  updateCurrentPeriodStart,
   type Anniversary,
 } from '../lib/anniversary'
 import { getMilestoneProgress } from '../lib/homeBigDay'
@@ -94,6 +100,8 @@ function birthdaySub(a: Anniversary, now: number): string {
 }
 
 function periodNum(a: Anniversary, now: number): string {
+  const current = getCurrentPeriod(a, now)
+  if (current) return `第 ${current.day} 天`
   const n = daysUntilPeriod(a, now)
   if (n != null && n > 0) return `${n} 天`
   const est = formatPeriodEstimate(a, now)
@@ -105,6 +113,7 @@ function periodNum(a: Anniversary, now: number): string {
 }
 
 function periodSub(a: Anniversary, now: number): string {
+  if (getCurrentPeriod(a, now)) return '经期中'
   const n = daysUntilPeriod(a, now)
   if (n != null && n > 0) return '预计经期开始'
   const est = formatPeriodEstimate(a, now)
@@ -161,6 +170,8 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
     () => personal.find((a) => a.periodDays != null && a.periodDays > 0),
     [personal],
   )
+  const currentPeriod = useMemo(() => getCurrentPeriod(period, now.getTime()), [period, now])
+  const periodHistory = useMemo(() => normalizePeriodHistory(period?.periodHistory), [period])
   // v7：首页直接展示当前 TA 的全部纪念日；来源与 AnniversaryManager 保持一致。
   const roleAnniversaries = useMemo(
     () => mergeDuplicateAnniversaries(
@@ -209,29 +220,25 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   }
   const openPeriod = () => {
     const target = period
-    if (target) {
-      const p = parseDateForPicker(target.date)
-      if (p) {
-        // REVIEW-FIX-01 防御：存量数据若为未来日期（异常），回填时 clamp 到今天
-        const t = new Date()
-        const cy = t.getFullYear()
-        const cm = t.getMonth() + 1
-        const cd = t.getDate()
-        const y = p.year ?? cy
-        const m = p.month
-        const d = Math.min(p.day, y === cy && m === cm ? cd : monthDayCount(y, m))
-        setPYear(String(y))
-        setPMonth(pad2(m))
-        setPDay(pad2(d))
-      }
-      setPCycle(clampCycleDays(target.periodDays ?? 28))
+    const selectedDate = currentPeriod?.start ?? localPeriodDate()
+    const p = parseDateForPicker(selectedDate)
+    const t = new Date()
+    if (p) {
+      const cy = t.getFullYear()
+      const cm = t.getMonth() + 1
+      const cd = t.getDate()
+      const y = p.year ?? cy
+      const m = p.month
+      const d = Math.min(p.day, y === cy && m === cm ? cd : monthDayCount(y, m))
+      setPYear(String(y))
+      setPMonth(pad2(m))
+      setPDay(pad2(d))
     } else {
-      const t = new Date()
       setPYear(String(t.getFullYear()))
       setPMonth(pad2(t.getMonth() + 1))
       setPDay(pad2(t.getDate()))
-      setPCycle(28)
     }
+    setPCycle(clampCycleDays(target?.periodDays ?? 28))
     setSheet({ kind: 'period', mode: target ? 'edit' : 'add', id: target?.id })
   }
   const closeSheet = () => setSheet(null)
@@ -304,24 +311,55 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
           undefined,
         )
       }
-    } else {
-      const d = toFullDate(Number(pYear), Number(pMonth), Number(pDay))
-      if (!isValidAnniversaryDate(d)) return
-      // REVIEW-FIX-01 最终防御：selected onset > 本地今天 → 不保存（本地日历比较，不走 UTC）
-      if (isFutureOnset(Number(pYear), Number(pMonth), Number(pDay))) return
-      const n = clampCycleDays(pCycle)
-      if (sheet.mode === 'add') {
-        addAnniversary('生理期', d, { kind: 'personal', periodDays: n }, undefined)
-      } else if (period) {
-        updateAnniversary(
-          period.id,
-          period.label || '生理期',
-          d,
-          { kind: 'personal', periodDays: n, color: period.color },
-          undefined,
-        )
-      }
     }
+    closeSheet()
+  }
+
+  const selectedPeriodDate = () => toFullDate(Number(pYear), Number(pMonth), Number(pDay))
+  const validSelectedPeriodDate = (date: string) =>
+    isValidAnniversaryDate(date) && !isFutureOnset(Number(pYear), Number(pMonth), Number(pDay))
+
+  const markPeriodStarted = () => {
+    const d = selectedPeriodDate()
+    if (!validSelectedPeriodDate(d)) return
+    const history = startPeriod(period?.periodHistory, d)
+    const fields = { kind: 'personal' as const, periodDays: clampCycleDays(pCycle), periodHistory: history }
+    if (period) {
+      updateAnniversary(period.id, period.label || '生理期', d, { ...fields, color: period.color }, undefined)
+    } else {
+      addAnniversary('生理期', d, fields, undefined)
+    }
+    closeSheet()
+  }
+
+  const saveCurrentPeriodStart = () => {
+    if (!period || !currentPeriod) return
+    const d = selectedPeriodDate()
+    if (!validSelectedPeriodDate(d)) return
+    const history = updateCurrentPeriodStart(period.periodHistory, d)
+    updateAnniversary(
+      period.id,
+      period.label || '生理期',
+      d,
+      { kind: 'personal', periodDays: clampCycleDays(pCycle), color: period.color, periodHistory: history },
+      undefined,
+    )
+    closeSheet()
+  }
+
+  const markPeriodEnded = () => {
+    if (!period || !currentPeriod) return
+    const d = selectedPeriodDate()
+    if (!validSelectedPeriodDate(d)) return
+    const corrected = updateCurrentPeriodStart(period.periodHistory, d)
+    const history = endPeriod(corrected, localPeriodDate())
+    updateAnniversary(
+      period.id,
+      period.label || '生理期',
+      d,
+      { kind: 'personal', periodDays: clampCycleDays(pCycle), color: period.color, periodHistory: history },
+      undefined,
+    )
     closeSheet()
   }
 
@@ -495,12 +533,14 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
         </div>
       )}
 
-      {/* 我的周期：专属 Bottom Sheet（年/月/日三列 Wheel + 周期 stepper；真实日期保存，不出现 HTML date input） */}
+      {/* 我的周期：开始 → 第 N 天 → 结束 → 预测下一次；历史仍挂在现有 personal_day 对象里。 */}
       {sheet?.kind === 'period' && (
         <div className="home-time-mask" onClick={closeSheet}>
           <div className="home-time-sheet" onClick={(e) => e.stopPropagation()}>
             <h3 className="home-time-sheet-title">我的周期</h3>
-            <p className="home-time-sub">上次经期开始</p>
+            <p className="home-time-sub">
+              {currentPeriod ? `这次开始日期 · 第 ${currentPeriod.day} 天` : '这次开始日期'}
+            </p>
             <div className="tw-row">
               <TimeWheel
                 className="tw-col-year"
@@ -522,6 +562,7 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
                 ariaLabel="选择日期"
               />
             </div>
+            <p className="home-period-start-hint">昨晚或更早开始，可以直接把日期改到实际那天。</p>
             <div className="home-period-cycle" aria-label="平均周期">
               <button
                 type="button"
@@ -543,10 +584,36 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
                 ＋
               </button>
             </div>
-            <p className="home-period-note">TA 会根据这次记录估算下一次</p>
-            <button type="button" className="home-time-save" onClick={saveSheet}>
-              保存记录
-            </button>
+            <p className="home-period-note">
+              {currentPeriod ? '结束后会继续估算下一次' : '开始后首页会显示现在是第几天'}
+            </p>
+
+            {periodHistory.length > 0 && (
+              <div className="home-period-history" aria-label="最近经期记录">
+                <span className="home-period-history-title">最近记录</span>
+                {periodHistory.slice(-3).reverse().map((entry) => (
+                  <span key={entry.start} className="home-period-history-row">
+                    <span>{formatAnniversaryDate(entry.start)}</span>
+                    <span>{entry.end ? formatAnniversaryDate(entry.end) : '进行中'}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {!currentPeriod ? (
+              <button type="button" className="home-time-save" onClick={markPeriodStarted}>
+                开始了
+              </button>
+            ) : (
+              <div className="home-period-actions">
+                <button type="button" className="home-time-save home-period-secondary" onClick={saveCurrentPeriodStart}>
+                  保存日期
+                </button>
+                <button type="button" className="home-time-save" onClick={markPeriodEnded}>
+                  结束了
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
