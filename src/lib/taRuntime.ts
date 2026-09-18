@@ -186,13 +186,21 @@ export type RuntimeChatDetection =
   | { kind: 'finish'; activityId: string }
   | null
 
-function latestMatchIndex(text: string, patterns: readonly RegExp[] | undefined): number {
+function latestMatchIndex(text: string, patterns: readonly RegExp[] | undefined, rejectFutureCue = false): number {
   let latest = -1
   for (const pattern of patterns ?? []) {
     const flags = pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g'
     const re = new RegExp(pattern.source, flags)
     let match: RegExpExecArray | null
     while ((match = re.exec(text)) != null) {
+      if (rejectFutureCue) {
+        const prefix = text.slice(Math.max(0, match.index - 10), match.index)
+        // “等会儿我去洗澡”只是未来打算，不应提前把首页写成正在洗澡。
+        if (/(?:等会儿?|待会儿?|一会儿?|过会儿?|稍后|等下|明天|改天|之后再|晚点)/i.test(prefix)) {
+          if (match[0].length === 0) re.lastIndex++
+          continue
+        }
+      }
       latest = Math.max(latest, match.index)
       if (match[0].length === 0) re.lastIndex++
     }
@@ -206,7 +214,7 @@ export function detectRuntimeChatAction(text: string): RuntimeChatDetection {
   if (!input) return null
   let best: { index: number; kind: 'start' | 'finish'; activityId: string } | null = null
   for (const signal of CHAT_RUNTIME_SIGNALS) {
-    const startIndex = latestMatchIndex(input, signal.start)
+    const startIndex = latestMatchIndex(input, signal.start, true)
     if (startIndex >= 0 && (!best || startIndex >= best.index)) best = { index: startIndex, kind: 'start', activityId: signal.activityId }
     const finishIndex = latestMatchIndex(input, signal.finish)
     if (finishIndex >= 0 && (!best || finishIndex >= best.index)) best = { index: finishIndex, kind: 'finish', activityId: signal.activityId }
