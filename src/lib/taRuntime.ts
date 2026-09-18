@@ -235,6 +235,196 @@ export function getOrAdvanceTaRuntime(
   return next
 }
 
+
+/* ---- Chat → Runtime 一致性（v7 #7） ----
+ * 只认 TA 回复里明确、正在发生/马上发生的自我动作；纯本地正则，不调 LLM。
+ * 目标：TA 说“我去洗澡了”后 Home 立刻能显示对应活动；说“洗完了”后不再继续挂“正在洗漱”。
+ * 不把未来计划（“晚点/明天再…”）、对方动作（“你去…”）或泛泛提及写成当前状态。
+ */
+
+export type RuntimeTextDecision =
+  | { type: 'start'; activityId: string }
+  | { type: 'finish' }
+  | null
+
+const CHAT_OVERRIDE_MAX_MS = 2 * 60 * 60 * 1000
+
+const ZH_FUTURE_RE = /(?:等会|待会|一会儿|一会|晚点|过会|过一会|等下|稍后|明天|改天|以后|之后|回头再)/
+const EN_FUTURE_RE = /\b(?:later|tomorrow|in a bit|in a while|afterwards?|sometime)\b/i
+const ZH_NEGATIVE_RE = /(?:不去|不在|不想|不准备|没在|没有在|别|不用)/
+const EN_NEGATIVE_RE = /\b(?:not|don't|do not|won't|will not|not going to)\b/i
+
+interface RuntimeTextRule {
+  activityId: string
+  zh: RegExp
+  en: RegExp
+}
+
+/** 规则从更具体到更泛化；同一条回复里若出现多个“现在动作”，取最后命中的那一个。 */
+const RUNTIME_TEXT_START_RULES: readonly RuntimeTextRule[] = [
+  { activityId: 'wake_up', zh: /(?:我)?(?:刚|才)?(?:起床|醒了|醒来)/, en: /\b(?:i\s*)?(?:just\s+)?(?:woke up|got up)\b/i },
+  { activityId: 'breakfast', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:吃早餐|吃早饭)/, en: /\b(?:i(?:'m| am)?\s+)?(?:having|getting|going to have) breakfast\b/i },
+  { activityId: 'lunch', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:吃午饭|吃午餐)/, en: /\b(?:i(?:'m| am)?\s+)?(?:having|getting|going to have) lunch\b/i },
+  { activityId: 'dinner', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:吃晚饭|吃晚餐)/, en: /\b(?:i(?:'m| am)?\s+)?(?:having|getting|going to have) dinner\b/i },
+  { activityId: 'shower', zh: /(?:我)?(?:正(?:在)?|在|去|先去|这就去|准备去?|要去)?(?:洗澡|冲澡|洗漱)/, en: /\b(?:i(?:'m| am)?\s+)?(?:(?:am\s+)?showering|taking a shower|going to (?:take a )?shower|washing up)\b/i },
+  { activityId: 'reading', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:看书|读书|看小说|读小说|阅读|翻书)/, en: /\b(?:i(?:'m| am)?\s+)?(?:reading|going to read|reading a book)\b/i },
+  { activityId: 'cooking', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:做饭|下厨|煮饭|炒菜|烘焙|做早餐|做午饭|做晚饭)/, en: /\b(?:i(?:'m| am)?\s+)?(?:cooking|making (?:breakfast|lunch|dinner)|going to cook)\b/i },
+  { activityId: 'coffee', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:喝咖啡|喝茶|喝奶茶)/, en: /\b(?:i(?:'m| am)?\s+)?(?:having|drinking|getting) (?:a )?(?:coffee|tea)\b/i },
+  { activityId: 'walk', zh: /(?:我)?(?:正(?:在)?|在|去|先去|出去|准备)?(?:散步|遛狗|走走|走一圈|逛一圈)/, en: /\b(?:i(?:'m| am)?\s+)?(?:walking|going for a walk|taking a walk|walking the dog)\b/i },
+  { activityId: 'exercise', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:运动|健身|跑步|游泳|瑜伽|打球)/, en: /\b(?:i(?:'m| am)?\s+)?(?:working out|exercising|running|swimming|doing yoga|going to the gym)\b/i },
+  { activityId: 'movie', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:看电影|看剧|追剧|看动漫)/, en: /\b(?:i(?:'m| am)?\s+)?(?:watching|going to watch) (?:a )?(?:movie|film|show|series|anime)\b/i },
+  { activityId: 'gaming', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:打游戏|玩游戏|开黑|打排位)/, en: /\b(?:i(?:'m| am)?\s+)?(?:gaming|playing (?:a )?game|playing games|going to play)\b/i },
+  { activityId: 'class', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:上课|听课)/, en: /\b(?:i(?:'m| am)?\s+)?(?:in class|going to class|attending class)\b/i },
+  { activityId: 'commute', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:通勤|去上班|去公司|回公司|上班路上)/, en: /\b(?:i(?:'m| am)?\s+)?(?:commuting|on my way to work|going to work|heading to work)\b/i },
+  { activityId: 'work', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:工作|加班|忙工作|开会|忙会儿工作)/, en: /\b(?:i(?:'m| am)?\s+)?(?:working|at work|in a meeting|going to work)\b/i },
+  { activityId: 'errand', zh: /(?:我)?(?:正(?:在)?|在|去|先去|出去|准备)?(?:办事|办点事|买东西|取快递)/, en: /\b(?:i(?:'m| am)?\s+)?(?:running errands?|going out for errands?|picking up a package)\b/i },
+  { activityId: 'home', zh: /(?:我)?(?:刚|才)?(?:到家|回到家|回家了)/, en: /\b(?:i(?:'m| am)?\s+)?(?:just got home|back home|home now)\b/i },
+  { activityId: 'rest', zh: /(?:我)?(?:正(?:在)?|在|先|准备)?(?:休息|歇会|歇一会|躺会|躺一会)/, en: /\b(?:i(?:'m| am)?\s+)?(?:resting|taking a break|lying down)\b/i },
+  { activityId: 'sleep_prep', zh: /(?:我)?(?:准备睡|要睡了|去睡了|先睡了|睡觉去了|上床睡)/, en: /\b(?:i(?:'m| am)?\s+)?(?:going to bed|getting ready for bed|going to sleep|heading to bed)\b/i },
+]
+
+const FINISH_PATTERNS: Readonly<Record<string, RegExp>> = {
+  shower: /(?:洗完(?:澡|漱)?|冲完澡|洗好了|洗完了|洗好了澡)/,
+  reading: /(?:看完书|书看完|读完书|读完了|看完了)/,
+  movie: /(?:看完电影|电影看完|剧看完|看完了)/,
+  gaming: /(?:游戏打完|打完游戏|这局打完|下线了|不玩了)/,
+  exercise: /(?:运动完|健身完|跑完(?:步)?|游完(?:泳)?|练完了)/,
+  walk: /(?:散步回来|走回来了|逛完了|回来了)/,
+  cooking: /(?:饭做好|做好饭|做完饭|做完了)/,
+  breakfast: /(?:吃完(?:早餐|早饭)?|吃好了|吃饱了)/,
+  lunch: /(?:吃完(?:午饭|午餐)?|吃好了|吃饱了)/,
+  dinner: /(?:吃完(?:晚饭|晚餐)?|吃好了|吃饱了)/,
+  coffee: /(?:喝完(?:咖啡|茶|奶茶)?|喝完了)/,
+  work: /(?:忙完了|工作做完|下班了|会开完了|开完会)/,
+  class: /(?:下课了|课上完了)/,
+  commute: /(?:到了|到公司了|到家了)/,
+  errand: /(?:办完了|买完了|取完了|事情办完)/,
+  rest: /(?:休息好了|歇够了|起来了)/,
+  sleep_prep: /(?:不睡了|先不睡了)/,
+}
+
+const FINISH_PATTERNS_EN: Readonly<Record<string, RegExp>> = {
+  shower: /\b(?:finished showering|done showering|out of the shower)\b/i,
+  reading: /\b(?:finished reading|done reading)\b/i,
+  movie: /\b(?:finished the movie|movie is over|done watching)\b/i,
+  gaming: /\b(?:done gaming|finished playing|logged off)\b/i,
+  exercise: /\b(?:finished (?:working out|exercising|running|swimming)|done working out)\b/i,
+  walk: /\b(?:back from (?:my )?walk|done walking)\b/i,
+  cooking: /\b(?:finished cooking|done cooking|food is ready)\b/i,
+  breakfast: /\b(?:finished breakfast|done eating breakfast)\b/i,
+  lunch: /\b(?:finished lunch|done eating lunch)\b/i,
+  dinner: /\b(?:finished dinner|done eating dinner)\b/i,
+  coffee: /\b(?:finished my coffee|done with my coffee|finished my tea)\b/i,
+  work: /\b(?:done with work|finished work|off work|meeting is over)\b/i,
+  class: /\b(?:class is over|done with class)\b/i,
+  commute: /\b(?:arrived|made it home|got to work)\b/i,
+  errand: /\b(?:finished my errands?|done with errands?)\b/i,
+  rest: /\b(?:done resting|finished my break)\b/i,
+  sleep_prep: /\b(?:not sleeping yet|staying up)\b/i,
+}
+
+function textClauses(text: string): string[] {
+  return String(text ?? '')
+    .split(/[。！？!?\n]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
+function isClearlyOtherPersonClause(clause: string): boolean {
+  const t = clause.trim()
+  return /^(?:你|对方|他|她|TA)\b/i.test(t) || /^(?:you|they|he|she)\b/i.test(t)
+}
+
+function blockedAsFutureOrNegative(clause: string): boolean {
+  return ZH_FUTURE_RE.test(clause) || EN_FUTURE_RE.test(clause) || ZH_NEGATIVE_RE.test(clause) || EN_NEGATIVE_RE.test(clause)
+}
+
+/** 纯判定：只根据 TA 最终可见回复 + 当前 Runtime 判断是否需要写回。 */
+export function detectTaRuntimeDecision(text: string, currentActivityId?: string): RuntimeTextDecision {
+  const clauses = textClauses(text)
+  let startDecision: RuntimeTextDecision = null
+
+  for (const clause of clauses) {
+    if (isClearlyOtherPersonClause(clause) || blockedAsFutureOrNegative(clause)) continue
+    for (const rule of RUNTIME_TEXT_START_RULES) {
+      if (rule.zh.test(clause) || rule.en.test(clause)) {
+        startDecision = { type: 'start', activityId: rule.activityId }
+      }
+    }
+  }
+  if (startDecision) return startDecision
+
+  if (currentActivityId) {
+    for (const clause of clauses) {
+      if (isClearlyOtherPersonClause(clause)) continue
+      const zh = FINISH_PATTERNS[currentActivityId]
+      const en = FINISH_PATTERNS_EN[currentActivityId]
+      if ((zh && zh.test(clause)) || (en && en.test(clause))) return { type: 'finish' }
+    }
+  }
+  return null
+}
+
+function createChatOverrideState(
+  activity: RuntimeActivity,
+  now: number,
+  recentIds: readonly string[],
+): TaRuntimeState {
+  const maxMinutes = Math.max(activity.minMin, Math.min(activity.maxMin, CHAT_OVERRIDE_MAX_MS / 60000))
+  const recentActivityIds = [activity.id, ...recentIds.filter((id) => id !== activity.id)].slice(0, 3)
+  return {
+    activityId: activity.id,
+    label: activity.label,
+    startedAt: now,
+    plannedUntil: now + maxMinutes * 60000,
+    updatedAt: now,
+    source: 'routine',
+    recentActivityIds,
+  }
+}
+
+/**
+ * TA 最终回复落库后调用：
+ * - 明确说自己“正在/马上去做 X” → X 写回同一 Runtime；
+ * - 明确说当前 X 已结束 → 立即结束该状态并回到日常调度；
+ * - 最长 2 小时没有后续 → plannedUntil 到期后自然回到日常调度。
+ * 返回 null = 本轮没有可信动作，不写任何状态。
+ */
+export function syncTaRuntimeFromAssistantText(
+  sessionId: string | undefined,
+  text: string,
+  now: number = Date.now(),
+  persona: string = getSessionPersona(sessionId),
+  rand: () => number = Math.random,
+): TaRuntimeState | null {
+  const key = sessionId || GUEST_KEY
+  const map = loadAll()
+  const cur = map[key]
+  const decision = detectTaRuntimeDecision(text, cur?.activityId)
+  if (!decision) return null
+
+  const recentIds = Array.isArray(cur?.recentActivityIds) && cur.recentActivityIds.length > 0
+    ? cur.recentActivityIds
+    : cur?.activityId
+      ? [cur.activityId]
+      : []
+
+  if (decision.type === 'start') {
+    const activity = ACTIVITIES.find((item) => item.id === decision.activityId)
+    if (!activity) return null
+    if (cur?.activityId === activity.id && now < cur.plannedUntil) return cur
+    const next = createChatOverrideState(activity, now, recentIds)
+    map[key] = next
+    saveAll(map)
+    return next
+  }
+
+  if (!cur) return null
+  map[key] = { ...cur, plannedUntil: now, updatedAt: now }
+  saveAll(map)
+  return getOrAdvanceTaRuntime(sessionId, persona, now, rand)
+}
+
 /** sync 收集：全部角色 Runtime（Record<sid, state>，保留归属） */
 export function collectAllTaRuntime(): Record<string, TaRuntimeState> {
   return loadAll()
