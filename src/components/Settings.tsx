@@ -840,10 +840,17 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
         <div className="field">
           <p className="hint">{nextPersonaLength} / {PERSONA_HARD_LIMIT}</p>
           {nextPersonaLength > PERSONA_SOFT_LIMIT && (
-            <p className="hint">人设有点长，精简一些会更容易保持一致。</p>
+            <p className="hint">人设越长、信息越杂，TA 越容易抓不住重点、混淆身份和关系。</p>
           )}
           {!personaLengthValid && (
-            <p className="test-result error">当前人设已超过 4000 字，只能缩短或保持原长度后保存。</p>
+            <>
+              <p className="test-result error">
+                已超出 {Math.max(0, nextPersonaLength - PERSONA_HARD_LIMIT)} 字。存量超长人设可以继续精简，但不能比当前已保存内容更长。
+              </p>
+              <p className="hint">
+                可以合并重复的性格描述，把剧情年表改成摘要，并把“TA 是什么人”和“你们经历过什么”分开写。
+              </p>
+            </>
           )}
         </div>
       </div>
