@@ -316,10 +316,11 @@ function EntryRow({
 
 function UpdateControls({ standalone = false }: { standalone?: boolean }) {
   const [expanded, setExpanded] = useState(false)
+  const [checked, setChecked] = useState(false)
 
   const checkUpdate = () => {
+    setChecked(true)
     setExpanded(true)
-    location.reload()
   }
 
   const doForceRefresh = () => {
@@ -352,6 +353,7 @@ function UpdateControls({ standalone = false }: { standalone?: boolean }) {
       <button type="button" className="entry-row" onClick={() => setExpanded((v) => !v)}>
         <span className="entry-icon"><UpdateIcon /></span>
         <span className="entry-label">检查更新</span>
+        {checked && <span className="entry-status">已是最新</span>}
         <svg className="entry-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M9 6l6 6-6 6" />
         </svg>
