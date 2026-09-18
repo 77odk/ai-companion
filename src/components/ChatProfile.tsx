@@ -138,7 +138,7 @@ export default function ChatProfile({ onClose, onGoMine, fromRoles = false, onCh
           <button type="button" className="link-btn ai-space-back" onClick={onClose}>
             ‹ 返回
           </button>
-          <h1 className="ai-space-title">资料卡</h1>
+          <h1 className="ai-space-title">TA 的资料</h1>
           <span className="ai-space-topbar-spacer" aria-hidden="true" />
         </div>
 
