@@ -7,12 +7,14 @@ import {
   applyCloudTaRuntime,
   buildTaRuntimeContext,
   collectAllTaRuntime,
+  detectTaRuntimeDecision,
   formatRuntimeUntil,
   getOrAdvanceTaRuntime,
   getSessionPersona,
   getTaRuntime,
   runtimeDisplayLabel,
   runtimeSlot,
+  syncTaRuntimeFromAssistantText,
 } from '../src/lib/taRuntime.ts'
 
 let pass = 0
@@ -417,6 +419,55 @@ group('I. PATCH-LANG：zh/en 展示语言一致性')
     'en',
   )
   ok(enCtxOld.includes('Watching a movie') && !/[\u4e00-\u9fa5]/.test(enCtxOld), 'I8 老数据中文 label → en context 仍纯英文')
+}
+
+// ============ J. v7 #7：聊天动作 → Runtime ============
+group('J. 聊天动作 → Runtime')
+{
+  eq(detectTaRuntimeDecision('好，我先去洗澡了，等会聊。'), { type: 'start', activityId: 'shower' }, 'J1 明确“我先去洗澡” → shower')
+  eq(detectTaRuntimeDecision('我现在在看书，晚点找你。'), { type: 'start', activityId: 'reading' }, 'J1 明确“我现在在看书” → reading')
+  eq(detectTaRuntimeDecision('我晚点去洗澡。'), null, 'J2 “晚点去”是未来计划 → 不改此刻')
+  eq(detectTaRuntimeDecision('你去洗澡吧。'), null, 'J2 对方动作 → 不改 TA 此刻')
+  eq(detectTaRuntimeDecision('我没在看书。'), null, 'J2 否定动作 → 不改此刻')
+  eq(detectTaRuntimeDecision('看书这件事我一直挺挑的。'), null, 'J2 泛泛提及生活词 → 不当当前动作')
+  eq(detectTaRuntimeDecision('我刚洗完澡，准备看书。', 'shower'), { type: 'start', activityId: 'reading' }, 'J3 同句先结束旧动作再开始新动作 → 以新动作 reading 为准')
+  eq(detectTaRuntimeDecision('洗完了。', 'shower'), { type: 'finish' }, 'J3 当前 shower + “洗完了” → finish')
+  eq(detectTaRuntimeDecision('洗完了吗？', 'shower'), null, 'J3 问句“洗完了吗”不误判完成')
+  eq(detectTaRuntimeDecision("I'm going to take a shower."), { type: 'start', activityId: 'shower' }, 'J4 English 当前动作 → shower')
+  eq(detectTaRuntimeDecision("I'll shower later."), null, 'J4 English later → 不改此刻')
+  eq(detectTaRuntimeDecision('I finished showering.', 'shower'), { type: 'finish' }, 'J4 English finish → 结束当前动作')
+
+  clearLS()
+  const t0 = new Date(2026, 8, 18, 20, 0, 0).getTime()
+  const shower = syncTaRuntimeFromAssistantText('chat-1', '好，我先去洗澡了。', t0, '', RAND_HALF)
+  eq(shower.activityId, 'shower', 'J5 最终回复落库后写回 shower')
+  eq(getTaRuntime('chat-1').activityId, 'shower', 'J5 Home/Chat 下一次读取同一 Runtime 都是 shower')
+  ok(shower.plannedUntil > t0 && shower.plannedUntil - t0 <= 2 * 60 * 60 * 1000, 'J5 chat override 最长不超过 2 小时')
+
+  const unchanged = syncTaRuntimeFromAssistantText('chat-1', '我还在洗澡。', t0 + 60_000, '', RAND_ZERO)
+  eq(unchanged.updatedAt, shower.updatedAt, 'J6 同一活动未过期 → 不反复重写/续命')
+
+  const afterShower = syncTaRuntimeFromAssistantText('chat-1', '洗完了。', t0 + 10 * 60_000, '', RAND_ZERO)
+  ok(afterShower && afterShower.activityId !== 'shower', 'J7 说“洗完了”后立即退出 shower')
+  eq(getTaRuntime('chat-1').activityId, afterShower.activityId, 'J7 结束后保存新的日常 Runtime')
+
+  clearLS()
+  const workStart = new Date(2026, 8, 18, 14, 0, 0).getTime()
+  const work = syncTaRuntimeFromAssistantText('chat-2', '我现在在加班。', workStart, '', RAND_HALF)
+  eq(work.activityId, 'work', 'J8 工作动作可写回')
+  eq(work.plannedUntil - workStart, 2 * 60 * 60 * 1000, 'J8 长活动也最多 2 小时后回日常调度')
+
+  clearLS()
+  getOrAdvanceTaRuntime('chat-3', '', t0, RAND_HALF)
+  const beforeNoop = getTaRuntime('chat-3')
+  const noop = syncTaRuntimeFromAssistantText('chat-3', '这个我也不知道诶。', t0 + 30_000, '', RAND_ZERO)
+  eq(noop, null, 'J9 无可信动作 → 返回 null')
+  eq(getTaRuntime('chat-3'), beforeNoop, 'J9 无可信动作 → Runtime 完全不写')
+
+  ok(chatSrc.includes('syncTaRuntimeFromAssistantText'), 'J10 Chat 接入动作写回函数')
+  ok(chatSrc.includes("m.role === 'assistant' && m.ts === assistantTs"), 'J10 只取本轮最终 assistant 文本')
+  ok(chatSrc.includes('syncTaRuntimeFromAssistantText(activeSessionId || undefined'), 'J10 写回固定到发起本轮回复的角色，切角色不串 Runtime')
+  ok(chatSrc.lastIndexOf('syncTaRuntimeFromAssistantText(') > chatSrc.indexOf('const commitFinal ='), 'J10 写回挂在最终 commit 出口，不碰流式半截文本')
 }
 
 console.log(`\n结果：${pass} 通过，${fail} 失败`)

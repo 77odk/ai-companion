@@ -40,7 +40,7 @@ import { commitPartialReply } from '../lib/partialReply'
 import { buildFutureAgendaBlock } from '../lib/futureAgenda'
 import { buildSelfTimelineBlock } from '../lib/selfTimeline'
 import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYourMoment } from '../lib/yourMoment'
-import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona } from '../lib/taRuntime'
+import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTaRuntimeFromAssistantText } from '../lib/taRuntime'
 import { buildIdentityContext } from '../lib/identityContext'
 
 /**
@@ -988,6 +988,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 模块二：组件卸载后跳过 UI 更新，落库/云同步继续执行
       if (mountedRef.current) setMessages(final)
       const sid = getActiveSessionId()
+      // v7 #7：只在最终可见回复已经落库后，把 TA 明确说出的“自己正在/马上做什么”写回同一 Runtime。
+      // 不读用户文本、不改聊天记录；失败/无可信动作时函数返回 null，保持原 Runtime。
+      const committedAssistantText = final
+        .filter((m) => m.role === 'assistant' && m.ts === assistantTs)
+        .map((m) => m.content)
+        .join('\n')
+        .trim()
+      if (committedAssistantText) {
+        syncTaRuntimeFromAssistantText(activeSessionId || undefined, committedAssistantText, Date.now())
+      }
       const token = getToken()
       if (sid && token) {
         let chain: Promise<void> = Promise.resolve()
