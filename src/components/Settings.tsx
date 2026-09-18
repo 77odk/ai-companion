@@ -157,6 +157,129 @@ function DetailHeader({ title, onBack }: { title: string; onBack: () => void }) 
   )
 }
 
+
+/* ---------------- 我的资料：沿用现有资料能力，主页面只展示，编辑集中到这里 ---------------- */
+
+function UserProfileDetail({ onBack }: { onBack: () => void }) {
+  const [user, setUser] = useState<UserProfile>(() => loadUserProfile())
+  const [picking, setPicking] = useState(false)
+
+  const updateUser = (patch: Partial<UserProfile>) => {
+    const next = { ...user, ...patch }
+    setUser(next)
+    saveUserProfile(next)
+  }
+
+  return (
+    <div className="page settings-page">
+      <DetailHeader title="我的资料" onBack={onBack} />
+      <div className="profile-edit-card">
+        <div className="profile-avatar-wrap">
+          <button
+            type="button"
+            className="profile-avatar"
+            onClick={() => setPicking((value) => !value)}
+            aria-label={picking ? '收起头像选择' : '更换头像'}
+          >
+            {user.avatar.startsWith('data:') ? (
+              <img src={user.avatar} alt="我的头像" />
+            ) : (
+              <DefaultAvatar kind="user" className="avatar-default" />
+            )}
+            <span className="profile-avatar-badge" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+                <circle cx="12" cy="13.5" r="3.2" />
+              </svg>
+            </span>
+          </button>
+        </div>
+
+        {picking && (
+          <div className="profile-avatar-pick">
+            <AvatarPicker value={user.avatar} onChange={(avatar) => updateUser({ avatar })} />
+          </div>
+        )}
+
+        <div className="field">
+          <label htmlFor="mine-profile-name">名字</label>
+          <input
+            id="mine-profile-name"
+            className="input"
+            type="text"
+            placeholder="你希望 TA 怎么叫你？"
+            value={user.nickname}
+            onChange={(event) => updateUser({ nickname: event.target.value })}
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="mine-profile-bio">一句话介绍</label>
+          <input
+            id="mine-profile-bio"
+            className="input"
+            type="text"
+            placeholder="让 TA 更懂你"
+            value={user.bio}
+            onChange={(event) => updateUser({ bio: event.target.value })}
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="mine-profile-region">地区</label>
+          <input
+            id="mine-profile-region"
+            className="input"
+            type="text"
+            placeholder="例如：上海 · 浦东新区"
+            value={user.region ?? ''}
+            onChange={(event) => updateUser({ region: event.target.value })}
+            autoComplete="address-level2"
+          />
+          <p className="hint profile-region-hint">按你填写的城市或区使用，不会自动读取定位；后续首页天气会从这里取地区。</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------------- 隐私：文案为本批草案，合并前需七七拍板 ---------------- */
+
+function PrivacyDetail({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="page settings-page">
+      <DetailHeader title="隐私" onBack={onBack} />
+      <div className="privacy-card">
+        <p className="privacy-lead">
+          你在忆文里告诉 TA 的话（聊天内容、记忆条目、TA 空间动态等）会和你的账号关联存储，用于让 TA 记住你、提供持续陪伴。你可以在「我的 → 账号与同步」管理账号，在 TA 的记忆与聊天记录中查看、管理或删除相关内容。忆文不会把你的对话内容用于训练外部模型，也不会向第三方出售你的个人信息。
+        </p>
+
+        <section className="privacy-section">
+          <h3>你的内容，只用于你正在使用的功能</h3>
+          <p>忆文不会为了广告、用户画像或与陪伴无关的用途，擅自查看或使用你的聊天、记忆和空间内容。正常使用中，这些内容只用于对话、记忆、关系连续性，以及你主动开启的同步功能。</p>
+        </section>
+
+        <section className="privacy-section">
+          <h3>模型请求</h3>
+          <p>聊天时，为了生成回复，必要的上下文会发送到你当前配置的模型服务商。你的 API Key 只保存在当前浏览器，不会上传到忆文服务器。不同模型服务商如何处理请求内容，以对应服务商自己的隐私规则为准。</p>
+        </section>
+
+        <section className="privacy-section">
+          <h3>账号与同步</h3>
+          <p>使用账号同步后，聊天、记忆、角色资料和空间内容会与账号关联保存，用于换设备后恢复。退出登录不会自动删除当前设备上的本地记录。</p>
+        </section>
+
+        <section className="privacy-section">
+          <h3>你可以随时管理</h3>
+          <p>你可以在忆文相应页面查看、修改或删除自己保存的内容。如果未来隐私范围发生实质变化，忆文应在变化生效前重新明确告知你。</p>
+        </section>
+      </div>
+    </div>
+  )
+}
+
 /* ---------------- 主页面：顶部资料卡 + 分组入口 ---------------- */
 
 function MainCenter({
@@ -351,6 +474,7 @@ function UpdateControls({ standalone = false }: { standalone?: boolean }) {
       <button type="button" className="entry-row" onClick={() => setExpanded((v) => !v)}>
         <span className="entry-icon"><UpdateIcon /></span>
         <span className="entry-label">检查更新</span>
+        <span className="entry-status">当前版本</span>
         <svg className="entry-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M9 6l6 6-6 6" />
         </svg>
@@ -388,6 +512,13 @@ const KeyIcon = () => (
     <path d="M10 13L21 2" />
     <path d="M15.5 7.5l3 3" />
     <path d="M18.5 4.5l3 3" />
+  </svg>
+)
+
+const PrivacyIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3l7 3v5c0 4.6-2.8 8.2-7 10-4.2-1.8-7-5.4-7-10V6l7-3z" />
+    <path d="M9.5 12l1.7 1.7 3.6-4" />
   </svg>
 )
 
@@ -459,16 +590,6 @@ const AboutMeIcon = () => (
   </svg>
 )
 
-/* 一起经历过：时间线节点 */
-const JourneyIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="6" cy="6" r="2" />
-    <circle cx="18" cy="7" r="2" />
-    <circle cx="12" cy="18" r="2" />
-    <path d="M7.5 7.5l3 8" />
-    <path d="M16 8.8l-2.6 7" />
-  </svg>
-)
 
 /* ---------------- 详情页：TA 的资料 ---------------- */
 
