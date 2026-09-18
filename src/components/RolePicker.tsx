@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { ROLE_TEMPLATES, type RoleTemplate } from '../lib/personaTemplates'
-import { buildCustomPersona } from '../lib/customPersona'
+import {
+  buildCustomPersona,
+  canSavePersonaLength,
+  countPersonaCharacters,
+  hasPersonaIdentityConflict,
+  PERSONA_HARD_LIMIT,
+  PERSONA_SOFT_LIMIT,
+} from '../lib/customPersona'
 import {
   savePersona,
   saveAIProfile,
@@ -435,6 +442,8 @@ function RoleSetupModal({
   error: string | null
 }) {
   const [form, setForm] = useState<RoleSetupState>(initial)
+  const [identityConflictOpen, setIdentityConflictOpen] = useState(false)
+  const [identityConflictAcknowledged, setIdentityConflictAcknowledged] = useState(false)
 
   const setField = <K extends keyof RoleSetupState>(key: K, value: RoleSetupState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -442,7 +451,24 @@ function RoleSetupModal({
 
   // Natural 只要求姓名；模板 / 自定义继续保持原有的姓名 + 性格必填。
   const isNatural = kind === 'natural'
-  const valid = form.nickname.trim() !== '' && (isNatural || form.personality.trim() !== '')
+  const isCustom = kind === 'custom'
+  const customPersona = isCustom ? buildCustomPersona(form) : ''
+  const personaLength = isCustom ? countPersonaCharacters(customPersona) : 0
+  const personaLengthValid = !isCustom || canSavePersonaLength(customPersona)
+  const valid = form.nickname.trim() !== '' && (isNatural || form.personality.trim() !== '') && personaLengthValid
+
+  const confirm = () => {
+    if (!valid) return
+    if (
+      isCustom &&
+      !identityConflictAcknowledged &&
+      hasPersonaIdentityConflict(customPersona, form.nickname)
+    ) {
+      setIdentityConflictOpen(true)
+      return
+    }
+    onConfirm(form)
+  }
 
   return (
     <div className="role-modal-overlay" role="dialog" aria-modal="true" aria-label={title}>
@@ -535,6 +561,17 @@ function RoleSetupModal({
               autoComplete="off"
             />
           </div>}
+          {isCustom && (
+            <div className="field">
+              <p className="hint">{personaLength} / {PERSONA_HARD_LIMIT}</p>
+              {personaLength > PERSONA_SOFT_LIMIT && (
+                <p className="hint">人设有点长，精简一些会更容易保持一致。</p>
+              )}
+              {personaLength > PERSONA_HARD_LIMIT && (
+                <p className="role-modal-required-hint">人设超过 4000 字，暂时不能确认使用。</p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="role-modal-footer">
@@ -549,12 +586,39 @@ function RoleSetupModal({
             <button type="button" className="btn btn-ghost" onClick={onClose} disabled={submitting}>
               取消
             </button>
-            <button type="button" className="btn btn-primary" onClick={() => onConfirm(form)} disabled={!valid || submitting}>
+            <button type="button" className="btn btn-primary" onClick={confirm} disabled={!valid || submitting}>
               {submitting ? '正在创建…' : isNatural ? '开始认识' : '确认使用'}
             </button>
           </div>
         </div>
       </div>
+      {identityConflictOpen && (
+        <div className="role-modal-overlay" role="dialog" aria-modal="true" aria-label="检查人设身份">
+          <div className="role-modal">
+            <div className="role-modal-body">
+              <p>这张人设里好像出现了两个不同的身份。TA 可能会分不清谁是谁。你可以继续使用，也可以先检查一下人设。</p>
+            </div>
+            <div className="role-modal-footer">
+              <div className="role-modal-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setIdentityConflictOpen(false)}>
+                  回去看看
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setIdentityConflictAcknowledged(true)
+                    setIdentityConflictOpen(false)
+                    onConfirm(form)
+                  }}
+                >
+                  知道了
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
