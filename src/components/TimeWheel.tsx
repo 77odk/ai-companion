@@ -75,7 +75,7 @@ export default function TimeWheel({ options, value, onChange, ariaLabel, visible
     const el = ref.current
     const state = drag.current
     if (!el || !state || state.pointerId !== e.pointerId) return
-    suppressClick.current = state.moved
+    suppressClick.current = e.type !== 'pointercancel' && state.moved
     drag.current = null
     el.classList.remove('is-dragging')
     if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId)
