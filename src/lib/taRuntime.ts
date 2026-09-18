@@ -276,7 +276,7 @@ const RUNTIME_TEXT_START_RULES: readonly RuntimeTextRule[] = [
   { activityId: 'gaming', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:打游戏|玩游戏|开黑|打排位)/, en: /\b(?:i(?:'m| am)?\s+)?(?:gaming|playing (?:a )?game|playing games|going to play)\b/i },
   { activityId: 'class', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:上课|听课)/, en: /\b(?:i(?:'m| am)?\s+)?(?:in class|going to class|attending class)\b/i },
   { activityId: 'commute', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:通勤|去上班|去公司|回公司|上班路上)/, en: /\b(?:i(?:'m| am)?\s+)?(?:commuting|on my way to work|going to work|heading to work)\b/i },
-  { activityId: 'work', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:工作|加班|忙工作|开会|忙会儿工作)/, en: /\b(?:i(?:'m| am)?\s+)?(?:working|at work|in a meeting|going to work)\b/i },
+  { activityId: 'work', zh: /(?:忙(?:着)?工作|处理工作|赶工作|工作中|开始工作|继续工作|加班|开会)/, en: /\b(?:working|at work|in a meeting|going to work)\b/i },
   { activityId: 'errand', zh: /(?:我)?(?:正(?:在)?|在|去|先去|出去|准备)?(?:办事|办点事|买东西|取快递)/, en: /\b(?:i(?:'m| am)?\s+)?(?:running errands?|going out for errands?|picking up a package)\b/i },
   { activityId: 'home', zh: /(?:我)?(?:刚|才)?(?:到家|回到家|回家了)/, en: /\b(?:i(?:'m| am)?\s+)?(?:just got home|back home|home now)\b/i },
   { activityId: 'rest', zh: /(?:我)?(?:正(?:在)?|在|先|准备)?(?:休息|歇会|歇一会|躺会|躺一会)/, en: /\b(?:i(?:'m| am)?\s+)?(?:resting|taking a break|lying down)\b/i },
@@ -332,11 +332,24 @@ function textClauses(text: string): string[] {
 
 function isClearlyOtherPersonClause(clause: string): boolean {
   const t = clause.trim()
-  return /^(?:你|对方|他|她|TA)\b/i.test(t) || /^(?:you|they|he|she)\b/i.test(t)
+  return /^(?:你|对方|他|她)(?![A-Za-z0-9_])/i.test(t) || /^TA\b/i.test(t) || /^(?:you|they|he|she)\b/i.test(t)
 }
 
 function blockedAsFutureOrNegative(clause: string): boolean {
   return ZH_FUTURE_RE.test(clause) || EN_FUTURE_RE.test(clause) || ZH_NEGATIVE_RE.test(clause) || EN_NEGATIVE_RE.test(clause)
+}
+
+function explicitSelfCurrentClause(clause: string): boolean {
+  const t = clause.trim()
+  if (!t) return false
+  // “好，我去…” / “我正在…” / “我刚…” 等明确自我当前动作。
+  if (/(?:^|[，,；;]\s*)我(?:现在|正(?:在)?|在|去|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/.test(t)) return true
+  // 省主语但带强当前标记：“先去洗澡”“正在看书”“刚到家”。
+  if (/^(?:现在|正(?:在)?|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/.test(t)) return true
+  // 很短的口语自述：“洗澡去了”“看书呢”，避免把“看书这件事…”之类泛提及当当前状态。
+  if (t.length <= 16 && /(?:去了|中|呢|着呢|一会儿?|一下|了)$/.test(t)) return true
+  // English: only explicit first-person/current constructions.
+  return /\b(?:i'm|i am|i’ll|i'll|i will|i'm going to|i am going to|let me|i just|i've just|i have just)\b/i.test(t)
 }
 
 /** 纯判定：只根据 TA 最终可见回复 + 当前 Runtime 判断是否需要写回。 */
@@ -345,7 +358,7 @@ export function detectTaRuntimeDecision(text: string, currentActivityId?: string
   let startDecision: RuntimeTextDecision = null
 
   for (const clause of clauses) {
-    if (isClearlyOtherPersonClause(clause) || blockedAsFutureOrNegative(clause)) continue
+    if (isClearlyOtherPersonClause(clause) || blockedAsFutureOrNegative(clause) || !explicitSelfCurrentClause(clause)) continue
     for (const rule of RUNTIME_TEXT_START_RULES) {
       if (rule.zh.test(clause) || rule.en.test(clause)) {
         startDecision = { type: 'start', activityId: rule.activityId }
@@ -356,7 +369,7 @@ export function detectTaRuntimeDecision(text: string, currentActivityId?: string
 
   if (currentActivityId) {
     for (const clause of clauses) {
-      if (isClearlyOtherPersonClause(clause)) continue
+      if (isClearlyOtherPersonClause(clause) || /(?:吗|嘛|么|没|没有)$/.test(clause.trim())) continue
       const zh = FINISH_PATTERNS[currentActivityId]
       const en = FINISH_PATTERNS_EN[currentActivityId]
       if ((zh && zh.test(clause)) || (en && en.test(clause))) return { type: 'finish' }
