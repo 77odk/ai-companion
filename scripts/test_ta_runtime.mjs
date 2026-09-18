@@ -466,7 +466,7 @@ group('J. 聊天动作 → Runtime')
 
   ok(chatSrc.includes('syncTaRuntimeFromAssistantText'), 'J10 Chat 接入动作写回函数')
   ok(chatSrc.includes("m.role === 'assistant' && m.ts === assistantTs"), 'J10 只取本轮最终 assistant 文本')
-  ok(chatSrc.indexOf('syncTaRuntimeFromAssistantText') > chatSrc.indexOf('const commitFinal ='), 'J10 写回挂在最终 commit 出口，不碰流式半截文本')
+  ok(chatSrc.lastIndexOf('syncTaRuntimeFromAssistantText(') > chatSrc.indexOf('const commitFinal ='), 'J10 写回挂在最终 commit 出口，不碰流式半截文本')
 }
 
 console.log(`\n结果：${pass} 通过，${fail} 失败`)
