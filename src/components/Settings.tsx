@@ -33,7 +33,6 @@ import {
   type UserProfile,
   type AIProfile,
 } from '../lib/storage'
-import { getAccount } from '../lib/sync'
 import { getToken, isLoggedIn, logout } from '../lib/auth'
 import { ChatError, testConnection } from '../lib/api'
 import { keyFormatHint } from '../lib/keyFormat'
@@ -310,7 +309,6 @@ function MainCenter({
   onGoWelcome?: () => void
 }) {
   const user = loadUserProfile()
-  const accountLabel = getAccount()?.account ?? null
   const loggedIn = isLoggedIn()
   const modelSettings = loadSettings()
   const providerStatus = `${PROVIDER_NAMES[modelSettings.provider]} · ${modelSettings.model || '未设置'}`
@@ -374,7 +372,7 @@ function MainCenter({
           icon={<CloudSyncIcon />}
           label="账号与同步"
           onClick={onOpenAccount}
-          status={accountLabel ?? '未登录'}
+          status={loggedIn ? '已登录' : '未登录'}
         />
         <EntryRow icon={<PrivacyIcon />} label="隐私" onClick={onOpenPrivacy} />
         <EntryRow icon={<PaletteIcon />} label="外观" onClick={onOpenAppearance} />
