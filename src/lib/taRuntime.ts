@@ -403,8 +403,11 @@ export function syncTaRuntimeFromAssistantText(
     return next
   }
 
-  // “做完了”只结束聊天明确写进去的同一活动，避免一句普通话把自动 Runtime 清掉。
-  if (!cur || cur.source !== 'chat' || cur.activityId !== detected.activityId) return null
+  // “做完了”只结束聊天明确写进去的同一活动；洗漱完成也可结束“刚起床正在洗漱”。
+  const finishMatchesCurrent =
+    cur?.activityId === detected.activityId ||
+    (detected.activityId === 'shower' && cur?.activityId === 'wake_up')
+  if (!cur || cur.source !== 'chat' || !finishMatchesCurrent) return null
   const recentAfterFinish = [cur.activityId, ...recentIds.filter((id) => id !== cur.activityId)].slice(0, 3)
   const next = createState(pickActivity(new Date(now), persona, recentAfterFinish, rand), now, rand, persona, recentAfterFinish)
   map[key] = next
