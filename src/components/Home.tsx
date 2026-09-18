@@ -9,9 +9,10 @@ import {
   formatCountdown,
   formatPeriodEstimate,
   getAnniversaries,
-  getMainAnniversaryId,
   isMilestoneAnniversary,
   isValidAnniversaryDate,
+  mergeDuplicateAnniversaries,
+  readRoleAnniversaries,
   updateAnniversary,
   type Anniversary,
 } from '../lib/anniversary'
@@ -159,15 +160,13 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
     () => personal.find((a) => a.periodDays != null && a.periodDays > 0),
     [personal],
   )
-  // v7：首页第三个日期位只展示“用户明确选中的当前角色纪念日”。
-  // 没有显式 main id、id 已失效、或指向 personal/里程碑时都不自动兜底，整块隐藏。
-  const featuredAnniversary = useMemo(() => {
-    const id = getMainAnniversaryId(sid)
-    if (!id) return null
-    return anniversaries.find(
-      (a) => a.id === id && a.kind !== 'personal' && !isMilestoneAnniversary(a),
-    ) ?? null
-  }, [anniversaries, sid])
+  // v7：首页直接展示当前 TA 的全部纪念日；来源与 AnniversaryManager 保持一致。
+  const roleAnniversaries = useMemo(
+    () => mergeDuplicateAnniversaries(
+      readRoleAnniversaries(sid).filter((a) => a.kind !== 'personal' && !isMilestoneAnniversary(a)),
+    ),
+    [anniversaries, sid],
+  )
   const milestone = useMemo(() => getMilestoneProgress(getKnownDays(now.getTime(), sid)), [sid, now])
 
   useEffect(() => {
@@ -360,6 +359,14 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
         <section className="home-my-time" aria-label="我的时间">
           <div className="home-my-time-head">
             <span className="home-eyebrow">MY TIME</span>
+            <button
+              type="button"
+              className="home-time-add"
+              onClick={onGoAnniversary}
+              aria-label="添加纪念日"
+            >
+              <span aria-hidden="true">+</span>
+            </button>
           </div>
 
           {/* 双大数字时间窗：生日 + 生理期并排、约 1:1、透明语言；空态可点击进入现有添加流程 */}
@@ -385,23 +392,16 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
             </button>
           </div>
 
-          {featuredAnniversary && (
-            <button
-              type="button"
-              className="home-time-featured"
-              onClick={onGoAnniversary}
-              aria-label={`查看纪念日：${featuredAnniversary.label}`}
-            >
-              <span className="home-time-featured-copy">
-                <span className="home-time-window-k">{featuredAnniversary.label}</span>
-                <strong className="home-time-featured-count">
-                  {formatCountdown(featuredAnniversary, now.getTime())}
-                </strong>
-              </span>
-              <span className="home-time-featured-date">
-                {formatAnniversaryDate(featuredAnniversary.date)}
-              </span>
-            </button>
+          {roleAnniversaries.length > 0 && (
+            <div className="home-anniv-list" aria-label="纪念日">
+              {roleAnniversaries.map((item) => (
+                <div key={item.id} className="home-anniv-item">
+                  <span className="home-anniv-label">{item.label}</span>
+                  <span className="home-anniv-count">{formatCountdown(item, now.getTime())}</span>
+                  <span className="home-anniv-date">{formatAnniversaryDate(item.date)}</span>
+                </div>
+              ))}
+            </div>
           )}
 
           {/* milestone 关系轨迹：真横排（flex row + inline-flex day；不竖字、不逐字换行）+
