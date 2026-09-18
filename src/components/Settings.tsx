@@ -61,7 +61,7 @@ import {
 type TestState = 'idle' | 'testing' | 'success' | 'error'
 
 /** 设置页子页：使用指南已抽成 App 独立 view（guide），不再嵌在这里 */
-export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary'
+export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary' | 'profile' | 'privacy'
 
 interface Props {
   onGoWelcome?: () => void
@@ -89,6 +89,12 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
   if (page === 'provider') {
     return <ProviderDetail onBack={() => setPage('main')} onGoGuide={onGoGuide} />
   }
+  if (page === 'profile') {
+    return <MyProfileDetail onBack={() => setPage('main')} />
+  }
+  if (page === 'privacy') {
+    return <PrivacyDetail onBack={() => setPage('main')} />
+  }
   if (page === 'about') {
     return <AboutDetail onBack={() => setPage('main')} onGoWelcome={onGoWelcome} />
   }
@@ -111,7 +117,9 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
   }
   return (
     <MainCenter
+      onOpenProfile={() => setPage('profile')}
       onOpenAccount={() => setPage('account')}
+      onOpenPrivacy={() => setPage('privacy')}
       onOpenProvider={() => setPage('provider')}
       onOpenGuide={() => onGoGuide?.()}
       onOpenAbout={() => setPage('about')}
@@ -156,7 +164,9 @@ function DetailHeader({ title, onBack }: { title: string; onBack: () => void }) 
 /* ---------------- 主页面：顶部资料卡 + 分组入口 ---------------- */
 
 function MainCenter({
+  onOpenProfile,
   onOpenAccount,
+  onOpenPrivacy,
   onOpenProvider,
   onOpenGuide,
   onOpenAbout,
@@ -165,11 +175,12 @@ function MainCenter({
   onOpenAnniversary,
   onGoRoles,
   onGoAboutMe,
-  onGoSpace,
   onGoProfile,
   onGoWelcome,
 }: {
+  onOpenProfile: () => void
   onOpenAccount: () => void
+  onOpenPrivacy: () => void
   onOpenProvider: () => void
   onOpenGuide: () => void
   onOpenAbout: () => void
@@ -178,21 +189,16 @@ function MainCenter({
   onOpenAnniversary: () => void
   onGoRoles?: () => void
   onGoAboutMe?: () => void
-  onGoSpace?: () => void
   onGoProfile?: () => void
   onGoWelcome?: () => void
 }) {
-  const [user, setUser] = useState<UserProfile>(() => loadUserProfile())
-  const [picking, setPicking] = useState(false)
-  // 登录状态：只在进「我的」页时读一次；去账号页登录/退出回来会重新挂载，读到最新值
+  const user = loadUserProfile()
+  const settings = loadSettings()
+  const activeProvider = settings.provider
+  const providerLabel = PROVIDER_NAMES[activeProvider] ?? activeProvider
+  const modelLabel = settings.providers[activeProvider]?.model?.trim() || '未设置'
   const accountLabel = getAccount()?.account ?? null
   const loggedIn = isLoggedIn()
-
-  const updateUser = (patch: Partial<UserProfile>) => {
-    const next = { ...user, ...patch }
-    setUser(next)
-    saveUserProfile(next)
-  }
 
   const handleLogout = () => {
     if (!window.confirm('退出登录后，本地记录不会丢；下次登录同一账号就能找回来。确定退出吗？')) return
@@ -202,92 +208,58 @@ function MainCenter({
 
   return (
     <div className="page settings-page">
-      <div className="profile-card">
+      <button type="button" className="profile-card profile-card-link" onClick={onOpenProfile} aria-label="编辑我的资料">
         <div className="profile-avatar-wrap">
-          <button
-            type="button"
-            className="profile-avatar"
-            onClick={() => setPicking((p) => !p)}
-            aria-label={picking ? '收起头像选择' : '更换头像'}
-          >
+          <span className="profile-avatar">
             {user.avatar.startsWith('data:') ? (
               <img src={user.avatar} alt="我的头像" />
             ) : (
               <DefaultAvatar kind="user" className="avatar-default" />
             )}
-            <span className="profile-avatar-badge">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
-                <circle cx="12" cy="13.5" r="3.2" />
-              </svg>
-            </span>
-          </button>
+          </span>
         </div>
+        <div className="profile-card-copy">
+          <strong className="profile-card-name">{user.nickname.trim() || '设置你的名字'}</strong>
+          <span className="profile-card-meta">{user.city?.trim() || '添加所在城市'}</span>
+        </div>
+        <svg className="entry-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </button>
 
-        <input
-          className="profile-name"
-          type="text"
-          placeholder="你希望 TA 怎么叫你？"
-          value={user.nickname}
-          onChange={(e) => updateUser({ nickname: e.target.value })}
-          autoComplete="off"
-        />
-        <input
-          className="profile-bio"
-          type="text"
-          placeholder="一句话介绍自己，让 TA 更懂你"
-          value={user.bio}
-          onChange={(e) => updateUser({ bio: e.target.value })}
-          autoComplete="off"
-        />
+      <ProfileGroup title="开始使用">
+        <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
+        <EntryRow icon={<KeyIcon />} label="API 设置" status={`${providerLabel} · ${modelLabel}`} onClick={onOpenProvider} />
+      </ProfileGroup>
 
-        {picking && (
-          <div className="profile-avatar-pick">
-            <AvatarPicker value={user.avatar} onChange={(avatar) => updateUser({ avatar })} />
-          </div>
-        )}
-      </div>
-
-      <p className="settings-place-note">这是你和 TA 的地方。</p>
-
-      <ProfileGroup title="TA">
-        {onGoProfile && <EntryRow icon={<ProfileIcon />} label="TA 的样子" onClick={onGoProfile} />}
+      <ProfileGroup title="关于 TA">
+        {onGoProfile && <EntryRow icon={<ProfileIcon />} label="TA 的资料" onClick={onGoProfile} />}
         {onGoRoles && <EntryRow icon={<RolesIcon />} label="角色管理" status="进阶" onClick={onGoRoles} />}
       </ProfileGroup>
 
-      <ProfileGroup title="记忆">
-        {onGoAboutMe && <EntryRow icon={<AboutMeIcon />} label="关于我" onClick={onGoAboutMe} />}
+      <ProfileGroup title="关于我">
+        {onGoAboutMe && <EntryRow icon={<AboutMeIcon />} label="重要记录 & 记忆" onClick={onGoAboutMe} />}
       </ProfileGroup>
 
-      <ProfileGroup title="我们">
-        <EntryRow icon={<AnniversaryIcon />} label="纪念日" onClick={onOpenAnniversary} />
-        {onGoSpace && <EntryRow icon={<JourneyIcon />} label="一起经历过" onClick={onGoSpace} />}
+      <ProfileGroup title="关于我们">
+        <EntryRow icon={<AnniversaryIcon />} label="纪念日管理" onClick={onOpenAnniversary} />
       </ProfileGroup>
 
-      <ProfileGroup title="其他">
+      <ProfileGroup title="即将开放">
+        <EntryRow icon={<WorkIcon />} label="AI 工作台" status="即将开放" disabled />
+      </ProfileGroup>
+
+      <ProfileGroup title="账号与隐私">
         <EntryRow
           icon={<CloudSyncIcon />}
           label="账号与同步"
           onClick={onOpenAccount}
-          status={accountLabel ?? '未登录'}
+          status={accountLabel ? '已登录' : '未登录'}
         />
+        <EntryRow icon={<PrivacyIcon />} label="隐私" onClick={onOpenPrivacy} />
         <EntryRow icon={<PaletteIcon />} label="外观" onClick={onOpenAppearance} />
-        <EntryRow icon={<KeyIcon />} label="AI 服务" onClick={onOpenProvider} />
-        <EntryRow icon={<WorkIcon />} label="工作台" onClick={onOpenWork} />
-        <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
+        <EntryRow icon={<InfoIcon />} label="关于忆文" onClick={onOpenAbout} />
         <UpdateControls />
-      </ProfileGroup>
-
-      <ProfileGroup title="关于忆文">
-        <EntryRow icon={<InfoIcon />} label="关于" onClick={onOpenAbout} />
       </ProfileGroup>
 
       {loggedIn && (
@@ -313,14 +285,16 @@ function EntryRow({
   label,
   onClick,
   status,
+  disabled = false,
 }: {
   icon: ReactNode
   label: string
-  onClick: () => void
+  onClick?: () => void
   status?: string
+  disabled?: boolean
 }) {
   return (
-    <button type="button" className="entry-row" onClick={onClick}>
+    <button type="button" className={`entry-row${disabled ? ' entry-row-disabled' : ''}`} onClick={onClick} disabled={disabled}>
       <span className="entry-icon">{icon}</span>
       <span className="entry-label">{label}</span>
       {status && <span className="entry-status">{status}</span>}
@@ -886,7 +860,91 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
   )
 }
 
-/* ---------------- 详情页：服务商配置 ---------------- */
+/* ---------------- 详情页：API 设置 ---------------- */
+
+/* ---------------- 详情页：我的资料 ---------------- */
+
+function MyProfileDetail({ onBack }: { onBack: () => void }) {
+  const [user, setUser] = useState<UserProfile>(() => loadUserProfile())
+  const [picking, setPicking] = useState(false)
+
+  const updateUser = (patch: Partial<UserProfile>) => {
+    const next = { ...user, ...patch }
+    setUser(next)
+    saveUserProfile(next)
+  }
+
+  return (
+    <div className="page settings-page">
+      <DetailHeader title="我的资料" onBack={onBack} />
+      <div className="profile-card profile-edit-card">
+        <div className="profile-avatar-wrap">
+          <button type="button" className="profile-avatar" onClick={() => setPicking((v) => !v)} aria-label={picking ? '收起头像选择' : '更换头像'}>
+            {user.avatar.startsWith('data:') ? <img src={user.avatar} alt="我的头像" /> : <DefaultAvatar kind="user" className="avatar-default" />}
+            <span className="profile-avatar-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+                <circle cx="12" cy="13.5" r="3.2" />
+              </svg>
+            </span>
+          </button>
+        </div>
+        <label className="profile-field">
+          <span>名字</span>
+          <input className="profile-name" type="text" placeholder="你希望 TA 怎么叫你？" value={user.nickname} onChange={(e) => updateUser({ nickname: e.target.value })} autoComplete="off" />
+        </label>
+        <label className="profile-field">
+          <span>一句话介绍</span>
+          <input className="profile-bio" type="text" placeholder="让 TA 更懂你" value={user.bio} onChange={(e) => updateUser({ bio: e.target.value })} autoComplete="off" />
+        </label>
+        <label className="profile-field">
+          <span>所在城市</span>
+          <input className="profile-bio" type="text" placeholder="例如：杭州" value={user.city ?? ''} maxLength={40} onChange={(e) => updateUser({ city: e.target.value })} autoComplete="address-level2" />
+        </label>
+        <p className="profile-city-note">仅用于为你提供当地天气，不会用于其他用途。</p>
+        {picking && <div className="profile-avatar-pick"><AvatarPicker value={user.avatar} onChange={(avatar) => updateUser({ avatar })} /></div>}
+      </div>
+    </div>
+  )
+}
+
+/* ---------------- 详情页：隐私（文案待七七最终拍板） ---------------- */
+
+function PrivacyDetail({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="page settings-page">
+      <DetailHeader title="隐私" onBack={onBack} />
+      <div className="privacy-detail-card">
+        <section>
+          <h3>你的内容属于你</h3>
+          <p>你在忆文里的聊天、记忆和与 TA 相处产生的内容，是为了让 TA 记住你、保持关系和对话的连续。忆文不会把这些内容当作平台自己的内容使用。</p>
+        </section>
+        <section>
+          <h3>忆文不会为了运营查看你的私人对话</h3>
+          <p>与账号关联保存的数据，只用于提供你正在使用的功能，例如聊天记录、记忆和跨设备同步。忆文不会为了运营、广告或了解你在聊什么而主动查看你的私人聊天内容。</p>
+        </section>
+        <section>
+          <h3>你的模型 Key 不会交给忆文使用</h3>
+          <p>你配置的模型服务 Key 用于在你的设备上连接你选择的模型服务。忆文不会拿你的 Key 为其他用户提供服务，也不会占用你的模型额度做与本人使用无关的事情。</p>
+        </section>
+        <section>
+          <h3>不会拿你的对话训练外部模型</h3>
+          <p>忆文不会把你的对话内容用于训练外部模型，也不会向第三方出售你的个人信息。</p>
+        </section>
+        <section>
+          <h3>你可以管理自己的记录</h3>
+          <p>你可以在忆文中查看和管理自己的聊天、记忆及账号相关内容。账号与同步相关设置可以在「我的 → 账号与同步」中管理。</p>
+        </section>
+        <section>
+          <h3>关于第三方模型服务</h3>
+          <p>当你使用自己配置的模型服务时，为了获得回复，必要的对话上下文会发送给你选择的模型服务商。相关内容如何被该服务商处理，以对应服务商的隐私政策和服务条款为准。</p>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+/* ---------------- 详情页：API 设置 ---------------- */
 
 function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?: () => void }) {
   const [initial] = useState(loadSettings)
@@ -1022,7 +1080,7 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
 
   return (
     <div className="page settings-page">
-      <DetailHeader title="服务商配置" onBack={onBack} />
+      <DetailHeader title="API 设置" onBack={onBack} />
 
       <div className="settings-card">
         <p className="hint">Key 只存你浏览器本地，不经过任何服务器。请放心填写。</p>
@@ -1276,7 +1334,7 @@ function AboutDetail({ onBack, onGoWelcome }: { onBack: () => void; onGoWelcome?
 
   return (
     <div className="page settings-page">
-      <DetailHeader title="关于" onBack={onBack} />
+      <DetailHeader title="关于忆文" onBack={onBack} />
 
       <div className="about-card">
         <div className="about-logo" aria-hidden="true">
