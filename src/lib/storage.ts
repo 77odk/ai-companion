@@ -326,13 +326,13 @@ export interface UserProfile {
   nickname: string
   avatar: string
   bio: string
-  /** 自填地区，仅用于本地资料展示与后续首页天气入口；沿用现有 user_profile，不新增 storage key。 */
-  region?: string
+  /** 自填城市，仅用于后续首页天气；沿用现有 user_profile，不新增 storage key。 */
+  city?: string
 }
 
 const USER_PROFILE_KEY = 'ai_companion_user_profile'
 
-export const DEFAULT_USER_PROFILE: UserProfile = { nickname: '', avatar: '', bio: '', region: '' }
+export const DEFAULT_USER_PROFILE: UserProfile = { nickname: '', avatar: '', bio: '', city: '' }
 
 export function loadUserProfile(): UserProfile {
   try {
@@ -343,7 +343,7 @@ export function loadUserProfile(): UserProfile {
       nickname: typeof p.nickname === 'string' ? p.nickname : '',
       avatar: typeof p.avatar === 'string' && p.avatar.startsWith('data:') ? p.avatar : '',
       bio: typeof p.bio === 'string' ? p.bio : '',
-      region: typeof p.region === 'string' ? p.region : '',
+      city: typeof p.city === 'string' ? p.city : '',
     }
   } catch {
     return DEFAULT_USER_PROFILE
