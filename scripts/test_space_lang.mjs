@@ -44,8 +44,13 @@ globalThis.localStorage = {
   removeItem: (k) => store.delete(k),
   clear: () => store.clear(),
 }
+/** #55 认识日边界（2026-09-18）：测试基线必须显式给一个早于候选事件的认识日。
+ *  否则 getFirstSeen 在无记录时兜底成真实当前时间，边界会把固定的 9/9 候选天全判成「认识之前」→ 生成 0 条。 */
+const SEED_FIRST_SEEN = new Date(2026, 7, 1, 12, 0).getTime()
 function resetStore() {
   store.clear()
+  localStorage.setItem('ai_companion_first_seen', String(SEED_FIRST_SEEN))
+  localStorage.setItem('ai_companion_first_seen_s1', String(SEED_FIRST_SEEN))
 }
 
 const MINUTE = 60 * 1000
