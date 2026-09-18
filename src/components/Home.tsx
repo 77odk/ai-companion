@@ -142,10 +142,17 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   // TASK-TA-RUNTIME-V1：TA 此刻主数据源 = Persistent Runtime（与 Chat 同一份持久状态、同一 lazy getter）。
   // 刷新/切 Tab/重进未到 plannedUntil 不换活动；到期才在读取时惰性推进。零额外 LLM。
   const personaText = useMemo(() => getSessionPersona(sid), [sid])
+  const [runtimeNow, setRuntimeNow] = useState(() => Date.now())
   const runtime = useMemo(
-    () => getOrAdvanceTaRuntime(sid, personaText, now.getTime()),
-    [sid, personaText, now],
+    () => getOrAdvanceTaRuntime(sid, personaText, runtimeNow),
+    [sid, personaText, runtimeNow],
   )
+  // 到 plannedUntil 时只刷新 Runtime 这一个展示状态；不轮询、不重载页面，也不影响其它首页时间卡片。
+  useEffect(() => {
+    const delay = Math.max(50, runtime.plannedUntil - Date.now() + 50)
+    const timer = window.setTimeout(() => setRuntimeNow(Date.now()), Math.min(delay, 2_147_483_647))
+    return () => window.clearTimeout(timer)
+  }, [runtime.activityId, runtime.plannedUntil, sid])
   // PATCH-LANG：显示语言走项目现有语言来源 getSessionLang(sid)（Chat 存会话语言）；英文会话显示英文 label
   const homeLang = useMemo(() => getSessionLang(sid), [sid])
   // Busy（仅展示优先级最高；只读现有 getBusyState，不写、不影响 Busy 数据层）
