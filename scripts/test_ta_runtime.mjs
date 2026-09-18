@@ -466,6 +466,7 @@ group('J. 聊天动作 → Runtime')
 
   ok(chatSrc.includes('syncTaRuntimeFromAssistantText'), 'J10 Chat 接入动作写回函数')
   ok(chatSrc.includes("m.role === 'assistant' && m.ts === assistantTs"), 'J10 只取本轮最终 assistant 文本')
+  ok(chatSrc.includes('syncTaRuntimeFromAssistantText(activeSessionId || undefined'), 'J10 写回固定到发起本轮回复的角色，切角色不串 Runtime')
   ok(chatSrc.lastIndexOf('syncTaRuntimeFromAssistantText(') > chatSrc.indexOf('const commitFinal ='), 'J10 写回挂在最终 commit 出口，不碰流式半截文本')
 }
 
