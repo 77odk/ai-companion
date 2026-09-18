@@ -128,7 +128,7 @@ for (const ts of latePlan) {
 console.log('\n[3b] 新角色认识边界：过去只能从 firstSeen 当天开始')
 const firstSeenToday = new Date(2026, 7, 22, 9, 30).getTime()
 const boundedToday = planBackfillTimestamps(null, now, [], new Set(), seeded(201), firstSeenToday)
-eq(new Set(boundedToday.map((ts) => dayKeyOf(ts))), new Set(['2026-08-22']), '今天刚认识 → 首访不再伪造前两天动态')
+eq([...new Set(boundedToday.map((ts) => dayKeyOf(ts)))], ['2026-08-22'], '今天刚认识 → 首访不再伪造前两天动态')
 ok(boundedToday.every((ts) => dayKeyOf(ts) >= dayKeyOf(firstSeenToday)), '所有首访槽位都不早于认识日')
 
 const firstSeenYesterday = new Date(2026, 7, 21, 18, 0).getTime()
