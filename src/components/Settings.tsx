@@ -464,16 +464,6 @@ const AboutMeIcon = () => (
   </svg>
 )
 
-/* 一起经历过：时间线节点 */
-const JourneyIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="6" cy="6" r="2" />
-    <circle cx="18" cy="7" r="2" />
-    <circle cx="12" cy="18" r="2" />
-    <path d="M7.5 7.5l3 8" />
-    <path d="M16 8.8l-2.6 7" />
-  </svg>
-)
 
 /* ---------------- 详情页：TA 的资料 ---------------- */
 
