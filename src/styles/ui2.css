@@ -454,6 +454,56 @@
   text-overflow: ellipsis;
 }
 
+/* v7：首页可选纪念日展示位。仅有显式选择时渲染，放在生日/生理期双窗下方。 */
+.home-time-featured {
+  width: 100%;
+  min-width: 0;
+  margin-top: 8px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--home-ink) 11%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--home-ink) 3%, transparent);
+  color: var(--home-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.home-time-featured:hover {
+  background: color-mix(in srgb, var(--home-ink) 6%, transparent);
+}
+
+.home-time-featured-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-time-featured-copy .home-time-window-k {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-time-featured-count {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.home-time-featured-date {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--home-ink-soft);
+  white-space: nowrap;
+}
+
 /* milestone 进度：关系时间轨迹（5–6px track + 当前进度节点，TA Accent 克制光） */
 .home-anniv-milestone {
   margin-top: 10px;
