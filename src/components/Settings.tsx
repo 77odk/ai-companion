@@ -227,17 +227,17 @@ function UserProfileDetail({ onBack }: { onBack: () => void }) {
         </div>
 
         <div className="field">
-          <label htmlFor="mine-profile-region">地区</label>
+          <label htmlFor="mine-profile-city">所在城市</label>
           <input
-            id="mine-profile-region"
+            id="mine-profile-city"
             className="input"
             type="text"
-            placeholder="例如：上海 · 浦东新区"
-            value={user.region ?? ''}
-            onChange={(event) => updateUser({ region: event.target.value })}
+            placeholder="例如：上海"
+            value={user.city ?? ''}
+            onChange={(event) => updateUser({ city: event.target.value })}
             autoComplete="address-level2"
           />
-          <p className="hint profile-region-hint">按你填写的城市或区使用，不会自动读取定位；后续首页天气会从这里取地区。</p>
+          <p className="hint profile-city-hint">仅用于为你提供当地天气，不会泄露你的隐私。</p>
         </div>
       </div>
     </div>
@@ -339,7 +339,7 @@ function MainCenter({
         </span>
         <span className="profile-card-name">{user.nickname.trim() || '设置你的名字'}</span>
         {user.bio.trim() && <span className="profile-card-bio">{user.bio}</span>}
-        <span className="profile-card-region">{user.region?.trim() || '地区未填写'}</span>
+        <span className="profile-card-region">{user.city?.trim() || '城市未填写'}</span>
         <svg className="profile-card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M9 6l6 6-6 6" />
         </svg>
