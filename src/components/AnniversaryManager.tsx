@@ -11,7 +11,6 @@ import {
   mergeDuplicateAnniversaries,
   readRoleAnniversaries,
   removeAnniversary,
-  resolveMainAnniversary,
   setMainAnniversaryId,
   updateAnniversary,
   type Anniversary,
@@ -35,7 +34,11 @@ export default function AnniversaryManager({ onBack }: Props) {
   const [date, setDate] = useState('')
   const [countMode, setCountMode] = useState<CountMode>('forward')
   const [color, setColor] = useState('warm-orange')
-  const main = useMemo(() => resolveMainAnniversary(items, sessionId), [items, mainId, sessionId])
+  // 首页展示位是可选项：只有显式 mainId 才算选中，不再自动拿列表第一条顶上。
+  const main = useMemo(
+    () => (mainId ? items.find((item) => item.id === mainId) ?? null : null),
+    [items, mainId],
+  )
 
   useEffect(() => {
     const refresh = () => {
@@ -89,8 +92,9 @@ export default function AnniversaryManager({ onBack }: Props) {
   }
 
   const selectMain = (item: Anniversary) => {
-    setMainAnniversaryId(item.id, sessionId)
-    setMainId(item.id)
+    const nextId = main?.id === item.id ? null : item.id
+    setMainAnniversaryId(nextId, sessionId)
+    setMainId(nextId)
   }
 
   return (
@@ -116,8 +120,8 @@ export default function AnniversaryManager({ onBack }: Props) {
                 <span className="anniversary-page-meta">{formatAnniversaryDate(item.date)} · {formatCountdown(item)}</span>
               </div>
               <div className="anniversary-manager-actions">
-                <button type="button" onClick={() => selectMain(item)} disabled={main?.id === item.id}>
-                  {main?.id === item.id ? '首页展示中' : '设为首页展示'}
+                <button type="button" onClick={() => selectMain(item)}>
+                  {main?.id === item.id ? '取消首页展示' : '设为首页展示'}
                 </button>
                 <button type="button" onClick={() => openEdit(item)}>编辑</button>
                 <button type="button" className="danger" onClick={() => remove(item)}>删除</button>
