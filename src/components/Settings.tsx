@@ -400,6 +400,13 @@ const InfoIcon = () => (
   </svg>
 )
 
+const PrivacyIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3l7 3v5c0 4.7-2.8 8.1-7 10-4.2-1.9-7-5.3-7-10V6l7-3z" />
+    <path d="M9.5 12l1.7 1.7 3.5-3.8" />
+  </svg>
+)
+
 const BookIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
