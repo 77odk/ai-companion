@@ -4,6 +4,35 @@ import { getAnniversaries } from './anniversary.ts'
 import type { Anniversary } from './anniversary.ts'
 import { getFirstSeen } from './storage.ts'
 import type { Lang } from './langDetect.ts'
+import { toPromptPerspective, type MemoryItem } from './memory.ts'
+
+/**
+ * 记忆注入块（2026-09-18 七七拍板「二」）：
+ * 每条记忆带上它的记录日期，块首加一行极短的数据说明——同一件事前后说法不一致时以更新的为准。
+ * 说明只写在记忆块里（这是数据，不是人设），不进 persona、不额外堆规则。
+ */
+export function buildMemoryBlock(items: MemoryItem[], lang: Lang = 'zh'): string | null {
+  const valid = (Array.isArray(items) ? items : []).filter((m) => m && typeof m.text === 'string' && m.text.trim())
+  if (valid.length === 0) return null
+  const header = lang === 'en'
+    ? 'Memories about them that are still relevant now (later lines are newer; if two lines contradict each other, trust the newer one):'
+    : '关于对方，以下是当前仍可参考的记忆（越靠后越新；同一件事前后说法不一致时，以更新的为准）：'
+  const lines = valid.map((m) => `- ${memoryDay(m, lang)} ${toPromptPerspective(m.text)}`)
+  return `${header}\n${lines.join('\n')}`
+}
+
+/** 记忆日期：优先「最近一次提到」，没有就用创建时间；都没有就老实写日期未知（不编） */
+function memoryDay(item: MemoryItem, lang: Lang): string {
+  const ts = item.lastMentionedAt ?? item.createdAt
+  if (typeof ts !== 'number' || !Number.isFinite(ts)) return lang === 'en' ? '(date unknown)' : '（日期未知）'
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return lang === 'en' ? '(date unknown)' : '（日期未知）'
+  const mm = d.getMonth() + 1
+  const dd = d.getDate()
+  return lang === 'en'
+    ? `${d.getFullYear()}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+    : `${mm}月${dd}日`
+}
 
 export interface ApiMessage {
   role: 'system' | 'user' | 'assistant'
