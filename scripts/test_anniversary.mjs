@@ -26,6 +26,12 @@ import {
   resolveMainAnniversary,
   purgeLegacyMilestones,
   getAnniversariesForPrompt,
+  normalizePeriodHistory,
+  startPeriod,
+  endPeriod,
+  getCurrentPeriod,
+  updateCurrentPeriodStart,
+  localPeriodDate,
 } from '../src/lib/anniversary.ts'
 import { buildAnniversaryBlock } from '../src/lib/api.ts'
 
@@ -336,6 +342,60 @@ eq(forPrompt.some((a) => a.id === 'g-legacy-couple'), false, '全局里遗留的
 eq(forPrompt.some((a) => a.id === 'own-milestone'), false, '里程碑残留不下发给 TA')
 eq(forPrompt.map((a) => a.id).sort(), ['own-known', 'p-birth'], '个人节日 + 本角色自己的纪念日照常下发')
 eq(getAnniversaries('300').some((a) => a.id === 'p-birth'), true, 'UI 读取仍能看到全局个人节日')
+
+console.log('\n[23] Period State Machine：历史 / 当前状态 / 忘记结束自动收口')
+const periodNow = new Date(2026, 8, 18, 12, 0).getTime() // 本地 2026-09-18
+const legacyPeriod = { id: 'p0', label: '生理期', date: '2026-09-15', createdAt: 1, kind: 'personal', periodDays: 31 }
+eq(getCurrentPeriod(legacyPeriod, periodNow), null, '旧数据没有 history → 不推断正在经期')
+eq(localPeriodDate(periodNow), '2026-09-18', '当前本地日历日格式稳定')
+
+const started = startPeriod(undefined, '2026-09-17')
+eq(started, [{ start: '2026-09-17' }], '第一次开始 → 新增 open history')
+eq(getCurrentPeriod({ ...legacyPeriod, periodHistory: started }, periodNow), { start: '2026-09-17', day: 2 }, '第 N 天 = today - start + 1')
+
+const missedEnd = startPeriod([{ start: '2026-08-20' }], '2026-09-17')
+eq(missedEnd, [
+  { start: '2026-08-20', end: '2026-09-16' },
+  { start: '2026-09-17' },
+], '上一轮忘记结束 → 新开始时自动补 end=新 start 前一天')
+
+const corrected = updateCurrentPeriodStart(missedEnd, '2026-09-16')
+eq(corrected.at(-1), { start: '2026-09-16' }, '进行中 start 可补记为更早日期')
+const ended = endPeriod(corrected, '2026-09-18')
+eq(ended.at(-1), { start: '2026-09-16', end: '2026-09-18' }, '结束 → 给最后一条 open 补 end')
+eq(getCurrentPeriod({ ...legacyPeriod, periodHistory: ended }, periodNow), null, '结束后不再是进行中')
+
+const seven = normalizePeriodHistory([
+  { start: '2026-01-01', end: '2026-01-04' },
+  { start: '2026-02-01', end: '2026-02-04' },
+  { start: '2026-03-01', end: '2026-03-04' },
+  { start: '2026-04-01', end: '2026-04-04' },
+  { start: '2026-05-01', end: '2026-05-04' },
+  { start: '2026-06-01', end: '2026-06-04' },
+  { start: '2026-07-01', end: '2026-07-04' },
+])
+eq(seven.length, 6, 'history 最多保留最近 6 次')
+eq(seven[0].start, '2026-02-01', '超过 6 次时丢最早一条')
+eq(normalizePeriodHistory([{ start: '2026-09-20' }, { start: '2026-09-01', end: '2026-08-31' }]), [
+  { start: '2026-09-01' },
+  { start: '2026-09-20' },
+], 'history 按 start 升序；end 早于 start 时忽略 end')
+
+console.log('\n[24] Period State Machine：periodHistory 随现有 personal 对象读写，不新增 key')
+resetStore()
+const pAdded = addAnniversary('生理期', '2026-09-17', {
+  kind: 'personal',
+  periodDays: 31,
+  periodHistory: [{ start: '2026-09-17' }],
+})
+eq(pAdded[0].periodHistory, [{ start: '2026-09-17' }], 'addAnniversary 可把 history 写进同一 personal 对象')
+eq([...store.keys()].filter((key) => key.includes('period')).length, 0, '没有新增 period 专用 storage key')
+const pUpdated = updateAnniversary(pAdded[0].id, '生理期', '2026-09-17', {
+  kind: 'personal',
+  periodDays: 31,
+  periodHistory: [{ start: '2026-09-17', end: '2026-09-18' }],
+})
+eq(pUpdated[0].periodHistory, [{ start: '2026-09-17', end: '2026-09-18' }], 'updateAnniversary 可更新 history 且留在原对象')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)
