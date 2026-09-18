@@ -169,6 +169,19 @@ group('D. 重复防护')
   const d1 = getOrAdvanceTaRuntime('sD', '', NOW_MORNING, RAND_HALF)
   const d2 = getOrAdvanceTaRuntime('sD', '', d1.plannedUntil + 1, RAND_HALF)
   ok(d2.activityId !== d1.activityId, 'D15 下一活动避免与 previous activityId 相同')
+  ok(Array.isArray(d2.recentActivityIds) && d2.recentActivityIds[0] === d2.activityId, 'D15 recentActivityIds 最新活动在前')
+  ok(d2.recentActivityIds.length <= 3, 'D15 recentActivityIds 最多保留 3 个')
+
+  // 最近 3 个活动能避则避：验证不会出现 A → B → A 的短周期重复
+  clearLS()
+  let dRecent = getOrAdvanceTaRuntime('sD3', '喜欢看书、电影、散步', new Date(2026, 8, 15, 20, 0, 0).getTime(), RAND_HALF)
+  const shortSeq = [dRecent.activityId]
+  for (let i = 0; i < 2; i++) {
+    dRecent = getOrAdvanceTaRuntime('sD3', '喜欢看书、电影、散步', dRecent.plannedUntil + 1, RAND_HALF)
+    shortSeq.push(dRecent.activityId)
+  }
+  ok(shortSeq[0] !== shortSeq[1] && shortSeq[1] !== shortSeq[2] && shortSeq[0] !== shortSeq[2], `D15b 最近三段不形成短周期重复（${shortSeq.join(' → ')}）`)
+
   // 极端候选池：反复推进 50 次不死循环、每次返回有效 state
   let cur = getOrAdvanceTaRuntime('sD2', '', new Date(2026, 8, 15, 2, 0, 0).getTime(), RAND_HALF) // 凌晨
   let okLoop = true
@@ -205,12 +218,57 @@ group('E. 时间')
   ok(spans.size >= 4, 'E19 活动持续时间不是全局固定值（时长范围多样）')
   const act = ACTIVITIES.find((a) => a.id === e1.activityId)
   const durMin = (e1.plannedUntil - e1.startedAt) / 60000
-  ok(durMin >= act.minMin && durMin <= act.maxMin, 'E19 时长落在活动自身范围')
+  ok(durMin > 0 && durMin <= act.maxMin, 'E19 时长为正且不超过活动自身上限（靠近时段边界时允许被截短）')
   // E20 本地时间边界可测：各边界时刻创建均合法
   const b1 = getOrAdvanceTaRuntime('e20a', '', new Date(2026, 8, 15, 4, 59).getTime(), RAND_HALF)
   const b2 = getOrAdvanceTaRuntime('e20b', '', new Date(2026, 8, 15, 17, 0).getTime(), RAND_HALF)
   const b3 = getOrAdvanceTaRuntime('e20c', '', new Date(2026, 8, 15, 23, 0).getTime(), RAND_HALF)
   ok(b1.activityId && b2.activityId && b3.activityId, 'E20 边界时刻创建均合法')
+
+  // E21 精确时段：10:50 不应再出现起床/早餐/早高峰通勤；16:30 不应出现早餐/午饭
+  const probe = (prefix, ts, forbidden) => {
+    let allGood = true
+    for (let i = 0; i < 80; i++) {
+      const s = getOrAdvanceTaRuntime(`${prefix}-${i}`, '', ts, () => i / 80)
+      if (forbidden.includes(s.activityId)) {
+        allGood = false
+        break
+      }
+    }
+    return allGood
+  }
+  clearLS()
+  ok(
+    probe('e21-morning', new Date(2026, 8, 15, 10, 50).getTime(), ['wake_up', 'breakfast', 'commute']),
+    'E21 10:50 不出现起床/早餐/早高峰通勤',
+  )
+  clearLS()
+  ok(
+    probe('e21-afternoon', new Date(2026, 8, 15, 16, 30).getTime(), ['wake_up', 'breakfast', 'lunch']),
+    'E21 16:30 不出现起床/早餐/午饭',
+  )
+
+  // E22 plannedUntil 不越过当前活动允许时段的结束点
+  const withinWindow = (state) => {
+    const a = ACTIVITIES.find((x) => x.id === state.activityId)
+    if (!a) return false
+    const d = new Date(state.startedAt)
+    const minute = d.getHours() * 60 + d.getMinutes()
+    const hit = a.windows.find(([start, end]) => minute >= start && minute < end)
+    if (!hit) return false
+    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() + hit[1] * 60000
+    return state.plannedUntil <= end
+  }
+  clearLS()
+  let cappedOk = true
+  for (let i = 0; i < 80; i++) {
+    const s = getOrAdvanceTaRuntime(`e22-${i}`, '', new Date(2026, 8, 15, 10, 20).getTime(), () => i / 80)
+    if (!withinWindow(s)) {
+      cappedOk = false
+      break
+    }
+  }
+  ok(cappedOk, 'E22 plannedUntil 不拖过活动时段边界')
 }
 
 // ============ F. sync ============
@@ -281,6 +339,8 @@ group('G. Busy 红线')
 group('H. Chat / Home 一致性')
 {
   ok(homeSrc.includes('getOrAdvanceTaRuntime'), 'H32 Home 使用同一 Runtime getter')
+  ok(homeSrc.includes('runtime.plannedUntil - Date.now() + 50'), 'H32 Home 按 plannedUntil 安排到点刷新')
+  ok(homeSrc.includes('setRuntimeNow(Date.now())'), 'H32 Home 到期后重新读取 Runtime，不轮询整页')
   ok(chatSrc.includes('getOrAdvanceTaRuntime'), 'H32 Chat 使用同一 Runtime getter')
   const chatCalls = (chatSrc.match(/getOrAdvanceTaRuntime\(/g) || []).length
   eq(chatCalls, 1, 'H33 Chat 不创建第二套随机 Runtime（仅 1 处调用）')
