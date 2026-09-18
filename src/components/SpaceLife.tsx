@@ -60,7 +60,9 @@ function timeAgo(ts: number): string {
   const days = Math.floor((startOfDay(now) - startOfDay(d)) / 86400000)
   if (days <= 0) {
     const m = Math.floor((now.getTime() - ts) / 60000)
-    if (m < 1) return '刚刚'
+    // ★只有「真的刚发出来」才叫刚刚（0 ≤ 差 < 1 分钟）；时间戳落在未来（回填排的时段）
+    //   或时钟漂移时直接显示时刻，绝不用「刚刚」糊过去（2026-09-18 修）
+    if (m >= 0 && m < 1) return '刚刚'
     return hm
   }
   if (days === 1) return `昨天 ${hm}`

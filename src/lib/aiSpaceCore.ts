@@ -432,6 +432,21 @@ export interface SpaceSlot {
  * @param ledger 配额账本（可选；已用额度 = max(现存动态, 账本)，删动态不回升）
  * @returns 升序计划（从旧到新），调用方逐条生成动态
  */
+/** 某天该几点发：过去的日子全天随机；今天只挑「已经过去的时段」（最晚 now-5 分钟，最早 7:00）。
+ *  ★2026-09-18 修：首访路径原来对「今天」也用全天随机，会造出未来时间戳的动态
+ *  （显示成「刚刚」永远不变）——两条路径统一走这里，时间戳绝不落在未来。 */
+function pickPostTimeForDay(day: number, now: number, rand: () => number): number | null {
+  const todayStart = dayStartOf(now)
+  if (day >= todayStart) {
+    const lo = todayStart + 7 * 60 * 60 * 1000
+    if (now < lo) return null
+    const hi = now - 5 * 60 * 1000
+    if (hi <= lo) return lo
+    return lo + Math.floor(rand() * (hi - lo))
+  }
+  return pickDayPostHour(day, rand)
+}
+
 export function planBackfillSlots(
   lastVisit: number | null,
   now: number,
@@ -454,7 +469,9 @@ export function planBackfillSlots(
       const u = dayUsage(posts, dk, ledger)
       if (isEvent ? u.event >= 1 : u.daily >= MAX_POSTS_PER_DAY) continue
       if (u.total >= MAX_TOTAL_PER_DAY) continue
-      out.push({ at: pickDayPostHour(day, rand), source: isEvent ? 'event' : 'daily' })
+      const at = pickPostTimeForDay(day, now, rand)
+      if (at == null) continue   // 今天还没到 7 点：TA 今天还没发圈
+      out.push({ at, source: isEvent ? 'event' : 'daily' })
     }
     return out.sort((a, b) => a.at - b.at)
   }
@@ -475,16 +492,7 @@ export function planBackfillSlots(
 
   // 生成某天动态的时间戳：今天只在「今天已过去的时段」里挑（最晚 now-5 分钟，最早 7:00），
   // 过去的日子（昨天/前天）用 7:00-23:59 全时段随机——绝不让时间戳落在未来，也绝不被拖到凌晨。
-  const pickTime = (day: number): number | null => {
-    if (day === todayStart) {
-      const lo = day + 7 * 60 * 60 * 1000 // 今天最早 7:00 发圈
-      if (now < lo) return null // 现在还没到 7 点：今天 TA 还没发圈，正常
-      const hi = now - 5 * 60 * 1000
-      if (hi <= lo) return lo // 极端兜底：刚过 7 点没几分钟
-      return lo + Math.floor(rand() * (hi - lo))
-    }
-    return pickDayPostHour(day, rand)
-  }
+  const pickTime = (day: number): number | null => pickPostTimeForDay(day, now, rand)
 
   // 当天是否已被窗口覆盖（lastVisit 是今天之前的日子 → 今天在窗口里，事件当天在窗口内规划）
   const todayCovered = todayStart > lastDay && days.includes(todayStart)

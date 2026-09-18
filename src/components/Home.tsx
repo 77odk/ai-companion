@@ -64,7 +64,8 @@ function fmtLifeTime(ts: number): string {
   const days = Math.floor((startOfDay(now) - startOfDay(d)) / 86400000)
   if (days <= 0) {
     const m = Math.floor((now.getTime() - ts) / 60000)
-    return m < 1 ? '刚刚' : hm
+    // ★同 SpaceLife：未来时间戳显示时刻，不显示「刚刚」（2026-09-18 修）
+    return (m >= 0 && m < 1) ? '刚刚' : hm
   }
   if (days === 1) return `昨天 ${hm}`
   if (days === 2) return `前天 ${hm}`
