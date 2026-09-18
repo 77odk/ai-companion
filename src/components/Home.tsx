@@ -28,6 +28,7 @@ import { MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { loadCurrentPosts } from '../lib/aiSpace'
 import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from '../lib/taRuntime'
 import { displaySessionName } from '../lib/sessionFlow'
+import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
 import {
   clampCycleDays,
   dayOptions,
@@ -153,6 +154,12 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
     const timer = window.setTimeout(() => setRuntimeNow(Date.now()), Math.min(delay, 2_147_483_647))
     return () => window.clearTimeout(timer)
   }, [runtime.activityId, runtime.plannedUntil, sid])
+  // Chat 把明确动作写回 Runtime 时 saveAll 会发同页数据变更事件；Home 若仍挂载，立即重读“TA 此刻”。
+  useEffect(() => {
+    const refreshRuntime = () => setRuntimeNow(Date.now())
+    window.addEventListener(ELUVIN_DATA_CHANGE, refreshRuntime)
+    return () => window.removeEventListener(ELUVIN_DATA_CHANGE, refreshRuntime)
+  }, [sid])
   // PATCH-LANG：显示语言走项目现有语言来源 getSessionLang(sid)（Chat 存会话语言）；英文会话显示英文 label
   const homeLang = useMemo(() => getSessionLang(sid), [sid])
   // Busy（仅展示优先级最高；只读现有 getBusyState，不写、不影响 Busy 数据层）
