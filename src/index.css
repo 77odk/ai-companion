@@ -4142,6 +4142,122 @@ textarea.persona-input {
   text-align: center;
 }
 
+.profile-card-link {
+  position: relative;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  appearance: none;
+}
+
+.profile-card-link:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 34%, transparent);
+}
+
+.profile-avatar-display {
+  cursor: inherit;
+}
+
+.profile-card-name {
+  display: block;
+  max-width: 100%;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-card-bio,
+.profile-card-region {
+  display: block;
+  max-width: 100%;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-card-bio {
+  font-size: 14px;
+}
+
+.profile-card-region {
+  margin-top: -4px;
+  opacity: 0.88;
+}
+
+.profile-card-chevron {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-muted);
+  transform: translateY(-50%);
+}
+
+.profile-edit-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 24px 18px 20px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+}
+
+.profile-edit-card > .profile-avatar-wrap {
+  align-self: center;
+}
+
+.profile-edit-card .profile-avatar-pick {
+  border-top: 1px dashed color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.profile-region-hint {
+  margin-top: 6px;
+  line-height: 1.55;
+}
+
+.privacy-card {
+  padding: 20px 18px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+}
+
+.privacy-lead {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--color-text);
+}
+
+.privacy-section {
+  padding: 16px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.privacy-section h3 {
+  margin: 0 0 7px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.privacy-section p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--color-text-muted);
+}
+
 .profile-avatar-wrap {
   position: relative;
   margin-bottom: 2px;
@@ -4276,6 +4392,20 @@ textarea.persona-input {
 .entry-row + .entry-row {
   border-top: 1px solid var(--color-border);
 }
+
+.entry-row-disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.entry-row-disabled .entry-status {
+  color: var(--color-text-muted);
+}
+
+.profile-group-card > .update-controls-inline {
+  border-top: 1px solid var(--color-border);
+}
+
 
 .entry-icon {
   width: 34px;
