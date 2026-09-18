@@ -7,6 +7,7 @@ import {
 } from './cloudState.ts'
 import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE } from './dataChange.ts'
 import { getAccount } from './sync.ts'
+import { collectAllAIProfiles } from './storage.ts'
 import { getSessionsCache } from './sessionStore.ts'
 import { applySpacePostFromCloud, deleteSpacePostFromCloud } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
@@ -33,6 +34,7 @@ const PERSONAL_DAYS_KEY = 'ai_companion_anniversaries'
 const ANNIVERSARIES_PREFIX = 'ai_companion_anniversaries_'
 const MAIN_ANNIVERSARY_KEY = 'ai_companion_main_anniversary'
 const ANNIVERSARY_VIEW_UPDATE = 'memory-updated'
+const AI_PROFILE_KEY = 'ai_companion_ai_profile'
 
 type JsonRecord = Record<string, unknown>
 
@@ -559,7 +561,6 @@ let runtimeSnapshot = new Map<string, TaRuntimeState>()
 function resetRuntimeSnapshot(): void {
   runtimeSnapshot = runtimeEntities()
 }
-
 function captureTaRuntime(): void {
   const next = runtimeEntities()
   for (const [sessionId, state] of next) {
@@ -588,6 +589,67 @@ function deleteRuntimeEntity(entity: CloudStateEntity): void {
   deleteTaRuntimeFromCloud(entity.sessionId)
 }
 
+// ---------- 角色资料（昵称/头像）云同步（2026-09-18 七七拍板）----------
+// 病根：新同步通道里没有「角色资料」这一类，手机新建的角色电脑上取不到 →
+// 旧规则「该角色没资料就回落全局那份」把老角色的头像名字借给了新角色（显示成饺子）。
+// 规则：每个角色一份实体（entityId=会话 id，session 作用域；全局那份 entityId='global'），
+// 应用照纪念日/主题同一条「云端权威」——手机上改的头像名字要能落到电脑上。
+function aiProfileStorageKey(entityId: string): string {
+  return entityId === GLOBAL ? AI_PROFILE_KEY : `${AI_PROFILE_KEY}_${entityId}`
+}
+
+function validAiProfile(value: unknown): { nickname: string; avatar: string } | null {
+  const item = record(value)
+  if (!item) return null
+  const nickname = typeof item.nickname === 'string' ? item.nickname.trim() : ''
+  const avatar = typeof item.avatar === 'string' && item.avatar.startsWith('data:') ? item.avatar : ''
+  if (!nickname && !avatar) return null
+  return { nickname: nickname || 'TA', avatar }
+}
+
+function profileEntities(): Map<string, { nickname: string; avatar: string }> {
+  const out = new Map<string, { nickname: string; avatar: string }>()
+  for (const [sid, profile] of Object.entries(collectAllAIProfiles())) {
+    const entityId = sid === '_global' ? GLOBAL : String(sid)
+    const value = validAiProfile(profile)
+    if (entityId && value) out.set(entityId, value)
+  }
+  return out
+}
+
+let profileSnapshot = new Map<string, { nickname: string; avatar: string }>()
+function resetProfileSnapshot(): void {
+  profileSnapshot = profileEntities()
+}
+
+function captureAiProfiles(): void {
+  const next = profileEntities()
+  for (const [entityId, value] of next) {
+    const previous = profileSnapshot.get(entityId)
+    if (!previous || JSON.stringify(previous) !== JSON.stringify(value)) {
+      queue('profile', entityId, value, false, entityId === GLOBAL ? undefined : entityId)
+    }
+  }
+  for (const entityId of profileSnapshot.keys()) {
+    if (!next.has(entityId)) queue('profile', entityId, undefined, true, entityId === GLOBAL ? undefined : entityId)
+  }
+  profileSnapshot = next
+}
+
+function applyAiProfileEntity(entity: CloudStateEntity): void {
+  if (!entity.entityId) return
+  const value = validAiProfile(entity.payload)
+  if (!value) return
+  localStorage.setItem(aiProfileStorageKey(entity.entityId), JSON.stringify(value))
+  profileSnapshot.set(entity.entityId, value)
+}
+
+function deleteAiProfileEntity(entity: CloudStateEntity): void {
+  if (!entity.entityId) return
+  localStorage.removeItem(aiProfileStorageKey(entity.entityId))
+  profileSnapshot.delete(entity.entityId)
+}
+
 let initialized = false
 export function initCloudStateResourceAdapters(): void {
   if (initialized) return
@@ -597,6 +659,7 @@ export function initCloudStateResourceAdapters(): void {
   resetSpaceSnapshot()
   resetRuntimeSnapshot()
   resetWeeklySnapshot()
+  resetProfileSnapshot()
   registerTaRuntimeCloudSnapshotResetter(resetRuntimeSnapshot)
   registerCloudStateAdapter('theme', {
     apply: applyThemeEntity,
@@ -639,10 +702,15 @@ export function initCloudStateResourceAdapters(): void {
     apply: applyWeeklyEntity,
     delete: deleteWeeklyEntity,
   })
+  registerCloudStateAdapter('profile', {
+    apply: applyAiProfileEntity,
+    delete: deleteAiProfileEntity,
+  })
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, capturePersonalDays)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAnniversaries)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureSpacePosts)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureTaRuntime)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureWeeklyReviews)
-  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot() })
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAiProfiles)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot() })
 }
