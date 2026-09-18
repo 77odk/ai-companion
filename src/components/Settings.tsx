@@ -83,7 +83,7 @@ interface Props {
   onAnniversaryBack?: () => void
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoSpace, onGoProfile, initialPage, onAnniversaryBack }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onAnniversaryBack }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
 
   if (page === 'provider') {
@@ -123,12 +123,10 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenProvider={() => setPage('provider')}
       onOpenGuide={() => onGoGuide?.()}
       onOpenAbout={() => setPage('about')}
-      onOpenWork={() => setPage('work')}
       onOpenAppearance={() => setPage('appearance')}
       onOpenAnniversary={() => setPage('anniversary')}
       onGoRoles={() => onGoRoles?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
-      onGoSpace={() => onGoSpace?.()}
       onGoProfile={() => onGoProfile?.()}
       onGoWelcome={onGoWelcome}
     />
@@ -170,7 +168,6 @@ function MainCenter({
   onOpenProvider,
   onOpenGuide,
   onOpenAbout,
-  onOpenWork,
   onOpenAppearance,
   onOpenAnniversary,
   onGoRoles,
@@ -184,7 +181,6 @@ function MainCenter({
   onOpenProvider: () => void
   onOpenGuide: () => void
   onOpenAbout: () => void
-  onOpenWork: () => void
   onOpenAppearance: () => void
   onOpenAnniversary: () => void
   onGoRoles?: () => void
@@ -246,7 +242,7 @@ function MainCenter({
       </ProfileGroup>
 
       <ProfileGroup title="即将开放">
-        <EntryRow icon={<WorkIcon />} label="AI 工作台" status="即将开放" onClick={onOpenWork} />
+        <EntryRow icon={<WorkIcon />} label="AI 工作台" status="即将开放" disabled />
       </ProfileGroup>
 
       <ProfileGroup title="账号与隐私">
@@ -316,11 +312,10 @@ function EntryRow({
 
 function UpdateControls({ standalone = false }: { standalone?: boolean }) {
   const [expanded, setExpanded] = useState(false)
-  const [checked, setChecked] = useState(false)
 
   const checkUpdate = () => {
-    setChecked(true)
     setExpanded(true)
+    location.reload()
   }
 
   const doForceRefresh = () => {
@@ -353,7 +348,7 @@ function UpdateControls({ standalone = false }: { standalone?: boolean }) {
       <button type="button" className="entry-row" onClick={() => setExpanded((v) => !v)}>
         <span className="entry-icon"><UpdateIcon /></span>
         <span className="entry-label">检查更新</span>
-        {checked && <span className="entry-status">已是最新</span>}
+        <span className="entry-status">当前版本</span>
         <svg className="entry-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M9 6l6 6-6 6" />
         </svg>
