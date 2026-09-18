@@ -80,7 +80,7 @@ function fmtLifeTime(ts: number): string {
 }
 
 /* UI2-VISUAL-CLOSURE：大数字时间窗的展示拆解（纯展示，不造新算法）。
-   生日主数字：MM · DD（从 date 提取）；副文案：现有 formatCountdown 倒计时（强制 countdown 口径）。
+   生日主信息：现有 formatCountdown 倒计时（强制 countdown 口径）；副信息：具体日期。
    生理期主数字：优先「距预计经期 N 天」（现有 daysUntilPeriod），否则现有估算兜底；
    副文案：现有 formatPeriodEstimate / 「预计经期开始」。 */
 function dateMD(date: string): { m: string; d: string } | null {
@@ -90,13 +90,13 @@ function dateMD(date: string): { m: string; d: string } | null {
   return md ? { m: md[1], d: md[2] } : null
 }
 
-function birthdayNum(a: Anniversary): string {
-  const md = dateMD(a.date)
-  return md ? `${md.m} · ${md.d}` : '— —'
+function birthdayNum(a: Anniversary, now: number): string {
+  return formatCountdown({ ...a, countMode: 'countdown' }, now) || '— —'
 }
 
-function birthdaySub(a: Anniversary, now: number): string {
-  return formatCountdown({ ...a, countMode: 'countdown' }, now) || '每年都会记得'
+function birthdaySub(a: Anniversary): string {
+  const md = dateMD(a.date)
+  return md ? `${Number(md.m)} 月 ${Number(md.d)} 日` : '每年都会记得'
 }
 
 function periodNum(a: Anniversary, now: number): string {
@@ -420,8 +420,8 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
               onClick={openBirthday}
             >
               <span className="home-time-window-k">我的生日</span>
-              <span className="home-time-window-num">{birthday ? birthdayNum(birthday) : '— —'}</span>
-              <span className="home-time-window-sub">{birthday ? birthdaySub(birthday, now.getTime()) : '点一下写下'}</span>
+              <span className="home-time-window-num">{birthday ? birthdayNum(birthday, now.getTime()) : '— —'}</span>
+              <span className="home-time-window-sub">{birthday ? birthdaySub(birthday) : '点一下写下'}</span>
             </button>
 
             <button
