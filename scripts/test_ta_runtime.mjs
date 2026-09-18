@@ -7,12 +7,14 @@ import {
   applyCloudTaRuntime,
   buildTaRuntimeContext,
   collectAllTaRuntime,
+  detectRuntimeChatAction,
   formatRuntimeUntil,
   getOrAdvanceTaRuntime,
   getSessionPersona,
   getTaRuntime,
   runtimeDisplayLabel,
   runtimeSlot,
+  syncTaRuntimeFromAssistantText,
 } from '../src/lib/taRuntime.ts'
 
 let pass = 0
@@ -417,6 +419,45 @@ group('I. PATCH-LANG：zh/en 展示语言一致性')
     'en',
   )
   ok(enCtxOld.includes('Watching a movie') && !/[\u4e00-\u9fa5]/.test(enCtxOld), 'I8 老数据中文 label → en context 仍纯英文')
+}
+
+// ============ J. 聊天动作 → Runtime 一致性 ============
+group('J. 聊天动作 → Runtime 一致性')
+{
+  eq(detectRuntimeChatAction('我先去洗澡了，晚点聊'), { kind: 'start', activityId: 'shower' }, 'J1 明确自述洗澡 → start shower')
+  eq(detectRuntimeChatAction('你去洗澡吧，早点休息'), null, 'J1 给对方的建议不误判成 TA 自己洗澡')
+  eq(detectRuntimeChatAction('等会儿我去洗澡'), null, 'J1 未来计划不提前写成现在进行中')
+  eq(detectRuntimeChatAction('我洗完澡了'), { kind: 'finish', activityId: 'shower' }, 'J2 洗完澡 → finish shower')
+  eq(detectRuntimeChatAction('我洗完澡了，我现在在看书'), { kind: 'start', activityId: 'reading' }, 'J2 同句结束旧动作并开始新动作 → 以后出现的新动作胜')
+  eq(detectRuntimeChatAction("I'm reading a book"), { kind: 'start', activityId: 'reading' }, 'J3 English mode 明确动作可识别')
+
+  clearLS()
+  const startAt = new Date(2026, 8, 18, 21, 0, 0).getTime()
+  const started = syncTaRuntimeFromAssistantText('chat-1', '', '我先去洗澡了', startAt, RAND_HALF)
+  eq(started?.activityId, 'shower', 'J4 写回 shower activityId')
+  eq(started?.source, 'chat', 'J4 聊天明确动作标记 source=chat')
+  ok(started.plannedUntil > startAt && started.plannedUntil <= startAt + 2 * 60 * 60 * 1000, 'J4 chat 动作有界，不无限挂住')
+  eq(getTaRuntime('chat-1')?.activityId, 'shower', 'J4 同一 Runtime 存储立即可读')
+
+  const afterFinishAt = startAt + 12 * 60 * 1000
+  const finished = syncTaRuntimeFromAssistantText('chat-1', '', '我洗完澡了', afterFinishAt, RAND_HALF)
+  ok(finished != null && finished.source !== 'chat', 'J5 明确结束后立即回到日常调度')
+  ok(finished.activityId !== 'shower', 'J5 结束 shower 后不继续挂 shower')
+
+  clearLS()
+  const routine = getOrAdvanceTaRuntime('chat-2', '', startAt, RAND_HALF)
+  const noClear = syncTaRuntimeFromAssistantText('chat-2', '', '我洗完澡了', startAt + 1000, RAND_HALF)
+  eq(noClear, null, 'J6 finish 只清同一 chat override，不误清自动 Runtime')
+  eq(getTaRuntime('chat-2'), routine, 'J6 自动 Runtime 原样保留')
+
+  clearLS()
+  const expiring = syncTaRuntimeFromAssistantText('chat-3', '', '我正在看书', startAt, RAND_HALF)
+  const advanced = getOrAdvanceTaRuntime('chat-3', '', expiring.plannedUntil + 1, RAND_HALF)
+  ok(advanced.source !== 'chat', 'J7 chat 动作到期后 lazy getter 自动退回日常调度')
+
+  ok(chatSrc.includes('syncTaRuntimeFromAssistantText'), 'J8 Chat 最终回复 commit 点挂载 Runtime 写回')
+  ok(chatSrc.includes("filter((m) => m.role === 'assistant' && m.ts === assistantTs)"), 'J8 只读本轮最终 assistant 消息，不碰历史消息')
+  ok(homeSrc.includes('ELUVIN_DATA_CHANGE'), 'J9 Home 监听同页数据变更，chat 写回后能即时重读 TA 此刻')
 }
 
 console.log(`\n结果：${pass} 通过，${fail} 失败`)
