@@ -370,7 +370,36 @@ export function buildPostText(
   return text
 }
 
-/** 生成一条动态：随机 kind → 挑模板 → 替换占位（v3 起不再写 art 色卡字段，按 source 通道标记） */
+/** 首次认识当天的模板兜底：只挑不提对方/共同过去的自我生活内容，避免刚认识就凭空有旧聊天/旧经历。 */
+function pickFirstDayTemplate(
+  used: UsedTemplates,
+  now: number,
+  rand: () => number,
+  lang: 'zh' | 'en',
+): { kind: SpaceKind; templateIndex: number } {
+  const pool = lang === 'en' ? EN_TEMPLATES : TEMPLATES
+  const cutoff = now - THIRTY_DAYS
+  const candidates: Array<{ kind: SpaceKind; templateIndex: number; last: number }> = []
+  for (const kind of KIND_KEYS) {
+    const list = pool[kind] ?? []
+    for (let i = 0; i < list.length; i++) {
+      const raw = list[i] ?? ''
+      const mentionsRelationship =
+        lang === 'en'
+          ? /\{yourName\}|\b(?:you|your|yours|we|us|our|together|conversation|chat)\b/i.test(raw)
+          : /\{yourName\}|你|我们|咱们|一起|聊天|下次|想你/.test(raw)
+      if (!mentionsRelationship) candidates.push({ kind, templateIndex: i, last: used[`${kind}:${i}`] ?? 0 })
+    }
+  }
+  const fresh = candidates.filter((x) => x.last < cutoff)
+  const list = fresh.length > 0 ? fresh : candidates
+  if (list.length === 0) return { kind: '日常', templateIndex: 1 }
+  if (fresh.length > 0) return list[Math.floor(rand() * list.length) % list.length]
+  return [...list].sort((a, b) => a.last - b.last)[0]
+}
+
+/** 生成一条动态：随机 kind → 挑模板 → 替换占位（v3 起不再写 art 色卡字段，按 source 通道标记）。
+ * relationshipStart 仅用于认识当天的模板降级：不制造认识之前的共同聊天/共同经历。 */
 export function generatePost(
   vars: TemplateVar,
   used: UsedTemplates,
@@ -379,9 +408,18 @@ export function generatePost(
   source: SpaceSource = 'daily',
   lang: 'zh' | 'en' = 'zh',
   generationSlotId?: string,
+  relationshipStart?: number,
 ): { post: SpacePost; templateKey: string } {
-  const kind = KIND_KEYS[Math.floor(rand() * KIND_KEYS.length) % KIND_KEYS.length]
-  const templateIndex = pickTemplateIndex(kind, used, now, rand)
+  const isFirstDay =
+    Number.isFinite(relationshipStart) && dayKeyOf(now) === dayKeyOf(relationshipStart as number)
+  const chosen = isFirstDay
+    ? pickFirstDayTemplate(used, now, rand, lang)
+    : {
+        kind: KIND_KEYS[Math.floor(rand() * KIND_KEYS.length) % KIND_KEYS.length],
+        templateIndex: -1,
+      }
+  const kind = chosen.kind
+  const templateIndex = chosen.templateIndex >= 0 ? chosen.templateIndex : pickTemplateIndex(kind, used, now, rand)
   const text = buildPostText(kind, templateIndex, vars, lang)
   const id = `p${now.toString(36)}${Math.floor(rand() * 1e6).toString(36)}`
   return {
@@ -454,8 +492,11 @@ export function planBackfillSlots(
   activeDays: ReadonlySet<string>,
   rand: () => number = Math.random,
   ledger?: SpaceLedger,
+  notBefore?: number,
 ): SpaceSlot[] {
   const h = new Date(now).getHours()
+  // 认识边界按本地自然日：新角色只能从认识 TA 的那一天开始铺动态，绝不回填更早日期。
+  const minDay = Number.isFinite(notBefore) ? dayStartOf(notBefore as number) : Number.NEGATIVE_INFINITY
   // 凌晨 0-4 点访问：今天的「白天发圈时刻」还没到来，把锚点日让给昨天
   const anchorDay = h < 5 ? dayStartOf(now - DAY_INTERVAL_MS) : dayStartOf(now)
   const out: SpaceSlot[] = []
@@ -464,6 +505,7 @@ export function planBackfillSlots(
   if (lastVisit == null) {
     for (let i = MAX_BACKFILL_DAYS - 1; i >= 0; i--) {
       const day = anchorDay - i * DAY_INTERVAL_MS
+      if (day < minDay) continue
       const dk = dayKeyOf(day)
       const isEvent = activeDays.has(dk)
       const u = dayUsage(posts, dk, ledger)
@@ -486,7 +528,7 @@ export function planBackfillSlots(
   const days: number[] = []
   for (let i = MAX_BACKFILL_DAYS - 1; i >= 0; i--) {
     const day = anchorDay - i * DAY_INTERVAL_MS
-    if (day > lastDay) days.push(day)
+    if (day > lastDay && day >= minDay) days.push(day)
   }
   days.sort((a, b) => a - b)
 
@@ -519,6 +561,7 @@ export function planBackfillSlots(
   // 白天时段进空间仍趁热补 1 条今天的事件动态（防抖已过才可能走到这）
   if (
     h >= 5 &&
+    todayStart >= minDay &&
     !todayCovered &&
     activeDays.has(todayKey) &&
     dayUsage(posts, todayKey, ledger).event < 1 &&
@@ -537,8 +580,9 @@ export function planBackfillTimestamps(
   posts: SpacePost[],
   activeDays: ReadonlySet<string>,
   rand: () => number = Math.random,
+  notBefore?: number,
 ): number[] {
-  return planBackfillSlots(lastVisit, now, posts, activeDays, rand).map((s) => s.at)
+  return planBackfillSlots(lastVisit, now, posts, activeDays, rand, undefined, notBefore).map((s) => s.at)
 }
 
 export interface SpaceState {
@@ -566,8 +610,9 @@ export function advanceTimeline(
   rand: () => number = Math.random,
   ledger?: SpaceLedger,
   lang: 'zh' | 'en' = 'zh',
+  relationshipStart?: number,
 ): AdvanceResult {
-  const slots = planBackfillSlots(prev.lastVisit, now, prev.posts, activeDays, rand, ledger)
+  const slots = planBackfillSlots(prev.lastVisit, now, prev.posts, activeDays, rand, ledger, relationshipStart)
   const posts = [...prev.posts]
   const used = { ...prev.used }
   let created = 0
@@ -582,7 +627,7 @@ export function advanceTimeline(
     }
     // 每条动态按自己的时间戳算时段/季节（回填昨天就用昨天的时段，凌晨不穿帮）
     const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(slot.at), season: getSeason(slot.at) }
-    const g = generatePost(dayVars, used, slot.at, rand, slot.source, lang)
+    const g = generatePost(dayVars, used, slot.at, rand, slot.source, lang, undefined, relationshipStart)
     used[g.templateKey] = now
     posts.unshift(g.post)
     created++

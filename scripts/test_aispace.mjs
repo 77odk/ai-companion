@@ -16,6 +16,7 @@ import {
   pickDayPostHour,
   pickTemplateIndex,
   buildPostText,
+  generatePost,
   advanceTimeline,
   dayKeyOf,
   pickReplyFallback,
@@ -123,6 +124,30 @@ for (const ts of latePlan) {
   ok(dayKeyOf(ts) !== dayKeyOf(midnight), '凌晨 3 点访问不回填今天（TA 在睡觉）')
   ok(ts < dayStartOf(midnight), '凌晨访问回填的都在昨天及以前')
 }
+
+console.log('\n[3b] 新角色认识边界：过去只能从 firstSeen 当天开始')
+const firstSeenToday = new Date(2026, 7, 22, 9, 30).getTime()
+const boundedToday = planBackfillTimestamps(null, now, [], new Set(), seeded(201), firstSeenToday)
+eq([...new Set(boundedToday.map((ts) => dayKeyOf(ts)))], ['2026-08-22'], '今天刚认识 → 首访不再伪造前两天动态')
+ok(boundedToday.every((ts) => dayKeyOf(ts) >= dayKeyOf(firstSeenToday)), '所有首访槽位都不早于认识日')
+
+const firstSeenYesterday = new Date(2026, 7, 21, 18, 0).getTime()
+const boundedYesterday = planBackfillTimestamps(null, now, [], new Set(), seeded(202), firstSeenYesterday)
+ok(boundedYesterday.every((ts) => dayKeyOf(ts) >= '2026-08-21'), '昨天认识 → 最早只到昨天')
+ok(new Set(boundedYesterday.map((ts) => dayKeyOf(ts))).size <= 2, '昨天认识 → 最多铺昨天和今天')
+
+const beforeStartVisit = new Date(2026, 7, 19, 12, 0).getTime()
+const regularBounded = planBackfillSlots(beforeStartVisit, now, [], new Set(['2026-08-20', '2026-08-21']), seeded(203), undefined, firstSeenYesterday)
+ok(regularBounded.every((slot) => dayKeyOf(slot.at) >= '2026-08-21'), '非首访回填同样不能越过认识日')
+
+console.log('\n[3c] 认识当天模板降级：只写 TA 自己，不编造共同过去')
+const firstDayVars = { taName: 'TA', yourName: '小七', season: '夏', timeWord: '中午', weatherWord: '晴' }
+for (let seed = 1; seed <= 20; seed++) {
+  const g = generatePost(firstDayVars, {}, now, seeded(300 + seed), 'daily', 'zh', undefined, firstSeenToday)
+  ok(!/小七|你|我们|咱们|一起|聊天|下次|想你/.test(g.post.text), `首日模板 seed=${seed} 不造共同过去：${g.post.text.slice(0, 16)}…`)
+}
+const afterFirstDay = generatePost(firstDayVars, {}, now + DAY, seeded(399), 'daily', 'zh', undefined, firstSeenToday)
+ok(typeof afterFirstDay.post.text === 'string' && afterFirstDay.post.text.length > 0, '认识日之后恢复正常模板池')
 
 console.log('\n[4] v3 配额按通道：日常满 2 条不吞事件 / 事件不占日常配额 / 一天一条事件 / 全天 ≤3')
 const yPosts = [

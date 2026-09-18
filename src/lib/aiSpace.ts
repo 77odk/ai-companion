@@ -44,7 +44,7 @@ import {
 import { loadChatTopics, collectTopicDays } from './chatTopics.ts'
 import { chatCompletion } from './api.ts'
 import { notifyDataChanged } from './dataChange.ts'
-import { loadPersona, loadSettings } from './storage.ts'
+import { getFirstSeen, loadPersona, loadSettings } from './storage.ts'
 import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
 import { resolveRolePersona } from './sessionProfile.ts'
 import { migrateGlobalToDefaultSession } from './roleData.ts'
@@ -301,7 +301,8 @@ export function refreshSpace(
   const activeDays = collectTopicDays(topics, dayKeyOf(now))
   // v3 配额账本（只留今天的键）：计划时已用额度 = max(现存动态, 账本)——删了动态配额照扣
   const ledger = todayLedger(sessionId, now)
-  const slots = planBackfillSlots(prev.lastVisit, now, prev.posts, activeDays, Math.random, ledger)
+  const relationshipStart = getFirstSeen(sessionId)
+  const slots = planBackfillSlots(prev.lastVisit, now, prev.posts, activeDays, Math.random, ledger, relationshipStart)
 
   // 没人设：不调 LLM。空间为空时用模板兜底生成 1 条保证空间不空（受账本当天配额约束），其余交给「先写人设」引导
   if (!persona.trim()) {
@@ -314,7 +315,7 @@ export function refreshSpace(
     const fallbackSlot = { at: now, source: 'daily' as const }
     const slotId = generationSlotIdFor(fallbackSlot)
     if (prev.posts.length === 0 && tLedger.daily < MAX_POSTS_PER_DAY && !slotWasUsed(prev, slotId)) {
-      const g = generatePost(vars, used, now - 3 * 60 * 1000, Math.random, 'daily', lang, slotId)
+      const g = generatePost(vars, used, now - 3 * 60 * 1000, Math.random, 'daily', lang, slotId, relationshipStart)
       used[`${SLOT_MARKER_PREFIX}${slotId}`] = PERMANENT_SLOT_MARKER
       used[g.templateKey] = now
       posts.unshift({ ...g.post, ...(sessionId ? { sessionId } : {}) })
@@ -348,7 +349,7 @@ export function refreshSpace(
   const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
   let created = 0
   for (const slot of eligible) {
-    const g = generatePost({ ...vars, timeWord: getTimeWord(slot.at), season: getSeason(slot.at) }, state.used, slot.at, Math.random, slot.source, spaceLang, generationSlotIdFor(slot))
+    const g = generatePost({ ...vars, timeWord: getTimeWord(slot.at), season: getSeason(slot.at) }, state.used, slot.at, Math.random, slot.source, spaceLang, generationSlotIdFor(slot), relationshipStart)
     state.used[`${SLOT_MARKER_PREFIX}${generationSlotIdFor(slot)}`] = PERMANENT_SLOT_MARKER
     state.used[g.templateKey] = now
     state.posts = mergeNewPosts(state.posts, [{ ...g.post, ...(sessionId ? { sessionId } : {}) }])
@@ -387,6 +388,8 @@ export async function generatePendingPosts(
   const persona = sessionPersona(sessionId)
   const settings = loadSettings()
   const vars = buildVars(taName, yourName, now)
+  const relationshipStart = getFirstSeen(sessionId)
+  const relationshipStartDate = dayKeyOf(relationshipStart)
   // 会话语言（canonical 优先，回退人设检测）——LLM 与模板降级两条路径共用
   const spaceLang = resolveSpaceLang(sessionId, persona)
   // v3 素材注入：TA 最近自己发过的 1-2 条动态原文（宁缺毋滥）——别重复，生活继续往前
@@ -471,6 +474,7 @@ export async function generatePendingPosts(
           // v3 时刻锚 + 事件通道标记（事件动态提示词按「那天共同的事」写，日常仍写自己的生活）
           nowAnchor,
           postSource: source,
+          relationshipStartDate,
         },
         spaceLang,
       )
@@ -493,7 +497,7 @@ export async function generatePendingPosts(
     if (!made) {
       // 模板降级也按 at 的时段/季节 + 来源通道生成（回填昨天就用昨天的时段词，不穿帮）
       const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(at), season: getSeason(at) }
-      const g = generatePost(dayVars, used, at, rand, source, spaceLang, generationSlotIdFor(slot))
+      const g = generatePost(dayVars, used, at, rand, source, spaceLang, generationSlotIdFor(slot), relationshipStart)
       used[g.templateKey] = now
       made = { post: g.post, templateKey: g.templateKey }
       usedFallback = true
