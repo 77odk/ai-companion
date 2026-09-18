@@ -19,6 +19,8 @@ interface TimeWheelProps {
 export default function TimeWheel({ options, value, onChange, ariaLabel, visible = 5, className }: TimeWheelProps) {
   const ref = useRef<HTMLDivElement>(null)
   const lastIdx = useRef(-1)
+  const drag = useRef<{ pointerId: number; startY: number; startTop: number; moved: boolean } | null>(null)
+  const suppressClick = useRef(false)
   const containerH = ITEM_H * visible
   const spacerH = (containerH - ITEM_H) / 2
   const idx = Math.max(0, options.indexOf(value))
@@ -35,6 +37,61 @@ export default function TimeWheel({ options, value, onChange, ariaLabel, visible
       }
     })
   }, [options, onChange])
+
+  const selectIndex = useCallback((i: number, behavior: ScrollBehavior = 'smooth') => {
+    const el = ref.current
+    if (!el || options[i] === undefined) return
+    lastIdx.current = i
+    onChange(options[i])
+    el.scrollTo({ top: i * ITEM_H, behavior })
+  }, [options, onChange])
+
+  // 桌面鼠标：按住上下拖动；触屏继续走原生滚动，不接管 pointer。
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return
+    const el = ref.current
+    if (!el) return
+    drag.current = {
+      pointerId: e.pointerId,
+      startY: e.clientY,
+      startTop: el.scrollTop,
+      moved: false,
+    }
+    el.setPointerCapture(e.pointerId)
+    el.classList.add('is-dragging')
+  }, [])
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const el = ref.current
+    const state = drag.current
+    if (!el || !state || state.pointerId !== e.pointerId) return
+    const dy = e.clientY - state.startY
+    if (Math.abs(dy) > 3) state.moved = true
+    el.scrollTop = state.startTop - dy
+    if (state.moved) e.preventDefault()
+  }, [])
+
+  const finishPointerDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const el = ref.current
+    const state = drag.current
+    if (!el || !state || state.pointerId !== e.pointerId) return
+    suppressClick.current = state.moved
+    drag.current = null
+    el.classList.remove('is-dragging')
+    if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId)
+    if (state.moved) {
+      const i = Math.max(0, Math.min(options.length - 1, Math.round(el.scrollTop / ITEM_H)))
+      selectIndex(i)
+    }
+  }, [options.length, selectIndex])
+
+  const handleOptionClick = useCallback((i: number) => {
+    if (suppressClick.current) {
+      suppressClick.current = false
+      return
+    }
+    selectIndex(i)
+  }, [selectIndex])
 
   // 外部 value 变化（回填 / 外部 clamp）→ 对齐滚动位置；相同索引不触发 onChange，无循环
   useEffect(() => {
@@ -53,15 +110,20 @@ export default function TimeWheel({ options, value, onChange, ariaLabel, visible
       role="listbox"
       aria-label={ariaLabel}
       onScroll={handleScroll}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={finishPointerDrag}
+      onPointerCancel={finishPointerDrag}
       style={{ height: containerH }}
     >
       <div className="tw-spacer" style={{ height: spacerH }} aria-hidden="true" />
-      {options.map((o) => (
+      {options.map((o, i) => (
         <div
           key={o}
           role="option"
           aria-selected={o === value}
           className={`tw-item${o === value ? ' is-selected' : ''}`}
+          onClick={() => handleOptionClick(i)}
         >
           {o}
         </div>
