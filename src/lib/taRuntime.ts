@@ -190,7 +190,7 @@ function createState(
 ): TaRuntimeState {
   const durMin = activity.minMin + Math.floor(rand() * (activity.maxMin - activity.minMin + 1))
   const windowEnd = activityWindowEnd(activity, new Date(now))
-  const plannedUntil = Math.max(now + 60000, Math.min(now + durMin * 60000, windowEnd ?? Number.POSITIVE_INFINITY))
+  const plannedUntil = Math.min(now + durMin * 60000, windowEnd ?? Number.POSITIVE_INFINITY)
   const recentActivityIds = [activity.id, ...recentIds.filter((id) => id !== activity.id)].slice(0, 3)
   return {
     activityId: activity.id,
