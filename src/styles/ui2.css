@@ -677,6 +677,13 @@
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: auto;
+  cursor: grab;
+  user-select: none;
+}
+
+.tw-col.is-dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;
 }
 
 .tw-col::-webkit-scrollbar {
