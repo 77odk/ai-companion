@@ -320,8 +320,12 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
     isValidAnniversaryDate(date) && !isFutureOnset(Number(pYear), Number(pMonth), Number(pDay))
 
   const markPeriodStarted = () => {
-    const d = selectedPeriodDate()
-    if (!validSelectedPeriodDate(d)) return
+    // 已有 open 但用户忘了结束：再次“开始了”默认把今天作为新一轮；若手动改过日期则用所选日期。
+    const selected = selectedPeriodDate()
+    const d = currentPeriod && selected === currentPeriod.start ? localPeriodDate() : selected
+    if (!isValidAnniversaryDate(d)) return
+    const parsed = parseDateForPicker(d)
+    if (!parsed || parsed.year == null || isFutureOnset(parsed.year, parsed.month, parsed.day)) return
     const history = startPeriod(period?.periodHistory, d)
     const fields = { kind: 'personal' as const, periodDays: clampCycleDays(pCycle), periodHistory: history }
     if (period) {
@@ -605,14 +609,19 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
                 开始了
               </button>
             ) : (
-              <div className="home-period-actions">
-                <button type="button" className="home-time-save home-period-secondary" onClick={saveCurrentPeriodStart}>
-                  保存日期
+              <>
+                <div className="home-period-actions">
+                  <button type="button" className="home-time-save home-period-secondary" onClick={saveCurrentPeriodStart}>
+                    保存日期
+                  </button>
+                  <button type="button" className="home-time-save" onClick={markPeriodEnded}>
+                    结束了
+                  </button>
+                </div>
+                <button type="button" className="home-period-new-start" onClick={markPeriodStarted}>
+                  开始了
                 </button>
-                <button type="button" className="home-time-save" onClick={markPeriodEnded}>
-                  结束了
-                </button>
-              </div>
+              </>
             )}
           </div>
         </div>
