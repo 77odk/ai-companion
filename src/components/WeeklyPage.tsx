@@ -23,7 +23,7 @@ import { loadChatTopics } from '../lib/chatTopics'
 import { dayKeyOf } from '../lib/aiSpaceCore'
 import { getActiveSessionId, getMemoriesCache, getMessagesCache, getSessionsCache } from '../lib/sessionStore'
 import { resolveRolePersona } from '../lib/sessionProfile'
-import { loadMemory } from '../lib/memory'
+import { loadMemory, toPromptPerspective } from '../lib/memory'
 import { getEventsForWeek } from '../lib/eventStore'
 
 const REPLY_PLACEHOLDER = '把此刻的心情写下来…'
@@ -260,7 +260,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         .map((p) => p.text)
       const weekAgenda = loadChatTopics(currentSid || undefined)
         .filter((t) => typeof t.futureDay === 'string' && t.futureDay >= dayKeyOf(week.startTs) && t.futureDay <= dayKeyOf(week.endTs))
-        .map((t) => `${t.t}（约在 ${t.futureDay}）`)
+        .map((t) => `${toPromptPerspective(t.t)}（约在 ${t.futureDay}）`)
       const weekEvents = getEventsForWeek(currentSid || undefined, week.startTs, week.endTs)
         .slice(0, 5)
         .map((e) => (e.description ? `${e.title}（${e.description}）` : e.title))

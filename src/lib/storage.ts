@@ -363,7 +363,6 @@ export interface AIProfile {
 }
 
 const AI_PROFILE_KEY = 'ai_companion_ai_profile'
-const AI_PROFILE_MIGRATED_KEY = 'ai_companion_ai_profile_migrated'
 
 export const DEFAULT_AI_PROFILE: AIProfile = { nickname: 'TA', avatar: '' }
 
@@ -380,21 +379,6 @@ export function hasOwnAIProfile(sessionId: string): boolean {
 }
 
 /** 首次按会话读取时，把老全局头像/姓名迁到「默认角色」（幂等；全局 key 保留，无会话兜底仍可读） */
-function ensureSessionProfile(_sessionId: string): void {
-  try {
-    if (localStorage.getItem(AI_PROFILE_MIGRATED_KEY) != null) return
-    const defaultSid = getDefaultSessionId()
-    if (!defaultSid) return
-    const raw = localStorage.getItem(AI_PROFILE_KEY)
-    if (raw == null) return
-    if (localStorage.getItem(aiProfileKey(defaultSid)) == null) {
-      localStorage.setItem(aiProfileKey(defaultSid), raw)
-    }
-    localStorage.setItem(AI_PROFILE_MIGRATED_KEY, '1')
-  } catch {
-    // 迁移失败不阻塞：全局 key 仍可读，下次再试
-  }
-}
 
 function normalizeAIProfile(raw: string | null): AIProfile {
   if (!raw) return DEFAULT_AI_PROFILE
@@ -411,11 +395,14 @@ function normalizeAIProfile(raw: string | null): AIProfile {
  */
 export function loadAIProfile(sessionId?: string): AIProfile {
   try {
-    if (sessionId) ensureSessionProfile(sessionId)
+    // 不再做「把全局那份塞给默认角色」的一次性迁移（2026-09-18）：多角色后它会把老角色的
+    // 头像名字盖到当时默认的那个角色上（新建的角色顶着饺子的脸就是这么来的）。
     const raw = localStorage.getItem(aiProfileKey(sessionId))
     if (raw == null) {
-      // 有会话但该会话还没自己的资料：回落全局（老数据）；全局也没有 → 默认
-      return sessionId ? normalizeAIProfile(localStorage.getItem(AI_PROFILE_KEY)) : DEFAULT_AI_PROFILE
+      // 有会话但该会话还没自己的资料：回落「空资料」，绝不借用全局那份（2026-09-18 拍板）。
+      // 病根：老全局那份是「饺子」，新角色没自己资料时会顶着别人的头像名字；
+      // 角色资料已经进云同步（kind: profile），拉下来就有，拉不到就先显示默认。
+      return DEFAULT_AI_PROFILE
     }
     return normalizeAIProfile(raw)
   } catch {
