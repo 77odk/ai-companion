@@ -454,54 +454,86 @@
   text-overflow: ellipsis;
 }
 
-/* v7：首页可选纪念日展示位。仅有显式选择时渲染，放在生日/生理期双窗下方。 */
-.home-time-featured {
-  width: 100%;
-  min-width: 0;
-  margin-top: 8px;
-  padding: 9px 12px;
-  display: flex;
+/* v7：首页「我的时间」右上角纪念日入口：只显示圆形 +，不放额外可见文字。 */
+.home-time-add {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid color-mix(in srgb, var(--home-ink) 11%, transparent);
-  border-radius: 14px;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--home-ink) 18%, transparent);
+  border-radius: 50%;
   background: color-mix(in srgb, var(--home-ink) 3%, transparent);
   color: var(--home-ink);
   font: inherit;
-  text-align: left;
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
 }
 
-.home-time-featured:hover {
-  background: color-mix(in srgb, var(--home-ink) 6%, transparent);
+.home-time-add:hover {
+  background: color-mix(in srgb, var(--home-ink) 7%, transparent);
 }
 
-.home-time-featured-copy {
+/* 当前 TA 的纪念日全部直接展示；无数据时 Home 不渲染此块。 */
+.home-anniv-list {
+  margin-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--home-ink) 10%, transparent);
+}
+
+.home-anniv-item {
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label count"
+    "label date";
+  column-gap: 12px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 9px 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--home-ink) 9%, transparent);
 }
 
-.home-time-featured-copy .home-time-window-k {
-  max-width: 100%;
+.home-anniv-item:last-child {
+  border-bottom: 0;
+}
+
+.home-anniv-label {
+  grid-area: label;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.home-time-featured-count {
-  font-size: 15px;
-  font-weight: 650;
-  line-height: 1.25;
   white-space: nowrap;
+  font-size: 13px;
+  color: var(--home-ink);
 }
 
-.home-time-featured-date {
-  flex: 0 0 auto;
+.home-anniv-count {
+  grid-area: count;
+  min-width: 0;
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--home-ink);
+}
+
+.home-anniv-date {
+  grid-area: date;
+  min-width: 0;
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
   font-size: 11px;
   color: var(--home-ink-soft);
-  white-space: nowrap;
 }
 
 /* milestone 进度：关系时间轨迹（5–6px track + 当前进度节点，TA Accent 克制光） */
