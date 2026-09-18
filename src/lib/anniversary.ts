@@ -15,6 +15,13 @@ import { MILESTONE_DAYS } from './milestone.ts'
 /** 计时模式：正计时（已经 X 天）| 倒计时（还剩 X 天） */
 export type CountMode = 'forward' | 'countdown'
 
+export interface PeriodHistoryEntry {
+  /** 本次经期开始日；本地日历 YYYY-MM-DD */
+  start: string
+  /** 本次经期结束日；未结束时缺省 */
+  end?: string
+}
+
 export interface Anniversary {
   id: string
   /** 名称：认识 TA 的日子 / 生日 / 在一起纪念日 / 在一起 X 天（里程碑）… */
@@ -32,8 +39,10 @@ export interface Anniversary {
    * couple（双人纪念日）存角色 key。老数据缺省 = couple（都是双人）。
    */
   kind?: 'personal' | 'couple'
-  /** 生理期专用：周期天数（如 28）。date 存「上次来潮日期」，展示时用周期估算下次来潮日 */
+  /** 生理期专用：周期天数（如 28）。date 始终存「最近一次开始日」，展示时用周期估算下次来潮日 */
   periodDays?: number
+  /** 生理期历史：按 start 升序，最多保留最近 6 次；最后一条无 end = 当前进行中 */
+  periodHistory?: PeriodHistoryEntry[]
   /**
    * 里程碑条目专用：目标认识天数（如 100，=「在一起 100 天」）。有这个字段就是里程碑，
    * 旧版自动生成的里程碑标记；读取角色数据时会清理这类条目
@@ -277,7 +286,7 @@ function storeKeyOf(id: string, sessionId?: string): string | null {
 export function addAnniversary(
   label: string,
   date: string,
-  fields?: { countMode?: CountMode; color?: string; kind?: 'personal' | 'couple'; periodDays?: number },
+  fields?: { countMode?: CountMode; color?: string; kind?: 'personal' | 'couple'; periodDays?: number; periodHistory?: PeriodHistoryEntry[] },
   sessionId?: string,
 ): Anniversary[] {
   const l = label.trim()
@@ -294,6 +303,7 @@ export function addAnniversary(
     ...(fields?.countMode === 'countdown' ? { countMode: 'countdown' as CountMode } : {}),
     ...(fields?.color?.trim() ? { color: fields.color.trim() } : {}),
     ...(fields?.periodDays != null && fields.periodDays > 0 ? { periodDays: Math.round(fields.periodDays) } : {}),
+    ...(fields?.periodHistory != null ? { periodHistory: normalizePeriodHistory(fields.periodHistory) } : {}),
     ...(kind === 'personal' ? { kind: 'personal' as const } : {}),
   }
   saveAnniversaries([item, ...readRaw(targetSid)], targetSid)
@@ -306,7 +316,7 @@ export function updateAnniversary(
   id: string,
   label: string,
   date: string,
-  fields?: { countMode?: CountMode; color?: string; kind?: 'personal' | 'couple'; periodDays?: number },
+  fields?: { countMode?: CountMode; color?: string; kind?: 'personal' | 'couple'; periodDays?: number; periodHistory?: PeriodHistoryEntry[] },
   sessionId?: string,
 ): Anniversary[] {
   const l = label.trim()
@@ -331,6 +341,7 @@ export function updateAnniversary(
     else delete updated.color
     if (fields.periodDays != null && fields.periodDays > 0) updated.periodDays = Math.round(fields.periodDays)
     else delete updated.periodDays
+    if (fields.periodHistory != null) updated.periodHistory = normalizePeriodHistory(fields.periodHistory)
   }
   if (newSid === currentSid) {
     list[idx] = updated
@@ -425,6 +436,110 @@ export function isValidAnniversaryDate(date: string): boolean {
 /** 本地日历日序号（从 1970 起的天数），用 UTC 算，避免夏令时把一天算成 23/25 小时 */
 function dayNumber(y: number, m: number, d: number): number {
   return Date.UTC(y, m - 1, d) / 86400000
+}
+
+/** 生理期历史只接受真实的 YYYY-MM-DD 本地日历日。 */
+function validPeriodDate(date: string): boolean {
+  const parsed = parseAnniversaryDate(date)
+  if (!parsed || parsed.year == null) return false
+  const dt = new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day))
+  return dt.getUTCFullYear() === parsed.year && dt.getUTCMonth() + 1 === parsed.month && dt.getUTCDate() === parsed.day
+}
+
+function periodDateDayNumber(date: string): number | null {
+  const parsed = parseAnniversaryDate(date)
+  if (!parsed || parsed.year == null || !validPeriodDate(date)) return null
+  return dayNumber(parsed.year, parsed.month, parsed.day)
+}
+
+/** 当前本地日历日 → YYYY-MM-DD。 */
+export function localPeriodDate(now: number = Date.now()): string {
+  const d = new Date(now)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
+}
+
+/** YYYY-MM-DD 按本地日历口径加减天数；非法输入原样返回。 */
+export function shiftPeriodDate(date: string, amount: number): string {
+  const parsed = parseAnniversaryDate(date)
+  if (!parsed || parsed.year == null || !validPeriodDate(date)) return date
+  const dt = new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day + Math.trunc(amount)))
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${dt.getUTCFullYear()}-${mm}-${dd}`
+}
+
+/**
+ * 生理期历史规范化：只保留合法日期，end 不能早于 start；按 start 升序；只留最近 6 次。
+ * 不从旧 date 推断历史，旧数据没有 periodHistory 就保持没有。
+ */
+export function normalizePeriodHistory(history: PeriodHistoryEntry[] | null | undefined): PeriodHistoryEntry[] {
+  if (!Array.isArray(history)) return []
+  const out: PeriodHistoryEntry[] = []
+  for (const raw of history) {
+    if (!raw || !validPeriodDate(raw.start)) continue
+    const entry: PeriodHistoryEntry = { start: raw.start }
+    if (raw.end && validPeriodDate(raw.end)) {
+      const startDay = periodDateDayNumber(raw.start)
+      const endDay = periodDateDayNumber(raw.end)
+      if (startDay != null && endDay != null && endDay >= startDay) entry.end = raw.end
+    }
+    out.push(entry)
+  }
+  out.sort((a, b) => a.start.localeCompare(b.start))
+  return out.slice(-6)
+}
+
+/** 最后一条无 end 才算进行中；旧数据无 history 不推断。 */
+export function getCurrentPeriod(a: Anniversary | null | undefined, now: number = Date.now()): { start: string; day: number } | null {
+  const history = normalizePeriodHistory(a?.periodHistory)
+  const current = history.at(-1)
+  if (!current || current.end) return null
+  const startDay = periodDateDayNumber(current.start)
+  const today = periodDateDayNumber(localPeriodDate(now))
+  if (startDay == null || today == null || startDay > today) return null
+  return { start: current.start, day: today - startDay + 1 }
+}
+
+/**
+ * 开始新一轮：若上一轮忘记结束，则自动补 end = 新 start 前一天；不弹窗。
+ * 返回结果始终按 start 升序且最多 6 次。
+ */
+export function startPeriod(history: PeriodHistoryEntry[] | null | undefined, start: string): PeriodHistoryEntry[] {
+  if (!validPeriodDate(start)) return normalizePeriodHistory(history)
+  const next = normalizePeriodHistory(history)
+  const last = next.at(-1)
+  if (last && !last.end) {
+    if (last.start === start) return next
+    const end = shiftPeriodDate(start, -1)
+    const lastStartDay = periodDateDayNumber(last.start)
+    const endDay = periodDateDayNumber(end)
+    if (lastStartDay != null && endDay != null && endDay >= lastStartDay) last.end = end
+  }
+  next.push({ start })
+  return normalizePeriodHistory(next)
+}
+
+/** 当前进行中的一轮结束；end 早于 start 时不改。 */
+export function endPeriod(history: PeriodHistoryEntry[] | null | undefined, end: string): PeriodHistoryEntry[] {
+  const next = normalizePeriodHistory(history)
+  const last = next.at(-1)
+  if (!last || last.end || !validPeriodDate(end)) return next
+  const startDay = periodDateDayNumber(last.start)
+  const endDay = periodDateDayNumber(end)
+  if (startDay == null || endDay == null || endDay < startDay) return next
+  last.end = end
+  return normalizePeriodHistory(next)
+}
+
+/** 修改当前进行中这一轮的 start；用于“昨晚开始、今天才记”的补记。 */
+export function updateCurrentPeriodStart(history: PeriodHistoryEntry[] | null | undefined, start: string): PeriodHistoryEntry[] {
+  const next = normalizePeriodHistory(history)
+  const last = next.at(-1)
+  if (!last || last.end || !validPeriodDate(start)) return next
+  last.start = start
+  return normalizePeriodHistory(next)
 }
 
 /** 把相差天数转成倒计时文案：0=今天，1=明天，正=还剩 N 天，负=已过 N 天 */
