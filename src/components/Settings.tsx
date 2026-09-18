@@ -81,10 +81,18 @@ interface Props {
   initialPage?: SettingsPage
   /** App 级来源（例如 TA 首页）进入纪念日时，由来源负责返回。 */
   onAnniversaryBack?: () => void
+  /** 隐私详情页是全屏二级页：通知 App 隐藏底部导航。 */
+  onPrivacyOpenChange?: (open: boolean) => void
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onAnniversaryBack }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onAnniversaryBack, onPrivacyOpenChange }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
+
+  useEffect(() => {
+    onPrivacyOpenChange?.(page === 'privacy')
+  }, [page, onPrivacyOpenChange])
+
+  useEffect(() => () => onPrivacyOpenChange?.(false), [onPrivacyOpenChange])
 
   if (page === 'provider') {
     return <ProviderDetail onBack={() => setPage('main')} onGoGuide={onGoGuide} />
@@ -906,7 +914,7 @@ function MyProfileDetail({ onBack }: { onBack: () => void }) {
 
 function PrivacyDetail({ onBack }: { onBack: () => void }) {
   return (
-    <div className="page settings-page">
+    <div className="page settings-page privacy-page">
       <DetailHeader title="隐私" onBack={onBack} />
       <div className="privacy-detail-card">
         <section>
