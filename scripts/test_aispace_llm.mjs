@@ -194,5 +194,22 @@ for (let i = 0; i < MAX_POSTS + 5; i++) {
 const capped = mergeNewPosts([], many)
 eq(capped.length, MAX_POSTS, '合并后裁到上限 20 条')
 
+console.log('\n[人称归属] 话题注入前必须转换视角 + 标明说话人（2026-09-18 七七真机抓包）')
+const ctxTopic = {
+  taName: '黎深', yourName: '你', persona: '寡言克制的急诊科医生', sessionId: '69',
+  season: '秋', timeWord: '晚上', weatherWord: '阴', recent: [], atDateStr: '9月18日',
+  chatTopics: ['其实我是女的 你作为我老公 连我是男的女的都不知道吗'],
+}
+const zhMsgs = buildLlmMessages(ctxTopic, 'zh')
+const zhUser = zhMsgs.find((m) => m.role === 'user')?.content ?? ''
+ok('话题行标了说话人「对方：」', zhUser.includes('- 对方：'), zhUser.slice(0, 80))
+ok('用户原话里的「我」已转成「对方」', zhUser.includes('其实对方是女的'), zhUser.slice(0, 80))
+ok('不再出现裸的「我是女的」（模型会读成它自己）', !zhUser.includes('其实我是女的'))
+ok('块首有「不是你自己」的说明', zhUser.includes('不是你自己'))
+const enMsgs = buildLlmMessages({ ...ctxTopic, persona: 'A calm doctor' }, 'en')
+const enUser = enMsgs.find((m) => m.role === 'user')?.content ?? ''
+ok('英文模式同样标明 From them', enUser.includes('- From them:'), enUser.slice(0, 80))
+ok('英文模式说明里点明 them 不是你自己', enUser.includes('never you'))
+
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

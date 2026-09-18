@@ -16,6 +16,7 @@ export interface LlmSettings {
 }
 
 import { buildIdentityContext } from './identityContext.ts'
+import { toPromptPerspective } from './memory.ts'
 
 /** 身份块（性别/称呼备注）：有内容时追加进 system，没有就原样 */
 function idSuffix(sessionId: string | undefined, en: boolean): string {
@@ -92,7 +93,8 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     user += `\nWrite about your own day — what you're doing, seeing, thinking, feeling. Grow it from your life and personality.`
     user += `\nThere's someone you care about named "${ctx.yourName}", but they're not your whole life: write about yourself first.`
     if (ctx.chatTopics && ctx.chatTopics.length > 0) {
-      user += `\n\nThings they told you (marked "today" if said the same day as this post):\n${ctx.chatTopics.map((t) => `- ${t}`).join('\n')}\n`
+      // 人称归属：话题是对方原话，注入前转换视角并标明说话人（「them」指说话的人，不是你自己）
+      user += `\n\nThings they told you (each line is their own words — "them" means the person who said it, never you; marked "today" if said the same day as this post):\n${ctx.chatTopics.map((t) => `- From them: ${toPromptPerspective(t)}`).join('\n')}\n`
       if (isEvent) {
         user += `\nThis post is about the thing you two shared or planned that day (the "today"-marked one) — write how you felt right after it, in your own words, one or two lines. Don't quote them back verbatim.`
       } else {
@@ -129,7 +131,9 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
   user += `\n写你自己的日子：你在做什么、看到什么、想到什么、心情如何——从你的生活和性格里长出来。`
   user += `\n你有一个在意的人叫「${ctx.yourName}」，但 TA 不是你的全部生活：这条动态先写你自己。`
   if (ctx.chatTopics && ctx.chatTopics.length > 0) {
-    user += `\n\n你记得对方跟你提过这些事（带「今天」的是这条动态同一天说的，带日期的是那天说的）：\n${ctx.chatTopics.map((t) => `- ${t}`).join('\n')}\n`
+    // 人称归属（2026-09-18 七七真机抓包：TA 把用户诉苦的「我」当成自己，写出「你说我连自己性别都搞不清」）：
+    // 话题存的是用户原话，注入前必须做视角转换 + 标明说话人，否则「我」会被模型读成它自己。
+    user += `\n\n你记得对方跟你提过这些事（下面每句都是对方说的原话，句中的「对方」就是说话的人本人，不是你自己；带「今天」的是这条动态同一天说的，带日期的是那天说的）：\n${ctx.chatTopics.map((t) => `- 对方：${toPromptPerspective(t)}`).join('\n')}\n`
     if (isEvent) {
       // 事件动态：就是为那天共同经历/约好的事发的（大事趁热），允许（也要求）自然地以那件事为主体
       user += `这条动态正是为你和对方那天共同经历或约好的事发的（下面带「今天」的就是当天的事）：`
