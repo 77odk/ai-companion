@@ -163,7 +163,7 @@ const CHAT_RUNTIME_SIGNALS: readonly ChatRuntimeSignal[] = [
   },
   {
     activityId: 'shower',
-    start: [/我(?:现在|正在|在|先去|去|要去|准备去)?(?:洗澡|洗漱|冲澡)(?:了|呢)?/i, /(?:^|[，。！\n])(?:先去|去)(?:洗澡|洗漱|冲澡)了/i, /\bi(?:'m| am) (?:taking a shower|showering|washing up)\b/i],
+    start: [/我(?:现在|正在|在|先去|去|要去|准备去)?(?:洗澡|冲澡)(?:了|呢)?/i, /我(?:现在|正在|在)洗漱(?:呢|中)?(?:[，。！\n]|$)/i, /(?:^|[，。！\n])(?:先去|去)(?:洗澡|冲澡)了/i, /\bi(?:'m| am) (?:taking a shower|showering|washing up)\b/i],
     finish: [/我(?:已经|刚)?(?:洗完澡|洗好澡|洗漱完|冲完澡)了/i, /(?:^|[，。！\n])(?:洗完澡|洗漱完|冲完澡)了/i, /\bi(?:'m| am) done (?:showering|washing up)\b/i],
   },
   {
@@ -209,7 +209,7 @@ export function detectRuntimeChatAction(text: string): RuntimeChatDetection {
     const startIndex = latestMatchIndex(input, signal.start)
     if (startIndex >= 0 && (!best || startIndex >= best.index)) best = { index: startIndex, kind: 'start', activityId: signal.activityId }
     const finishIndex = latestMatchIndex(input, signal.finish)
-    if (finishIndex >= 0 && (!best || finishIndex > best.index)) best = { index: finishIndex, kind: 'finish', activityId: signal.activityId }
+    if (finishIndex >= 0 && (!best || finishIndex >= best.index)) best = { index: finishIndex, kind: 'finish', activityId: signal.activityId }
   }
   return best ? { kind: best.kind, activityId: best.activityId } : null
 }
