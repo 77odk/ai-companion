@@ -492,6 +492,30 @@ test('RUNTIME-CS legacy apply resets the V2 snapshot and malformed identities ar
   assert.equal(cloudOps('ta_runtime').length, 0)
 })
 
+// 2026-09-17 修：云同步上线后「性别又松了」——云端那份性别是 9/15 由旧 blob 播种的
+// locked:false（legacy 导入规则不许覆盖已有 V2，所以本地后来锁定的状态传不上去），
+// 而 applyGenderEntity 当时直接照抄云端，一拉就把本机「已锁定」降级成「可选」。
+// 这条测试锁死规则：与 storage.applyCloudGenders 一致 —— 本机已锁不动，本机未锁才让云端的锁带回来。
+test('GENDER-CS-LOCK: 云端 locked:false 不许冲开本机已锁的性别；云端锁能带回新设备', async () => {
+  clearState()
+  resources.initCloudStateResourceAdapters()
+  localStorage.setItem('ai_companion_ai_gender_role-locked', JSON.stringify({ g: 'male', locked: true }))
+  localStorage.setItem('ai_companion_ai_gender_role-open', 'female') // 老格式裸值 = 未锁
+  const changes = [
+    { kind: 'gender', entityId: 'role-locked', version: 11, payload: { g: 'female', locked: false } },
+    { kind: 'gender', entityId: 'role-open', version: 12, payload: { g: 'male', locked: true } },
+    { kind: 'gender', entityId: 'role-new', version: 13, payload: { g: 'female', locked: true } },
+    { kind: 'gender', entityId: 'global', version: 14, payload: { g: 'female', locked: false } },
+  ]
+  globalThis.fetch = async () => jsonResponse(pullBody(14, changes))
+  await cloud.pullCloudState()
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_ai_gender_role-locked')), { g: 'male', locked: true })
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_ai_gender_role-open')), { g: 'male', locked: true })
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_ai_gender_role-new')), { g: 'female', locked: true })
+  assert.deepEqual(JSON.parse(localStorage.getItem('ai_companion_ai_gender')), { g: 'female', locked: false })
+  assert.equal(storage.loadAIGenderState('role-locked').locked, true, '读取层仍认为已锁定')
+})
+
 test('X: local theme, gender, model settings, and personal-day writes create scoped cloud ops', () => {
   clearState('A')
   window.dispatchEvent(new Event('eluvin-auth-change'))
