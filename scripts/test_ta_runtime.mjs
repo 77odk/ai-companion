@@ -439,6 +439,13 @@ group('J. 聊天动作 → Runtime 一致性')
   ok(started.plannedUntil > startAt && started.plannedUntil <= startAt + 2 * 60 * 60 * 1000, 'J4 chat 动作有界，不无限挂住')
   eq(getTaRuntime('chat-1')?.activityId, 'shower', 'J4 同一 Runtime 存储立即可读')
 
+  clearLS()
+  syncTaRuntimeFromAssistantText('chat-wake', '', '我刚起床了', startAt, RAND_HALF)
+  const wakeFinished = syncTaRuntimeFromAssistantText('chat-wake', '', '我洗漱完了', startAt + 15 * 60 * 1000, RAND_HALF)
+  ok(wakeFinished != null && wakeFinished.source !== 'chat', 'J4b 洗漱完能结束“刚起床正在洗漱”')
+
+  clearLS()
+  syncTaRuntimeFromAssistantText('chat-1', '', '我先去洗澡了', startAt, RAND_HALF)
   const afterFinishAt = startAt + 12 * 60 * 1000
   const finished = syncTaRuntimeFromAssistantText('chat-1', '', '我洗完澡了', afterFinishAt, RAND_HALF)
   ok(finished != null && finished.source !== 'chat', 'J5 明确结束后立即回到日常调度')
