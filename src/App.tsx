@@ -738,10 +738,6 @@ export default function App() {
                   setDetailFrom('settings')
                   navigate('aboutme')
                 }}
-                onGoSpace={() => {
-                  setSpaceFrom('space')
-                  navigate('aispace')
-                }}
                 onGoProfile={() => {
                   setDetailFrom('settings')
                   setProfileTarget(null)
