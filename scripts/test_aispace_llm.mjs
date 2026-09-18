@@ -121,6 +121,30 @@ ok(msgsWithTopics[1].content.includes('同一天说的'), 'user 说明「今天�
 ok(msgsWithTopics[1].content.includes('大多数动态写你自己的日子就好'), '素材换血：九成写自己的生活')
 ok(msgsWithTopics[1].content.includes('别整条都写对方'), '素材换血：禁止整条复读对方')
 
+console.log('\n[4c] buildLlmMessages 认识边界：不编造认识前共同过去')
+const boundaryCtx = {
+  taName: '小忆',
+  yourName: '阿明',
+  persona: '喜欢摄影，独立生活',
+  season: '秋',
+  timeWord: '晚上',
+  weatherWord: '晴',
+  atDateStr: '9月18日',
+  relationshipStartDate: '2026-09-18',
+  recent: [],
+}
+const boundaryZh = buildLlmMessages(boundaryCtx, 'zh')
+const boundaryZhUser = boundaryZh.find((m) => m.role === 'user')?.content ?? ''
+ok(boundaryZhUser.includes('2026-09-18'), '中文提示含认识日期')
+ok(boundaryZhUser.includes('不能有你们的共同过去'), '中文明确禁止认识前共同过去')
+ok(boundaryZhUser.includes('可以有你自己的过去'), '中文允许 TA 自己的人生背景')
+
+const boundaryEn = buildLlmMessages({ ...boundaryCtx, persona: 'Independent photographer' }, 'en')
+const boundaryEnUser = boundaryEn.find((m) => m.role === 'user')?.content ?? ''
+ok(boundaryEnUser.includes('You first met them on 2026-09-18'), '英文提示含认识日期')
+ok(boundaryEnUser.includes('Never invent shared chats'), '英文明确禁止认识前共同经历')
+ok(boundaryEnUser.includes('its own history, but not a shared history'), '英文允许 TA 自己的过去但禁止共同过去')
+
 console.log('\n[5] extractImageCaption 配图标记拆解（TASK_UI_BATCH2）')
 eq(extractImageCaption('今天路过花店，买了一把。\n[配图]一束粉色花束'), {
   text: '今天路过花店，买了一把。',
