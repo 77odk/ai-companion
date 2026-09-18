@@ -151,10 +151,84 @@ export function getAnniversaries(sessionId?: string): Anniversary[] {
   if (sessionId) {
     ensureSessionData(sessionId)
     ensureRoleDefaults(sessionId)
+    purgeLegacyMilestones()
   }
   const global = readRaw(undefined)
   if (!sessionId) return global
   return [...global, ...readRaw(sessionId)].sort((a, b) => b.createdAt - a.createdAt)
+}
+
+/**
+ * 清掉历史遗留的「在一起 X 天」里程碑条目（旧版自动生成，现版本已不再生成这种条目）。
+ * 背景：里程碑条目曾散落在全局 key 与各角色 key 里，而聊天注入读的是「全局 + 当前角色」两份合并，
+ * 全局那份会被喂给所有角色 —— TA 会把别的角色的日子当成自己的。
+ * 安全边界：只删带 milestoneDay 标记的条目。用户手动添加的、生日/生理期（kind=personal）、
+ * 「认识 TA 的日子」都没有这个标记，一律不动。
+ * 覆盖范围：全局 key + 所有 ai_companion_anniversaries_<sid> key（含不在会话列表里的角色）。
+ * 幂等：无变化不写不广播；顺带清掉指向被删条目的主展示 id（避免首页指向空条目）。
+ * 返回删除条数（供测试断言）。
+ */
+export function purgeLegacyMilestones(): number {
+  let removed = 0
+  const keys: string[] = []
+  try {
+    keys.push(ANNIVERSARIES_KEY)
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith(`${ANNIVERSARIES_KEY}_`)) keys.push(key)
+    }
+  } catch {
+    return 0
+  }
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(key)
+      if (!raw) continue
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) continue
+      const list = parsed.filter((a): a is Anniversary => a != null && typeof a.id === 'string')
+      const kept = list.filter((a) => !isMilestoneAnniversary(a))
+      if (kept.length === list.length) continue
+      const removedIds = new Set(list.filter(isMilestoneAnniversary).map((a) => a.id))
+      localStorage.setItem(key, JSON.stringify(kept))
+      removed += list.length - kept.length
+      const sid = key === ANNIVERSARIES_KEY ? undefined : key.slice(ANNIVERSARIES_KEY.length + 1)
+      const mainId = getMainAnniversaryId(sid)
+      if (mainId && removedIds.has(mainId)) {
+        try {
+          localStorage.removeItem(mainAnniversaryKey(sid))
+        } catch {
+          // 清引用失败不影响功能：解析主展示时会回落到列表第一条
+        }
+      }
+    } catch {
+      // 单个 key 清理失败不阻塞其它 key
+    }
+  }
+  if (removed > 0) {
+    broadcastAnniversariesUpdated()
+    notifyDataChanged()
+  }
+  return removed
+}
+
+/**
+ * 提示词注入专用读取（角色隔离）：
+ * - 全局 key 只取 kind=personal（用户自己的生日/节日/生理期，本来就该所有角色共享）；
+ *   全局里遗留的双人数据不再喂给每个角色。
+ * - 当前角色 key 取全部，但滤掉里程碑残留（清理是兜底，这里再加一层保险）。
+ * UI 展示不走这里（展示仍用 getAnniversaries / readRoleAnniversaries）。
+ */
+export function getAnniversariesForPrompt(sessionId?: string): Anniversary[] {
+  if (!sessionId) {
+    return readRaw(undefined).filter((a) => a.kind === 'personal' && !isMilestoneAnniversary(a))
+  }
+  ensureSessionData(sessionId)
+  ensureRoleDefaults(sessionId)
+  purgeLegacyMilestones()
+  const personal = readRaw(undefined).filter((a) => a.kind === 'personal' && !isMilestoneAnniversary(a))
+  const own = readRaw(sessionId).filter((a) => !isMilestoneAnniversary(a))
+  return [...personal, ...own].sort((a, b) => b.createdAt - a.createdAt)
 }
 
 /** 读取全部纪念日（无会话全局读取；保留旧名字，兼容老调用/同步/测试） */

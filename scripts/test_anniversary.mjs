@@ -24,6 +24,8 @@ import {
   getMainAnniversaryId,
   setMainAnniversaryId,
   resolveMainAnniversary,
+  purgeLegacyMilestones,
+  getAnniversariesForPrompt,
 } from '../src/lib/anniversary.ts'
 import { buildAnniversaryBlock } from '../src/lib/api.ts'
 
@@ -53,6 +55,10 @@ globalThis.localStorage = {
   setItem: (k, v) => store.set(k, String(v)),
   removeItem: (k) => store.delete(k),
   clear: () => store.clear(),
+  key: (i) => [...store.keys()][i] ?? null,
+  get length() {
+    return store.size
+  },
 }
 function resetStore() {
   store.clear()
@@ -291,6 +297,45 @@ eq(cleaned.map((a) => a.id), ['ordinary'], '读取后删除旧里程碑并保留
 eq(getMainAnniversaryId('200'), null, '主展示指向旧里程碑时清除 stale 引用')
 const cleanedAgain = getAnniversaries('200')
 eq(cleanedAgain.map((a) => a.id), ['ordinary'], '再次读取不复活里程碑且普通纪念日仍保留')
+
+console.log('\n[21] purgeLegacyMilestones：清全局 + 所有角色 key 里的旧里程碑（别的条目一律不动）')
+resetStore()
+localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+  { id: 'g-birth', label: '我的生日', date: '08-05', createdAt: 1, kind: 'personal' },
+  { id: 'g-couple-old', label: '在一起的纪念日', date: '2026-08-24', createdAt: 2 },
+  { id: 'g-milestone', label: '在一起 7 天', date: '2026-09-11', createdAt: 3, countMode: 'forward', milestoneDay: 7 },
+]))
+localStorage.setItem('ai_companion_main_anniversary', 'g-milestone')
+localStorage.setItem('ai_companion_anniversaries_24', JSON.stringify([
+  { id: 'r-known', label: '认识 TA 的日子', date: '08-24', createdAt: 4 },
+  { id: 'r-milestone', label: '在一起 30 天', date: '2026-10-04', createdAt: 5, countMode: 'forward', milestoneDay: 30 },
+]))
+localStorage.setItem('ai_companion_main_anniversary_24', 'r-milestone')
+eq(purgeLegacyMilestones(), 2, '删掉 2 条里程碑（全局 1 条 + 角色 1 条）')
+eq(JSON.parse(localStorage.getItem('ai_companion_anniversaries')).map((a) => a.id), ['g-birth', 'g-couple-old'], '全局：个人节日与手写条目都留着，只掉里程碑')
+eq(JSON.parse(localStorage.getItem('ai_companion_anniversaries_24')).map((a) => a.id), ['r-known'], '角色 key：只掉里程碑，认识日留着')
+eq(getMainAnniversaryId(), null, '全局主展示指向被删里程碑 → 清掉引用')
+eq(getMainAnniversaryId('24'), null, '角色主展示指向被删里程碑 → 清掉引用')
+eq(purgeLegacyMilestones(), 0, '再跑一次删 0 条（幂等）')
+
+console.log('\n[22] getAnniversariesForPrompt：全局只喂个人节日，别的角色的数据不再串进注入')
+resetStore()
+localStorage.setItem('ai_companion_sessions_cache', JSON.stringify([{ id: 300, title: '测试角色', persona: '' }]))
+localStorage.setItem('ai_companion_first_seen_300', String(Date.now()))
+localStorage.setItem('ai_companion_anniv_migrated', '1')
+localStorage.setItem('ai_companion_anniversaries', JSON.stringify([
+  { id: 'p-birth', label: '我的生日', date: '08-05', createdAt: 1, kind: 'personal' },
+  { id: 'g-legacy-couple', label: '别的角色的纪念日', date: '2026-08-24', createdAt: 2 },
+]))
+localStorage.setItem('ai_companion_anniversaries_300', JSON.stringify([
+  { id: 'own-known', label: '认识 TA 的日子', date: '09-05', createdAt: 3 },
+  { id: 'own-milestone', label: '在一起 7 天', date: '2026-09-11', createdAt: 4, countMode: 'forward', milestoneDay: 7 },
+]))
+const forPrompt = getAnniversariesForPrompt('300')
+eq(forPrompt.some((a) => a.id === 'g-legacy-couple'), false, '全局里遗留的双人条目不进注入（不再串给每个角色）')
+eq(forPrompt.some((a) => a.id === 'own-milestone'), false, '里程碑残留不下发给 TA')
+eq(forPrompt.map((a) => a.id).sort(), ['own-known', 'p-birth'], '个人节日 + 本角色自己的纪念日照常下发')
+eq(getAnniversaries('300').some((a) => a.id === 'p-birth'), true, 'UI 读取仍能看到全局个人节日')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

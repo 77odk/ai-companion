@@ -1,6 +1,6 @@
 // 提示词层（2026-09-09 从 api.ts 手术拆分：只搬职责，不改任何逻辑/文案/接口）
 // 职责：聊天规矩/初始身份/记忆规则/时间上下文/纪念日/认识天数/systemPrompt 组装/文本清洗/人机味与编造质检/busy 回来提示词
-import { getAnniversaries } from './anniversary.ts'
+import { getAnniversariesForPrompt } from './anniversary.ts'
 import type { Anniversary } from './anniversary.ts'
 import { getFirstSeen } from './storage.ts'
 import type { Lang } from './langDetect.ts'
@@ -211,7 +211,7 @@ export function buildSystemPrompt(persona?: string, aiName?: string, now?: numbe
   }
   // 认识天数 + 纪念日注入
   const relationshipBlock = buildRelationshipBlock(now, sessionId, lang)
-  const anniversaryBlock = buildAnniversaryBlock(getAnniversaries(sessionId), lang)
+  const anniversaryBlock = buildAnniversaryBlock(getAnniversariesForPrompt(sessionId), lang)
   let body: string
   if (relationshipBlock && anniversaryBlock) body = `${relationshipBlock}\n${anniversaryBlock}\n\n${prompt}`
   else if (relationshipBlock) body = `${relationshipBlock}\n\n${prompt}`
