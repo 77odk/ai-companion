@@ -276,7 +276,7 @@ const RUNTIME_TEXT_START_RULES: readonly RuntimeTextRule[] = [
   { activityId: 'gaming', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:打游戏|玩游戏|开黑|打排位)/, en: /\b(?:i(?:'m| am)?\s+)?(?:gaming|playing (?:a )?game|playing games|going to play)\b/i },
   { activityId: 'class', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:上课|听课)/, en: /\b(?:i(?:'m| am)?\s+)?(?:in class|going to class|attending class)\b/i },
   { activityId: 'commute', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:通勤|去上班|去公司|回公司|上班路上)/, en: /\b(?:i(?:'m| am)?\s+)?(?:commuting|on my way to work|going to work|heading to work)\b/i },
-  { activityId: 'work', zh: /(?:忙(?:着)?工作|处理工作|赶工作|工作中|开始工作|继续工作|加班|开会)/, en: /\b(?:working|at work|in a meeting|going to work)\b/i },
+  { activityId: 'work', zh: /(?:忙(?:着)?工作|处理工作|赶工作|工作中|开始工作|继续工作|加班|开会)/, en: /\b(?:working|at work|in a meeting)\b/i },
   { activityId: 'errand', zh: /(?:我)?(?:正(?:在)?|在|去|先去|出去|准备)?(?:办事|办点事|买东西|取快递)/, en: /\b(?:i(?:'m| am)?\s+)?(?:running errands?|going out for errands?|picking up a package)\b/i },
   { activityId: 'home', zh: /(?:我)?(?:刚|才)?(?:到家|回到家|回家了)/, en: /\b(?:i(?:'m| am)?\s+)?(?:just got home|back home|home now)\b/i },
   { activityId: 'rest', zh: /(?:我)?(?:正(?:在)?|在|先|准备)?(?:休息|歇会|歇一会|躺会|躺一会)/, en: /\b(?:i(?:'m| am)?\s+)?(?:resting|taking a break|lying down)\b/i },
