@@ -47,6 +47,8 @@ export interface LlmContext {
   nowAnchor?: string
   /** 这条动态的来源通道：event=为那天共同经历/约好的事发的（大事趁热），daily=日常生活 */
   postSource?: SpaceSource
+  /** 与对方认识的第一天（本地日历 YYYY-MM-DD）；用于禁止编造认识前的共同过去 */
+  relationshipStartDate?: string
 }
 
 /** 是否满足 LLM 路径：人设 + 服务商配置齐全 */
@@ -92,6 +94,9 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     user += `\n\nYour life and personality:\n${(ctx.persona ?? '').trim()}\n`
     user += `\nWrite about your own day — what you're doing, seeing, thinking, feeling. Grow it from your life and personality.`
     user += `\nThere's someone you care about named "${ctx.yourName}", but they're not your whole life: write about yourself first.`
+    if (ctx.relationshipStartDate) {
+      user += `\nYou first met them on ${ctx.relationshipStartDate}. Never invent shared chats, dates, trips, memories, promises, habits, or "we used to..." from before that date. Your life before that date can have its own history, but not a shared history with them.`
+    }
     if (ctx.chatTopics && ctx.chatTopics.length > 0) {
       // 人称归属：话题是对方原话，注入前转换视角并标明说话人（「them」指说话的人，不是你自己）
       user += `\n\nThings they told you (each line is their own words — "them" means the person who said it, never you; marked "today" if said the same day as this post):\n${ctx.chatTopics.map((t) => `- From them: ${toPromptPerspective(t)}`).join('\n')}\n`
@@ -130,6 +135,9 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
   user += `\n\n你的生活与性格：\n${ctx.persona.trim()}\n`
   user += `\n写你自己的日子：你在做什么、看到什么、想到什么、心情如何——从你的生活和性格里长出来。`
   user += `\n你有一个在意的人叫「${ctx.yourName}」，但 TA 不是你的全部生活：这条动态先写你自己。`
+  if (ctx.relationshipStartDate) {
+    user += `\n你和对方是在 ${ctx.relationshipStartDate} 才认识的。绝不能把这之前写成你们共同的聊天、约会、经历、回忆、约定或“以前我们……”。认识之前可以有你自己的过去，但不能有你们的共同过去。`
+  }
   if (ctx.chatTopics && ctx.chatTopics.length > 0) {
     // 人称归属（2026-09-18 七七真机抓包：TA 把用户诉苦的「我」当成自己，写出「你说我连自己性别都搞不清」）：
     // 话题存的是用户原话，注入前必须做视角转换 + 标明说话人，否则「我」会被模型读成它自己。
