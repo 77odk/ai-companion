@@ -364,6 +364,7 @@ function normalizeUserProfile(raw: unknown): UserProfile {
     nickname: typeof p.nickname === 'string' ? p.nickname : '',
     avatar: typeof p.avatar === 'string' && p.avatar.startsWith('data:') ? p.avatar : '',
     bio: typeof p.bio === 'string' ? p.bio : '',
+    city: typeof p.city === 'string' ? p.city : '',
   }
 }
 function normalizeAIProfile(raw: unknown): AIProfile {
