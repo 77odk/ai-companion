@@ -27,8 +27,8 @@ export interface TaRuntimeState {
   plannedUntil: number
   /** 本状态写入/推进时间戳（sync 冲突：updatedAt 更新者胜） */
   updatedAt: number
-  /** persona 锚点命中 → 'persona'；纯时段/随机 → 'routine' */
-  source: 'routine' | 'persona'
+  /** persona 锚点命中 → 'persona'；纯时段/随机 → 'routine'；聊天里 TA 明确说自己正在做 → 'chat' */
+  source: 'routine' | 'persona' | 'chat'
   /** 最近活动（最新在前，含当前，最多 3 个）；旧数据可缺省 */
   recentActivityIds?: string[]
 }
@@ -75,6 +75,144 @@ export const ACTIVITIES: readonly RuntimeActivity[] = [
   { id: 'sleep_prep', label: '准备睡了', labelEn: 'Getting ready for bed', slots: ['夜晚', '凌晨'], windows: [[0, 120], [1320, 1440]], minMin: 15, maxMin: 30 },
   { id: 'sleep', label: '正在睡觉', labelEn: 'Sleeping', slots: ['凌晨'], windows: [[0, 480], [1380, 1440]], minMin: 240, maxMin: 480 },
 ]
+
+type ChatRuntimeSignal = {
+  activityId: string
+  start: readonly RegExp[]
+  finish?: readonly RegExp[]
+}
+
+/** 高置信度本地识别：只认 TA 对“自己此刻动作”的明确陈述；宁可漏，不把“你去洗澡吧”误写成 TA 在洗澡。 */
+const CHAT_RUNTIME_SIGNALS: readonly ChatRuntimeSignal[] = [
+  {
+    activityId: 'wake_up',
+    start: [/我(?:刚|才)?起床(?:了|呢)?/i, /\bi (?:just )?(?:woke|got) up\b/i],
+    finish: [/我(?:已经|刚)?洗漱完了/i],
+  },
+  {
+    activityId: 'breakfast',
+    start: [/我(?:现在|正在|在|先去|去|要去)?吃(?:早饭|早餐)(?:了|呢)?/i, /\bi(?:'m| am) (?:having|eating) breakfast\b/i],
+    finish: [/我(?:已经|刚)?吃完(?:早饭|早餐)了/i],
+  },
+  {
+    activityId: 'coffee',
+    start: [/我(?:现在|正在|在|先去|去|要去)?喝(?:咖啡|茶|奶茶)(?:了|呢)?/i, /\bi(?:'m| am) (?:having|drinking) (?:coffee|tea)\b/i],
+    finish: [/我(?:已经|刚)?喝完(?:咖啡|茶|奶茶)了/i],
+  },
+  {
+    activityId: 'commute',
+    start: [/我(?:现在|正在|在)(?:通勤|上班路上|回家路上)/i, /\bi(?:'m| am) (?:commuting|on my way (?:to work|home))\b/i],
+  },
+  {
+    activityId: 'work',
+    start: [/我(?:现在|正在|在|先去|去|要去|得去)?(?:工作|上班|忙工作)(?:了|呢)?/i, /\bi(?:'m| am) (?:working|at work)\b/i],
+    finish: [/我(?:已经|刚)?(?:忙完|工作完|下班)了/i, /\bi(?:'m| am) done (?:working|with work)\b/i],
+  },
+  {
+    activityId: 'class',
+    start: [/我(?:现在|正在|在|先去|去|要去)?上课(?:了|呢)?/i, /\bi(?:'m| am) (?:in class|heading to class)\b/i],
+    finish: [/我(?:已经|刚)?(?:下课|上完课)了/i],
+  },
+  {
+    activityId: 'reading',
+    start: [/我(?:现在|正在|在|先去|去|要去|开始|还在)?(?:看书|读书|看小说)(?:了|呢)?/i, /\bi(?:'m| am) (?:reading|reading a book)\b/i],
+    finish: [/我(?:已经|刚)?(?:看完书|读完书|看完小说)了/i, /\bi(?:'m| am) done reading\b/i],
+  },
+  {
+    activityId: 'lunch',
+    start: [/我(?:现在|正在|在|先去|去|要去)?吃午饭(?:了|呢)?/i, /\bi(?:'m| am) (?:having|eating) lunch\b/i],
+    finish: [/我(?:已经|刚)?吃完午饭了/i],
+  },
+  {
+    activityId: 'errand',
+    start: [/我(?:现在|正在|在|先去|去|要去)?(?:办事|跑一趟|买点东西)(?:了|呢)?/i, /\bi(?:'m| am) (?:running an errand|out on an errand)\b/i],
+  },
+  {
+    activityId: 'home',
+    start: [/我(?:刚|才)?到家(?:了|呢)?/i, /\bi (?:just )?got home\b/i],
+  },
+  {
+    activityId: 'cooking',
+    start: [/我(?:现在|正在|在|先去|去|要去|开始)?(?:做饭|煮饭|下厨)(?:了|呢)?/i, /\bi(?:'m| am) cooking\b/i],
+    finish: [/我(?:已经|刚)?(?:做完饭|做好饭|饭做好)了/i, /\bi(?:'m| am) done cooking\b/i],
+  },
+  {
+    activityId: 'dinner',
+    start: [/我(?:现在|正在|在|先去|去|要去)?吃晚饭(?:了|呢)?/i, /\bi(?:'m| am) (?:having|eating) dinner\b/i],
+    finish: [/我(?:已经|刚)?吃完晚饭了/i],
+  },
+  {
+    activityId: 'walk',
+    start: [/我(?:现在|正在|在|先去|去|要去)?(?:散步|遛狗|出去走走)(?:了|呢)?/i, /\bi(?:'m| am) (?:out for a walk|walking the dog)\b/i],
+    finish: [/我(?:已经|刚)?(?:散完步|遛完狗|走完|散步回来)了/i, /\bi(?:'m| am) back from (?:my walk|walking the dog)\b/i],
+  },
+  {
+    activityId: 'exercise',
+    start: [/我(?:现在|正在|在|先去|去|要去)?(?:运动|健身|跑步|游泳|打球|做瑜伽)(?:了|呢)?/i, /\bi(?:'m| am) (?:working out|running|swimming|at the gym)\b/i],
+    finish: [/我(?:已经|刚)?(?:运动完|健身完|跑完步|游完泳|打完球)了/i, /\bi(?:'m| am) done (?:working out|running|swimming)\b/i],
+  },
+  {
+    activityId: 'movie',
+    start: [/我(?:现在|正在|在|先去|去|要去|开始)?(?:看电影|看剧|追剧)(?:了|呢)?/i, /\bi(?:'m| am) (?:watching a movie|watching a show)\b/i],
+    finish: [/我(?:已经|刚)?(?:看完电影|电影看完|看完剧|剧看完)了/i, /\bi(?:'m| am) done watching (?:the movie|the show)\b/i],
+  },
+  {
+    activityId: 'gaming',
+    start: [/我(?:现在|正在|在|先去|去|要去|开始)?(?:打游戏|打排位|开黑)(?:了|呢)?/i, /\bi(?:'m| am) (?:playing games|gaming)\b/i],
+    finish: [/我(?:已经|刚)?(?:打完游戏|游戏打完|不打了)/i, /\bi(?:'m| am) done gaming\b/i],
+  },
+  {
+    activityId: 'shower',
+    start: [/我(?:现在|正在|在|先去|去|要去|准备去)?(?:洗澡|洗漱|冲澡)(?:了|呢)?/i, /(?:^|[，。！\n])(?:先去|去)(?:洗澡|洗漱|冲澡)了/i, /\bi(?:'m| am) (?:taking a shower|showering|washing up)\b/i],
+    finish: [/我(?:已经|刚)?(?:洗完澡|洗好澡|洗漱完|冲完澡)了/i, /(?:^|[，。！\n])(?:洗完澡|洗漱完|冲完澡)了/i, /\bi(?:'m| am) done (?:showering|washing up)\b/i],
+  },
+  {
+    activityId: 'rest',
+    start: [/我(?:现在|正在|在)?(?:休息|躺着|窝着)(?:呢|了)?/i, /\bi(?:'m| am) (?:resting|lying down)\b/i],
+  },
+  {
+    activityId: 'sleep_prep',
+    start: [/我(?:现在|先|要|准备)?(?:睡了|去睡|准备睡|上床睡)(?:呢)?/i, /\bi(?:'m| am) (?:getting ready for bed|going to bed)\b/i],
+  },
+  {
+    activityId: 'sleep',
+    start: [/我(?:已经|刚)?睡着了/i, /\bi(?:'m| am) falling asleep\b/i],
+    finish: [/我(?:已经|刚)?(?:睡醒|醒来|醒)了/i, /\bi (?:just )?woke up\b/i],
+  },
+]
+
+export type RuntimeChatDetection =
+  | { kind: 'start'; activityId: string }
+  | { kind: 'finish'; activityId: string }
+  | null
+
+function latestMatchIndex(text: string, patterns: readonly RegExp[] | undefined): number {
+  let latest = -1
+  for (const pattern of patterns ?? []) {
+    const flags = pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g'
+    const re = new RegExp(pattern.source, flags)
+    let match: RegExpExecArray | null
+    while ((match = re.exec(text)) != null) {
+      latest = Math.max(latest, match.index)
+      if (match[0].length === 0) re.lastIndex++
+    }
+  }
+  return latest
+}
+
+/** 纯函数：从 TA 最终可见回复里找“此刻正在做/刚做完”的最后一个高置信度动作。 */
+export function detectRuntimeChatAction(text: string): RuntimeChatDetection {
+  const input = String(text ?? '').trim()
+  if (!input) return null
+  let best: { index: number; kind: 'start' | 'finish'; activityId: string } | null = null
+  for (const signal of CHAT_RUNTIME_SIGNALS) {
+    const startIndex = latestMatchIndex(input, signal.start)
+    if (startIndex >= 0 && (!best || startIndex >= best.index)) best = { index: startIndex, kind: 'start', activityId: signal.activityId }
+    const finishIndex = latestMatchIndex(input, signal.finish)
+    if (finishIndex >= 0 && (!best || finishIndex > best.index)) best = { index: finishIndex, kind: 'finish', activityId: signal.activityId }
+  }
+  return best ? { kind: best.kind, activityId: best.activityId } : null
+}
 
 /** 存储 key：单一 Runtime 存储（Record<sid, TaRuntimeState>），只经本文件读写 */
 const RUNTIME_KEY = 'ai_companion_ta_runtime'
@@ -203,6 +341,69 @@ function createState(
   }
 }
 
+const CHAT_RUNTIME_MAX_MS = 2 * 60 * 60 * 1000
+
+function createChatState(
+  activity: RuntimeActivity,
+  now: number,
+  recentIds: readonly string[],
+): TaRuntimeState {
+  const normalMs = activity.maxMin * 60000
+  // 聊天动作是“此刻事实”而不是长期日程：一般最多挂 2 小时；睡着例外，允许按睡眠自身上限。
+  const ttl = activity.id === 'sleep' ? normalMs : Math.min(normalMs, CHAT_RUNTIME_MAX_MS)
+  return {
+    activityId: activity.id,
+    label: activity.label,
+    startedAt: now,
+    plannedUntil: now + ttl,
+    updatedAt: now,
+    source: 'chat',
+    recentActivityIds: [activity.id, ...recentIds.filter((id) => id !== activity.id)].slice(0, 3),
+  }
+}
+
+/**
+ * TA 最终回复 → Runtime 写回。
+ * - 明确“我去洗澡/正在看书”才覆盖当前状态；
+ * - 明确“洗完了/下课了”只结束同一个 chat 状态，然后立刻回到日常调度；
+ * - 没命中完全不写；不改聊天、Memory/Event/Space。
+ */
+export function syncTaRuntimeFromAssistantText(
+  sessionId: string | undefined,
+  persona: string,
+  text: string,
+  now: number = Date.now(),
+  rand: () => number = Math.random,
+): TaRuntimeState | null {
+  const detected = detectRuntimeChatAction(text)
+  if (!detected) return null
+  const key = sessionId || GUEST_KEY
+  const map = loadAll()
+  const cur = map[key]
+  const recentIds = cur && Array.isArray(cur.recentActivityIds) && cur.recentActivityIds.length > 0
+    ? cur.recentActivityIds
+    : cur?.activityId
+      ? [cur.activityId]
+      : []
+
+  if (detected.kind === 'start') {
+    const activity = ACTIVITIES.find((item) => item.id === detected.activityId)
+    if (!activity) return null
+    const next = createChatState(activity, now, recentIds)
+    map[key] = next
+    saveAll(map)
+    return next
+  }
+
+  // “做完了”只结束聊天明确写进去的同一活动，避免一句普通话把自动 Runtime 清掉。
+  if (!cur || cur.source !== 'chat' || cur.activityId !== detected.activityId) return null
+  const recentAfterFinish = [cur.activityId, ...recentIds.filter((id) => id !== cur.activityId)].slice(0, 3)
+  const next = createState(pickActivity(new Date(now), persona, recentAfterFinish, rand), now, rand, persona, recentAfterFinish)
+  map[key] = next
+  saveAll(map)
+  return next
+}
+
 /**
  * 核心 API（Lazy Runtime）：
  * 1) 无状态 → 按 当前时间 + persona 创建并保存；
@@ -289,7 +490,7 @@ export function isTaRuntimeState(value: unknown): value is TaRuntimeState {
     && typeof state.startedAt === 'number' && Number.isFinite(state.startedAt)
     && typeof state.plannedUntil === 'number' && Number.isFinite(state.plannedUntil)
     && typeof state.updatedAt === 'number' && Number.isFinite(state.updatedAt)
-    && (state.source === 'routine' || state.source === 'persona')
+    && (state.source === 'routine' || state.source === 'persona' || state.source === 'chat')
     && (state.recentActivityIds == null || (
       Array.isArray(state.recentActivityIds)
       && state.recentActivityIds.length <= 3
