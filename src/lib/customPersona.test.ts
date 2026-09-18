@@ -180,6 +180,24 @@ ok(
   !hasPersonaIdentityConflict('【我】\n姓名：卡桑德拉·诺特', ''),
   '主角色名为空时分节规则不启用',
 )
+ok(
+  hasPersonaIdentityConflict(
+    buildCustomPersona({ nickname: '赫敏·格兰杰', personality: '性格冷静。', background: '姓名：赫敏·格兰杰\n名字：卡桑德拉·诺特' }),
+    '赫敏·格兰杰',
+  ),
+  '表单拼接后（首行被加上「关系背景：」前缀）两个不同姓名字段 → 命中',
+)
+ok(
+  !hasPersonaIdentityConflict(
+    buildCustomPersona({ nickname: '赫敏·格兰杰', personality: '性格冷静。', background: '名字：赫敏·格兰杰' }),
+    '赫敏·格兰杰',
+  ),
+  '表单拼接后只有一个姓名且与主角色名一致 → 不命中',
+)
+ok(
+  !hasPersonaIdentityConflict('她的朋友名字叫卡桑德拉·诺特，性格活泼。', '赫敏·格兰杰'),
+  '叙述里的「名字叫」不算命中',
+)
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) throw new Error(`customPersona.test 失败：${failed} 项未通过`)

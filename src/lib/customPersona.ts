@@ -33,11 +33,18 @@ function normalizePersonaName(value: string): string {
     .toLocaleLowerCase()
 }
 
+/**
+ * 字段式姓名行：允许前面带一个短标签。
+ * 表单拼接会给人设首行加「性格特质：」「关系背景：」这类前缀，用户写的「姓名：A」拼完就成
+ * 「关系背景：姓名：A」——严格行首匹配会漏掉它（实测：两个不同姓名字段一个都不命中）。
+ * 仍然只认带冒号的字段写法，叙述里的「名字叫……」不算。
+ */
+const NAME_FIELD_RE = /(?:^|[：:\s])(?:姓名|名字)\s*[：:]\s*([^\r\n]+?)\s*$/gm
+
 function explicitNameFields(persona: string): string[] {
   if (!persona) return []
   const names: string[] = []
-  const re = /^\s*(?:姓名|名字)\s*[：:]\s*([^\r\n]+?)\s*$/gm
-  for (const match of persona.matchAll(re)) {
+  for (const match of persona.matchAll(NAME_FIELD_RE)) {
     const normalized = normalizePersonaName(match[1] ?? '')
     if (normalized) names.push(normalized)
   }
