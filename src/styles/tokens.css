@@ -1,0 +1,112 @@
+/* ==========================================================================
+   Eluvin UI #9 — Canonical Tokens v1
+   --------------------------------------------------------------------------
+   This file is the new visual contract. It does NOT restyle existing pages yet.
+   Old --color-* / --ui2-* variables stay in place during migration.
+   Pages should move onto these tokens one batch at a time after visual review.
+   ========================================================================== */
+
+:root {
+  /* Layout */
+  --el-app-max-width: 480px;
+  --el-page-x: 20px;
+
+  /* Spacing */
+  --el-space-1: 4px;
+  --el-space-2: 8px;
+  --el-space-3: 12px;
+  --el-space-4: 16px;
+  --el-space-5: 24px;
+  --el-space-6: 32px;
+  --el-space-7: 48px;
+
+  /* Typography */
+  --el-font-caption: 12px;
+  --el-font-support: 13px;
+  --el-font-body: 15px;
+  --el-font-nav-title: 17px;
+  --el-font-title-sm: 20px;
+  --el-font-title: 24px;
+  --el-font-display: 30px;
+
+  --el-weight-regular: 400;
+  --el-weight-medium: 500;
+  --el-weight-semibold: 600;
+
+  --el-line-caption: 1.5;
+  --el-line-support: 1.6;
+  --el-line-body: 1.7;
+  --el-line-section: 1.4;
+  --el-line-title: 1.3;
+
+  /* Radius */
+  --el-radius-sm: 10px;
+  --el-radius-md: 16px;
+  --el-radius-lg: 24px;
+  --el-radius-pill: 999px;
+  --el-radius-round: 50%;
+
+  /* Component dimensions */
+  --el-topbar-height: 52px;
+  --el-bottom-nav-height: 56px;
+  --el-control-height: 46px;
+  --el-list-row-height: 52px;
+  --el-list-row-two-line-height: 60px;
+  --el-icon-button-size: 40px;
+  --el-hit-target-min: 44px;
+  --el-segment-height: 36px;
+  --el-switch-width: 44px;
+  --el-switch-height: 26px;
+
+  /* Icons */
+  --el-icon-size: 20px;
+  --el-icon-nav-size: 24px;
+  --el-icon-small-size: 16px;
+  --el-icon-stroke: 1.6;
+
+  /* Motion */
+  --el-motion-fast: 120ms;
+  --el-motion-base: 200ms;
+  --el-motion-slow: 300ms;
+  --el-ease-standard: cubic-bezier(.2, .8, .2, 1);
+
+  /* Z-index */
+  --el-z-content: 0;
+  --el-z-sticky: 10;
+  --el-z-nav: 20;
+  --el-z-popover: 30;
+  --el-z-backdrop: 40;
+  --el-z-overlay: 50;
+  --el-z-toast: 60;
+  --el-z-critical: 70;
+
+  /* Semantic surfaces — aliases only, so existing theme/runtime behavior stays intact. */
+  --el-surface-page: var(--ui2-canvas, var(--color-bg, #fff8f3));
+  --el-surface-card: var(--color-card, #ffffff);
+  --el-surface-elevated: var(--ui2-surface-elevated, var(--color-card, #ffffff));
+  --el-surface-accent: var(--color-primary-soft, #ffd3b6);
+
+  /* Semantic text */
+  --el-text-primary: var(--ui2-text, var(--color-text, #3d2c29));
+  --el-text-secondary: var(--ui2-text-secondary, var(--color-text-muted, #9a7d74));
+  --el-text-muted: var(--color-text-muted, #9a7d74);
+  --el-text-on-accent: var(--color-on-primary, #ffffff);
+
+  /* Semantic borders */
+  --el-border: var(--color-border, #f0dcd0);
+  --el-border-soft: var(--ui2-hairline, color-mix(in srgb, var(--color-border, #f0dcd0) 62%, transparent));
+
+  /* Accent follows the user's current TA theme. */
+  --el-accent-primary: var(--color-primary, #ff8a5c);
+  --el-accent-soft: var(--color-primary-soft, #ffd3b6);
+  --el-accent-deep: var(--color-primary-deep, #e96f3e);
+
+  /* Feedback */
+  --el-danger: #b3261e;
+  --el-success: #2f7d4d;
+  --el-warning: #9a6418;
+
+  /* Shadow: only two supported elevation tiers. */
+  --el-shadow-float: 0 8px 24px rgba(38, 31, 28, 0.08);
+  --el-shadow-modal: 0 18px 48px rgba(38, 31, 28, 0.14);
+}
