@@ -74,6 +74,8 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
   const hasThink = !isUser && !!message.thinking && message.thinking.trim().length > 0
   // TASK-ENGLISH-MODE：会话语言决定灰条标签（sessionLang 已在上面定义）
   const thinkLabel = sessionLang === 'en' ? 'TA was thinking' : 'TA 想了想'
+  const typingLabel = sessionLang === 'en' ? 'TA is thinking…' : 'TA 正在想…'
+  const memoryMomentLabel = sessionLang === 'en' ? 'Saved this moment' : '已记住这个瞬间'
   // 思考链是否需要翻译：中文会话 + thinking 是英文 → 需要懒翻译
   const thinkingRaw = message.thinking ?? ''
   const needThinkTranslate = hasThink && sessionLang === 'zh' && detectLang(thinkingRaw) === 'en'
@@ -163,8 +165,8 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
         <div className="message-bubble-line">
           <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
             {typing ? (
-              <span className="typing" aria-label="TA 正在想">
-                <span className="typing-text">TA 正在想…</span>
+              <span className="typing" aria-label={typingLabel}>
+                <span className="typing-text">{typingLabel}</span>
                 <i />
                 <i />
                 <i />
@@ -180,7 +182,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" />
             </svg>
-            <span>已记住这个瞬间</span>
+            <span>{memoryMomentLabel}</span>
           </span>
         )}
       </div>
