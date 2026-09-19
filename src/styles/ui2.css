@@ -2849,7 +2849,7 @@
   padding: 7px 11px;
   border: 1px solid color-mix(in srgb, var(--color-border) 62%, transparent);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--color-card) 94%, var(--color-bg));
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-card) 94%, var(--color-bg)) 60%, transparent);
   box-shadow: none;
   color: var(--color-text);
 }
@@ -2859,7 +2859,7 @@
   padding: 8px 12px;
   border: 1px solid color-mix(in srgb, var(--color-primary) 14%, transparent);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-card));
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-primary) 14%, var(--color-card)) 60%, transparent);
   color: var(--color-text);
   box-shadow: none;
 }
