@@ -1,0 +1,346 @@
+/* ==========================================================================
+   Eluvin UI #9 — TA Profile Migration v1
+   --------------------------------------------------------------------------
+   TA Profile remains a person-first page: large avatar, relationship identity
+   and a calm hero stay intact. Product chrome moves onto canonical --el-*.
+   ========================================================================== */
+
+.ta-profile-page {
+  min-height: 100%;
+  padding: 0;
+  background:
+    radial-gradient(
+      circle at 20% 16%,
+      color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 8%, transparent),
+      transparent 28%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--el-accent-soft, var(--color-primary-soft)) 16%, transparent),
+      transparent 42%
+    ),
+    var(--el-surface-page, var(--color-bg));
+  color: var(--el-text-primary, var(--color-text));
+}
+
+/* ---- Top bar ----------------------------------------------------------- */
+.ta-profile-topbar {
+  z-index: var(--el-z-sticky, 10);
+  grid-template-columns:
+    var(--el-icon-button-size, 40px)
+    minmax(0, 1fr)
+    var(--el-icon-button-size, 40px);
+  min-height: calc(var(--el-topbar-height, 52px) + env(safe-area-inset-top));
+  padding:
+    env(safe-area-inset-top)
+    var(--el-page-x, 20px)
+    0;
+  border-bottom: 1px solid var(--el-border-soft, var(--color-border));
+  background: color-mix(in srgb, var(--el-surface-page, var(--color-bg)) 92%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.ta-profile-topbar h1 {
+  font-size: var(--el-font-nav-title, 17px);
+  font-weight: var(--el-weight-semibold, 600);
+  line-height: var(--el-line-section, 1.4);
+  letter-spacing: 0.01em;
+  color: var(--el-text-primary, var(--color-text));
+}
+
+.ta-profile-back,
+.ta-profile-topbar-spacer {
+  width: var(--el-icon-button-size, 40px);
+  height: var(--el-icon-button-size, 40px);
+}
+
+.ta-profile-back {
+  border-radius: var(--el-radius-round, 50%);
+  color: var(--el-text-primary, var(--color-text));
+  transition:
+    background var(--el-motion-fast, 120ms) ease,
+    transform var(--el-motion-fast, 120ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1));
+}
+
+.ta-profile-back svg {
+  width: var(--el-icon-size, 20px);
+  height: var(--el-icon-size, 20px);
+  stroke-width: var(--el-icon-stroke, 1.6);
+}
+
+.ta-profile-back:hover {
+  background: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 6%, transparent);
+}
+
+.ta-profile-back:active {
+  transform: translateY(1px);
+}
+
+.ta-profile-back:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 38%, #fff);
+  outline-offset: 2px;
+}
+
+/* ---- Person-first hero ------------------------------------------------- */
+.ta-profile-hero {
+  padding:
+    var(--el-space-5, 24px)
+    var(--el-page-x, 20px)
+    var(--el-space-5, 24px);
+}
+
+.ta-profile-avatar {
+  /* Large avatar is an intentional TA Profile exception. */
+  width: 116px;
+  height: 116px;
+  border: 3px solid color-mix(in srgb, var(--el-surface-card, var(--color-card)) 92%, #fff 8%);
+  border-radius: var(--el-radius-round, 50%);
+  background: var(--el-surface-card, var(--color-card));
+  color: var(--el-text-secondary, var(--color-text-muted));
+  box-shadow:
+    0 16px 38px color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 14%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 18%, transparent);
+  transition:
+    transform var(--el-motion-fast, 120ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1)),
+    box-shadow var(--el-motion-base, 200ms) ease;
+}
+
+.ta-profile-avatar:active {
+  transform: scale(0.985);
+}
+
+.ta-profile-avatar:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 42%, #fff);
+  outline-offset: 3px;
+}
+
+.ta-profile-avatar-letter {
+  font-size: var(--el-font-display, 30px);
+  font-weight: var(--el-weight-semibold, 600);
+  color: var(--el-accent-deep, var(--color-primary-deep));
+}
+
+.ta-profile-name {
+  margin-top: var(--el-space-4, 16px);
+  font-size: var(--el-font-title, 24px);
+  font-weight: var(--el-weight-semibold, 600);
+  line-height: var(--el-line-title, 1.3);
+  color: var(--el-text-primary, var(--color-text));
+}
+
+.ta-profile-meta {
+  gap: var(--el-space-2, 8px);
+  margin-top: var(--el-space-2, 8px);
+  font-size: var(--el-font-support, 13px);
+  line-height: var(--el-line-support, 1.6);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.ta-profile-days {
+  margin-top: var(--el-space-1, 4px);
+  font-size: var(--el-font-support, 13px);
+  line-height: var(--el-line-support, 1.6);
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Body -------------------------------------------------------------- */
+.ta-profile-body {
+  gap: var(--el-space-4, 16px);
+  padding:
+    0
+    var(--el-page-x, 20px)
+    calc(var(--el-space-6, 32px) + env(safe-area-inset-bottom));
+}
+
+.ta-profile-who,
+.ta-profile-menu,
+.ta-profile-refresh {
+  overflow: hidden;
+  border: 1px solid var(--el-border, var(--color-border));
+  border-radius: var(--el-radius-md, 16px);
+  background: color-mix(in srgb, var(--el-surface-card, var(--color-card)) 96%, transparent);
+  box-shadow: none;
+}
+
+/* ---- “TA 是谁” -------------------------------------------------------- */
+.ta-profile-who {
+  padding: var(--el-space-4, 16px);
+}
+
+.ta-profile-section-head {
+  margin-bottom: var(--el-space-2, 8px);
+}
+
+.ta-profile-section-head h3 {
+  font-size: var(--el-font-nav-title, 17px);
+  font-weight: var(--el-weight-semibold, 600);
+  line-height: var(--el-line-section, 1.4);
+  color: var(--el-text-primary, var(--color-text));
+}
+
+.ta-profile-who-row {
+  grid-template-columns: 28px 56px minmax(0, 1fr);
+  gap: var(--el-space-2, 8px);
+  min-height: var(--el-list-row-height, 52px);
+  padding: var(--el-space-3, 12px) 0;
+}
+
+.ta-profile-who-row + .ta-profile-who-row {
+  border-top-color: var(--el-border-soft, var(--color-border));
+}
+
+.ta-profile-who-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--el-accent-deep, var(--color-primary-deep));
+}
+
+.ta-profile-who-icon svg {
+  width: var(--el-icon-size, 20px);
+  height: var(--el-icon-size, 20px);
+  stroke-width: var(--el-icon-stroke, 1.6);
+}
+
+.ta-profile-who-label {
+  padding-top: 2px;
+  font-size: var(--el-font-support, 13px);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.ta-profile-who-value {
+  padding-top: 1px;
+  font-size: var(--el-font-body, 15px);
+  line-height: var(--el-line-support, 1.6);
+  color: var(--el-text-primary, var(--color-text));
+}
+
+/* ---- Entry rows -------------------------------------------------------- */
+.ta-profile-menu-row {
+  min-height: var(--el-list-row-height, 52px);
+  gap: var(--el-space-3, 12px);
+  padding: var(--el-space-2, 8px) var(--el-space-3, 12px);
+  color: var(--el-text-primary, var(--color-text));
+  transition:
+    background var(--el-motion-fast, 120ms) ease,
+    transform var(--el-motion-fast, 120ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1));
+}
+
+.ta-profile-menu-row + .ta-profile-menu-row {
+  border-top: 1px solid var(--el-border-soft, var(--color-border));
+}
+
+.ta-profile-menu-row:hover {
+  background: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 4%, transparent);
+}
+
+.ta-profile-menu-row:active {
+  background: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 7%, transparent);
+}
+
+.ta-profile-menu-row:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, #fff);
+  outline-offset: -2px;
+}
+
+.ta-profile-menu-icon {
+  width: 32px;
+  height: 32px;
+  color: var(--el-accent-deep, var(--color-primary-deep));
+}
+
+.ta-profile-menu-icon svg {
+  width: var(--el-icon-size, 20px);
+  height: var(--el-icon-size, 20px);
+  stroke-width: var(--el-icon-stroke, 1.6);
+}
+
+.ta-profile-menu-label {
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-medium, 500);
+  line-height: var(--el-line-section, 1.4);
+}
+
+.ta-profile-menu-row .ai-space-entry-chevron {
+  width: var(--el-icon-small-size, 16px);
+  height: var(--el-icon-small-size, 16px);
+  color: var(--el-text-secondary, var(--color-text-muted));
+  stroke-width: var(--el-icon-stroke, 1.6);
+}
+
+/* ---- Refresh confirmation --------------------------------------------- */
+.ta-profile-refresh-confirm {
+  padding:
+    var(--el-space-3, 12px)
+    var(--el-space-4, 16px)
+    var(--el-space-4, 16px);
+  border-top: 1px solid var(--el-border-soft, var(--color-border));
+}
+
+.ta-profile-refresh-confirm p {
+  margin-bottom: var(--el-space-3, 12px);
+  font-size: var(--el-font-support, 13px);
+  line-height: var(--el-line-support, 1.6);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.ta-profile-refresh-actions {
+  gap: var(--el-space-2, 8px);
+}
+
+.ta-profile-refresh-actions .btn {
+  flex: 1;
+  min-height: var(--el-control-height, 46px);
+  font-size: var(--el-font-support, 13px);
+}
+
+/* ---- Role-management chat CTA ----------------------------------------- */
+.ta-profile-chat-cta {
+  width: 100%;
+  min-height: var(--el-control-height, 46px);
+  margin-bottom: 0;
+  border: 1px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 18%, transparent);
+  border-radius: var(--el-radius-md, 16px);
+  background: color-mix(
+    in srgb,
+    var(--el-accent-primary, var(--color-primary)) 13%,
+    var(--el-surface-card, var(--color-card))
+  );
+  color: var(--el-text-primary, var(--color-text));
+  gap: var(--el-space-2, 8px);
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+.ta-profile-chat-cta svg {
+  width: var(--el-icon-size, 20px);
+  height: var(--el-icon-size, 20px);
+}
+
+.ta-profile-hint {
+  font-size: var(--el-font-caption, 12px);
+  line-height: var(--el-line-support, 1.6);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+@media (max-width: 380px) {
+  .ta-profile-avatar {
+    width: 106px;
+    height: 106px;
+  }
+
+  .ta-profile-body {
+    padding-left: var(--el-page-x, 20px);
+    padding-right: var(--el-page-x, 20px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ta-profile-back,
+  .ta-profile-avatar,
+  .ta-profile-menu-row {
+    transition: none;
+  }
+}
