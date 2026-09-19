@@ -433,18 +433,53 @@
 }
 
 .weekly-letter-send {
-  width: 100%;
+  align-self: flex-end;
+  width: var(--el-control-height, 46px);
+  height: var(--el-control-height, 46px);
+  min-width: var(--el-control-height, 46px);
+  min-height: var(--el-control-height, 46px);
   margin-top: 18px;
-  min-height: 48px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 64%, var(--color-primary-deep));
-  color: var(--color-on-primary);
-  font-size: 15px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform var(--el-motion-fast, 120ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1)),
+    opacity var(--el-motion-fast, 120ms) ease,
+    background var(--el-motion-fast, 120ms) ease;
+}
+
+.weekly-letter-send svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.weekly-letter-send:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.weekly-letter-send:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, #fff);
+  outline-offset: 2px;
 }
 
 .weekly-letter-send:disabled {
   opacity: 0.45;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weekly-letter-send {
+    transition: none;
+  }
 }
 
 .weekly-letter-sent {
