@@ -2819,12 +2819,25 @@
   color: var(--color-text);
 }
 
+.message-bubble-line {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.row-user .message-bubble-line {
+  flex-direction: row-reverse;
+}
+
 .chat-page .msg-bubble-time {
-  margin-top: 2px;
-  padding-inline: 3px;
-  color: color-mix(in srgb, var(--color-text-muted) 72%, transparent);
+  flex: none;
+  margin-bottom: 2px;
+  padding: 0;
+  color: color-mix(in srgb, var(--color-text-muted) 68%, transparent);
   font-size: 12px;
   line-height: 1.25;
+  white-space: nowrap;
 }
 
 .memory-moment {
