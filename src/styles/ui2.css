@@ -2755,7 +2755,7 @@
   justify-content: center;
   gap: 5px;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
@@ -2807,7 +2807,7 @@
 .chat-page .bubble-assistant {
   background: color-mix(in srgb, var(--color-card) 84%, var(--color-bg));
   border: 1px solid color-mix(in srgb, var(--color-border) 62%, transparent);
-  border-bottom-left-radius: 7px;
+  border-bottom-left-radius: 10px;
   box-shadow: none;
   color: var(--color-text);
 }
@@ -2815,7 +2815,7 @@
 .chat-page .bubble-user {
   background: color-mix(in srgb, var(--color-primary) 18%, var(--color-card));
   border: 1px solid color-mix(in srgb, var(--color-primary) 16%, transparent);
-  border-bottom-right-radius: 7px;
+  border-bottom-right-radius: 10px;
   color: var(--color-text);
 }
 
@@ -2823,7 +2823,7 @@
   margin-top: 2px;
   padding-inline: 3px;
   color: color-mix(in srgb, var(--color-text-muted) 72%, transparent);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.25;
 }
 
@@ -2835,7 +2835,7 @@
   gap: 5px;
   border-top: 1px solid color-mix(in srgb, var(--color-primary) 14%, transparent);
   color: color-mix(in srgb, var(--color-primary-deep) 74%, var(--color-text-muted));
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1.4;
 }
@@ -2868,18 +2868,17 @@
   padding: 8px;
   gap: 8px;
   border: 1px solid color-mix(in srgb, var(--color-border) 62%, transparent);
-  border-radius: 18px;
+  border-radius: 16px;
   background: color-mix(in srgb, var(--color-card) 84%, transparent);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
-  box-shadow: 0 8px 28px rgba(61, 44, 41, 0.06);
 }
 
 .chat-page .composer-input {
-  min-height: 42px;
+  min-height: 46px;
   padding: 10px 12px;
   border: 1px solid transparent;
-  border-radius: 14px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--color-bg) 76%, transparent);
   line-height: 1.5;
 }
@@ -2891,8 +2890,8 @@
 
 .chat-page .btn-send,
 .chat-page .btn-stop {
-  min-height: 42px;
-  border-radius: 14px;
+  min-height: 46px;
+  border-radius: 16px;
   padding: 9px 15px;
   transition: transform 120ms cubic-bezier(.2, .8, .2, 1), opacity 120ms ease, background 120ms ease;
 }
@@ -2902,11 +2901,6 @@
   transform: scale(.97);
 }
 
-.chat-page .chat-error {
-  border: 1px solid color-mix(in srgb, #b3261e 16%, transparent);
-  background: color-mix(in srgb, #fdecea 66%, transparent);
-  box-shadow: none;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .chat-page .btn-send,
