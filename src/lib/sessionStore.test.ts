@@ -158,6 +158,27 @@ const withNull = [null, { role: 'user' as const, content: 'x', ts: 1 }] as unkno
 eq(mergeSessionMessages(withNull, []).length, 1, '非法条目被过滤')
 eq(mergeSessionMessages([{ role: 'user' as const, content: 'a', ts: NaN }], [{ role: 'user' as const, content: 'b', ts: 2 }]).length, 1, 'NaN ts 被过滤')
 
+const memoryBadgeMerged = mergeSessionMessages(
+  [{ role: 'assistant', content: '我记住了', ts: 400, memorySaved: true }],
+  [{ role: 'assistant', content: '我记住了', ts: 400 }],
+)
+eq(memoryBadgeMerged[0]?.memorySaved, true, '同 ts 云端回填保留本地 memorySaved')
+
+const memoryBadgeContentFallback = mergeSessionMessages(
+  [{ role: 'assistant', content: '唯一内容', ts: 500, memorySaved: true }],
+  [{ role: 'assistant', content: '唯一内容', ts: 501 }],
+)
+eq(memoryBadgeContentFallback[0]?.memorySaved, true, '服务端 ts 不同时，唯一 role+content 命中仍保留 memorySaved')
+
+const duplicateContentNoLeak = mergeSessionMessages(
+  [
+    { role: 'assistant', content: '重复', ts: 600, memorySaved: true },
+    { role: 'assistant', content: '重复', ts: 700 },
+  ],
+  [{ role: 'assistant', content: '重复', ts: 800 }],
+)
+eq(duplicateContentNoLeak[0]?.memorySaved, undefined, '重复 role+content 不用内容兜底，避免徽标串到错误消息')
+
 console.log('\n[6] confirmMessageInCache：上传成功后本地对账')
 resetStore()
 saveMessagesCache('7', [

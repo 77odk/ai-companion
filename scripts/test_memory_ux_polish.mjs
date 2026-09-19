@@ -65,8 +65,9 @@ rec('B6 反馈只看 created（不再要求 explicit）',
   /if \(res\.created\) created = true/.test(chat) && !/wrote && p\.explicit/.test(chat))
 rec('B7 用户气泡标记只在真实新增时设置且为布尔（多条只一次）',
   /if \(created\) userMsg\.memorySaved = true/.test(chat))
-rec('B8 TA「已记住」= 真实新增(memorySaved) 且正文含 marker',
-  /const hasMemory = !isUser && message\.memorySaved === true && extractMemories\(message\.content\)\.length > 0/.test(bubble))
+rec('B8 TA「已记住」只绑定真实新增(memorySaved)，不依赖已被剥离的正文 marker',
+  /const hasMemory = !isUser && message\.memorySaved === true/.test(bubble) &&
+  !/message\.memorySaved === true && extractMemories\(message\.content\)/.test(bubble))
 
 console.log('--- 行为：真实原语 ---')
 const mem = await import(B + 'memory.ts')

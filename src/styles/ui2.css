@@ -2673,3 +2673,302 @@
     transition: none;
   }
 }
+
+
+/* ==========================================================================
+   Chat v1.1 — 忆文聊天视觉
+   方向：不是“把旧气泡做漂亮”，而是让对话更像两个人自然说话。
+   只改展示层：不碰消息顺序 / streaming / Memory / Event / Busy 写入逻辑。
+   ========================================================================== */
+
+.app:has(.chat-page) .app-header {
+  min-height: 62px;
+  padding: 9px 56px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 42%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  z-index: 10;
+}
+
+.app:has(.chat-page) .session-list-entry {
+  left: 12px;
+  top: 11px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.app:has(.chat-page) .session-list-entry:hover {
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+  color: var(--color-text);
+}
+
+.app:has(.chat-page) .chat-header-planet {
+  right: 12px;
+  top: 11px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.app:has(.chat-page) .chat-header-planet:hover {
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+  color: var(--color-text);
+}
+
+.chat-header-identity {
+  min-width: 0;
+  max-width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.chat-header-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+}
+
+.chat-header-presence {
+  max-width: 100%;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-header-presence > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-header-presence-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 72%, var(--color-text-muted));
+}
+
+/* 轻环境感：不引入场景图，不和 Home 抢视觉。 */
+.chat-page {
+  background:
+    radial-gradient(circle at 14% 8%, color-mix(in srgb, var(--color-primary) 7%, transparent), transparent 34%),
+    radial-gradient(circle at 88% 72%, color-mix(in srgb, var(--color-primary-soft) 12%, transparent), transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 96%, #fff), var(--color-bg));
+}
+
+.chat-page .message-list {
+  padding: 14px 14px 18px;
+  gap: 2px;
+}
+
+/* 同一方连续说话更紧；换人时拉开，形成自然轮次。 */
+.chat-page .message-row + .message-row {
+  margin-top: 0;
+}
+
+.chat-page .row-user + .row-assistant,
+.chat-page .row-assistant + .row-user {
+  margin-top: 12px;
+}
+
+.chat-page .message-row {
+  gap: 7px;
+}
+
+.chat-page .row-assistant {
+  align-items: flex-start;
+}
+
+.chat-page .row-assistant > .msg-avatar-btn,
+.chat-page .row-assistant > .msg-avatar {
+  margin-top: 2px;
+}
+
+.chat-page .row-user {
+  align-items: center;
+}
+
+/* 连续消息只保留第一次头像，后续保持对齐但不重复抢视觉。 */
+.chat-page .row-assistant + .row-assistant .msg-avatar-btn,
+.chat-page .row-assistant + .row-assistant > .msg-avatar,
+.chat-page .row-user + .row-user > .msg-avatar {
+  visibility: hidden;
+}
+
+.chat-page .msg-avatar {
+  border-color: color-mix(in srgb, var(--color-border) 42%, transparent);
+  background: color-mix(in srgb, var(--color-card) 76%, transparent);
+}
+
+.chat-page .message-body {
+  max-width: 80%;
+}
+
+.message-bubble-line {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.row-user .message-bubble-line {
+  flex-direction: row-reverse;
+}
+
+/* TA：恢复小气泡。连续消息仍共用同一头像列，避免“大卡片感”。 */
+.chat-page .bubble-assistant {
+  padding: 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 62%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-card) 94%, var(--color-bg)) 60%, transparent);
+  box-shadow: none;
+  color: var(--color-text);
+}
+
+/* 用户：同样收紧，保留 TA Accent 作为“我说的话”的轻锚点。 */
+.chat-page .bubble-user {
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 14%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, color-mix(in srgb, var(--color-primary) 14%, var(--color-card)) 60%, transparent);
+  color: var(--color-text);
+  box-shadow: none;
+}
+
+.chat-page .bubble {
+  font-size: 15px;
+  line-height: 1.62;
+}
+
+.chat-page .msg-bubble-time {
+  flex: none;
+  margin-bottom: 2px;
+  padding: 0;
+  color: color-mix(in srgb, var(--color-text-muted) 58%, transparent);
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+/* 记忆不是系统提示，而是留在这次对话里的轻痕迹。 */
+.memory-moment {
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  color: color-mix(in srgb, var(--color-primary-deep) 68%, var(--color-text-muted));
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  opacity: 0.9;
+}
+
+.memory-moment svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+
+.row-assistant .memory-moment {
+  margin-left: 0;
+}
+
+.chat-page .typing {
+  min-height: 24px;
+  gap: 4px;
+  padding: 0;
+}
+
+.chat-page .typing .typing-text {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.chat-page .typing i {
+  width: 5px;
+  height: 5px;
+  background: color-mix(in srgb, var(--color-primary) 48%, var(--color-text-muted));
+}
+
+/* 输入区去掉“白色大容器再套输入框”的网页表单感。 */
+.chat-page .composer {
+  margin: 0 12px 6px;
+  padding: 0;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-page .composer-input {
+  min-height: 46px;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 54%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-card) 72%, transparent);
+  color: var(--color-text);
+  line-height: 1.5;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.chat-page .composer-input:focus {
+  border-color: color-mix(in srgb, var(--color-primary) 38%, transparent);
+  background: color-mix(in srgb, var(--color-card) 84%, transparent);
+}
+
+.chat-page .btn-send,
+.chat-page .btn-stop {
+  min-width: 58px;
+  min-height: 46px;
+  padding: 9px 14px;
+  border-radius: 16px;
+  box-shadow: none;
+  transition:
+    transform 120ms cubic-bezier(.2, .8, .2, 1),
+    opacity 120ms ease,
+    background 120ms ease;
+}
+
+.chat-page .btn-send:active:not(:disabled),
+.chat-page .btn-stop:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-page .btn-send,
+  .chat-page .btn-stop {
+    transition: none;
+  }
+}
+

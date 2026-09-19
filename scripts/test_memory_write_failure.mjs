@@ -67,9 +67,15 @@ ok(/if \(!item\) return \{ ok: false, created: false \}/.test(chatSrc), 'E1 writ
 ok(/if \(res\.created\) created = true/.test(chatSrc) && /if \(created\) userMsg\.memorySaved = true/.test(chatSrc), 'E2 flushMemoryWrites：只有「真实新增(created)」才置 memorySaved（不再要求 explicit）')
 ok(/if \(memoryWroteThisTurn && assistantMsgs\.length > 0\)/.test(chatSrc), 'E3 TA 消息的「已记住」标记也来自真实写入结果')
 ok(
-  /const hasMemory = !isUser && message\.memorySaved === true && extractMemories\(message\.content\)\.length > 0/.test(bubbleSrc),
-  'F 「已记住」= marker 存在 + memorySaved===true（写失败时不显示）',
+  /const hasMemory = !isUser && message\.memorySaved === true/.test(bubbleSrc) &&
+    !/message\.memorySaved === true && extractMemories\(message\.content\)/.test(bubbleSrc),
+  'F1 「已记住」只看真实写入结果 memorySaved===true（正文 marker 已剥离，不再参与展示判断）',
 )
+const badgeMerged = ss.mergeSessionMessages(
+  [{ role: 'assistant', content: '我记住了', ts: 101, memorySaved: true }],
+  [{ role: 'assistant', content: '我记住了', ts: 101 }],
+)
+ok(badgeMerged[0]?.memorySaved === true, 'F2 云端消息回填后仍保留本地 memorySaved，提示不会消失')
 ok(st.shouldShowMemorySaved({ role: 'user', content: 'x', ts: 1, memorySaved: true }) === true, 'G1 写成功 → 「✅已帮你记下」显示')
 ok(st.shouldShowMemorySaved({ role: 'user', content: 'x', ts: 1 }) === false, 'G2 写失败（未标 memorySaved）→ 不显示')
 ok(st.shouldShowMemorySaved({ role: 'user', content: 'x', ts: 1, memorySaved: false }) === false, 'G3 memorySaved=false → 不显示')
