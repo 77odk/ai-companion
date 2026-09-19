@@ -170,21 +170,19 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
                 <i />
               </span>
             ) : (
-              <>
-                <span className="bubble-text">{displayText}</span>
-                {hasMemory && (
-                  <span className="memory-moment">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" />
-                    </svg>
-                    <span>已记住这个瞬间</span>
-                  </span>
-                )}
-              </>
+              <span className="bubble-text">{displayText}</span>
             )}
           </div>
           <span className="msg-bubble-time">{chatBubbleTime(message.ts)}</span>
         </div>
+        {hasMemory && (
+          <span className="memory-moment">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" />
+            </svg>
+            <span>已记住这个瞬间</span>
+          </span>
+        )}
       </div>
       {isUser && <Avatar value={avatar} kind="user" className="user-avatar" />}
     </div>
