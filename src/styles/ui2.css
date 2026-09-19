@@ -2804,6 +2804,19 @@
   gap: 6px;
 }
 
+.chat-page .row-assistant {
+  align-items: flex-start;
+}
+
+.chat-page .row-assistant > .msg-avatar-btn,
+.chat-page .row-assistant > .msg-avatar {
+  margin-top: 2px;
+}
+
+.chat-page .row-user {
+  align-items: center;
+}
+
 /* 连续消息只保留第一次头像，后续保持对齐但不重复抢视觉。 */
 .chat-page .row-assistant + .row-assistant .msg-avatar-btn,
 .chat-page .row-assistant + .row-assistant > .msg-avatar,
