@@ -1,0 +1,202 @@
+/* ==========================================================================
+   Eluvin UI #9 — Shared Primitives v1
+   --------------------------------------------------------------------------
+   Cross-page controls only. Page layout/identity remains owned by each page.
+   Loaded after legacy index.css and before page-specific override layers.
+   ========================================================================== */
+
+/* ---- Buttons ----------------------------------------------------------- */
+.btn {
+  min-height: var(--el-control-height, 46px);
+  padding: 0 var(--el-space-4, 16px);
+  border-radius: var(--el-radius-md, 16px);
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-semibold, 600);
+  transition:
+    transform var(--el-motion-fast, 120ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1)),
+    background var(--el-motion-fast, 120ms) ease,
+    opacity var(--el-motion-fast, 120ms) ease;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  background: var(--el-accent-primary, var(--color-primary));
+  color: var(--el-text-on-accent, var(--color-on-primary));
+}
+
+.btn-ghost {
+  background: var(--el-accent-soft, var(--color-primary-soft));
+  color: var(--el-accent-deep, var(--color-primary-deep));
+}
+
+.btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 42%, #fff);
+  outline-offset: 2px;
+}
+
+/* ---- Form controls ----------------------------------------------------- */
+.input {
+  min-height: var(--el-control-height, 46px);
+  padding: 10px var(--el-space-3, 12px);
+  border: 1px solid var(--el-border, var(--color-border));
+  border-radius: var(--el-radius-sm, 10px);
+  background: var(--el-surface-card, var(--color-card));
+  color: var(--el-text-primary, var(--color-text));
+  font-size: var(--el-font-body, 15px);
+  line-height: var(--el-line-section, 1.4);
+}
+
+.input:focus {
+  border-color: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 58%, var(--el-border, var(--color-border)));
+}
+
+/* ---- Shared detail top bar -------------------------------------------- */
+.detail-header {
+  min-height: var(--el-topbar-height, 52px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--el-space-3, 12px);
+}
+
+.detail-back {
+  flex: none;
+  width: var(--el-icon-button-size, 40px);
+  height: var(--el-icon-button-size, 40px);
+  padding: 0;
+  border: 1px solid var(--el-border-soft, var(--color-border));
+  border-radius: var(--el-radius-round, 50%);
+  background: var(--el-surface-card, var(--color-card));
+  color: var(--el-text-secondary, var(--color-text-muted));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color var(--el-motion-fast, 120ms) ease,
+    border-color var(--el-motion-fast, 120ms) ease,
+    background var(--el-motion-fast, 120ms) ease;
+}
+
+.detail-back svg {
+  width: var(--el-icon-small-size, 16px);
+  height: var(--el-icon-small-size, 16px);
+  stroke-width: var(--el-icon-stroke, 1.6);
+}
+
+.detail-back:hover {
+  color: var(--el-accent-deep, var(--color-primary-deep));
+  border-color: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, transparent);
+}
+
+.detail-back:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 38%, #fff);
+  outline-offset: 2px;
+}
+
+.detail-back.detail-back-text {
+  width: auto;
+  height: var(--el-icon-button-size, 40px);
+  padding: 0 var(--el-space-3, 12px) 0 var(--el-space-2, 8px);
+  gap: var(--el-space-1, 4px);
+  border-radius: var(--el-radius-pill, 999px);
+  font-size: var(--el-font-support, 13px);
+}
+
+.detail-title {
+  margin: 0;
+  color: var(--el-text-primary, var(--color-text));
+  font-size: var(--el-font-nav-title, 17px);
+  font-weight: var(--el-weight-semibold, 600);
+  line-height: var(--el-line-section, 1.4);
+}
+
+.detail-spacer {
+  width: var(--el-icon-button-size, 40px);
+  flex: none;
+}
+
+/* ---- Shared switch ----------------------------------------------------- */
+.settings-switch {
+  width: var(--el-switch-width, 44px);
+  height: var(--el-switch-height, 26px);
+  margin-top: 0;
+  border-radius: var(--el-radius-pill, 999px);
+  transition: background var(--el-motion-base, 200ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1));
+}
+
+.settings-switch.on {
+  background: var(--el-accent-primary, var(--color-primary));
+}
+
+.settings-switch-thumb {
+  width: 20px;
+  height: 20px;
+  transition: transform var(--el-motion-base, 200ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1));
+}
+
+.settings-switch.on .settings-switch-thumb {
+  transform: translateX(18px);
+}
+
+.settings-switch:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 38%, #fff);
+  outline-offset: 2px;
+}
+
+/* ---- Shared modal grammar --------------------------------------------- */
+.switch-role-overlay {
+  z-index: var(--el-z-overlay, 50);
+  padding: var(--el-space-5, 24px);
+  background: rgba(38, 31, 28, 0.30);
+}
+
+.switch-role-card {
+  width: min(100%, 360px);
+  max-width: 360px;
+  padding: var(--el-space-5, 24px) var(--el-space-5, 24px) var(--el-space-4, 16px);
+  border-radius: var(--el-radius-lg, 24px);
+  background: var(--el-surface-elevated, var(--color-card));
+  box-shadow: var(--el-shadow-modal, 0 18px 48px rgba(38, 31, 28, 0.14));
+}
+
+.switch-role-header {
+  margin-bottom: var(--el-space-4, 16px);
+}
+
+.switch-role-title {
+  font-size: var(--el-font-title-sm, 20px);
+  font-weight: var(--el-weight-semibold, 600);
+  line-height: var(--el-line-title, 1.3);
+}
+
+.switch-role-close {
+  width: var(--el-icon-button-size, 40px);
+  height: var(--el-icon-button-size, 40px);
+  border-radius: var(--el-radius-round, 50%);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.switch-role-option {
+  min-height: var(--el-list-row-two-line-height, 60px);
+  padding: var(--el-space-3, 12px) var(--el-space-4, 16px);
+  border-color: var(--el-border, var(--color-border));
+  border-radius: var(--el-radius-md, 16px);
+  background: var(--el-surface-card, var(--color-card));
+}
+
+.switch-role-option:hover {
+  border-color: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 44%, var(--el-border, var(--color-border)));
+  background: color-mix(in srgb, var(--el-accent-soft, var(--color-primary-soft)) 34%, var(--el-surface-card, var(--color-card)));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .detail-back,
+  .settings-switch,
+  .settings-switch-thumb {
+    transition: none;
+  }
+}
