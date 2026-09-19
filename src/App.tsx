@@ -111,8 +111,10 @@ function ChatHeaderPresence({ sessionId }: { sessionId: string | null }) {
 
   if (!label) return null
 
+  const ariaLabel = lang === 'en' ? `TA right now: ${label}` : `TA 此刻：${label}`
+
   return (
-    <p className="chat-header-presence" aria-label={`TA 此刻：${label}`}>
+    <p className="chat-header-presence" aria-label={ariaLabel}>
       <span className="chat-header-presence-dot" aria-hidden="true" />
       <span>{label}</span>
     </p>
