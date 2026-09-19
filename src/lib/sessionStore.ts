@@ -576,11 +576,35 @@ export function newPendingOpId(): string {
 export function mergeSessionMessages(local: StoredMessage[], cloud: StoredMessage[]): StoredMessage[] {
   // 去重：同 ts（云端优先）或同 role+内容（本地乐观 ts 与云端 createdAt 毫秒差）都算同一条。
   // 根因（2026-08-25 七七实测）：本地乐观写入 ts=Date.now()，云端=后端 createdAt，毫秒差导致同一条消息被当两条显示。
+  // 云端仍负责 role/content/ts 等权威字段；memorySaved 是本地展示元数据，服务端消息没有该字段，
+  // 所以命中同一条消息时必须从本地缓存带回，否则重新拉会话后「已记住这个瞬间」会消失。
+  const validLocal = (local ?? []).filter(
+    (m): m is StoredMessage => m != null && typeof m.ts === 'number' && !Number.isNaN(m.ts),
+  )
+  const localByTs = new Map<number, StoredMessage>()
+  const localByContent = new Map<string, StoredMessage[]>()
+  for (const m of validLocal) {
+    localByTs.set(m.ts, m)
+    const ck = `${m.role}|${m.content}`
+    const matches = localByContent.get(ck) ?? []
+    matches.push(m)
+    localByContent.set(ck, matches)
+  }
+
+  const cloudWithLocalMetadata = (cloud ?? []).map((m) => {
+    if (m == null || typeof m.ts !== 'number' || Number.isNaN(m.ts)) return m
+    const ck = `${m.role}|${m.content}`
+    const contentMatches = localByContent.get(ck) ?? []
+    // 优先精确 ts；只有 role+content 在本地唯一时才用内容兜底，避免重复文案串错徽标。
+    const localMatch = localByTs.get(m.ts) ?? (contentMatches.length === 1 ? contentMatches[0] : undefined)
+    return localMatch?.memorySaved === true ? { ...m, memorySaved: true } : m
+  })
+
   // cloud 在前 = 同 ts 时云端版本优先（后端权威）。
   const seenTs = new Set<number>()
   const seenContent = new Set<string>()
   const out: StoredMessage[] = []
-  for (const m of [...(cloud ?? []), ...(local ?? [])]) {
+  for (const m of [...cloudWithLocalMetadata, ...validLocal]) {
     if (m == null || typeof m.ts !== 'number' || Number.isNaN(m.ts)) continue
     const ck = `${m.role}|${m.content}`
     if (seenTs.has(m.ts) || seenContent.has(ck)) continue
