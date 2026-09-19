@@ -136,13 +136,32 @@ export function stripEmoji(text: string): string {
 }
 
 /**
+ * 硬过滤：删掉系统时间标签（[3 分钟前] / [此刻] / [3 min ago] 这类）。
+ * 历史消息注入上下文时会带这类标注（Chat.tsx 里给每条历史加前缀），
+ * 强模型不会抄，弱模型（智谱 glm-4.7-flash、中转 Gemini 实测）会当成正文原样学样，
+ * 用户看到的回复就是「[3 分钟前] 真要睡就早点。」这种。
+ * 只删标签本身和紧跟的空白，正文一个字不动；整条只剩标签时返回空串，由调用方兜底。
+ */
+export function stripTimeLabels(text: string): string {
+  if (!text) return ''
+  const LABEL =
+    '[\\[［【]\\s*(?:刚刚|此刻|现在|今天|昨天|前天|刚才|\\d+\\s*(?:秒|分钟|个小时|小时|天|个月|年)前|' +
+    'just now|\\d+\\s*(?:secs?|seconds|mins?|minutes|hours?|hrs?|days?)\\s+ago)\\s*[\\]］】]'
+  return text
+    .replace(new RegExp(`^(?:\\s*${LABEL})+\\s*`, 'u'), '')
+    .replace(new RegExp(`(^|\\n)\\s*${LABEL}\\s*`, 'gu'), '$1')
+}
+
+/**
  * 硬过滤：删掉角色扮演式的动作旁白（*摸头*、（转身看向窗外）这类），像真人打字一样说话。
  */
 export function stripActionMarkers(text: string): string {
-  return text
-    .replace(/\*[^*]*\*/g, '')
-    .replace(/（[^（）]*）/g, '')
-    .replace(/\([^()]*\)/g, '')
+  return stripTimeLabels(
+    stripTimeLabels(text)
+      .replace(/\*[^*]*\*/g, '')
+      .replace(/（[^（）]*）/g, '')
+      .replace(/\([^()]*\)/g, ''),
+  )
     .replace(/\s{2,}/g, ' ')
     .trim()
 }
