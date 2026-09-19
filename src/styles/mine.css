@@ -1,0 +1,326 @@
+/* ==========================================================================
+   Eluvin UI #9 — Mine Migration v1
+   --------------------------------------------------------------------------
+   Mine owns the list grammar. Keep information architecture intact; normalize
+   profile entry, groups, rows, detail cards and destructive actions to --el-*.
+   ========================================================================== */
+
+.settings-page {
+  padding:
+    20px
+    var(--el-page-x, 20px)
+    calc(var(--el-space-6, 32px) + env(safe-area-inset-bottom));
+  gap: var(--el-space-4, 16px);
+  color: var(--el-text-primary, var(--color-text));
+}
+
+/* ---- Mine profile entry ------------------------------------------------ */
+.settings-page > .profile-card-link {
+  min-height: 92px;
+  padding: var(--el-space-4, 16px);
+  gap: var(--el-space-4, 16px);
+  border: 1px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 14%, var(--el-border, var(--color-border)));
+  border-radius: var(--el-radius-lg, 24px);
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 7%, var(--el-surface-card, var(--color-card))),
+      color-mix(in srgb, var(--el-accent-soft, var(--color-primary-soft)) 12%, var(--el-surface-card, var(--color-card)))
+    );
+  box-shadow: none;
+}
+
+.settings-page > .profile-card-link .profile-avatar {
+  width: 64px;
+  height: 64px;
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 30%, transparent);
+  box-shadow: none;
+  transition:
+    border-color var(--el-motion-fast, 120ms) ease,
+    transform var(--el-motion-fast, 120ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1));
+}
+
+.settings-page > .profile-card-link:active .profile-avatar {
+  transform: scale(0.98);
+}
+
+.profile-card-copy {
+  gap: var(--el-space-1, 4px);
+}
+
+.profile-card-name {
+  font-size: var(--el-font-title-sm, 20px);
+  font-weight: var(--el-weight-semibold, 600);
+  line-height: var(--el-line-title, 1.3);
+}
+
+.profile-card-meta {
+  font-size: var(--el-font-support, 13px);
+  line-height: var(--el-line-support, 1.6);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.settings-page > .profile-card-link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 38%, #fff);
+  outline-offset: 2px;
+}
+
+/* ---- Mine grouped list grammar ---------------------------------------- */
+.profile-group {
+  gap: var(--el-space-2, 8px);
+  margin-top: var(--el-space-2, 8px);
+}
+
+.profile-group + .profile-group {
+  margin-top: var(--el-space-2, 8px);
+}
+
+.profile-group-title {
+  margin: 0 var(--el-space-1, 4px);
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: var(--el-font-caption, 12px);
+  font-weight: var(--el-weight-semibold, 600);
+  line-height: var(--el-line-section, 1.4);
+  letter-spacing: 0.05em;
+}
+
+.profile-group-card {
+  overflow: hidden;
+  border: 1px solid var(--el-border, var(--color-border));
+  border-radius: var(--el-radius-md, 16px);
+  background: var(--el-surface-card, var(--color-card));
+  box-shadow: none;
+}
+
+.entry-row {
+  min-height: var(--el-list-row-height, 52px);
+  gap: var(--el-space-3, 12px);
+  padding: var(--el-space-2, 8px) var(--el-space-3, 12px);
+  color: var(--el-text-primary, var(--color-text));
+  transition:
+    background var(--el-motion-fast, 120ms) ease,
+    opacity var(--el-motion-fast, 120ms) ease;
+}
+
+.entry-row + .entry-row {
+  border-top: 1px solid var(--el-border-soft, var(--color-border));
+}
+
+.entry-row:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 4%, transparent);
+}
+
+.entry-row:active:not(:disabled) {
+  background: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 7%, transparent);
+}
+
+.entry-row:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, #fff);
+  outline-offset: -2px;
+}
+
+.entry-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--el-radius-sm, 10px);
+  background: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 9%, transparent);
+  color: var(--el-accent-deep, var(--color-primary-deep));
+}
+
+.entry-icon svg {
+  width: var(--el-icon-size, 20px);
+  height: var(--el-icon-size, 20px);
+  stroke-width: var(--el-icon-stroke, 1.6);
+}
+
+.entry-label {
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-medium, 500);
+  line-height: var(--el-line-section, 1.4);
+}
+
+.entry-status {
+  max-width: 42%;
+  font-size: var(--el-font-caption, 12px);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.entry-chevron {
+  width: var(--el-icon-small-size, 16px);
+  height: var(--el-icon-small-size, 16px);
+  color: var(--el-text-secondary, var(--color-text-muted));
+  stroke-width: var(--el-icon-stroke, 1.6);
+}
+
+.entry-row-disabled {
+  opacity: 0.5;
+}
+
+/* ---- Expanded update controls remain part of the list ----------------- */
+.settings-page .update-controls-secondary {
+  gap: var(--el-space-2, 8px);
+  padding:
+    var(--el-space-2, 8px)
+    var(--el-space-3, 12px)
+    var(--el-space-3, 12px)
+    58px;
+  border-top-color: var(--el-border-soft, var(--color-border));
+}
+
+.settings-page .update-controls-secondary .btn {
+  min-height: var(--el-control-height, 46px);
+  padding: 0 var(--el-space-3, 12px);
+  border-radius: var(--el-radius-md, 16px);
+  font-size: var(--el-font-support, 13px);
+}
+
+/* ---- Settings detail cards -------------------------------------------- */
+.settings-card {
+  margin-bottom: var(--el-space-4, 16px);
+  padding: var(--el-space-4, 16px);
+  border: 1px solid var(--el-border, var(--color-border));
+  border-radius: var(--el-radius-md, 16px);
+  background: var(--el-surface-card, var(--color-card));
+  box-shadow: none;
+}
+
+.settings-card-title {
+  margin-bottom: var(--el-space-3, 12px);
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-semibold, 600);
+  line-height: var(--el-line-section, 1.4);
+}
+
+.settings-actions {
+  gap: var(--el-space-2, 8px);
+}
+
+.field {
+  gap: var(--el-space-2, 8px);
+}
+
+.field > label {
+  font-size: var(--el-font-support, 13px);
+  font-weight: var(--el-weight-medium, 500);
+  color: var(--el-text-primary, var(--color-text));
+}
+
+.hint,
+.profile-city-note,
+.settings-place-note {
+  font-size: var(--el-font-caption, 12px);
+  line-height: var(--el-line-support, 1.6);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.ai-role-card {
+  gap: var(--el-space-4, 16px);
+}
+
+.ai-save-row {
+  gap: var(--el-space-2, 8px);
+}
+
+/* ---- My Profile detail ------------------------------------------------- */
+.profile-edit-card {
+  margin-top: 0;
+  padding: var(--el-space-5, 24px) var(--el-space-4, 16px);
+  border-radius: var(--el-radius-lg, 24px);
+  box-shadow: none;
+}
+
+.profile-edit-card .profile-avatar {
+  width: 88px;
+  height: 88px;
+  box-shadow: none;
+}
+
+.profile-field {
+  gap: var(--el-space-1, 4px);
+}
+
+.profile-field > span {
+  font-size: var(--el-font-caption, 12px);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.profile-name {
+  font-size: var(--el-font-title-sm, 20px);
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+.profile-bio {
+  font-size: var(--el-font-body, 15px);
+}
+
+/* ---- Privacy / About --------------------------------------------------- */
+.privacy-detail-card {
+  border: 1px solid var(--el-border, var(--color-border));
+  border-radius: var(--el-radius-md, 16px);
+  background: var(--el-surface-card, var(--color-card));
+  box-shadow: none;
+}
+
+.privacy-detail-card section {
+  padding: var(--el-space-4, 16px);
+}
+
+.privacy-detail-card section + section {
+  border-top-color: var(--el-border-soft, var(--color-border));
+}
+
+.privacy-detail-card h3 {
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+.privacy-detail-card p {
+  font-size: var(--el-font-support, 13px);
+  line-height: var(--el-line-body, 1.7);
+}
+
+.about-card {
+  gap: var(--el-space-2, 8px);
+  padding: var(--el-space-6, 32px) var(--el-space-5, 24px);
+  border: 1px solid var(--el-border, var(--color-border));
+  border-radius: var(--el-radius-lg, 24px);
+  background: var(--el-surface-card, var(--color-card));
+  box-shadow: none;
+}
+
+.about-name {
+  font-size: var(--el-font-title, 24px);
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+/* ---- Destructive exit ------------------------------------------------- */
+.logout-btn {
+  min-height: var(--el-control-height, 46px);
+  padding: 0 var(--el-space-4, 16px);
+  border: 1px solid color-mix(in srgb, var(--el-danger, #b3261e) 22%, var(--el-border, var(--color-border)));
+  border-radius: var(--el-radius-md, 16px);
+  background: var(--el-surface-card, var(--color-card));
+  color: var(--el-danger, #b3261e);
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-medium, 500);
+}
+
+/* ---- Modal chrome inside Mine ----------------------------------------- */
+.role-modal-card {
+  border-radius: var(--el-radius-lg, 24px);
+  box-shadow: var(--el-shadow-modal, 0 18px 48px rgba(38, 31, 28, 0.14));
+}
+
+.role-modal-actions {
+  gap: var(--el-space-2, 8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-page > .profile-card-link .profile-avatar,
+  .entry-row {
+    transition: none;
+  }
+}
