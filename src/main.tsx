@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
+import './styles/tokens.css'
 import './index.css'
 import './styles/ui2.css'
 import './styles/spaceLetter.css'
