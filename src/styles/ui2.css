@@ -2786,7 +2786,7 @@
 }
 
 .chat-page .message-list {
-  padding: 16px 16px 20px;
+  padding: 14px 14px 18px;
   gap: 2px;
 }
 
@@ -2797,11 +2797,11 @@
 
 .chat-page .row-user + .row-assistant,
 .chat-page .row-assistant + .row-user {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .chat-page .message-row {
-  gap: 6px;
+  gap: 7px;
 }
 
 .chat-page .row-assistant {
@@ -2844,21 +2844,21 @@
   flex-direction: row-reverse;
 }
 
-/* TA：隐形气泡，文字像直接长在对话里。 */
+/* TA：恢复小气泡。连续消息仍共用同一头像列，避免“大卡片感”。 */
 .chat-page .bubble-assistant {
-  padding: 4px 0 3px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  padding: 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 62%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-card) 94%, var(--color-bg));
   box-shadow: none;
   color: var(--color-text);
 }
 
-/* 用户：保留轻气泡，作为“我说的话”的视觉锚点。 */
+/* 用户：同样收紧，保留 TA Accent 作为“我说的话”的轻锚点。 */
 .chat-page .bubble-user {
-  padding: 10px 14px;
+  padding: 8px 12px;
   border: 1px solid color-mix(in srgb, var(--color-primary) 14%, transparent);
-  border-radius: 16px;
+  border-radius: 14px;
   background: color-mix(in srgb, var(--color-primary) 14%, var(--color-card));
   color: var(--color-text);
   box-shadow: none;
@@ -2866,7 +2866,7 @@
 
 .chat-page .bubble {
   font-size: 15px;
-  line-height: 1.72;
+  line-height: 1.62;
 }
 
 .chat-page .msg-bubble-time {
