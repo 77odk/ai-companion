@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { StoredMessage } from '../lib/storage'
-import { loadAIProfile, loadSettings, loadUserProfile, shouldShowMemorySaved } from '../lib/storage'
-import { extractMemories, isPureThinkBlock, stripMemoryMarkers, stripThinkBlocks } from '../lib/memory'
+import { loadAIProfile, loadSettings, loadUserProfile } from '../lib/storage'
+import { isPureThinkBlock, stripMemoryMarkers, stripThinkBlocks } from '../lib/memory'
 import { getActiveSessionId, getSessionLang } from '../lib/sessionStore'
 import { chatBubbleTime } from '../lib/time'
 import { chatCompletion } from '../lib/api'
@@ -69,11 +69,13 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
   // 第一批③：裸英文思考泄漏——只在中文会话剥，英文会话正文绝不动
   const displayText = isUser ? message.content : stripThinkBlocks(stripMemoryMarkers(message.content), sessionLang)
   // 「已记住」必须绑真实写入结果：只凭模型输出了 marker 不算保存成功（memorySaved 由写入链在成功时标记）
-  const hasMemory = !isUser && message.memorySaved === true && extractMemories(message.content).length > 0
+  const hasMemory = !isUser && message.memorySaved === true
   // 内心戏：TA 消息有 thinking 字段时显示灰条
   const hasThink = !isUser && !!message.thinking && message.thinking.trim().length > 0
   // TASK-ENGLISH-MODE：会话语言决定灰条标签（sessionLang 已在上面定义）
   const thinkLabel = sessionLang === 'en' ? 'TA was thinking' : 'TA 想了想'
+  const typingLabel = sessionLang === 'en' ? 'TA is thinking…' : 'TA 正在想…'
+  const memoryMomentLabel = sessionLang === 'en' ? 'Saved this moment' : '已记住这个瞬间'
   // 思考链是否需要翻译：中文会话 + thinking 是英文 → 需要懒翻译
   const thinkingRaw = message.thinking ?? ''
   const needThinkTranslate = hasThink && sessionLang === 'zh' && detectLang(thinkingRaw) === 'en'
@@ -83,9 +85,6 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
       ? thinkZh.length > 600 ? `${thinkZh.slice(0, 600)}…` : thinkZh
       : thinkingRaw.length > 600 ? `${thinkingRaw.slice(0, 600)}…` : thinkingRaw
     : ''
-  // 用户这条消息触发记忆写入时，气泡下方给个「已帮你记下」的反馈
-  const showMemorySaved = shouldShowMemorySaved(message)
-
   // 点开灰条时触发懒翻译（仅中文会话+英文思考链）
   const handleThinkToggle = () => {
     const nextOpen = !thinkOpen
@@ -163,22 +162,29 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
             )}
           </div>
         )}
-        <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
-          {typing ? (
-            <span className="typing" aria-label="正在输入">
-              <span className="typing-text">正在输入</span>
-              <i />
-              <i />
-              <i />
-            </span>
-          ) : (
-            <span className="bubble-text">{displayText}</span>
-          )}
+        <div className="message-bubble-line">
+          <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
+            {typing ? (
+              <span className="typing" aria-label={typingLabel}>
+                <span className="typing-text">{typingLabel}</span>
+                <i />
+                <i />
+                <i />
+              </span>
+            ) : (
+              <span className="bubble-text">{displayText}</span>
+            )}
+          </div>
+          <span className="msg-bubble-time">{chatBubbleTime(message.ts)}</span>
         </div>
-        {/* 每条消息都带时间（2026-08-26 七七拍板，AM/PM 微信式） */}
-        <span className="msg-bubble-time">{chatBubbleTime(message.ts)}</span>
-        {hasMemory && <span className="memory-remembered">已记住</span>}
-        {showMemorySaved && <span className="memory-saved">✅已帮你记下</span>}
+        {hasMemory && (
+          <span className="memory-moment">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" />
+            </svg>
+            <span>{memoryMomentLabel}</span>
+          </span>
+        )}
       </div>
       {isUser && <Avatar value={avatar} kind="user" className="user-avatar" />}
     </div>

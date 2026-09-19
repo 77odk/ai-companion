@@ -28,6 +28,8 @@ import { getToken, isLoggedIn, isPublicView } from './lib/auth'
 import { createSession, listSessions } from './lib/sessionApi'
 import {
   getActiveSessionId,
+  getBusyState,
+  getSessionLang,
   getSessionsCache,
   setActiveSessionId,
   setSessionsCache,
@@ -55,6 +57,7 @@ import SpaceLife from './components/SpaceLife'
 import Memory from './components/Memory'
 import { initCloudStateSync, syncCloudState } from './lib/cloudState'
 import { closeOldestCandidateWindowOnStartup } from './lib/eventDetector'
+import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from './lib/taRuntime'
 
 type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
@@ -71,6 +74,51 @@ function navTabActive(v: View, tab: 'ta' | 'space' | 'memory' | 'mine'): boolean
   if (tab === 'space') return v === 'aispace'
   if (tab === 'memory') return v === 'memory'
   return v === 'settings'
+}
+
+
+/** Chat 页头「TA 此刻」：复用 Home 的 Persistent Runtime / Busy State，不新造状态。 */
+function ChatHeaderPresence({ sessionId }: { sessionId: string | null }) {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!sessionId) return
+    const refresh = () => setNow(Date.now())
+    refresh()
+    const timer = window.setInterval(refresh, 10_000)
+    const onReplyCommitted = (event: Event) => {
+      const sid = (event as CustomEvent<{ sid?: string }>).detail?.sid
+      if (!sid || String(sid) === sessionId) refresh()
+    }
+    window.addEventListener('yiwem:ai-reply-committed', onReplyCommitted)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('yiwem:ai-reply-committed', onReplyCommitted)
+    }
+  }, [sessionId])
+
+  if (!sessionId) return null
+
+  const busy = getBusyState(sessionId)
+  const lang = getSessionLang(sessionId)
+  const label =
+    busy.status === 'busy' && busy.busyUntil > now && busy.busyReason
+      ? busy.busyReason
+      : runtimeDisplayLabel(
+          getOrAdvanceTaRuntime(sessionId, getSessionPersona(sessionId), now),
+          lang,
+        )
+
+  if (!label) return null
+
+  const ariaLabel = lang === 'en' ? `TA right now: ${label}` : `TA 此刻：${label}`
+
+  return (
+    <p className="chat-header-presence" aria-label={ariaLabel}>
+      <span className="chat-header-presence-dot" aria-hidden="true" />
+      <span>{label}</span>
+    </p>
+  )
 }
 
 // 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
@@ -679,7 +727,10 @@ export default function App() {
                 </button>
               )}
               {view === 'chat' ? (
-                <h1 className="app-title chat-header-name">{headerSession ? displaySessionName(headerSession) : ''}</h1>
+                <div className="chat-header-identity">
+                  <h1 className="app-title chat-header-name">{headerSession ? displaySessionName(headerSession) : ''}</h1>
+                  <ChatHeaderPresence sessionId={headerSession ? String(headerSession.id) : null} />
+                </div>
               ) : (
                 <h1 className="app-title" onClick={handleTitleClick}>
                   忆文
