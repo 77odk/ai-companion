@@ -75,6 +75,21 @@ import MilestoneCard from './MilestoneCard'
 /** 总输入 token 预算：系统提示词+记忆注入+历史消息合计不超过此值 */
 const TOTAL_INPUT_BUDGET = 64000
 
+const SendArrowIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.1"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M4.5 16.2c3.2 2.4 6.8 1.9 9.3-.6 2.5-2.5 3.6-5.8 5.7-9.7" />
+    <path d="M13.1 7.1l6.4-1.2-1.3 6.2" />
+  </svg>
+)
+
 interface Props {
   onGoSettings: () => void
   onGoGuide: () => void
@@ -1194,7 +1209,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (injected) send(injected)
   }, [send])
 
-  const handleSend = () => send(input)
+  const handleSend = () => {
+    const text = input
+    if (!text.trim() || streaming) return
+    send(text)
+    // 移动端连续聊天：发送后保持 textarea 焦点，让软键盘像微信一样继续留在屏幕上。
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus({ preventScroll: true })
+    })
+  }
 
   const handleStop = () => {
     runIdRef.current += 1
@@ -1307,8 +1330,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             停止
           </button>
         ) : (
-          <button className="btn btn-send" onClick={handleSend} disabled={!input.trim()}>
-            发送
+          <button
+            type="button"
+            className="btn btn-send"
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={handleSend}
+            disabled={!input.trim()}
+            aria-label="发送"
+            title="发送"
+          >
+            <SendArrowIcon />
           </button>
         )}
       </div>

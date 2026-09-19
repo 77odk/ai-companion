@@ -248,7 +248,16 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
     "J2 首次定位 behavior: 'auto'（instant）",
   )
   ok(!chatSrc.includes("behavior: 'smooth'"), 'J3 首次跳转不再用 smooth')
-  ok(!chatSrc.includes('requestAnimationFrame'), 'J4 已移除双 rAF 延迟')
+  const jumpEffectStart = chatSrc.indexOf('useLayoutEffect(() => {')
+  const jumpEffectEnd = chatSrc.indexOf('  useEffect(() => {', jumpEffectStart)
+  const jumpEffectSrc =
+    jumpEffectStart >= 0 && jumpEffectEnd > jumpEffectStart
+      ? chatSrc.slice(jumpEffectStart, jumpEffectEnd)
+      : ''
+  ok(
+    jumpEffectSrc.length > 0 && !jumpEffectSrc.includes('requestAnimationFrame'),
+    'J4 jump effect 已移除双 rAF 延迟（Chat 其他交互可独立使用 rAF）',
+  )
 
   // 失败路径：consume + 上报（App 展示）
   ok(chatSrc.includes("onJumpNotice?.('原对话已不在了')"), 'J5 失败时上报提示文本')

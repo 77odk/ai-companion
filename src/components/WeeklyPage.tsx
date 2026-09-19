@@ -80,6 +80,24 @@ const EnvelopeIcon = () => (
   </svg>
 )
 
+const FeatherReplyIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M5 19.5c1.2-4.8 3.6-9 7.4-12.2 2.2-1.8 4.4-3 6.6-3.8-.2 2.6-1.2 5-3 7.2-2.6 3.3-6 5.5-10.1 6.7" />
+    <path d="M5 19.5 3.8 21" />
+    <path d="M8.2 15.9 16.9 7" />
+    <path d="M10.4 13.6 8.7 10.8" />
+    <path d="M13.5 10.4 16.7 10.1" />
+  </svg>
+)
+
 interface Props {
   onBack: () => void
   onGoSettings: () => void
@@ -568,8 +586,10 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                 className="weekly-letter-send"
                 onClick={() => void handleSaveReply()}
                 disabled={!replyText.trim() || taReplying}
+                aria-label={effectiveMode === 'sealed' ? '寄出慢信' : '寄出回信'}
+                title={effectiveMode === 'sealed' ? '寄出慢信' : '寄出回信'}
               >
-                {effectiveMode === 'sealed' ? '寄出慢信' : '寄出回信'}
+                <FeatherReplyIcon />
               </button>
             </div>
           ) : (
