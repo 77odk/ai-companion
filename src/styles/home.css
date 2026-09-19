@@ -1,0 +1,339 @@
+/* ==========================================================================
+   Eluvin UI #9 — Home Migration v1
+   --------------------------------------------------------------------------
+   Home remains an immersive scene page. This layer only moves its reusable
+   geometry / typography / interaction values onto the canonical --el-* scale.
+   Scene art, TA Orb, information architecture and content order stay intact.
+   ========================================================================== */
+
+.home-page {
+  padding:
+    max(var(--el-space-4, 16px), env(safe-area-inset-top))
+    var(--el-page-x, 20px)
+    0;
+}
+
+.home-inner {
+  max-width: var(--el-app-max-width, 480px);
+}
+
+/* ---- Brand + relationship time ---------------------------------------- */
+.home-brand {
+  gap: var(--el-space-2, 8px);
+  margin: 2px 0 clamp(var(--el-space-3, 12px), 3.2vh, var(--el-space-5, 24px));
+}
+
+.home-greeting {
+  margin-bottom: var(--el-space-2, 8px);
+  font-size: var(--el-font-support, 13px);
+}
+
+.home-time h1 {
+  font-size: clamp(var(--el-font-title, 24px), 7vw, var(--el-font-display, 30px));
+  font-weight: var(--el-weight-medium, 500);
+}
+
+.home-time h1 strong {
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+.home-time > p:last-child {
+  margin-top: var(--el-space-2, 8px);
+  font-size: var(--el-font-caption, 12px);
+}
+
+/* ---- MY TIME ----------------------------------------------------------- */
+.home-my-time {
+  margin: var(--el-space-3, 12px) 0 var(--el-space-2, 8px);
+  padding: var(--el-space-3, 12px) var(--el-space-4, 16px);
+  border-radius: var(--el-radius-lg, 24px);
+}
+
+.home-my-time-head {
+  margin-bottom: var(--el-space-2, 8px);
+}
+
+.home-eyebrow {
+  font-size: var(--el-font-caption, 12px);
+}
+
+.home-time-windows {
+  gap: var(--el-space-2, 8px);
+}
+
+.home-time-window {
+  gap: var(--el-space-1, 4px);
+  padding: var(--el-space-3, 12px);
+  border-radius: var(--el-radius-md, 16px);
+  transition:
+    background var(--el-motion-fast, 120ms) ease,
+    transform var(--el-motion-fast, 120ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1));
+}
+
+.home-time-window:active {
+  transform: translateY(1px);
+}
+
+.home-time-window-k,
+.home-time-window-sub {
+  font-size: var(--el-font-caption, 12px);
+}
+
+.home-time-window-num {
+  font-size: clamp(var(--el-font-title, 24px), 6.8vw, var(--el-font-display, 30px));
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+/* Keep the visible + at the existing compact size, but give it a canonical
+   40px icon-button hit area. */
+.home-time-add {
+  position: relative;
+  width: var(--el-icon-button-size, 40px);
+  height: var(--el-icon-button-size, 40px);
+  flex: 0 0 var(--el-icon-button-size, 40px);
+  border: 0;
+  background: transparent;
+}
+
+.home-time-add > span {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--home-ink) 18%, transparent);
+  border-radius: var(--el-radius-round, 50%);
+  background: color-mix(in srgb, var(--home-ink) 3%, transparent);
+  transition: background var(--el-motion-fast, 120ms) ease;
+}
+
+.home-time-add:hover {
+  background: transparent;
+}
+
+.home-time-add:hover > span,
+.home-time-add:active > span {
+  background: color-mix(in srgb, var(--home-ink) 7%, transparent);
+}
+
+.home-time-add:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 38%, #fff);
+  outline-offset: 1px;
+  border-radius: var(--el-radius-round, 50%);
+}
+
+.home-anniv-list {
+  margin-top: var(--el-space-2, 8px);
+}
+
+.home-anniv-item {
+  column-gap: var(--el-space-3, 12px);
+  padding: var(--el-space-2, 8px) 2px;
+}
+
+.home-anniv-label {
+  font-size: var(--el-font-support, 13px);
+}
+
+.home-anniv-count,
+.home-anniv-date,
+.home-anniv-day,
+.home-anniv-next {
+  font-variant-numeric: tabular-nums;
+}
+
+.home-anniv-count,
+.home-anniv-day {
+  font-size: var(--el-font-caption, 12px);
+}
+
+.home-anniv-date,
+.home-anniv-next {
+  font-size: var(--el-font-caption, 12px);
+}
+
+.home-anniv-milestone {
+  margin-top: var(--el-space-2, 8px);
+  padding-top: var(--el-space-2, 8px);
+}
+
+.home-anniv-milestone-line {
+  gap: var(--el-space-3, 12px);
+}
+
+/* ---- TA Presence ------------------------------------------------------- */
+.home-companion {
+  gap: var(--el-space-1, 4px);
+  margin: var(--el-space-1, 4px) 0 var(--el-space-3, 12px);
+}
+
+.home-moment-copy h2 {
+  margin-bottom: var(--el-space-1, 4px);
+  font-size: var(--el-font-caption, 12px);
+  font-weight: var(--el-weight-medium, 500);
+}
+
+.home-moment-copy p {
+  font-size: var(--el-font-body, 15px);
+  line-height: var(--el-line-body, 1.7);
+}
+
+/* ---- Primary chat action ---------------------------------------------- */
+.home-talk {
+  min-height: var(--el-control-height, 46px);
+  margin-top: 2px;
+  padding: 0 var(--el-space-5, 24px);
+  border-radius: var(--el-radius-pill, 999px);
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-medium, 500);
+  transition:
+    transform var(--el-motion-fast, 120ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1)),
+    background var(--el-motion-fast, 120ms) ease;
+}
+
+.home-talk:active {
+  transform: translateY(1px);
+}
+
+.home-talk:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 38%, #fff);
+  outline-offset: 2px;
+}
+
+/* ---- TA life preview --------------------------------------------------- */
+.home-life {
+  margin: var(--el-space-6, 32px) 0 var(--el-space-2, 8px);
+  padding: var(--el-space-4, 16px);
+  border-radius: var(--el-radius-lg, 24px);
+}
+
+.home-life-title {
+  font-size: var(--el-font-support, 13px);
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+.home-life-more,
+.home-life-time {
+  font-size: var(--el-font-caption, 12px);
+}
+
+.home-life-preview,
+.home-life-empty {
+  margin-top: var(--el-space-3, 12px);
+  padding-top: var(--el-space-3, 12px);
+}
+
+.home-life-text {
+  font-size: var(--el-font-body, 15px);
+  line-height: var(--el-line-body, 1.7);
+}
+
+.home-life-empty {
+  font-size: var(--el-font-support, 13px);
+  line-height: var(--el-line-support, 1.6);
+}
+
+/* ---- Web refresh: 40px hit area while preserving the 34px visual circle */
+.home-web-refresh {
+  width: var(--el-icon-button-size, 40px);
+  height: var(--el-icon-button-size, 40px);
+  right: var(--el-page-x, 20px);
+  border: 0;
+  background: transparent;
+}
+
+.home-web-refresh::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px solid color-mix(in srgb, var(--home-ink) 16%, transparent);
+  border-radius: var(--el-radius-round, 50%);
+  background: color-mix(in srgb, var(--home-ink) 7%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.home-web-refresh svg {
+  position: relative;
+  z-index: 1;
+  width: var(--el-icon-small-size, 16px);
+  height: var(--el-icon-small-size, 16px);
+}
+
+.home-web-refresh:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 38%, #fff);
+  outline-offset: 1px;
+  border-radius: var(--el-radius-round, 50%);
+}
+
+/* ---- Home time sheet --------------------------------------------------- */
+.home-time-mask {
+  z-index: var(--el-z-overlay, 50);
+  padding: var(--el-space-4, 16px);
+  background: rgba(38, 31, 28, 0.30);
+}
+
+.home-time-sheet {
+  width: min(100%, 420px);
+  padding: var(--el-space-5, 24px) var(--el-space-5, 24px) var(--el-space-5, 24px);
+  border-radius: var(--el-radius-lg, 24px);
+  background: var(--el-surface-elevated, var(--ui2-surface-elevated));
+  color: var(--el-text-primary, var(--ui2-text));
+  box-shadow: var(--el-shadow-modal, var(--ui2-shadow));
+}
+
+.home-time-sheet-title {
+  margin-bottom: var(--el-space-1, 4px);
+  font-size: var(--el-font-nav-title, 17px);
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+.home-time-sub {
+  margin-bottom: var(--el-space-3, 12px);
+  font-size: var(--el-font-caption, 12px);
+  color: var(--el-text-secondary, var(--ui2-text-secondary));
+}
+
+.home-cycle-btn {
+  width: var(--el-icon-button-size, 40px);
+  height: var(--el-icon-button-size, 40px);
+  border-color: var(--el-border-soft, var(--ui2-hairline));
+}
+
+.home-cycle-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 38%, #fff);
+  outline-offset: 2px;
+}
+
+.home-time-save {
+  min-height: var(--el-control-height, 46px);
+  margin-top: var(--el-space-4, 16px);
+  padding: 0 var(--el-space-4, 16px);
+  border-radius: var(--el-radius-md, 16px);
+  background: var(--ta-accent, var(--el-accent-primary));
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-semibold, 600);
+  transition:
+    transform var(--el-motion-fast, 120ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1)),
+    opacity var(--el-motion-fast, 120ms) ease;
+}
+
+.home-time-save:active {
+  transform: translateY(1px);
+}
+
+.home-period-new-start {
+  min-height: var(--el-hit-target-min, 44px);
+  margin-top: var(--el-space-2, 8px);
+  padding: 0 var(--el-space-3, 12px);
+  font-size: var(--el-font-caption, 12px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-time-window,
+  .home-time-add > span,
+  .home-talk,
+  .home-time-save {
+    transition: none;
+  }
+}
