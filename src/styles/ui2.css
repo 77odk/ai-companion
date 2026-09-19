@@ -2787,21 +2787,21 @@
 
 .chat-page .message-list {
   padding: 16px 16px 20px;
-  gap: 4px;
+  gap: 2px;
 }
 
 /* 同一方连续说话更紧；换人时拉开，形成自然轮次。 */
 .chat-page .message-row + .message-row {
-  margin-top: 2px;
+  margin-top: 0;
 }
 
 .chat-page .row-user + .row-assistant,
 .chat-page .row-assistant + .row-user {
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
 .chat-page .message-row {
-  gap: 9px;
+  gap: 6px;
 }
 
 /* 连续消息只保留第一次头像，后续保持对齐但不重复抢视觉。 */
@@ -2833,7 +2833,7 @@
 
 /* TA：隐形气泡，文字像直接长在对话里。 */
 .chat-page .bubble-assistant {
-  padding: 6px 2px 5px;
+  padding: 4px 0 3px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -2868,7 +2868,7 @@
 
 /* 记忆不是系统提示，而是留在这次对话里的轻痕迹。 */
 .memory-moment {
-  margin-top: 6px;
+  margin-top: 0;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -2884,6 +2884,10 @@
   flex: none;
   width: 13px;
   height: 13px;
+}
+
+.row-assistant .memory-moment {
+  margin-left: 0;
 }
 
 .chat-page .typing {
