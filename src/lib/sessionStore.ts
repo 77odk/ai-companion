@@ -610,7 +610,7 @@ export function confirmMessageInCache(
   if (idx < 0) return
   const ts = Date.parse(serverMsg.createdAt)
   if (!Number.isFinite(ts)) return
-  list[idx] = { role: serverMsg.role, content: serverMsg.content, ts }
+  list[idx] = { ...list[idx], role: serverMsg.role, content: serverMsg.content, ts }
   // 对账只把本地 ts 换成服务端 ts，内容不变：不广播（避免双同步），RolesPage 列表摘要已是最新
   saveMessagesCache(sessionId, list, false)
 }
