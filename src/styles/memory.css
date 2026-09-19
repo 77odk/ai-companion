@@ -1,0 +1,350 @@
+/* ==========================================================================
+   Eluvin UI #9 — Memory Migration v1
+   --------------------------------------------------------------------------
+   Memory stays a reading-first experience. The River and Memory Book keep
+   their own editorial/paper character; product chrome moves onto --el-*.
+   ========================================================================== */
+
+.memory-page {
+  padding:
+    max(20px, env(safe-area-inset-top))
+    var(--el-page-x, 20px)
+    0;
+  color: var(--memory-ink, var(--el-text-primary, var(--color-text)));
+}
+
+/* ---- River header ------------------------------------------------------ */
+.memory-head {
+  min-height: var(--el-topbar-height, 52px);
+  gap: var(--el-space-3, 12px);
+  margin: 0 0 var(--el-space-2, 8px);
+}
+
+.memory-head-actions {
+  gap: var(--el-space-2, 8px);
+}
+
+.memory-title {
+  font-size: var(--el-font-title, 24px);
+  font-weight: var(--el-weight-semibold, 600);
+  line-height: var(--el-line-title, 1.3);
+}
+
+.memory-head-meta {
+  margin-bottom: var(--el-space-2, 8px);
+  font-size: var(--el-font-support, 13px);
+  line-height: var(--el-line-support, 1.6);
+}
+
+/* The Memory page reuses Home's refresh control, but in normal flow. */
+.memory-page .home-web-refresh {
+  position: static;
+  top: auto;
+  right: auto;
+  z-index: auto;
+  flex: 0 0 var(--el-icon-button-size, 40px);
+}
+
+/* ---- Year navigation --------------------------------------------------- */
+.memory-year-nav {
+  gap: var(--el-space-2, 8px);
+  margin: var(--el-space-5, 24px) 0 var(--el-space-1, 4px);
+  padding-bottom: var(--el-space-2, 8px);
+}
+
+.memory-year-nav-btn {
+  min-height: var(--el-hit-target-min, 44px);
+  padding: 0 2px;
+  font-size: var(--el-font-support, 13px);
+  transition: color var(--el-motion-fast, 120ms) ease;
+}
+
+.memory-year-nav-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--memory-accent) 42%, #fff);
+  outline-offset: 2px;
+  border-radius: var(--el-radius-sm, 10px);
+}
+
+/* ---- River rhythm ------------------------------------------------------ */
+.memory-river {
+  padding-top: var(--el-space-2, 8px);
+}
+
+.memory-year-chapter {
+  padding-top: var(--el-space-6, 32px);
+}
+
+.memory-year-chapter + .memory-year-chapter {
+  margin-top: var(--el-space-4, 16px);
+  padding-top: var(--el-space-6, 32px);
+}
+
+.memory-year-chapter-label {
+  margin-bottom: var(--el-space-4, 16px);
+}
+
+/* Large year numerals are an editorial Memory exception. */
+.memory-month-chapter {
+  margin-bottom: var(--el-space-5, 24px);
+}
+
+.memory-month-chapter + .memory-month-chapter {
+  margin-top: var(--el-space-5, 24px);
+}
+
+.memory-month-chapter-label {
+  gap: var(--el-space-2, 8px);
+  margin-bottom: var(--el-space-3, 12px);
+  padding-left: 22px;
+}
+
+.memory-month-name {
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+.memory-month-count {
+  font-size: var(--el-font-caption, 12px);
+}
+
+.memory-entry {
+  gap: var(--el-space-3, 12px);
+  padding: var(--el-space-3, 12px) var(--el-space-1, 4px) var(--el-space-3, 12px) 0;
+  transition: background var(--el-motion-fast, 120ms) ease;
+}
+
+.memory-entry-text {
+  font-size: var(--el-font-body, 15px);
+  line-height: var(--el-line-body, 1.7);
+}
+
+.memory-entry-date {
+  font-size: var(--el-font-caption, 12px);
+}
+
+/* ---- Empty state ------------------------------------------------------- */
+.memory-empty {
+  padding: 72px 0 88px;
+}
+
+.memory-empty-trace {
+  margin-bottom: var(--el-space-6, 32px);
+}
+
+.memory-empty-title {
+  margin-bottom: var(--el-space-2, 8px);
+  font-size: var(--el-font-nav-title, 17px);
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+.memory-empty-copy {
+  font-size: var(--el-font-support, 13px);
+  line-height: var(--el-line-body, 1.7);
+}
+
+/* ---- Memory detail ----------------------------------------------------- */
+.memory-local-bar {
+  min-height: var(--el-topbar-height, 52px);
+  margin-bottom: var(--el-space-5, 24px);
+}
+
+.memory-back {
+  min-height: var(--el-icon-button-size, 40px);
+  padding: 0 var(--el-space-2, 8px);
+  border-radius: var(--el-radius-sm, 10px);
+  font-size: var(--el-font-support, 13px);
+}
+
+.memory-back:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--memory-accent) 42%, #fff);
+  outline-offset: 2px;
+}
+
+.memory-local-kicker {
+  font-size: var(--el-font-caption, 12px);
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+.memory-detail-layout {
+  min-height: 320px;
+  padding: 0;
+}
+
+.memory-detail-meta {
+  margin-bottom: var(--el-space-5, 24px);
+  font-size: var(--el-font-caption, 12px);
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+.memory-detail-text {
+  font-size: var(--el-font-title-sm, 20px);
+  line-height: var(--el-line-body, 1.7);
+}
+
+.memory-detail-rule {
+  margin: var(--el-space-6, 32px) 0 var(--el-space-5, 24px);
+}
+
+.memory-detail-source,
+.memory-detail-reply,
+.memory-detail-remembered {
+  margin-bottom: var(--el-space-5, 24px);
+}
+
+.memory-detail-source-label,
+.memory-detail-reply-label,
+.memory-detail-remembered-label {
+  font-size: var(--el-font-caption, 12px);
+}
+
+.memory-detail-source-text {
+  font-size: var(--el-font-body, 15px);
+  line-height: var(--el-line-body, 1.7);
+}
+
+.memory-detail-source-empty,
+.memory-detail-reply-note,
+.memory-jump-notice {
+  font-size: var(--el-font-caption, 12px);
+  line-height: var(--el-line-support, 1.6);
+}
+
+.memory-jump-row {
+  margin: -8px 0 var(--el-space-5, 24px);
+}
+
+.memory-jump-trigger {
+  min-height: var(--el-hit-target-min, 44px);
+  gap: var(--el-space-1, 4px);
+  padding: 0 var(--el-space-1, 4px);
+  font-size: var(--el-font-support, 13px);
+  transition: opacity var(--el-motion-fast, 120ms) ease;
+}
+
+.memory-jump-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--memory-accent) 42%, #fff);
+  outline-offset: 2px;
+  border-radius: var(--el-radius-sm, 10px);
+}
+
+.memory-detail-reply-text {
+  padding-left: var(--el-space-3, 12px);
+  font-size: var(--el-font-body, 15px);
+  line-height: var(--el-line-body, 1.7);
+}
+
+.memory-detail-remembered-head {
+  gap: var(--el-space-2, 8px);
+  margin-bottom: var(--el-space-2, 8px);
+}
+
+/* ---- Correction / delete controls ------------------------------------ */
+.memory-correction-trigger,
+.memory-delete-trigger {
+  min-height: var(--el-icon-button-size, 40px);
+  padding: 0 var(--el-space-2, 8px);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--el-radius-sm, 10px);
+  font-size: var(--el-font-support, 13px);
+}
+
+.memory-correction-trigger:focus-visible,
+.memory-delete-trigger:focus-visible,
+.memory-correction-cancel:focus-visible,
+.memory-correction-save:focus-visible,
+.memory-delete-confirm-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--memory-accent) 40%, #fff);
+  outline-offset: 2px;
+}
+
+.memory-correction-input {
+  min-height: 112px;
+  padding: var(--el-space-3, 12px);
+  border-radius: var(--el-radius-sm, 10px);
+  font-size: var(--el-font-body, 15px);
+  line-height: var(--el-line-body, 1.7);
+}
+
+.memory-correction-actions {
+  gap: var(--el-space-2, 8px);
+  padding: var(--el-space-3, 12px) 0 var(--el-space-1, 4px);
+}
+
+.memory-correction-cancel,
+.memory-correction-save,
+.memory-delete-confirm-btn {
+  min-width: 64px;
+  min-height: var(--el-control-height, 46px);
+  padding: 0 var(--el-space-4, 16px);
+  border-radius: var(--el-radius-md, 16px);
+  font-size: var(--el-font-support, 13px);
+}
+
+.memory-delete-ask {
+  font-size: var(--el-font-support, 13px);
+  line-height: var(--el-line-support, 1.6);
+}
+
+.memory-detail-pin {
+  gap: var(--el-space-1, 4px);
+  padding: 5px var(--el-space-2, 8px);
+  border-radius: var(--el-radius-pill, 999px);
+  font-size: var(--el-font-caption, 12px);
+}
+
+.memory-book-entry {
+  min-height: var(--el-hit-target-min, 44px);
+  gap: var(--el-space-2, 8px);
+  margin-top: var(--el-space-6, 32px);
+  padding: 0 var(--el-space-1, 4px);
+  font-size: var(--el-font-support, 13px);
+}
+
+/* ---- Memory Book controls only; paper/editorial surfaces stay untouched */
+.memory-book-overlay {
+  z-index: var(--el-z-overlay, 50);
+}
+
+.memory-book-open {
+  min-height: var(--el-control-height, 46px);
+  margin-top: var(--el-space-6, 32px);
+  padding: 0 var(--el-space-5, 24px);
+  border-radius: var(--el-radius-pill, 999px);
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-medium, 500);
+}
+
+.memory-book-close,
+.memory-book-exit {
+  min-height: var(--el-hit-target-min, 44px);
+  padding: 0 var(--el-space-2, 8px);
+  font-size: var(--el-font-support, 13px);
+}
+
+.memory-book-turn {
+  width: var(--el-hit-target-min, 44px);
+  height: var(--el-hit-target-min, 44px);
+  border-radius: var(--el-radius-round, 50%);
+}
+
+.memory-book-count {
+  font-size: var(--el-font-support, 13px);
+}
+
+.memory-book-open:focus-visible,
+.memory-book-close:focus-visible,
+.memory-book-exit:focus-visible,
+.memory-book-turn:focus-visible,
+.memory-book-entry:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 42%, #fff);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memory-year-nav-btn,
+  .memory-entry,
+  .memory-jump-trigger {
+    transition: none;
+  }
+}
