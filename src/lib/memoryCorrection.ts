@@ -93,7 +93,18 @@ export async function removeMemory(target: MemoryCorrectionTarget): Promise<Memo
   if (!current || !isServerMemoryId(current.id)) return { ok: false, message: MEMORY_NOT_SYNCED }
 
   const response = await deleteMemory(target.token, current.id)
-  if (!response.ok) return { ok: false, message: response.message || '删除失败，请重试' }
+  if (!response.ok) {
+    // 404：这条在云端已经不存在了（多半是在别的设备上删过）。服务端是权威，本机也跟着清掉，
+    // 别让它继续挂在本机列表里、点一次报一次「找不到」。
+    if (response.status === 404) {
+      saveMemoriesCache(
+        target.sessionId,
+        cached.filter((memory) => memory.id !== current.id),
+      )
+      return { ok: false, message: '这段记忆已经在别的设备删过了，已从这台设备移除' }
+    }
+    return { ok: false, message: response.message || '删除失败，请重试' }
+  }
 
   saveMemoriesCache(
     target.sessionId,

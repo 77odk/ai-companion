@@ -338,8 +338,14 @@ export function sessionMemoryToItem(mem: { id: number; content: string; createdA
  * - PATCH-01：source/taReply 以「后端回显 ?? 本地缓存」取——换设备时本地为空，后端持久化的 source/taReply 仍可恢复；
  *   本地缓存有增强字段（本机会话内刚写、后端尚未回显）时也不丢。
  * - 缓存里后端还没有的乐观条目（刚新增、上传未成功）保留在列表最前，不丢
+ * - purgeMissing（只在「云端列表这次确实拉成功」时由调用方打开）：云端没有、又没有 pendingSync 标记的条目
+ *   = 在别的设备删过了 → 本次从缓存里清掉（清之前先 stashRemovedMemories 留底）。带 pendingSync 的永不在此清除。
  */
-export function mergeSessionMemories(cache: MemoryItem[], cloud: MemoryItem[]): MemoryItem[] {
+export function mergeSessionMemories(
+  cache: MemoryItem[],
+  cloud: MemoryItem[],
+  opts: { purgeMissing?: boolean; sessionId?: string } = {},
+): MemoryItem[] {
   const cacheList = Array.isArray(cache) ? cache : []
   const out: MemoryItem[] = []
   const cloudIds = new Set<string>()
@@ -361,8 +367,51 @@ export function mergeSessionMemories(cache: MemoryItem[], cloud: MemoryItem[]): 
         : cm,
     )
   }
-  const optimistic = cacheList.filter((m) => m != null && m.id && !cloudIds.has(m.id))
-  return [...optimistic, ...out]
+  const missing = cacheList.filter((m) => m != null && m.id && !cloudIds.has(m.id))
+  const removed = opts.purgeMissing ? missing.filter((m) => !m.pendingSync) : []
+  const kept = removed.length ? missing.filter((m) => !removed.includes(m)) : missing
+  if (removed.length) stashRemovedMemories(opts.sessionId ?? '', removed)
+  return [...kept, ...out]
+}
+
+// ---- 被清掉的记忆留底（万一判错还能捞回来；不进注入、不上传、不参与同步） ----
+
+const removedMemKey = (sessionId: string) => `ai_companion_mem_removed_${sessionId}`
+/** 留底上限与保质期：够用来救急即可，避免越攒越多 */
+const REMOVED_KEEP = 50
+const REMOVED_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
+export type RemovedMemoryStash = MemoryItem & { removedAt: number }
+
+/** 读取某会话的「已清掉记忆」留底（倒序，最新在前） */
+export function loadRemovedMemories(sessionId: string): RemovedMemoryStash[] {
+  if (!sessionId) return []
+  try {
+    const raw = localStorage.getItem(removedMemKey(sessionId))
+    if (!raw) return []
+    const arr = JSON.parse(raw)
+    if (!Array.isArray(arr)) return []
+    const now = Date.now()
+    return arr.filter(
+      (m): m is RemovedMemoryStash =>
+        m != null && typeof m === 'object' && typeof m.id === 'string' && typeof m.text === 'string' && typeof m.removedAt === 'number' && now - m.removedAt < REMOVED_TTL_MS,
+    )
+  } catch {
+    return []
+  }
+}
+
+/** 清掉本地记忆前留底：保留最近 50 条、30 天。留底失败不影响主流程 */
+export function stashRemovedMemories(sessionId: string, items: MemoryItem[]): void {
+  if (!sessionId || !items?.length) return
+  try {
+    const now = Date.now()
+    const fresh: RemovedMemoryStash[] = items.map((m) => ({ ...m, removedAt: now }))
+    const next = [...fresh, ...loadRemovedMemories(sessionId)].slice(0, REMOVED_KEEP)
+    localStorage.setItem(removedMemKey(sessionId), JSON.stringify(next))
+  } catch {
+    /* 留底是保险，不是主流程 */
+  }
 }
 
 /** 上传成功对账：把缓存里乐观条目的本地 id 换成后端 id，下次「缓存+后端」合并不重复 */
@@ -370,7 +419,10 @@ export function reconcileMemoryCacheId(sessionId: string, localId: string, backe
   const list = getMemoriesCache(sessionId)
   const idx = list.findIndex((m) => m.id === localId)
   if (idx < 0) return
-  list[idx] = { ...list[idx], id: String(backendId) }
+  // 上传成功：换成后端 id，并抹掉「还没传成功」标记（这条以后以云端为准）
+  const next = { ...list[idx], id: String(backendId) }
+  delete next.pendingSync
+  list[idx] = next
   saveMemoriesCache(sessionId, list)
 }
 
@@ -391,6 +443,8 @@ export function addMemoryCacheItem(
     createdAt: Date.now(),
     topic: topic?.trim() || '其他',
     ...(explicit === true ? { explicit: true } : {}),
+    // 刚写在本机、还没上传成功：拉云端列表时靠它区分「新记忆」与「别的设备已删」（见 mergeSessionMemories）
+    pendingSync: true,
   }
   const nextA = [item, ...getMemoriesCache(sessionId)]
   if (!saveMemoriesCache(sessionId, nextA)) return null
@@ -417,6 +471,8 @@ export function upsertMemoryCache(
     ...(topic?.trim() ? { topic: topic.trim() } : {}),
     ...(explicit === true ? { explicit: true } : {}),
     ...(taReply?.trim() ? { taReply: taReply.trim() } : {}),
+    // 刚写在本机、还没上传成功：拉云端列表时靠它区分「新记忆」与「别的设备已删」（见 mergeSessionMemories）
+    pendingSync: true,
   }
   const nextB = [item, ...getMemoriesCache(sessionId)]
   if (!saveMemoriesCache(sessionId, nextB)) return null

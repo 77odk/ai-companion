@@ -16,6 +16,7 @@ import {
   saveMemoriesCache,
   clearMemoriesCache,
   mergeSessionMemories,
+  loadRemovedMemories,
   sessionMemoryToItem,
   reconcileMemoryCacheId,
   addMemoryCacheItem,
@@ -233,6 +234,54 @@ eq(item1.id, '5', '后端 id 转字符串')
 eq(item1.text, 'hi', 'text=content')
 eq(item1.createdAt, Date.parse('2026-08-24T00:00:00.000Z'), 'createdAt 解析 ISO')
 eq(sessionMemoryToItem({ id: 5, content: 'x', createdAt: 'bad' }).createdAt, 0, 'createdAt 解析失败 → 0')
+
+console.log('\n[9b] 云端删除跨设备同步：没标记的本地条目按「别的设备删过」清掉，带 pendingSync 的永不误删')
+resetStore()
+const cloudTwo: MemoryItem[] = [
+  { id: '1', text: '云端猫', createdAt: 100 },
+  { id: '2', text: '云端辣', createdAt: 200 },
+]
+const cacheFour: MemoryItem[] = [
+  { id: '1', text: '缓存猫', createdAt: 100 },
+  { id: '2', text: '缓存辣', createdAt: 200 },
+  { id: '99', text: '本机刚写还没传成功', createdAt: 300, pendingSync: true },
+  { id: '98', text: '别的设备删过了', createdAt: 400 },
+]
+// 场景一：云端列表这次拉成功（purgeMissing）→ 未上传的保留，已删的清掉并留底
+const m1 = mergeSessionMemories(cacheFour, cloudTwo, { purgeMissing: true, sessionId: '77' })
+eq(m1.length, 3, '云端 2 条 + 未上传的 1 条')
+eq(
+  m1.some((m) => m.id === '99'),
+  true,
+  '带 pendingSync 的新记忆不被误删',
+)
+eq(
+  m1.some((m) => m.id === '98'),
+  false,
+  '云端没有且无标记 → 判定别的设备删过，清掉',
+)
+const stash1 = loadRemovedMemories('77')
+eq(stash1.length, 1, '清掉的条目前先留底')
+eq(stash1[0].text, '别的设备删过了', '留底内容正确')
+// 场景二：云端没拉成功（没开 purgeMissing）→ 一条都不清
+const m2 = mergeSessionMemories(cacheFour, [], { sessionId: '77' })
+eq(m2.length, 4, '没拉成功时不动本地（离线不误删）')
+// 场景三：云端有这条 → 合并结果不再带标记（以云端为准，标记自我修复）
+const m3 = mergeSessionMemories(
+  [{ id: '42', text: '已上传', createdAt: 500, pendingSync: true }],
+  [{ id: '42', text: '已上传', createdAt: 500 }],
+  { purgeMissing: true, sessionId: '77' },
+)
+eq(m3.length, 1, '云端有 → 保留')
+eq(m3[0].pendingSync, undefined, '云端确认后不再带未上传标记')
+// 场景四：新写入即带标记，上传成功对账后抹掉
+resetStore()
+const freshMem = upsertMemoryCache('77', '新记的事', '原话', '日常')!
+eq(freshMem.pendingSync, true, '刚写入的记忆带未上传标记')
+eq(getMemoriesCache('77')[0].pendingSync, true, '标记落在缓存里')
+reconcileMemoryCacheId('77', freshMem.id, 55)
+eq(getMemoriesCache('77')[0].pendingSync, undefined, '上传成功后标记被抹掉')
+eq(getMemoriesCache('77')[0].id, '55', 'id 换成后端 id')
 
 console.log('\n[10] reconcileMemoryCacheId：上传成功把本地 id 换成后端 id')
 resetStore()

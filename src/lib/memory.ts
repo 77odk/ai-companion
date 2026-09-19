@@ -24,6 +24,12 @@ export interface MemoryItem {
   lastMentionedAt?: number
   /** 双源信任：true=用户亲口明说的（手动添加），注入排序时优先；缺省/缺失=TA 从聊天里推断的、或旧数据（优先级低） */
   explicit?: boolean
+  /**
+   * 本机专用标记（不上传、不进云端）：这条是刚在本机写的、还没确认上传成功。
+   * 拉云端列表做合并时用它区分两件事——带标记 = 还没传成功的新记忆，必须保留；
+   * 不带标记且云端也没有 = 在别的设备已经删过，本机跟着清掉。
+   */
+  pendingSync?: boolean
 }
 
 const MEMORY_KEY = 'ai_companion_memory'

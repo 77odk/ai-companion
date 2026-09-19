@@ -502,7 +502,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     listMemories(token, activeSessionId).then((res) => {
       if (cancelled || !res.ok) return
       const cloudMem = res.data.memories.map(sessionMemoryToItem)
-      const mergedMem = mergeSessionMemories(getMemoriesCache(activeSessionId), cloudMem)
+      // 云端列表这次确实拉成功了：不在云端、又没有「还没传成功」标记的条目 = 在别的设备删过 → 本机也清掉（清前留底）
+      const mergedMem = mergeSessionMemories(getMemoriesCache(activeSessionId), cloudMem, {
+        purgeMissing: true,
+        sessionId: activeSessionId,
+      })
       saveMemoriesCache(activeSessionId, mergedMem)
     })
     return () => {
