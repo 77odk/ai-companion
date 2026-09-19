@@ -2947,7 +2947,33 @@
   background: color-mix(in srgb, var(--color-card) 84%, transparent);
 }
 
-.chat-page .btn-send,
+.chat-page .btn-send {
+  flex: none;
+  width: var(--el-control-height, 46px);
+  height: var(--el-control-height, 46px);
+  min-width: var(--el-control-height, 46px);
+  min-height: var(--el-control-height, 46px);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: none;
+  touch-action: manipulation;
+  transition:
+    transform var(--el-motion-fast, 120ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1)),
+    opacity var(--el-motion-fast, 120ms) ease,
+    background var(--el-motion-fast, 120ms) ease;
+}
+
+.chat-page .btn-send svg {
+  width: 21px;
+  height: 21px;
+  display: block;
+}
+
 .chat-page .btn-stop {
   min-width: 58px;
   min-height: 46px;
@@ -2955,14 +2981,19 @@
   border-radius: 16px;
   box-shadow: none;
   transition:
-    transform 120ms cubic-bezier(.2, .8, .2, 1),
-    opacity 120ms ease,
-    background 120ms ease;
+    transform var(--el-motion-fast, 120ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1)),
+    opacity var(--el-motion-fast, 120ms) ease,
+    background var(--el-motion-fast, 120ms) ease;
 }
 
 .chat-page .btn-send:active:not(:disabled),
 .chat-page .btn-stop:active:not(:disabled) {
   transform: translateY(1px);
+}
+
+.chat-page .btn-send:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, #fff);
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
