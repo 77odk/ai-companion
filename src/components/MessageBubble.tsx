@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { StoredMessage } from '../lib/storage'
-import { loadAIProfile, loadSettings, loadUserProfile, shouldShowMemorySaved } from '../lib/storage'
+import { loadAIProfile, loadSettings, loadUserProfile } from '../lib/storage'
 import { extractMemories, isPureThinkBlock, stripMemoryMarkers, stripThinkBlocks } from '../lib/memory'
 import { getActiveSessionId, getSessionLang } from '../lib/sessionStore'
 import { chatBubbleTime } from '../lib/time'
@@ -83,9 +83,6 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
       ? thinkZh.length > 600 ? `${thinkZh.slice(0, 600)}…` : thinkZh
       : thinkingRaw.length > 600 ? `${thinkingRaw.slice(0, 600)}…` : thinkingRaw
     : ''
-  // 用户这条消息触发记忆写入时，气泡下方给个「已帮你记下」的反馈
-  const showMemorySaved = shouldShowMemorySaved(message)
-
   // 点开灰条时触发懒翻译（仅中文会话+英文思考链）
   const handleThinkToggle = () => {
     const nextOpen = !thinkOpen
@@ -165,20 +162,28 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
         )}
         <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
           {typing ? (
-            <span className="typing" aria-label="正在输入">
-              <span className="typing-text">正在输入</span>
+            <span className="typing" aria-label="TA 正在想">
+              <span className="typing-text">TA 正在想…</span>
               <i />
               <i />
               <i />
             </span>
           ) : (
-            <span className="bubble-text">{displayText}</span>
+            <>
+              <span className="bubble-text">{displayText}</span>
+              {hasMemory && (
+                <span className="memory-moment">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" />
+                  </svg>
+                  <span>已记住这个瞬间</span>
+                </span>
+              )}
+            </>
           )}
         </div>
         {/* 每条消息都带时间（2026-08-26 七七拍板，AM/PM 微信式） */}
         <span className="msg-bubble-time">{chatBubbleTime(message.ts)}</span>
-        {hasMemory && <span className="memory-remembered">已记住</span>}
-        {showMemorySaved && <span className="memory-saved">✅已帮你记下</span>}
       </div>
       {isUser && <Avatar value={avatar} kind="user" className="user-avatar" />}
     </div>
