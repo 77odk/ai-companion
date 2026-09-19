@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { StoredMessage } from '../lib/storage'
 import { loadAIProfile, loadSettings, loadUserProfile } from '../lib/storage'
-import { extractMemories, isPureThinkBlock, stripMemoryMarkers, stripThinkBlocks } from '../lib/memory'
+import { isPureThinkBlock, stripMemoryMarkers, stripThinkBlocks } from '../lib/memory'
 import { getActiveSessionId, getSessionLang } from '../lib/sessionStore'
 import { chatBubbleTime } from '../lib/time'
 import { chatCompletion } from '../lib/api'
@@ -69,7 +69,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
   // 第一批③：裸英文思考泄漏——只在中文会话剥，英文会话正文绝不动
   const displayText = isUser ? message.content : stripThinkBlocks(stripMemoryMarkers(message.content), sessionLang)
   // 「已记住」必须绑真实写入结果：只凭模型输出了 marker 不算保存成功（memorySaved 由写入链在成功时标记）
-  const hasMemory = !isUser && message.memorySaved === true && extractMemories(message.content).length > 0
+  const hasMemory = !isUser && message.memorySaved === true
   // 内心戏：TA 消息有 thinking 字段时显示灰条
   const hasThink = !isUser && !!message.thinking && message.thinking.trim().length > 0
   // TASK-ENGLISH-MODE：会话语言决定灰条标签（sessionLang 已在上面定义）
