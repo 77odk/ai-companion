@@ -84,6 +84,7 @@ function ChatHeaderPresence({ sessionId }: { sessionId: string | null }) {
   useEffect(() => {
     if (!sessionId) return
     const refresh = () => setNow(Date.now())
+    refresh()
     const timer = window.setInterval(refresh, 10_000)
     const onReplyCommitted = (event: Event) => {
       const sid = (event as CustomEvent<{ sid?: string }>).detail?.sid
