@@ -5,10 +5,11 @@ import {
   requestCloudStateSync,
   type CloudStateEntity,
 } from './cloudState.ts'
-import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE } from './dataChange.ts'
+import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE, notifyDataChanged } from './dataChange.ts'
 import { getAccount } from './sync.ts'
 import { collectAllAIProfiles } from './storage.ts'
 import { getSessionsCache } from './sessionStore.ts'
+import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
 import { applySpacePostFromCloud, deleteSpacePostFromCloud } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
 import {
@@ -650,6 +651,42 @@ function deleteAiProfileEntity(entity: CloudStateEntity): void {
   profileSnapshot.delete(entity.entityId)
 }
 
+let defaultRoleSnapshot: string | null = null
+
+function resetDefaultRoleSnapshot(): void {
+  const accountId = getAccount()?.account ?? ''
+  defaultRoleSnapshot = accountId ? (getDefaultRoleId(accountId) || null) : null
+}
+
+function captureDefaultRole(): void {
+  const accountId = getAccount()?.account ?? ''
+  if (!accountId) return
+  const next = getDefaultRoleId(accountId) || null
+  if (next === defaultRoleSnapshot) return
+  if (next) queue('default_role', GLOBAL, { sessionId: next })
+  else queue('default_role', GLOBAL, undefined, true)
+  defaultRoleSnapshot = next
+}
+
+function applyDefaultRoleEntity(entity: CloudStateEntity): void {
+  if (entity.entityId !== GLOBAL) return
+  const accountId = getAccount()?.account ?? ''
+  if (!accountId) return
+  const sid = applyDefaultRoleFromCloud(accountId, entity.payload)
+  if (!sid) return
+  defaultRoleSnapshot = sid
+  notifyDataChanged()
+}
+
+function deleteDefaultRoleEntity(entity: CloudStateEntity): void {
+  if (entity.entityId !== GLOBAL) return
+  const accountId = getAccount()?.account ?? ''
+  if (!accountId) return
+  deleteDefaultRoleFromCloud(accountId)
+  defaultRoleSnapshot = null
+  notifyDataChanged()
+}
+
 let initialized = false
 export function initCloudStateResourceAdapters(): void {
   if (initialized) return
@@ -660,6 +697,7 @@ export function initCloudStateResourceAdapters(): void {
   resetRuntimeSnapshot()
   resetWeeklySnapshot()
   resetProfileSnapshot()
+  resetDefaultRoleSnapshot()
   registerTaRuntimeCloudSnapshotResetter(resetRuntimeSnapshot)
   registerCloudStateAdapter('theme', {
     apply: applyThemeEntity,
@@ -706,11 +744,16 @@ export function initCloudStateResourceAdapters(): void {
     apply: applyAiProfileEntity,
     delete: deleteAiProfileEntity,
   })
+  registerCloudStateAdapter('default_role', {
+    apply: applyDefaultRoleEntity,
+    delete: deleteDefaultRoleEntity,
+  })
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, capturePersonalDays)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAnniversaries)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureSpacePosts)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureTaRuntime)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureWeeklyReviews)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAiProfiles)
-  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot() })
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureDefaultRole)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot(); resetDefaultRoleSnapshot() })
 }

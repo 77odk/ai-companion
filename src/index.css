@@ -4849,6 +4849,30 @@ textarea.persona-input {
   white-space: nowrap;
 }
 
+.roles-item-title-line {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.roles-item-title-line .roles-item-title {
+  min-width: 0;
+  width: auto;
+  flex: 0 1 auto;
+}
+
+.roles-default-badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary-deep);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
 .roles-item.active .roles-item-title {
   color: var(--color-primary-deep);
 }

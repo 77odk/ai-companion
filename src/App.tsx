@@ -752,7 +752,7 @@ export default function App() {
               <RolesPage
                 onBack={() => navigate('settings')}
                 onNew={handleRolesNew}
-                onSwitch={() => goView('chat')}
+                onSwitch={() => navigate('home')}
                 onOpenProfile={(sid) => {
                   setDetailFrom('roles')
                   setProfileTarget(sid)
