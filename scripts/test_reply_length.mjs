@@ -19,12 +19,19 @@ const {
   applyGlobalReplyLengthFromCloud,
   deleteGlobalReplyLengthFromCloud,
   getReplyLengthOverride,
+  getReplyLengthPreference,
+  getStoredReplyLengthPreference,
   saveReplyLengthOverride,
+  saveReplyLengthPreference,
+  saveReplyLengthFollowGlobal,
+  saveReplyLengthMode,
   clearReplyLengthOverride,
   getEffectiveReplyLength,
   applyReplyLengthOverrideFromCloud,
+  applyReplyLengthPreferenceFromCloud,
   deleteReplyLengthOverrideFromCloud,
   collectStoredReplyLengthOverrides,
+  collectStoredReplyLengthPreferences,
   replyLengthLabel,
   buildReplyLengthInstruction,
   splitDetailedAssistantReply,
@@ -92,16 +99,47 @@ clearReplyLengthOverride('A', '1')
 check('跟随全局 = 删除 override', getReplyLengthOverride('A', '1') === null)
 check('删除后回适中', getEffectiveReplyLength('A', '1') === 'medium')
 
+console.log('\n[4b] 跟随全局开关：锁住但不删除当前 TA 已选')
+mem.clear()
+saveGlobalReplyLength('A', 'medium')
+check('先保存 TA=详细且不跟随全局', saveReplyLengthPreference('A', '1', { mode: 'long', followGlobal: false }) === true)
+check('关闭全局时 TA 详细生效', getEffectiveReplyLength('A', '1') === 'long')
+check('打开跟随全局成功', saveReplyLengthFollowGlobal('A', '1', true) === true)
+let pref = getReplyLengthPreference('A', '1')
+check('打开后 followGlobal=true', pref.followGlobal === true)
+check('打开后仍记住 TA 自己的详细', pref.mode === 'long')
+check('打开后实际按全局适中', getEffectiveReplyLength('A', '1') === 'medium')
+check('兼容 override 读取在跟随全局时为空', getReplyLengthOverride('A', '1') === null)
+check('跟随全局期间只改全局即可实时生效', saveGlobalReplyLength('A', 'short') === true && getEffectiveReplyLength('A', '1') === 'short')
+check('关闭跟随全局成功', saveReplyLengthFollowGlobal('A', '1', false) === true)
+check('关闭后恢复之前详细', getEffectiveReplyLength('A', '1') === 'long')
+check('单独改 TA 档位不改开关', saveReplyLengthMode('A', '1', 'short') === true && getReplyLengthPreference('A', '1').followGlobal === false)
+check('TA 新档位简洁生效', getEffectiveReplyLength('A', '1') === 'short')
+
+console.log('\n[4c] 旧数据迁移：已有 override 继续按 TA 自己生效')
+mem.clear()
+mem.set('ai_companion_reply_length_override_A_legacy', 'long')
+const legacyPref = getStoredReplyLengthPreference('A', 'legacy')
+check('旧字符串读取为详细', legacyPref?.mode === 'long')
+check('旧字符串迁移语义 followGlobal=false', legacyPref?.followGlobal === false)
+check('旧 override 不会被升级成全局覆盖', getEffectiveReplyLength('A', 'legacy') === 'long')
+
 console.log('\n[5] Cloud State 语义')
 mem.clear()
 check('cloud global long', applyGlobalReplyLengthFromCloud('A', { mode: 'long' }) === 'long')
 check('cloud global 恢复', getGlobalReplyLength('A') === 'long')
-check('cloud override natural', applyReplyLengthOverrideFromCloud('A', '2', { mode: 'natural' }) === 'natural')
-check('override natural 生效', getEffectiveReplyLength('A', '2') === 'natural')
+check('cloud 新格式可恢复 mode + followGlobal', !!applyReplyLengthPreferenceFromCloud('A', '2', { mode: 'natural', followGlobal: true }))
+check('cloud 跟随全局时实际用 global', getEffectiveReplyLength('A', '2') === 'long')
+check('cloud 仍记住 TA 自己 natural', getReplyLengthPreference('A', '2').mode === 'natural')
+check('cloud followGlobal=true 保留', getReplyLengthPreference('A', '2').followGlobal === true)
+check('cloud 旧格式仍按 override 恢复', applyReplyLengthOverrideFromCloud('A', '3', { mode: 'natural' }) === 'natural')
+check('cloud 旧格式 natural 生效', getEffectiveReplyLength('A', '3') === 'natural')
 check('非法 global 拒绝', applyGlobalReplyLengthFromCloud('A', { mode: 'huge' }) === null)
-check('非法 override 拒绝', applyReplyLengthOverrideFromCloud('A', '2', { mode: 'huge' }) === null)
+check('非法 preference 拒绝', applyReplyLengthPreferenceFromCloud('A', '2', { mode: 'huge', followGlobal: true }) === null)
+const collectedPrefs = collectStoredReplyLengthPreferences('A', ['2', '3'])
+check('collect 会保留跟随全局中的已选值', collectedPrefs.get('2')?.mode === 'natural' && collectedPrefs.get('2')?.followGlobal === true)
 deleteReplyLengthOverrideFromCloud('A', '2')
-check('删 override → 跟随 global', getEffectiveReplyLength('A', '2') === 'long')
+check('删 preference → 回默认跟随 global', getEffectiveReplyLength('A', '2') === 'long')
 deleteGlobalReplyLengthFromCloud('A')
 check('删 global → natural', getGlobalReplyLength('A') === 'natural')
 
@@ -137,9 +175,13 @@ check('详细模式最终提交使用大气泡 splitter', chatSrc.includes("repl
 check('详细模式流式显示也使用大气泡 splitter', chatSrc.includes("replyLength === 'long'\n        ? splitDetailedAssistantReply"))
 check('半截回复也保留详细模式', partialSrc.includes("replyLength === 'long'") && partialSrc.includes('splitDetailedAssistantReply'))
 check('全局 UI 是自然/简洁/适中/详细', ['自然', '简洁', '适中', '详细'].every((label) => settingsSrc.includes(`title: '${label}'`)))
-check('单 TA 有跟随全局 + 四档', chatSettingsSrc.includes("title: '跟随全局'") && ['自然', '简洁', '适中', '详细'].every((label) => chatSettingsSrc.includes(`title: '${label}'`)))
+check('聊天设置有跟随全局 switch', chatSettingsSrc.includes('role="switch"') && chatSettingsSrc.includes('saveReplyLengthFollowGlobal'))
+check('聊天设置是一条四档 range', chatSettingsSrc.includes('type="range"') && ['自然', '简洁', '适中', '详细'].every((label) => chatSettingsSrc.includes(`label: '${label}'`)))
+check('跟随全局开启会锁住 range', chatSettingsSrc.includes('disabled={preference.followGlobal}'))
+check('提示文案是当前全局 + 开启覆盖', chatSettingsSrc.includes('当前全局：{replyLengthLabel(globalValue)} · 开启将覆盖已选'))
 check('reply_length_global 仍注册', cloudSrc.includes("registerCloudStateAdapter('reply_length_global'"))
-check('reply_length override 仍注册', cloudSrc.includes("registerCloudStateAdapter('reply_length'"))
+check('reply_length preference 仍复用原 Cloud kind', cloudSrc.includes("registerCloudStateAdapter('reply_length'"))
+check('Cloud payload 同步 mode + followGlobal', cloudSrc.includes('{ mode: value.mode, followGlobal: value.followGlobal }'))
 check('session_start 已注册跨设备同步', cloudSrc.includes("registerCloudStateAdapter('session_start'"))
 check('session_start 只往前推进', cloudSrc.includes('if (local > ts)'))
 check('原普通拆泡函数签名不变', /export function splitAssistantReplies\(content: string, ts: number\)/.test(storeSrc))
