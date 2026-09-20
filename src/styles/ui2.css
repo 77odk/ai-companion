@@ -2712,7 +2712,8 @@
   color: var(--color-text);
 }
 
-.app:has(.chat-page) .chat-header-planet {
+/* 资料入口 = TA 的圆形头像（最初那版）；与聊天设置并排，两个都不带圆环底 */
+.app:has(.chat-page) .chat-header-avatar {
   right: 56px;
   top: 11px;
   width: 40px;
@@ -2722,8 +2723,8 @@
   color: var(--color-text-muted);
 }
 
-.app:has(.chat-page) .chat-header-planet:hover {
-  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+.app:has(.chat-page) .chat-header-avatar:hover {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
   color: var(--color-text);
 }
 

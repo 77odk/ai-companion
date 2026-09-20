@@ -13,7 +13,7 @@ import LoginGate from './components/LoginGate'
 import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
 import { getAccount } from './lib/sync'
 import RolesPage from './components/RolesPage'
-import { PlanetIcon } from './components/spaceIcons'
+import DefaultAvatar from './components/DefaultAvatar'
 import type { ChatJumpTarget, MemoryReturnTarget } from './lib/chatJump'
 import {
   loadMessages,
@@ -350,6 +350,9 @@ export default function App() {
     if (!sid) return null
     return getSessionsCache().find((s) => String(s.id) === sid) ?? null
   })()
+  // 聊天页右上角资料入口：回到最初那版「TA 的圆形头像」（有头像显示头像，没头像显示名字首字）
+  const headerAi = loadAIProfile(headerSession ? String(headerSession.id) : undefined)
+  const headerRoleName = headerSession ? displaySessionName(headerSession) : headerAi.nickname || ''
 
   // 老数据一键迁移：建云端会话 → 按升序传消息 → 传记忆（单条失败跳过不中断）→
   // 置位 → 进聊天。本地数据只读不删（红线）；createSession 失败才算整个迁移失败（不置位，可重试）。
@@ -720,7 +723,7 @@ export default function App() {
               {view === 'chat' && (
                 <button
                   type="button"
-                  className="chat-header-planet"
+                  className="chat-header-avatar"
                   onClick={() => {
                     setDetailFrom('chat')
                     setProfileTarget(null)
@@ -729,7 +732,13 @@ export default function App() {
                   aria-label="打开 TA 的资料卡"
                   title="TA 的资料卡"
                 >
-                  <PlanetIcon />
+                  {headerAi.avatar.startsWith('data:') ? (
+                    <img src={headerAi.avatar} alt="" />
+                  ) : headerRoleName ? (
+                    <span className="chat-header-avatar-letter">{headerRoleName.slice(0, 1)}</span>
+                  ) : (
+                    <DefaultAvatar kind="ai" className="avatar-default" />
+                  )}
                 </button>
               )}
               {view === 'chat' && loggedIn && (
