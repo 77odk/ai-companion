@@ -2713,7 +2713,7 @@
 }
 
 .app:has(.chat-page) .chat-header-planet {
-  right: 12px;
+  right: 56px;
   top: 11px;
   width: 40px;
   height: 40px;
@@ -2723,6 +2723,23 @@
 }
 
 .app:has(.chat-page) .chat-header-planet:hover {
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+  color: var(--color-text);
+}
+
+/* 聊天设置入口：与资料入口并排，两个都是纯图标（不带圆环底） */
+.app:has(.chat-page) .chat-header-settings {
+  right: 12px;
+  top: 11px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.app:has(.chat-page) .chat-header-settings:hover {
   background: color-mix(in srgb, var(--color-primary) 6%, transparent);
   color: var(--color-text);
 }
