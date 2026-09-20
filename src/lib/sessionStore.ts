@@ -19,7 +19,7 @@ export interface SessionPendingOp {
   id: string
   type: 'message' | 'memory'
   sessionId: string
-  /** 上传用的载荷：message = {role, content}，memory = {content} */
+  /** 上传用的载荷：message = {role, content}；memory 还可带 source / taReply / localMemoryId */
   payload: Record<string, unknown>
   /** 本地写入时的时间戳（消息按这个 ts 跟缓存里的乐观条目对上号） */
   ts: number
@@ -150,7 +150,7 @@ export function clearMessagesCache(sessionId: string): void {
 
 // ---- 记忆乐观缓存（key 带 sessionId，各会话独立，B2c-3） ----
 // 与消息缓存同一模式：localStorage 只做页面缓存，后端是权威数据源。
-// 记忆量小，不走 pendingOps 队列：直接乐观缓存 + 调用方异步 postMemory 上传，失败提示重试即可。
+// 记忆与消息共用 pendingOps：先乐观缓存，再直传；失败时联网/下次进入聊天自动补传。
 // 注意 saveMemoriesCache 不广播 dataChange——记忆写入不进 legacy 账号同步（/api/sync 全量上传），
 // 避免同一批记忆被 postMemory 和账号同步重复上传。
 
@@ -657,9 +657,18 @@ export async function flushPendingOps(token: string): Promise<void> {
         return // 登录已失效，sessionApi 已广播，剩下的等重新登录后再补
       }
     } else if (op.type === 'memory') {
-      const res = await postMemory(token, op.sessionId, { content: String(op.payload.content ?? '') })
+      const source = typeof op.payload.source === 'string' && op.payload.source.trim() ? op.payload.source : undefined
+      const taReply = typeof op.payload.taReply === 'string' && op.payload.taReply.trim() ? op.payload.taReply : undefined
+      const res = await postMemory(token, op.sessionId, {
+        content: String(op.payload.content ?? ''),
+        ...(source ? { source } : {}),
+        ...(taReply ? { taReply } : {}),
+      })
       if (res.ok) {
         removePendingOp(op.id)
+        if (typeof op.payload.localMemoryId === 'string') {
+          reconcileMemoryCacheId(op.sessionId, op.payload.localMemoryId, res.data.id)
+        }
       } else if (res.status === 401) {
         return
       }

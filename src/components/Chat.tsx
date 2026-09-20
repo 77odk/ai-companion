@@ -734,12 +734,25 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         // 本地写失败（回读不一致）→ upsertMemoryCache 返回 null：不写云端、也不当作成功
         if (!item) return { ok: false, created: false }
         if (token) {
-          postMemory(token, activeSessionId, {
+          const payload = {
             content: trimmed,
             ...(snippet ? { source: snippet } : {}),
             ...(opts.taReply?.trim() ? { taReply: opts.taReply.trim() } : {}),
-          }).then((res) => {
-            if (res.ok) reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
+          }
+          const op: PendingOp = {
+            id: newPendingOpId(),
+            type: 'memory',
+            sessionId: activeSessionId,
+            payload: { ...payload, localMemoryId: item.id },
+            ts: item.createdAt,
+          }
+          // 与消息同一套 outbox：先排队再直传，失败或关页时保留，联网/下次进聊天自动补传。
+          addPendingOp(op)
+          postMemory(token, activeSessionId, payload).then((res) => {
+            if (res.ok) {
+              removePendingOp(op.id)
+              reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
+            }
           })
         }
         notifyMemoryUpdated()
