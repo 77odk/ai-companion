@@ -1,16 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getAccount } from '../lib/sync'
 import { getActiveSessionId, getSessionsCache } from '../lib/sessionStore'
 import { displaySessionName } from '../lib/sessionFlow'
 import { setSessionStart } from '../lib/storage'
-import { notifyDataChanged } from '../lib/dataChange'
+import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
 import {
-  clearReplyLengthOverride,
   getGlobalReplyLength,
-  getReplyLengthOverride,
+  getReplyLengthPreference,
   replyLengthLabel,
-  saveReplyLengthOverride,
+  saveReplyLengthFollowGlobal,
+  saveReplyLengthMode,
   type ReplyLength,
+  type ReplyLengthPreference,
 } from '../lib/replyLength'
 
 interface Props {
@@ -18,31 +19,57 @@ interface Props {
   onRefreshed: () => void
 }
 
-type LocalChoice = 'global' | ReplyLength
+const LENGTH_OPTIONS: Array<{ value: ReplyLength; label: string }> = [
+  { value: 'natural', label: '自然' },
+  { value: 'short', label: '简洁' },
+  { value: 'medium', label: '适中' },
+  { value: 'long', label: '详细' },
+]
 
 export default function ChatSettings({ onBack, onRefreshed }: Props) {
   const accountId = getAccount()?.account ?? ''
   const sessionId = getActiveSessionId()
   const session = getSessionsCache().find((item) => String(item.id) === sessionId)
   const taName = session ? displaySessionName(session) : '当前 TA'
-  const globalValue = getGlobalReplyLength(accountId)
-  const [choice, setChoice] = useState<LocalChoice>(() => getReplyLengthOverride(accountId, sessionId) ?? 'global')
+  const [globalValue, setGlobalValue] = useState<ReplyLength>(() => getGlobalReplyLength(accountId))
+  const [preference, setPreference] = useState<ReplyLengthPreference>(() => getReplyLengthPreference(accountId, sessionId))
   const [error, setError] = useState('')
   const [confirmRefresh, setConfirmRefresh] = useState(false)
 
-  const choose = (next: LocalChoice) => {
-    if (!accountId || !sessionId) return
-    if (next === 'global') {
-      clearReplyLengthOverride(accountId, sessionId)
-      setChoice('global')
-      setError('')
-      return
+  useEffect(() => {
+    const refresh = () => {
+      setGlobalValue(getGlobalReplyLength(accountId))
+      setPreference(getReplyLengthPreference(accountId, sessionId))
     }
-    if (!saveReplyLengthOverride(accountId, sessionId, next)) {
+    window.addEventListener(ELUVIN_DATA_CHANGE, refresh)
+    return () => window.removeEventListener(ELUVIN_DATA_CHANGE, refresh)
+  }, [accountId, sessionId])
+
+  const selectedIndex = useMemo(
+    () => Math.max(0, LENGTH_OPTIONS.findIndex((option) => option.value === preference.mode)),
+    [preference.mode],
+  )
+
+  const toggleGlobal = () => {
+    if (!accountId || !sessionId) return
+    const next = !preference.followGlobal
+    if (!saveReplyLengthFollowGlobal(accountId, sessionId, next)) {
       setError('没有保存成功，稍后再试一下')
       return
     }
-    setChoice(next)
+    setPreference((current) => ({ ...current, followGlobal: next }))
+    setError('')
+  }
+
+  const chooseIndex = (index: number) => {
+    if (!accountId || !sessionId || preference.followGlobal) return
+    const option = LENGTH_OPTIONS[index]
+    if (!option || option.value === preference.mode) return
+    if (!saveReplyLengthMode(accountId, sessionId, option.value)) {
+      setError('没有保存成功，稍后再试一下')
+      return
+    }
+    setPreference((current) => ({ ...current, mode: option.value }))
     setError('')
   }
 
@@ -53,14 +80,6 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
     setConfirmRefresh(false)
     onRefreshed()
   }
-
-  const options: Array<{ value: LocalChoice; title: string; note: string }> = [
-    { value: 'global', title: '跟随全局', note: `当前全局：${replyLengthLabel(globalValue)}` },
-    { value: 'natural', title: '自然', note: '不做额外限制，按聊天内容自然回复' },
-    { value: 'short', title: '简洁', note: '更利落一点，省掉不必要的展开' },
-    { value: 'medium', title: '适中', note: '该说的说完整，不过分展开' },
-    { value: 'long', title: '详细', note: '可以把细节和想法多说一点' },
-  ]
 
   return (
     <div className="page chat-settings-page">
@@ -78,31 +97,67 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
       <section className="chat-settings-section">
         <div className="chat-settings-section-head">
           <h2>回复长度</h2>
-          <p>这里只影响 {taName}；「跟随全局」会使用你的全局设置。</p>
         </div>
-        <div className="reply-length-options" role="radiogroup" aria-label={`${taName} 的回复长度`}>
-          {options.map((option) => {
-            const selected = choice === option.value
-            return (
-              <button
-                key={option.value}
-                type="button"
-                className={`reply-length-option${selected ? ' is-selected' : ''}`}
-                role="radio"
-                aria-checked={selected}
-                onClick={() => choose(option.value)}
-              >
-                <span className="reply-length-option-copy">
-                  <strong>{option.title}</strong>
-                  <span>{option.note}</span>
-                </span>
-                <span className="reply-length-radio" aria-hidden="true">
-                  {selected ? <span /> : null}
-                </span>
-              </button>
-            )
-          })}
+
+        <div className="chat-settings-card chat-reply-card">
+          <div className="chat-follow-row">
+            <div className="chat-follow-copy">
+              <strong>跟随全局</strong>
+              <small>当前全局：{replyLengthLabel(globalValue)} · 开启将覆盖已选</small>
+            </div>
+            <button
+              type="button"
+              className={`chat-follow-switch${preference.followGlobal ? ' is-on' : ''}`}
+              role="switch"
+              aria-checked={preference.followGlobal}
+              aria-label={`跟随全局，当前${preference.followGlobal ? '已开启' : '已关闭'}`}
+              onClick={toggleGlobal}
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
+
+          <div
+            className={`chat-length-control is-index-${selectedIndex}${preference.followGlobal ? ' is-locked' : ''}`}
+            aria-disabled={preference.followGlobal}
+          >
+            <div className="chat-length-control-head">
+              <span>当前 TA</span>
+              <strong>{replyLengthLabel(preference.mode)}</strong>
+            </div>
+
+            <div className="chat-length-slider">
+              <div className="chat-length-rail" aria-hidden="true">
+                <span className="chat-length-fill" />
+                {LENGTH_OPTIONS.map((option, index) => (
+                  <span
+                    key={option.value}
+                    className={`chat-length-dot${index === selectedIndex ? ' is-selected' : ''}`}
+                  />
+                ))}
+              </div>
+              <input
+                className="chat-length-range"
+                type="range"
+                min="0"
+                max={String(LENGTH_OPTIONS.length - 1)}
+                step="1"
+                value={selectedIndex}
+                disabled={preference.followGlobal}
+                aria-label={`${taName} 的回复长度`}
+                aria-valuetext={replyLengthLabel(preference.mode)}
+                onChange={(event) => chooseIndex(Number(event.target.value))}
+              />
+            </div>
+
+            <div className="chat-length-labels" aria-hidden="true">
+              {LENGTH_OPTIONS.map((option) => (
+                <span key={option.value}>{option.label}</span>
+              ))}
+            </div>
+          </div>
         </div>
+
         {error ? <p className="reply-length-error" role="status">{error}</p> : null}
       </section>
 
