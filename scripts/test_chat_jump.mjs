@@ -299,6 +299,23 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
   ok(calls === 1, 'K6 只请求一次后端')
 }
 
+// ---- K2：云端原始消息同一句出现两次 → 必须保持 ambiguous，不能被 merge 去重后误判 unique ----
+{
+  resetStore()
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    session: { id: 1, title: 'TA', persona: '', created_at: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' },
+    messages: [
+      { id: 1, role: 'user', content: '这句话说过两次', createdAt: '2026-09-01T10:00:00.000Z' },
+      { id: 2, role: 'assistant', content: '第一次回应', createdAt: '2026-09-01T10:00:01.000Z' },
+      { id: 3, role: 'user', content: '这句话说过两次', createdAt: '2026-09-02T10:00:00.000Z' },
+      { id: 4, role: 'assistant', content: '第二次回应', createdAt: '2026-09-02T10:00:01.000Z' },
+    ],
+    memories: [],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  const hydrated = await findChatJumpTargetHydrated('A', '这句话说过两次', 'token-A')
+  ok(hydrated.status === 'ambiguous' && hydrated.target === null, 'K7 云端原始列表重复 source → ambiguous，不猜哪一次')
+}
+
 // ---- L：本地已经 unique 时不额外请求后端 ----
 {
   resetStore()
