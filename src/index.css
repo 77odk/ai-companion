@@ -582,18 +582,8 @@ button {
   cursor: not-allowed;
 }
 
-.btn-primary {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-}
-
 .btn-primary:hover:not(:disabled) {
   background: var(--color-primary-deep);
-}
-
-.btn-ghost {
-  background: var(--color-primary-soft);
-  color: var(--color-primary-deep);
 }
 
 .btn-ghost:hover:not(:disabled) {
@@ -690,10 +680,6 @@ button {
   width: 100%;
 }
 
-.input:focus {
-  border-color: var(--color-primary);
-}
-
 select.input {
   appearance: auto;
 }
@@ -729,14 +715,6 @@ textarea.persona-input {
 .settings-actions {
   display: flex;
   gap: 10px;
-}
-
-.settings-card {
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
-  margin-bottom: 14px;
 }
 
 .settings-card-title {
@@ -1163,13 +1141,6 @@ textarea.persona-input {
   height: 40px;
   color: var(--color-primary-soft);
   margin-bottom: 8px;
-}
-
-.memory-empty-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text);
 }
 
 .memory-empty-sub {
@@ -2253,13 +2224,6 @@ textarea.persona-input {
   box-shadow: var(--shadow, 0 2px 10px rgba(0, 0, 0, 0.04));
 }
 
-.home-life-text {
-  margin: 0 0 8px;
-  font-size: 14px;
-  line-height: 1.65;
-  color: var(--color-text);
-}
-
 .home-life-time {
   margin: 0;
   font-size: 11px;
@@ -2637,11 +2601,6 @@ textarea.persona-input {
   margin-bottom: 14px;
 }
 
-.ai-space-back {
-  font-size: 13px;
-  padding: 0;
-}
-
 .ai-space-title {
   margin: 0;
   font-size: 16px;
@@ -2754,11 +2713,6 @@ textarea.persona-input {
   padding: 2px 2px 0;
 }
 
-.ai-space-update {
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
 .ai-space-refresh {
   width: 32px;
   height: 32px;
@@ -2772,17 +2726,6 @@ textarea.persona-input {
   justify-content: center;
   padding: 0;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
-}
-
-.ai-space-refresh:hover {
-  color: var(--color-primary-deep);
-  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
-  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
-}
-
-.ai-space-refresh svg {
-  width: 16px;
-  height: 16px;
 }
 
 .ai-space-hint {
@@ -3646,11 +3589,6 @@ textarea.persona-input {
   width: 100%;
 }
 
-/* TA 空间的子页面（聊天记录 / TA 记得的 / TA 的生活）：顶部 ‹ 返回 + 标题，页面内滚动 */
-.ai-space-page-sub {
-  padding: 0;
-}
-
 .ai-space-sub-bar {
   position: sticky;
   top: 0;
@@ -3660,13 +3598,6 @@ textarea.persona-input {
   flex-shrink: 0;
   background: var(--color-card);
   border-bottom: 1px solid var(--color-border);
-}
-
-.ai-space-sub-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--color-text);
 }
 
 /* ========== 我的页 · 个人中心 ========== */
@@ -3791,21 +3722,6 @@ textarea.persona-input {
   gap: 8px;
 }
 
-.profile-group-title {
-  margin: 4px 4px 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  letter-spacing: 0.04em;
-}
-
-.profile-group-card {
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
 .entry-row {
   width: 100%;
   display: flex;
@@ -3820,10 +3736,6 @@ textarea.persona-input {
   text-align: left;
 }
 
-.entry-row + .entry-row {
-  border-top: 1px solid var(--color-border);
-}
-
 .entry-icon {
   width: 34px;
   height: 34px;
@@ -3834,11 +3746,6 @@ textarea.persona-input {
   align-items: center;
   justify-content: center;
   flex: none;
-}
-
-.entry-icon svg {
-  width: 18px;
-  height: 18px;
 }
 
 .entry-label {
@@ -3887,30 +3794,11 @@ textarea.persona-input {
   gap: 5px;
 }
 
-.profile-card-name {
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.profile-card-meta {
-  font-size: 13px;
-  color: var(--color-text-muted);
-}
-
-.profile-edit-card {
-  margin-top: 4px;
-}
-
 .profile-field {
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-.profile-field > span {
-  font-size: 12px;
-  color: var(--color-text-muted);
 }
 
 .profile-city-note {
@@ -3954,10 +3842,6 @@ textarea.persona-input {
   overflow: hidden;
 }
 
-.privacy-detail-card section {
-  padding: 16px;
-}
-
 .privacy-detail-card section + section {
   border-top: 1px solid var(--color-border);
 }
@@ -3982,41 +3866,6 @@ textarea.persona-input {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 2px;
-}
-
-.detail-back {
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-card);
-  color: var(--color-text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.detail-back:hover {
-  color: var(--color-primary-deep);
-  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
-}
-
-.detail-back svg {
-  width: 18px;
-  height: 18px;
-}
-
-.detail-title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.detail-spacer {
-  width: 38px;
-  flex: none;
 }
 
 /* 关于忆文 */
@@ -5582,10 +5431,6 @@ textarea.persona-input {
   transition: background 0.2s ease;
 }
 
-.settings-switch.on {
-  background: var(--color-primary);
-}
-
 .settings-switch-thumb {
   position: absolute;
   top: 3px;
@@ -5596,10 +5441,6 @@ textarea.persona-input {
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   transition: transform 0.2s ease;
-}
-
-.settings-switch.on .settings-switch-thumb {
-  transform: translateX(20px);
 }
 
 /* ========== W1 相处里程碑纪念卡 ========== */
@@ -6831,12 +6672,6 @@ html, body {
   padding: 36px 0 6px;
 }
 
-.memory-year-chapter + .memory-year-chapter {
-  margin-top: 30px;
-  border-top: 1px solid color-mix(in srgb, var(--color-border) 58%, transparent);
-  padding-top: 40px;
-}
-
 .memory-year-chapter-label {
   margin: 0 0 8px;
   color: color-mix(in srgb, var(--color-text) 15%, transparent);
@@ -6869,12 +6704,6 @@ html, body {
   color: color-mix(in srgb, var(--color-text-muted) 62%, transparent);
   font-size: 10.5px;
   font-weight: 500;
-}
-
-/* 连续记忆流：一条很浅的竖向主轴贯穿月份条目 */
-.memory-month-entries {
-  position: relative;
-  padding-left: 20px;
 }
 
 .memory-month-entries::before {
@@ -6912,11 +6741,6 @@ html, body {
   border-bottom-color: transparent;
 }
 
-.memory-entry:hover,
-.memory-entry:focus-visible {
-  background: color-mix(in srgb, var(--color-card) 52%, transparent);
-}
-
 .memory-entry-dot {
   position: absolute;
   top: 22px;
@@ -6928,10 +6752,6 @@ html, body {
   transition: background 150ms ease;
 }
 
-.memory-entry.is-explicit .memory-entry-dot {
-  background: var(--color-primary);
-}
-
 .memory-entry.is-pinned .memory-entry-dot {
   top: 21px;
   left: -19px;
@@ -6939,10 +6759,6 @@ html, body {
   height: 7px;
   background: var(--color-primary-deep);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
-}
-
-.memory-entry-body {
-  display: block;
 }
 
 .memory-entry-text {
@@ -7010,11 +6826,6 @@ html, body {
   background: linear-gradient(transparent, var(--memory-river));
 }
 
-.memory-empty-title {
-  font-size: 18px;
-  font-weight: 620;
-}
-
 .memory-empty-copy {
   max-width: 260px;
   margin: 4px 0 0;
@@ -7078,15 +6889,6 @@ html, body {
   font-weight: 600;
 }
 
-.memory-detail-text {
-  margin: 0 0 22px;
-  color: var(--memory-ink);
-  font-size: clamp(20px, 5.8vw, 26px);
-  line-height: 1.75;
-  letter-spacing: 0.01em;
-  overflow-wrap: anywhere;
-}
-
 /* 来源对话：详情页里的弱化引用，不是独立卡片（可读但低于正文层级） */
 .memory-detail-quote {
   margin: 0 0 18px;
@@ -7119,10 +6921,6 @@ html, body {
   font: inherit;
   font-size: 14px;
   cursor: pointer;
-}
-
-.memory-book-page {
-  min-height: 100%;
 }
 
 .memory-book {
@@ -7170,22 +6968,6 @@ html, body {
   color: var(--memory-muted);
   font-size: 11px;
   text-align: center;
-}
-
-.memory-book-turn {
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-primary-deep);
-  font-size: 22px;
-  cursor: pointer;
-}
-
-.memory-book-turn:disabled {
-  opacity: 0.28;
-  cursor: default;
 }
 
 @media (min-width: 640px) {
@@ -7527,10 +7309,6 @@ html, body {
 .home-time h1 strong { color: var(--color-primary-deep); font-size: 1.35em; }
 .home-scene-night .home-time h1 strong { color: #93c5ff; }
 .home-time > p:last-child { margin: 8px 0 0; color: var(--home-ink-soft); font-size: 12px; letter-spacing: .05em; }
-
-.home-anniversary { margin: 28px 0 22px; padding: 18px 20px; border: 1px solid rgba(255,255,255,.36); border-radius: 22px; background: rgba(255,255,255,.19); backdrop-filter: blur(18px); }
-.home-eyebrow { color: var(--home-ink-soft); font-size: 9px; letter-spacing: .2em; }
-.home-anniversary h2 { margin: 9px 0 2px; font-size: 15px; font-weight: 600; }
 .home-anniversary strong { display: block; font-size: 28px; font-weight: 650; }
 .home-anniversary time { color: var(--home-ink-soft); font-size: 12px; }
 .home-anniversary-empty { color: var(--home-ink-soft); font-size: 12px; }
@@ -7547,24 +7325,17 @@ html, body {
 .anniversary-manager-fieldset legend { margin-bottom: 7px; font-weight: 600; }
 .anniversary-manager-fieldset > label { margin-right: 16px; }
 
-.home-companion { display: flex; flex-direction: column; align-items: center; padding: 20px 18px 16px; border-radius: 28px; background: linear-gradient(145deg, rgba(255,255,255,.23), rgba(255,255,255,.08)); backdrop-filter: blur(14px); }
-.home-moment-copy { align-self: stretch; }
-.home-moment-copy h2 { margin: 0 0 7px; font-size: 14px; }
-.home-moment-copy p { min-height: 44px; margin: 0; color: var(--home-ink-soft); font-size: 14px; line-height: 1.65; }
-
 .ta-orb { position: relative; width: 154px; height: 154px; margin: 12px 0 4px; color: var(--home-ink); }
 .ta-orb svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 10px 24px rgba(52, 117, 194, .18)); }
 .ta-orb-track { fill: none; stroke: rgba(105, 164, 229, .38); stroke-width: 1; stroke-dasharray: 4 8; transform-origin: center; animation: ta-orbit 28s linear infinite; }
 .ta-orb-dot { fill: #6daef5; transform-origin: 90px 90px; animation: ta-orbit 20s linear infinite reverse; }
 .ta-orb-core { fill: rgba(128, 188, 244, .28); stroke: rgba(255,255,255,.52); stroke-width: 1; animation: ta-breathe 7s ease-in-out infinite; transform-origin: center; }
-.ta-orb-night .ta-orb-core { fill: rgba(93, 154, 241, .35); }
 .ta-orb > span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 21px; font-weight: 600; }
 .ta-orb > span img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; }
 @keyframes ta-orbit { to { transform: rotate(360deg); } }
 @keyframes ta-breathe { 50% { transform: scale(1.045); opacity: .82; } }
 
 .home-talk { width: auto; padding: 9px 16px; border: 0; border-radius: 999px; background: rgba(255,255,255,.24); color: var(--home-ink); font: inherit; font-size: 14px; cursor: pointer; }
-.home-talk span { margin-left: 5px; color: var(--color-primary-deep); }
 .home-shortcuts { display: flex; justify-content: center; gap: 10px; margin-top: 16px; }
 .home-shortcuts button { min-width: 0; padding: 9px 14px; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; background: rgba(255,255,255,.15); backdrop-filter: blur(12px); color: var(--home-ink); font: inherit; font-size: 12px; cursor: pointer; }
 
@@ -7662,10 +7433,6 @@ html, body {
   justify-content: flex-end;
   gap: 10px;
 }
-
-/* ===== TASK-HOME-BIG-DAY-V2：首页时间关系卡 · 里程碑轨迹 ===== */
-.home-anniv-milestone { margin-top: 16px; padding-top: 13px; border-top: 1px solid rgba(127,127,127,.18); }
-.home-anniv-milestone-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .home-anniv-day { color: var(--home-ink-soft); font-size: 12px; white-space: nowrap; }
 .home-anniv-day strong { color: var(--home-ink); font-size: 15px; font-weight: 650; }
 .home-anniv-next { color: var(--home-ink-soft); font-size: 11px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -7813,16 +7580,6 @@ html, body {
   cursor: pointer;
 }
 
-.ta-profile-back svg {
-  width: 22px;
-  height: 22px;
-}
-
-.ta-profile-topbar-spacer {
-  width: 36px;
-  height: 36px;
-}
-
 .ta-profile-hero {
   display: flex;
   flex-direction: column;
@@ -7907,19 +7664,6 @@ html, body {
   padding: 0 16px calc(24px + env(safe-area-inset-bottom));
 }
 
-.ta-profile-who,
-.ta-profile-menu,
-.ta-profile-refresh {
-  background: color-mix(in srgb, var(--color-card) 96%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
-  border-radius: 18px;
-  overflow: hidden;
-}
-
-.ta-profile-who {
-  padding: 16px;
-}
-
 .ta-profile-section-head {
   display: flex;
   align-items: center;
@@ -7956,17 +7700,6 @@ html, body {
   justify-content: center;
 }
 
-.ta-profile-who-icon svg {
-  width: 19px;
-  height: 19px;
-}
-
-.ta-profile-who-label {
-  padding-top: 2px;
-  font-size: 13px;
-  color: var(--color-text-muted);
-}
-
 .ta-profile-who-value {
   padding-top: 1px;
   font-size: 14px;
@@ -7990,14 +7723,6 @@ html, body {
   cursor: pointer;
 }
 
-.ta-profile-menu-row + .ta-profile-menu-row {
-  border-top: 1px solid var(--color-border);
-}
-
-.ta-profile-menu-row:hover {
-  background: color-mix(in srgb, var(--color-primary) 4%, transparent);
-}
-
 .ta-profile-menu-icon {
   width: 30px;
   height: 30px;
@@ -8008,27 +7733,11 @@ html, body {
   color: var(--color-primary-deep);
 }
 
-.ta-profile-menu-icon svg {
-  width: 20px;
-  height: 20px;
-}
-
 .ta-profile-menu-label {
   flex: 1;
   min-width: 0;
   font-size: 15px;
   font-weight: 500;
-}
-
-.ta-profile-menu-row .ai-space-entry-chevron {
-  width: 16px;
-  height: 16px;
-  color: var(--color-text-muted);
-}
-
-.ta-profile-refresh-confirm {
-  padding: 12px 14px 14px;
-  border-top: 1px solid var(--color-border);
 }
 
 .ta-profile-refresh-confirm p {
@@ -8043,11 +7752,6 @@ html, body {
   gap: 8px;
 }
 
-.ta-profile-refresh-actions .btn {
-  flex: 1;
-  font-size: 13px;
-}
-
 .ta-profile-chat-cta {
   width: 100%;
   min-height: 52px;
@@ -8060,11 +7764,6 @@ html, body {
   justify-content: center;
   gap: 8px;
   font-weight: 600;
-}
-
-.ta-profile-chat-cta svg {
-  width: 19px;
-  height: 19px;
 }
 
 .ta-profile-hint {
