@@ -1,4 +1,4 @@
-name: PR80 verification
+name: PR80 final verification
 
 on:
   pull_request:
