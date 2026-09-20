@@ -202,8 +202,8 @@
   bottom: calc(62px + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 8px;
   pointer-events: none;
 }
 
@@ -215,8 +215,6 @@
 
 .chat-model-slot {
   display: flex;
-  justify-content: flex-end;
-  margin-left: auto;
 }
 
 .chat-control-capsule {
