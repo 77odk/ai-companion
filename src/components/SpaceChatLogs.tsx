@@ -2,7 +2,7 @@
 // 搜索框 + 日历选日期 + 按天折叠目录（微信式，M7-2），点某天进完整回放。
 // 数据只读（消息由外层传入），内部状态全是视图态，组件级复用不复制两份逻辑。
 
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   calendarMonthRange,
   dayKey,
@@ -18,6 +18,7 @@ import { stripMemoryMarkers } from '../lib/memory'
 import type { StoredMessage } from '../lib/storage'
 import { chatBubbleTime } from '../lib/time'
 import { SearchIcon } from './spaceIcons'
+import type { ChatJumpTarget } from '../lib/chatJump'
 
 interface Props {
   /** 该角色的全部消息（有会话读缓存，无会话读全局） */
@@ -28,11 +29,14 @@ interface Props {
   aiNickname: string
   /** 返回资料卡 */
   onBack: () => void
+  /** 从记忆「看原对话」进入时的唯一目标；普通入口不传。 */
+  jumpTarget?: ChatJumpTarget | null
 }
 
-export default function SpaceChatLogs({ messages, yourName, aiNickname, onBack }: Props) {
+export default function SpaceChatLogs({ messages, yourName, aiNickname, onBack, jumpTarget = null }: Props) {
   // 聊天记录二级视图：非 null 表示正在看某一天的完整消息
-  const [logDayKey, setLogDayKey] = useState<string | null>(null)
+  const [logDayKey, setLogDayKey] = useState<string | null>(() => (jumpTarget ? dayKey(jumpTarget.ts) : null))
+  const jumpHandledRef = useRef(false)
   // 搜索关键词 / 日历当前月份
   const [chatSearch, setChatSearch] = useState('')
   const [calYear, setCalYear] = useState<number>(() => new Date().getFullYear())
@@ -65,6 +69,27 @@ export default function SpaceChatLogs({ messages, yourName, aiNickname, onBack }
 
   const logDay = logDayKey ? dayGroups.find((g) => g.key === logDayKey) ?? null : null
   const isLogView = logDay != null
+
+  // 「看原对话」直达当天回放：再次校验 session/ts/source 后，首帧定位并短暂高亮。
+  // 目标不可靠时不猜、不滚到相似内容；入口处已经给出失败提示并留在原记忆。
+  useLayoutEffect(() => {
+    if (!jumpTarget || jumpHandledRef.current || !logDay) return
+    const matches = messages.filter(
+      (m) =>
+        m.role === 'user' &&
+        m.ts === jumpTarget.ts &&
+        (m.content ?? '').trim() === jumpTarget.source.trim(),
+    )
+    if (matches.length !== 1) return
+    const el = document.querySelector<HTMLElement>(
+      `[data-log-msg-role="user"][data-log-msg-ts="${jumpTarget.ts}"]`,
+    )
+    if (!el) return
+    jumpHandledRef.current = true
+    el.scrollIntoView({ block: 'center', behavior: 'auto' })
+    el.classList.add('msg-jump-highlight')
+    window.setTimeout(() => el.classList.remove('msg-jump-highlight'), 2600)
+  }, [jumpTarget, logDay, messages])
 
   /** 日历：当前月网格，有聊天记录的天打圆点，点某天直接进那天回放 */
   function renderCalendar() {
@@ -253,7 +278,11 @@ export default function SpaceChatLogs({ messages, yourName, aiNickname, onBack }
     return (
       <div className="ai-space-log">
         <div className="ai-space-topbar ai-space-log-bar">
-          <button type="button" className="link-btn ai-space-back" onClick={() => setLogDayKey(null)}>
+          <button
+            type="button"
+            className="link-btn ai-space-back"
+            onClick={() => (jumpTarget ? onBack() : setLogDayKey(null))}
+          >
             ‹ 返回
           </button>
           <h2 className="ai-space-log-title">{logDay.label}</h2>
@@ -264,7 +293,12 @@ export default function SpaceChatLogs({ messages, yourName, aiNickname, onBack }
           {logDay.messages.map((m, i) => {
             const isUser = m.role === 'user'
             return (
-              <div key={i} className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}>
+              <div
+                key={i}
+                className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}
+                data-log-msg-role={m.role}
+                data-log-msg-ts={m.ts}
+              >
                 <div className="message-body">
                   <span className="ai-space-log-role">{isUser ? yourName : aiNickname}</span>
                   <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
@@ -279,8 +313,12 @@ export default function SpaceChatLogs({ messages, yourName, aiNickname, onBack }
         </div>
 
         <div className="ai-space-log-foot">
-          <button type="button" className="btn btn-ghost" onClick={() => setLogDayKey(null)}>
-            返回聊天记录
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => (jumpTarget ? onBack() : setLogDayKey(null))}
+          >
+            {jumpTarget ? '返回记忆' : '返回聊天记录'}
           </button>
         </div>
       </div>

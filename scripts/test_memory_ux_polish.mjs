@@ -32,17 +32,18 @@ rec('A1 return target 用稳定 identity（memoryId+kind+sessionId）',
 rec('A2 App 持有 transient pendingMemoryReturn（只 useState，不落存储）',
   /const \[pendingMemoryReturn, setPendingMemoryReturn\] = useState<MemoryReturnTarget \| null>\(null\)/.test(app))
 rec('A3 只有跳转成功才记录 return target',
-  /onJumpToChat=\{\(target, returnTarget\) => \{[\s\S]{0,240}setPendingMemoryReturn\(returnTarget \?\? null\)/.test(app))
+  /onJumpToChatLog=\{\(target, returnTarget\) => \{[\s\S]{0,240}setPendingMemoryReturn\(returnTarget \?\? null\)/.test(app))
 rec('A4 Memory 接收 initialDetail / onInitialDetailConsumed',
-  /initialDetail=\{pendingMemoryReturn\}/.test(app) && /onInitialDetailConsumed=\{\(\) => setPendingMemoryReturn\(null\)\}/.test(app))
+  /initialDetail=\{pendingMemoryReturn\}/.test(app) &&
+  /onInitialDetailConsumed=\{\(\) => \{[\s\S]{0,160}setPendingMemoryReturn\(null\)/.test(app))
 rec('A5 返回时按 kind + memoryId + sessionId 在当前数据重新查（不靠 index）',
   /findIndex\([\s\S]{0,240}entry\.kind === initialDetail\.kind[\s\S]{0,140}entry\.item\.id === initialDetail\.memoryId/.test(memSrc))
 rec('A6 找到才打开 Detail，找不到安全留在 River（不猜别的条目）',
   /if \(index >= 0\) \{\s*setSelectedIndex\(index\)\s*setView\('detail'\)\s*\}/.test(memSrc))
 rec('A7 无条件消费 target（找到/没找到都清）',
   /if \(index >= 0\)[\s\S]{0,160}\}\s*onInitialDetailConsumed\?\.\(\)/.test(memSrc))
-rec('A8 跳转失败路径不碰 return target（onJumpToChat 只有一个调用点）',
-  (memSrc.match(/onJumpToChat\(/g) || []).length === 1 && /ambiguous[\s\S]{0,420}showJumpNotice\('暂时无法定位原位置；当时保留的对话片段仍在这一页'\)/.test(memSrc))
+rec('A8 跳转失败路径不碰 return target（onJumpToChatLog 只有一个调用点）',
+  (memSrc.match(/onJumpToChatLog\(/g) || []).length === 1 && /ambiguous[\s\S]{0,420}showJumpNotice\('暂时无法定位原位置；当时保留的对话片段仍在这一页'\)/.test(memSrc))
 rec('A9 连续查看不同 Memory：每次成功跳转覆盖 target',
   (app.match(/setPendingMemoryReturn\(returnTarget \?\? null\)/g) || []).length === 1)
 rec('A10 return target 不进 localStorage / sync / backend / schema',

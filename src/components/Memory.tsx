@@ -4,7 +4,7 @@ import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
 import { getToken } from '../lib/auth'
 import { correctMemoryText, removeMemory, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
-import { findChatJumpTargetHydrated, type ChatJumpTarget, type MemoryReturnTarget } from '../lib/chatJump'
+import { findChatRecordJumpTargetHydrated, type ChatJumpTarget, type MemoryReturnTarget } from '../lib/chatJump'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
 // 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
@@ -98,15 +98,15 @@ const RIVER_FULL_LIMIT = 200
 const RIVER_BATCH = 120
 
 interface MemoryProps {
-  /** UI2-03B-1「看原对话」：把一次性 jump target 交给 App（附上返回目标），由 App 切到 chat 并转交 Chat 消费 */
-  onJumpToChat?: (target: ChatJumpTarget, returnTarget?: MemoryReturnTarget) => void
-  /** 从 Chat 返回时要恢复的详情目标（transient，只从 App 内存传入，绝不持久化） */
+  /** UI2-03B-1「看原对话」：把一次性 jump target 交给 App（附上返回目标），由 App 打开完整聊天记录 */
+  onJumpToChatLog?: (target: ChatJumpTarget, returnTarget?: MemoryReturnTarget) => void
+  /** 从聊天记录返回时要恢复的详情目标（transient，只从 App 内存传入，绝不持久化） */
   initialDetail?: MemoryReturnTarget | null
   /** 恢复动作完成（找到或没找到都要）后通知 App 清掉 target，恢复普通返回行为 */
   onInitialDetailConsumed?: () => void
 }
 
-export default function Memory({ onJumpToChat, initialDetail, onInitialDetailConsumed }: MemoryProps = {}) {
+export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetailConsumed }: MemoryProps = {}) {
   const sessionId = getActiveSessionId()
   const readMemories = (): SourcedMemory[] => {
     const globalExplicit = loadMemory().filter((memory) => memory.explicit === true)
@@ -208,16 +208,16 @@ export default function Memory({ onJumpToChat, initialDetail, onInitialDetailCon
   }
 
   // UI2-03B-1：只允许「session Memory + source 非空」跳原对话。
-  // 刷新后本地消息缓存可能还没恢复：本地 not_found 时先补拉当前 session，再做一次 exact-match。
-  const handleJumpToChat = async () => {
-    if (!selected || !onJumpToChat || jumpLoading) return
+  // 点击时用当前 session 的完整云端记录确认唯一性；云端不可用再安全回落本地缓存。
+  const handleJumpToChatLog = async () => {
+    if (!selected || !onJumpToChatLog || jumpLoading) return
     setJumpLoading(true)
-    const result = await findChatJumpTargetHydrated(sessionId, selected.item.source ?? '', getToken())
+    const result = await findChatRecordJumpTargetHydrated(sessionId, selected.item.source ?? '', getToken())
     setJumpLoading(false)
     if (result.status === 'unique' && result.target) {
       setJumpNotice(null)
       // 记下返回目标：用稳定 identity（memoryId + kind + sessionId），绝不靠 index 硬恢复
-      onJumpToChat(result.target, {
+      onJumpToChatLog(result.target, {
         memoryId: selected.item.id,
         kind: selected.kind,
         ...(selected.kind === 'session' && sessionId ? { sessionId } : {}),
@@ -569,8 +569,8 @@ export default function Memory({ onJumpToChat, initialDetail, onInitialDetailCon
               <button
                 type="button"
                 className="memory-jump-trigger"
-                onClick={() => void handleJumpToChat()}
-                disabled={!onJumpToChat || jumpLoading}
+                onClick={() => void handleJumpToChatLog()}
+                disabled={!onJumpToChatLog || jumpLoading}
               >
                 {jumpLoading ? '正在定位…' : '看原对话'}
                 <span aria-hidden="true">→</span>
