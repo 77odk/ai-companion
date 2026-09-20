@@ -69,7 +69,7 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
           <span>返回</span>
         </button>
         <h1 className="detail-title">聊天设置</h1>
-        <span className="detail-header-spacer" aria-hidden="true" />
+        <span className="detail-spacer" aria-hidden="true" />
       </div>
 
       <section className="chat-settings-section">
