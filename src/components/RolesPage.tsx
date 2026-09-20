@@ -7,8 +7,9 @@
 
 import { useEffect, useState } from 'react'
 import { getToken } from '../lib/auth'
+import { getAccount } from '../lib/sync'
 import { deleteSession, listSessions, patchSession, type Session } from '../lib/sessionApi'
-import { displaySessionName, pickNextSessionAfterDelete, sessionTimestamp } from '../lib/sessionFlow'
+import { displaySessionName, resolveSessionAfterDelete, sessionTimestamp } from '../lib/sessionFlow'
 import {
   clearMemoriesCache,
   clearMessagesCache,
@@ -24,13 +25,14 @@ import { truncatePreview } from '../lib/aiSpaceDetail'
 import { wechatListTime } from '../lib/time'
 import { loadAIProfile, saveAIProfile } from '../lib/storage'
 import type { StoredMessage } from '../lib/storage'
+import { clearDefaultRoleId, getDefaultRoleId, setDefaultRoleId } from '../lib/defaultRole'
 
 interface Props {
   /** 返回「我的」（角色管理页的返回落点） */
   onBack: () => void
   /** 新建角色：App 跳选角色页（roleMode='first'） */
   onNew: () => void
-  /** 会话已切换（本页已 setActiveSessionId），App 回聊天页（删除当前会话后切到最近会话用） */
+  /** 删除当前角色后切回显式默认角色：本页已 setActiveSessionId，App 回 TA 首页 */
   onSwitch: () => void
   /** 点角色/角色详情：只看资料卡不切换会话，App 用临时角色参数打开该角色资料卡（onOpenProfile(id)） */
   onOpenProfile: (sessionId: string) => void
@@ -59,6 +61,8 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
   const [deleting, setDeleting] = useState(false)
   // 「选择」确认层：开在哪个会话上（null = 收起）
   const [confirmingSelect, setConfirmingSelect] = useState<string | null>(null)
+  const accountId = getAccount()?.account ?? ''
+  const [defaultRoleId, setDefaultRoleState] = useState(() => getDefaultRoleId(accountId))
 
   useEffect(() => {
     const token = getToken()
@@ -76,10 +80,13 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
 
   // 微信式实时刷新（2026-08-26 七七拍板）：有新消息/缓存变化立刻重读重排，不用手动重进
   useEffect(() => {
-    const onData = () => setSessions([...getSessionsCache()])
+    const onData = () => {
+      setSessions([...getSessionsCache()])
+      setDefaultRoleState(getDefaultRoleId(accountId))
+    }
     window.addEventListener('eluvin-data-change', onData)
     return () => window.removeEventListener('eluvin-data-change', onData)
-  }, [])
+  }, [accountId])
 
   const list = Array.isArray(sessions) ? sessions : []
   // 微信式排序（2026-08-26 七七拍板）：按最后一条消息的时间排，最新聊的排最上面；
@@ -115,6 +122,17 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
     onNew()
   }
 
+  const handleToggleDefault = (id: string) => {
+    setMenuFor(null)
+    if (!accountId) return
+    if (defaultRoleId === id) {
+      clearDefaultRoleId(accountId)
+      setDefaultRoleState('')
+      return
+    }
+    if (setDefaultRoleId(accountId, id)) setDefaultRoleState(id)
+  }
+
   const handleDelete = async (id: string, title: string) => {
     setMenuFor(null)
     if (deleting) return
@@ -133,16 +151,23 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
       const remaining = list.filter((s) => String(s.id) !== String(id))
       setSessions(remaining)
       setSessionsCache(remaining)
-      // 删的是当前会话：剩 >0 切最近一个，无会话进选角色页新建
+
+      const resolution = resolveSessionAfterDelete(
+        remaining,
+        id,
+        getActiveSessionId(),
+        defaultRoleId,
+      )
+
+      if (resolution.clearDefault && accountId) {
+        clearDefaultRoleId(accountId)
+        setDefaultRoleState('')
+      }
+
+      // 只有删除当前角色时才改 active。没有有效默认角色就清空 active，并留在角色管理页等待用户自己选。
       if (getActiveSessionId() === String(id)) {
-        const next = pickNextSessionAfterDelete(remaining, id)
-        if (next) {
-          setActiveSessionId(String(next.id))
-          onSwitch()
-        } else {
-          setActiveSessionId('')
-          onNew()
-        }
+        setActiveSessionId(resolution.nextActiveId)
+        if (resolution.destination === 'home') onSwitch()
       }
     } finally {
       setDeleting(false)
@@ -213,6 +238,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
           {sortedList.map((s) => {
             const id = String(s.id)
             const active = id === activeId
+            const isDefault = id === defaultRoleId
             const displayName = displaySessionName(s)
             const last = lastMessage(id)
             const unread = getUnreadCount(s)
@@ -235,7 +261,10 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
                     )}
                   </span>
                   <span className="roles-info">
-                    <span className="roles-item-title">{displayName}</span>
+                    <span className="roles-item-title-line">
+                      <span className="roles-item-title">{displayName}</span>
+                      {isDefault ? <span className="roles-default-badge">默认</span> : null}
+                    </span>
                     <span className="roles-item-summary">{summary || '还没有消息'}</span>
                   </span>
                 </button>
@@ -289,6 +318,13 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
                 </span>
                 {menuFor === id && (
                   <div className="roles-menu" role="menu">
+                    <button
+                      type="button"
+                      className="roles-menu-item"
+                      onClick={() => handleToggleDefault(id)}
+                    >
+                      {isDefault ? '取消默认' : '设为默认'}
+                    </button>
                     <button
                       type="button"
                       className="roles-menu-item"
