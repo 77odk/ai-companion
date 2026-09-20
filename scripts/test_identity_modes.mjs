@@ -15,6 +15,7 @@ globalThis.localStorage = {
 const {
   resolveCompanionPolicy,
   resolveIdentityMode,
+  mergeProfileIdentityField,
   saveIdentityMode,
 } = await import('../src/lib/companionPolicy.ts')
 const { buildSystemPrompt, CHAT_RULES, CHAT_RULES_EN, looksRobotic } = await import('../src/lib/chatPrompts.ts')
@@ -35,6 +36,16 @@ assert.equal(resolveIdentityMode('B'), 'ai')
 assert.equal(loadAIProfile('A').nickname, '甲', '切身份不覆盖昵称')
 assert.equal(collectAllAIProfiles().A.identityMode, 'natural', '沿用现有 profile 同步实体')
 assert.ok([...store.keys()].every((key) => !key.includes('identity_mode')), '没有新增 identity storage key')
+localStorage.setItem('ai_companion_ai_profile_A', JSON.stringify({ nickname: '甲', avatar: '', futureField: '保留', identityMode: 'natural' }))
+assert.equal(saveIdentityMode('A', 'ai'), true)
+assert.equal(JSON.parse(localStorage.getItem('ai_companion_ai_profile_A')).futureField, '保留', '切身份只 merge，不吃未来资料字段')
+assert.equal(saveIdentityMode('A', 'natural'), true)
+const legacyMerged = mergeProfileIdentityField(
+  JSON.stringify({ nickname: '甲', avatar: '', identityMode: 'ai' }),
+  { nickname: '旧客户端', avatar: '' },
+)
+assert.equal(legacyMerged.identityMode, 'ai', '旧客户端缺 identityMode 时不覆盖本机选择')
+assert.equal(mergeProfileIdentityField(null, { nickname: '旧角色', avatar: '' }).identityMode, undefined, '无旧选择时保持缺字段语义')
 
 console.log('\n[2] 中央策略：四个维度完整，默认/自然/AI 语义固定')
 const natural = resolveCompanionPolicy('A')

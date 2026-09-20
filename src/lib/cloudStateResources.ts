@@ -8,6 +8,7 @@ import {
 import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE, notifyDataChanged } from './dataChange.ts'
 import { getAccount } from './sync.ts'
 import { collectAllAIProfiles, getSessionStart, setSessionStart } from './storage.ts'
+import { isIdentityMode, mergeProfileIdentityField, type IdentityMode } from './companionPolicy.ts'
 import { getSessionsCache } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
 import { applyGlobalReplyLengthFromCloud, applyReplyLengthPreferenceFromCloud, collectStoredReplyLengthPreferences, deleteGlobalReplyLengthFromCloud, deleteReplyLengthOverrideFromCloud, getStoredGlobalReplyLength, type ReplyLength } from './replyLength.ts'
@@ -600,18 +601,21 @@ function aiProfileStorageKey(entityId: string): string {
   return entityId === GLOBAL ? AI_PROFILE_KEY : `${AI_PROFILE_KEY}_${entityId}`
 }
 
-function validAiProfile(value: unknown): { nickname: string; avatar: string; identityMode: 'immersive' | 'natural' | 'ai' } | null {
+type SyncedAIProfile = { nickname: string; avatar: string; identityMode?: IdentityMode }
+
+function validAiProfile(value: unknown): SyncedAIProfile | null {
   const item = record(value)
   if (!item) return null
   const nickname = typeof item.nickname === 'string' ? item.nickname.trim() : ''
   const avatar = typeof item.avatar === 'string' && item.avatar.startsWith('data:') ? item.avatar : ''
   if (!nickname && !avatar) return null
-  const identityMode = item.identityMode === 'natural' || item.identityMode === 'ai' ? item.identityMode : 'immersive'
-  return { nickname: nickname || 'TA', avatar, identityMode }
+  const profile: SyncedAIProfile = { nickname: nickname || 'TA', avatar }
+  if (isIdentityMode(item.identityMode)) profile.identityMode = item.identityMode
+  return profile
 }
 
-function profileEntities(): Map<string, { nickname: string; avatar: string; identityMode: 'immersive' | 'natural' | 'ai' }> {
-  const out = new Map<string, { nickname: string; avatar: string; identityMode: 'immersive' | 'natural' | 'ai' }>()
+function profileEntities(): Map<string, SyncedAIProfile> {
+  const out = new Map<string, SyncedAIProfile>()
   for (const [sid, profile] of Object.entries(collectAllAIProfiles())) {
     const entityId = sid === '_global' ? GLOBAL : String(sid)
     const value = validAiProfile(profile)
@@ -620,7 +624,7 @@ function profileEntities(): Map<string, { nickname: string; avatar: string; iden
   return out
 }
 
-let profileSnapshot = new Map<string, { nickname: string; avatar: string; identityMode: 'immersive' | 'natural' | 'ai' }>()
+let profileSnapshot = new Map<string, SyncedAIProfile>()
 function resetProfileSnapshot(): void {
   profileSnapshot = profileEntities()
 }
@@ -643,8 +647,13 @@ function applyAiProfileEntity(entity: CloudStateEntity): void {
   if (!entity.entityId) return
   const value = validAiProfile(entity.payload)
   if (!value) return
-  localStorage.setItem(aiProfileStorageKey(entity.entityId), JSON.stringify(value))
+  const key = aiProfileStorageKey(entity.entityId)
+  const merged = mergeProfileIdentityField(localStorage.getItem(key), value)
+  localStorage.setItem(key, JSON.stringify(merged))
+  const mergedValue = validAiProfile(merged)
   profileSnapshot.set(entity.entityId, value)
+  // 旧客户端若把缺字段的 profile 推上云，本机有明确选择时立即用同一实体补回，避免继续扩散。
+  if (!value.identityMode && mergedValue?.identityMode) captureAiProfiles()
 }
 
 function deleteAiProfileEntity(entity: CloudStateEntity): void {

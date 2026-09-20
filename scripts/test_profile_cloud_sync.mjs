@@ -64,7 +64,11 @@ const storageSrc = readFileSync(new URL('../src/lib/storage.ts', import.meta.url
 check('注册了 profile 适配器', src.includes("registerCloudStateAdapter('profile'"))
 check('capture 挂在数据变化事件上', src.includes('addEventListener(ELUVIN_DATA_CHANGE, captureAiProfiles)'))
 check('切换账号会重置资料快照', /ELUVIN_AUTH_CHANGE[\s\S]{0,220}resetProfileSnapshot\(\)/.test(src))
-check('apply 写该角色自己的 key', src.includes('localStorage.setItem(aiProfileStorageKey(entity.entityId), JSON.stringify(value))'))
+check('apply 写该角色自己的 key',
+  src.includes('const key = aiProfileStorageKey(entity.entityId)') &&
+  src.includes('localStorage.setItem(key, JSON.stringify(merged))'))
+check('旧客户端缺身份字段时保留本机选择', src.includes('mergeProfileIdentityField(localStorage.getItem(key), value)'))
+check('本机有明确选择时补回云端字段', src.includes('if (!value.identityMode && mergedValue?.identityMode) captureAiProfiles()'))
 check('delete 只删该角色那份', src.includes('localStorage.removeItem(aiProfileStorageKey(entity.entityId))'))
 check('会话实体带 session 作用域', /queue\('profile', entityId, value, false, entityId === GLOBAL \? undefined : entityId\)/.test(src))
 check('只认 data: 开头的头像（防脏值）', src.includes("startsWith('data:')"))

@@ -77,16 +77,33 @@ export function saveIdentityMode(sessionId: string, mode: IdentityMode): boolean
     } catch {
       // 损坏资料只重建最小安全对象，不影响其它角色。
     }
-    localStorage.setItem(key, JSON.stringify({
-      nickname: typeof current.nickname === 'string' && current.nickname ? current.nickname : 'TA',
-      avatar: typeof current.avatar === 'string' && current.avatar.startsWith('data:') ? current.avatar : '',
-      identityMode: mode,
-    }))
+    // 只改身份字段；角色资料未来新增字段时也不会被这里吃掉。
+    localStorage.setItem(key, JSON.stringify({ ...current, identityMode: mode }))
     notifyDataChanged()
     return resolveIdentityMode(sessionId) === mode
   } catch {
     return false
   }
+}
+
+/** 旧客户端上传的 profile 没有 identityMode 时，保留本机已选模式而不是回退沉浸。 */
+export function mergeProfileIdentityField(
+  currentRaw: string | null,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  let current: Record<string, unknown> = {}
+  try {
+    const parsed = JSON.parse(currentRaw ?? '{}')
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) current = parsed
+  } catch {
+    // 本地资料损坏时由传入的合法 profile 重建。
+  }
+  const merged = { ...current, ...incoming }
+  if (!isIdentityMode(incoming.identityMode)) {
+    if (isIdentityMode(current.identityMode)) merged.identityMode = current.identityMode
+    else delete merged.identityMode
+  }
+  return merged
 }
 
 export function identityModeLabel(mode: IdentityMode): CompanionPolicy['label'] {

@@ -168,10 +168,15 @@ export function stripActionMarkers(text: string): string {
 }
 
 // 人机味关键词：命中说明这轮回复像客服/程序，需要重写
-const ROBOTIC_PATTERNS = [
+const IDENTITY_DISCLOSURE_PATTERNS = [
   /(作为(一个)?(AI|人工智能|程序|助手|模型|机器人))/,
   /(我是(一个)?(AI|人工智能|程序|助手|模型|机器人|语言模型))/,
   /(我(是|叫|就是)?(你的)?(TA|AI助手))/,
+  /\b(as an? (AI|artificial intelligence|language model|assistant|bot|robot))\b/i,
+  /\b(I'?m (just? )?an? (AI|assistant|language model|bot|robot))\b/i,
+]
+
+const ROBOTIC_PATTERNS = [
   /(有什么可以帮你的吗|有什么我可以帮你的吗)/,
   /(很高兴(能)?为你服务|随时为你服务)/,
   /((TA|AI|这个|那)?(指的是|是指|的意思))/,
@@ -180,8 +185,6 @@ const ROBOTIC_PATTERNS = [
   /(按照(我的|你的)?(设定|人设)|根据(我的|你的)?(设定|人设))/,
   /(我的(设定|人设)(是|里|写)|(设定|人设)(里|中)写)/,
   // 英文 AI 腔
-  /\b(as an? (AI|artificial intelligence|language model|assistant|bot|robot))\b/i,
-  /\b(I'?m (just? )?an? (AI|assistant|language model|bot|robot))\b/i,
   /\b(how can I (help|assist) you|what can I do for you|is there anything I can help)\b/i,
   /\b(I'?m (happy|glad) to (help|assist)|I'?m here to help)\b/i,
   /\b(feel free to (ask|reach out)|let me know if you (need|have) any (questions?|help))\b/i,
@@ -205,12 +208,9 @@ const FABRICATED_PATTERNS = [
 
 export function looksRobotic(text: string, identityMode: IdentityMode = 'immersive'): boolean {
   const t = stripEmoji(text ?? '')
-  return ROBOTIC_PATTERNS.some((re, index) => {
-    // 前 3 条中文 + 前 2 条英文是「承认自己是 AI」；自然/AI 档允许诚实披露，
-    // 但客服话术、设定腔、人机味仍继续拦截。
-    const disclosurePattern = index <= 2 || index === 10 || index === 11
-    return !(identityMode !== 'immersive' && disclosurePattern) && re.test(t)
-  })
+  // 身份披露与客服腔分开维护，新增/调序规则不会静默改变模式语义。
+  if (identityMode === 'immersive' && IDENTITY_DISCLOSURE_PATTERNS.some((re) => re.test(t))) return true
+  return ROBOTIC_PATTERNS.some((re) => re.test(t))
 }
 
 /** 是否在编造共同经历，命中触发重写 */
