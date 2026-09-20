@@ -3,7 +3,6 @@ import { getAccount } from '../lib/sync'
 import { getActiveSessionId, getSessionsCache } from '../lib/sessionStore'
 import { displaySessionName } from '../lib/sessionFlow'
 import { setSessionStart } from '../lib/storage'
-import { notifyDataChanged } from '../lib/dataChange'
 import {
   clearReplyLengthOverride,
   getGlobalReplyLength,
@@ -49,17 +48,16 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
   const refreshConversation = () => {
     if (!sessionId) return
     setSessionStart(Date.now(), sessionId)
-    notifyDataChanged()
     setConfirmRefresh(false)
     onRefreshed()
   }
 
   const options: Array<{ value: LocalChoice; title: string; note: string }> = [
-    { value: 'global', title: '跟随全局', note: `现在是「${replyLengthLabel(globalValue)}」` },
-    { value: 'natural', title: '自然', note: '不加任何限制，让 TA 自己说' },
-    { value: 'short', title: '短', note: '简短自然，几句话说完' },
-    { value: 'medium', title: '中', note: '不多不少，日常聊天的量' },
-    { value: 'long', title: '长', note: '可以多说一点，按话题自然展开' },
+    { value: 'global', title: '跟随全局', note: `当前全局：${replyLengthLabel(globalValue)}` },
+    { value: 'natural', title: '自然', note: '不做额外限制，按聊天内容自然回复' },
+    { value: 'short', title: '简洁', note: '更利落一点，省掉不必要的展开' },
+    { value: 'medium', title: '适中', note: '该说的说完整，不过分展开' },
+    { value: 'long', title: '详细', note: '可以把细节和想法多说一点' },
   ]
 
   return (
@@ -78,7 +76,7 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
       <section className="chat-settings-section">
         <div className="chat-settings-section-head">
           <h2>回复长度</h2>
-          <p>这里只影响 {taName}。选「跟随全局」时，会自动使用「我的 → 关于 TA → 回复长度」里的设置。</p>
+          <p>这里只影响 {taName}；「跟随全局」会使用你的全局设置。</p>
         </div>
         <div className="reply-length-options" role="radiogroup" aria-label={`${taName} 的回复长度`}>
           {options.map((option) => {
