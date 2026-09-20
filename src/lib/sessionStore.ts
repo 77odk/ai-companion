@@ -7,6 +7,7 @@ import { postMessage, postMemory, type Session } from './sessionApi.ts'
 import type { StoredMessage } from './storage.ts'
 import { isSimilarMemory, loadMemory, newMemoryItemId, recallRelevantMemories, type MemoryItem, type RecallOptions } from './memory.ts'
 import type { BusyState } from './aiBusy.ts'
+import { replyLengthMaxBubbleChars, type ReplyLength } from './replyLength.ts'
 
 const ACTIVE_SESSION_KEY = 'ai_companion_active_session_id'
 const SESSIONS_CACHE_KEY = 'ai_companion_sessions_cache'
@@ -747,8 +748,9 @@ function chunkText(text: string, maxLen: number = 60): string[] {
  * - 连续多行合成一条最长 60 字内；空白行是分段符
  * - 第二批⑨：超长内容折行不丢弃，不再 slice+省略号
  */
-export function splitAssistantReplies(content: string, ts: number): StoredMessage[] {
+export function splitAssistantReplies(content: string, ts: number, replyLength: ReplyLength = 'medium'): StoredMessage[] {
   const text = String(content ?? '').trim()
+  const maxLen = replyLengthMaxBubbleChars(replyLength)
   if (!text) return []
   // 1) 优先按换行/空行拆：AI 在提示词约束下会像发微信一样分行发（一条一行）
   const lines = text
@@ -759,7 +761,7 @@ export function splitAssistantReplies(content: string, ts: number): StoredMessag
     // 每行一条；过长的行折行不丢弃（第二批⑨）
     const result: StoredMessage[] = []
     for (const l of lines) {
-      for (const chunk of chunkText(l, 60)) {
+      for (const chunk of chunkText(l, maxLen)) {
         result.push({ role: 'assistant' as const, content: chunk, ts })
       }
     }
@@ -786,11 +788,11 @@ export function splitAssistantReplies(content: string, ts: number): StoredMessag
   const sentences = sentenceParts.filter(Boolean)
   if (sentences.length <= 1) {
     // 单句超长也折行
-    return chunkText(text, 60).map((c) => ({ role: 'assistant' as const, content: c, ts }))
+    return chunkText(text, maxLen).map((c) => ({ role: 'assistant' as const, content: c, ts }))
   }
   const result: StoredMessage[] = []
   for (const s of sentences) {
-    for (const chunk of chunkText(s, 60)) {
+    for (const chunk of chunkText(s, maxLen)) {
       result.push({ role: 'assistant' as const, content: chunk, ts })
     }
   }
