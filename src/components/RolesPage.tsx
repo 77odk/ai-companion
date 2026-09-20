@@ -26,6 +26,7 @@ import { wechatListTime } from '../lib/time'
 import { loadAIProfile, saveAIProfile } from '../lib/storage'
 import type { StoredMessage } from '../lib/storage'
 import { clearDefaultRoleId, getDefaultRoleId, setDefaultRoleId } from '../lib/defaultRole'
+import { clearReplyLength } from '../lib/replyLength'
 
 interface Props {
   /** 返回「我的」（角色管理页的返回落点） */
@@ -148,6 +149,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
       }
       clearMessagesCache(id)
       clearMemoriesCache(id)
+      if (accountId) clearReplyLength(accountId, id)
       const remaining = list.filter((s) => String(s.id) !== String(id))
       setSessions(remaining)
       setSessionsCache(remaining)
