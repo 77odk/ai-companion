@@ -125,7 +125,7 @@ const EntryChevron = ({ open = false }: { open?: boolean }) => (
 /** 小星球（聊天页右上角 TA 资料入口图标，2026-08-25 七七拍板） */
 const PlanetIcon = () => (
   <svg
-    viewBox="0 0 24 24"
+    viewBox="0 0 32 32"
     fill="none"
     stroke="currentColor"
     strokeWidth="1.5"
@@ -133,10 +133,10 @@ const PlanetIcon = () => (
     strokeLinejoin="round"
     aria-hidden="true"
   >
-    <circle cx="12" cy="12" r="4" />
-    <path d="M16.5 3.5c2 .5 3 2 3 4 0 3.3-3.4 6-7.5 6S4.5 10.8 4.5 7.5c0-2 1-3.5 3-4" />
-    <path d="M7 16.5c1.5 1 3.2 1.6 5 1.6 2 0 3.9-.7 5.4-1.8" />
-    <path d="M12 3.2v1.6M8.5 4.6l.8 1.4M15.5 4.6l-.8 1.4" />
+    <circle cx="16" cy="16" r="6.2" />
+    <path d="M4.1 22.7c-1-1.9 4.2-6.4 11.6-10.1S29.9 7.5 30.8 9.4c1 1.9-4.2 6.4-11.6 10.1S5.1 24.6 4.1 22.7Z" />
+    <circle cx="26.2" cy="9.4" r="1.1" fill="var(--color-card)" />
+    <path d="M7.7 7.5v3M6.2 9h3M23.8 21.8v3.4M22.1 23.5h3.4" />
   </svg>
 )
 
