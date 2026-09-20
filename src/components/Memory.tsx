@@ -4,7 +4,7 @@ import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
 import { getToken } from '../lib/auth'
 import { correctMemoryText, removeMemory, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
-import { findChatJumpTarget, type ChatJumpTarget, type MemoryReturnTarget } from '../lib/chatJump'
+import { findChatJumpTargetHydrated, type ChatJumpTarget, type MemoryReturnTarget } from '../lib/chatJump'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
 // 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
@@ -199,6 +199,7 @@ export default function Memory({ onJumpToChat, initialDetail, onInitialDetailCon
   const [deleteError, setDeleteError] = useState('')
   // UI2-03B-1「看原对话」：失败提示（不撑坏 Detail），短暂显示后自动消失
   const [jumpNotice, setJumpNotice] = useState<string | null>(null)
+  const [jumpLoading, setJumpLoading] = useState(false)
   const jumpNoticeTimer = useRef<number | null>(null)
   const showJumpNotice = (text: string) => {
     setJumpNotice(text)
@@ -206,10 +207,13 @@ export default function Memory({ onJumpToChat, initialDetail, onInitialDetailCon
     jumpNoticeTimer.current = window.setTimeout(() => setJumpNotice(null), 2600)
   }
 
-  // UI2-03B-1：只允许「session Memory + source 非空」跳原对话；unique 才跳，not_found/ambiguous 就地提示。
-  const handleJumpToChat = () => {
-    if (!selected || !onJumpToChat) return
-    const result = findChatJumpTarget(sessionId, selected.item.source ?? '')
+  // UI2-03B-1：只允许「session Memory + source 非空」跳原对话。
+  // 刷新后本地消息缓存可能还没恢复：本地 not_found 时先补拉当前 session，再做一次 exact-match。
+  const handleJumpToChat = async () => {
+    if (!selected || !onJumpToChat || jumpLoading) return
+    setJumpLoading(true)
+    const result = await findChatJumpTargetHydrated(sessionId, selected.item.source ?? '', getToken())
+    setJumpLoading(false)
     if (result.status === 'unique' && result.target) {
       setJumpNotice(null)
       // 记下返回目标：用稳定 identity（memoryId + kind + sessionId），绝不靠 index 硬恢复
@@ -221,10 +225,11 @@ export default function Memory({ onJumpToChat, initialDetail, onInitialDetailCon
       return
     }
     if (result.status === 'ambiguous') {
-      showJumpNotice('这句话你们说过好几次，没办法确定是哪一次')
+      showJumpNotice('这句话你们说过好几次，暂时无法确定是哪一次')
       return
     }
-    showJumpNotice('原对话已不在了')
+    // source / taReply 仍是已持久化的真实证据；定位失败不等于“对话被删除”。
+    showJumpNotice('暂时无法定位原位置；当时保留的对话片段仍在这一页')
   }
 
   // ---- Detail → back 保持 River 位置 ----
@@ -564,10 +569,10 @@ export default function Memory({ onJumpToChat, initialDetail, onInitialDetailCon
               <button
                 type="button"
                 className="memory-jump-trigger"
-                onClick={handleJumpToChat}
-                disabled={!onJumpToChat}
+                onClick={() => void handleJumpToChat()}
+                disabled={!onJumpToChat || jumpLoading}
               >
-                看原对话
+                {jumpLoading ? '正在定位…' : '看原对话'}
                 <span aria-hidden="true">→</span>
               </button>
               {jumpNotice ? (
