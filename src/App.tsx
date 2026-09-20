@@ -5,6 +5,7 @@ import Chat from './components/Chat'
 import Settings, { type SettingsPage } from './components/Settings'
 import AISpace from './components/AISpace'
 import ChatProfile from './components/ChatProfile'
+import ChatSettings from './components/ChatSettings'
 import AboutMe from './components/AboutMe'
 import WeeklyPage from './components/WeeklyPage'
 import GuideDetail from './components/Guide'
@@ -59,7 +60,7 @@ import { initCloudStateSync, syncCloudState } from './lib/cloudState'
 import { closeOldestCandidateWindowOnStartup } from './lib/eventDetector'
 import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from './lib/taRuntime'
 
-type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
+type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
 // 底部四 tab 的常显范围：主视图（TA/空间/记忆/我的）带底部导航；Chat 等全屏页不带。
 // UI2-02 NAV-03：Chat 是 Secondary 全屏 view，Bottom Nav 只属于 home/aispace/memory/settings。
@@ -633,6 +634,11 @@ export default function App() {
           onBack={() => navigate(loggedIn && roleBack === 'welcome' ? 'home' : roleBack)}
           onLogin={() => setGateTarget('chat')}
         />
+      ) : view === 'chatsettings' ? (
+        <ChatSettings
+          onBack={() => navigate('chat')}
+          onRefreshed={() => navigate('chat')}
+        />
       ) : view === 'chatprofile' ? (
         <ChatProfile
           sessionIdOverride={profileTarget ?? undefined}
@@ -724,6 +730,28 @@ export default function App() {
                   title="TA 的资料卡"
                 >
                   <PlanetIcon />
+                </button>
+              )}
+              {view === 'chat' && loggedIn && (
+                <button
+                  type="button"
+                  className="chat-header-settings"
+                  onClick={() => goView('chatsettings')}
+                  aria-label="打开聊天设置"
+                  title="聊天设置"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20.3h-3v-.08a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7 15a1.7 1.7 0 0 0-1.56-1.03H5.3v-3h.14A1.7 1.7 0 0 0 7 9.94a1.7 1.7 0 0 0-.34-1.88L6.6 8l2.12-2.12.06.06A1.7 1.7 0 0 0 10.66 6a1.7 1.7 0 0 0 1.03-1.56V4.3h3v.14A1.7 1.7 0 0 0 15.72 6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03h.14v3h-.14A1.7 1.7 0 0 0 19.4 15z" />
+                  </svg>
                 </button>
               )}
               {view === 'chat' ? (

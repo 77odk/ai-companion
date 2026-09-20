@@ -1,9 +1,9 @@
 // 聊天头像资料卡（2026-08-25 七七拍板改版，TASK-UI1 再改）：
 // 聊天页点角色头像 → 打开资料卡。卡片 = 角色大头像 + 名字 + 性别/备注 + 「相识的第 N 天」大字（不带框）
-// + 入口列表（TA 的资料 / TA 的生活 / 聊天记录 / 刷新对话）。
+// + 入口列表（TA 的资料 / TA 的生活 / 聊天记录 / 聊天背景）。
 // 相识天数从「角色创建那天」开始自动计数（会话 created_at；无会话兜底 getFirstSeen）。
 // 子页面复用现有组件：AIDetail（TA 的资料=角色设定卡完整版）、SpaceLife（TA 的生活）、
-// SpaceChatLogs（聊天记录）；刷新对话 = 设置会话起点（TA 忘掉重来，聊天记录一条不删）。
+// SpaceChatLogs（聊天记录）；聊天相关行为设置已迁到聊天页右上角「聊天设置」。
 
 import { useState } from 'react'
 import {
@@ -14,7 +14,6 @@ import {
   loadPersona,
   loadUserProfile,
   getFirstSeen,
-  setSessionStart,
   AIGENDER_LABELS,
   type StoredMessage,
 } from '../lib/storage'
@@ -28,7 +27,7 @@ import SpaceChatLogs from './SpaceChatLogs'
 import ChatBgSetting from './ChatBgSetting'
 import SpaceLife from './SpaceLife'
 import { AIDetail } from './Settings'
-import { ChatIcon, EntryChevron, RefreshIcon, SparkleIcon } from './spaceIcons'
+import { ChatIcon, EntryChevron, SparkleIcon } from './spaceIcons'
 
 interface Props {
   /** 关闭资料卡回聊天 */
@@ -93,19 +92,6 @@ export default function ChatProfile({ onClose, onGoMine, fromRoles = false, onCh
   // 子页面路由：home 资料卡 / profile TA 的资料 / life TA 的生活 / chats 聊天记录 / bg 聊天背景
   const [page, setPage] = useState<'home' | 'profile' | 'life' | 'chats' | 'bg'>('home')
   const goHome = () => setPage('home')
-
-  // 刷新对话：仅清当前对话上下文（TA 忘掉重来），聊天记录一条不删。
-  // ★2026-09-03 修复：起点按会话隔离存储（sessionId 透传），会话模式下聊天页才能真正读到。
-  // 刷新后回聊天页（view 切走再切回，Chat 重新挂载）会重新按起点过滤，旧消息不再发给 TA。
-  const [confirmRefresh, setConfirmRefresh] = useState(false)
-  const [hint, setHint] = useState<string | null>(null)
-
-  const doRefresh = () => {
-    setSessionStart(Date.now(), sessionId || undefined)
-    setConfirmRefresh(false)
-    setHint('已刷新，TA 从新的一页开始')
-    window.setTimeout(() => setHint(null), 2600)
-  }
 
   // 子页面：整页替换（各自带返回条），资料卡 home 才是这层的主页
   if (page === 'profile') {
@@ -254,36 +240,12 @@ export default function ChatProfile({ onClose, onGoMine, fromRoles = false, onCh
           </button>
         </section>
 
-        <section className="ta-profile-refresh">
-          <button
-            type="button"
-            className="ta-profile-menu-row ta-profile-refresh-row"
-            onClick={() => setConfirmRefresh(true)}
-            aria-expanded={confirmRefresh}
-          >
-            <span className="ta-profile-menu-icon" aria-hidden="true"><RefreshIcon /></span>
-            <span className="ta-profile-menu-label">刷新对话</span>
-            <EntryChevron open={confirmRefresh} />
-          </button>
-          {confirmRefresh && (
-            <div className="ta-profile-refresh-confirm">
-              <p>刷新后聊天框内容清空，聊天记录仍可查看。</p>
-              <div className="ta-profile-refresh-actions">
-                <button type="button" className="btn btn-ghost" onClick={() => setConfirmRefresh(false)}>再想想</button>
-                <button type="button" className="btn btn-primary" onClick={doRefresh}>确认刷新</button>
-              </div>
-            </div>
-          )}
-        </section>
-
         {fromRoles && onChat && (
           <button type="button" className="btn ta-profile-chat-cta" onClick={onChat}>
             <ChatIcon />
             <span>和 TA 聊天</span>
           </button>
         )}
-
-        {hint && <p className="ta-profile-hint">{hint}</p>}
       </div>
     </div>
   )

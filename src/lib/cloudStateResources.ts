@@ -10,6 +10,7 @@ import { getAccount } from './sync.ts'
 import { collectAllAIProfiles } from './storage.ts'
 import { getSessionsCache } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
+import { applyGlobalReplyLengthFromCloud, applyReplyLengthOverrideFromCloud, collectStoredReplyLengthOverrides, deleteGlobalReplyLengthFromCloud, deleteReplyLengthOverrideFromCloud, getStoredGlobalReplyLength, type ReplyLength } from './replyLength.ts'
 import { applySpacePostFromCloud, deleteSpacePostFromCloud } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
 import {
@@ -687,6 +688,93 @@ function deleteDefaultRoleEntity(entity: CloudStateEntity): void {
   notifyDataChanged()
 }
 
+interface ReplyLengthEntity {
+  sessionId: string
+  mode: ReplyLength
+}
+
+function replyLengthOverrideEntities(): Map<string, ReplyLengthEntity> {
+  const out = new Map<string, ReplyLengthEntity>()
+  const accountId = getAccount()?.account ?? ''
+  if (!accountId) return out
+  const sessionIds = getSessionsCache().map((session) => String(session.id))
+  for (const [sessionId, mode] of collectStoredReplyLengthOverrides(accountId, sessionIds)) {
+    out.set(sessionId, { sessionId, mode })
+  }
+  return out
+}
+
+let globalReplyLengthSnapshot: ReplyLength | null = null
+let replyLengthOverrideSnapshot = new Map<string, ReplyLengthEntity>()
+
+function resetReplyLengthSnapshot(): void {
+  const accountId = getAccount()?.account ?? ''
+  globalReplyLengthSnapshot = accountId ? getStoredGlobalReplyLength(accountId) : null
+  replyLengthOverrideSnapshot = replyLengthOverrideEntities()
+}
+
+function captureReplyLengths(): void {
+  const accountId = getAccount()?.account ?? ''
+  if (!accountId) return
+
+  const nextGlobal = getStoredGlobalReplyLength(accountId)
+  if (nextGlobal !== globalReplyLengthSnapshot) {
+    if (nextGlobal) queue('reply_length_global', GLOBAL, { mode: nextGlobal })
+    else queue('reply_length_global', GLOBAL, undefined, true)
+    globalReplyLengthSnapshot = nextGlobal
+  }
+
+  const next = replyLengthOverrideEntities()
+  for (const [sessionId, value] of next) {
+    const previous = replyLengthOverrideSnapshot.get(sessionId)
+    if (!previous || previous.mode !== value.mode) {
+      queue('reply_length', sessionId, { mode: value.mode }, false, sessionId)
+    }
+  }
+  for (const [sessionId, value] of replyLengthOverrideSnapshot) {
+    if (!next.has(sessionId)) queue('reply_length', sessionId, undefined, true, value.sessionId)
+  }
+  replyLengthOverrideSnapshot = next
+}
+
+function applyGlobalReplyLengthEntity(entity: CloudStateEntity): void {
+  if (entity.entityId !== GLOBAL) return
+  const accountId = getAccount()?.account ?? ''
+  if (!accountId) return
+  const mode = applyGlobalReplyLengthFromCloud(accountId, entity.payload)
+  if (!mode) return
+  globalReplyLengthSnapshot = mode
+  notifyDataChanged()
+}
+
+function deleteGlobalReplyLengthEntity(entity: CloudStateEntity): void {
+  if (entity.entityId !== GLOBAL) return
+  const accountId = getAccount()?.account ?? ''
+  if (!accountId) return
+  deleteGlobalReplyLengthFromCloud(accountId)
+  globalReplyLengthSnapshot = null
+  notifyDataChanged()
+}
+
+function applyReplyLengthEntity(entity: CloudStateEntity): void {
+  const accountId = getAccount()?.account ?? ''
+  const sessionId = entity.sessionId || entity.entityId
+  if (!accountId || !sessionId || entity.entityId !== sessionId) return
+  const mode = applyReplyLengthOverrideFromCloud(accountId, sessionId, entity.payload)
+  if (!mode) return
+  replyLengthOverrideSnapshot.set(sessionId, { sessionId, mode })
+  notifyDataChanged()
+}
+
+function deleteReplyLengthEntity(entity: CloudStateEntity): void {
+  const accountId = getAccount()?.account ?? ''
+  const sessionId = entity.sessionId || entity.entityId
+  if (!accountId || !sessionId || entity.entityId !== sessionId) return
+  deleteReplyLengthOverrideFromCloud(accountId, sessionId)
+  replyLengthOverrideSnapshot.delete(sessionId)
+  notifyDataChanged()
+}
+
 let initialized = false
 export function initCloudStateResourceAdapters(): void {
   if (initialized) return
@@ -698,6 +786,7 @@ export function initCloudStateResourceAdapters(): void {
   resetWeeklySnapshot()
   resetProfileSnapshot()
   resetDefaultRoleSnapshot()
+  resetReplyLengthSnapshot()
   registerTaRuntimeCloudSnapshotResetter(resetRuntimeSnapshot)
   registerCloudStateAdapter('theme', {
     apply: applyThemeEntity,
@@ -748,6 +837,14 @@ export function initCloudStateResourceAdapters(): void {
     apply: applyDefaultRoleEntity,
     delete: deleteDefaultRoleEntity,
   })
+  registerCloudStateAdapter('reply_length_global', {
+    apply: applyGlobalReplyLengthEntity,
+    delete: deleteGlobalReplyLengthEntity,
+  })
+  registerCloudStateAdapter('reply_length', {
+    apply: applyReplyLengthEntity,
+    delete: deleteReplyLengthEntity,
+  })
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, capturePersonalDays)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAnniversaries)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureSpacePosts)
@@ -755,5 +852,6 @@ export function initCloudStateResourceAdapters(): void {
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureWeeklyReviews)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAiProfiles)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureDefaultRole)
-  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot(); resetDefaultRoleSnapshot() })
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureReplyLengths)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot(); resetDefaultRoleSnapshot(); resetReplyLengthSnapshot() })
 }

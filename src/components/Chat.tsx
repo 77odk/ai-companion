@@ -5,6 +5,7 @@ import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extr
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
+import { getAccount } from '../lib/sync'
 import { getSession, listMemories, postMemory, postMessage, type Session } from '../lib/sessionApi'
 import {
   addPendingOp,
@@ -43,6 +44,7 @@ import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYou
 import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTaRuntimeFromAssistantText } from '../lib/taRuntime'
 import { buildIdentityContext } from '../lib/identityContext'
 import { dropRepeatedReplies } from '../lib/replyDedupe'
+import { buildReplyLengthInstruction, getEffectiveReplyLength } from '../lib/replyLength'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -846,6 +848,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       return t
     })()
     const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined, lang) }]
+    if (activeSessionId) {
+      const accountId = getAccount()?.account ?? ''
+      const replyLength = getEffectiveReplyLength(accountId, activeSessionId)
+      apiMessages.push({ role: 'system', content: buildReplyLengthInstruction(replyLength, lang) })
+    }
 
     const contextText = base
       .slice(-6)

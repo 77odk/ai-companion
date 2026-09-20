@@ -256,6 +256,236 @@
   font-size: var(--el-font-body, 15px);
 }
 
+/* ---- Reply length ------------------------------------------------------ */
+.reply-length-page {
+  gap: var(--el-space-4, 16px);
+}
+
+.reply-length-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--el-space-1, 4px);
+}
+
+.reply-length-lead {
+  margin: 0;
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-medium, 500);
+  line-height: var(--el-line-body, 1.6);
+  color: var(--el-text-primary, var(--color-text));
+}
+
+.reply-length-copy .hint {
+  margin: 0;
+}
+
+.reply-length-options {
+  overflow: hidden;
+  border: 1px solid var(--el-border, var(--color-border));
+  border-radius: var(--el-radius-md, 16px);
+  background: var(--el-surface-card, var(--color-card));
+}
+
+.reply-length-option {
+  width: 100%;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--el-space-3, 12px);
+  padding: var(--el-space-3, 12px) var(--el-space-4, 16px);
+  border: 0;
+  background: transparent;
+  color: var(--el-text-primary, var(--color-text));
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reply-length-option + .reply-length-option {
+  border-top: 1px solid var(--el-border-soft, var(--color-border));
+}
+
+.reply-length-option:hover {
+  background: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 4%, transparent);
+}
+
+.reply-length-option:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, #fff);
+  outline-offset: -2px;
+}
+
+.reply-length-option-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--el-space-1, 4px);
+}
+
+.reply-length-option-copy strong {
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-semibold, 600);
+  line-height: var(--el-line-section, 1.4);
+}
+
+.reply-length-option-copy span {
+  font-size: var(--el-font-caption, 12px);
+  line-height: var(--el-line-support, 1.6);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.reply-length-radio {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--el-border-strong, var(--color-border));
+  border-radius: 50%;
+}
+
+.reply-length-option.is-selected .reply-length-radio {
+  border-color: var(--el-accent-primary, var(--color-primary));
+}
+
+.reply-length-radio > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--el-accent-primary, var(--color-primary));
+}
+
+.reply-length-error {
+  margin: 0;
+  font-size: var(--el-font-caption, 12px);
+  color: var(--color-danger, #b3261e);
+}
+
+/* ---- Chat settings ----------------------------------------------------- */
+.chat-settings-page {
+  min-height: 100%;
+  padding:
+    0
+    var(--el-page-x, 20px)
+    calc(var(--el-space-6, 32px) + env(safe-area-inset-bottom));
+  color: var(--el-text-primary, var(--color-text));
+}
+
+.chat-settings-header {
+  margin: 0 calc(var(--el-page-x, 20px) * -1);
+}
+
+.chat-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--el-space-3, 12px);
+  margin-top: var(--el-space-5, 24px);
+}
+
+.chat-settings-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--el-space-1, 4px);
+}
+
+.chat-settings-section-head h2 {
+  margin: 0;
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-semibold, 600);
+  line-height: var(--el-line-section, 1.4);
+}
+
+.chat-settings-section-head p {
+  margin: 0;
+  font-size: var(--el-font-caption, 12px);
+  line-height: var(--el-line-support, 1.6);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.chat-settings-card {
+  overflow: hidden;
+  border: 1px solid var(--el-border, var(--color-border));
+  border-radius: var(--el-radius-md, 16px);
+  background: var(--el-surface-card, var(--color-card));
+}
+
+.chat-settings-row {
+  width: 100%;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--el-space-3, 12px);
+  padding: var(--el-space-3, 12px) var(--el-space-4, 16px);
+  border: 0;
+  background: transparent;
+  color: var(--el-text-primary, var(--color-text));
+  font-family: inherit;
+  text-align: left;
+}
+
+.chat-settings-row > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--el-space-1, 4px);
+}
+
+.chat-settings-row strong {
+  font-size: var(--el-font-body, 15px);
+  font-weight: var(--el-weight-semibold, 600);
+}
+
+.chat-settings-row small {
+  font-size: var(--el-font-caption, 12px);
+  line-height: var(--el-line-support, 1.6);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.chat-settings-row > svg {
+  width: var(--el-icon-size, 20px);
+  height: var(--el-icon-size, 20px);
+  flex: none;
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.chat-settings-row:hover {
+  background: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 4%, transparent);
+}
+
+.chat-settings-row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, #fff);
+  outline-offset: -2px;
+}
+
+.chat-settings-refresh-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--el-space-3, 12px);
+  padding: 0 var(--el-space-4, 16px) var(--el-space-4, 16px);
+  border-top: 1px solid var(--el-border-soft, var(--color-border));
+}
+
+.chat-settings-refresh-confirm p {
+  margin: var(--el-space-3, 12px) 0 0;
+  font-size: var(--el-font-support, 13px);
+  line-height: var(--el-line-support, 1.6);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.chat-settings-refresh-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--el-space-2, 8px);
+}
+
+.chat-settings-refresh-actions .btn {
+  min-height: var(--el-control-height, 46px);
+  border-radius: var(--el-radius-md, 16px);
+}
+
 /* ---- Privacy / About --------------------------------------------------- */
 .privacy-detail-card {
   border: 1px solid var(--el-border, var(--color-border));
