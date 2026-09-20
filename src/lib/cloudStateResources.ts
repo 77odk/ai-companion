@@ -10,6 +10,7 @@ import { getAccount } from './sync.ts'
 import { collectAllAIProfiles } from './storage.ts'
 import { getSessionsCache } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
+import { applyReplyLengthFromCloud, collectStoredReplyLengths, deleteReplyLengthFromCloud, type ReplyLength } from './replyLength.ts'
 import { applySpacePostFromCloud, deleteSpacePostFromCloud } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
 import {
@@ -687,6 +688,61 @@ function deleteDefaultRoleEntity(entity: CloudStateEntity): void {
   notifyDataChanged()
 }
 
+interface ReplyLengthEntity {
+  sessionId: string
+  mode: ReplyLength
+}
+
+function replyLengthEntities(): Map<string, ReplyLengthEntity> {
+  const out = new Map<string, ReplyLengthEntity>()
+  const accountId = getAccount()?.account ?? ''
+  if (!accountId) return out
+  const sessionIds = getSessionsCache().map((session) => String(session.id))
+  for (const [sessionId, mode] of collectStoredReplyLengths(accountId, sessionIds)) {
+    out.set(sessionId, { sessionId, mode })
+  }
+  return out
+}
+
+let replyLengthSnapshot = new Map<string, ReplyLengthEntity>()
+
+function resetReplyLengthSnapshot(): void {
+  replyLengthSnapshot = replyLengthEntities()
+}
+
+function captureReplyLengths(): void {
+  const next = replyLengthEntities()
+  for (const [sessionId, value] of next) {
+    const previous = replyLengthSnapshot.get(sessionId)
+    if (!previous || previous.mode !== value.mode) {
+      queue('reply_length', sessionId, { mode: value.mode }, false, sessionId)
+    }
+  }
+  for (const [sessionId, value] of replyLengthSnapshot) {
+    if (!next.has(sessionId)) queue('reply_length', sessionId, undefined, true, value.sessionId)
+  }
+  replyLengthSnapshot = next
+}
+
+function applyReplyLengthEntity(entity: CloudStateEntity): void {
+  const accountId = getAccount()?.account ?? ''
+  const sessionId = entity.sessionId || entity.entityId
+  if (!accountId || !sessionId || entity.entityId !== sessionId) return
+  const mode = applyReplyLengthFromCloud(accountId, sessionId, entity.payload)
+  if (!mode) return
+  replyLengthSnapshot.set(sessionId, { sessionId, mode })
+  notifyDataChanged()
+}
+
+function deleteReplyLengthEntity(entity: CloudStateEntity): void {
+  const accountId = getAccount()?.account ?? ''
+  const sessionId = entity.sessionId || entity.entityId
+  if (!accountId || !sessionId || entity.entityId !== sessionId) return
+  deleteReplyLengthFromCloud(accountId, sessionId)
+  replyLengthSnapshot.delete(sessionId)
+  notifyDataChanged()
+}
+
 let initialized = false
 export function initCloudStateResourceAdapters(): void {
   if (initialized) return
@@ -698,6 +754,7 @@ export function initCloudStateResourceAdapters(): void {
   resetWeeklySnapshot()
   resetProfileSnapshot()
   resetDefaultRoleSnapshot()
+  resetReplyLengthSnapshot()
   registerTaRuntimeCloudSnapshotResetter(resetRuntimeSnapshot)
   registerCloudStateAdapter('theme', {
     apply: applyThemeEntity,
@@ -748,6 +805,10 @@ export function initCloudStateResourceAdapters(): void {
     apply: applyDefaultRoleEntity,
     delete: deleteDefaultRoleEntity,
   })
+  registerCloudStateAdapter('reply_length', {
+    apply: applyReplyLengthEntity,
+    delete: deleteReplyLengthEntity,
+  })
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, capturePersonalDays)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAnniversaries)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureSpacePosts)
@@ -755,5 +816,6 @@ export function initCloudStateResourceAdapters(): void {
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureWeeklyReviews)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAiProfiles)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureDefaultRole)
-  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot(); resetDefaultRoleSnapshot() })
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureReplyLengths)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot(); resetDefaultRoleSnapshot(); resetReplyLengthSnapshot() })
 }
