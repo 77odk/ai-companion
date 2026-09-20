@@ -3,9 +3,10 @@
 // 数据源与 Chat 渲染同源：getMessagesCache + sessionStart 过滤，保证「跳得到的一定是 Chat 会渲染的」。
 
 import type { StoredMessage } from './storage.ts'
-import { getMessagesCache } from './sessionStore.ts'
+import { getMessagesCache, mergeSessionMessages, saveMessagesCache } from './sessionStore.ts'
 import { getSessionStart } from './storage.ts'
 import { filterSessionMessages } from './aiSpaceDetail.ts'
+import { getSession } from './sessionApi.ts'
 
 /** 三态：唯一命中 / 0 命中 / 多次命中（无法确定是哪一次） */
 export type ChatJumpStatus = 'unique' | 'not_found' | 'ambiguous'
@@ -71,6 +72,38 @@ export function findChatJumpTarget(sessionId: string | null, source: string): Ch
  * session 未变 + visibleMessages 中该 ts 存在 + content 与 source 完全一致 + 仍唯一。
  * 只凭 ts 不算数；任何一项不满足都不得滚动。
  */
+
+
+/**
+ * 刷新/换设备后 Memory 页面可能已经恢复了 memory.source，但聊天消息缓存尚未恢复。
+ * 这时先从后端补拉当前 session 的完整消息，写回同一份消息缓存，再重新做 exact-match。
+ * 只在本地 not_found 时补拉；ambiguous 仍保持不猜。
+ */
+export async function findChatJumpTargetHydrated(
+  sessionId: string | null,
+  source: string,
+  token: string | null,
+): Promise<ChatJumpResult> {
+  const local = findChatJumpTarget(sessionId, source)
+  if (local.status !== 'not_found' || !sessionId || !token) return local
+
+  const res = await getSession(token, sessionId)
+  if (!res.ok) return local
+
+  const cloud: StoredMessage[] = res.data.messages
+    .map((message) => ({
+      role: message.role,
+      content: message.content,
+      ts: Date.parse(message.createdAt),
+      thinking: message.thinking,
+    }))
+    .filter((message) => Number.isFinite(message.ts))
+
+  const merged = mergeSessionMessages(getMessagesCache(sessionId), cloud)
+  saveMessagesCache(sessionId, merged)
+  return findChatJumpTarget(sessionId, source)
+}
+
 export function verifyChatJumpTarget(
   target: ChatJumpTarget | null,
   activeSessionId: string | null,
