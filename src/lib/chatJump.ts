@@ -39,14 +39,16 @@ export interface ChatJumpResult {
  * - 只允许 exact equality（trim 后全等），禁止 includes / startsWith / 模糊匹配；
  * - 目标早于 sessionStart 的消息 Chat 不渲染，视为不可跳（按 not_found 处理）。
  */
-export function findChatJumpTarget(sessionId: string | null, source: string): ChatJumpResult {
+function findChatJumpTargetInMessages(
+  sessionId: string | null,
+  source: string,
+  all: StoredMessage[],
+): ChatJumpResult {
   const src = (source ?? '').trim()
   if (!sessionId || !src) return { status: 'not_found', target: null }
 
-  const all = getMessagesCache(sessionId)
   const sessionStart = getSessionStart(sessionId)
   const visible = filterSessionMessages(all, sessionStart)
-
   const matches = visible.filter(
     (m) =>
       m != null &&
@@ -67,12 +69,10 @@ export function findChatJumpTarget(sessionId: string | null, source: string): Ch
   return { status: 'not_found', target: null }
 }
 
-/**
- * Chat 真正滚动前的最终二次校验：
- * session 未变 + visibleMessages 中该 ts 存在 + content 与 source 完全一致 + 仍唯一。
- * 只凭 ts 不算数；任何一项不满足都不得滚动。
- */
-
+export function findChatJumpTarget(sessionId: string | null, source: string): ChatJumpResult {
+  if (!sessionId) return { status: 'not_found', target: null }
+  return findChatJumpTargetInMessages(sessionId, source, getMessagesCache(sessionId))
+}
 
 /**
  * 刷新/换设备后 Memory 页面可能已经恢复了 memory.source，但聊天消息缓存尚未恢复。
@@ -99,11 +99,19 @@ export async function findChatJumpTargetHydrated(
     }))
     .filter((message) => Number.isFinite(message.ts))
 
+  // provenance 的唯一性必须按服务端原始消息判断；不能用 merge 后的列表，
+  // 因为 mergeSessionMessages 会按 role+content 去重，同一句真实说过两次时会把它压成一条。
+  const cloudResult = findChatJumpTargetInMessages(sessionId, source, cloud)
   const merged = mergeSessionMessages(getMessagesCache(sessionId), cloud)
   saveMessagesCache(sessionId, merged)
-  return findChatJumpTarget(sessionId, source)
+  return cloudResult
 }
 
+/**
+ * Chat 真正滚动前的最终二次校验：
+ * session 未变 + visibleMessages 中该 ts 存在 + content 与 source 完全一致 + 仍唯一。
+ * 只凭 ts 不算数；任何一项不满足都不得滚动。
+ */
 export function verifyChatJumpTarget(
   target: ChatJumpTarget | null,
   activeSessionId: string | null,
