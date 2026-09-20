@@ -5,7 +5,7 @@
 //       sessionStart 过滤 / verifyChatJumpTarget 二次校验（ts / content / session / 多命中）
 
 import { readFileSync } from 'node:fs'
-import { findChatJumpTarget, verifyChatJumpTarget } from '../src/lib/chatJump.ts'
+import { findChatJumpTarget, findChatJumpTargetHydrated, verifyChatJumpTarget } from '../src/lib/chatJump.ts'
 import { getMessagesCache, saveMessagesCache } from '../src/lib/sessionStore.ts'
 
 // localStorage / window mock（与现有 test_*.mjs 同款）：storage.ts / sessionStore.ts 在函数体内引用
@@ -201,7 +201,7 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
     'H11 无 session 分支走统一失败路径并消费 pending（不残留 pendingChatJump）',
   )
   ok(
-    failRegion !== null && failRegion.includes("onJumpNotice?.('原对话已不在了')"),
+    failRegion !== null && failRegion.includes("onJumpNotice?.('暂时无法定位原对话')"),
     'H12 无 session 分支给出同样的轻量提示（统一上报 App）',
   )
   ok(
@@ -260,7 +260,7 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
   )
 
   // 失败路径：consume + 上报（App 展示）
-  ok(chatSrc.includes("onJumpNotice?.('原对话已不在了')"), 'J5 失败时上报提示文本')
+  ok(chatSrc.includes("onJumpNotice?.('暂时无法定位原对话')"), 'J5 失败时上报提示文本')
   ok(!chatSrc.includes('showJumpNotice'), 'J6 Chat 不再本地展示 notice')
   ok(!chatSrc.includes('jumpNoticeTimer'), 'J7 Chat 不再本地持 notice timer')
 
@@ -271,6 +271,63 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
     'J9 restoreScroll 在 pending jump 时跳过 chat 的旧位置恢复',
   )
   ok(appSrc.includes('pendingJump={pendingChatJump}') && appSrc.includes('onJumpNotice={showChatJumpNotice}'), 'J10 App 把 pendingJump / notice 回调一起传给 Chat')
+}
+
+
+// ---- K：刷新后本地消息缓存为空 → 从后端补拉当前 session 后再定位 ----
+{
+  resetStore()
+  let calls = 0
+  globalThis.fetch = async (url, init = {}) => {
+    calls++
+    ok(String(url).includes('/api/sessions/A'), 'K1 只补拉当前 session A')
+    ok((init.headers?.Authorization ?? init.headers?.authorization) === 'Bearer token-A', 'K2 携带当前登录 token')
+    return new Response(JSON.stringify({
+      session: { id: 1, title: 'TA', persona: '', created_at: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' },
+      messages: [
+        { id: 1, role: 'user', content: '刷新后也要找得到', createdAt: '2026-09-01T10:00:00.000Z' },
+        { id: 2, role: 'assistant', content: '我记得。', createdAt: '2026-09-01T10:00:01.000Z' },
+      ],
+      memories: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+  const before = findChatJumpTarget('A', '刷新后也要找得到')
+  ok(before.status === 'not_found', 'K3 补拉前本地缓存为空 → not_found')
+  const hydrated = await findChatJumpTargetHydrated('A', '刷新后也要找得到', 'token-A')
+  ok(hydrated.status === 'unique' && hydrated.target?.sessionId === 'A', 'K4 补拉后重新 exact-match → unique')
+  ok(getMessagesCache('A').some((m) => m.role === 'user' && m.content === '刷新后也要找得到'), 'K5 云端消息写回当前 session 缓存')
+  ok(calls === 1, 'K6 只请求一次后端')
+}
+
+// ---- K2：云端原始消息同一句出现两次 → 必须保持 ambiguous，不能被 merge 去重后误判 unique ----
+{
+  resetStore()
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    session: { id: 1, title: 'TA', persona: '', created_at: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' },
+    messages: [
+      { id: 1, role: 'user', content: '这句话说过两次', createdAt: '2026-09-01T10:00:00.000Z' },
+      { id: 2, role: 'assistant', content: '第一次回应', createdAt: '2026-09-01T10:00:01.000Z' },
+      { id: 3, role: 'user', content: '这句话说过两次', createdAt: '2026-09-02T10:00:00.000Z' },
+      { id: 4, role: 'assistant', content: '第二次回应', createdAt: '2026-09-02T10:00:01.000Z' },
+    ],
+    memories: [],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  const hydrated = await findChatJumpTargetHydrated('A', '这句话说过两次', 'token-A')
+  ok(hydrated.status === 'ambiguous' && hydrated.target === null, 'K7 云端原始列表重复 source → ambiguous，不猜哪一次')
+}
+
+// ---- L：本地已经 unique 时不额外请求后端 ----
+{
+  resetStore()
+  saveMessagesCache('A', [uid('本地已经有', 1000)])
+  let called = false
+  globalThis.fetch = async () => {
+    called = true
+    throw new Error('不该请求')
+  }
+  const hydrated = await findChatJumpTargetHydrated('A', '本地已经有', 'token-A')
+  ok(hydrated.status === 'unique', 'L1 本地 unique 直接返回')
+  ok(called === false, 'L2 不浪费一次 session 拉取')
 }
 
 console.log(`\nchatJump: ${passed} passed, ${failed} failed`)

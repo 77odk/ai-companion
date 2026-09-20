@@ -3,9 +3,10 @@
 // 数据源与 Chat 渲染同源：getMessagesCache + sessionStart 过滤，保证「跳得到的一定是 Chat 会渲染的」。
 
 import type { StoredMessage } from './storage.ts'
-import { getMessagesCache } from './sessionStore.ts'
+import { getMessagesCache, mergeSessionMessages, saveMessagesCache } from './sessionStore.ts'
 import { getSessionStart } from './storage.ts'
 import { filterSessionMessages } from './aiSpaceDetail.ts'
+import { getSession } from './sessionApi.ts'
 
 /** 三态：唯一命中 / 0 命中 / 多次命中（无法确定是哪一次） */
 export type ChatJumpStatus = 'unique' | 'not_found' | 'ambiguous'
@@ -38,14 +39,16 @@ export interface ChatJumpResult {
  * - 只允许 exact equality（trim 后全等），禁止 includes / startsWith / 模糊匹配；
  * - 目标早于 sessionStart 的消息 Chat 不渲染，视为不可跳（按 not_found 处理）。
  */
-export function findChatJumpTarget(sessionId: string | null, source: string): ChatJumpResult {
+function findChatJumpTargetInMessages(
+  sessionId: string | null,
+  source: string,
+  all: StoredMessage[],
+): ChatJumpResult {
   const src = (source ?? '').trim()
   if (!sessionId || !src) return { status: 'not_found', target: null }
 
-  const all = getMessagesCache(sessionId)
   const sessionStart = getSessionStart(sessionId)
   const visible = filterSessionMessages(all, sessionStart)
-
   const matches = visible.filter(
     (m) =>
       m != null &&
@@ -64,6 +67,44 @@ export function findChatJumpTarget(sessionId: string | null, source: string): Ch
   }
   if (matches.length > 1) return { status: 'ambiguous', target: null }
   return { status: 'not_found', target: null }
+}
+
+export function findChatJumpTarget(sessionId: string | null, source: string): ChatJumpResult {
+  if (!sessionId) return { status: 'not_found', target: null }
+  return findChatJumpTargetInMessages(sessionId, source, getMessagesCache(sessionId))
+}
+
+/**
+ * 刷新/换设备后 Memory 页面可能已经恢复了 memory.source，但聊天消息缓存尚未恢复。
+ * 这时先从后端补拉当前 session 的完整消息，写回同一份消息缓存，再重新做 exact-match。
+ * 只在本地 not_found 时补拉；ambiguous 仍保持不猜。
+ */
+export async function findChatJumpTargetHydrated(
+  sessionId: string | null,
+  source: string,
+  token: string | null,
+): Promise<ChatJumpResult> {
+  const local = findChatJumpTarget(sessionId, source)
+  if (local.status !== 'not_found' || !sessionId || !token) return local
+
+  const res = await getSession(token, sessionId)
+  if (!res.ok) return local
+
+  const cloud: StoredMessage[] = res.data.messages
+    .map((message) => ({
+      role: message.role,
+      content: message.content,
+      ts: Date.parse(message.createdAt),
+      thinking: message.thinking,
+    }))
+    .filter((message) => Number.isFinite(message.ts))
+
+  // provenance 的唯一性必须按服务端原始消息判断；不能用 merge 后的列表，
+  // 因为 mergeSessionMessages 会按 role+content 去重，同一句真实说过两次时会把它压成一条。
+  const cloudResult = findChatJumpTargetInMessages(sessionId, source, cloud)
+  const merged = mergeSessionMessages(getMessagesCache(sessionId), cloud)
+  saveMessagesCache(sessionId, merged)
+  return cloudResult
 }
 
 /**

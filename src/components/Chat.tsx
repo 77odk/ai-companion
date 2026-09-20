@@ -396,7 +396,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       jumpAtMountRef.current = false
       jumpSuppressRef.current = false
       onJumpConsumed?.()
-      onJumpNotice?.('原对话已不在了')
+      onJumpNotice?.('暂时无法定位原对话')
     }
     if (!activeSessionId) {
       // 无会话：跳不了，同样消费 pending + 提示，避免 pending 残留 / 死状态
@@ -422,7 +422,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       window.setTimeout(() => el.classList.remove('msg-jump-highlight'), 1800)
     } else {
       // 目标节点不存在（数据/渲染异常）：仍要消费 pending 并提示，不滚错位置
-      onJumpNotice?.('原对话已不在了')
+      onJumpNotice?.('暂时无法定位原对话')
     }
     jumpAtMountRef.current = false
     jumpSuppressRef.current = false
