@@ -2713,7 +2713,7 @@
 }
 
 .app:has(.chat-page) .chat-header-planet {
-  right: 12px;
+  right: 56px;
   top: 11px;
   width: 40px;
   height: 40px;
@@ -2727,9 +2727,24 @@
   color: var(--color-text);
 }
 
+.app:has(.chat-page) .chat-header-settings {
+  right: 10px;
+  top: 11px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.app:has(.chat-page) .chat-header-settings:hover {
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+  color: var(--color-text);
+}
+
 .chat-header-identity {
   min-width: 0;
-  max-width: 220px;
+  max-width: min(220px, calc(100vw - 176px));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3002,4 +3017,3 @@
     transition: none;
   }
 }
-
