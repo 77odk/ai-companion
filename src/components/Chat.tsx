@@ -847,12 +847,19 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       if (!t || t === '新会话' || t === '我们的开始') return loadAIProfile(activeSessionId).nickname
       return t
     })()
-    const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined, lang) }]
-    if (activeSessionId) {
-      const accountId = getAccount()?.account ?? ''
-      const replyLength = getEffectiveReplyLength(accountId, activeSessionId)
-      apiMessages.push({ role: 'system', content: buildReplyLengthInstruction(replyLength, lang) })
-    }
+    const accountId = activeSessionId ? (getAccount()?.account ?? '') : ''
+    const replyPreference = activeSessionId
+      ? buildReplyLengthInstruction(getEffectiveReplyLength(accountId, activeSessionId), lang).trim()
+      : ''
+    // 回复偏好并进现有的主 system 文本末尾（不新增第二条 system）；自然档时这一行为空
+    const apiMessages: ApiMessage[] = [
+      {
+        role: 'system',
+        content:
+          buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined, lang) +
+          (replyPreference ? '\n\n' + replyPreference : ''),
+      },
+    ]
 
     const contextText = base
       .slice(-6)

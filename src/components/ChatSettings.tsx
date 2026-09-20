@@ -3,6 +3,7 @@ import { getAccount } from '../lib/sync'
 import { getActiveSessionId, getSessionsCache } from '../lib/sessionStore'
 import { displaySessionName } from '../lib/sessionFlow'
 import { setSessionStart } from '../lib/storage'
+import { notifyDataChanged } from '../lib/dataChange'
 import {
   clearReplyLengthOverride,
   getGlobalReplyLength,
@@ -48,15 +49,17 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
   const refreshConversation = () => {
     if (!sessionId) return
     setSessionStart(Date.now(), sessionId)
+    notifyDataChanged()
     setConfirmRefresh(false)
     onRefreshed()
   }
 
   const options: Array<{ value: LocalChoice; title: string; note: string }> = [
     { value: 'global', title: '跟随全局', note: `现在是「${replyLengthLabel(globalValue)}」` },
-    { value: 'short', title: '短', note: '通常 1–2 句' },
-    { value: 'medium', title: '中', note: '通常 2–4 句' },
-    { value: 'long', title: '长', note: '需要时 4–7 句' },
+    { value: 'natural', title: '自然', note: '不加任何限制，让 TA 自己说' },
+    { value: 'short', title: '短', note: '简短自然，几句话说完' },
+    { value: 'medium', title: '中', note: '不多不少，日常聊天的量' },
+    { value: 'long', title: '长', note: '可以多说一点，按话题自然展开' },
   ]
 
   return (

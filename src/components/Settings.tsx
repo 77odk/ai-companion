@@ -295,9 +295,10 @@ function ReplyLengthDetail({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState('')
 
   const options: Array<{ value: ReplyLength; title: string; note: string }> = [
-    { value: 'short', title: '短', note: '通常 1–2 句，直接一点' },
-    { value: 'medium', title: '中', note: '通常 2–4 句，日常聊天' },
-    { value: 'long', title: '长', note: '需要时 4–7 句，多说一点' },
+    { value: 'natural', title: '自然', note: '不加任何限制，让 TA 自己说（默认）' },
+    { value: 'short', title: '短', note: '简短自然，几句话说完' },
+    { value: 'medium', title: '中', note: '不多不少，日常聊天的量' },
+    { value: 'long', title: '长', note: '可以多说一点，按话题自然展开' },
   ]
 
   const choose = (next: ReplyLength) => {
@@ -315,7 +316,7 @@ function ReplyLengthDetail({ onBack }: { onBack: () => void }) {
       <DetailHeader title="回复长度" onBack={onBack} />
       <div className="reply-length-copy">
         <p className="reply-length-lead">设置所有 TA 默认一次会说多少。</p>
-        <p className="hint">这个偏好会跟账号同步。某个 TA 想单独调整，可以在聊天右上角「聊天设置」里覆盖。</p>
+        <p className="hint">「自然」就是不加任何限制，跟 TA 现在的说法一样。这个偏好会跟账号同步；某个 TA 想单独调整，可以在聊天右上角「聊天设置」里覆盖。</p>
       </div>
 
       <div className="reply-length-options" role="radiogroup" aria-label="全局回复长度">
