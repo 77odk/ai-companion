@@ -14,6 +14,7 @@ import {
   resolveSessionTitle,
   pickNextSessionAfterDelete,
   resolveActiveSession,
+  resolveSessionAfterDelete,
 } from './sessionFlow.ts'
 import type { Session } from './sessionApi.ts'
 
@@ -115,6 +116,46 @@ eq(resolveActiveSession([older, newer], '1')?.id, 1, '已保存会话存在 → 
 eq(resolveActiveSession([older, newer], '99')?.id, 2, '已保存会话不存在 → 安全回退到最近会话')
 eq(resolveActiveSession([older, newer], '')?.id, 2, '没有已保存会话 → 使用现有最近会话默认逻辑')
 eq(resolveActiveSession([], '1'), null, '空列表 → null')
+
+
+
+console.log('\n[10] resolveSessionAfterDelete：只回显式默认角色，不偷偷挑最近')
+{
+  const old = makeSession({ id: 1, updatedAt: '2026-08-01T00:00:00.000Z', title: 'A' })
+  const current = makeSession({ id: 2, updatedAt: '2026-08-20T00:00:00.000Z', title: 'B' })
+  const preferred = makeSession({ id: 3, updatedAt: '2026-07-01T00:00:00.000Z', title: 'C' })
+
+  eq(
+    resolveSessionAfterDelete([old, preferred], '2', '2', '3'),
+    { nextActiveId: '3', destination: 'home', clearDefault: false },
+    '删当前角色 + 默认角色仍存在 → 切回默认并回首页',
+  )
+  eq(
+    resolveSessionAfterDelete([old, preferred], '2', '2', ''),
+    { nextActiveId: '', destination: 'stay', clearDefault: false },
+    '删当前角色 + 未设置默认 → 清 active 留在角色页',
+  )
+  eq(
+    resolveSessionAfterDelete([old, preferred], '2', '2', '99'),
+    { nextActiveId: '', destination: 'stay', clearDefault: true },
+    '删当前角色 + 默认已失效 → 不猜最近，清默认并留在角色页',
+  )
+  eq(
+    resolveSessionAfterDelete([current, preferred], '1', '2', '3'),
+    { nextActiveId: '2', destination: 'stay', clearDefault: false },
+    '删非当前角色 → 保持当前角色，不跳页',
+  )
+  eq(
+    resolveSessionAfterDelete([current, preferred], '1', '2', '1'),
+    { nextActiveId: '2', destination: 'stay', clearDefault: true },
+    '删非当前但它是默认角色 → 只清默认，不切当前',
+  )
+  eq(
+    resolveSessionAfterDelete([], '2', '2', '2'),
+    { nextActiveId: '', destination: 'stay', clearDefault: true },
+    '删掉最后一个且它是默认 → 清 active/默认，留在空角色页',
+  )
+}
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) throw new Error(`${failed} 个用例失败`)
