@@ -7,6 +7,7 @@
 // 做法：关页面/切后台时把已经生成出来的那部分落库，并排进 pendingOps（同步写 localStorage，
 // 不需要网络）；下次打开聊天页时的 flushPendingOps 会把它补传到后端。
 import { loadMessages, saveMessages, type StoredMessage } from './storage.ts'
+import type { ReplyLength } from './replyLength.ts'
 import {
   addPendingOp,
   getMessagesCache,
@@ -29,8 +30,9 @@ export function commitPartialReply(
   ts: number,
   cleanedText: string,
   queue = true,
+  replyLength: ReplyLength = 'medium',
 ): StoredMessage[] {
-  const parts = splitAssistantReplies(cleanedText, ts)
+  const parts = splitAssistantReplies(cleanedText, ts, replyLength)
   if (!parts.length) return []
   const base = sessionId ? getMessagesCache(sessionId) : loadMessages()
   // 替换同 ts 的旧内容（占位空消息 / 之前落过的半截），不是追加
