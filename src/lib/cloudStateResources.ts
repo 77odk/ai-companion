@@ -10,7 +10,7 @@ import { getAccount } from './sync.ts'
 import { collectAllAIProfiles, getSessionStart, setSessionStart } from './storage.ts'
 import { getSessionsCache } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
-import { applyGlobalReplyLengthFromCloud, applyReplyLengthOverrideFromCloud, collectStoredReplyLengthOverrides, deleteGlobalReplyLengthFromCloud, deleteReplyLengthOverrideFromCloud, getStoredGlobalReplyLength, type ReplyLength } from './replyLength.ts'
+import { applyGlobalReplyLengthFromCloud, applyReplyLengthPreferenceFromCloud, collectStoredReplyLengthPreferences, deleteGlobalReplyLengthFromCloud, deleteReplyLengthOverrideFromCloud, getStoredGlobalReplyLength, type ReplyLength } from './replyLength.ts'
 import { applySpacePostFromCloud, deleteSpacePostFromCloud } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
 import {
@@ -691,26 +691,31 @@ function deleteDefaultRoleEntity(entity: CloudStateEntity): void {
 interface ReplyLengthEntity {
   sessionId: string
   mode: ReplyLength
+  followGlobal: boolean
 }
 
-function replyLengthOverrideEntities(): Map<string, ReplyLengthEntity> {
+function replyLengthPreferenceEntities(): Map<string, ReplyLengthEntity> {
   const out = new Map<string, ReplyLengthEntity>()
   const accountId = getAccount()?.account ?? ''
   if (!accountId) return out
   const sessionIds = getSessionsCache().map((session) => String(session.id))
-  for (const [sessionId, mode] of collectStoredReplyLengthOverrides(accountId, sessionIds)) {
-    out.set(sessionId, { sessionId, mode })
+  for (const [sessionId, preference] of collectStoredReplyLengthPreferences(accountId, sessionIds)) {
+    out.set(sessionId, {
+      sessionId,
+      mode: preference.mode,
+      followGlobal: preference.followGlobal,
+    })
   }
   return out
 }
 
 let globalReplyLengthSnapshot: ReplyLength | null = null
-let replyLengthOverrideSnapshot = new Map<string, ReplyLengthEntity>()
+let replyLengthPreferenceSnapshot = new Map<string, ReplyLengthEntity>()
 
 function resetReplyLengthSnapshot(): void {
   const accountId = getAccount()?.account ?? ''
   globalReplyLengthSnapshot = accountId ? getStoredGlobalReplyLength(accountId) : null
-  replyLengthOverrideSnapshot = replyLengthOverrideEntities()
+  replyLengthPreferenceSnapshot = replyLengthPreferenceEntities()
 }
 
 function captureReplyLengths(): void {
@@ -724,17 +729,23 @@ function captureReplyLengths(): void {
     globalReplyLengthSnapshot = nextGlobal
   }
 
-  const next = replyLengthOverrideEntities()
+  const next = replyLengthPreferenceEntities()
   for (const [sessionId, value] of next) {
-    const previous = replyLengthOverrideSnapshot.get(sessionId)
-    if (!previous || previous.mode !== value.mode) {
-      queue('reply_length', sessionId, { mode: value.mode }, false, sessionId)
+    const previous = replyLengthPreferenceSnapshot.get(sessionId)
+    if (!previous || previous.mode !== value.mode || previous.followGlobal !== value.followGlobal) {
+      queue(
+        'reply_length',
+        sessionId,
+        { mode: value.mode, followGlobal: value.followGlobal },
+        false,
+        sessionId,
+      )
     }
   }
-  for (const [sessionId, value] of replyLengthOverrideSnapshot) {
+  for (const [sessionId, value] of replyLengthPreferenceSnapshot) {
     if (!next.has(sessionId)) queue('reply_length', sessionId, undefined, true, value.sessionId)
   }
-  replyLengthOverrideSnapshot = next
+  replyLengthPreferenceSnapshot = next
 }
 
 function applyGlobalReplyLengthEntity(entity: CloudStateEntity): void {
@@ -760,9 +771,13 @@ function applyReplyLengthEntity(entity: CloudStateEntity): void {
   const accountId = getAccount()?.account ?? ''
   const sessionId = entity.sessionId || entity.entityId
   if (!accountId || !sessionId || entity.entityId !== sessionId) return
-  const mode = applyReplyLengthOverrideFromCloud(accountId, sessionId, entity.payload)
-  if (!mode) return
-  replyLengthOverrideSnapshot.set(sessionId, { sessionId, mode })
+  const preference = applyReplyLengthPreferenceFromCloud(accountId, sessionId, entity.payload)
+  if (!preference) return
+  replyLengthPreferenceSnapshot.set(sessionId, {
+    sessionId,
+    mode: preference.mode,
+    followGlobal: preference.followGlobal,
+  })
   notifyDataChanged()
 }
 
@@ -771,7 +786,7 @@ function deleteReplyLengthEntity(entity: CloudStateEntity): void {
   const sessionId = entity.sessionId || entity.entityId
   if (!accountId || !sessionId || entity.entityId !== sessionId) return
   deleteReplyLengthOverrideFromCloud(accountId, sessionId)
-  replyLengthOverrideSnapshot.delete(sessionId)
+  replyLengthPreferenceSnapshot.delete(sessionId)
   notifyDataChanged()
 }
 
