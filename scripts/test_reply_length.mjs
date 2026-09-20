@@ -1,4 +1,4 @@
-// #12 回复长度：每 TA 独立 + Cloud State + 主聊天注入回归
+// #12 回复长度：账号级全局 + 单 TA 覆盖 + Cloud State + 聊天设置回归
 import { readFileSync } from 'node:fs'
 
 const mem = new Map()
@@ -11,14 +11,19 @@ globalThis.localStorage = {
 globalThis.window = new EventTarget()
 
 const {
-  DEFAULT_REPLY_LENGTH,
-  getReplyLength,
-  getStoredReplyLength,
-  saveReplyLength,
-  clearReplyLength,
-  applyReplyLengthFromCloud,
-  deleteReplyLengthFromCloud,
-  collectStoredReplyLengths,
+  DEFAULT_GLOBAL_REPLY_LENGTH,
+  getStoredGlobalReplyLength,
+  getGlobalReplyLength,
+  saveGlobalReplyLength,
+  applyGlobalReplyLengthFromCloud,
+  deleteGlobalReplyLengthFromCloud,
+  getReplyLengthOverride,
+  saveReplyLengthOverride,
+  clearReplyLengthOverride,
+  getEffectiveReplyLength,
+  applyReplyLengthOverrideFromCloud,
+  deleteReplyLengthOverrideFromCloud,
+  collectStoredReplyLengthOverrides,
   replyLengthLabel,
   buildReplyLengthInstruction,
 } = await import('../src/lib/replyLength.ts')
@@ -33,64 +38,78 @@ function check(name, cond, detail = '') {
   }
 }
 
-console.log('\n[1] 默认值 + 账号/角色隔离')
+console.log('\n[1] 全局：账号级、默认短、显式设置可持久化')
 mem.clear()
-check('默认值是 medium', DEFAULT_REPLY_LENGTH === 'medium')
-check('未设置 A/1 → medium', getReplyLength('A', '1') === 'medium')
-check('未设置不伪造显式值', getStoredReplyLength('A', '1') === null)
-check('A/1 可设 short', saveReplyLength('A', '1', 'short') === true)
-check('A/1 读回 short', getReplyLength('A', '1') === 'short')
-check('A/2 不串 A/1', getReplyLength('A', '2') === 'medium')
-check('B/1 不串 A/1', getReplyLength('B', '1') === 'medium')
-check('A/2 可独立设 long', saveReplyLength('A', '2', 'long') === true)
-check('A/2 读回 long', getReplyLength('A', '2') === 'long')
-check('A/1 仍是 short', getReplyLength('A', '1') === 'short')
+check('默认全局是 short', DEFAULT_GLOBAL_REPLY_LENGTH === 'short')
+check('未设置 A → short', getGlobalReplyLength('A') === 'short')
+check('未设置不伪造 stored 值', getStoredGlobalReplyLength('A') === null)
+check('A 全局可设 long', saveGlobalReplyLength('A', 'long') === true)
+check('A 读回 long', getGlobalReplyLength('A') === 'long')
+check('B 不串 A', getGlobalReplyLength('B') === 'short')
+check('B 可设 medium', saveGlobalReplyLength('B', 'medium') === true)
+check('A 仍是 long', getGlobalReplyLength('A') === 'long')
 
-console.log('\n[2] 中也是显式选择，可跨设备保持')
-check('A/3 可显式设 medium', saveReplyLength('A', '3', 'medium') === true)
-check('A/3 stored 为 medium', getStoredReplyLength('A', '3') === 'medium')
-const collected = collectStoredReplyLengths('A', ['1', '2', '3', '4'])
-check('collect 收到 3 个显式设置', collected.size === 3)
-check('collect 值正确', collected.get('1') === 'short' && collected.get('2') === 'long' && collected.get('3') === 'medium')
+console.log('\n[2] 单 TA override：override > global；无 override 实时继承')
+check('A/1 无 override', getReplyLengthOverride('A', '1') === null)
+check('A/1 继承 global long', getEffectiveReplyLength('A', '1') === 'long')
+check('A/1 可覆盖 short', saveReplyLengthOverride('A', '1', 'short') === true)
+check('A/1 生效 short', getEffectiveReplyLength('A', '1') === 'short')
+check('A/2 仍继承 long', getEffectiveReplyLength('A', '2') === 'long')
+check('B/1 不串 A/1', getReplyLengthOverride('B', '1') === null)
+check('改 A 全局 medium', saveGlobalReplyLength('A', 'medium') === true)
+check('A/2 自动跟到 medium', getEffectiveReplyLength('A', '2') === 'medium')
+check('A/1 覆盖仍保持 short', getEffectiveReplyLength('A', '1') === 'short')
+clearReplyLengthOverride('A', '1')
+check('A/1 跟随全局 = 删除 override', getReplyLengthOverride('A', '1') === null)
+check('删除 override 后实时继承 medium', getEffectiveReplyLength('A', '1') === 'medium')
 
-console.log('\n[3] clear / cloud apply-delete')
-clearReplyLength('A', '1')
-check('clear 后回默认 medium', getReplyLength('A', '1') === 'medium')
-check('cloud apply long', applyReplyLengthFromCloud('A', '1', { mode: 'long' }) === 'long')
-check('cloud apply 后 A/1=long', getReplyLength('A', '1') === 'long')
-check('坏 cloud payload 忽略', applyReplyLengthFromCloud('A', '1', { mode: 'huge' }) === null)
-check('坏 payload 不覆盖现值', getReplyLength('A', '1') === 'long')
-deleteReplyLengthFromCloud('A', '1')
-check('cloud delete 后回默认', getReplyLength('A', '1') === 'medium')
-check('cloud delete 不影响 A/2', getReplyLength('A', '2') === 'long')
+console.log('\n[3] Cloud State apply/delete：全局和单 TA 分层')
+check('cloud apply global long', applyGlobalReplyLengthFromCloud('A', { mode: 'long' }) === 'long')
+check('cloud global 恢复后 A=long', getGlobalReplyLength('A') === 'long')
+check('cloud apply A/2 short', applyReplyLengthOverrideFromCloud('A', '2', { mode: 'short' }) === 'short')
+check('cloud override 优先', getEffectiveReplyLength('A', '2') === 'short')
+check('坏 payload 不覆盖', applyReplyLengthOverrideFromCloud('A', '2', { mode: 'huge' }) === null && getEffectiveReplyLength('A', '2') === 'short')
+deleteReplyLengthOverrideFromCloud('A', '2')
+check('cloud delete override → 回 global', getEffectiveReplyLength('A', '2') === 'long')
+deleteGlobalReplyLengthFromCloud('A')
+check('cloud delete global → 回默认 short', getGlobalReplyLength('A') === 'short')
 
-console.log('\n[4] 文案 contract')
+console.log('\n[4] collect 只收显式单 TA override')
+saveReplyLengthOverride('A', '1', 'medium')
+saveReplyLengthOverride('A', '3', 'long')
+const collected = collectStoredReplyLengthOverrides('A', ['1', '2', '3'])
+check('只收两个 override', collected.size === 2)
+check('override 值正确', collected.get('1') === 'medium' && collected.get('3') === 'long')
+
+console.log('\n[5] 文案 contract')
 check('标签短中长', replyLengthLabel('short') === '短' && replyLengthLabel('medium') === '中' && replyLengthLabel('long') === '长')
-const zhShort = buildReplyLengthInstruction('short', 'zh')
-const zhMedium = buildReplyLengthInstruction('medium', 'zh')
-const zhLong = buildReplyLengthInstruction('long', 'zh')
-check('短明确 1–2 句', zhShort.includes('1–2 句'))
-check('中明确 2–4 句', zhMedium.includes('2–4 句'))
-check('长明确 4–7 句', zhLong.includes('4–7 句'))
-check('长模式禁止灌水重复', zhLong.includes('不灌水') && zhLong.includes('不重复'))
+check('短明确 1–2 句', buildReplyLengthInstruction('short', 'zh').includes('1–2 句'))
+check('中明确 2–4 句', buildReplyLengthInstruction('medium', 'zh').includes('2–4 句'))
+check('长明确 4–7 句', buildReplyLengthInstruction('long', 'zh').includes('4–7 句'))
 check('英文三档都有 Reply length', ['short','medium','long'].every((v) => buildReplyLengthInstruction(v, 'en').includes('[Reply length]')))
 
-console.log('\n[5] 源码契约')
+console.log('\n[6] 源码 contract：全局入口 + 聊天设置 + refresh 搬迁')
 const chatSrc = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
 const settingsSrc = readFileSync(new URL('../src/components/Settings.tsx', import.meta.url), 'utf8')
+const chatSettingsSrc = readFileSync(new URL('../src/components/ChatSettings.tsx', import.meta.url), 'utf8')
+const profileSrc = readFileSync(new URL('../src/components/ChatProfile.tsx', import.meta.url), 'utf8')
+const appSrc = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 const storeSrc = readFileSync(new URL('../src/lib/sessionStore.ts', import.meta.url), 'utf8')
 const cloudSrc = readFileSync(new URL('../src/lib/cloudStateResources.ts', import.meta.url), 'utf8')
-const rolesSrc = readFileSync(new URL('../src/components/RolesPage.tsx', import.meta.url), 'utf8')
 
-check('Chat 读取当前角色 reply length', chatSrc.includes('getReplyLength(accountId, activeSessionId)'))
-check('Chat 追加独立 system 长度指令', chatSrc.includes("apiMessages.push({ role: 'system', content: buildReplyLengthInstruction(replyLength, lang) })"))
-check('没有把长度塞进 persona/buildSystemPrompt 参数', !/buildSystemPrompt\([^\n]*replyLength/.test(chatSrc))
-check('Settings 关于 TA 有回复长度入口', settingsSrc.includes('label="回复长度"') && settingsSrc.includes('ReplyLengthDetail'))
-check('三档 UI 都存在', settingsSrc.includes("value: 'short'") && settingsSrc.includes("value: 'medium'") && settingsSrc.includes("value: 'long'"))
-check('Cloud State 注册 reply_length', cloudSrc.includes("registerCloudStateAdapter('reply_length'"))
-check('Cloud queue 带 session scope', cloudSrc.includes("queue('reply_length', sessionId, { mode: value.mode }, false, sessionId)"))
-check('删除角色会清 reply length', rolesSrc.includes('clearReplyLength(accountId, id)'))
-check('splitAssistantReplies 签名未被回复长度污染', /export function splitAssistantReplies\(content: string, ts: number\)/.test(storeSrc))
+check('Chat 用 effective（override > global）', chatSrc.includes('getEffectiveReplyLength(accountId, activeSessionId)'))
+check('Chat 追加独立 system 指令', chatSrc.includes("buildReplyLengthInstruction(replyLength, lang)"))
+check('我的→关于 TA 有全局回复长度', settingsSrc.includes('设置所有 TA 默认一次会说多少') && settingsSrc.includes('saveGlobalReplyLength'))
+check('聊天设置有跟随全局', chatSettingsSrc.includes("'global'") && chatSettingsSrc.includes('clearReplyLengthOverride'))
+check('聊天设置有短中长', chatSettingsSrc.includes("value: 'short'") && chatSettingsSrc.includes("value: 'medium'") && chatSettingsSrc.includes("value: 'long'"))
+check('聊天设置接管刷新对话', chatSettingsSrc.includes('setSessionStart(Date.now(), sessionId)') && chatSettingsSrc.includes('刷新对话'))
+check('TA 资料页不再承载刷新对话', !profileSrc.includes('setSessionStart') && !profileSrc.includes('确认刷新'))
+check('Chat 顶栏有齿轮入口', appSrc.includes('className="chat-header-settings"') && appSrc.includes("goView('chatsettings')"))
+check('Cloud State 注册 global', cloudSrc.includes("registerCloudStateAdapter('reply_length_global'"))
+check('Cloud State 注册 per-role override', cloudSrc.includes("registerCloudStateAdapter('reply_length'"))
+check('全局 queue 无 session scope', cloudSrc.includes("queue('reply_length_global', GLOBAL"))
+check('override queue 带 session scope', cloudSrc.includes("queue('reply_length', sessionId, { mode: value.mode }, false, sessionId)"))
+check('splitAssistantReplies 签名没被长度设置污染', /export function splitAssistantReplies\(content: string, ts: number\)/.test(storeSrc))
 check('拆泡仍维持原 60 目标', (storeSrc.match(/chunkText\([^\n]*, 60\)/g) || []).length >= 2)
 
 console.log(`\n结果：${passed} passed, ${failed} failed`)
