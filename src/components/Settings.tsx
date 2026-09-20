@@ -51,7 +51,7 @@ import {
 import { listSessions, patchSession, type Session } from '../lib/sessionApi'
 import { getActiveSessionId, getSessionsCache, setSessionsCache } from '../lib/sessionStore'
 import { forceRefresh } from '../lib/forceRefresh'
-import { getReplyLength, replyLengthLabel, saveReplyLength, type ReplyLength } from '../lib/replyLength'
+import { getGlobalReplyLength, replyLengthLabel, saveGlobalReplyLength, type ReplyLength } from '../lib/replyLength'
 import {
   patchSessionInList,
   resolveRoleName,
@@ -210,8 +210,7 @@ function MainCenter({
   const modelLabel = settings.providers[activeProvider]?.model?.trim() || '未设置'
   const accountLabel = getAccount()?.account ?? null
   const loggedIn = isLoggedIn()
-  const activeSessionId = getActiveSessionId()
-  const replyLength = getReplyLength(accountLabel ?? '', activeSessionId)
+  const replyLength = getGlobalReplyLength(accountLabel ?? '')
 
   const handleLogout = () => {
     if (!window.confirm('退出登录后，本地记录不会丢；下次登录同一账号就能找回来。确定退出吗？')) return
@@ -250,9 +249,8 @@ function MainCenter({
         <EntryRow
           icon={<ReplyLengthIcon />}
           label="回复长度"
-          status={activeSessionId ? replyLengthLabel(replyLength) : '先选择 TA'}
+          status={replyLengthLabel(replyLength)}
           onClick={onOpenReply}
-          disabled={!activeSessionId}
         />
         {onGoRoles && <EntryRow icon={<RolesIcon />} label="角色管理" status="进阶" onClick={onGoRoles} />}
       </ProfileGroup>
@@ -293,19 +291,18 @@ function MainCenter({
 
 function ReplyLengthDetail({ onBack }: { onBack: () => void }) {
   const accountId = getAccount()?.account ?? ''
-  const sessionId = getActiveSessionId()
-  const [value, setValue] = useState<ReplyLength>(() => getReplyLength(accountId, sessionId))
+  const [value, setValue] = useState<ReplyLength>(() => getGlobalReplyLength(accountId))
   const [error, setError] = useState('')
 
   const options: Array<{ value: ReplyLength; title: string; note: string }> = [
     { value: 'short', title: '短', note: '通常 1–2 句，直接一点' },
-    { value: 'medium', title: '中', note: '通常 2–4 句，日常默认' },
+    { value: 'medium', title: '中', note: '通常 2–4 句，日常聊天' },
     { value: 'long', title: '长', note: '需要时 4–7 句，多说一点' },
   ]
 
   const choose = (next: ReplyLength) => {
-    if (!accountId || !sessionId) return
-    if (!saveReplyLength(accountId, sessionId, next)) {
+    if (!accountId) return
+    if (!saveGlobalReplyLength(accountId, next)) {
       setError('没有保存成功，稍后再试一下')
       return
     }
@@ -317,11 +314,11 @@ function ReplyLengthDetail({ onBack }: { onBack: () => void }) {
     <div className="page settings-page reply-length-page">
       <DetailHeader title="回复长度" onBack={onBack} />
       <div className="reply-length-copy">
-        <p className="reply-length-lead">设置当前 TA 平时一次会说多少。</p>
-        <p className="hint">只影响回复总长度，不会改变 TA 的人设、记忆和聊天气泡拆分方式。</p>
+        <p className="reply-length-lead">设置所有 TA 默认一次会说多少。</p>
+        <p className="hint">这个偏好会跟账号同步。某个 TA 想单独调整，可以在聊天右上角「聊天设置」里覆盖。</p>
       </div>
 
-      <div className="reply-length-options" role="radiogroup" aria-label="回复长度">
+      <div className="reply-length-options" role="radiogroup" aria-label="全局回复长度">
         {options.map((option) => {
           const selected = option.value === value
           return (
