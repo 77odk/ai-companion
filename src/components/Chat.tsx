@@ -44,7 +44,7 @@ import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYou
 import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTaRuntimeFromAssistantText } from '../lib/taRuntime'
 import { buildIdentityContext } from '../lib/identityContext'
 import { dropRepeatedReplies } from '../lib/replyDedupe'
-import { buildReplyLengthInstruction, getReplyLength } from '../lib/replyLength'
+import { buildReplyLengthInstruction, getEffectiveReplyLength } from '../lib/replyLength'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -850,7 +850,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined, lang) }]
     if (activeSessionId) {
       const accountId = getAccount()?.account ?? ''
-      const replyLength = getReplyLength(accountId, activeSessionId)
+      const replyLength = getEffectiveReplyLength(accountId, activeSessionId)
       apiMessages.push({ role: 'system', content: buildReplyLengthInstruction(replyLength, lang) })
     }
 
