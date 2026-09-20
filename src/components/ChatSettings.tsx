@@ -3,6 +3,7 @@ import { getAccount } from '../lib/sync'
 import { getActiveSessionId, getSessionsCache } from '../lib/sessionStore'
 import { displaySessionName } from '../lib/sessionFlow'
 import { setSessionStart } from '../lib/storage'
+import { notifyDataChanged } from '../lib/dataChange'
 import {
   clearReplyLengthOverride,
   getGlobalReplyLength,
@@ -48,6 +49,7 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
   const refreshConversation = () => {
     if (!sessionId) return
     setSessionStart(Date.now(), sessionId)
+    notifyDataChanged()
     setConfirmRefresh(false)
     onRefreshed()
   }
