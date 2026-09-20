@@ -140,6 +140,26 @@ const PlanetIcon = () => (
   </svg>
 )
 
+/** 星环（聊天页右上角 TA 资料入口图标，2026-09-20 七七选定：外环轨道上的小圆改实心）
+ *  来源：lucide-icons/lucide（MIT）orbit 图标，两个小圆由描边改成实心 */
+const OrbitRingIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M20.341 6.484A10 10 0 0 1 10.266 21.85" />
+    <path d="M3.659 17.516A10 10 0 0 1 13.74 2.152" />
+    <circle cx="12" cy="12" r="3" />
+    <circle cx="19" cy="5" r="2" fill="currentColor" />
+    <circle cx="5" cy="19" r="2" fill="currentColor" />
+  </svg>
+)
+
 export {
   ChatIcon,
   HeartIcon,
@@ -150,4 +170,5 @@ export {
   NotebookIcon,
   EntryChevron,
   PlanetIcon,
+  OrbitRingIcon,
 }

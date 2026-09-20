@@ -13,7 +13,7 @@ import LoginGate from './components/LoginGate'
 import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
 import { getAccount } from './lib/sync'
 import RolesPage from './components/RolesPage'
-import { PlanetIcon } from './components/spaceIcons'
+import { OrbitRingIcon } from './components/spaceIcons'
 import type { ChatJumpTarget, MemoryReturnTarget } from './lib/chatJump'
 import {
   loadMessages,
@@ -729,7 +729,7 @@ export default function App() {
                   aria-label="打开 TA 的资料卡"
                   title="TA 的资料卡"
                 >
-                  <PlanetIcon />
+                  <OrbitRingIcon />
                 </button>
               )}
               {view === 'chat' && loggedIn && (
