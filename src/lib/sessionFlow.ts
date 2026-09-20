@@ -70,6 +70,56 @@ export function pickNextSessionAfterDelete(sessions: Session[], deletedId: strin
   return pickMostRecentSession(rest)
 }
 
+export interface DeleteSessionResolution {
+  nextActiveId: string
+  destination: 'home' | 'stay'
+  clearDefault: boolean
+}
+
+/**
+ * 删除角色后的导航：
+ * - 删除的不是当前角色：保持当前角色，不跳页；若删的是默认角色，只清默认标记。
+ * - 删除的是当前角色：只允许回到仍存在的显式默认角色；没有有效默认角色就清 active 并停留角色管理页。
+ * 绝不按“最近会话”偷偷替用户选一个 TA。
+ */
+export function resolveSessionAfterDelete(
+  sessions: Session[],
+  deletedId: string | number,
+  activeId: string | number | null | undefined,
+  defaultRoleId: string | number | null | undefined,
+): DeleteSessionResolution {
+  const deleted = String(deletedId)
+  const active = String(activeId ?? '')
+  const preferred = String(defaultRoleId ?? '')
+  const remaining = (Array.isArray(sessions) ? sessions : []).filter((session) => String(session.id) !== deleted)
+  const validDefault = preferred
+    ? remaining.find((session) => String(session.id) === preferred)
+    : undefined
+  const clearDefault = Boolean(preferred) && (!validDefault || preferred === deleted)
+
+  if (active !== deleted) {
+    return {
+      nextActiveId: active,
+      destination: 'stay',
+      clearDefault,
+    }
+  }
+
+  if (validDefault) {
+    return {
+      nextActiveId: String(validDefault.id),
+      destination: 'home',
+      clearDefault: false,
+    }
+  }
+
+  return {
+    nextActiveId: '',
+    destination: 'stay',
+    clearDefault,
+  }
+}
+
 /** 会话时间戳：updatedAt 优先，缺省用 created_at；都解析失败返回 0（最旧） */
 export function sessionTimestamp(s: Session): number {
   const updated = Date.parse(s.updatedAt)
