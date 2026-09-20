@@ -1,13 +1,14 @@
 import { notifyDataChanged } from './dataChange.ts'
 import type { Lang } from './langDetect.ts'
+import type { StoredMessage } from './storage.ts'
 
 /**
  * 回复长度偏好（2026-09-20 重做，取代「短/中/长 + 句数硬规定」版）
  *
  * 设计口径（七七拍板）：
- * - 四档：natural（自然）/ short / medium / long。默认 natural = 什么都不注入，
+ * - 四档：natural（自然）/ short（简洁）/ medium（适中）/ long（详细）。默认 natural = 什么都不注入，
  *   升级前后聊天体感完全不变——用户没动过设置就永远不受影响。
- * - 只有用户主动选了 short/medium/long 才注入一行「【回复偏好】…」，而且只说篇幅感，
+ * - 只有用户主动选了简洁/适中/详细才注入一行「【回复偏好】…」，而且只说展开程度，
  *   不写句数、不写字数、不写上限目标。
  * - 「自然」= 没有显式值（全局）；单 TA 的「自然」= 一个明确的 override 值，
  *   用来在全局设了 non-natural 时让某个 TA 回到自然；「跟随全局」= 没有 override。
@@ -189,9 +190,9 @@ export function collectStoredReplyLengthOverrides(
 }
 
 export function replyLengthLabel(value: ReplyLength): string {
-  if (value === 'short') return '短'
-  if (value === 'medium') return '中'
-  if (value === 'long') return '长'
+  if (value === 'short') return '简洁'
+  if (value === 'medium') return '适中'
+  if (value === 'long') return '详细'
   return '自然'
 }
 
@@ -201,13 +202,122 @@ export function replyLengthLabel(value: ReplyLength): string {
  */
 export function buildReplyLengthInstruction(value: ReplyLength, lang: Lang = 'zh'): string {
   if (lang === 'en') {
-    if (value === 'short') return 'Reply preference: keep it short and natural, a few sentences is plenty.'
-    if (value === 'medium') return 'Reply preference: keep a moderate length.'
-    if (value === 'long') return 'Reply preference: feel free to say a bit more and let it flow with the topic.'
+    if (value === 'short') return '[Reply preference] Keep the reply concise and natural; skip unnecessary elaboration.'
+    if (value === 'medium') return '[Reply preference] Use a moderate level of detail; say what needs to be said without stretching it out.'
+    if (value === 'long') return '[Reply preference] Feel free to develop the reply more fully and include relevant details and thoughts, without repeating yourself or padding it with unrelated content.'
     return ''
   }
-  if (value === 'short') return '【回复偏好】简短自然，几句话说完。'
-  if (value === 'medium') return '【回复偏好】保持适中长度。'
-  if (value === 'long') return '【回复偏好】可以多说一点，按话题自然展开。'
+  if (value === 'short') return '【回复偏好】回复简洁自然，省掉不必要的展开。'
+  if (value === 'medium') return '【回复偏好】保持适中的展开程度，把该说的说完整，不必刻意拉长。'
+  if (value === 'long') return '【回复偏好】可以更充分地展开，把相关细节和想法说完整，但不要为了变长重复或堆无关内容。'
   return ''
+}
+
+
+/**
+ * 「详细」模式的展示拆分：
+ * - 正常长度的一整段优先保留成一个气泡，不沿用普通聊天的 60 字 / 一句一泡节奏；
+ * - 模型本身分了自然段，就按自然段保留；
+ * - 只有单个自然段真的很长时，才在完整句子/自然停顿处做少量拆分。
+ *
+ * 这里的阈值只是 UI 防护，不进入 prompt，也不代表 TA 必须写到某个字数。
+ */
+const DETAILED_BUBBLE_SOFT_LIMIT = 420
+const DETAILED_SENT_END = '。！？!?…'
+const DETAILED_PAUSE = '，、；：,;:'
+
+function detailedSentenceUnits(text: string): string[] {
+  const units: string[] = []
+  let start = 0
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    const isEnglishPeriod = ch === '.' && (i === text.length - 1 || /\s/.test(text[i + 1]))
+    if (DETAILED_SENT_END.includes(ch) || isEnglishPeriod) {
+      const unit = text.slice(start, i + 1).trim()
+      if (unit) units.push(unit)
+      start = i + 1
+    }
+  }
+  const tail = text.slice(start).trim()
+  if (tail) units.push(tail)
+  return units
+}
+
+function splitOversizedDetailedUnit(text: string, limit: number): string[] {
+  const input = text.trim()
+  if (!input || input.length <= limit) return input ? [input] : []
+
+  const result: string[] = []
+  let rest = input
+  while (rest.length > limit) {
+    const window = rest.slice(0, limit)
+    let breakPos = -1
+    for (let i = window.length - 1; i >= Math.floor(limit * 0.55); i--) {
+      const ch = window[i]
+      if (DETAILED_PAUSE.includes(ch) || /\s/.test(ch)) {
+        breakPos = i + 1
+        break
+      }
+    }
+    if (breakPos < 0) {
+      for (let i = limit; i < rest.length; i++) {
+        const ch = rest[i]
+        if (DETAILED_SENT_END.includes(ch) || DETAILED_PAUSE.includes(ch) || /\s/.test(ch)) {
+          breakPos = i + 1
+          break
+        }
+      }
+    }
+    // 连续长 token / 没有自然断点：宁可保留整段，也不硬切词。
+    if (breakPos < 0) {
+      result.push(rest)
+      rest = ''
+      break
+    }
+    const piece = rest.slice(0, breakPos).trim()
+    if (piece) result.push(piece)
+    rest = rest.slice(breakPos).trim()
+  }
+  if (rest) result.push(rest)
+  return result
+}
+
+function splitDetailedParagraph(paragraph: string): string[] {
+  const text = paragraph.trim()
+  if (!text) return []
+  if (text.length <= DETAILED_BUBBLE_SOFT_LIMIT) return [text]
+
+  const units = detailedSentenceUnits(text)
+  if (units.length <= 1) return splitOversizedDetailedUnit(text, DETAILED_BUBBLE_SOFT_LIMIT)
+
+  const chunks: string[] = []
+  let current = ''
+  for (const unit of units) {
+    if (!current) {
+      current = unit
+      continue
+    }
+    const candidate = `${current}${/^[A-Za-z0-9]/.test(unit) ? ' ' : ''}${unit}`
+    if (candidate.length <= DETAILED_BUBBLE_SOFT_LIMIT) {
+      current = candidate
+      continue
+    }
+    chunks.push(...splitOversizedDetailedUnit(current, DETAILED_BUBBLE_SOFT_LIMIT))
+    current = unit
+  }
+  if (current) chunks.push(...splitOversizedDetailedUnit(current, DETAILED_BUBBLE_SOFT_LIMIT))
+  return chunks
+}
+
+export function splitDetailedAssistantReply(content: string, ts: number): StoredMessage[] {
+  const text = String(content ?? '').trim()
+  if (!text) return []
+
+  const paragraphs = text
+    .split(/\n\s*\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+
+  const pieces = (paragraphs.length > 0 ? paragraphs : [text]).flatMap(splitDetailedParagraph)
+  return pieces.map((piece) => ({ role: 'assistant' as const, content: piece, ts }))
 }
