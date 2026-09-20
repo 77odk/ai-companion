@@ -51,6 +51,7 @@ import {
 import { listSessions, patchSession, type Session } from '../lib/sessionApi'
 import { getActiveSessionId, getSessionsCache, setSessionsCache } from '../lib/sessionStore'
 import { forceRefresh } from '../lib/forceRefresh'
+import { getReplyLength, replyLengthLabel, saveReplyLength, type ReplyLength } from '../lib/replyLength'
 import {
   patchSessionInList,
   resolveRoleName,
@@ -61,7 +62,7 @@ import {
 type TestState = 'idle' | 'testing' | 'success' | 'error'
 
 /** 设置页子页：使用指南已抽成 App 独立 view（guide），不再嵌在这里 */
-export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary' | 'profile' | 'privacy'
+export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary' | 'profile' | 'privacy' | 'reply'
 
 interface Props {
   onGoWelcome?: () => void
@@ -103,6 +104,9 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
   if (page === 'privacy') {
     return <PrivacyDetail onBack={() => setPage('main')} />
   }
+  if (page === 'reply') {
+    return <ReplyLengthDetail onBack={() => setPage('main')} />
+  }
   if (page === 'about') {
     return <AboutDetail onBack={() => setPage('main')} onGoWelcome={onGoWelcome} />
   }
@@ -133,6 +137,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenAbout={() => setPage('about')}
       onOpenAppearance={() => setPage('appearance')}
       onOpenAnniversary={() => setPage('anniversary')}
+      onOpenReply={() => setPage('reply')}
       onGoRoles={() => onGoRoles?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
       onGoProfile={() => onGoProfile?.()}
@@ -178,6 +183,7 @@ function MainCenter({
   onOpenAbout,
   onOpenAppearance,
   onOpenAnniversary,
+  onOpenReply,
   onGoRoles,
   onGoAboutMe,
   onGoProfile,
@@ -191,6 +197,7 @@ function MainCenter({
   onOpenAbout: () => void
   onOpenAppearance: () => void
   onOpenAnniversary: () => void
+  onOpenReply: () => void
   onGoRoles?: () => void
   onGoAboutMe?: () => void
   onGoProfile?: () => void
@@ -203,6 +210,8 @@ function MainCenter({
   const modelLabel = settings.providers[activeProvider]?.model?.trim() || '未设置'
   const accountLabel = getAccount()?.account ?? null
   const loggedIn = isLoggedIn()
+  const activeSessionId = getActiveSessionId()
+  const replyLength = getReplyLength(accountLabel ?? '', activeSessionId)
 
   const handleLogout = () => {
     if (!window.confirm('退出登录后，本地记录不会丢；下次登录同一账号就能找回来。确定退出吗？')) return
@@ -238,6 +247,13 @@ function MainCenter({
 
       <ProfileGroup title="关于 TA">
         {onGoProfile && <EntryRow icon={<ProfileIcon />} label="TA 的资料" onClick={onGoProfile} />}
+        <EntryRow
+          icon={<ReplyLengthIcon />}
+          label="回复长度"
+          status={activeSessionId ? replyLengthLabel(replyLength) : '先选择 TA'}
+          onClick={onOpenReply}
+          disabled={!activeSessionId}
+        />
         {onGoRoles && <EntryRow icon={<RolesIcon />} label="角色管理" status="进阶" onClick={onGoRoles} />}
       </ProfileGroup>
 
@@ -271,6 +287,64 @@ function MainCenter({
           退出登录
         </button>
       )}
+    </div>
+  )
+}
+
+function ReplyLengthDetail({ onBack }: { onBack: () => void }) {
+  const accountId = getAccount()?.account ?? ''
+  const sessionId = getActiveSessionId()
+  const [value, setValue] = useState<ReplyLength>(() => getReplyLength(accountId, sessionId))
+  const [error, setError] = useState('')
+
+  const options: Array<{ value: ReplyLength; title: string; note: string }> = [
+    { value: 'short', title: '短', note: '通常 1–2 句，直接一点' },
+    { value: 'medium', title: '中', note: '通常 2–4 句，日常默认' },
+    { value: 'long', title: '长', note: '需要时 4–7 句，多说一点' },
+  ]
+
+  const choose = (next: ReplyLength) => {
+    if (!accountId || !sessionId) return
+    if (!saveReplyLength(accountId, sessionId, next)) {
+      setError('没有保存成功，稍后再试一下')
+      return
+    }
+    setError('')
+    setValue(next)
+  }
+
+  return (
+    <div className="page settings-page reply-length-page">
+      <DetailHeader title="回复长度" onBack={onBack} />
+      <div className="reply-length-copy">
+        <p className="reply-length-lead">设置当前 TA 平时一次会说多少。</p>
+        <p className="hint">只影响回复总长度，不会改变 TA 的人设、记忆和聊天气泡拆分方式。</p>
+      </div>
+
+      <div className="reply-length-options" role="radiogroup" aria-label="回复长度">
+        {options.map((option) => {
+          const selected = option.value === value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={`reply-length-option${selected ? ' is-selected' : ''}`}
+              role="radio"
+              aria-checked={selected}
+              onClick={() => choose(option.value)}
+            >
+              <span className="reply-length-option-copy">
+                <strong>{option.title}</strong>
+                <span>{option.note}</span>
+              </span>
+              <span className="reply-length-radio" aria-hidden="true">
+                {selected ? <span /> : null}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {error ? <p className="reply-length-error" role="status">{error}</p> : null}
     </div>
   )
 }
@@ -416,6 +490,14 @@ const BookIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+  </svg>
+)
+
+const ReplyLengthIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M5 7h14" />
+    <path d="M5 12h10" />
+    <path d="M5 17h7" />
   </svg>
 )
 
