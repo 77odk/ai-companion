@@ -140,7 +140,8 @@ check('全局 UI 是自然/简洁/适中/详细', ['自然', '简洁', '适中',
 check('单 TA 有跟随全局 + 四档', chatSettingsSrc.includes("title: '跟随全局'") && ['自然', '简洁', '适中', '详细'].every((label) => chatSettingsSrc.includes(`title: '${label}'`)))
 check('reply_length_global 仍注册', cloudSrc.includes("registerCloudStateAdapter('reply_length_global'"))
 check('reply_length override 仍注册', cloudSrc.includes("registerCloudStateAdapter('reply_length'"))
-check('本批不新增 session_start Cloud State', !cloudSrc.includes("registerCloudStateAdapter('session_start'"))
+check('session_start 已注册跨设备同步', cloudSrc.includes("registerCloudStateAdapter('session_start'"))
+check('session_start 只往前推进', cloudSrc.includes('if (local > ts)'))
 check('原普通拆泡函数签名不变', /export function splitAssistantReplies\(content: string, ts: number\)/.test(storeSrc))
 check('原普通拆泡 60 字逻辑仍在', (storeSrc.match(/chunkText\([^\n]*, 60\)/g) || []).length >= 2)
 
