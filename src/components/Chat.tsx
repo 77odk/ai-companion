@@ -44,7 +44,7 @@ import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYou
 import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTaRuntimeFromAssistantText } from '../lib/taRuntime'
 import { buildIdentityContext } from '../lib/identityContext'
 import { dropRepeatedReplies } from '../lib/replyDedupe'
-import { buildReplyLengthInstruction, getEffectiveReplyLength } from '../lib/replyLength'
+import { buildReplyLengthInstruction, getEffectiveReplyLength, splitDetailedAssistantReply } from '../lib/replyLength'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -553,7 +553,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const sid = getActiveSessionId()
       const lang = sid ? getSessionLang(sid) : 'zh'
       const text = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)))
-      const parts = commitPartialReply(sid, ts, text, leaving)
+      const partialReplyLength = sid
+        ? getEffectiveReplyLength(getAccount()?.account ?? '', sid)
+        : 'natural'
+      const parts = commitPartialReply(sid, ts, text, leaving, partialReplyLength)
       if (!parts.length) return
       if (leaving) window.dispatchEvent(new CustomEvent('yiwem:ai-reply-committed', { detail: { sid } }))
     }
@@ -847,12 +850,20 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       if (!t || t === '新会话' || t === '我们的开始') return loadAIProfile(activeSessionId).nickname
       return t
     })()
-    const apiMessages: ApiMessage[] = [{ role: 'system', content: buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined, lang) }]
-    if (activeSessionId) {
-      const accountId = getAccount()?.account ?? ''
-      const replyLength = getEffectiveReplyLength(accountId, activeSessionId)
-      apiMessages.push({ role: 'system', content: buildReplyLengthInstruction(replyLength, lang) })
-    }
+    const accountId = activeSessionId ? (getAccount()?.account ?? '') : ''
+    const replyLength = activeSessionId
+      ? getEffectiveReplyLength(accountId, activeSessionId)
+      : 'natural'
+    const replyPreference = buildReplyLengthInstruction(replyLength, lang).trim()
+    // 回复偏好并进现有的主 system 文本末尾（不新增第二条 system）；自然档时这一行为空
+    const apiMessages: ApiMessage[] = [
+      {
+        role: 'system',
+        content:
+          buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined, lang) +
+          (replyPreference ? '\n\n' + replyPreference : ''),
+      },
+    ]
 
     const contextText = base
       .slice(-6)
@@ -1110,7 +1121,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 回复卫生（2026-09-19）：
       // ① 时间标签兜底——模型可能把历史里的 [3 分钟前] 抄进第二条气泡开头，逐条再剥一次；
       // ② 去复读——丢掉与最近两条 TA 自己消息整条重复的气泡（弱模型实测会连发三条一样的生活状态）。
-      const splitParts = cleaned ? splitAssistantReplies(cleaned, assistantTs) : []
+      const splitParts = cleaned
+        ? (replyLength === 'long' ? splitDetailedAssistantReply(cleaned, assistantTs) : splitAssistantReplies(cleaned, assistantTs))
+        : []
       const hygienicParts = splitParts
         .map((m) => ({ ...m, content: stripTimeLabels(m.content).trim() }))
         .filter((m) => m.content !== '')
@@ -1147,7 +1160,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         pauseLeftRef.current = 5
       }
       displayCleanRef.current = clean.slice(0, showLenRef.current)
-      const splits = splitAssistantReplies(displayCleanRef.current, assistantTs)
+      const splits = replyLength === 'long'
+        ? splitDetailedAssistantReply(displayCleanRef.current, assistantTs)
+        : splitAssistantReplies(displayCleanRef.current, assistantTs)
       setMessages([...messages, userMsg, ...splits])
       if (showLenRef.current >= total && streamEndedRef.current) finishStreaming()
     }

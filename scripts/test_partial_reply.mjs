@@ -84,12 +84,20 @@ const cache6 = getMessagesCache(SID)
 check('半截内容先落本地（切后台/被系统杀掉也不丢）', cache6.some((m) => m.ts === T && m.content === '半截内容'))
 check('没有排上传队列（流还在跑，等正常结束再传）', getPendingOps().length === 0)
 
+console.log('[6b] 详细模式半截回复也保持整段优先')
+reset()
+saveMessagesCache(SID, [{ role: 'user', content: '展开说说', ts: T - 1000 }, { role: 'assistant', content: '', ts: T }])
+const detailedText = '第一句把背景交代清楚。第二句继续把相关细节说完整。第三句再补上自己的想法，不需要一句一泡。'
+const detailedParts = commitPartialReply(SID, T, detailedText, true, 'long')
+check('详细模式正常段落保持一条', detailedParts.length === 1, JSON.stringify(detailedParts.map((p) => p.content)))
+check('详细模式正文不丢', detailedParts[0]?.content === detailedText)
+
 console.log('[7] 静态检查：Chat.tsx 真的挂了兜底')
 const fs = await import('node:fs')
 const chatSrc = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
 check('注册 pagehide', /addEventListener\('pagehide'/.test(chatSrc))
 check('注册 visibilitychange', /addEventListener\('visibilitychange'/.test(chatSrc))
-check('调用 commitPartialReply', /commitPartialReply\(sid, ts, text, leaving\)/.test(chatSrc))
+check('调用 commitPartialReply（带当前回复长度）', /commitPartialReply\(sid, ts, text, leaving, partialReplyLength\)/.test(chatSrc))
 check('生成开始时记下 ts（partialTsRef）', /partialTsRef\.current = assistantTs/.test(chatSrc))
 check('正常结束时清掉标记（commitFinal 内）', /partialTsRef\.current = null/.test(chatSrc))
 

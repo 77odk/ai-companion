@@ -7,7 +7,7 @@ import {
 } from './cloudState.ts'
 import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE, notifyDataChanged } from './dataChange.ts'
 import { getAccount } from './sync.ts'
-import { collectAllAIProfiles } from './storage.ts'
+import { collectAllAIProfiles, getSessionStart, setSessionStart } from './storage.ts'
 import { getSessionsCache } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
 import { applyGlobalReplyLengthFromCloud, applyReplyLengthOverrideFromCloud, collectStoredReplyLengthOverrides, deleteGlobalReplyLengthFromCloud, deleteReplyLengthOverrideFromCloud, getStoredGlobalReplyLength, type ReplyLength } from './replyLength.ts'
@@ -775,6 +775,68 @@ function deleteReplyLengthEntity(entity: CloudStateEntity): void {
   notifyDataChanged()
 }
 
+// ── 会话起点（刷新对话）跨设备：session 级实体 ──
+// 任一设备刷新当前会话后，同账号其他设备也使用新的上下文起点。
+// 只推进、不回退；聊天历史本身不删除。
+let sessionStartSnapshot = new Map<string, number>()
+
+function sessionStartEntities(): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const session of getSessionsCache()) {
+    const sid = String(session.id)
+    if (!sid) continue
+    const ts = getSessionStart(sid)
+    if (ts > 0) out.set(sid, ts)
+  }
+  return out
+}
+
+function resetSessionStartSnapshot(): void {
+  sessionStartSnapshot = getAccount() ? sessionStartEntities() : new Map()
+}
+
+function captureSessionStarts(): void {
+  if (!getAccount()) return
+  const next = sessionStartEntities()
+  for (const [sessionId, ts] of next) {
+    if (sessionStartSnapshot.get(sessionId) !== ts) {
+      queue('session_start', sessionId, { ts }, false, sessionId)
+    }
+  }
+  for (const [sessionId] of sessionStartSnapshot) {
+    if (!next.has(sessionId)) queue('session_start', sessionId, undefined, true, sessionId)
+  }
+  sessionStartSnapshot = next
+}
+
+function applySessionStartEntity(entity: CloudStateEntity): void {
+  const sessionId = entity.sessionId || entity.entityId
+  if (!sessionId || entity.entityId !== sessionId) return
+  const raw = (entity.payload as { ts?: unknown } | null)?.ts
+  const ts = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(ts) || ts <= 0) return
+
+  const local = getSessionStart(sessionId)
+  // 刷新起点只能往前走：本机若更新，就把更新值重新排队回云端，而不是被旧值覆盖。
+  if (local > ts) {
+    queue('session_start', sessionId, { ts: local }, false, sessionId)
+    sessionStartSnapshot.set(sessionId, local)
+    return
+  }
+
+  setSessionStart(ts, sessionId)
+  sessionStartSnapshot.set(sessionId, ts)
+  notifyDataChanged()
+}
+
+function deleteSessionStartEntity(entity: CloudStateEntity): void {
+  const sessionId = entity.sessionId || entity.entityId
+  if (!sessionId || entity.entityId !== sessionId) return
+  setSessionStart(0, sessionId)
+  sessionStartSnapshot.delete(sessionId)
+  notifyDataChanged()
+}
+
 let initialized = false
 export function initCloudStateResourceAdapters(): void {
   if (initialized) return
@@ -787,6 +849,7 @@ export function initCloudStateResourceAdapters(): void {
   resetProfileSnapshot()
   resetDefaultRoleSnapshot()
   resetReplyLengthSnapshot()
+  resetSessionStartSnapshot()
   registerTaRuntimeCloudSnapshotResetter(resetRuntimeSnapshot)
   registerCloudStateAdapter('theme', {
     apply: applyThemeEntity,
@@ -845,6 +908,10 @@ export function initCloudStateResourceAdapters(): void {
     apply: applyReplyLengthEntity,
     delete: deleteReplyLengthEntity,
   })
+  registerCloudStateAdapter('session_start', {
+    apply: applySessionStartEntity,
+    delete: deleteSessionStartEntity,
+  })
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, capturePersonalDays)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAnniversaries)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureSpacePosts)
@@ -853,5 +920,6 @@ export function initCloudStateResourceAdapters(): void {
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAiProfiles)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureDefaultRole)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureReplyLengths)
-  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot(); resetDefaultRoleSnapshot(); resetReplyLengthSnapshot() })
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureSessionStarts)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot(); resetDefaultRoleSnapshot(); resetReplyLengthSnapshot(); resetSessionStartSnapshot() })
 }
