@@ -28,6 +28,7 @@ import ChatBgSetting from './ChatBgSetting'
 import SpaceLife from './SpaceLife'
 import { AIDetail } from './Settings'
 import { ChatIcon, EntryChevron, SparkleIcon } from './spaceIcons'
+import type { ChatJumpTarget } from '../lib/chatJump'
 
 interface Props {
   /** 关闭资料卡回聊天 */
@@ -40,6 +41,10 @@ interface Props {
   onChat?: () => void
   /** 临时查看的角色 id（角色管理「角色详情」只看不切）；缺省读当前会话 */
   sessionIdOverride?: string
+  /** 「看原对话」直达聊天记录；普通资料卡入口不传。 */
+  initialPage?: 'home' | 'chats'
+  /** 聊天记录内要定位并高亮的原话。 */
+  chatLogTarget?: ChatJumpTarget | null
 }
 
 /** 相识天数：角色创建（会话 created_at）当天起算；无会话/读不到回落 getFirstSeen，至少 1 天 */
@@ -55,7 +60,15 @@ function profileDaysKnown(sessionId: string | null): number {
   return computeDaysKnown(getFirstSeen(sessionId || undefined))
 }
 
-export default function ChatProfile({ onClose, onGoMine, fromRoles = false, onChat, sessionIdOverride }: Props) {
+export default function ChatProfile({
+  onClose,
+  onGoMine,
+  fromRoles = false,
+  onChat,
+  sessionIdOverride,
+  initialPage = 'home',
+  chatLogTarget = null,
+}: Props) {
   // 当前会话（角色管理「角色详情」临时查看时用 sessionIdOverride；其余入口读当前会话；无会话兜底全局）
   const sessionId = sessionIdOverride ?? getActiveSessionId()
   // TA 资料按会话隔离：资料卡显示当前角色的头像/姓名
@@ -90,7 +103,7 @@ export default function ChatProfile({ onClose, onGoMine, fromRoles = false, onCh
   const [messages] = useState<StoredMessage[]>(() => (sessionId ? getMessagesCache(sessionId) : loadMessages()))
 
   // 子页面路由：home 资料卡 / profile TA 的资料 / life TA 的生活 / chats 聊天记录 / bg 聊天背景
-  const [page, setPage] = useState<'home' | 'profile' | 'life' | 'chats' | 'bg'>('home')
+  const [page, setPage] = useState<'home' | 'profile' | 'life' | 'chats' | 'bg'>(initialPage)
   const goHome = () => setPage('home')
 
   // 子页面：整页替换（各自带返回条），资料卡 home 才是这层的主页
@@ -102,7 +115,15 @@ export default function ChatProfile({ onClose, onGoMine, fromRoles = false, onCh
     return <ChatBgSetting sessionId={sessionId || undefined} onBack={goHome} />
   }
   if (page === 'chats') {
-    return <SpaceChatLogs messages={messages} yourName={yourName} aiNickname={ai.nickname} onBack={goHome} />
+    return (
+      <SpaceChatLogs
+        messages={messages}
+        yourName={yourName}
+        aiNickname={ai.nickname}
+        onBack={chatLogTarget ? onClose : goHome}
+        jumpTarget={chatLogTarget}
+      />
+    )
   }
   if (page === 'life') {
     return (

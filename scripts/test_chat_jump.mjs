@@ -1,11 +1,15 @@
-// UI2-03B-1 Memory「看原对话」：exact-match 三态 + 二次校验
+// UI2-03B-1 Memory「看原对话」：完整聊天记录 exact-match 三态 + 返回闭环
 // 直接导入纯逻辑 TS（Node 22+ 原生类型剥离），不依赖任何构建工具。
 // 跑法：node scripts/test_chat_jump.mjs（npm test 入口自动带上）
 // 覆盖：unique / not_found / ambiguous / substring 禁止 / 角色隔离 /
-//       sessionStart 过滤 / verifyChatJumpTarget 二次校验（ts / content / session / 多命中）
+//       sessionStart 不影响聊天记录 / verifyChatJumpTarget 二次校验（ts / content / session / 多命中）
 
 import { readFileSync } from 'node:fs'
-import { findChatJumpTarget, findChatJumpTargetHydrated, verifyChatJumpTarget } from '../src/lib/chatJump.ts'
+import {
+  findChatRecordJumpTarget,
+  findChatRecordJumpTargetHydrated,
+  verifyChatJumpTarget,
+} from '../src/lib/chatJump.ts'
 import { getMessagesCache, saveMessagesCache } from '../src/lib/sessionStore.ts'
 
 // localStorage / window mock（与现有 test_*.mjs 同款）：storage.ts / sessionStore.ts 在函数体内引用
@@ -45,7 +49,7 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
 {
   resetStore()
   saveMessagesCache('A', [uid('我喜欢拿铁', 1000), msg('assistant', '记住啦', 1001), uid('你呢？', 2000)])
-  const r = findChatJumpTarget('A', '我喜欢拿铁')
+  const r = findChatRecordJumpTarget('A', '我喜欢拿铁')
   ok(r.status === 'unique', 'A unique：唯一 exact match → unique')
   ok(r.target && r.target.ts === 1000 && r.target.sessionId === 'A' && r.target.source === '我喜欢拿铁', 'A target 携带 sessionId/ts/source')
 }
@@ -54,7 +58,7 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
 {
   resetStore()
   saveMessagesCache('A', [uid('今天天气不错', 1000)])
-  const r = findChatJumpTarget('A', '我喜欢拿铁')
+  const r = findChatRecordJumpTarget('A', '我喜欢拿铁')
   ok(r.status === 'not_found' && r.target === null, 'B not_found：聊天没有该句 → not_found')
 }
 
@@ -62,14 +66,14 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
 {
   resetStore()
   saveMessagesCache('A', [uid('我喜欢拿铁', 1000)])
-  const r = findChatJumpTarget('A', '   ')
+  const r = findChatRecordJumpTarget('A', '   ')
   ok(r.status === 'not_found' && r.target === null, 'B2 空 source → not_found（不查）')
 }
 
 // ---- B3：sessionId 为空 ----
 {
   resetStore()
-  const r = findChatJumpTarget(null, '我喜欢拿铁')
+  const r = findChatRecordJumpTarget(null, '我喜欢拿铁')
   ok(r.status === 'not_found' && r.target === null, 'B3 无 session → not_found（不跨角色）')
 }
 
@@ -77,7 +81,7 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
 {
   resetStore()
   saveMessagesCache('A', [uid('我喜欢拿铁', 1000), msg('assistant', '好', 1001), uid('我喜欢拿铁', 2000)])
-  const r = findChatJumpTarget('A', '我喜欢拿铁')
+  const r = findChatRecordJumpTarget('A', '我喜欢拿铁')
   ok(r.status === 'ambiguous' && r.target === null, 'C ambiguous：同 session 两次相同 → ambiguous，不跳第一条')
 }
 
@@ -85,7 +89,7 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
 {
   resetStore()
   saveMessagesCache('A', [uid('我不喜欢拿铁', 1000), uid('我喜欢拿铁蛋糕', 2000)])
-  const r = findChatJumpTarget('A', '我喜欢拿铁')
+  const r = findChatRecordJumpTarget('A', '我喜欢拿铁')
   ok(r.status === 'not_found' && r.target === null, 'D substring 禁止：includes 命中不算 exact → not_found')
 }
 
@@ -93,7 +97,7 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
 {
   resetStore()
   saveMessagesCache('A', [uid('  我喜欢拿铁  ', 1000)])
-  const r = findChatJumpTarget('A', '我喜欢拿铁')
+  const r = findChatRecordJumpTarget('A', '我喜欢拿铁')
   ok(r.status === 'unique' && r.target && r.target.ts === 1000, 'D2 trim 后全等 → unique（两端空白不破坏匹配）')
 }
 
@@ -102,24 +106,24 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
   resetStore()
   saveMessagesCache('A', [uid('我喜欢拿铁', 1000)])
   saveMessagesCache('B', [uid('我喜欢拿铁', 3000)])
-  const rA = findChatJumpTarget('A', '我喜欢拿铁')
+  const rA = findChatRecordJumpTarget('A', '我喜欢拿铁')
   ok(rA.status === 'unique' && rA.target && rA.target.sessionId === 'A' && rA.target.ts === 1000, 'E A 只查 A cache：命中 A 的那条')
-  const rB = findChatJumpTarget('B', '我喜欢拿铁')
+  const rB = findChatRecordJumpTarget('B', '我喜欢拿铁')
   ok(rB.status === 'unique' && rB.target && rB.target.sessionId === 'B' && rB.target.ts === 3000, 'E B 只查 B cache：命中 B 的那条')
   // A 的会话起点过滤后，B 的消息绝不能进入 A 的结果
-  const rA2 = findChatJumpTarget('A', 'x')
+  const rA2 = findChatRecordJumpTarget('A', 'x')
   ok(rA2.status === 'not_found', 'E 不跨会话：A 查不到 B 的内容')
 }
 
-// ---- F：sessionStart 过滤 ----
+// ---- F：聊天记录不受 sessionStart 影响 ----
 {
   resetStore()
   saveMessagesCache('A', [uid('我喜欢拿铁', 1000), uid('最近还好吗', 5000)])
   memStore.set(`${SESSION_START_KEY}_sid_A`, String(4000)) // 起点 4000：1000 那条 Chat 不渲染
-  const rOld = findChatJumpTarget('A', '我喜欢拿铁')
-  ok(rOld.status === 'not_found' && rOld.target === null, 'F 早于 sessionStart → not_found（不可跳 Chat 不渲染的旧消息）')
-  const rNew = findChatJumpTarget('A', '最近还好吗')
-  ok(rNew.status === 'unique' && rNew.target && rNew.target.ts === 5000, 'F 晚于 sessionStart 仍可跳')
+  const rOld = findChatRecordJumpTarget('A', '我喜欢拿铁')
+  ok(rOld.status === 'unique' && rOld.target?.ts === 1000, 'F 早于 sessionStart → 仍可定位完整聊天记录')
+  const rNew = findChatRecordJumpTarget('A', '最近还好吗')
+  ok(rNew.status === 'unique' && rNew.target && rNew.target.ts === 5000, 'F 晚于 sessionStart 同样可定位')
 }
 
 // ---- verifyChatJumpTarget：Chat 进入前二次校验 ----
@@ -184,8 +188,8 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
   )
   const appSrcNotice = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
   ok(
-    /chatJumpNoticeTimerRef\.current !== null\) window\.clearTimeout\(chatJumpNoticeTimerRef\.current\)/.test(appSrcNotice),
-    'H10 提示定时器改由 App 持有，并在 App 卸载时统一清理',
+    appSrcNotice.includes('pendingChatLogJump') && !appSrcNotice.includes('pendingJump={pendingChatJump}'),
+    'H10 Memory 跳转已从当前 Chat 移到完整聊天记录',
   )
   const noSessionStart = chatSrc.indexOf('if (!activeSessionId) {')
   const noSessionEnd = chatSrc.indexOf('jumpHandledRef.current = true', noSessionStart)
@@ -228,7 +232,7 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
   // 同 ts 下存在 assistant 行 → 业务判定与 DOM 一样只认 user 行，不产生歧义
   resetStore()
   saveMessagesCache('A', [uid('我喜欢拿铁', 1000), msg('assistant', '我喜欢拿铁', 1000)])
-  const r = findChatJumpTarget('A', '我喜欢拿铁')
+  const r = findChatRecordJumpTarget('A', '我喜欢拿铁')
   ok(r.status === 'unique' && r.target && r.target.ts === 1000, 'I5 同 ts 同内容的 assistant 行不算命中（仍 unique）')
   ok(verifyChatJumpTarget({ sessionId: 'A', ts: 1000, source: '我喜欢拿铁' }, 'A', [uid('我喜欢拿铁', 1000), msg('assistant', '我喜欢拿铁', 1000)]) === true, 'I6 二次校验同样只认 user 行 → true')
 
@@ -264,13 +268,29 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
   ok(!chatSrc.includes('showJumpNotice'), 'J6 Chat 不再本地展示 notice')
   ok(!chatSrc.includes('jumpNoticeTimer'), 'J7 Chat 不再本地持 notice timer')
 
-  // App：接管 notice + restoreScroll 跳过
-  ok(appSrc.includes('chatJumpNotice') && appSrc.includes('showChatJumpNotice'), 'J8 App 持有 chatJumpNotice 与展示函数')
+  // App：直达聊天记录，并保留原 Memory Detail 返回目标
+  const profileSrc = readFileSync(new URL('../src/components/ChatProfile.tsx', import.meta.url), 'utf8')
+  const logsSrc = readFileSync(new URL('../src/components/SpaceChatLogs.tsx', import.meta.url), 'utf8')
+  ok(appSrc.includes('pendingChatLogJump') && appSrc.includes('pendingMemoryReturn'), 'J8 App 同时持有聊天记录目标与原 Memory 返回目标')
   ok(
-    /if \(v === 'chat' && pendingChatJumpRef\.current\) return/.test(appSrc),
-    'J9 restoreScroll 在 pending jump 时跳过 chat 的旧位置恢复',
+    appSrc.includes("goView('chatprofile')") && appSrc.includes("setDetailFrom('memory')"),
+    'J9 看原对话直达 ChatProfile，并记录来源为 Memory',
   )
-  ok(appSrc.includes('pendingJump={pendingChatJump}') && appSrc.includes('onJumpNotice={showChatJumpNotice}'), 'J10 App 把 pendingJump / notice 回调一起传给 Chat')
+  ok(
+    profileSrc.includes("initialPage = 'home'") && profileSrc.includes('jumpTarget={chatLogTarget}') &&
+      logsSrc.includes('data-log-msg-ts={m.ts}') && logsSrc.includes("el.classList.add('msg-jump-highlight')"),
+    'J10 ChatProfile 直开聊天记录；当天回放按 ts 定位并高亮',
+  )
+  ok(
+    appSrc.includes('if (pendingChatLogJump) {') && appSrc.includes('window.history.back()') &&
+      /onInitialDetailConsumed=\{\(\) => \{[\s\S]{0,160}setPendingMemoryReturn\(null\)[\s\S]{0,160}setPendingChatLogJump\(null\)/.test(appSrc),
+    'J11 页内返回/浏览器返回都回 Memory，恢复原 Detail 后清理两个临时目标',
+  )
+  ok(
+    logsSrc.includes("onClick={() => (jumpTarget ? onBack() : setLogDayKey(null))}") &&
+      logsSrc.includes("{jumpTarget ? '返回记忆' : '返回聊天记录'}"),
+    'J12 定向回放的顶部与底部返回都指向原 Memory；普通入口仍回聊天记录',
+  )
 }
 
 
@@ -291,9 +311,9 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
       memories: [],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
-  const before = findChatJumpTarget('A', '刷新后也要找得到')
+  const before = findChatRecordJumpTarget('A', '刷新后也要找得到')
   ok(before.status === 'not_found', 'K3 补拉前本地缓存为空 → not_found')
-  const hydrated = await findChatJumpTargetHydrated('A', '刷新后也要找得到', 'token-A')
+  const hydrated = await findChatRecordJumpTargetHydrated('A', '刷新后也要找得到', 'token-A')
   ok(hydrated.status === 'unique' && hydrated.target?.sessionId === 'A', 'K4 补拉后重新 exact-match → unique')
   ok(getMessagesCache('A').some((m) => m.role === 'user' && m.content === '刷新后也要找得到'), 'K5 云端消息写回当前 session 缓存')
   ok(calls === 1, 'K6 只请求一次后端')
@@ -312,22 +332,29 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
     ],
     memories: [],
   }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-  const hydrated = await findChatJumpTargetHydrated('A', '这句话说过两次', 'token-A')
+  const hydrated = await findChatRecordJumpTargetHydrated('A', '这句话说过两次', 'token-A')
   ok(hydrated.status === 'ambiguous' && hydrated.target === null, 'K7 云端原始列表重复 source → ambiguous，不猜哪一次')
 }
 
-// ---- L：本地已经 unique 时不额外请求后端 ----
+// ---- L：本地 unique 仍用云端完整记录确认唯一性 ----
 {
   resetStore()
   saveMessagesCache('A', [uid('本地已经有', 1000)])
   let called = false
   globalThis.fetch = async () => {
     called = true
-    throw new Error('不该请求')
+    return new Response(JSON.stringify({
+      session: { id: 1, title: 'TA', persona: '', created_at: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' },
+      messages: [
+        { id: 1, role: 'user', content: '本地已经有', createdAt: '2026-09-01T10:00:00.000Z' },
+        { id: 2, role: 'user', content: '本地已经有', createdAt: '2026-09-02T10:00:00.000Z' },
+      ],
+      memories: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
-  const hydrated = await findChatJumpTargetHydrated('A', '本地已经有', 'token-A')
-  ok(hydrated.status === 'unique', 'L1 本地 unique 直接返回')
-  ok(called === false, 'L2 不浪费一次 session 拉取')
+  const hydrated = await findChatRecordJumpTargetHydrated('A', '本地已经有', 'token-A')
+  ok(hydrated.status === 'ambiguous', 'L1 云端完整记录发现重复 → ambiguous')
+  ok(called === true, 'L2 本地 unique 仍补拉云端确认，不把不完整缓存当全量')
 }
 
 console.log(`\nchatJump: ${passed} passed, ${failed} failed`)
