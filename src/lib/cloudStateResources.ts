@@ -10,7 +10,7 @@ import { getAccount } from './sync.ts'
 import { collectAllAIProfiles } from './storage.ts'
 import { getSessionsCache } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
-import { applyReplyLengthFromCloud, collectStoredReplyLengths, deleteReplyLengthFromCloud, type ReplyLength } from './replyLength.ts'
+import { applyGlobalReplyLengthFromCloud, applyReplyLengthOverrideFromCloud, collectStoredReplyLengthOverrides, deleteGlobalReplyLengthFromCloud, deleteReplyLengthOverrideFromCloud, getStoredGlobalReplyLength, type ReplyLength } from './replyLength.ts'
 import { applySpacePostFromCloud, deleteSpacePostFromCloud } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
 import {
@@ -693,44 +693,76 @@ interface ReplyLengthEntity {
   mode: ReplyLength
 }
 
-function replyLengthEntities(): Map<string, ReplyLengthEntity> {
+function replyLengthOverrideEntities(): Map<string, ReplyLengthEntity> {
   const out = new Map<string, ReplyLengthEntity>()
   const accountId = getAccount()?.account ?? ''
   if (!accountId) return out
   const sessionIds = getSessionsCache().map((session) => String(session.id))
-  for (const [sessionId, mode] of collectStoredReplyLengths(accountId, sessionIds)) {
+  for (const [sessionId, mode] of collectStoredReplyLengthOverrides(accountId, sessionIds)) {
     out.set(sessionId, { sessionId, mode })
   }
   return out
 }
 
-let replyLengthSnapshot = new Map<string, ReplyLengthEntity>()
+let globalReplyLengthSnapshot: ReplyLength | null = null
+let replyLengthOverrideSnapshot = new Map<string, ReplyLengthEntity>()
 
 function resetReplyLengthSnapshot(): void {
-  replyLengthSnapshot = replyLengthEntities()
+  const accountId = getAccount()?.account ?? ''
+  globalReplyLengthSnapshot = accountId ? getStoredGlobalReplyLength(accountId) : null
+  replyLengthOverrideSnapshot = replyLengthOverrideEntities()
 }
 
 function captureReplyLengths(): void {
-  const next = replyLengthEntities()
+  const accountId = getAccount()?.account ?? ''
+  if (!accountId) return
+
+  const nextGlobal = getStoredGlobalReplyLength(accountId)
+  if (nextGlobal !== globalReplyLengthSnapshot) {
+    if (nextGlobal) queue('reply_length_global', GLOBAL, { mode: nextGlobal })
+    else queue('reply_length_global', GLOBAL, undefined, true)
+    globalReplyLengthSnapshot = nextGlobal
+  }
+
+  const next = replyLengthOverrideEntities()
   for (const [sessionId, value] of next) {
-    const previous = replyLengthSnapshot.get(sessionId)
+    const previous = replyLengthOverrideSnapshot.get(sessionId)
     if (!previous || previous.mode !== value.mode) {
       queue('reply_length', sessionId, { mode: value.mode }, false, sessionId)
     }
   }
-  for (const [sessionId, value] of replyLengthSnapshot) {
+  for (const [sessionId, value] of replyLengthOverrideSnapshot) {
     if (!next.has(sessionId)) queue('reply_length', sessionId, undefined, true, value.sessionId)
   }
-  replyLengthSnapshot = next
+  replyLengthOverrideSnapshot = next
+}
+
+function applyGlobalReplyLengthEntity(entity: CloudStateEntity): void {
+  if (entity.entityId !== GLOBAL) return
+  const accountId = getAccount()?.account ?? ''
+  if (!accountId) return
+  const mode = applyGlobalReplyLengthFromCloud(accountId, entity.payload)
+  if (!mode) return
+  globalReplyLengthSnapshot = mode
+  notifyDataChanged()
+}
+
+function deleteGlobalReplyLengthEntity(entity: CloudStateEntity): void {
+  if (entity.entityId !== GLOBAL) return
+  const accountId = getAccount()?.account ?? ''
+  if (!accountId) return
+  deleteGlobalReplyLengthFromCloud(accountId)
+  globalReplyLengthSnapshot = null
+  notifyDataChanged()
 }
 
 function applyReplyLengthEntity(entity: CloudStateEntity): void {
   const accountId = getAccount()?.account ?? ''
   const sessionId = entity.sessionId || entity.entityId
   if (!accountId || !sessionId || entity.entityId !== sessionId) return
-  const mode = applyReplyLengthFromCloud(accountId, sessionId, entity.payload)
+  const mode = applyReplyLengthOverrideFromCloud(accountId, sessionId, entity.payload)
   if (!mode) return
-  replyLengthSnapshot.set(sessionId, { sessionId, mode })
+  replyLengthOverrideSnapshot.set(sessionId, { sessionId, mode })
   notifyDataChanged()
 }
 
@@ -738,8 +770,8 @@ function deleteReplyLengthEntity(entity: CloudStateEntity): void {
   const accountId = getAccount()?.account ?? ''
   const sessionId = entity.sessionId || entity.entityId
   if (!accountId || !sessionId || entity.entityId !== sessionId) return
-  deleteReplyLengthFromCloud(accountId, sessionId)
-  replyLengthSnapshot.delete(sessionId)
+  deleteReplyLengthOverrideFromCloud(accountId, sessionId)
+  replyLengthOverrideSnapshot.delete(sessionId)
   notifyDataChanged()
 }
 
@@ -804,6 +836,10 @@ export function initCloudStateResourceAdapters(): void {
   registerCloudStateAdapter('default_role', {
     apply: applyDefaultRoleEntity,
     delete: deleteDefaultRoleEntity,
+  })
+  registerCloudStateAdapter('reply_length_global', {
+    apply: applyGlobalReplyLengthEntity,
+    delete: deleteGlobalReplyLengthEntity,
   })
   registerCloudStateAdapter('reply_length', {
     apply: applyReplyLengthEntity,
