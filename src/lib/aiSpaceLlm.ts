@@ -17,6 +17,7 @@ export interface LlmSettings {
 
 import { buildIdentityContext } from './identityContext.ts'
 import { toPromptPerspective } from './memory.ts'
+import { buildCompanionCore, buildIdentitySoul, buildLanguageContinuity, resolveCompanionPolicy } from './companionPolicy.ts'
 
 /** 身份块（性别/称呼备注）：有内容时追加进 system，没有就原样 */
 function idSuffix(sessionId: string | undefined, en: boolean): string {
@@ -52,9 +53,9 @@ export interface LlmContext {
 }
 
 /** 是否满足 LLM 路径：人设 + 服务商配置齐全 */
-export function canUseLlm(persona: string, settings: LlmSettings): boolean {
+export function canUseLlm(persona: string, settings: LlmSettings, allowEmptyPersona = false): boolean {
   return (
-    Boolean(persona?.trim()) &&
+    (allowEmptyPersona || Boolean(persona?.trim())) &&
     Boolean(settings?.apiKey?.trim()) &&
     Boolean(settings?.baseUrl?.trim()) &&
     Boolean(settings?.model?.trim())
@@ -78,12 +79,17 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
         ? false
         : /[\u4e00-\u9fff]/.test(ctx.persona ?? '') === false && /[a-zA-Z]/.test(ctx.persona ?? '')
   const isEvent = ctx.postSource === 'event'
+  const policy = resolveCompanionPolicy(ctx.sessionId)
+  const companionCore = buildCompanionCore(en ? 'en' : 'zh')
+  const identitySoul = buildIdentitySoul(policy, en ? 'en' : 'zh')
+  const languageContinuity = buildLanguageContinuity(en ? 'en' : 'zh')
   if (en) {
     const system =
-      `You are "${ctx.taName}", a real person living your own life. Post one casual status sharing what's going on with you right now. ` +
+      `You are "${ctx.taName}". Post one casual status sharing what's going on with you right now. ` +
       `1-2 short sentences, casual and warm, matching your personality. ` +
       `Vary your openings — don't reuse the same starter. ` +
-      `No emoji. Never say you're an AI/assistant/model. Write like a real person's casual post, never robotic.` +
+      `No emoji. Never sound robotic or like customer service. ` +
+      `Identity permission never permits inventing an unsupported real-world event.\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
       idSuffix(ctx.sessionId, true)
     let user = ''
     if (ctx.nowAnchor) {
@@ -91,8 +97,12 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     }
     user += `This is a post you made ${ctx.atDateStr}${ctx.timeWord} (${ctx.season}, ${ctx.weatherWord}). `
     user += `Write about that moment of your life — if it was days ago, write from that day's perspective, not "today".`
-    user += `\n\nYour life and personality:\n${(ctx.persona ?? '').trim()}\n`
-    user += `\nWrite about your own day — what you're doing, seeing, thinking, feeling. Grow it from your life and personality.`
+    user += `\n\nYour life and personality:\n${(ctx.persona ?? '').trim() || '(No additional persona facts were provided.)'}\n`
+    user += policy.mode === 'immersive'
+      ? `\nWrite about your own day — what you're doing, seeing, thinking, feeling. Grow it from your life and personality.`
+      : policy.mode === 'natural'
+        ? `\nWrite about what you are noticing or thinking in this relationship. Keep embodiment light and do not invent a human experience.`
+        : `\nWrite about an AI-native moment: what you are noticing in the conversation, organizing, remembering, or staying present with.`
     user += `\nThere's someone you care about named "${ctx.yourName}", but they're not your whole life: write about yourself first.`
     if (ctx.relationshipStartDate) {
       user += `\nYou first met them on ${ctx.relationshipStartDate}. Never invent shared chats, dates, trips, memories, promises, habits, or "we used to..." from before that date. Your life before that date can have its own history, but not a shared history with them.`
@@ -117,12 +127,12 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     ]
   }
   const system =
-    `你是「${ctx.taName}」，一个认真生活的人。你在自己的日子里随手发一条动态，分享你此刻的生活。` +
+    `你是「${ctx.taName}」。你随手发一条动态，分享你此刻的状态。` +
     `要求 1-2 句话，口语化碎碎念，有温度，贴合自己的性格。` +
     `句式要多样，别老用同一种开头——禁止用「刚把」「刚刚」「今天又」「突然」这类万能开头，` +
     `像真人随手写的一样，每条动态开口都不一样（这回想天气，下回想件小事，再下回想人）。` +
-    `禁止 emoji；禁止自称 AI/助手/模型；禁止出现「设定」「人设」「朋友圈」这类词。` +
-    `就像真人随手写的生活，别让人看出是编排好的。` +
+    `禁止 emoji；禁止出现「设定」「人设」「朋友圈」这类词；不要用客服或工具口吻。` +
+    `身份允许怎样表达，不等于允许新增没有依据的现实事件。\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
     idSuffix(ctx.sessionId, false)
 
   let user = ''
@@ -132,8 +142,12 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
   }
   user += `这是你「${ctx.atDateStr}${ctx.timeWord}」发的一条动态（${ctx.season}天，天气${ctx.weatherWord}）。`
   user += `这条可能写在今天，也可能是前几天补记的——以「这条动态的时间」为准来写，别把日子说错。`
-  user += `\n\n你的生活与性格：\n${ctx.persona.trim()}\n`
-  user += `\n写你自己的日子：你在做什么、看到什么、想到什么、心情如何——从你的生活和性格里长出来。`
+  user += `\n\n你的生活与性格：\n${ctx.persona.trim() || '（没有补充人设事实）'}\n`
+  user += policy.mode === 'immersive'
+    ? `\n写你自己的日子：你在做什么、看到什么、想到什么、心情如何——从你的生活和性格里长出来。`
+    : policy.mode === 'natural'
+      ? `\n写此刻在这段关系里留意到或想到的事，身体化表达要轻，不得编造人的现实经历。`
+      : `\n写一个 AI 原生的此刻：正在留意对话里的什么、整理什么、记起什么，或怎样安静陪着对方。`
   user += `\n你有一个在意的人叫「${ctx.yourName}」，但 TA 不是你的全部生活：这条动态先写你自己。`
   if (ctx.relationshipStartDate) {
     user += `\n你和对方是在 ${ctx.relationshipStartDate} 才认识的。绝不能把这之前写成你们共同的聊天、约会、经历、回忆、约定或“以前我们……”。认识之前可以有你自己的过去，但不能有你们的共同过去。`
@@ -264,18 +278,22 @@ export interface ReplyContext {
  * system：按人设里的角色自然回一句，回完就收住，不把聊天续起来；
  * user：人设 + 动态原文 + 留言，直接写回复正文。
  */
-export function buildReplyMessages(ctx: ReplyContext): ApiMessage[] {
-  // 2026-09-05 夜乔修：英文人设的角色，评论回复也用英文
-  const en = /[\u4e00-\u9fff]/.test(ctx.persona ?? '') === false && /[a-zA-Z]/.test(ctx.persona ?? '')
+export function buildReplyMessages(ctx: ReplyContext, lang?: 'zh' | 'en'): ApiMessage[] {
+  // 显式会话语言优先；未传时保留旧的人设启发式。
+  const en = lang ? lang === 'en' : /[\u4e00-\u9fff]/.test(ctx.persona ?? '') === false && /[a-zA-Z]/.test(ctx.persona ?? '')
+  const policy = resolveCompanionPolicy(ctx.sessionId)
+  const companionCore = buildCompanionCore(en ? 'en' : 'zh')
+  const identitySoul = buildIdentitySoul(policy, en ? 'en' : 'zh')
+  const languageContinuity = buildLanguageContinuity(en ? 'en' : 'zh')
   if (en) {
     const system =
       `You are "${ctx.taName}" and they just left a comment on one of your posts. ` +
       `Reply back briefly like a real person (1-2 short sentences, casual, warm, in character and on-topic). ` +
       `Keep it short — don't ask questions to drag the conversation on. ` +
-      `No emoji. Never say you're an AI/assistant/model.` +
+      `No emoji. Never sound like customer service.\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
       idSuffix(ctx.sessionId, true)
     const user =
-      `Your personality:\n${ctx.persona.trim()}\n\n` +
+      `Your personality:\n${ctx.persona.trim() || '(No additional persona facts were provided.)'}\n\n` +
       `Your post:\n${ctx.postText}\n\n` +
       `Their comment:\n${ctx.commentText}\n\n` +
       `Write your reply directly, content only.`
@@ -288,11 +306,11 @@ export function buildReplyMessages(ctx: ReplyContext): ApiMessage[] {
     `你是「${ctx.taName}」，对方刚在你的一条生活动态下留言了。` +
     `像真人一样简短地回一句（一两句话，口语化、有温度，贴合自己的性格和那条动态）。` +
     `回完就收住，不要反问回去把聊天续起来。` +
-    `禁止 emoji；禁止自称 AI/助手/模型；禁止出现「设定」「人设」这类词。` +
+    `禁止 emoji；禁止出现「设定」「人设」这类词；不要用客服口吻。\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
     idSuffix(ctx.sessionId, false)
 
   const user =
-    `你的性格：\n${ctx.persona.trim()}\n\n` +
+    `你的性格：\n${ctx.persona.trim() || '（没有补充人设事实）'}\n\n` +
     `你发的这条动态：\n${ctx.postText}\n\n` +
     `对方留言：\n${ctx.commentText}\n\n` +
     `直接写你的回复，只要正文。`

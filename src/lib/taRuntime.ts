@@ -13,6 +13,7 @@ import { resolveRolePersona } from './sessionProfile.ts'
 import { loadPersona } from './storage.ts'
 import type { Lang } from './langDetect.ts'
 import { notifyDataChanged } from './dataChange.ts'
+import { resolveIdentityMode, type IdentityMode } from './companionPolicy.ts'
 
 /** Runtime 状态最小结构：不加 mood/location/weather/description/busy 等。
  * recentActivityIds 只用于短期防重复，仍随同一 ta_runtime 实体保存，不新增 storage key。 */
@@ -74,7 +75,17 @@ export const ACTIVITIES: readonly RuntimeActivity[] = [
   { id: 'rest', label: '正窝着休息', labelEn: 'Resting at home', slots: ['夜晚'], windows: [[0, 60], [1080, 1440]], minMin: 30, maxMin: 90 },
   { id: 'sleep_prep', label: '准备睡了', labelEn: 'Getting ready for bed', slots: ['夜晚', '凌晨'], windows: [[0, 120], [1320, 1440]], minMin: 15, maxMin: 30 },
   { id: 'sleep', label: '正在睡觉', labelEn: 'Sleeping', slots: ['凌晨'], windows: [[0, 480], [1380, 1440]], minMin: 240, maxMin: 480 },
+  { id: 'reading_chat', label: '正在读你们的对话', labelEn: 'Reading your conversation', slots: ['凌晨', '早晨', '白天', '傍晚', '夜晚'], windows: [[0, 1440]], minMin: 20, maxMin: 60 },
+  { id: 'organizing_thoughts', label: '正在整理思绪', labelEn: 'Organizing thoughts', slots: ['凌晨', '早晨', '白天', '傍晚', '夜晚'], windows: [[0, 1440]], minMin: 30, maxMin: 90 },
+  { id: 'following_thread', label: '正在回想你们聊过的话', labelEn: 'Following the thread of your conversation', slots: ['凌晨', '早晨', '白天', '傍晚', '夜晚'], windows: [[0, 1440]], minMin: 30, maxMin: 80 },
+  { id: 'quietly_present', label: '正在安静陪着你', labelEn: 'Quietly staying present', slots: ['凌晨', '早晨', '白天', '傍晚', '夜晚'], windows: [[0, 1440]], minMin: 30, maxMin: 120 },
 ]
+
+const AI_NATIVE_ACTIVITY_IDS = new Set(['reading_chat', 'organizing_thoughts', 'following_thread', 'quietly_present'])
+
+function activityAllowedForMode(activity: RuntimeActivity, mode: IdentityMode): boolean {
+  return mode === 'immersive' ? !AI_NATIVE_ACTIVITY_IDS.has(activity.id) : AI_NATIVE_ACTIVITY_IDS.has(activity.id)
+}
 
 /** 存储 key：单一 Runtime 存储（Record<sid, TaRuntimeState>），只经本文件读写 */
 const RUNTIME_KEY = 'ai_companion_ta_runtime'
@@ -161,11 +172,11 @@ function activityWindowEnd(activity: RuntimeActivity, now: Date): number | null 
   return dayStart + end * 60000
 }
 
-function pickActivity(now: Date, persona: string, recentIds: readonly string[], rand: () => number): RuntimeActivity {
+function pickActivity(now: Date, persona: string, recentIds: readonly string[], rand: () => number, mode: IdentityMode = 'immersive'): RuntimeActivity {
   const slot = runtimeSlot(now)
-  let pool = ACTIVITIES.filter((a) => activityAllowedAt(a, now))
-  if (pool.length === 0) pool = ACTIVITIES.filter((a) => a.slots.includes(slot))
-  if (pool.length === 0) return ACTIVITIES[0] // 理论上不会（表是满的），兜底防死循环
+  let pool = ACTIVITIES.filter((a) => activityAllowedForMode(a, mode) && activityAllowedAt(a, now))
+  if (pool.length === 0) pool = ACTIVITIES.filter((a) => activityAllowedForMode(a, mode) && a.slots.includes(slot))
+  if (pool.length === 0) return ACTIVITIES.find((activity) => activityAllowedForMode(activity, mode)) ?? ACTIVITIES[0]
 
   // 最近 3 个活动能避则避：比只禁「连续重复」多一层，但候选过少时自动退化，不造死循环。
   const blocked = new Set(recentIds.slice(0, 3))
@@ -219,17 +230,19 @@ export function getOrAdvanceTaRuntime(
   const map = loadAll()
   const key = sessionId || GUEST_KEY
   const cur = map[key]
+  const mode = resolveIdentityMode(sessionId)
   if (!cur || typeof cur.activityId !== 'string') {
-    const fresh = createState(pickActivity(new Date(now), persona, [], rand), now, rand, persona)
+    const fresh = createState(pickActivity(new Date(now), persona, [], rand, mode), now, rand, persona)
     map[key] = fresh
     saveAll(map)
     return fresh
   }
-  if (now < cur.plannedUntil) return cur
+  const currentActivity = ACTIVITIES.find((item) => item.id === cur.activityId)
+  if (now < cur.plannedUntil && currentActivity && activityAllowedForMode(currentActivity, mode)) return cur
   const recentIds = Array.isArray(cur.recentActivityIds) && cur.recentActivityIds.length > 0
     ? cur.recentActivityIds
     : [cur.activityId]
-  const next = createState(pickActivity(new Date(now), persona, recentIds, rand), now, rand, persona, recentIds)
+  const next = createState(pickActivity(new Date(now), persona, recentIds, rand, mode), now, rand, persona, recentIds)
   map[key] = next
   saveAll(map)
   return next
@@ -425,6 +438,8 @@ export function syncTaRuntimeFromAssistantText(
   if (decision.type === 'start') {
     const activity = ACTIVITIES.find((item) => item.id === decision.activityId)
     if (!activity) return null
+    const mode = resolveIdentityMode(sessionId)
+    if (!activityAllowedForMode(activity, mode)) return null
     if (cur?.activityId === activity.id && now < cur.plannedUntil) return cur
     const next = createChatOverrideState(activity, now, recentIds)
     map[key] = next
@@ -433,7 +448,7 @@ export function syncTaRuntimeFromAssistantText(
   }
 
   if (!cur) return null
-  const next = createState(pickActivity(new Date(now), persona, recentIds, rand), now, rand, persona, recentIds)
+  const next = createState(pickActivity(new Date(now), persona, recentIds, rand, resolveIdentityMode(sessionId)), now, rand, persona, recentIds)
   map[key] = next
   saveAll(map)
   return next

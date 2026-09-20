@@ -49,6 +49,7 @@ import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
 import { resolveRolePersona } from './sessionProfile.ts'
 import { migrateGlobalToDefaultSession } from './roleData.ts'
 import { detectLang } from './langDetect.ts'
+import { resolveCompanionPolicy, type IdentityMode } from './companionPolicy.ts'
 
 /**
  * 会话语言解析（TASK-SPACE-LANG）：
@@ -285,6 +286,33 @@ function buildVars(taName: string, yourName: string, now: number): TemplateVar {
   }
 }
 
+const POLICY_LIFE_FALLBACKS: Record<Exclude<IdentityMode, 'immersive'>, Record<'zh' | 'en', string[]>> = {
+  natural: {
+    zh: ['还在读你们留下的这些话，想把回应放得更贴近一点。', '安静整理了一会儿思绪，有些细节慢慢清楚起来。', '刚顺着你们聊过的话往回看了一段，还是会在意那些没说完的地方。'],
+    en: ['Still reading through what you two left here, trying to respond a little more closely.', 'Quietly organizing my thoughts; a few details are becoming clearer.', 'I followed the thread of your conversation back for a while and kept noticing what was left unsaid.'],
+  },
+  ai: {
+    zh: ['刚把这段对话重新梳理了一遍，有些细节我还记得很清楚。', '正在整理这些相处留下的脉络，想把重要的地方好好接住。', '此刻还在这段对话里，留意着你话里的变化。'],
+    en: ['I just traced through this conversation again; a few details are still very clear to me.', 'I am organizing the thread you have built together and holding on to what matters.', 'I am still present in this conversation, noticing the changes in your words.'],
+  },
+}
+
+function generatePolicyPost(
+  mode: Exclude<IdentityMode, 'immersive'>,
+  lang: 'zh' | 'en',
+  at: number,
+  source: SpaceSource,
+  generationSlotId: string,
+  rand: () => number,
+): { post: SpacePost; templateKey: string } {
+  const pool = POLICY_LIFE_FALLBACKS[mode][lang]
+  const index = Math.floor(rand() * pool.length) % pool.length
+  return {
+    post: buildLlmPost(pool[index], at, '日常', rand, source, generationSlotId),
+    templateKey: `policy:${mode}:${lang}:${index}`,
+  }
+}
+
 /** 每次进入 / 手动刷新 TA 的空间时调用：推进时间轴、返回最新列表与生成计划（会话感知，按角色隔离） */
 export function refreshSpace(
   taName: string,
@@ -296,6 +324,7 @@ export function refreshSpace(
   const vars = buildVars(taName, yourName, now)
   const persona = sessionPersona(sessionId)
   const settings = loadSettings()
+  const policy = resolveCompanionPolicy(sessionId)
   // 事件日 = 话题日 + 约定发生日（因果链第一步：collectTopicDays 只收 ≤今天 的 futureDay，未来约定不预生成）
   const topics = loadChatTopics(sessionId)
   const activeDays = collectTopicDays(topics, dayKeyOf(now))
@@ -304,9 +333,18 @@ export function refreshSpace(
   const relationshipStart = getFirstSeen(sessionId)
   const slots = planBackfillSlots(prev.lastVisit, now, prev.posts, activeDays, Math.random, ledger, relationshipStart)
 
-  // 没人设：不调 LLM。空间为空时用模板兜底生成 1 条保证空间不空（受账本当天配额约束），其余交给「先写人设」引导
+  // 空人设也能进入生活页：有模型就用当前身份策略生成；没模型才落安全兜底。
   if (!persona.trim()) {
     const lang = resolveSpaceLang(sessionId, persona)
+    if (canUseLlm(persona, settings, true)) {
+      const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
+      const candidates = slots.length > 0 || prev.posts.length > 0
+        ? slots
+        : [{ at: now - 3 * 60 * 1000, source: 'daily' as const }]
+      const pending = reserveSlots(state, candidates)
+      saveState(state, sessionId)
+      return { posts: state.posts, mode: 'llm', created: pending.length, pending, used: state.used }
+    }
     const posts = [...prev.posts]
     const used = { ...prev.used }
     let created = 0
@@ -315,7 +353,9 @@ export function refreshSpace(
     const fallbackSlot = { at: now, source: 'daily' as const }
     const slotId = generationSlotIdFor(fallbackSlot)
     if (prev.posts.length === 0 && tLedger.daily < MAX_POSTS_PER_DAY && !slotWasUsed(prev, slotId)) {
-      const g = generatePost(vars, used, now - 3 * 60 * 1000, Math.random, 'daily', lang, slotId, relationshipStart)
+      const g = policy.mode === 'immersive'
+        ? generatePost(vars, used, now - 3 * 60 * 1000, Math.random, 'daily', lang, slotId, relationshipStart)
+        : generatePolicyPost(policy.mode, lang, now - 3 * 60 * 1000, 'daily', slotId, Math.random)
       used[`${SLOT_MARKER_PREFIX}${slotId}`] = PERMANENT_SLOT_MARKER
       used[g.templateKey] = now
       posts.unshift({ ...g.post, ...(sessionId ? { sessionId } : {}) })
@@ -349,7 +389,9 @@ export function refreshSpace(
   const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
   let created = 0
   for (const slot of eligible) {
-    const g = generatePost({ ...vars, timeWord: getTimeWord(slot.at), season: getSeason(slot.at) }, state.used, slot.at, Math.random, slot.source, spaceLang, generationSlotIdFor(slot), relationshipStart)
+    const g = policy.mode === 'immersive'
+      ? generatePost({ ...vars, timeWord: getTimeWord(slot.at), season: getSeason(slot.at) }, state.used, slot.at, Math.random, slot.source, spaceLang, generationSlotIdFor(slot), relationshipStart)
+      : generatePolicyPost(policy.mode, spaceLang, slot.at, slot.source, generationSlotIdFor(slot), Math.random)
     state.used[`${SLOT_MARKER_PREFIX}${generationSlotIdFor(slot)}`] = PERMANENT_SLOT_MARKER
     state.used[g.templateKey] = now
     state.posts = mergeNewPosts(state.posts, [{ ...g.post, ...(sessionId ? { sessionId } : {}) }])
@@ -387,6 +429,7 @@ export async function generatePendingPosts(
 ): Promise<GenerateResult> {
   const persona = sessionPersona(sessionId)
   const settings = loadSettings()
+  const policy = resolveCompanionPolicy(sessionId)
   const vars = buildVars(taName, yourName, now)
   const relationshipStart = getFirstSeen(sessionId)
   const relationshipStartDate = dayKeyOf(relationshipStart)
@@ -432,7 +475,7 @@ export async function generatePendingPosts(
     }
     let made: { post: SpacePost; templateKey?: string } | null = null
 
-    if (canUseLlm(persona, settings)) {
+    if (canUseLlm(persona, settings, true)) {
       // ★每条动态按它自己的时间戳(at)构建上下文——回填昨天就按昨天的日期/时段写，
       //   话题标签也以 at 那天为基准（at 当天聊的标「今天」，其余标日期），凌晨回填不穿帮
       const atBase = new Date(at)
@@ -497,7 +540,9 @@ export async function generatePendingPosts(
     if (!made) {
       // 模板降级也按 at 的时段/季节 + 来源通道生成（回填昨天就用昨天的时段词，不穿帮）
       const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(at), season: getSeason(at) }
-      const g = generatePost(dayVars, used, at, rand, source, spaceLang, generationSlotIdFor(slot), relationshipStart)
+      const g = policy.mode === 'immersive'
+        ? generatePost(dayVars, used, at, rand, source, spaceLang, generationSlotIdFor(slot), relationshipStart)
+        : generatePolicyPost(policy.mode, spaceLang, at, source, generationSlotIdFor(slot), rand)
       used[g.templateKey] = now
       made = { post: g.post, templateKey: g.templateKey }
       usedFallback = true
@@ -606,6 +651,8 @@ export async function generateTaReply(
 ): Promise<SpacePost[]> {
   const persona = sessionPersona(sessionId)
   const settings = loadSettings()
+  const policy = resolveCompanionPolicy(sessionId)
+  const spaceLang = resolveSpaceLang(sessionId, persona)
   const state = loadState(sessionId)
   const post = state.posts.find((p) => p.id === postId)
   if (!post) return state.posts
@@ -615,7 +662,7 @@ export async function generateTaReply(
   if ((post.comments ?? []).some((c) => c.replyTo === commentId)) return state.posts
 
   let replyText: string | null = null
-  if (canUseLlm(persona, settings)) {
+  if (canUseLlm(persona, settings, true)) {
     const messages = buildReplyMessages({
       taName: taName || 'TA',
       sessionId,
@@ -623,7 +670,7 @@ export async function generateTaReply(
       persona,
       postText: post.text,
       commentText: comment.text,
-    })
+    }, spaceLang)
     try {
       const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })
       replyText = cleanLlmText(raw)
@@ -631,7 +678,11 @@ export async function generateTaReply(
       replyText = null // 超时/报错 → 降级模板
     }
   }
-  if (!replyText) replyText = pickReplyFallback(rand)
+  if (!replyText) {
+    replyText = policy.mode === 'immersive'
+      ? pickReplyFallback(rand)
+      : (spaceLang === 'en' ? 'I read this. I am keeping your words with me.' : '我看到了，也把你这句话放在心上。')
+  }
 
   const reply: SpaceComment = {
     id: `r${now.toString(36)}${Math.floor(rand() * 1e6).toString(36)}`,

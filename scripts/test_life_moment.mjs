@@ -23,7 +23,8 @@ const withPersona = buildSystemPrompt('你是温柔男友，爱做饭，最近�
 ok(withPersona.includes('爱做饭，最近在学一道新菜'), '人设原文保留')
 ok(withPersona.includes('你的名字叫「小忆」'), '名字注入保留')
 ok(withPersona.includes('【聊天规矩】'), '含精简后的聊天规矩')
-ok(withPersona.includes('你是活人不是AI'), '规矩1：不承认AI')
+ok(withPersona.includes('【身份灵魂·沉浸】'), '默认身份：沉浸')
+ok(!withPersona.match(/【聊天规矩】1\.[^。]*不是AI/), '公共聊天规矩不再硬编码身份')
 ok(withPersona.includes('不知道的事就说不知道'), '规矩1：不编不圆')
 ok(withPersona.includes('像真人微信聊天'), '规矩2：像真人说话')
 ok(withPersona.includes('你有自己的日子在过'), '规矩3：有自己的生活')
@@ -47,7 +48,7 @@ ok(noPersona.includes('对方怎么叫你，你就是谁'), '兜底身份原文'
 console.log('\n[3] 认识天数 + 纪念日 + 时间仍在（Node 无 localStorage 时认识天数段为空属正常，函数不崩即可）')
 ok(typeof buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()) === 'string', 'buildSystemPrompt 正常返回字符串')
 ok(buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).includes('此刻时间'), '时间上下文仍在')
-ok(buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).length < 1100, `提示词总长 <1100（得 ${buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).length}）`)
+ok(buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).length < 1250, `提示词总长 <1250（得 ${buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).length}）`)
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

@@ -23,7 +23,7 @@ import {
 import { stripMemoryMarkers } from '../lib/memory'
 import { truncatePreview } from '../lib/aiSpaceDetail'
 import { wechatListTime } from '../lib/time'
-import { loadAIProfile, saveAIProfile } from '../lib/storage'
+import { clearAIProfile, loadAIProfile, saveAIProfile } from '../lib/storage'
 import type { StoredMessage } from '../lib/storage'
 import { clearDefaultRoleId, getDefaultRoleId, setDefaultRoleId } from '../lib/defaultRole'
 import { clearReplyLengthOverride } from '../lib/replyLength'
@@ -149,6 +149,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
       }
       clearMessagesCache(id)
       clearMemoriesCache(id)
+      clearAIProfile(id)
       if (accountId) clearReplyLengthOverride(accountId, id)
       const remaining = list.filter((s) => String(s.id) !== String(id))
       setSessions(remaining)

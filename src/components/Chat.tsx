@@ -45,6 +45,7 @@ import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTa
 import { buildIdentityContext } from '../lib/identityContext'
 import { dropRepeatedReplies } from '../lib/replyDedupe'
 import { buildReplyLengthInstruction, getEffectiveReplyLength, splitDetailedAssistantReply } from '../lib/replyLength'
+import { resolveIdentityMode } from '../lib/companionPolicy'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -1088,7 +1089,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         thinking = thinkFromReasoning || thinkFromContent
       }
       const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)))
-      if (cleaned && (looksRobotic(cleaned) || looksFabricated(cleaned)) && !retriedRef.current) {
+      const identityMode = resolveIdentityMode(activeSessionId || undefined)
+      if (cleaned && (looksRobotic(cleaned, identityMode) || looksFabricated(cleaned)) && !retriedRef.current) {
         retriedRef.current = true
         setError(null)
         setMessages([...messages, userMsg, { role: 'assistant', content: '…', ts: assistantTs }])
@@ -1103,7 +1105,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         ])
           .then((retry) => {
             const retryCleaned = stripActionMarkers(stripEmoji(retry))
-            if (!retryCleaned || looksRobotic(retryCleaned) || looksFabricated(retryCleaned)) {
+            if (!retryCleaned || looksRobotic(retryCleaned, identityMode) || looksFabricated(retryCleaned)) {
               const fallback = '这个我还真没头绪，你跟我说说呗。'
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: fallback, ts: assistantTs }]
               commitFinal(final)

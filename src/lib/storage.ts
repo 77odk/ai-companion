@@ -363,11 +363,13 @@ export function saveUserProfile(p: UserProfile): void {
 export interface AIProfile {
   nickname: string
   avatar: string
+  /** 角色级身份模式；旧资料没有时按 immersive 读取。 */
+  identityMode?: 'immersive' | 'natural' | 'ai'
 }
 
 const AI_PROFILE_KEY = 'ai_companion_ai_profile'
 
-export const DEFAULT_AI_PROFILE: AIProfile = { nickname: 'TA', avatar: '' }
+export const DEFAULT_AI_PROFILE: AIProfile = { nickname: 'TA', avatar: '', identityMode: 'immersive' }
 
 const aiProfileKey = (sessionId?: string): string =>
   sessionId ? `${AI_PROFILE_KEY}_${sessionId}` : AI_PROFILE_KEY
@@ -389,6 +391,7 @@ function normalizeAIProfile(raw: string | null): AIProfile {
   return {
     nickname: typeof p.nickname === 'string' && p.nickname ? p.nickname : 'TA',
     avatar: typeof p.avatar === 'string' && p.avatar.startsWith('data:') ? p.avatar : '',
+    identityMode: p.identityMode === 'natural' || p.identityMode === 'ai' ? p.identityMode : 'immersive',
   }
 }
 
@@ -415,7 +418,15 @@ export function loadAIProfile(sessionId?: string): AIProfile {
 
 /** 保存 TA 资料（会话感知）：传 sessionId 写会话 key（角色隔离），否则写全局 key（无会话兜底） */
 export function saveAIProfile(p: AIProfile, sessionId?: string): void {
-  localStorage.setItem(aiProfileKey(sessionId), JSON.stringify(p))
+  const current = loadAIProfile(sessionId)
+  localStorage.setItem(aiProfileKey(sessionId), JSON.stringify({ ...current, ...p }))
+  notifyDataChanged()
+}
+
+/** 删除角色后清掉同一 profile 实体；现有 Cloud State capture 会据此发精确 tombstone。 */
+export function clearAIProfile(sessionId: string): void {
+  if (!sessionId) return
+  localStorage.removeItem(aiProfileKey(sessionId))
   notifyDataChanged()
 }
 

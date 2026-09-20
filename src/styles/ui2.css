@@ -179,6 +179,138 @@
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
 }
 
+.chat-shell {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.chat-shell > .chat-page {
+  width: 100%;
+}
+
+.chat-shell .message-list {
+  padding-bottom: 52px;
+}
+
+.chat-companion-controls {
+  position: absolute;
+  z-index: 8;
+  left: 14px;
+  right: 72px;
+  bottom: calc(62px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.chat-control-slot {
+  position: relative;
+  min-width: 0;
+  pointer-events: auto;
+}
+
+.chat-model-slot {
+  display: flex;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.chat-control-capsule {
+  min-height: 28px;
+  max-width: 174px;
+  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 64%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-card) 88%, transparent);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.chat-control-capsule:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, #fff);
+  outline-offset: 2px;
+}
+
+.chat-control-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.chat-model-capsule svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.chat-control-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  min-width: 216px;
+  padding: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-card) 96%, transparent);
+  box-shadow: 0 12px 30px rgba(47, 38, 31, 0.14);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.chat-identity-menu { left: 0; }
+.chat-model-menu { right: 0; }
+
+.chat-control-menu button {
+  width: 100%;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.chat-control-menu button.is-active {
+  background: color-mix(in srgb, var(--color-primary-soft) 62%, transparent);
+  color: var(--color-primary-deep);
+}
+
+.chat-control-menu strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.chat-control-menu small,
+.chat-control-empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.chat-control-empty {
+  padding: 10px;
+  white-space: nowrap;
+}
+
 /* 兜底：不支持 :has() 的旧浏览器统一留安全空间 */
 @supports not (selector(:has(*))) {
   .app-main {

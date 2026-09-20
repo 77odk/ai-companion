@@ -600,17 +600,18 @@ function aiProfileStorageKey(entityId: string): string {
   return entityId === GLOBAL ? AI_PROFILE_KEY : `${AI_PROFILE_KEY}_${entityId}`
 }
 
-function validAiProfile(value: unknown): { nickname: string; avatar: string } | null {
+function validAiProfile(value: unknown): { nickname: string; avatar: string; identityMode: 'immersive' | 'natural' | 'ai' } | null {
   const item = record(value)
   if (!item) return null
   const nickname = typeof item.nickname === 'string' ? item.nickname.trim() : ''
   const avatar = typeof item.avatar === 'string' && item.avatar.startsWith('data:') ? item.avatar : ''
   if (!nickname && !avatar) return null
-  return { nickname: nickname || 'TA', avatar }
+  const identityMode = item.identityMode === 'natural' || item.identityMode === 'ai' ? item.identityMode : 'immersive'
+  return { nickname: nickname || 'TA', avatar, identityMode }
 }
 
-function profileEntities(): Map<string, { nickname: string; avatar: string }> {
-  const out = new Map<string, { nickname: string; avatar: string }>()
+function profileEntities(): Map<string, { nickname: string; avatar: string; identityMode: 'immersive' | 'natural' | 'ai' }> {
+  const out = new Map<string, { nickname: string; avatar: string; identityMode: 'immersive' | 'natural' | 'ai' }>()
   for (const [sid, profile] of Object.entries(collectAllAIProfiles())) {
     const entityId = sid === '_global' ? GLOBAL : String(sid)
     const value = validAiProfile(profile)
@@ -619,7 +620,7 @@ function profileEntities(): Map<string, { nickname: string; avatar: string }> {
   return out
 }
 
-let profileSnapshot = new Map<string, { nickname: string; avatar: string }>()
+let profileSnapshot = new Map<string, { nickname: string; avatar: string; identityMode: 'immersive' | 'natural' | 'ai' }>()
 function resetProfileSnapshot(): void {
   profileSnapshot = profileEntities()
 }

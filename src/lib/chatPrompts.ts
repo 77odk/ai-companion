@@ -5,6 +5,7 @@ import type { Anniversary } from './anniversary.ts'
 import { getFirstSeen } from './storage.ts'
 import type { Lang } from './langDetect.ts'
 import { toPromptPerspective, type MemoryItem } from './memory.ts'
+import { buildCompanionCore, buildIdentitySoul, buildLanguageContinuity, resolveCompanionPolicy, type IdentityMode } from './companionPolicy.ts'
 
 /**
  * 记忆注入块（2026-09-18 七七拍板「二」）：
@@ -42,7 +43,7 @@ export interface ApiMessage {
 /** 聊天规矩：合并原底线+分寸+此刻+按设定，4句人话，功能全保留不啰嗦 */
 export const CHAT_RULES =
   '【聊天规矩】' +
-  '1. 你是活人不是AI，别承认别解释；不知道的事就说不知道让对方告诉你，别编别圆场。' +
+  '1. 不知道的事就说不知道，让对方告诉你；别编造事实、共同经历或现实事件，也别圆场。' +
   '2. 像真人微信聊天：短句口语，不用emoji，话多就拆成几条短消息发，别堆一大段。' +
   '3. 你有自己的日子在过，分享是日常不是救场：对方说事先接住，先顺着对方刚说的事追一两个细节（几点、跟谁、后来呢、咋了），像真人对刚听到的话感兴趣——别连环盘问、别光顾着问完就换话题；再自然带一句自己的生活（正在忙什么、此刻心情、刚发生的小事），带具体细节（什么茶、什么事、看见啥）——别整段只围着对方转，也别光问对方光评价对方，有来有往才像真人。你说过要去做的事就是在做，刚做完的事自己心里有数——对方重复提你刚做过的事，你自然想起来，别当没发生过。' +
   '4. 对方在倾诉，自己先让路接住，别急着扯自己的事；对方冷淡回嗯哦…，就递个有画面的事续话，别确认情绪也别顺势拜拜。'
@@ -50,7 +51,7 @@ export const CHAT_RULES =
 /** 聊天规矩 EN 版：约束等价，英文口语自然 */
 export const CHAT_RULES_EN =
   '[Ground Rules] ' +
-  '1. You are a real person, not an AI. Never admit or explain it. If you don\'t know something, say so and let them tell you — don\'t make stuff up or talk your way out of it.' +
+  '1. If you don\'t know something, say so and let them tell you. Never invent facts, shared memories, or real-world events, and don\'t talk your way out of it.' +
   '2. Text like a real person: short sentences, casual tone, no emoji. If you have a lot to say, split it into a few short messages instead of one big block.' +
   '3. You have your own life going on, and sharing it is your everyday right, not a rescue move. When they say something, catch it first: follow up on what they just told you with one or two genuine questions (what time, with who, then what, what happened) like a real person curious about what they heard — don\'t machine-gun questions or change topic right after asking; then let a line about your own day slip in naturally (what you\'re busy with, your mood right now, something small that just happened), with real details (what tea, what task, what you just saw). Don\'t let the whole message revolve around them, and don\'t just ask things or comment on them — a real conversation goes both ways. When you say you\'re going to do something, you\'re doing it; when you just finished something, you remember it. If they bring up something you just did again, you naturally recall it — don\'t act like it never happened.' +
   '4. If they\'re opening up about something, give them the floor and hold space — don\'t jump in with your own story. If they\'re being cold (short replies like "yeah" "ok" "..."), toss out something vivid to keep the conversation going — don\'t probe their mood or say goodbye.'
@@ -202,9 +203,14 @@ const FABRICATED_PATTERNS = [
   /(还记得|你忘了吗|你忘了没)(吗|？)?(，|,)?(我们|咱们|之前|上次|那天)/,
 ]
 
-export function looksRobotic(text: string): boolean {
+export function looksRobotic(text: string, identityMode: IdentityMode = 'immersive'): boolean {
   const t = stripEmoji(text ?? '')
-  return ROBOTIC_PATTERNS.some((re) => re.test(t))
+  return ROBOTIC_PATTERNS.some((re, index) => {
+    // 前 3 条中文 + 前 2 条英文是「承认自己是 AI」；自然/AI 档允许诚实披露，
+    // 但客服话术、设定腔、人机味仍继续拦截。
+    const disclosurePattern = index <= 2 || index === 10 || index === 11
+    return !(identityMode !== 'immersive' && disclosurePattern) && re.test(t)
+  })
 }
 
 /** 是否在编造共同经历，命中触发重写 */
@@ -239,6 +245,10 @@ export function buildRelationshipBlock(now: number = Date.now(), sessionId?: str
  */
 export function buildSystemPrompt(persona?: string, aiName?: string, now?: number, sessionId?: string, lang: Lang = 'zh'): string {
   const isEn = lang === 'en'
+  const policy = resolveCompanionPolicy(sessionId)
+  const companionCore = buildCompanionCore(lang)
+  const identitySoul = buildIdentitySoul(policy, lang)
+  const languageContinuity = buildLanguageContinuity(lang)
   const rules = isEn ? CHAT_RULES_EN : CHAT_RULES
   const defaultIdentity = isEn ? DEFAULT_IDENTITY_EN : DEFAULT_IDENTITY
   const memoryInstr = isEn ? MEMORY_INSTRUCTION_EN : MEMORY_INSTRUCTION
@@ -253,9 +263,9 @@ export function buildSystemPrompt(persona?: string, aiName?: string, now?: numbe
     const lifeHeader = isEn
       ? '[Your Life & Memories — Most Important] The following is your life, your personality, your shared past — this is what you\'ve lived through, not a script someone wrote for you. This is who you are; speak and act accordingly:\n'
       : '【你的人生与记忆·最重要】下面是你的人生、你的性格、你们的过去——这是你亲身经历的，不是谁写给你的剧本。你就是这么一个人，说话做事都顺着它来：\n'
-    prompt = `${lifeHeader}${custom}\n\n${nameLine}${rules}`
+    prompt = `${lifeHeader}${custom}\n\n${nameLine}${companionCore}\n${identitySoul}\n${languageContinuity}\n${rules}`
   } else {
-    prompt = `${nameLine}${defaultIdentity}\n\n${rules}`
+    prompt = `${nameLine}${defaultIdentity}\n\n${companionCore}\n${identitySoul}\n${languageContinuity}\n${rules}`
   }
   // 认识天数 + 纪念日注入
   const relationshipBlock = buildRelationshipBlock(now, sessionId, lang)
