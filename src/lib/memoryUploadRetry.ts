@@ -38,12 +38,6 @@ function isSamePendingMemory(local: MemoryItem, cloud: SessionMemory): boolean {
   return true
 }
 
-function hasSameExactPayload(local: MemoryItem, cloud: SessionMemory): boolean {
-  return clean(local.text) === clean(cloud.content)
-    && clean(local.source) === clean(cloud.source)
-    && clean(local.taReply) === clean(cloud.taReply)
-}
-
 function findUniqueCloudMatch(local: MemoryItem, cloud: SessionMemory[]): SessionMemory | null | 'ambiguous' {
   // 一旦本地已经对账成服务端 id，id 是最强证据，不再受 createdAt 时间窗限制。
   // 这覆盖“离线数小时后才补传成功，但 pendingSync 尚未被下一次 hydration 清掉”的情况，
@@ -55,14 +49,6 @@ function findUniqueCloudMatch(local: MemoryItem, cloud: SessionMemory[]): Sessio
   const matches = cloud.filter((item) => isSamePendingMemory(local, item))
   if (matches.length === 1) return matches[0]
   if (matches.length > 1) return 'ambiguous'
-
-  // 设备时钟可能与服务端相差超过 5 分钟。严格时间窗没有候选时，
-  // 只允许“完整 payload 完全一致且全云端唯一”的单条回退匹配。
-  // 这样能覆盖“第一次 POST 已成功但响应丢失 + 手机时间明显偏差”，
-  // 同时只要历史里存在第二条同 payload 记录就判 ambiguous，绝不猜。
-  const exactPayloadMatches = cloud.filter((item) => hasSameExactPayload(local, item))
-  if (exactPayloadMatches.length === 1) return exactPayloadMatches[0]
-  if (exactPayloadMatches.length > 1) return 'ambiguous'
   return null
 }
 
