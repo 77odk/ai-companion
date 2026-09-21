@@ -25,7 +25,12 @@ assert.match(source, /setSelectedIdentity\(\{[\s\S]*kind: memory\.kind,[\s\S]*me
 assert.match(source, /const identity: MemorySelection = \{[\s\S]*kind: initialDetail\.kind,[\s\S]*memoryId: initialDetail\.memoryId/)
 assert.match(source, /setSelectedIdentity\(identity\)/)
 
-console.log('\n[5] If refresh removes the selected item, Detail exits safely instead of falling through to a neighbor')
+console.log('\n[5] Refresh reconciliation carries local→server id into an open Detail')
+assert.match(source, /setSelectedIdentity\(\(current\) => \{/)
+assert.match(source, /alignment\.reconciledIds\.get\(String\(current\.memoryId\)\)/)
+assert.match(source, /return serverId \? \{ \.\.\.current, memoryId: serverId \} : current/)
+
+console.log('\n[6] If refresh truly removes the selected item, Detail exits safely instead of falling through to a neighbor')
 assert.match(source, /if \(view !== 'detail' \|\| !selectedIdentity \|\| selected\) return/)
 assert.match(source, /setSelectedIdentity\(null\)[\s\S]*setView\('river'\)/)
 
