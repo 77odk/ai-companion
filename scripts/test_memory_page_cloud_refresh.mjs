@@ -14,7 +14,10 @@ globalThis.localStorage = {
 }
 
 const {
+  getMemoriesCache,
   mergeSessionMemories,
+  reconcileMemoryCacheId,
+  saveMemoriesCache,
   sessionMemoryToItem,
 } = await import('../src/lib/sessionStore.ts')
 const { alignPendingMemoriesForRefresh } = await import('../src/lib/memoryRefreshReconcile.ts')
@@ -92,6 +95,10 @@ const mergedInflight = mergeSessionMemories(alignedInflight, inflightCloud, { pu
 assert.equal(mergedInflight.length, 1, '对齐后 merge 只能剩一条')
 assert.equal(mergedInflight[0].id, '901')
 assert.equal(mergedInflight[0].pendingSync, undefined, '云端权威条目收敛后清 pending')
+saveMemoriesCache(sessionId, mergedInflight)
+reconcileMemoryCacheId(sessionId, 'local-inflight', 901)
+assert.equal(getMemoriesCache(sessionId).length, 1, '旧 POST 回调回来时临时 id 已不存在，必须 no-op')
+assert.equal(getMemoriesCache(sessionId)[0].id, '901')
 
 console.log('\n[5] 有歧义时绝不猜；超出当前 5 分钟窗口也保持 pending 原样')
 const ambiguousCloud = [
