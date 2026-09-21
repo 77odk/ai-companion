@@ -6,6 +6,7 @@ import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBo
 import { getToken } from '../lib/auth'
 import { correctMemoryText, removeMemory, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 import { findChatRecordJumpTargetHydrated, type ChatJumpTarget, type MemoryReturnTarget } from '../lib/chatJump'
+import { alignPendingMemoriesForRefresh } from '../lib/memoryRefreshReconcile'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
 // 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
@@ -150,7 +151,8 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       if (cancelled || !res.ok || memoryMutationVersionRef.current !== startedAtMutationVersion) return
 
       const cloudMemories = res.data.memories.map(sessionMemoryToItem)
-      const merged = mergeSessionMemories(getMemoriesCache(sessionId), cloudMemories, {
+      const refreshedCache = alignPendingMemoriesForRefresh(getMemoriesCache(sessionId), cloudMemories)
+      const merged = mergeSessionMemories(refreshedCache, cloudMemories, {
         purgeMissing: true,
         sessionId,
       })
