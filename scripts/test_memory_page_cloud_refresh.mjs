@@ -17,6 +17,7 @@ const {
   mergeSessionMemories,
   sessionMemoryToItem,
 } = await import('../src/lib/sessionStore.ts')
+const { alignPendingMemoriesForRefresh } = await import('../src/lib/memoryRefreshReconcile.ts')
 
 const sessionId = '19'
 const local = [
@@ -62,21 +63,64 @@ const pending = merged.find((item) => item.id === 'local-pending')
 assert.ok(pending)
 assert.equal(pending?.pendingSync, true)
 
-console.log('\n[4] 页面挂载明确走 listMemories → sessionMemoryToItem → mergeSessionMemories')
+
+console.log('\n[4] 刷新遇到“POST 已落云端但回调未返回”时，唯一 pending/cloud 对会先对齐 id')
+const inflightLocal = [
+  {
+    id: 'local-inflight',
+    text: '刚记住的一件事',
+    createdAt: Date.parse('2026-09-21T00:00:00.000Z'),
+    source: '这是原话',
+    taReply: '我记住了',
+    pendingSync: true,
+  },
+]
+const inflightCloud = [
+  {
+    id: '901',
+    text: '刚记住的一件事',
+    createdAt: Date.parse('2026-09-21T00:00:20.000Z'),
+    source: '这是原话',
+    taReply: '我记住了',
+  },
+]
+const alignedInflight = alignPendingMemoriesForRefresh(inflightLocal, inflightCloud)
+assert.equal(alignedInflight.length, 1)
+assert.equal(alignedInflight[0].id, '901')
+assert.equal(alignedInflight[0].pendingSync, true)
+const mergedInflight = mergeSessionMemories(alignedInflight, inflightCloud, { purgeMissing: true, sessionId })
+assert.equal(mergedInflight.length, 1, '对齐后 merge 只能剩一条')
+assert.equal(mergedInflight[0].id, '901')
+assert.equal(mergedInflight[0].pendingSync, undefined, '云端权威条目收敛后清 pending')
+
+console.log('\n[5] 有歧义时绝不猜；超出当前 5 分钟窗口也保持 pending 原样')
+const ambiguousCloud = [
+  inflightCloud[0],
+  { ...inflightCloud[0], id: '902' },
+]
+assert.equal(alignPendingMemoriesForRefresh(inflightLocal, ambiguousCloud)[0].id, 'local-inflight')
+const lateCloud = [
+  { ...inflightCloud[0], createdAt: inflightLocal[0].createdAt + 6 * 60 * 1000 },
+]
+assert.equal(alignPendingMemoriesForRefresh(inflightLocal, lateCloud)[0].id, 'local-inflight')
+
+console.log('\n[6] 页面挂载明确先 align pending/cloud，再走既有 mergeSessionMemories')
 const source = fs.readFileSync(path.join(process.cwd(), 'src/components/Memory.tsx'), 'utf8')
 assert.match(source, /import \{ listMemories \} from '\.\.\/lib\/sessionApi'/)
+assert.match(source, /import \{ alignPendingMemoriesForRefresh \} from '\.\.\/lib\/memoryRefreshReconcile'/)
 assert.match(source, /res\.data\.memories\.map\(sessionMemoryToItem\)/)
-assert.match(source, /mergeSessionMemories\(getMemoriesCache\(sessionId\), cloudMemories/)
+assert.match(source, /const refreshedCache = alignPendingMemoriesForRefresh\(getMemoriesCache\(sessionId\), cloudMemories\)/)
+assert.match(source, /mergeSessionMemories\(refreshedCache, cloudMemories/)
 assert.match(source, /purgeMissing: true/)
 assert.match(source, /sessionId,/)
 
-console.log('\n[5] 页内会话记忆改/删后，旧 GET 结果必须因 mutation version 变化而失效')
+console.log('\n[7] 页内会话记忆改/删后，旧 GET 结果必须因 mutation version 变化而失效')
 assert.match(source, /const memoryMutationVersionRef = useRef\(0\)/)
 assert.match(source, /startedAtMutationVersion = memoryMutationVersionRef\.current/)
 assert.ok((source.match(/memoryMutationVersionRef\.current !== startedAtMutationVersion/g) ?? []).length >= 2)
 assert.ok((source.match(/if \(selected\.kind === 'session'\) memoryMutationVersionRef\.current \+= 1/g) ?? []).length >= 2)
 
-console.log('\n[6] 没有新增 storage key / API；只复用当前 token、session 和现有缓存')
+console.log('\n[8] 没有新增 storage key / API；只复用当前 token、session 和现有缓存')
 assert.equal(source.includes('localStorage.setItem('), false)
 assert.equal(source.includes('/api/'), false)
 
