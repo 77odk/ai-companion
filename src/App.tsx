@@ -54,7 +54,7 @@ import {
 } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh } from './lib/forceRefresh'
-import { fetchDeployedBuildVersion, getCurrentBuildVersion, shouldShowBuildUpdate } from './lib/appVersion'
+import { checkDeployedBuild, getCurrentBuildVersion, subscribeDeployedBuild } from './lib/appVersion'
 import Home from './components/Home'
 import SpaceLife from './components/SpaceLife'
 import Memory from './components/Memory'
@@ -309,30 +309,30 @@ export default function App() {
     const currentVersion = getCurrentBuildVersion()
     if (!currentVersion) return () => { cancelled = true }
 
-    const checkVersion = async () => {
-      const deployedVersion = await fetchDeployedBuildVersion()
-      if (cancelled || !deployedVersion) return
-      if (!shouldShowBuildUpdate(currentVersion, deployedVersion)) {
-        setDeployedUpdateVersion(null)
-        return
-      }
-      if (dismissedUpdateVersionRef.current !== deployedVersion) {
-        setDeployedUpdateVersion(deployedVersion)
-      }
+    // 探测统一走 checkDeployedBuild：「我的 → 检查更新」用的是同一个函数，两处判定不会各写一套。
+    const applyDeployed = (version: string | null) => {
+      if (cancelled) return
+      setDeployedUpdateVersion(version && dismissedUpdateVersionRef.current !== version ? version : null)
+    }
+    const unsubscribe = subscribeDeployedBuild(applyDeployed)
+
+    const checkVersion = () => {
+      void checkDeployedBuild()
     }
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void checkVersion()
+      if (document.visibilityState === 'visible') checkVersion()
     }
-    const onOnline = () => void checkVersion()
-    const onControllerChange = () => void checkVersion()
+    const onOnline = () => checkVersion()
+    const onControllerChange = () => checkVersion()
 
-    void checkVersion()
+    checkVersion()
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('online', onOnline)
     navigator.serviceWorker?.addEventListener('controllerchange', onControllerChange)
     return () => {
       cancelled = true
+      unsubscribe()
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('online', onOnline)
       navigator.serviceWorker?.removeEventListener('controllerchange', onControllerChange)
