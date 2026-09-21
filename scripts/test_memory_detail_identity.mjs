@@ -30,7 +30,14 @@ assert.match(source, /setSelectedIdentity\(\(current\) => \{/)
 assert.match(source, /alignment\.reconciledIds\.get\(String\(current\.memoryId\)\)/)
 assert.match(source, /return serverId \? \{ \.\.\.current, memoryId: serverId \} : current/)
 
-console.log('\n[6] If refresh truly removes the selected item, Detail exits safely instead of falling through to a neighbor')
+console.log('\n[6] Pending “看原对话” handler 在 await 后使用 reconciled server id')
+assert.match(source, /const reconciledMemoryIdsRef = useRef\(new Map<string, string>\(\)\)/)
+assert.match(source, /reconciledMemoryIdsRef\.current\.set\(localId, serverId\)/)
+assert.match(source, /const jumpIdentity: MemorySelection = \{/)
+assert.match(source, /reconciledMemoryIdsRef\.current\.get\(String\(jumpIdentity\.memoryId\)\)/)
+assert.match(source, /memoryId: returnMemoryId/)
+
+console.log('\n[7] If refresh truly removes the selected item, Detail exits safely instead of falling through to a neighbor')
 assert.match(source, /if \(view !== 'detail' \|\| !selectedIdentity \|\| selected\) return/)
 assert.match(source, /setSelectedIdentity\(null\)[\s\S]*setView\('river'\)/)
 
