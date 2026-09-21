@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadMemory, type MemoryItem } from '../lib/memory'
-import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
+import { getActiveSessionId, getMemoriesCache, mergeSessionMemories, saveMemoriesCache, sessionMemoryToItem } from '../lib/sessionStore'
+import { listMemories } from '../lib/sessionApi'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
 import { getToken } from '../lib/auth'
 import { correctMemoryText, removeMemory, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
@@ -108,16 +109,45 @@ interface MemoryProps {
 
 export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetailConsumed }: MemoryProps = {}) {
   const sessionId = getActiveSessionId()
-  const readMemories = (): SourcedMemory[] => {
+  const readMemories = (sessionOverride?: MemoryItem[]): SourcedMemory[] => {
     const globalExplicit = loadMemory().filter((memory) => memory.explicit === true)
-    const sessionMemories = sessionId ? getMemoriesCache(sessionId) : []
+    const sessionMemories = sessionOverride ?? (sessionId ? getMemoriesCache(sessionId) : [])
     return [
       ...globalExplicit.map((item) => ({ item, kind: 'global' as const })),
       ...sessionMemories.map((item) => ({ item, kind: 'session' as const })),
     ]
   }
   const [memories, setMemories] = useState(readMemories)
-  useEffect(() => setMemories(readMemories()), [sessionId])
+  // #19：进入记忆页主动拉当前会话云端记忆。页内一旦发生改/删，本次旧 GET 结果作废，避免回写过期状态。
+  const memoryMutationVersionRef = useRef(0)
+  useEffect(() => {
+    let cancelled = false
+    setMemories(readMemories())
+    if (!sessionId) return () => { cancelled = true }
+
+    const token = getToken()
+    if (!token) return () => { cancelled = true }
+
+    const startedAtMutationVersion = memoryMutationVersionRef.current
+    void listMemories(token, sessionId).then((res) => {
+      if (cancelled || !res.ok || memoryMutationVersionRef.current !== startedAtMutationVersion) return
+
+      const cloudMemories = res.data.memories.map(sessionMemoryToItem)
+      const merged = mergeSessionMemories(getMemoriesCache(sessionId), cloudMemories, {
+        purgeMissing: true,
+        sessionId,
+      })
+      if (cancelled || memoryMutationVersionRef.current !== startedAtMutationVersion) return
+
+      // localStorage 写失败不伪装成成功；但本次页面仍可展示刚从权威云端拉回的真实结果。
+      saveMemoriesCache(sessionId, merged)
+      setMemories(readMemories(merged))
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId])
 
   const chronological = useMemo<DatedSourcedMemory[]>(() => {
     return memories
@@ -274,6 +304,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       : { kind: 'session', sessionId, item: selected.item, token: getToken() }
     setDeleting(true)
     setDeleteError('')
+    if (selected.kind === 'session') memoryMutationVersionRef.current += 1
     const result = await removeMemory(target)
     setDeleting(false)
     if (!result.ok) {
@@ -299,6 +330,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       : { kind: 'session', sessionId, item: selected.item, token: getToken() }
     setSaving(true)
     setSaveError('')
+    if (selected.kind === 'session') memoryMutationVersionRef.current += 1
     const result = await correctMemoryText(target, text)
     setSaving(false)
     if (!result.ok) {
