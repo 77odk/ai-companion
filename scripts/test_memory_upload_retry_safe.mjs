@@ -1,4 +1,4 @@
-// #20 · memoryUploadRetry 专项测试：pendingSync 驱动、安全去重、删除不复活。
+// #20 · memoryUploadRetry 专项测试：pendingSync 驱动、安全去重、删除不复活、并发防重入。
 import assert from 'node:assert/strict'
 
 const store = new Map()
@@ -121,7 +121,7 @@ assert.equal(requests.length, 1)
 assert.equal(getMemoriesCache(SID)[0].id, 'local-memory-1')
 assert.equal(getMemoriesCache(SID)[0].pendingSync, true)
 
-console.log('\n[5] 补传过程中本地已删除：绝不复活、绝不 POST')
+console.log('\n[5] 补传开始前本地已删除：绝不 POST')
 reset()
 requests = []
 getCount = 0
@@ -136,7 +136,25 @@ assert.equal(requests.filter((r) => r.method === 'POST').length, 0)
 assert.deepEqual(getMemoriesCache(SID), [])
 assert.ok(result.skipped >= 1)
 
-console.log('\n[6] 没有 pendingSync：零请求')
+console.log('\n[6] POST 在途时本地被删：成功后 best-effort 删除刚创建的服务端行，不回写本地')
+reset()
+requests = []
+handler = async (req) => {
+  if (req.method === 'GET') return json({ memories: [] })
+  if (req.method === 'POST') {
+    saveMemoriesCache(SID, [])
+    return json(cloudMemory(303))
+  }
+  assert.equal(req.method, 'DELETE')
+  assert.match(req.url, /\/api\/memories\/303$/)
+  return json({ ok: true })
+}
+result = await retryPendingMemoryUploads('token', SID)
+assert.equal(requests.filter((r) => r.method === 'POST').length, 1)
+assert.equal(requests.filter((r) => r.method === 'DELETE').length, 1)
+assert.deepEqual(getMemoriesCache(SID), [])
+
+console.log('\n[7] 没有 pendingSync：零请求')
 store.clear()
 saveMemoriesCache(SID, [{ ...localMemory(), pendingSync: undefined }])
 requests = []
@@ -145,5 +163,42 @@ result = await retryPendingMemoryUploads('token', SID)
 assert.equal(requests.length, 0)
 assert.equal(result.uploaded, 0)
 assert.equal(result.reconciled, 0)
+
+console.log('\n[8] 已对账成 server id 后，即使 server createdAt 与本地相差数小时，也只认 id 不重复 POST')
+store.clear()
+saveMemoriesCache(SID, [{ ...localMemory(), id: '404', pendingSync: true }])
+requests = []
+handler = async (req) => {
+  assert.equal(req.method, 'GET')
+  return json({ memories: [cloudMemory(404, '记住这件事', 6 * 60 * 60 * 1000)] })
+}
+result = await retryPendingMemoryUploads('token', SID)
+assert.equal(result.reconciled, 1)
+assert.equal(requests.length, 1)
+assert.equal(requests.some((r) => r.method === 'POST'), false)
+
+console.log('\n[9] 同 token + session 并发调用只跑一套网络请求')
+reset()
+requests = []
+let releaseFirstGet
+const firstGetGate = new Promise((resolve) => { releaseFirstGet = resolve })
+getCount = 0
+handler = async (req) => {
+  if (req.method === 'GET') {
+    getCount += 1
+    if (getCount === 1) await firstGetGate
+    return json({ memories: [] })
+  }
+  assert.equal(req.method, 'POST')
+  return json(cloudMemory(505))
+}
+const p1 = retryPendingMemoryUploads('same-token', SID)
+const p2 = retryPendingMemoryUploads('same-token', SID)
+releaseFirstGet()
+const [r1, r2] = await Promise.all([p1, p2])
+assert.equal(getCount, 2, '并发调用共享同一轮：只有两次预检 GET')
+assert.equal(requests.filter((r) => r.method === 'POST').length, 1)
+assert.equal(r1.uploaded, 1)
+assert.equal(r2.uploaded, 1)
 
 console.log('\nmemory upload retry safe: all passed')
