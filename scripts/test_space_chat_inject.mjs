@@ -33,9 +33,9 @@ const block = buildSpacePostsBlock([
   post('楼下散步，天气不错'),
 ])
 ok(block.startsWith('你最近发过的动态：'), '以「你最近发过的动态」开头')
-ok(block.includes('- 早餐店的豆浆油条，绝了'), '含第一条（最新）')
-ok(block.includes('- 煮了碗面，加了俩蛋'), '含第二条')
-ok(block.includes('- 楼下散步，天气不错'), '含第三条')
+ok(block.includes('- [source=SELF] 早餐店的豆浆油条，绝了'), '含第一条（最新）')
+ok(block.includes('- [source=SELF] 煮了碗面，加了俩蛋'), '含第二条')
+ok(block.includes('- [source=SELF] 楼下散步，天气不错'), '含第三条')
 ok(block.includes('这是你自己发过的生活记录，对方提起时照实接'), '带被动引用说明（别当成实时经历）')
 ok(block.includes('别当成现在正在发生的事'), '明确是历史记录非实时经历')
 // limit 截断
@@ -43,7 +43,7 @@ const five = buildSpacePostsBlock(
   [1, 2, 3, 4, 5, 6].map((n) => post(`动态${n}`)),
   5,
 )
-ok(five.includes('- 动态1') && !five.includes('- 动态6'), 'limit=5 只取前 5 条（最新在前）')
+ok(five.includes('- [source=SELF] 动态1') && !five.includes('动态6'), 'limit=5 只取前 5 条（最新在前）')
 // text 空白过滤
 const mixed = buildSpacePostsBlock([post('  有内容的  '), post('   ')])
 ok(mixed.includes('有内容的') && !mixed.includes('  '), 'text 去空白，空行不占位')
@@ -64,7 +64,7 @@ const withReply = {
   ],
 }
 const b1 = buildSpacePostsBlock([withReply])
-ok(b1.includes('对方留言「哪家呀」，你回了「路口那家，改天带你去」'), 'TA 记得"对方留言了、自己回过了"')
+ok(b1.includes('[source=USER] 哪家呀') && b1.includes('[source=SELF] 路口那家，改天带 USER 去'), 'TA 记得"对方留言了、自己回过了"')
 ok(b1.includes('早餐店的豆浆油条，绝了'), '原动态文本仍保留')
 // 对方留言 + TA 未回
 const noReply = {
@@ -76,7 +76,7 @@ const noReply = {
   comments: [{ id: 'c3', text: '好吃吗', at: 2, from: 'user' }],
 }
 const b2 = buildSpacePostsBlock([noReply])
-ok(b2.includes('对方留言「好吃吗」，你还没回'), 'TA 记得"对方留言了、自己还没回"')
+ok(b2.includes('[source=USER] 好吃吗') && b2.includes('SELF 还没回复'), 'TA 记得"对方留言了、自己还没回"')
 // limit 内只带前 N 条的评论
 const limited = buildSpacePostsBlock([withReply, post('另一条')], 1)
 ok(limited.includes('互动：') && limited.includes('早餐店的豆浆油条'), 'limit 截断后评论跟随对应动态')

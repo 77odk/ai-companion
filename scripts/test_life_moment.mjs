@@ -48,7 +48,7 @@ ok(noPersona.includes('对方怎么叫你，你就是谁'), '兜底身份原文'
 console.log('\n[3] 认识天数 + 纪念日 + 时间仍在（Node 无 localStorage 时认识天数段为空属正常，函数不崩即可）')
 ok(typeof buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()) === 'string', 'buildSystemPrompt 正常返回字符串')
 ok(buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).includes('此刻时间'), '时间上下文仍在')
-ok(buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).length < 1250, `提示词总长 <1250（得 ${buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).length}）`)
+ok(buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).length < 1350, `提示词总长 <1350（含来源说明；得 ${buildSystemPrompt('你是温柔男友', '小忆', new Date(2026, 8, 4, 20, 0).getTime()).length}）`)
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

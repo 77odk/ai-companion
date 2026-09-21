@@ -6,6 +6,7 @@ import { getActiveSessionId, getSessionLang } from '../lib/sessionStore'
 import { chatBubbleTime } from '../lib/time'
 import { chatCompletion } from '../lib/api'
 import { detectLang } from '../lib/langDetect'
+import { cleanAttributionArtifacts } from '../lib/promptAttribution'
 import DefaultAvatar from './DefaultAvatar'
 
 interface Props {
@@ -67,7 +68,9 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
   const avatar = isUser ? loadUserProfile().avatar : loadAIProfile(getActiveSessionId() || undefined).avatar
   // 展示时把「【记忆】xxx」那行和思考链「」藏起来，不让用户看到标记（原文仍保存在存储里）
   // 第一批③：裸英文思考泄漏——只在中文会话剥，英文会话正文绝不动
-  const displayText = isUser ? message.content : stripThinkBlocks(stripMemoryMarkers(message.content), sessionLang)
+  const displayText = isUser
+    ? message.content
+    : cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(message.content), sessionLang), sessionLang)
   // 「已记住」必须绑真实写入结果：只凭模型输出了 marker 不算保存成功（memorySaved 由写入链在成功时标记）
   const hasMemory = !isUser && message.memorySaved === true
   // 内心戏：TA 消息有 thinking 字段时显示灰条
@@ -77,7 +80,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
   const typingLabel = sessionLang === 'en' ? 'TA is thinking…' : 'TA 正在想…'
   const memoryMomentLabel = sessionLang === 'en' ? 'Saved this moment' : '已记住这个瞬间'
   // 思考链是否需要翻译：中文会话 + thinking 是英文 → 需要懒翻译
-  const thinkingRaw = message.thinking ?? ''
+  const thinkingRaw = cleanAttributionArtifacts(message.thinking ?? '', sessionLang)
   const needThinkTranslate = hasThink && sessionLang === 'zh' && detectLang(thinkingRaw) === 'en'
   // 展示内容：有翻译用翻译，没有用原文（限600字）
   const thinkDisplay = hasThink
@@ -107,7 +110,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
         { maxTokens: 200, temperature: 0.7 },
       )
         .then((text) => {
-          const result = (text ?? '').trim()
+          const result = cleanAttributionArtifacts(text ?? '', 'zh').trim()
           if (result) {
             setThinkZh(result)
             setThinkZhCache(message.ts, result)

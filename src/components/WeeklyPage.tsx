@@ -3,9 +3,7 @@ import {
   SLOW_LETTER_REPLY_SYSTEM_PROMPT,
   WEEKLY_REPLY_SYSTEM_PROMPT,
   WEEKLY_SYSTEM_PROMPT,
-  buildWeeklyPrompt,
   cooldownInfo,
-  formatMessageLine,
   getWeekRange,
   getWeeklyReviews,
   newWeeklyReviewId,
@@ -23,8 +21,10 @@ import { loadChatTopics } from '../lib/chatTopics'
 import { dayKeyOf } from '../lib/aiSpaceCore'
 import { getActiveSessionId, getMemoriesCache, getMessagesCache, getSessionsCache } from '../lib/sessionStore'
 import { resolveRolePersona } from '../lib/sessionProfile'
-import { loadMemory, toPromptPerspective } from '../lib/memory'
+import { loadMemory } from '../lib/memory'
 import { getEventsForWeek } from '../lib/eventStore'
+import { buildAttributionLegend, cleanAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
+import { buildAttributedWeeklyPrompt, formatAttributedWeeklyMessage } from '../lib/weeklyPromptAttribution'
 
 const REPLY_PLACEHOLDER = '把此刻的心情写下来…'
 const SUCCESS_IMMEDIATE = '你的回信已经寄出。TA 的回信到了以后，会先等你亲手拆开。'
@@ -189,7 +189,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         if (!s.apiKey?.trim() || !s.baseUrl?.trim() || !s.model?.trim()) return
 
         try {
-          const reviewContext = '这封一周情书《' + current.title + '》：\n' + current.content
+          const reviewContext = formatAttributedLine('这封一周情书《' + current.title + '》：\n' + current.content, 'SELF', 'zh')
           const personaContext = persona ? '\n\n【你的性格】' + persona : ''
           const raw = await chatCompletion(
             s,
@@ -197,13 +197,15 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
               { role: 'system', content: SLOW_LETTER_REPLY_SYSTEM_PROMPT },
               {
                 role: 'user',
-                content: reviewContext + '\n\n对方几天前写给你的慢信：' + item.pending.content + personaContext,
+                content:
+                  buildAttributionLegend('zh') + '\n' + reviewContext + '\n\n' +
+                  formatAttributedLine(item.pending.content, 'USER', 'zh') + personaContext,
               },
             ],
             { maxTokens: 300, timeoutMs: 30000 },
           )
-          const clean = raw.trim()
-          if (!clean) throw new Error('empty')
+          const clean = cleanAttributionArtifacts(raw, 'zh').trim()
+          if (!clean || hasAttributionLeak(clean)) throw new Error('empty-or-attribution-leak')
           const replyAt = Date.now()
           working = working.map((r) =>
             r.id === item.reviewId
@@ -266,7 +268,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         .filter((m) => m.ts >= week.startTs && m.ts <= week.endTs)
         .sort((a, b) => a.ts - b.ts)
         .slice(-40)
-      const summaryLines = weekMsgs.map((m) => formatMessageLine(m))
+      const summaryLines = weekMsgs.map((m) => formatAttributedWeeklyMessage(m))
       const newMemories = (currentSid ? getMemoriesCache(currentSid) : loadMemory())
         .filter((m) => m.createdAt >= week.startTs && m.createdAt <= week.endTs)
         .map((m) => m.text)
@@ -278,7 +280,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         .map((p) => p.text)
       const weekAgenda = loadChatTopics(currentSid || undefined)
         .filter((t) => typeof t.futureDay === 'string' && t.futureDay >= dayKeyOf(week.startTs) && t.futureDay <= dayKeyOf(week.endTs))
-        .map((t) => `${toPromptPerspective(t.t)}（约在 ${t.futureDay}）`)
+        .map((t) => `${t.t}（约在 ${t.futureDay}）`)
       const weekEvents = getEventsForWeek(currentSid || undefined, week.startTs, week.endTs)
         .slice(0, 5)
         .map((e) => (e.description ? `${e.title}（${e.description}）` : e.title))
@@ -289,7 +291,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
           { role: 'system', content: WEEKLY_SYSTEM_PROMPT },
           {
             role: 'user',
-            content: buildWeeklyPrompt({
+            content: buildAttributedWeeklyPrompt({
               sessionId: currentSid || undefined,
               weekLabel: week.weekLabel,
               summaryLines,
@@ -306,7 +308,16 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         { maxTokens: 2000, timeoutMs: 120000 },
       )
 
-      const parsed = parseWeeklyOutput(raw, `第 ${week.weekNumber} 周`)
+      const parsedRaw = parseWeeklyOutput(raw, `第 ${week.weekNumber} 周`)
+      const parsed = {
+        ...parsedRaw,
+        title: cleanAttributionArtifacts(parsedRaw.title, 'zh'),
+        content: cleanAttributionArtifacts(parsedRaw.content, 'zh'),
+        replies: parsedRaw.replies.map((reply) => cleanAttributionArtifacts(reply, 'zh')),
+      }
+      if ([parsed.title, parsed.content, ...parsed.replies].some(hasAttributionLeak)) {
+        throw new Error('attribution-leak')
+      }
       if (!parsed.content) {
         setGenError('TA 这周没写出来，再试一次？')
         return
@@ -366,17 +377,20 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     try {
       const s = loadSettings()
       if (!s.apiKey?.trim() || !s.baseUrl?.trim() || !s.model?.trim()) throw new Error('no-key')
-      const reviewContext = `这封一周情书《${selectedReview.title}》：\n${selectedReview.content}`
+      const reviewContext = formatAttributedLine(`这封一周情书《${selectedReview.title}》：\n${selectedReview.content}`, 'SELF', 'zh')
       const reply = await chatCompletion(
         s,
         [
           { role: 'system', content: WEEKLY_REPLY_SYSTEM_PROMPT },
-          { role: 'user', content: `${reviewContext}\n\n对方写给你的回信：${t}` },
+          {
+            role: 'user',
+            content: `${buildAttributionLegend('zh')}\n${reviewContext}\n\n${formatAttributedLine(t, 'USER', 'zh')}`,
+          },
         ],
         { maxTokens: 100, timeoutMs: 30000 },
       )
-      const clean = reply.trim()
-      if (!clean) throw new Error('empty')
+      const clean = cleanAttributionArtifacts(reply, 'zh').trim()
+      if (!clean || hasAttributionLeak(clean)) throw new Error('empty-or-attribution-leak')
       const withReply: LetterReview[] = base.map((r) =>
         r.id === selectedReview.id
           ? {

@@ -4,8 +4,9 @@ import { getAnniversariesForPrompt } from './anniversary.ts'
 import type { Anniversary } from './anniversary.ts'
 import { getFirstSeen } from './storage.ts'
 import type { Lang } from './langDetect.ts'
-import { toPromptPerspective, type MemoryItem } from './memory.ts'
+import type { MemoryItem } from './memory.ts'
 import { buildCompanionCore, buildIdentitySoul, buildLanguageContinuity, resolveCompanionPolicy, type IdentityMode } from './companionPolicy.ts'
+import { buildAttributionLegend, cleanAttributionArtifacts, formatAttributedLine } from './promptAttribution.ts'
 
 /**
  * 记忆注入块（2026-09-18 七七拍板「二」）：
@@ -18,7 +19,7 @@ export function buildMemoryBlock(items: MemoryItem[], lang: Lang = 'zh'): string
   const header = lang === 'en'
     ? 'Memories about them that are still relevant now (later lines are newer; if two lines contradict each other, trust the newer one):'
     : '关于对方，以下是当前仍可参考的记忆（越靠后越新；同一件事前后说法不一致时，以更新的为准）：'
-  const lines = valid.map((m) => `- ${memoryDay(m, lang)} ${toPromptPerspective(m.text)}`)
+  const lines = valid.map((m) => `- ${memoryDay(m, lang)} ${formatAttributedLine(m.text, 'USER', lang)}`)
   return `${header}\n${lines.join('\n')}`
 }
 
@@ -156,13 +157,13 @@ export function stripTimeLabels(text: string): string {
 /**
  * 硬过滤：删掉角色扮演式的动作旁白（*摸头*、（转身看向窗外）这类），像真人打字一样说话。
  */
-export function stripActionMarkers(text: string): string {
-  return stripTimeLabels(
+export function stripActionMarkers(text: string, lang?: Lang): string {
+  return cleanAttributionArtifacts(stripTimeLabels(
     stripTimeLabels(text)
       .replace(/\*[^*]*\*/g, '')
       .replace(/（[^（）]*）/g, '')
       .replace(/\([^()]*\)/g, ''),
-  )
+  ), lang)
     .replace(/\s{2,}/g, ' ')
     .trim()
 }
@@ -275,7 +276,7 @@ export function buildSystemPrompt(persona?: string, aiName?: string, now?: numbe
   else if (relationshipBlock) body = `${relationshipBlock}\n\n${prompt}`
   else if (anniversaryBlock) body = `${anniversaryBlock}\n\n${prompt}`
   else body = prompt
-  return `${buildTimeContext(now, lang)}\n\n${body}\n\n${memoryInstr}`
+  return `${buildTimeContext(now, lang)}\n${buildAttributionLegend(lang)}\n\n${body}\n\n${memoryInstr}`
 }
 
 /**
@@ -290,10 +291,10 @@ export function buildBusyReturnPrompt(busyReason: string, busyContext: string, l
     ? `\n\n${lang === 'en' ? '[What you were talking about before getting busy]' : '【忙碌前你们在聊】'}\n${busyContext.trim()}\n\n${lang === 'en' ? 'Pick up the conversation from above, don\'t start a new topic.' : '顺着上面的话题接，别开新话题。'}`
     : ''
   if (lang === 'en') {
-    return `You are SELF. The other person is USER.
+    return `${buildAttributionLegend('en')}
 
 [ALLOWED FACTS]
-SELF_ACTIVITY: ${activity}
+${formatAttributedLine(activity, 'SELF', 'en')}
 PREVIOUS_CONTEXT:
 ${busyContext.trim() || '(none)'}
 
@@ -302,10 +303,10 @@ You just returned. Send USER a message. Requirements:
 2. Pick up the topic you were talking about before, or ask them a specific question that gives them something to respond to.${context}
 3. Short casual sentences, no emoji. If you can say it in one sentence, do it — max two sentences.`
   }
-  return `SELF 指当前 TA，USER 指聊天对方。
+  return `${buildAttributionLegend('zh')}
 
 【允许引用的事实】
-SELF_ACTIVITY: ${activity}
+${formatAttributedLine(activity, 'SELF', 'zh')}
 PREVIOUS_CONTEXT:
 ${busyContext.trim() || '（无）'}
 

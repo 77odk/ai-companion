@@ -2,6 +2,7 @@
 // 起因（2026-09-17 七七）：资料页设了性别=女，聊天里 TA 却答"我是男生啊"——性别从来没进提示词。
 // 规则：性别不只是事实，还要约束自称 / 语气 / 用词；没设性别（unknown）就什么都不加，不硬塞。
 import { loadAIGender, loadAIRemark } from './storage.ts'
+import { formatAttributedLine } from './promptAttribution.ts'
 
 export type IdentityLang = 'zh' | 'en'
 
@@ -27,7 +28,7 @@ export function buildIdentityContext(sessionId?: string, lang: IdentityLang = 'z
           'never use male self-reference such as bro / buddy, and never a sleazy flirty tone.',
       )
     }
-    if (remark) lines.push(`[About you — the note the other person keeps about you] ${remark} (a fact about you, not a name for the other person)`)
+    if (remark) lines.push(`[About you — the note USER keeps about SELF] ${formatAttributedLine(remark, 'USER', 'en')} (a fact about SELF, not a name for USER)`)
     return lines.join('\n')
   }
 
@@ -40,6 +41,6 @@ export function buildIdentityContext(sessionId?: string, lang: IdentityLang = 'z
       '【你的性别】你是女生。自称、语气、用词都要跟这个身份一致——不要用男性式的自称（比如"哥""兄弟""老子"），也不要用油腻的搭话腔。',
     )
   }
-  if (remark) lines.push(`【关于你自己·对方给你记的备注】${remark}（这是关于你自己的事，不是让你拿它去称呼对方）`)
+  if (remark) lines.push(`【关于你自己·USER 给你记的备注】${formatAttributedLine(remark, 'USER', 'zh')}（这是关于 SELF 的事，不是让你拿它去称呼 USER）`)
   return lines.join('\n')
 }

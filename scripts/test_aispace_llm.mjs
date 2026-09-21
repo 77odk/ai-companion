@@ -226,14 +226,14 @@ const ctxTopic = {
 }
 const zhMsgs = buildLlmMessages(ctxTopic, 'zh')
 const zhUser = zhMsgs.find((m) => m.role === 'user')?.content ?? ''
-ok('话题行标了说话人「对方：」', zhUser.includes('- 对方：'), zhUser.slice(0, 80))
-ok('用户原话里的「我」已转成「对方」', zhUser.includes('其实对方是女的'), zhUser.slice(0, 80))
+ok('话题行标了来源 USER', zhUser.includes('- [source=USER]'), zhUser.slice(0, 80))
+ok('用户原话里的「我/你」已按来源归一', zhUser.includes('其实 USER 是女的 SELF 作为 USER 的老公'), zhUser.slice(0, 80))
 ok('不再出现裸的「我是女的」（模型会读成它自己）', !zhUser.includes('其实我是女的'))
-ok('块首有「不是你自己」的说明', zhUser.includes('不是你自己'))
+ok('块首有统一来源说明', zhMsgs.some((m) => m.content.includes('USER 是与你聊天的人；SELF 是你自己')))
 const enMsgs = buildLlmMessages({ ...ctxTopic, persona: 'A calm doctor' }, 'en')
 const enUser = enMsgs.find((m) => m.role === 'user')?.content ?? ''
-ok('英文模式同样标明 From them', enUser.includes('- From them:'), enUser.slice(0, 80))
-ok('英文模式说明里点明 them 不是你自己', enUser.includes('never you'))
+ok('英文模式同样标明 USER 来源', enUser.includes('- [source=USER]'), enUser.slice(0, 80))
+ok('英文模式带统一来源说明', enMsgs.some((m) => m.content.includes('USER is the person you are talking with')))
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

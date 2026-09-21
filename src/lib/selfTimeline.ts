@@ -5,6 +5,7 @@
 import { stripActionMarkers } from './api.ts'
 import { stripMemoryMarkers } from './memory.ts'
 import type { Lang } from './langDetect.ts'
+import { formatAttributedLine } from './promptAttribution.ts'
 export interface TimelineMsg {
   role: string
   content: string
@@ -56,12 +57,13 @@ export function buildSelfTimelineBlock(messages: TimelineMsg[], now: number = Da
   const lines: string[] = []
   for (const m of recent) {
     let text = stripMemoryMarkers(String(m.content ?? ''))
-    text = stripActionMarkers(text)
+    text = stripActionMarkers(text, lang)
     text = text.replace(/\s+/g, ' ').trim()
     if (!text) continue
     text = text.slice(0, MAX_LEN)
     const ago = formatAgo(m.ts, now, lang)
-    lines.push(isEn ? `${ago ? `${ago} ` : ''}You said: ${text}` : `${ago ? `${ago} ` : ''}你说过：${text}`)
+    const attributed = formatAttributedLine(text, 'SELF', lang)
+    lines.push(isEn ? `${ago ? `${ago} ` : ''}${attributed}` : `${ago ? `${ago} ` : ''}${attributed}`)
   }
   if (lines.length === 0) return ''
   if (isEn) {

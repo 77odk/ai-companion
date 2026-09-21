@@ -4,6 +4,7 @@
 // 纯逻辑零依赖（只 import 类型），方便被 Node 脚本直接跑单测。
 import type { SpacePost } from './aiSpaceCore.ts'
 import type { Lang } from './langDetect.ts'
+import { formatAttributedLine } from './promptAttribution.ts'
 /** 单条动态的评论互动摘要：让 TA 知道"对方留言了、自己回没回"（TASK-SPACE-CHAT #4） */
 function formatComments(post: SpacePost, lang: Lang = 'zh'): string {
   const cs = Array.isArray(post.comments) ? post.comments : []
@@ -15,15 +16,19 @@ function formatComments(post: SpacePost, lang: Lang = 'zh'): string {
     if (uc.from !== 'user') continue
     const reply = cs.find((c) => c.from === 'ta' && c.replyTo === uc.id)
     if (isEn) {
-      parts.push(reply ? `They commented "${uc.text}", you replied "${reply.text}"` : `They commented "${uc.text}", you haven't replied yet`)
+      parts.push(reply
+        ? `${formatAttributedLine(uc.text, 'USER', 'en')}; ${formatAttributedLine(reply.text, 'SELF', 'en')}`
+        : `${formatAttributedLine(uc.text, 'USER', 'en')}; SELF has not replied yet`)
     } else {
-      parts.push(reply ? `对方留言「${uc.text}」，你回了「${reply.text}」` : `对方留言「${uc.text}」，你还没回`)
+      parts.push(reply
+        ? `${formatAttributedLine(uc.text, 'USER', 'zh')}；${formatAttributedLine(reply.text, 'SELF', 'zh')}`
+        : `${formatAttributedLine(uc.text, 'USER', 'zh')}；SELF 还没回复`)
     }
   }
   // TA 主动发的不归属任何留言的回复（理论上少见，也带上）
   for (const tc of cs) {
     if (tc.from === 'ta' && !tc.replyTo) {
-      parts.push(isEn ? `You added "${tc.text}" under this post` : `你在这条下补了一句「${tc.text}」`)
+      parts.push(formatAttributedLine(tc.text, 'SELF', lang))
     }
   }
   return parts.length > 0 ? (isEn ? `\n    Interactions: ${parts.join('; ')}` : `\n    互动：${parts.join('；')}`) : ''
@@ -40,7 +45,7 @@ export function buildSpacePostsBlock(posts: SpacePost[], limit = 5, lang: Lang =
       if (!p || typeof p.text !== 'string') return ''
       const t = p.text.trim()
       if (!t) return ''
-      return '- ' + t + formatComments(p, lang)
+      return '- ' + formatAttributedLine(t, 'SELF', lang) + formatComments(p, lang)
     })
     .filter(Boolean)
   if (lines.length === 0) return ''

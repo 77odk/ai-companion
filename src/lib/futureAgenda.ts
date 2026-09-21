@@ -9,6 +9,7 @@
 // - 至多 3 条，克制不刷屏；没约定返回空串（调用方跳过，不占上下文）
 import type { ChatTopic } from './chatTopics.ts'
 import type { Lang } from './langDetect.ts'
+import { formatAttributedLine } from './promptAttribution.ts'
 
 /** 距今偏移：futureDay(YYYY-MM-DD) - 今天，按本地日历算 */
 export function daysUntil(futureDay: string, now: Date = new Date()): number {
@@ -56,7 +57,7 @@ export function buildFutureAgendaBlock(topics: ChatTopic[], now: Date = new Date
   if (pending.length === 0) return ''
   const isEn = lang === 'en'
   const lines = pending.map((t) => {
-    const what = String(t.t ?? '').slice(0, 40)
+    const what = formatAttributedLine(String(t.t ?? '').slice(0, 40), 'USER', lang)
     const when = dayLabel(t.futureDay, now, lang)
     return isEn ? `- ${when}: ${what}` : `- ${when}：${what}`
   })

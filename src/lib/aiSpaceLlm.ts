@@ -16,8 +16,8 @@ export interface LlmSettings {
 }
 
 import { buildIdentityContext } from './identityContext.ts'
-import { toPromptPerspective } from './memory.ts'
 import { buildCompanionCore, buildIdentitySoul, buildLanguageContinuity, resolveCompanionPolicy } from './companionPolicy.ts'
+import { buildAttributionLegend, cleanAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from './promptAttribution.ts'
 
 /** 身份块（性别/称呼备注）：有内容时追加进 system，没有就原样 */
 function idSuffix(sessionId: string | undefined, en: boolean): string {
@@ -89,7 +89,7 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
       `1-2 short sentences, casual and warm, matching your personality. ` +
       `Vary your openings — don't reuse the same starter. ` +
       `No emoji. Never sound robotic or like customer service. ` +
-      `Identity permission never permits inventing an unsupported real-world event.\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
+      `Identity permission never permits inventing an unsupported real-world event.\n${buildAttributionLegend('en')}\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
       idSuffix(ctx.sessionId, true)
     let user = ''
     if (ctx.nowAnchor) {
@@ -108,8 +108,8 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
       user += `\nYou first met them on ${ctx.relationshipStartDate}. Never invent shared chats, dates, trips, memories, promises, habits, or "we used to..." from before that date. Your life before that date can have its own history, but not a shared history with them.`
     }
     if (ctx.chatTopics && ctx.chatTopics.length > 0) {
-      // 人称归属：话题是对方原话，注入前转换视角并标明说话人（「them」指说话的人，不是你自己）
-      user += `\n\nThings they told you (each line is their own words — "them" means the person who said it, never you; marked "today" if said the same day as this post):\n${ctx.chatTopics.map((t) => `- From them: ${toPromptPerspective(t)}`).join('\n')}\n`
+      // 话题保留存储原文，只在本次 prompt 出口标明 USER 来源并统一人称。
+      user += `\n\nThings USER told you (marked "today" if said the same day as this post):\n${ctx.chatTopics.map((t) => `- ${formatAttributedLine(t, 'USER', 'en')}`).join('\n')}\n`
       if (isEvent) {
         user += `\nThis post is about the thing you two shared or planned that day (the "today"-marked one) — write how you felt right after it, in your own words, one or two lines. Don't quote them back verbatim.`
       } else {
@@ -117,7 +117,7 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
       }
     }
     if (ctx.recent.length > 0) {
-      user += `\n\nYour recent posts:\n${ctx.recent.map((r) => `- ${r}`).join('\n')}\n`
+      user += `\n\nYour recent posts:\n${ctx.recent.map((r) => `- ${formatAttributedLine(r, 'SELF', 'en')}`).join('\n')}\n`
       user += `\nDon't repeat the same content — life moves on, write something new.`
     }
     user += `\n\nWrite the post directly, content only, no explanation.`
@@ -132,7 +132,7 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     `句式要多样，别老用同一种开头——禁止用「刚把」「刚刚」「今天又」「突然」这类万能开头，` +
     `像真人随手写的一样，每条动态开口都不一样（这回想天气，下回想件小事，再下回想人）。` +
     `禁止 emoji；禁止出现「设定」「人设」「朋友圈」这类词；不要用客服或工具口吻。` +
-    `身份允许怎样表达，不等于允许新增没有依据的现实事件。\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
+    `身份允许怎样表达，不等于允许新增没有依据的现实事件。\n${buildAttributionLegend('zh')}\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
     idSuffix(ctx.sessionId, false)
 
   let user = ''
@@ -153,9 +153,8 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     user += `\n你和对方是在 ${ctx.relationshipStartDate} 才认识的。绝不能把这之前写成你们共同的聊天、约会、经历、回忆、约定或“以前我们……”。认识之前可以有你自己的过去，但不能有你们的共同过去。`
   }
   if (ctx.chatTopics && ctx.chatTopics.length > 0) {
-    // 人称归属（2026-09-18 七七真机抓包：TA 把用户诉苦的「我」当成自己，写出「你说我连自己性别都搞不清」）：
-    // 话题存的是用户原话，注入前必须做视角转换 + 标明说话人，否则「我」会被模型读成它自己。
-    user += `\n\n你记得对方跟你提过这些事（下面每句都是对方说的原话，句中的「对方」就是说话的人本人，不是你自己；带「今天」的是这条动态同一天说的，带日期的是那天说的）：\n${ctx.chatTopics.map((t) => `- 对方：${toPromptPerspective(t)}`).join('\n')}\n`
+    // 话题保留存储原文，只在本次 prompt 出口标明 USER 来源并统一人称。
+    user += `\n\nUSER 跟你提过这些事（带「今天」的是这条动态同一天说的，带日期的是那天说的）：\n${ctx.chatTopics.map((t) => `- ${formatAttributedLine(t, 'USER', 'zh')}`).join('\n')}\n`
     if (isEvent) {
       // 事件动态：就是为那天共同经历/约好的事发的（大事趁热），允许（也要求）自然地以那件事为主体
       user += `这条动态正是为你和对方那天共同经历或约好的事发的（下面带「今天」的就是当天的事）：`
@@ -165,7 +164,7 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     }
   }
   if (ctx.recent.length > 0) {
-    user += `\n你最近发过这些动态：\n${ctx.recent.map((r) => `- ${r}`).join('\n')}\n`
+    user += `\n你最近发过这些动态：\n${ctx.recent.map((r) => `- ${formatAttributedLine(r, 'SELF', 'zh')}`).join('\n')}\n`
     user += `别重复同样的内容，生活继续往前——写点新鲜的。`
   }
   user += `\n\n直接写这条新动态，只要正文，别解释。`
@@ -184,8 +183,9 @@ const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2B00}-\u{2BFF}
  * 返回 null 表示内容不可用（走降级）。
  */
 export function cleanLlmText(text: string): string | null {
-  let t = String(text ?? '').trim()
+  let t = cleanAttributionArtifacts(String(text ?? '').trim())
   if (!t) return null
+  if (hasAttributionLeak(t)) return null
   // 硬过滤：删掉所有 emoji / 表情符号（提示词拦不住，物理删）
   t = t.replace(EMOJI_RE, '')
   const pairs: Array<[string, string]> = [
@@ -290,12 +290,12 @@ export function buildReplyMessages(ctx: ReplyContext, lang?: 'zh' | 'en'): ApiMe
       `You are "${ctx.taName}" and they just left a comment on one of your posts. ` +
       `Reply back briefly like a real person (1-2 short sentences, casual, warm, in character and on-topic). ` +
       `Keep it short — don't ask questions to drag the conversation on. ` +
-      `No emoji. Never sound like customer service.\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
+      `No emoji. Never sound like customer service.\n${buildAttributionLegend('en')}\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
       idSuffix(ctx.sessionId, true)
     const user =
       `Your personality:\n${ctx.persona.trim() || '(No additional persona facts were provided.)'}\n\n` +
-      `Your post:\n${ctx.postText}\n\n` +
-      `Their comment:\n${ctx.commentText}\n\n` +
+      `Your post:\n${formatAttributedLine(ctx.postText, 'SELF', 'en')}\n\n` +
+      `Their comment:\n${formatAttributedLine(ctx.commentText, 'USER', 'en')}\n\n` +
       `Write your reply directly, content only.`
     return [
       { role: 'system', content: system },
@@ -306,13 +306,13 @@ export function buildReplyMessages(ctx: ReplyContext, lang?: 'zh' | 'en'): ApiMe
     `你是「${ctx.taName}」，对方刚在你的一条生活动态下留言了。` +
     `像真人一样简短地回一句（一两句话，口语化、有温度，贴合自己的性格和那条动态）。` +
     `回完就收住，不要反问回去把聊天续起来。` +
-    `禁止 emoji；禁止出现「设定」「人设」这类词；不要用客服口吻。\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
+    `禁止 emoji；禁止出现「设定」「人设」这类词；不要用客服口吻。\n${buildAttributionLegend('zh')}\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
     idSuffix(ctx.sessionId, false)
 
   const user =
     `你的性格：\n${ctx.persona.trim() || '（没有补充人设事实）'}\n\n` +
-    `你发的这条动态：\n${ctx.postText}\n\n` +
-    `对方留言：\n${ctx.commentText}\n\n` +
+    `你发的这条动态：\n${formatAttributedLine(ctx.postText, 'SELF', 'zh')}\n\n` +
+    `对方留言：\n${formatAttributedLine(ctx.commentText, 'USER', 'zh')}\n\n` +
     `直接写你的回复，只要正文。`
 
   return [

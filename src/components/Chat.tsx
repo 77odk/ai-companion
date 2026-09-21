@@ -46,6 +46,7 @@ import { buildIdentityContext } from '../lib/identityContext'
 import { dropRepeatedReplies } from '../lib/replyDedupe'
 import { buildReplyLengthInstruction, getEffectiveReplyLength, splitDetailedAssistantReply } from '../lib/replyLength'
 import { resolveIdentityMode } from '../lib/companionPolicy'
+import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -307,7 +308,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           { role: 'system', content: systemPrompt },
           { role: 'system', content: busyPrompt },
         ], { maxTokens: 150, temperature: 0.9 })
-        const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(content), busyLang))).trim()
+        const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(content), busyLang)), busyLang).trim()
         return isGroundedBusyReturn(cleaned, selfActivity) ? cleaned : busyReturnFallback(busyLang)
       },
       commit: async (targetSid, content) => {
@@ -553,7 +554,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       const sid = getActiveSessionId()
       const lang = sid ? getSessionLang(sid) : 'zh'
-      const text = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)))
+      const text = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)), lang)
       const partialReplyLength = sid
         ? getEffectiveReplyLength(getAccount()?.account ?? '', sid)
         : 'natural'
@@ -868,7 +869,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
     const contextText = base
       .slice(-6)
-      .map((m) => (m.role === 'assistant' ? stripThinkBlocks(stripMemoryMarkers(m.content), lang) : m.content))
+      .map((m) => (m.role === 'assistant'
+        ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), lang), lang)
+        : m.content))
       .join('\n')
     const memory = recallSessionMemories(activeSessionId, contextText)
     if (memory.length > 0) {
@@ -894,7 +897,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         role: 'system',
         content:
           eventsHeader +
-          recentEvents.map((e) => `- ${formatEventDateShort(e.occurredAt)}：${e.title}${e.description ? `（${e.description}）` : ''}`).join('\n'),
+          recentEvents.map((e) => {
+            const eventText = `${e.title}${e.description ? `（${e.description}）` : ''}`
+            return `- ${formatEventDateShort(e.occurredAt)}：${formatAttributedLine(eventText, 'SHARED', lang, 'USER')}`
+          }).join('\n'),
       })
     }
     // 自我时间线：TA 刚说过的话，让它记得自己做过什么，不依附忙碌机制（TASK-SELF-TIMELINE）
@@ -923,16 +929,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // TASK-JOURNAL-INJECT：不只带标题，带最近一篇正文前 200 字摘要，被问"周记写的啥"有内容可答
       const excerpt = (w.content ?? '').trim().slice(0, 200)
       if (lang === 'en') {
-        const excerptLine = excerpt ? `\nJournal excerpt: ${excerpt}` : ''
         apiMessages.push({
           role: 'system',
-          content: `Your most recent journal entry to them is "${w.title}" (${w.weekLabel}).${excerptLine}\nIf they bring up the journal, respond in the tone and content of this entry.`,
+          content: `Your most recent journal entry to them is "${w.title}" (${w.weekLabel}).${excerpt ? `\n${formatAttributedLine(excerpt, 'SELF', 'en')}` : ''}\nIf they bring it up, respond in the tone and content of this entry.`,
         })
       } else {
-        const excerptLine = excerpt ? `\n周记内容摘录：${excerpt}` : ''
         apiMessages.push({
           role: 'system',
-          content: `你最近写给对方的周记是「${w.title}」（${w.weekLabel}）。${excerptLine}\n对方要是提起周记，就照这篇的语气和内容回应。`,
+          content: `你最近写给对方的周记是「${w.title}」（${w.weekLabel}）。${excerpt ? `\n${formatAttributedLine(excerpt, 'SELF', 'zh')}` : ''}\n对方要是提起周记，就照这篇的语气和内容回应。`,
         })
       }
     }
@@ -963,7 +967,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       if (momentBlock) {
         apiMessages.push({
           role: 'system',
-          content: `${lang === 'en' ? MOMENT_GUIDE_EN : MOMENT_GUIDE_ZH}\n${momentBlock}`,
+          content: `${lang === 'en' ? MOMENT_GUIDE_EN : MOMENT_GUIDE_ZH}\n${formatAttributedLine(momentBlock, 'SELF', lang)}`,
         })
       }
     }
@@ -971,12 +975,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       if (lang === 'en') {
         apiMessages.push({
           role: 'system',
-          content: `They just asked you to remember: ${memInstr.fact ?? text}. Write ONLY the fact they explicitly stated — no added subject (don't write "they/you/their name"), no explanation, no inference, no extra conclusions. Keep it short and stable for long-term memory. At the end of your reply, output a separate line with [Memory: Topic] marker (topic word summarizes the category), write this fact as the content, and briefly confirm in your reply that you've noted it.`,
+          content: `USER just asked you to remember: ${formatAttributedLine(memInstr.fact ?? text, 'USER', 'en')}. Write ONLY the fact USER explicitly stated — no added subject, explanation, inference, or extra conclusion. Keep it short and stable for long-term memory. At the end of your reply, output a separate line with [Memory: Topic] marker (topic word summarizes the category), write this fact as the content, and briefly confirm in your reply that you've noted it.`,
         })
       } else {
         apiMessages.push({
           role: 'system',
-          content: `用户刚要求你记住：${memInstr.fact ?? text}。只写用户明确说出的这句事实本身：不加主语（不要写"用户/对方/TA/名字"）、不解释、不推断、不补充他没说的结论，保持简洁、稳定，适合长期记忆。请在回复末尾单独一行输出【记忆·主题】标记（主题词概括类别），内容写这条事实，并在回复里简短确认已经记下。`,
+          content: `USER 刚要求你记住：${formatAttributedLine(memInstr.fact ?? text, 'USER', 'zh')}。只写 USER 明确说出的这句事实本身：不加主语、不解释、不推断、不补充没说的结论，保持简洁、稳定，适合长期记忆。请在回复末尾单独一行输出【记忆·主题】标记（主题词概括类别），内容写这条事实，并在回复里简短确认已经记下。`,
         })
       }
     } else if (isRetort) {
@@ -1001,7 +1005,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const history: ApiMessage[] = truncateByToken(
       base.map((m) => {
         const body =
-          m.role === 'assistant' ? stripThinkBlocks(stripMemoryMarkers(m.content), lang) : m.content
+          m.role === 'assistant'
+            ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), lang), lang)
+            : m.content
         // 时间流逝标记（只注入不改存储）：让 TA 感知每条消息隔了多久
         const mark = msgTimeMark(m.ts, lang)
         return { role: m.role, content: mark ? mark + body : body }
@@ -1088,9 +1094,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       } else {
         thinking = thinkFromReasoning || thinkFromContent
       }
-      const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)))
+      thinking = cleanAttributionArtifacts(thinking, lang)
+      const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)), lang)
       const identityMode = resolveIdentityMode(activeSessionId || undefined)
-      if (cleaned && (looksRobotic(cleaned, identityMode) || looksFabricated(cleaned)) && !retriedRef.current) {
+      if (cleaned && (hasAttributionLeak(cleaned) || looksRobotic(cleaned, identityMode) || looksFabricated(cleaned)) && !retriedRef.current) {
         retriedRef.current = true
         setError(null)
         setMessages([...messages, userMsg, { role: 'assistant', content: '…', ts: assistantTs }])
@@ -1104,7 +1111,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           },
         ])
           .then((retry) => {
-            const retryCleaned = stripActionMarkers(stripEmoji(retry))
+            const retryCleaned = stripActionMarkers(stripEmoji(retry), lang)
             if (!retryCleaned || looksRobotic(retryCleaned, identityMode) || looksFabricated(retryCleaned)) {
               const fallback = '这个我还真没头绪，你跟我说说呗。'
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: fallback, ts: assistantTs }]
@@ -1150,7 +1157,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         pauseLeftRef.current -= 1
         return
       }
-      const clean = stripThinkBlocks(stripMemoryMarkers(assistantText.current), lang)
+      const clean = cleanStreamingAttributionArtifacts(
+        stripThinkBlocks(stripMemoryMarkers(assistantText.current), lang),
+        lang,
+      )
       const total = clean.length
       if (showLenRef.current >= total) {
         if (streamEndedRef.current) finishStreaming()

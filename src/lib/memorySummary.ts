@@ -5,6 +5,7 @@
 import { inferTopic } from './memory.ts'
 import type { MemoryItem } from './memory.ts'
 import type { ApiMessage } from './api.ts'
+import { buildAttributionLegend, cleanAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from './promptAttribution.ts'
 
 export interface MemoryStats {
   /** 记忆总条数（只算字段合法的） */
@@ -121,10 +122,10 @@ export function buildSummaryMessages(
     `你是「${taName}」，正以 TA 的口吻给「${yourName}」写一段心里话。` +
     `80 字以内，口语化、真诚、有温度，像真人想起在意的人时心里的话。` +
     `直接写心里话，不罗列事实，不提「记忆」「记录」「记得」这类词。` +
-    `禁止 emoji；不要自称 AI/助手/模型。`
+    `禁止 emoji；不要自称 AI/助手/模型。\n${buildAttributionLegend('zh')}`
 
-  let user = `你心里装着「${yourName}」。你对 TA 的了解：\n`
-  for (const m of items) user += `- ${m.text}\n`
+  let user = `你心里装着「${yourName}」。下面是关于 USER 的记忆：\n`
+  for (const m of items) user += `- ${formatAttributedLine(m.text, 'USER', 'zh')}\n`
   if (persona?.trim()) user += `\n你的性格：\n${persona.trim()}\n`
   user += `\n直接写这段心里话，只要正文，不要引号。`
 
@@ -136,8 +137,9 @@ export function buildSummaryMessages(
 
 /** 清洗 LLM 返回的心里话：trim、去成对引号、过滤空串（AI 可能自己加引号） */
 export function cleanSummaryText(text: string): string | null {
-  let t = String(text ?? '').trim()
+  let t = cleanAttributionArtifacts(String(text ?? '').trim(), 'zh')
   if (!t) return null
+  if (hasAttributionLeak(t)) return null
   const pairs: Array<[string, string]> = [
     ['"', '"'],
     ['“', '”'],

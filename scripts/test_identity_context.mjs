@@ -46,7 +46,7 @@ saveAIGender('female', SID)
 saveAIRemark('她喜欢被叫阿阳；我们说好每周日通一次电话', SID)
 ctx = buildIdentityContext(SID, 'zh')
 ok(ctx.includes('关于你自己') && ctx.includes('喜欢被叫阿阳'), '备注：作为关于 TA 自己的事实注入')
-ok(ctx.includes('不是让你拿它去称呼对方'), '备注：明确不是让它拿这个称呼去叫对方')
+ok(ctx.includes('不是让你拿它去称呼 USER'), '备注：明确不是让它拿这个称呼去叫对方')
 
 // 5. 会话隔离：别的会话不串
 ok(buildIdentityContext('idt-other', 'zh') === '', '会话隔离：其他会话不受影响')

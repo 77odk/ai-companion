@@ -12,6 +12,7 @@ import { getSessionsCache } from './sessionStore.ts'
 import { resolveRolePersona } from './sessionProfile.ts'
 import { loadPersona } from './storage.ts'
 import type { Lang } from './langDetect.ts'
+import { formatAttributedLine } from './promptAttribution.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { resolveIdentityMode, type IdentityMode } from './companionPolicy.ts'
 
@@ -551,12 +552,12 @@ export function buildTaRuntimeContext(runtime: TaRuntimeState | null, lang: Lang
       '[What you are doing right now]',
       "This is your own current life state — not something the other person told you, not a shared memory or event, and not the other person\u2019s activity.",
       'Never restate it as what the other person is doing:',
-      `${runtimeDisplayLabel(runtime, 'en')}, probably until around ${until}.`,
+      `${formatAttributedLine(runtimeDisplayLabel(runtime, 'en'), 'SELF', 'en')}, probably until around ${until}.`,
     ].join('\n')
   }
   return [
     '【你自己此刻在做什么】',
-    '下面是你（TA）自己当前的生活状态，不是对方告诉你的，也不是你们共同的经历——更不是在说对方，绝不要把这件事写成对方在做：',
-    `${runtime.label}，预计会持续到 ${until} 左右。`,
+    '下面是你自己当前的生活状态，不是对方告诉你的，也不是你们共同的经历——更不是在说对方，绝不要把这件事写成对方在做：',
+    `${formatAttributedLine(runtime.label, 'SELF', 'zh')}，预计会持续到 ${until} 左右。`,
   ].join('\n')
 }

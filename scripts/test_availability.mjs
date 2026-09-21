@@ -44,13 +44,13 @@ test('context labels USER and SELF without ambiguous first person', () => {
   assert.equal(serializeBusyContext([
     { role: 'user', content: '你好' },
     { role: 'assistant', content: '等我一下' },
-  ]), 'USER：你好\nSELF：等我一下')
+  ]), '[source=USER] 向 SELF 问好\n[source=SELF] 等 SELF 一下')
 })
 
 test('Busy Return prompt contains ownership and allowed facts', () => {
   const prompt = buildBusyReturnPrompt('洗澡', 'USER：好\nSELF：等我', 'zh', '我先去洗澡，出来找你')
-  assert.match(prompt, /SELF_ACTIVITY: 我先去洗澡，出来找你/)
-  assert.match(prompt, /SELF 指当前 TA，USER 指聊天对方/)
+  assert.match(prompt, /\[source=SELF\] SELF 先去洗澡，出来找 USER/)
+  assert.match(prompt, /USER 是与你聊天的人；SELF 是你自己；SHARED 是你们双方/)
   assert.match(prompt, /不得把 SELF_ACTIVITY 说成 USER/)
 })
 

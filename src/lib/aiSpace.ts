@@ -523,14 +523,13 @@ export async function generatePendingPosts(
       )
       try {
         const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })
-        const cleaned = cleanLlmText(raw)
+        // 先解析动态自己的 [配图] 协议，再做统一归因净化，避免净化层碰协议正文。
+        const { text: protocolText } = extractImageCaption(raw)
+        const cleaned = cleanLlmText(protocolText)
         if (cleaned) {
-          // 纯文字动态（色卡已删）：模型如残留 [配图] 标记只剥掉做文本清洗，不再生成配图
-          const { text } = extractImageCaption(cleaned)
-          if (text) {
-            const post = buildLlmPost(text, at, guessKind(text), rand, source, generationSlotIdFor(slot))
-            made = { post }
-          }
+          // 纯文字动态（色卡已删）：[配图] 协议只剥离，不再生成配图。
+          const post = buildLlmPost(cleaned, at, guessKind(cleaned), rand, source, generationSlotIdFor(slot))
+          made = { post }
         }
       } catch {
         made = null // 超时/报错/返回不可用 → 降级模板

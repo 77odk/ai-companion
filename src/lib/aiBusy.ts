@@ -3,6 +3,8 @@
 // 2026-09-05 升级：从词表精确匹配改为"离开意图"句式正则匹配——不枚举具体事情，匹配句式结构。
 // 纯逻辑抽成可单测的导出函数；localStorage 读写委托给 sessionStore。
 
+import { formatAttributedLine } from './promptAttribution.ts'
+
 /**
  * 离开意图前缀：TA 表达"我要离开去做某事"的起始词。
  * 不枚举具体事情（洗碗/开会/写报告），只匹配"离开意图"的句式结构。
@@ -219,6 +221,10 @@ export function serializeBusyContext(messages: { role: string; content: string }
   if (!Array.isArray(messages) || messages.length === 0) return ''
   return messages
     .slice(-3)
-    .map((m) => `${m.role === 'user' ? 'USER' : 'SELF'}：${String(m.content ?? '').slice(0, 100)}`)
+    .map((m) => formatAttributedLine(
+      String(m.content ?? '').slice(0, 100),
+      m.role === 'user' ? 'USER' : 'SELF',
+      /[\u3400-\u9fff]/.test(String(m.content ?? '')) ? 'zh' : 'en',
+    ))
     .join('\n')
 }
