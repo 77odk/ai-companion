@@ -40,12 +40,17 @@ function candidateIds(local: MemoryItem, cloud: MemoryItem[]): string[] {
  * 这里只换 id，pendingSync 仍保留，随后现有 mergeSessionMemories 看到同 id 的
  * cloud 权威条目后会自然收敛成一条并清掉 pending 标记。
  */
+export interface PendingRefreshAlignment {
+  cache: MemoryItem[]
+  reconciledIds: Map<string, string>
+}
+
 export function alignPendingMemoriesForRefresh(
   cache: MemoryItem[],
   cloud: MemoryItem[],
-): MemoryItem[] {
+): PendingRefreshAlignment {
   const pending = cache.filter((item) => item?.pendingSync === true)
-  if (pending.length === 0 || cloud.length === 0) return cache
+  if (pending.length === 0 || cloud.length === 0) return { cache, reconciledIds: new Map() }
 
   const candidates = new Map<string, string[]>()
   const reverseCount = new Map<string, number>()
@@ -57,6 +62,7 @@ export function alignPendingMemoriesForRefresh(
   }
 
   let changed = false
+  const reconciledIds = new Map<string, string>()
   const next = cache.map((item) => {
     if (item.pendingSync !== true) return item
     const ids = candidates.get(item.id) ?? []
@@ -64,8 +70,9 @@ export function alignPendingMemoriesForRefresh(
     const serverId = ids[0]
     if ((reverseCount.get(serverId) ?? 0) !== 1) return item
     changed = true
+    reconciledIds.set(item.id, serverId)
     return { ...item, id: serverId }
   })
 
-  return changed ? next : cache
+  return { cache: changed ? next : cache, reconciledIds }
 }
