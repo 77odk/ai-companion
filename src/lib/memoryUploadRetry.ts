@@ -3,7 +3,7 @@
 // 补传前两次读取云端确认，避免“请求其实已到服务端但响应丢失”时重复 POST。
 
 import { notifyMemoryUpdated, type MemoryItem } from './memory.ts'
-import { listMemories, postMemory, type SessionMemory } from './sessionApi.ts'
+import { deleteMemory, listMemories, postMemory, type SessionMemory } from './sessionApi.ts'
 import { getMemoriesCache, saveMemoriesCache } from './sessionStore.ts'
 
 const MATCH_TIME_TOLERANCE_MS = 5 * 60 * 1000
@@ -14,6 +14,10 @@ export interface MemoryRetryResult {
   ambiguous: number
   skipped: number
   authExpired: boolean
+}
+
+function emptyResult(): MemoryRetryResult {
+  return { uploaded: 0, reconciled: 0, ambiguous: 0, skipped: 0, authExpired: false }
 }
 
 function clean(value: unknown): string {
@@ -35,6 +39,13 @@ function isSamePendingMemory(local: MemoryItem, cloud: SessionMemory): boolean {
 }
 
 function findUniqueCloudMatch(local: MemoryItem, cloud: SessionMemory[]): SessionMemory | null | 'ambiguous' {
+  // 一旦本地已经对账成服务端 id，id 是最强证据，不再受 createdAt 时间窗限制。
+  // 这覆盖“离线数小时后才补传成功，但 pendingSync 尚未被下一次 hydration 清掉”的情况，
+  // 避免下一次 retry 因时间差过大再次 POST。
+  const exactIdMatches = cloud.filter((item) => String(item.id) === local.id)
+  if (exactIdMatches.length === 1) return exactIdMatches[0]
+  if (exactIdMatches.length > 1) return 'ambiguous'
+
   const matches = cloud.filter((item) => isSamePendingMemory(local, item))
   if (matches.length === 1) return matches[0]
   if (matches.length > 1) return 'ambiguous'
@@ -79,18 +90,8 @@ function currentPending(sessionId: string, localId: string): MemoryItem | null {
   return getMemoriesCache(sessionId).find((item) => item.id === localId && item.pendingSync === true) ?? null
 }
 
-/**
- * 只补当前 session 里“仍存在 + pendingSync=true”的会话记忆。
- * - 云端已有唯一同一条：只对账 ID，不 POST。
- * - 云端无：POST 前再拉一次，缩小多设备并发重复窗口。
- * - 任一步出现歧义/网络失败：保留 pendingSync，下次再试，不猜、不复活已删除条目。
- * - POST 成功后只换成服务端 ID，暂时保留 pendingSync；下一次新鲜云端 hydration 看到该 ID 后，
- *   现有 mergeSessionMemories 会自然清掉 pendingSync。
- */
-export async function retryPendingMemoryUploads(token: string, sessionId: string): Promise<MemoryRetryResult> {
-  const result: MemoryRetryResult = { uploaded: 0, reconciled: 0, ambiguous: 0, skipped: 0, authExpired: false }
-  if (!token || !sessionId) return result
-
+async function runRetryPendingMemoryUploads(token: string, sessionId: string): Promise<MemoryRetryResult> {
+  const result = emptyResult()
   const snapshot = getMemoriesCache(sessionId).filter((item) => item.pendingSync === true)
   if (snapshot.length === 0) return result
 
@@ -147,7 +148,7 @@ export async function retryPendingMemoryUploads(token: string, sessionId: string
       continue
     }
 
-    // 二次确认之后、本地仍然存在且仍 pending 才允许 POST；本地已删的绝不复活。
+    // 二次确认之后、本地仍然存在且仍 pending 才允许 POST；补传开始前已删除的绝不复活。
     local = currentPending(sessionId, local.id)
     if (!local) {
       result.skipped += 1
@@ -168,14 +169,36 @@ export async function retryPendingMemoryUploads(token: string, sessionId: string
       continue
     }
 
-    // 请求成功以后再次确认用户没有在请求期间删除这条；若已删，不把它重新写回本地。
+    // 极窄竞态：POST 已发出后用户恰好删掉本地条目。
+    // 不把它写回本地，并立即 best-effort 删除刚创建的服务端行，避免下次 hydration 把它复活。
     if (!currentPending(sessionId, local.id)) {
+      const cleanup = await deleteMemory(token, posted.data.id)
+      if (!cleanup.ok && cleanup.status === 401) result.authExpired = true
       result.skipped += 1
       continue
     }
+
+    // 成功后只换成服务端 ID，暂留 pendingSync；下一次真正看到该 server id 的 hydration 会自然清标记。
     if (reconcileKeepingPending(sessionId, local.id, posted.data.id)) result.uploaded += 1
     else result.skipped += 1
   }
 
   return result
+}
+
+// Chat ref 能挡同一次 mount；这里再挡 StrictMode 重挂载 / 未来其它调用方的并发。
+// token 只作为瞬时内存 key 的一部分，任务结束即删除，不持久化、不输出。
+const inFlight = new Map<string, Promise<MemoryRetryResult>>()
+
+export function retryPendingMemoryUploads(token: string, sessionId: string): Promise<MemoryRetryResult> {
+  if (!token || !sessionId) return Promise.resolve(emptyResult())
+  const key = `${sessionId}\u0000${token}`
+  const existing = inFlight.get(key)
+  if (existing) return existing
+
+  const task = runRetryPendingMemoryUploads(token, sessionId).finally(() => {
+    if (inFlight.get(key) === task) inFlight.delete(key)
+  })
+  inFlight.set(key, task)
+  return task
 }
