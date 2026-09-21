@@ -39,7 +39,7 @@ rec('A4 Memory 接收 initialDetail / onInitialDetailConsumed',
 rec('A5 返回时使用稳定 identity 在当前数据重新查（不靠 index）',
   memSrc.includes('const identity: MemorySelection = {') &&
   memSrc.includes('kind: initialDetail.kind') &&
-  memSrc.includes('memoryId: initialDetail.memoryId') &&
+  memSrc.includes('resolveMemoryIdAlias(initialDetail.sessionId ?? sessionId, String(initialDetail.memoryId))') &&
   memSrc.includes('matchesMemorySelection(entry, identity, sessionId)'))
 rec('A6 找到才打开 Detail，找不到安全留在 River（不猜别的条目）',
   memSrc.includes('setSelectedIdentity(identity)') &&

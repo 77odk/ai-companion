@@ -7,6 +7,7 @@ import { postMessage, postMemory, type Session } from './sessionApi.ts'
 import type { StoredMessage } from './storage.ts'
 import { isSimilarMemory, loadMemory, newMemoryItemId, recallRelevantMemories, type MemoryItem, type RecallOptions } from './memory.ts'
 import type { BusyState } from './aiBusy.ts'
+import { recordMemoryIdAlias } from './memoryIdAliases.ts'
 
 const ACTIVE_SESSION_KEY = 'ai_companion_active_session_id'
 const SESSIONS_CACHE_KEY = 'ai_companion_sessions_cache'
@@ -419,11 +420,12 @@ export function reconcileMemoryCacheId(sessionId: string, localId: string, backe
   const list = getMemoriesCache(sessionId)
   const idx = list.findIndex((m) => m.id === localId)
   if (idx < 0) return
+  const serverId = String(backendId)
   // 上传成功：换成后端 id，并抹掉「还没传成功」标记（这条以后以云端为准）
-  const next = { ...list[idx], id: String(backendId) }
+  const next = { ...list[idx], id: serverId }
   delete next.pendingSync
   list[idx] = next
-  saveMemoriesCache(sessionId, list)
+  if (saveMemoriesCache(sessionId, list)) recordMemoryIdAlias(sessionId, localId, serverId)
 }
 
 // ---- 会话缓存记忆写入（乐观；异步上传由调用方做） ----

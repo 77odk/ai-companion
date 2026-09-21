@@ -21,6 +21,7 @@ const {
   sessionMemoryToItem,
 } = await import('../src/lib/sessionStore.ts')
 const { alignPendingMemoriesForRefresh } = await import('../src/lib/memoryRefreshReconcile.ts')
+const { resolveMemoryIdAlias } = await import('../src/lib/memoryIdAliases.ts')
 
 const sessionId = '19'
 const local = [
@@ -116,24 +117,38 @@ const ambiguousCloud = [
 ]
 assert.equal(alignPendingMemoriesForRefresh(inflightLocal, ambiguousCloud).cache[0].id, 'local-inflight')
 
-console.log('\n[7] 页面挂载明确先 align pending/cloud，再走既有 mergeSessionMemories')
+console.log('\n[7] Chat 回调先于 GET 时，统一别名源仍保留 old → new identity')
+const callbackFirstSession = 'callback-first'
+saveMemoriesCache(callbackFirstSession, [{ ...inflightLocal[0], id: 'local-callback-first' }])
+const selectedBeforeGet = 'local-callback-first'
+reconcileMemoryCacheId(callbackFirstSession, selectedBeforeGet, 903)
+const callbackFirstCache = getMemoriesCache(callbackFirstSession)
+assert.equal(callbackFirstCache[0].id, '903')
+assert.equal(callbackFirstCache[0].pendingSync, undefined)
+const callbackFirstAlignment = alignPendingMemoriesForRefresh(callbackFirstCache, [
+  { ...inflightCloud[0], id: '903' },
+])
+assert.equal(callbackFirstAlignment.reconciledIds.size, 0, '回调已先对账，refresh helper 本身不会再产映射')
+assert.equal(resolveMemoryIdAlias(callbackFirstSession, selectedBeforeGet), '903', '旧详情 identity 仍能解析到 server id')
+
+console.log('\n[8] 页面挂载明确先 align pending/cloud，再走既有 mergeSessionMemories')
 const source = fs.readFileSync(path.join(process.cwd(), 'src/components/Memory.tsx'), 'utf8')
 assert.match(source, /import \{ listMemories \} from '\.\.\/lib\/sessionApi'/)
 assert.match(source, /import \{ alignPendingMemoriesForRefresh \} from '\.\.\/lib\/memoryRefreshReconcile'/)
 assert.match(source, /res\.data\.memories\.map\(sessionMemoryToItem\)/)
 assert.match(source, /const alignment = alignPendingMemoriesForRefresh\(getMemoriesCache\(sessionId\), cloudMemories\)/)
 assert.match(source, /mergeSessionMemories\(alignment\.cache, cloudMemories/)
-assert.match(source, /alignment\.reconciledIds\.get\(String\(current\.memoryId\)\)/)
+assert.match(source, /resolveMemoryIdAlias\(sessionId, String\(current\.memoryId\)\)/)
 assert.match(source, /purgeMissing: true/)
 assert.match(source, /sessionId,/)
 
-console.log('\n[8] 页内会话记忆改/删后，旧 GET 结果必须因 mutation version 变化而失效')
+console.log('\n[9] 页内会话记忆改/删后，旧 GET 结果必须因 mutation version 变化而失效')
 assert.match(source, /const memoryMutationVersionRef = useRef\(0\)/)
 assert.match(source, /startedAtMutationVersion = memoryMutationVersionRef\.current/)
 assert.ok((source.match(/memoryMutationVersionRef\.current !== startedAtMutationVersion/g) ?? []).length >= 2)
 assert.ok((source.match(/if \(selected\.kind === 'session'\) memoryMutationVersionRef\.current \+= 1/g) ?? []).length >= 2)
 
-console.log('\n[9] 没有新增 storage key / API；只复用当前 token、session 和现有缓存')
+console.log('\n[10] 没有新增 storage key / API；只复用当前 token、session 和现有缓存')
 assert.equal(source.includes('localStorage.setItem('), false)
 assert.equal(source.includes('/api/'), false)
 

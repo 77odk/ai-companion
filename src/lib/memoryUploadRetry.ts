@@ -5,6 +5,7 @@
 import { notifyMemoryUpdated, type MemoryItem } from './memory.ts'
 import { deleteMemory, listMemories, postMemory, type SessionMemory } from './sessionApi.ts'
 import { getMemoriesCache, saveMemoriesCache } from './sessionStore.ts'
+import { recordMemoryIdAlias } from './memoryIdAliases.ts'
 
 const MATCH_TIME_TOLERANCE_MS = 5 * 60 * 1000
 
@@ -82,7 +83,10 @@ function reconcileKeepingPending(sessionId: string, localId: string, backendId: 
   }
 
   const saved = saveMemoriesCache(sessionId, next)
-  if (saved) notifyMemoryUpdated()
+  if (saved) {
+    recordMemoryIdAlias(sessionId, localId, serverId)
+    notifyMemoryUpdated()
+  }
   return saved
 }
 

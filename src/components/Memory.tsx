@@ -7,6 +7,7 @@ import { getToken } from '../lib/auth'
 import { correctMemoryText, removeMemory, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 import { findChatRecordJumpTargetHydrated, type ChatJumpTarget, type MemoryReturnTarget } from '../lib/chatJump'
 import { alignPendingMemoriesForRefresh } from '../lib/memoryRefreshReconcile'
+import { recordMemoryIdAlias, resolveMemoryIdAlias, subscribeMemoryIdAliases } from '../lib/memoryIdAliases'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
 // 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
@@ -138,8 +139,6 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const [memories, setMemories] = useState(readMemories)
   // #19：进入记忆页主动拉当前会话云端记忆。页内一旦发生改/删，本次旧 GET 结果作废，避免回写过期状态。
   const memoryMutationVersionRef = useRef(0)
-  // local pending id → server id，仅用于承接当前页面内已经在 await 的跳转 handler；不持久化。
-  const reconciledMemoryIdsRef = useRef(new Map<string, string>())
   useEffect(() => {
     let cancelled = false
     setMemories(readMemories())
@@ -160,14 +159,16 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       })
       if (alignment.reconciledIds.size > 0) {
         for (const [localId, serverId] of alignment.reconciledIds) {
-          reconciledMemoryIdsRef.current.set(localId, serverId)
+          recordMemoryIdAlias(sessionId, localId, serverId)
         }
-        setSelectedIdentity((current) => {
-          if (!current || current.kind !== 'session') return current
-          const serverId = alignment.reconciledIds.get(String(current.memoryId))
-          return serverId ? { ...current, memoryId: serverId } : current
-        })
       }
+      // Chat 的 POST 回调可能在本页读取缓存之后、GET 返回之前先完成；
+      // 即使 alignment 没产生映射，也要从统一别名源承接那次 local → server 对账。
+      setSelectedIdentity((current) => {
+        if (!current || current.kind !== 'session') return current
+        const resolved = resolveMemoryIdAlias(sessionId, String(current.memoryId))
+        return resolved !== current.memoryId ? { ...current, memoryId: resolved } : current
+      })
       if (cancelled || memoryMutationVersionRef.current !== startedAtMutationVersion) return
 
       // localStorage 写失败不伪装成成功；但本次页面仍可展示刚从权威云端拉回的真实结果。
@@ -229,6 +230,37 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const [bookStage, setBookStage] = useState<'cover' | 'body'>('cover')
   const [bookFrom, setBookFrom] = useState<'cover' | 'detail'>('cover')
   const [selectedIdentity, setSelectedIdentity] = useState<MemorySelection | null>(null)
+
+  useEffect(() => {
+    if (!sessionId) return
+    return subscribeMemoryIdAliases((alias) => {
+      if (alias.sessionId !== sessionId) return
+      // 对账源已经成功写入缓存；列表与 selection 必须同一轮迁移，
+      // 否则只把 selection 换成 server id 会在旧列表上短暂“找不到”，误退回 River。
+      setMemories((current) => {
+        const alreadyHasServerId = current.some((entry) => (
+          entry.kind === 'session' && String(entry.item.id) === alias.newId
+        ))
+        if (alreadyHasServerId) {
+          return current.filter((entry) => !(
+            entry.kind === 'session' && String(entry.item.id) === alias.oldId
+          ))
+        }
+        return current.map((entry) => {
+          if (entry.kind !== 'session' || String(entry.item.id) !== alias.oldId) return entry
+          const item = { ...entry.item, id: alias.newId }
+          delete item.pendingSync
+          return { ...entry, item }
+        })
+      })
+      setSelectedIdentity((current) => {
+        if (!current || current.kind !== 'session') return current
+        const resolved = resolveMemoryIdAlias(sessionId, String(current.memoryId))
+        return resolved !== current.memoryId ? { ...current, memoryId: resolved } : current
+      })
+    })
+  }, [sessionId])
+
   const selectedIndex = useMemo(() => {
     if (!selectedIdentity) return -1
     return chronological.findIndex((memory) => matchesMemorySelection(memory, selectedIdentity, sessionId))
@@ -243,7 +275,9 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
     if (chronological.length === 0) return
     const identity: MemorySelection = {
       kind: initialDetail.kind,
-      memoryId: initialDetail.memoryId,
+      memoryId: initialDetail.kind === 'session'
+        ? resolveMemoryIdAlias(initialDetail.sessionId ?? sessionId, String(initialDetail.memoryId))
+        : initialDetail.memoryId,
       ...(initialDetail.kind === 'session'
         ? { sessionId: initialDetail.sessionId ?? sessionId ?? undefined }
         : {}),
@@ -305,7 +339,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       // await 期间 mount refresh 可能把 pending local id 对账成 server id；
       // return target 必须承接最新 id，不能把旧 local id 带进聊天返回链。
       const returnMemoryId = jumpIdentity.kind === 'session'
-        ? (reconciledMemoryIdsRef.current.get(String(jumpIdentity.memoryId)) ?? jumpIdentity.memoryId)
+        ? resolveMemoryIdAlias(jumpIdentity.sessionId ?? sessionId, String(jumpIdentity.memoryId))
         : jumpIdentity.memoryId
       onJumpToChatLog(result.target, {
         memoryId: returnMemoryId,
