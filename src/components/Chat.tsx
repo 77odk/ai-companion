@@ -47,6 +47,7 @@ import { dropRepeatedReplies } from '../lib/replyDedupe'
 import { buildReplyLengthInstruction, getEffectiveReplyLength, splitDetailedAssistantReply } from '../lib/replyLength'
 import { resolveIdentityMode } from '../lib/companionPolicy'
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
+import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -578,13 +579,34 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     document.addEventListener('visibilitychange', onVisible)
   }, [])
 
+  // #20：Memory 补传只在聊天挂载 / 网络恢复时触发；session 级 ref 防重入。
+  // 具体去重与对账全部在独立 helper，Chat 不碰上传/合并/去重链路。
+  const memoryRetryInFlightRef = useRef<Set<string>>(new Set())
+
   useEffect(() => {
     if (!activeSessionId) return
+
+    const runMemoryRetry = async () => {
+      const token = getToken()
+      if (!token || memoryRetryInFlightRef.current.has(activeSessionId)) return
+      memoryRetryInFlightRef.current.add(activeSessionId)
+      try {
+        await retryPendingMemoryUploads(token, activeSessionId)
+      } finally {
+        memoryRetryInFlightRef.current.delete(activeSessionId)
+      }
+    }
+
     const token = getToken()
-    if (token) void flushPendingOps(token)
+    if (token) {
+      void flushPendingOps(token)
+      void runMemoryRetry()
+    }
     const onOnline = () => {
       const t = getToken()
-      if (t) void flushPendingOps(t)
+      if (!t) return
+      void flushPendingOps(t)
+      void runMemoryRetry()
     }
     window.addEventListener('online', onOnline)
     return () => window.removeEventListener('online', onOnline)
