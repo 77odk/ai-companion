@@ -88,10 +88,11 @@ const inflightCloud = [
   },
 ]
 const alignedInflight = alignPendingMemoriesForRefresh(inflightLocal, inflightCloud)
-assert.equal(alignedInflight.length, 1)
-assert.equal(alignedInflight[0].id, '901')
-assert.equal(alignedInflight[0].pendingSync, true)
-const mergedInflight = mergeSessionMemories(alignedInflight, inflightCloud, { purgeMissing: true, sessionId })
+assert.equal(alignedInflight.cache.length, 1)
+assert.equal(alignedInflight.cache[0].id, '901')
+assert.equal(alignedInflight.cache[0].pendingSync, true)
+assert.equal(alignedInflight.reconciledIds.get('local-inflight'), '901')
+const mergedInflight = mergeSessionMemories(alignedInflight.cache, inflightCloud, { purgeMissing: true, sessionId })
 assert.equal(mergedInflight.length, 1, '对齐后 merge 只能剩一条')
 assert.equal(mergedInflight[0].id, '901')
 assert.equal(mergedInflight[0].pendingSync, undefined, '云端权威条目收敛后清 pending')
@@ -104,26 +105,27 @@ console.log('\n[5] 跨时间窗完整 payload 唯一时仍可对账；多个候�
 const lateCloud = [
   { ...inflightCloud[0], createdAt: inflightLocal[0].createdAt + 12 * 60 * 60 * 1000 },
 ]
-assert.equal(alignPendingMemoriesForRefresh(inflightLocal, lateCloud)[0].id, '901')
+assert.equal(alignPendingMemoriesForRefresh(inflightLocal, lateCloud).cache[0].id, '901')
 const ambiguousCloud = [
   lateCloud[0],
   { ...lateCloud[0], id: '902' },
 ]
-assert.equal(alignPendingMemoriesForRefresh(inflightLocal, ambiguousCloud)[0].id, 'local-inflight')
+assert.equal(alignPendingMemoriesForRefresh(inflightLocal, ambiguousCloud).cache[0].id, 'local-inflight')
 
 console.log('\n[6] 跨时间窗 source / taReply 不完全一致时不能误对账')
 const mismatchedPayloadCloud = [
   { ...lateCloud[0], id: '903', source: '另一段原话' },
 ]
-assert.equal(alignPendingMemoriesForRefresh(inflightLocal, mismatchedPayloadCloud)[0].id, 'local-inflight')
+assert.equal(alignPendingMemoriesForRefresh(inflightLocal, mismatchedPayloadCloud).cache[0].id, 'local-inflight')
 
 console.log('\n[7] 页面挂载明确先 align pending/cloud，再走既有 mergeSessionMemories')
 const source = fs.readFileSync(path.join(process.cwd(), 'src/components/Memory.tsx'), 'utf8')
 assert.match(source, /import \{ listMemories \} from '\.\.\/lib\/sessionApi'/)
 assert.match(source, /import \{ alignPendingMemoriesForRefresh \} from '\.\.\/lib\/memoryRefreshReconcile'/)
 assert.match(source, /res\.data\.memories\.map\(sessionMemoryToItem\)/)
-assert.match(source, /const refreshedCache = alignPendingMemoriesForRefresh\(getMemoriesCache\(sessionId\), cloudMemories\)/)
-assert.match(source, /mergeSessionMemories\(refreshedCache, cloudMemories/)
+assert.match(source, /const alignment = alignPendingMemoriesForRefresh\(getMemoriesCache\(sessionId\), cloudMemories\)/)
+assert.match(source, /mergeSessionMemories\(alignment\.cache, cloudMemories/)
+assert.match(source, /alignment\.reconciledIds\.get\(String\(current\.memoryId\)\)/)
 assert.match(source, /purgeMissing: true/)
 assert.match(source, /sessionId,/)
 
