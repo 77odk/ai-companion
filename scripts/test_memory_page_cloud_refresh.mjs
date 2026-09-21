@@ -101,22 +101,20 @@ reconcileMemoryCacheId(sessionId, 'local-inflight', 901)
 assert.equal(getMemoriesCache(sessionId).length, 1, '旧 POST 回调回来时临时 id 已不存在，必须 no-op')
 assert.equal(getMemoriesCache(sessionId)[0].id, '901')
 
-console.log('\n[5] 跨时间窗完整 payload 唯一时仍可对账；多个候选时绝不猜')
+console.log('\n[5] 跨时间窗即使完整 payload 唯一也不能对账')
 const lateCloud = [
   { ...inflightCloud[0], createdAt: inflightLocal[0].createdAt + 12 * 60 * 60 * 1000 },
 ]
-assert.equal(alignPendingMemoriesForRefresh(inflightLocal, lateCloud).cache[0].id, '901')
+const lateAlignment = alignPendingMemoriesForRefresh(inflightLocal, lateCloud)
+assert.equal(lateAlignment.cache[0].id, 'local-inflight')
+assert.equal(lateAlignment.reconciledIds.size, 0)
+
+console.log('\n[6] 跨时间窗多个同 payload 候选同样保持 pending，不猜')
 const ambiguousCloud = [
   lateCloud[0],
   { ...lateCloud[0], id: '902' },
 ]
 assert.equal(alignPendingMemoriesForRefresh(inflightLocal, ambiguousCloud).cache[0].id, 'local-inflight')
-
-console.log('\n[6] 跨时间窗 source / taReply 不完全一致时不能误对账')
-const mismatchedPayloadCloud = [
-  { ...lateCloud[0], id: '903', source: '另一段原话' },
-]
-assert.equal(alignPendingMemoriesForRefresh(inflightLocal, mismatchedPayloadCloud).cache[0].id, 'local-inflight')
 
 console.log('\n[7] 页面挂载明确先 align pending/cloud，再走既有 mergeSessionMemories')
 const source = fs.readFileSync(path.join(process.cwd(), 'src/components/Memory.tsx'), 'utf8')
