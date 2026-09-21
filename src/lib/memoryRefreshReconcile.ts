@@ -6,19 +6,30 @@ function clean(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function samePendingPayload(local: MemoryItem, cloud: MemoryItem): boolean {
-  if (local.pendingSync !== true) return false
-  if (local.id === cloud.id) return false
-  if (clean(local.text) !== clean(cloud.text)) return false
+function hasSameExactPayload(local: MemoryItem, cloud: MemoryItem): boolean {
+  return local.pendingSync === true
+    && local.id !== cloud.id
+    && clean(local.text) === clean(cloud.text)
+    && clean(local.source) === clean(cloud.source)
+    && clean(local.taReply) === clean(cloud.taReply)
+}
+
+function samePendingPayloadWithinWindow(local: MemoryItem, cloud: MemoryItem): boolean {
+  if (!hasSameExactPayload(local, cloud)) return false
 
   const localTs = local.createdAt
   const cloudTs = cloud.createdAt
   if (!Number.isFinite(localTs) || !Number.isFinite(cloudTs)) return false
-  if (Math.abs(localTs - cloudTs) > MATCH_TIME_TOLERANCE_MS) return false
+  return Math.abs(localTs - cloudTs) <= MATCH_TIME_TOLERANCE_MS
+}
 
-  if (clean(local.source) !== clean(cloud.source)) return false
-  if (clean(local.taReply) !== clean(cloud.taReply)) return false
-  return true
+function candidateIds(local: MemoryItem, cloud: MemoryItem[]): string[] {
+  const timed = cloud.filter((server) => samePendingPayloadWithinWindow(local, server))
+  if (timed.length > 0) return timed.map((server) => server.id)
+
+  // 手机时间可能与服务端偏差很大。时间窗没有候选时，只接受完整 payload
+  // 完全一致的候选；后续双向唯一检查会拒绝任何历史重复记录。
+  return cloud.filter((server) => hasSameExactPayload(local, server)).map((server) => server.id)
 }
 
 /**
@@ -40,8 +51,7 @@ export function alignPendingMemoriesForRefresh(
   const reverseCount = new Map<string, number>()
 
   for (const local of pending) {
-    const matches = cloud.filter((server) => samePendingPayload(local, server))
-    const ids = matches.map((server) => server.id)
+    const ids = candidateIds(local, cloud)
     candidates.set(local.id, ids)
     for (const id of ids) reverseCount.set(id, (reverseCount.get(id) ?? 0) + 1)
   }
