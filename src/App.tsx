@@ -12,7 +12,8 @@ import WeeklyPage from './components/WeeklyPage'
 import GuideDetail from './components/Guide'
 import LoginGate from './components/LoginGate'
 import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
-import { getAccount } from './lib/sync'
+import { getAccount, API_BASE } from './lib/sync'
+import { pingSiteHit } from './lib/siteStats'
 import RolesPage from './components/RolesPage'
 import { PlanetIcon } from './components/spaceIcons'
 import type { ChatJumpTarget, MemoryReturnTarget } from './lib/chatJump'
@@ -304,6 +305,11 @@ export default function App() {
   // #21：旧 PWA 与线上 build SHA 不一致时提示刷新；“稍后”只在本次页面内生效，不落 storage。
   const [deployedUpdateVersion, setDeployedUpdateVersion] = useState<string | null>(null)
   const dismissedUpdateVersionRef = useRef<string | null>(null)
+
+  // 站点访问计数：打我们自己的后端（第一方，替代第三方脚本），每次页面加载一次，失败静默。
+  useEffect(() => {
+    pingSiteHit(API_BASE)
+  }, [])
   useEffect(() => {
     let cancelled = false
     const currentVersion = getCurrentBuildVersion()

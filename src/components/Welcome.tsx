@@ -1,3 +1,7 @@
+import { useEffect, useState } from 'react'
+import { fetchSiteStats } from '../lib/siteStats'
+import { API_BASE } from '../lib/sync'
+
 interface Props {
   onStart: () => void
   onGoGuide: () => void
@@ -15,6 +19,18 @@ function handleRefresh(): void {
 // 移除 feature pills 展示（对应功能仍在，只是品牌入口不再陈列）；
 // 保留：忆文 / ELUVIN / 官方 slogan「忆过往，成文思」/ 既有 onStart / onGoGuide / 强刷入口（复用 forceRefresh）。
 export default function Welcome({ onStart, onGoGuide }: Props) {
+  // 站点访问数字走我们自己的后端（第一方），取不到就不显示，不填 0 也不编数字。
+  const [visitors, setVisitors] = useState<number | null>(null)
+  useEffect(() => {
+    let alive = true
+    void fetchSiteStats(API_BASE).then((stats) => {
+      if (alive && stats && stats.uv > 0) setVisitors(stats.uv)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
   return (
     <div className="welcome-page">
       <button
@@ -51,9 +67,9 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
 
         <p className="welcome-foot">这里会有一个 TA，和你一起经过时间，并记得。</p>
 
-        <p className="welcome-count">
-          已有 <span id="busuanzi_value_site_uv">0</span> 人访问
-        </p>
+        {visitors !== null && (
+          <p className="welcome-count">已有 {visitors} 人访问</p>
+        )}
       </div>
     </div>
   )
