@@ -177,40 +177,50 @@ assert.equal(result.reconciled, 1)
 assert.equal(requests.length, 1)
 assert.equal(requests.some((r) => r.method === 'POST'), false)
 
-console.log('\n[9] 本机时间偏差 >5 分钟：完整 payload 全云端唯一时只对账，不重复 POST')
+console.log('\n[9] 本机时间偏差 >5 分钟：不能把同 payload 的旧云端记录当成同一次上传')
 reset()
 requests = []
+getCount = 0
 handler = async (req) => {
-  assert.equal(req.method, 'GET')
-  return json({ memories: [cloudMemory(450, '记住这件事', 12 * 60 * 60 * 1000)] })
+  if (req.method === 'GET') {
+    getCount += 1
+    return json({ memories: [cloudMemory(450, '记住这件事', 12 * 60 * 60 * 1000)] })
+  }
+  assert.equal(req.method, 'POST')
+  return json(cloudMemory(451))
 }
 result = await retryPendingMemoryUploads('token-clock-skew', SID)
-assert.equal(result.reconciled, 1)
-assert.equal(result.uploaded, 0)
-assert.equal(requests.length, 1)
-assert.equal(requests.some((r) => r.method === 'POST'), false)
-assert.equal(getMemoriesCache(SID)[0].id, '450')
+assert.equal(getCount, 2)
+assert.equal(result.reconciled, 0)
+assert.equal(result.uploaded, 1)
+assert.equal(requests.filter((req) => req.method === 'POST').length, 1)
+assert.equal(getMemoriesCache(SID)[0].id, '451')
 
-console.log('\n[10] 跨时间窗出现多个完整 payload 候选：判 ambiguous，绝不猜、绝不 POST')
+console.log('\n[10] 超出时间窗即使 payload 完全一致，也保持事件身份分离')
 reset()
 requests = []
+getCount = 0
 handler = async (req) => {
-  assert.equal(req.method, 'GET')
-  return json({
-    memories: [
-      cloudMemory(451, '记住这件事', 12 * 60 * 60 * 1000),
-      cloudMemory(452, '记住这件事', 24 * 60 * 60 * 1000),
-    ],
-  })
+  if (req.method === 'GET') {
+    getCount += 1
+    return json({
+      memories: [
+        cloudMemory(452, '记住这件事', 12 * 60 * 60 * 1000),
+        cloudMemory(453, '记住这件事', 24 * 60 * 60 * 1000),
+      ],
+    })
+  }
+  assert.equal(req.method, 'POST')
+  return json(cloudMemory(454))
 }
-result = await retryPendingMemoryUploads('token-clock-skew-ambiguous', SID)
-assert.equal(result.ambiguous, 1)
+result = await retryPendingMemoryUploads('token-clock-skew-duplicate-payload', SID)
+assert.equal(getCount, 2)
 assert.equal(result.reconciled, 0)
-assert.equal(requests.length, 1)
-assert.equal(requests.some((r) => r.method === 'POST'), false)
-assert.equal(getMemoriesCache(SID)[0].id, 'local-memory-1')
+assert.equal(result.uploaded, 1)
+assert.equal(requests.filter((req) => req.method === 'POST').length, 1)
+assert.equal(getMemoriesCache(SID)[0].id, '454')
 
-console.log('\n[11] 跨时间窗只有 content 相同但 source 不同：不能误认旧记录，仍按正常流程 POST')
+console.log('\n[11] 跨时间窗 source 不同同样不能误对账')
 reset()
 requests = []
 getCount = 0
@@ -219,19 +229,19 @@ handler = async (req) => {
     getCount += 1
     return json({
       memories: [{
-        ...cloudMemory(453, '记住这件事', 12 * 60 * 60 * 1000),
+        ...cloudMemory(455, '记住这件事', 12 * 60 * 60 * 1000),
         source: '另一段旧原话',
       }],
     })
   }
   assert.equal(req.method, 'POST')
-  return json(cloudMemory(454))
+  return json(cloudMemory(456))
 }
 result = await retryPendingMemoryUploads('token-clock-skew-source-mismatch', SID)
 assert.equal(getCount, 2)
 assert.equal(result.uploaded, 1)
-assert.equal(requests.filter((r) => r.method === 'POST').length, 1)
-assert.equal(getMemoriesCache(SID)[0].id, '454')
+assert.equal(requests.filter((req) => req.method === 'POST').length, 1)
+assert.equal(getMemoriesCache(SID)[0].id, '456')
 
 console.log('\n[12] 同 token + session 并发调用只跑一套网络请求')
 reset()
