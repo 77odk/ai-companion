@@ -35,6 +35,23 @@ interface DatedSourcedMemory extends DatedMemory {
   kind: MemoryKind
 }
 
+interface MemorySelection {
+  kind: MemoryKind
+  memoryId: MemoryItem['id']
+  sessionId?: string
+}
+
+function matchesMemorySelection(
+  memory: DatedSourcedMemory,
+  selection: MemorySelection,
+  activeSessionId: string | null,
+): boolean {
+  if (memory.kind !== selection.kind || memory.item.id !== selection.memoryId) return false
+  if (selection.kind !== 'session') return true
+  const expectedSessionId = selection.sessionId ?? activeSessionId
+  return Boolean(expectedSessionId && activeSessionId === expectedSessionId)
+}
+
 const MONTHS_EN = [
   'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
   'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
@@ -197,8 +214,12 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const [view, setView] = useState<'river' | 'detail' | 'book'>('river')
   const [bookStage, setBookStage] = useState<'cover' | 'body'>('cover')
   const [bookFrom, setBookFrom] = useState<'cover' | 'detail'>('cover')
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const selected = chronological[selectedIndex] ?? null
+  const [selectedIdentity, setSelectedIdentity] = useState<MemorySelection | null>(null)
+  const selectedIndex = useMemo(() => {
+    if (!selectedIdentity) return -1
+    return chronological.findIndex((memory) => matchesMemorySelection(memory, selectedIdentity, sessionId))
+  }, [chronological, selectedIdentity, sessionId])
+  const selected = selectedIndex >= 0 ? chronological[selectedIndex] : null
 
   // 从 Chat 返回：按稳定 identity 在当前数据里重新定位并打开详情；找不到就安全留在 River，绝不猜别的条目
   useEffect(() => {
@@ -206,14 +227,16 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
     // 数据尚未就绪（首帧 session 未恢复 / 记忆还没读入）→ 先等，不能在这时消费 target，否则会被误判成「不存在」
     if (initialDetail.kind === 'session' && !sessionId) return
     if (chronological.length === 0) return
-    const index = chronological.findIndex(
-      (entry) =>
-        entry.kind === initialDetail.kind &&
-        entry.item.id === initialDetail.memoryId &&
-        (initialDetail.kind !== 'session' || !initialDetail.sessionId || sessionId === initialDetail.sessionId),
-    )
+    const identity: MemorySelection = {
+      kind: initialDetail.kind,
+      memoryId: initialDetail.memoryId,
+      ...(initialDetail.kind === 'session'
+        ? { sessionId: initialDetail.sessionId ?? sessionId ?? undefined }
+        : {}),
+    }
+    const index = chronological.findIndex((entry) => matchesMemorySelection(entry, identity, sessionId))
     if (index >= 0) {
-      setSelectedIndex(index)
+      setSelectedIdentity(identity)
       setView('detail')
     }
     onInitialDetailConsumed?.()
@@ -231,6 +254,20 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const [jumpNotice, setJumpNotice] = useState<string | null>(null)
   const [jumpLoading, setJumpLoading] = useState(false)
   const jumpNoticeTimer = useRef<number | null>(null)
+
+  // 详情身份必须跟随稳定 memory identity，而不是数组位置。
+  // 云端刷新若删除当前条目，就安全退回 River；绝不能悄悄落到相邻条目。
+  useEffect(() => {
+    if (view !== 'detail' || !selectedIdentity || selected) return
+    setEditing(false)
+    setConfirmingDelete(false)
+    setSaveError('')
+    setDeleteError('')
+    setJumpNotice(null)
+    setSelectedIdentity(null)
+    setView('river')
+  }, [view, selectedIdentity, selected])
+
   const showJumpNotice = (text: string) => {
     setJumpNotice(text)
     if (jumpNoticeTimer.current !== null) window.clearTimeout(jumpNoticeTimer.current)
@@ -267,10 +304,11 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const riverScrollRef = useRef(0)
   const openDetail = (memory: DatedSourcedMemory) => {
     riverScrollRef.current = pageRef.current?.scrollTop ?? 0
-    const index = chronological.findIndex(
-      (candidate) => candidate.kind === memory.kind && candidate.item.id === memory.item.id,
-    )
-    setSelectedIndex(index >= 0 ? index : 0)
+    setSelectedIdentity({
+      kind: memory.kind,
+      memoryId: memory.item.id,
+      ...(memory.kind === 'session' && sessionId ? { sessionId } : {}),
+    })
     setEditing(false)
     setSaveError('')
     setView('detail')
@@ -315,6 +353,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       !(memory.kind === selected.kind && memory.item.id === selected.item.id)
     )))
     setConfirmingDelete(false)
+    setSelectedIdentity(null)
     setView('river')
   }
 
