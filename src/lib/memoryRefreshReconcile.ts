@@ -24,12 +24,9 @@ function samePendingPayloadWithinWindow(local: MemoryItem, cloud: MemoryItem): b
 }
 
 function candidateIds(local: MemoryItem, cloud: MemoryItem[]): string[] {
-  const timed = cloud.filter((server) => samePendingPayloadWithinWindow(local, server))
-  if (timed.length > 0) return timed.map((server) => server.id)
-
-  // 手机时间可能与服务端偏差很大。时间窗没有候选时，只接受完整 payload
-  // 完全一致的候选；后续双向唯一检查会拒绝任何历史重复记录。
-  return cloud.filter((server) => hasSameExactPayload(local, server)).map((server) => server.id)
+  return cloud
+    .filter((server) => samePendingPayloadWithinWindow(local, server))
+    .map((server) => server.id)
 }
 
 /**
