@@ -151,11 +151,18 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       if (cancelled || !res.ok || memoryMutationVersionRef.current !== startedAtMutationVersion) return
 
       const cloudMemories = res.data.memories.map(sessionMemoryToItem)
-      const refreshedCache = alignPendingMemoriesForRefresh(getMemoriesCache(sessionId), cloudMemories)
-      const merged = mergeSessionMemories(refreshedCache, cloudMemories, {
+      const alignment = alignPendingMemoriesForRefresh(getMemoriesCache(sessionId), cloudMemories)
+      const merged = mergeSessionMemories(alignment.cache, cloudMemories, {
         purgeMissing: true,
         sessionId,
       })
+      if (alignment.reconciledIds.size > 0) {
+        setSelectedIdentity((current) => {
+          if (!current || current.kind !== 'session') return current
+          const serverId = alignment.reconciledIds.get(String(current.memoryId))
+          return serverId ? { ...current, memoryId: serverId } : current
+        })
+      }
       if (cancelled || memoryMutationVersionRef.current !== startedAtMutationVersion) return
 
       // localStorage 写失败不伪装成成功；但本次页面仍可展示刚从权威云端拉回的真实结果。
