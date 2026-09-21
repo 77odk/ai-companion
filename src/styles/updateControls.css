@@ -96,3 +96,12 @@
     margin-left: auto;
   }
 }
+
+/* #21 · 「我的 → 检查更新」的探测结果提示（已是最新 / 有新版本 / 检查不了） */
+.update-check-hint {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}

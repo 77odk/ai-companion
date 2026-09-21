@@ -33,3 +33,40 @@ export async function fetchDeployedBuildVersion(
     return null
   }
 }
+
+/**
+ * 统一的版本探测入口：定时探针（启动 / 回到前台 / 联网 / SW 换版）与
+ * 「我的 → 检查更新」都走这里，保证两处判定完全一致、不各写一套。
+ */
+export type BuildUpdateCheck = 'updated' | 'current' | 'unknown'
+
+type DeployedBuildListener = (version: string | null) => void
+const deployedBuildListeners = new Set<DeployedBuildListener>()
+
+/** 订阅探测结果：有新版本给版本号，已是最新给 null。调用方负责展示与「稍后」的忽略逻辑。 */
+export function subscribeDeployedBuild(listener: DeployedBuildListener): () => void {
+  deployedBuildListeners.add(listener)
+  return () => {
+    deployedBuildListeners.delete(listener)
+  }
+}
+
+function emitDeployedBuild(version: string | null): void {
+  for (const listener of [...deployedBuildListeners]) listener(version)
+}
+
+/**
+ * updated = 线上是更新的版本；current = 已经是最新；unknown = 取不到（离线、本地开发构建）。
+ * 拿不到当前版本时一律 unknown，不误报。
+ */
+export async function checkDeployedBuild(
+  fetchImpl: typeof fetch = fetch,
+): Promise<BuildUpdateCheck> {
+  const current = getCurrentBuildVersion()
+  if (!current) return 'unknown'
+  const deployed = await fetchDeployedBuildVersion(fetchImpl)
+  if (!deployed) return 'unknown'
+  const updated = shouldShowBuildUpdate(current, deployed)
+  emitDeployedBuild(updated ? deployed : null)
+  return updated ? 'updated' : 'current'
+}

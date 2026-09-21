@@ -51,6 +51,7 @@ import {
 import { listSessions, patchSession, type Session } from '../lib/sessionApi'
 import { getActiveSessionId, getSessionsCache, setSessionsCache } from '../lib/sessionStore'
 import { forceRefresh } from '../lib/forceRefresh'
+import { checkDeployedBuild } from '../lib/appVersion'
 import { getGlobalReplyLength, replyLengthLabel, saveGlobalReplyLength, type ReplyLength } from '../lib/replyLength'
 import {
   patchSessionInList,
@@ -392,16 +393,36 @@ function EntryRow({
 
 function UpdateControls({ standalone = false }: { standalone?: boolean }) {
   const [expanded, setExpanded] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [checkHint, setCheckHint] = useState('')
 
-  const checkUpdate = () => {
+  // #21：不再盲目 reload，先探一次线上 build；有新版本页面顶部会出现提示条（同一套检测）。
+  const checkUpdate = async () => {
     setExpanded(true)
-    location.reload()
+    if (checking) return
+    setChecking(true)
+    setCheckHint('')
+    const result = await checkDeployedBuild()
+    setChecking(false)
+    if (result === 'updated') setCheckHint('发现新版本，看页面顶部的提示刷新一下')
+    else if (result === 'current') setCheckHint('已经是最新版本')
+    else setCheckHint('暂时检查不了，过会儿再试')
   }
 
   const doForceRefresh = () => {
     if (!window.confirm('强制刷新会清除页面缓存并重新加载，继续吗？')) return
     void forceRefresh()
   }
+
+  const secondary = (
+    <div className="update-controls-secondary">
+      <button type="button" className="btn btn-ghost" onClick={() => void checkUpdate()} disabled={checking}>
+        {checking ? '检查中…' : '检查新版本'}
+      </button>
+      <button type="button" className="btn btn-ghost" onClick={doForceRefresh}>强制刷新</button>
+      {checkHint && <p className="update-check-hint" role="status">{checkHint}</p>}
+    </div>
+  )
 
   if (standalone) {
     return (
@@ -413,12 +434,7 @@ function UpdateControls({ standalone = false }: { standalone?: boolean }) {
             <path d="M9 6l6 6-6 6" />
           </svg>
         </button>
-        {expanded && (
-          <div className="update-controls-secondary">
-            <button type="button" className="btn btn-ghost" onClick={checkUpdate}>重新加载检查</button>
-            <button type="button" className="btn btn-ghost" onClick={doForceRefresh}>强制刷新</button>
-          </div>
-        )}
+        {expanded && secondary}
       </div>
     )
   }
@@ -433,12 +449,7 @@ function UpdateControls({ standalone = false }: { standalone?: boolean }) {
           <path d="M9 6l6 6-6 6" />
         </svg>
       </button>
-      {expanded && (
-        <div className="update-controls-secondary">
-          <button type="button" className="btn btn-ghost" onClick={checkUpdate}>重新加载检查</button>
-          <button type="button" className="btn btn-ghost" onClick={doForceRefresh}>强制刷新</button>
-        </div>
-      )}
+      {expanded && secondary}
     </div>
   )
 }

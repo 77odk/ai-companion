@@ -52,14 +52,47 @@ assert.ok(!vite.includes("**/*.{js,css,html,svg,ico,png,json}"), 'version.json �
 
 console.log('\n[5] App 只在版本不一致时展示固定文案，并复用 forceRefresh')
 const app = fs.readFileSync(path.join(process.cwd(), 'src/App.tsx'), 'utf8')
-assert.match(app, /fetchDeployedBuildVersion/)
-assert.match(app, /shouldShowBuildUpdate/)
+assert.match(app, /checkDeployedBuild/)
+assert.match(app, /subscribeDeployedBuild/)
 assert.match(app, /发现新版本，刷新后即可使用/)
 assert.match(app, /立即刷新/)
 assert.match(app, /稍后/)
-assert.match(app, /onClick=\{\(\) => void forceRefresh\(\)\}/)
+assert.ok(app.includes('void forceRefresh()'), '立即刷新复用现有 forceRefresh')
 assert.match(app, /dismissedUpdateVersionRef/)
 assert.equal(app.includes('localStorage.setItem('), false)
+
+console.log('\n[7] 统一探测入口：判定与通知同一处，设置页复用，不再盲目 reload')
+const versionModule = fs.readFileSync(path.join(process.cwd(), 'src/lib/appVersion.ts'), 'utf8')
+assert.match(versionModule, /export async function checkDeployedBuild/)
+assert.match(versionModule, /export function subscribeDeployedBuild/)
+assert.match(versionModule, /emitDeployedBuild/)
+
+const previousBuild = globalThis.__ELUVIN_BUILD_VERSION__
+globalThis.__ELUVIN_BUILD_VERSION__ = 'sha-current'
+const { checkDeployedBuild, subscribeDeployedBuild } = await import('../src/lib/appVersion.ts')
+assert.equal(getCurrentBuildVersion(), 'sha-current')
+const emitted = []
+const off = subscribeDeployedBuild((version) => emitted.push(version))
+const say = (version) => async () => new Response(JSON.stringify({ version }), { status: 200 })
+assert.equal(await checkDeployedBuild(say('sha-current')), 'current')
+assert.deepEqual(emitted, [null], '已是最新：通知 null（顶部提示条收起）')
+assert.equal(await checkDeployedBuild(say('sha-new')), 'updated')
+assert.deepEqual(emitted, [null, 'sha-new'], '有新版本：通知新版本号')
+assert.equal(await checkDeployedBuild(async () => { throw new Error('offline') }), 'unknown')
+off()
+assert.equal(await checkDeployedBuild(say('sha-new')), 'updated')
+assert.deepEqual(emitted, [null, 'sha-new'], '退订后不再收到通知')
+if (previousBuild === undefined) delete globalThis.__ELUVIN_BUILD_VERSION__
+else globalThis.__ELUVIN_BUILD_VERSION__ = previousBuild
+
+const settings = fs.readFileSync(path.join(process.cwd(), 'src/components/Settings.tsx'), 'utf8')
+assert.match(settings, /checkDeployedBuild/)
+assert.match(settings, /已经是最新版本/)
+assert.match(settings, /发现新版本，看页面顶部的提示刷新一下/)
+assert.match(settings, /暂时检查不了，过会儿再试/)
+assert.equal(settings.includes('location.reload()'), false, '检查更新不再直接 reload')
+const cssCheck = fs.readFileSync(path.join(process.cwd(), 'src/styles/updateControls.css'), 'utf8')
+assert.match(cssCheck, /\.update-check-hint \{/)
 
 console.log('\n[6] 样式是应用流内顶部细条，390 宽不依赖固定像素宽度')
 const css = fs.readFileSync(path.join(process.cwd(), 'src/styles/updateControls.css'), 'utf8')
