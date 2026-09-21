@@ -100,18 +100,24 @@ reconcileMemoryCacheId(sessionId, 'local-inflight', 901)
 assert.equal(getMemoriesCache(sessionId).length, 1, '旧 POST 回调回来时临时 id 已不存在，必须 no-op')
 assert.equal(getMemoriesCache(sessionId)[0].id, '901')
 
-console.log('\n[5] 有歧义时绝不猜；超出当前 5 分钟窗口也保持 pending 原样')
+console.log('\n[5] 跨时间窗完整 payload 唯一时仍可对账；多个候选时绝不猜')
+const lateCloud = [
+  { ...inflightCloud[0], createdAt: inflightLocal[0].createdAt + 12 * 60 * 60 * 1000 },
+]
+assert.equal(alignPendingMemoriesForRefresh(inflightLocal, lateCloud)[0].id, '901')
 const ambiguousCloud = [
-  inflightCloud[0],
-  { ...inflightCloud[0], id: '902' },
+  lateCloud[0],
+  { ...lateCloud[0], id: '902' },
 ]
 assert.equal(alignPendingMemoriesForRefresh(inflightLocal, ambiguousCloud)[0].id, 'local-inflight')
-const lateCloud = [
-  { ...inflightCloud[0], createdAt: inflightLocal[0].createdAt + 6 * 60 * 1000 },
-]
-assert.equal(alignPendingMemoriesForRefresh(inflightLocal, lateCloud)[0].id, 'local-inflight')
 
-console.log('\n[6] 页面挂载明确先 align pending/cloud，再走既有 mergeSessionMemories')
+console.log('\n[6] 跨时间窗 source / taReply 不完全一致时不能误对账')
+const mismatchedPayloadCloud = [
+  { ...lateCloud[0], id: '903', source: '另一段原话' },
+]
+assert.equal(alignPendingMemoriesForRefresh(inflightLocal, mismatchedPayloadCloud)[0].id, 'local-inflight')
+
+console.log('\n[7] 页面挂载明确先 align pending/cloud，再走既有 mergeSessionMemories')
 const source = fs.readFileSync(path.join(process.cwd(), 'src/components/Memory.tsx'), 'utf8')
 assert.match(source, /import \{ listMemories \} from '\.\.\/lib\/sessionApi'/)
 assert.match(source, /import \{ alignPendingMemoriesForRefresh \} from '\.\.\/lib\/memoryRefreshReconcile'/)
@@ -121,13 +127,13 @@ assert.match(source, /mergeSessionMemories\(refreshedCache, cloudMemories/)
 assert.match(source, /purgeMissing: true/)
 assert.match(source, /sessionId,/)
 
-console.log('\n[7] 页内会话记忆改/删后，旧 GET 结果必须因 mutation version 变化而失效')
+console.log('\n[8] 页内会话记忆改/删后，旧 GET 结果必须因 mutation version 变化而失效')
 assert.match(source, /const memoryMutationVersionRef = useRef\(0\)/)
 assert.match(source, /startedAtMutationVersion = memoryMutationVersionRef\.current/)
 assert.ok((source.match(/memoryMutationVersionRef\.current !== startedAtMutationVersion/g) ?? []).length >= 2)
 assert.ok((source.match(/if \(selected\.kind === 'session'\) memoryMutationVersionRef\.current \+= 1/g) ?? []).length >= 2)
 
-console.log('\n[8] 没有新增 storage key / API；只复用当前 token、session 和现有缓存')
+console.log('\n[9] 没有新增 storage key / API；只复用当前 token、session 和现有缓存')
 assert.equal(source.includes('localStorage.setItem('), false)
 assert.equal(source.includes('/api/'), false)
 
