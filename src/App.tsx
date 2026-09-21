@@ -54,6 +54,7 @@ import {
 } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh } from './lib/forceRefresh'
+import { fetchDeployedBuildVersion, getCurrentBuildVersion, shouldShowBuildUpdate } from './lib/appVersion'
 import Home from './components/Home'
 import SpaceLife from './components/SpaceLife'
 import Memory from './components/Memory'
@@ -300,6 +301,43 @@ export default function App() {
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
+  // #21：旧 PWA 与线上 build SHA 不一致时提示刷新；“稍后”只在本次页面内生效，不落 storage。
+  const [deployedUpdateVersion, setDeployedUpdateVersion] = useState<string | null>(null)
+  const dismissedUpdateVersionRef = useRef<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const currentVersion = getCurrentBuildVersion()
+    if (!currentVersion) return () => { cancelled = true }
+
+    const checkVersion = async () => {
+      const deployedVersion = await fetchDeployedBuildVersion()
+      if (cancelled || !deployedVersion) return
+      if (!shouldShowBuildUpdate(currentVersion, deployedVersion)) {
+        setDeployedUpdateVersion(null)
+        return
+      }
+      if (dismissedUpdateVersionRef.current !== deployedVersion) {
+        setDeployedUpdateVersion(deployedVersion)
+      }
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void checkVersion()
+    }
+    const onOnline = () => void checkVersion()
+    const onControllerChange = () => void checkVersion()
+
+    void checkVersion()
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', onOnline)
+    navigator.serviceWorker?.addEventListener('controllerchange', onControllerChange)
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', onOnline)
+      navigator.serviceWorker?.removeEventListener('controllerchange', onControllerChange)
+    }
+  }, [])
 
   useEffect(() => {
     if (loggedIn) {
@@ -566,6 +604,26 @@ export default function App() {
 
   return (
     <div className="app">
+      {deployedUpdateVersion && (
+        <div className="version-update-notice" role="status" aria-live="polite">
+          <span className="version-update-notice-copy">发现新版本，刷新后即可使用</span>
+          <div className="version-update-notice-actions">
+            <button type="button" className="version-update-now" onClick={() => void forceRefresh()}>
+              立即刷新
+            </button>
+            <button
+              type="button"
+              className="version-update-later"
+              onClick={() => {
+                dismissedUpdateVersionRef.current = deployedUpdateVersion
+                setDeployedUpdateVersion(null)
+              }}
+            >
+              稍后
+            </button>
+          </div>
+        </div>
+      )}
       {loggedIn && needLightConsent ? (
         // ConsentGate V1：老用户/登录态无服务端 consent 记录 → 轻量补确认（同意后上报服务端留档）
         <ConsentGate mode="light" onDone={() => setNeedLightConsent(false)} />
