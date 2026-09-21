@@ -138,6 +138,8 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const [memories, setMemories] = useState(readMemories)
   // #19：进入记忆页主动拉当前会话云端记忆。页内一旦发生改/删，本次旧 GET 结果作废，避免回写过期状态。
   const memoryMutationVersionRef = useRef(0)
+  // local pending id → server id，仅用于承接当前页面内已经在 await 的跳转 handler；不持久化。
+  const reconciledMemoryIdsRef = useRef(new Map<string, string>())
   useEffect(() => {
     let cancelled = false
     setMemories(readMemories())
@@ -157,6 +159,9 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
         sessionId,
       })
       if (alignment.reconciledIds.size > 0) {
+        for (const [localId, serverId] of alignment.reconciledIds) {
+          reconciledMemoryIdsRef.current.set(localId, serverId)
+        }
         setSelectedIdentity((current) => {
           if (!current || current.kind !== 'session') return current
           const serverId = alignment.reconciledIds.get(String(current.memoryId))
@@ -287,16 +292,25 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   // 点击时用当前 session 的完整云端记录确认唯一性；云端不可用再安全回落本地缓存。
   const handleJumpToChatLog = async () => {
     if (!selected || !onJumpToChatLog || jumpLoading) return
+    const jumpIdentity: MemorySelection = {
+      kind: selected.kind,
+      memoryId: selected.item.id,
+      ...(selected.kind === 'session' && sessionId ? { sessionId } : {}),
+    }
     setJumpLoading(true)
     const result = await findChatRecordJumpTargetHydrated(sessionId, selected.item.source ?? '', getToken())
     setJumpLoading(false)
     if (result.status === 'unique' && result.target) {
       setJumpNotice(null)
-      // 记下返回目标：用稳定 identity（memoryId + kind + sessionId），绝不靠 index 硬恢复
+      // await 期间 mount refresh 可能把 pending local id 对账成 server id；
+      // return target 必须承接最新 id，不能把旧 local id 带进聊天返回链。
+      const returnMemoryId = jumpIdentity.kind === 'session'
+        ? (reconciledMemoryIdsRef.current.get(String(jumpIdentity.memoryId)) ?? jumpIdentity.memoryId)
+        : jumpIdentity.memoryId
       onJumpToChatLog(result.target, {
-        memoryId: selected.item.id,
-        kind: selected.kind,
-        ...(selected.kind === 'session' && sessionId ? { sessionId } : {}),
+        memoryId: returnMemoryId,
+        kind: jumpIdentity.kind,
+        ...(jumpIdentity.kind === 'session' && jumpIdentity.sessionId ? { sessionId: jumpIdentity.sessionId } : {}),
       })
       return
     }
