@@ -6,6 +6,8 @@ import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBo
 import { getToken } from '../lib/auth'
 import { correctMemoryText, removeMemory, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 import { findChatRecordJumpTargetHydrated, type ChatJumpTarget, type MemoryReturnTarget } from '../lib/chatJump'
+import { alignPendingMemoriesForRefresh } from '../lib/memoryRefreshReconcile'
+import { recordMemoryIdAlias, resolveMemoryIdAlias, subscribeMemoryIdAliases } from '../lib/memoryIdAliases'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
 // 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
@@ -33,6 +35,23 @@ interface SourcedMemory {
 
 interface DatedSourcedMemory extends DatedMemory {
   kind: MemoryKind
+}
+
+interface MemorySelection {
+  kind: MemoryKind
+  memoryId: MemoryItem['id']
+  sessionId?: string
+}
+
+function matchesMemorySelection(
+  memory: DatedSourcedMemory,
+  selection: MemorySelection,
+  activeSessionId: string | null,
+): boolean {
+  if (memory.kind !== selection.kind || memory.item.id !== selection.memoryId) return false
+  if (selection.kind !== 'session') return true
+  const expectedSessionId = selection.sessionId ?? activeSessionId
+  return Boolean(expectedSessionId && activeSessionId === expectedSessionId)
 }
 
 const MONTHS_EN = [
@@ -133,9 +152,22 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       if (cancelled || !res.ok || memoryMutationVersionRef.current !== startedAtMutationVersion) return
 
       const cloudMemories = res.data.memories.map(sessionMemoryToItem)
-      const merged = mergeSessionMemories(getMemoriesCache(sessionId), cloudMemories, {
+      const alignment = alignPendingMemoriesForRefresh(getMemoriesCache(sessionId), cloudMemories)
+      const merged = mergeSessionMemories(alignment.cache, cloudMemories, {
         purgeMissing: true,
         sessionId,
+      })
+      if (alignment.reconciledIds.size > 0) {
+        for (const [localId, serverId] of alignment.reconciledIds) {
+          recordMemoryIdAlias(sessionId, localId, serverId)
+        }
+      }
+      // Chat 的 POST 回调可能在本页读取缓存之后、GET 返回之前先完成；
+      // 即使 alignment 没产生映射，也要从统一别名源承接那次 local → server 对账。
+      setSelectedIdentity((current) => {
+        if (!current || current.kind !== 'session') return current
+        const resolved = resolveMemoryIdAlias(sessionId, String(current.memoryId))
+        return resolved !== current.memoryId ? { ...current, memoryId: resolved } : current
       })
       if (cancelled || memoryMutationVersionRef.current !== startedAtMutationVersion) return
 
@@ -197,8 +229,43 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const [view, setView] = useState<'river' | 'detail' | 'book'>('river')
   const [bookStage, setBookStage] = useState<'cover' | 'body'>('cover')
   const [bookFrom, setBookFrom] = useState<'cover' | 'detail'>('cover')
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const selected = chronological[selectedIndex] ?? null
+  const [selectedIdentity, setSelectedIdentity] = useState<MemorySelection | null>(null)
+
+  useEffect(() => {
+    if (!sessionId) return
+    return subscribeMemoryIdAliases((alias) => {
+      if (alias.sessionId !== sessionId) return
+      // 对账源已经成功写入缓存；列表与 selection 必须同一轮迁移，
+      // 否则只把 selection 换成 server id 会在旧列表上短暂“找不到”，误退回 River。
+      setMemories((current) => {
+        const alreadyHasServerId = current.some((entry) => (
+          entry.kind === 'session' && String(entry.item.id) === alias.newId
+        ))
+        if (alreadyHasServerId) {
+          return current.filter((entry) => !(
+            entry.kind === 'session' && String(entry.item.id) === alias.oldId
+          ))
+        }
+        return current.map((entry) => {
+          if (entry.kind !== 'session' || String(entry.item.id) !== alias.oldId) return entry
+          const item = { ...entry.item, id: alias.newId }
+          delete item.pendingSync
+          return { ...entry, item }
+        })
+      })
+      setSelectedIdentity((current) => {
+        if (!current || current.kind !== 'session') return current
+        const resolved = resolveMemoryIdAlias(sessionId, String(current.memoryId))
+        return resolved !== current.memoryId ? { ...current, memoryId: resolved } : current
+      })
+    })
+  }, [sessionId])
+
+  const selectedIndex = useMemo(() => {
+    if (!selectedIdentity) return -1
+    return chronological.findIndex((memory) => matchesMemorySelection(memory, selectedIdentity, sessionId))
+  }, [chronological, selectedIdentity, sessionId])
+  const selected = selectedIndex >= 0 ? chronological[selectedIndex] : null
 
   // 从 Chat 返回：按稳定 identity 在当前数据里重新定位并打开详情；找不到就安全留在 River，绝不猜别的条目
   useEffect(() => {
@@ -206,14 +273,18 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
     // 数据尚未就绪（首帧 session 未恢复 / 记忆还没读入）→ 先等，不能在这时消费 target，否则会被误判成「不存在」
     if (initialDetail.kind === 'session' && !sessionId) return
     if (chronological.length === 0) return
-    const index = chronological.findIndex(
-      (entry) =>
-        entry.kind === initialDetail.kind &&
-        entry.item.id === initialDetail.memoryId &&
-        (initialDetail.kind !== 'session' || !initialDetail.sessionId || sessionId === initialDetail.sessionId),
-    )
+    const identity: MemorySelection = {
+      kind: initialDetail.kind,
+      memoryId: initialDetail.kind === 'session'
+        ? resolveMemoryIdAlias(initialDetail.sessionId ?? sessionId, String(initialDetail.memoryId))
+        : initialDetail.memoryId,
+      ...(initialDetail.kind === 'session'
+        ? { sessionId: initialDetail.sessionId ?? sessionId ?? undefined }
+        : {}),
+    }
+    const index = chronological.findIndex((entry) => matchesMemorySelection(entry, identity, sessionId))
     if (index >= 0) {
-      setSelectedIndex(index)
+      setSelectedIdentity(identity)
       setView('detail')
     }
     onInitialDetailConsumed?.()
@@ -231,6 +302,20 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const [jumpNotice, setJumpNotice] = useState<string | null>(null)
   const [jumpLoading, setJumpLoading] = useState(false)
   const jumpNoticeTimer = useRef<number | null>(null)
+
+  // 详情身份必须跟随稳定 memory identity，而不是数组位置。
+  // 云端刷新若删除当前条目，就安全退回 River；绝不能悄悄落到相邻条目。
+  useEffect(() => {
+    if (view !== 'detail' || !selectedIdentity || selected) return
+    setEditing(false)
+    setConfirmingDelete(false)
+    setSaveError('')
+    setDeleteError('')
+    setJumpNotice(null)
+    setSelectedIdentity(null)
+    setView('river')
+  }, [view, selectedIdentity, selected])
+
   const showJumpNotice = (text: string) => {
     setJumpNotice(text)
     if (jumpNoticeTimer.current !== null) window.clearTimeout(jumpNoticeTimer.current)
@@ -241,16 +326,25 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   // 点击时用当前 session 的完整云端记录确认唯一性；云端不可用再安全回落本地缓存。
   const handleJumpToChatLog = async () => {
     if (!selected || !onJumpToChatLog || jumpLoading) return
+    const jumpIdentity: MemorySelection = {
+      kind: selected.kind,
+      memoryId: selected.item.id,
+      ...(selected.kind === 'session' && sessionId ? { sessionId } : {}),
+    }
     setJumpLoading(true)
     const result = await findChatRecordJumpTargetHydrated(sessionId, selected.item.source ?? '', getToken())
     setJumpLoading(false)
     if (result.status === 'unique' && result.target) {
       setJumpNotice(null)
-      // 记下返回目标：用稳定 identity（memoryId + kind + sessionId），绝不靠 index 硬恢复
+      // await 期间 mount refresh 可能把 pending local id 对账成 server id；
+      // return target 必须承接最新 id，不能把旧 local id 带进聊天返回链。
+      const returnMemoryId = jumpIdentity.kind === 'session'
+        ? resolveMemoryIdAlias(jumpIdentity.sessionId ?? sessionId, String(jumpIdentity.memoryId))
+        : jumpIdentity.memoryId
       onJumpToChatLog(result.target, {
-        memoryId: selected.item.id,
-        kind: selected.kind,
-        ...(selected.kind === 'session' && sessionId ? { sessionId } : {}),
+        memoryId: returnMemoryId,
+        kind: jumpIdentity.kind,
+        ...(jumpIdentity.kind === 'session' && jumpIdentity.sessionId ? { sessionId: jumpIdentity.sessionId } : {}),
       })
       return
     }
@@ -267,10 +361,11 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const riverScrollRef = useRef(0)
   const openDetail = (memory: DatedSourcedMemory) => {
     riverScrollRef.current = pageRef.current?.scrollTop ?? 0
-    const index = chronological.findIndex(
-      (candidate) => candidate.kind === memory.kind && candidate.item.id === memory.item.id,
-    )
-    setSelectedIndex(index >= 0 ? index : 0)
+    setSelectedIdentity({
+      kind: memory.kind,
+      memoryId: memory.item.id,
+      ...(memory.kind === 'session' && sessionId ? { sessionId } : {}),
+    })
     setEditing(false)
     setSaveError('')
     setView('detail')
@@ -315,6 +410,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       !(memory.kind === selected.kind && memory.item.id === selected.item.id)
     )))
     setConfirmingDelete(false)
+    setSelectedIdentity(null)
     setView('river')
   }
 

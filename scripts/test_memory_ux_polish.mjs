@@ -36,10 +36,14 @@ rec('A3 只有跳转成功才记录 return target',
 rec('A4 Memory 接收 initialDetail / onInitialDetailConsumed',
   /initialDetail=\{pendingMemoryReturn\}/.test(app) &&
   /onInitialDetailConsumed=\{\(\) => \{[\s\S]{0,160}setPendingMemoryReturn\(null\)/.test(app))
-rec('A5 返回时按 kind + memoryId + sessionId 在当前数据重新查（不靠 index）',
-  /findIndex\([\s\S]{0,240}entry\.kind === initialDetail\.kind[\s\S]{0,140}entry\.item\.id === initialDetail\.memoryId/.test(memSrc))
+rec('A5 返回时使用稳定 identity 在当前数据重新查（不靠 index）',
+  memSrc.includes('const identity: MemorySelection = {') &&
+  memSrc.includes('kind: initialDetail.kind') &&
+  memSrc.includes('resolveMemoryIdAlias(initialDetail.sessionId ?? sessionId, String(initialDetail.memoryId))') &&
+  memSrc.includes('matchesMemorySelection(entry, identity, sessionId)'))
 rec('A6 找到才打开 Detail，找不到安全留在 River（不猜别的条目）',
-  /if \(index >= 0\) \{\s*setSelectedIndex\(index\)\s*setView\('detail'\)\s*\}/.test(memSrc))
+  memSrc.includes('setSelectedIdentity(identity)') &&
+  /if \(index >= 0\)[\s\S]{0,120}setView\('detail'\)/.test(memSrc))
 rec('A7 无条件消费 target（找到/没找到都清）',
   /if \(index >= 0\)[\s\S]{0,160}\}\s*onInitialDetailConsumed\?\.\(\)/.test(memSrc))
 rec('A8 跳转失败路径不碰 return target（onJumpToChatLog 只有一个调用点）',
