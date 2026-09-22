@@ -980,7 +980,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     const identityMode = resolveIdentityMode(activeSessionId || undefined)
     const allowEmbodiedLife = allowsEmbodiedLifeContext(identityMode)
-    const allowBusy = allowsBusyState(identityMode)
     // Space 旧动态没有 identityMode stamp。为避免从沉浸切到自然 / AI 后把旧吃饭、出门、地点继续当成 SELF 事实，
     // v1 仅在沉浸档把 Space 历史注入 Chat；Space 页面本身仍照当前 identity policy 正常生成与展示。
     if (allowEmbodiedLife) {
