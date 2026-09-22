@@ -257,15 +257,22 @@ export function setSessionStart(ts: number, sessionId?: string): void {
   localStorage.setItem(sessionStartKey(sessionId), String(ts))
 }
 
-// ---- 上下文压缩标记（Context Compact，PR #99 同一批次） ----
-// 每会话最多压缩一次（主动或达到阈值自动触发）。业务真实值存本地（number，模式同 session_start），
-// 由 cloudStateResources 的 context_compact adapter 同步上云——不是"只在本机"的 key。
-// 只影响"注入给模型的上下文"（历史折叠为近窗 + 记忆块），绝不删除原聊天记录（缓存/后端都不动）。
+// ---- 上下文压缩（Context Compact，PR #99 同一批次） ----
+// 每会话最多压缩 1 次：用户主动「压缩」→ 最多 1 次模型调用，把较老历史压成 summary，
+// 同时保留最近原始消息；之后注入 = summary + recent raw messages。
+// compactedAt 存本地 number（模式同 session_start，兼容已上线旧数据），
+// summary 存独立 key；两者都走 cloudStateResources 的 context_compact adapter 同步上云，
+// 不是"只在本机"的 key。原聊天记录（缓存/后端）一律不动，绝不删除。
 
 const CONTEXT_COMPACT_KEY = 'ai_companion_context_compact'
+const CONTEXT_COMPACT_SUMMARY_KEY = 'ai_companion_context_compact_summary'
 
 function contextCompactKey(sessionId?: string): string {
   return sessionId ? `${CONTEXT_COMPACT_KEY}_sid_${sessionId}` : CONTEXT_COMPACT_KEY
+}
+
+function contextCompactSummaryKey(sessionId?: string): string {
+  return sessionId ? `${CONTEXT_COMPACT_SUMMARY_KEY}_sid_${sessionId}` : CONTEXT_COMPACT_SUMMARY_KEY
 }
 
 /** 该会话最近一次上下文压缩的时间戳；没压缩过返回 0 */
@@ -290,10 +297,31 @@ export function setContextCompactAt(ts: number, sessionId?: string): void {
   }
 }
 
-// ---- 会话承接标记（Session Bridge，PR #99 同一批次） ----
-// 用户主动把"上一个同 TA 会话"的记忆承接进当前会话，每会话最多承接一次。
-// 业务真实值存本地 JSON（{fromSessionId, bridgedAt}），由 cloudStateResources 的
-// context_bridge adapter 同步上云。承接只注入旧会话的记忆块，原聊天记录不动。
+/** 该会话压缩出的较老历史摘要；未压缩过返回空串 */
+export function getContextCompactSummary(sessionId?: string): string {
+  try {
+    return localStorage.getItem(contextCompactSummaryKey(sessionId)) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/** 写入该会话的压缩摘要（空串 = 清除，供云端 delete 用） */
+export function setContextCompactSummary(summary: string, sessionId?: string): void {
+  try {
+    const s = summary.trim()
+    if (s) localStorage.setItem(contextCompactSummaryKey(sessionId), s)
+    else localStorage.removeItem(contextCompactSummaryKey(sessionId))
+  } catch {
+    // 存不下不影响功能
+  }
+}
+
+// ---- 会话承接（Session Bridge，PR #99 同一批次） ----
+// 用户主动「承接」→ 最多 1 次模型调用，把上一会话有限聊天尾部生成 evidence-only bridge，
+// 临时参与后续约 6–10 轮后退出。禁止写 Memory / Event、禁止搬完整旧聊天。
+// 业务真实值存本地 JSON（{fromSessionId, bridgedAt, content, turnsLeft}），由
+// cloudStateResources 的 context_bridge adapter 同步上云（content 随 payload 同步）。
 
 const CONTEXT_BRIDGE_KEY = 'ai_companion_context_bridge'
 
@@ -306,9 +334,13 @@ export interface ContextBridgeState {
   fromSessionId: string
   /** 承接时间戳 */
   bridgedAt: number
+  /** evidence-only bridge 摘要（模型生成；空 = 尚未生成/旧格式数据） */
+  content: string
+  /** 剩余参与轮数；>0 时才注入，归零后退出（记录保留，不再注入） */
+  turnsLeft: number
 }
 
-/** 该会话的承接状态；没承接过返回 null */
+/** 该会话的承接状态；没承接过返回 null。兼容旧格式（无 content/turnsLeft → 空摘要、0 轮）。 */
 export function getContextBridge(sessionId?: string): ContextBridgeState | null {
   if (!sessionId) return null
   try {
@@ -319,18 +351,34 @@ export function getContextBridge(sessionId?: string): ContextBridgeState | null 
     const fromSessionId = typeof obj.fromSessionId === 'string' ? obj.fromSessionId : ''
     const bridgedAt = typeof obj.bridgedAt === 'number' ? obj.bridgedAt : 0
     if (!fromSessionId || !Number.isFinite(bridgedAt) || bridgedAt <= 0) return null
-    return { fromSessionId, bridgedAt }
+    const content = typeof obj.content === 'string' ? obj.content : ''
+    const turnsLeft = typeof obj.turnsLeft === 'number' && Number.isFinite(obj.turnsLeft) ? obj.turnsLeft : 0
+    return { fromSessionId, bridgedAt, content, turnsLeft }
   } catch {
     return null
   }
 }
 
-/** 记录该会话已承接（来自旧会话 fromSessionId） */
-export function setContextBridge(sessionId: string, fromSessionId: string): void {
+/** 记录该会话已承接（来自旧会话 fromSessionId），可选写入生成好的 bridge 摘要与剩余轮数 */
+export function setContextBridge(sessionId: string, fromSessionId: string, content = '', turnsLeft = 0): void {
   try {
-    localStorage.setItem(contextBridgeKey(sessionId), JSON.stringify({ fromSessionId, bridgedAt: Date.now() }))
+    localStorage.setItem(
+      contextBridgeKey(sessionId),
+      JSON.stringify({ fromSessionId, bridgedAt: Date.now(), content, turnsLeft }),
+    )
   } catch {
     // 存不下不影响功能
+  }
+}
+
+/** 递减/写入该会话 bridge 的剩余参与轮数（本地轮次；不改变 fromSessionId/bridgedAt） */
+export function setContextBridgeTurns(sessionId: string, turnsLeft: number): void {
+  try {
+    const cur = getContextBridge(sessionId)
+    if (!cur) return
+    localStorage.setItem(contextBridgeKey(sessionId), JSON.stringify({ ...cur, turnsLeft }))
+  } catch {
+    // ignore
   }
 }
 
