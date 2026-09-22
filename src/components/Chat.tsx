@@ -81,12 +81,12 @@ import MilestoneCard from './MilestoneCard'
 
 
 /**
- * PR #99 Session Bridge：角色隔离必须使用真实稳定身份，不能拿可编辑 title/persona 猜。
- * 当前 Session schema 没有独立 roleId，因此先 fail closed：不暴露跨 session 承接入口。
- * 等数据层提供明确 same-role identity 后，再在这里接入；绝不跨角色搬聊天尾部。
+ * PR #99 Session Bridge：只承接“同一 session 刷新前”的历史。
+ * sessionStart 是当前角色的上下文分界线，因此天然满足角色隔离；
+ * 禁止再用可编辑 title/persona 去猜“是不是同一个 TA”。
  */
-function findBridgableSession(_currentId: string): Session | null {
-  return null
+function hasBridgableHistory(messages: StoredMessage[], sessionStart: number): boolean {
+  return sessionStart > 0 && messages.some((message) => message.ts < sessionStart)
 }
 
 const SendArrowIcon = () => (  <svg
@@ -1443,24 +1443,21 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
   }
 
-  // PR #99 Session Bridge：用户主动承接上一个同 TA 会话（每会话最多 1 次）。
-  // 最多 1 次模型调用：取上一会话有限聊天尾部（BRIDGE_TAIL_COUNT 条），生成 evidence-only bridge
-  // （刚才在聊什么 / 未完成事项 / 用户当前状态 / TA 已明确作出的承诺 / 必要指代），
-  // 只临时参与后续约 BRIDGE_ACTIVE_TURNS 轮后退出。禁止编造、禁止写 Memory / Event、
-  // 禁止搬完整旧聊天。失败可重试（不占用"最多 1 次"）。
+  // PR #99 Session Bridge：用户主动承接“同一角色刷新前”的上一段上下文（每次刷新后最多 1 次）。
+  // 最多 1 次模型调用：只取 sessionStart 之前的有限聊天尾部（BRIDGE_TAIL_COUNT 条），
+  // 生成 evidence-only bridge；绝不跨 session / 跨角色，也不写 Memory / Event。
   const handleBridge = async () => {
     if (!activeSessionId || bridgeInfo || streaming || contextBusy) return
     const uiLang = getSessionLang(activeSessionId)
-    const source = findBridgableSession(activeSessionId)
-    if (!source) return
+    if (!hasBridgableHistory(messages, sessionStart)) return
     const settings = loadSettings()
     if (!settings.apiKey || !settings.baseUrl || !settings.model) {
       setError('还没接上 TA，去「我的」页填一下 API Key 就能聊了')
       return
     }
-    const tail = getMessagesCache(String(source.id)).slice(-BRIDGE_TAIL_COUNT)
+    const tail = messages.filter((message) => message.ts < sessionStart).slice(-BRIDGE_TAIL_COUNT)
     if (tail.length === 0) {
-      setContextNotice(uiLang === 'en' ? 'That session has no chat history to bridge.' : '那个会话还没有可承接的聊天记录。')
+      setContextNotice(uiLang === 'en' ? 'There is no earlier context to bridge.' : '没有可承接的上一段对话。')
       return
     }
     const cleanBody = (m: StoredMessage) =>
@@ -1470,9 +1467,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const lines = tail.map((m) => `${m.role === 'user' ? 'USER' : 'TA'}: ${cleanBody(m)}`)
     const prompt =
       uiLang === 'en'
-        ? 'Below is the recent tail of an earlier conversation with the same companion. Write a short evidence-only handover note covering: 1) what you two were talking about, 2) unfinished topics, 3) the user\'s current state, 4) any explicit promises the companion made, 5) necessary referents (who "he/she" means). Only state what is actually in the text. Never invent or infer. Keep it in plain concise notes.\n\n' +
+        ? 'Below is the recent tail from before this same conversation was refreshed. Write a short evidence-only handover note covering: 1) what you two were talking about, 2) unfinished topics, 3) the user\'s current state, 4) any explicit promises the companion made, 5) necessary referents (who "he/she" means). Only state what is actually in the text. Never invent or infer. Keep it in plain concise notes.\n\n' +
           lines.join('\n')
-        : '下面是同一段与 TA 更早对话的最近一小段。请写一份简短、仅基于事实的交接摘要，覆盖：1）你们刚才在聊什么 2）未完成的事项 3）用户当前状态 4）TA 已明确作出的承诺 5）必要指代（“他/她”指谁）。只写文本里确实出现的内容，禁止编造或推断。用简洁的要点书写。\n\n' +
+        : '下面是这个同一会话刷新前最近的一小段对话。请写一份简短、仅基于事实的交接摘要，覆盖：1）你们刚才在聊什么 2）未完成的事项 3）用户当前状态 4）TA 已明确作出的承诺 5）必要指代（“他/她”指谁）。只写文本里确实出现的内容，禁止编造或推断。用简洁的要点书写。\n\n' +
           lines.join('\n')
     setContextBusy('bridge')
     try {
@@ -1486,10 +1483,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       )
       const trimmed = content.trim()
       if (!trimmed) throw new Error('empty bridge')
-      setContextBridge(activeSessionId, String(source.id), trimmed, BRIDGE_ACTIVE_TURNS)
+      const bridgedAt = Date.now()
+      setContextBridge(activeSessionId, activeSessionId, trimmed, BRIDGE_ACTIVE_TURNS, bridgedAt)
       notifyDataChanged()
-      setBridgeInfo({ fromSessionId: String(source.id), bridgedAt: Date.now(), content: trimmed, turnsLeft: BRIDGE_ACTIVE_TURNS })
-      setContextNotice(uiLang === 'en' ? 'Picked up where the previous session left off.' : '已接上上一段对话。')
+      setBridgeInfo({ fromSessionId: activeSessionId, bridgedAt, content: trimmed, turnsLeft: BRIDGE_ACTIVE_TURNS })
+      setContextNotice(uiLang === 'en' ? 'Picked up where the conversation left off before refresh.' : '已接上刷新前的上一段对话。')
     } catch {
       setContextNotice(uiLang === 'en' ? 'Bridge failed. Try again.' : '承接失败，请再试一次。')
     } finally {
@@ -1614,7 +1612,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               {contextBusy === 'compact' ? '压缩中…' : '压缩'}
             </button>
           )}
-          {!bridgeInfo && findBridgableSession(activeSessionId) && (
+          {!bridgeInfo && hasBridgableHistory(messages, sessionStart) && (
             <button
               type="button"
               className="context-meter-btn"
