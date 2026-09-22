@@ -30,6 +30,7 @@ const anniversary = await import('../src/lib/anniversary.ts')
 const aiSpace = await import('../src/lib/aiSpace.ts')
 const taRuntime = await import('../src/lib/taRuntime.ts')
 const weeklyReview = await import('../src/lib/weeklyReview.ts')
+const companionPolicy = await import('../src/lib/companionPolicy.ts')
 
 function login(account = 'account-a') {
   localStorage.setItem('ai_companion_account', JSON.stringify({ account, token: `token-${account}` }))
@@ -1368,4 +1369,75 @@ test('WEEKLY-CS-4: tombstone deletes only exact session and invalid entities are
   assert.deepEqual(weeklyReview.getWeeklyReviews('A'), [])
   assert.deepEqual(weeklyReview.getWeeklyReviews('B').map(item => item.id), ['same'])
   assert.equal(cloudOps('weekly_review').length, 0)
+})
+
+
+test('PROFILE-ID-1: stale cloud pull cannot clobber a pending local identity selection', async () => {
+  clearState('identity-refresh')
+  resources.initCloudStateResourceAdapters()
+  store.setSessionsCache([{ id: 'A', title: 'TA', persona: '' }])
+  localStorage.setItem('ai_companion_ai_profile_A', JSON.stringify({
+    nickname: 'TA', avatar: '', identityMode: 'immersive',
+  }))
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+
+  assert.equal(companionPolicy.saveIdentityMode('A', 'natural'), true)
+  let ops = cloudOps('profile')
+  assert.equal(ops.length, 1)
+  assert.equal(ops[0].payload.identityMode, 'natural')
+  assert.equal(ops[0].baseVersion, 0)
+
+  globalThis.fetch = async () => jsonResponse(pullBody(7, [{
+    kind: 'profile',
+    entityId: 'A',
+    sessionId: 'A',
+    version: 7,
+    payload: { nickname: 'TA', avatar: '', identityMode: 'immersive' },
+  }]))
+  await cloud.pullCloudState()
+
+  assert.equal(companionPolicy.resolveIdentityMode('A'), 'natural', '刷新 pull 后仍保留本机刚选的自然档')
+  ops = cloudOps('profile')
+  assert.equal(ops.length, 1, '旧 pending 被替换为一条 rebased profile op')
+  assert.equal(ops[0].baseVersion, 7)
+  assert.equal(ops[0].payload.identityMode, 'natural')
+
+  globalThis.fetch = async (_url, init) => {
+    const sent = JSON.parse(init.body).ops
+    assert.equal(sent.length, 1)
+    assert.equal(sent[0].baseVersion, 7)
+    assert.equal(sent[0].payload.identityMode, 'natural')
+    return jsonResponse({ results: [{ opId: sent[0].opId, status: 'applied', version: 8 }] })
+  }
+  await cloud.flushCloudStatePendingOps()
+
+  assert.equal(cloudOps('profile').length, 0)
+  assert.equal(companionPolicy.resolveIdentityMode('A'), 'natural')
+  assert.equal(cloud.getCloudStateVersion('profile', 'A', undefined, 'A'), 8)
+})
+
+test('PROFILE-ID-2: legacy cloud profile missing identityMode is repaired at the pulled version', async () => {
+  clearState('identity-legacy')
+  resources.initCloudStateResourceAdapters()
+  store.setSessionsCache([{ id: 'A', title: 'TA', persona: '' }])
+  localStorage.setItem('ai_companion_ai_profile_A', JSON.stringify({
+    nickname: 'TA', avatar: '', identityMode: 'ai',
+  }))
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+  assert.equal(cloudOps('profile').length, 0)
+
+  globalThis.fetch = async () => jsonResponse(pullBody(3, [{
+    kind: 'profile',
+    entityId: 'A',
+    sessionId: 'A',
+    version: 3,
+    payload: { nickname: 'TA', avatar: '' },
+  }]))
+  await cloud.pullCloudState()
+
+  assert.equal(companionPolicy.resolveIdentityMode('A'), 'ai')
+  const ops = cloudOps('profile')
+  assert.equal(ops.length, 1)
+  assert.equal(ops[0].baseVersion, 3, '补回旧客户端缺失字段时直接基于刚 pull 的 canonical version')
+  assert.equal(ops[0].payload.identityMode, 'ai')
 })
