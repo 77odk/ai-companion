@@ -1114,8 +1114,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 非流式/流式漏网兜底（2026-09-05 晚）：部分中转站（doi 等）不给标准 SSE 逐字流，onToken 忙碌检测跑不到——
       // 完整文本到 finalize 时再查一次，命中照样截断进忙碌（忙语句之后的尾巴不落库）
       const availability = classifyAvailability(raw)
+      // 身份模式可以在同一轮生成过程中切换；finalize 必须以“此刻”的模式判定，不能沿用请求开始时的闭包值。
+      const liveIdentityMode = resolveIdentityMode(activeSessionId || undefined)
+      const liveAllowBusy = allowsBusyState(liveIdentityMode)
       // Busy 是沉浸档专属能力；自然 / AI 的“等我/稍后回来”只作为身份违规继续走 finalization repair。
-      if (allowBusy && !busyTriggeredRef.current && raw && availability.state === 'unavailable' && availability.owner === 'SELF') {
+      if (liveAllowBusy && !busyTriggeredRef.current && raw && availability.state === 'unavailable' && availability.owner === 'SELF') {
         busyTriggeredRef.current = true
         const cut = findBusyCutoff(raw)
         const busyText = cut > 0 && cut < raw.length ? raw.slice(0, cut) : raw
@@ -1142,12 +1145,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       thinking = cleanAttributionArtifacts(thinking, lang)
       const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)), lang)
       const attributionProblem = cleaned ? hasAttributionLeak(cleaned) : false
-      const roboticProblem = cleaned ? looksRobotic(cleaned, identityMode) : false
+      const roboticProblem = cleaned ? looksRobotic(cleaned, liveIdentityMode) : false
       const fabricatedProblem = cleaned ? looksFabricated(cleaned) : false
-      const embodiedProblem = cleaned ? looksEmbodiedSelfClaim(cleaned, identityMode) : false
+      const embodiedProblem = cleaned ? looksEmbodiedSelfClaim(cleaned, liveIdentityMode) : false
       const cleanedAvailability = cleaned ? classifyAvailability(cleaned) : null
       const unavailableIdentityProblem = Boolean(
-        cleaned && !allowBusy && cleanedAvailability?.state === 'unavailable' && cleanedAvailability.owner === 'SELF',
+        cleaned && !liveAllowBusy && cleanedAvailability?.state === 'unavailable' && cleanedAvailability.owner === 'SELF',
       )
       const identityProblem = embodiedProblem || unavailableIdentityProblem
       // 用户主动 Stop 不再发第二次模型请求；若截停片段已经越过身份边界，直接不落这段 assistant 文本。
@@ -1162,7 +1165,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         const genericRepair = lang === 'en'
           ? 'Your previous reply had a grounding or style problem. Forget that sentence and answer again: stay grounded in the available context, do not invent shared history, do not sound like customer service, and keep the reply natural and concise.'
           : '你刚才的回复有依据或表达问题。忘掉那句，重新回答：只用现有上下文里有依据的内容，不编共同经历，不要客服腔，保持自然简短。'
-        const identityRepair = identityProblem ? buildIdentityBoundaryRepair(identityMode, lang) : ''
+        const identityRepair = identityProblem ? buildIdentityBoundaryRepair(liveIdentityMode, lang) : ''
         const safeFallback = lang === 'en'
           ? "I'm not sure about that yet. Tell me a little more."
           : '这个我还真没头绪，你跟我说说呗。'
@@ -1177,12 +1180,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           .then((retry) => {
             const retryCleaned = stripActionMarkers(stripEmoji(retry), lang)
             const retryAvailability = retryCleaned ? classifyAvailability(retryCleaned) : null
+            const retryIdentityMode = resolveIdentityMode(activeSessionId || undefined)
+            const retryAllowBusy = allowsBusyState(retryIdentityMode)
             if (
               !retryCleaned ||
-              looksRobotic(retryCleaned, identityMode) ||
+              looksRobotic(retryCleaned, retryIdentityMode) ||
               looksFabricated(retryCleaned) ||
-              looksEmbodiedSelfClaim(retryCleaned, identityMode) ||
-              (!allowBusy && retryAvailability?.state === 'unavailable' && retryAvailability.owner === 'SELF')
+              looksEmbodiedSelfClaim(retryCleaned, retryIdentityMode) ||
+              (!retryAllowBusy && retryAvailability?.state === 'unavailable' && retryAvailability.owner === 'SELF')
             ) {
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: safeFallback, ts: assistantTs }]
               commitFinal(final)
@@ -1274,7 +1279,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           assistantText.current += t
           // Busy 只在沉浸档拦截流；自然 / AI 即使说“等我回来”也让流完成，再由 finalize repair。
           const availability = classifyAvailability(assistantText.current)
-          if (allowBusy && !busyTriggeredRef.current && availability.state === 'unavailable' && availability.owner === 'SELF') {
+          const liveAllowBusy = allowsBusyState(resolveIdentityMode(activeSessionId || undefined))
+          if (liveAllowBusy && !busyTriggeredRef.current && availability.state === 'unavailable' && availability.owner === 'SELF') {
             busyTriggeredRef.current = true
             const cutoff = findBusyCutoff(assistantText.current)
             if (cutoff > 0 && cutoff < assistantText.current.length) {
