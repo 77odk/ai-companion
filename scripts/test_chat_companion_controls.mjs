@@ -1,0 +1,65 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { readFileSync } from 'node:fs'
+
+const css = readFileSync(new URL('../src/styles/ui2.css', import.meta.url), 'utf8')
+const controls = readFileSync(new URL('../src/components/ChatCompanionControls.tsx', import.meta.url), 'utf8')
+const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
+
+function cssBlock(selector) {
+  const escaped = selector.replace(/[.*+?^$()|[\]\\]/g, '\\$&')
+  const match = css.match(new RegExp(escaped + '\\s*\\{([\\s\\S]*?)\\}'))
+  assert.ok(match, `missing CSS block: ${selector}`)
+  return match[1]
+}
+
+test('chat companion controls sit below the composer in normal flow', () => {
+  const shell = cssBlock('.chat-shell')
+  assert.match(shell, /flex-direction:\s*column/)
+  const row = cssBlock('.chat-companion-controls')
+  assert.match(row, /position:\s*relative/)
+  assert.doesNotMatch(row, /position:\s*absolute/)
+  assert.match(row, /flex-wrap:\s*nowrap/)
+  assert.match(row, /env\(safe-area-inset-bottom\)/)
+  assert.match(cssBlock('.chat-shell .message-list'), /padding-bottom:\s*18px/)
+})
+
+test('control popovers open upward and stay bounded on mobile', () => {
+  const menu = cssBlock('.chat-control-menu')
+  assert.match(menu, /bottom:\s*calc\(100% \+ 8px\)/)
+  assert.match(menu, /max-height:/)
+  assert.match(menu, /overflow-y:\s*auto/)
+  assert.match(cssBlock('.chat-identity-menu'), /100vw - 28px/)
+  assert.match(cssBlock('.chat-model-menu'), /100vw - 28px/)
+})
+
+test('immersion control keeps choices compact and moves detail behind help', () => {
+  assert.match(controls, /沉浸感 ·/)
+  assert.match(controls, /AI 本体/)
+  assert.match(controls, /note: '完整真人感'/)
+  assert.match(controls, /note: '平衡真人感与 AI'/)
+  assert.match(controls, /note: '保留 AI 身份'/)
+  assert.match(controls, /查看沉浸感说明/)
+  assert.match(controls, /chat-identity-help/)
+  assert.match(controls, /记忆、关系和性格不会因此改变。/)
+  assert.match(controls, /有时会有 3–5 分钟的等待/)
+  assert.match(controls, /像一个很有真人感的 AI 陪着你/)
+  assert.match(controls, /以 AI 的身份陪着你/)
+  const helpButton = cssBlock('.chat-control-menu .chat-control-help-button')
+  assert.match(helpButton, /width:\s*26px/)
+  assert.match(helpButton, /height:\s*26px/)
+})
+
+
+test('controls render from active session id even before session cache fills', () => {
+  assert.match(app, /const activeChatSessionId = getActiveSessionId\(\)/)
+  assert.match(app, /activeChatSessionId && <ChatCompanionControls sessionId=\{activeChatSessionId\} \/>/)
+  assert.doesNotMatch(app, /headerSession && <ChatCompanionControls/)
+})
+
+
+test('chat keeps a page-level safe-area fallback when controls are absent', () => {
+  assert.match(app, /chat-shell\$\{activeChatSessionId \? ' chat-shell-with-controls' : ''\}/)
+  assert.match(cssBlock('.chat-page'), /padding-bottom:\s*env\(safe-area-inset-bottom\)/)
+  assert.match(cssBlock('.chat-shell-with-controls > .chat-page'), /padding-bottom:\s*0/)
+})
