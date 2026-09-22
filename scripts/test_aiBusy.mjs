@@ -99,7 +99,7 @@ eq(findBusyCutoff('我先去洗碗，等会再去做饭'), 12, '无句末标点�
 console.log('\n[3] randomBusyDurationMs 随机时长')
 const d1 = randomBusyDurationMs(seeded(1))
 const d2 = randomBusyDurationMs(seeded(2))
-ok(d1 >= 3.5 * 60 * 1000 && d1 <= 5.5 * 60 * 1000, `时长在 3.5-5.5 分钟内（得 ${Math.round(d1 / 1000)}s）`)
+ok(d1 >= 3 * 60 * 1000 && d1 <= 5 * 60 * 1000, `时长在 3-5 分钟内（得 ${Math.round(d1 / 1000)}s）`)
 ok(d1 !== d2, '两次随机不同（不总准点）')
 
 console.log('\n[4] inferBusyReason 忙碌原因')
