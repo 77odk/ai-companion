@@ -9,7 +9,7 @@ import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE, notifyDataChanged } from './dat
 import { getAccount } from './sync.ts'
 import { collectAllAIProfiles, getSessionStart, setSessionStart } from './storage.ts'
 import { isIdentityMode, mergeProfileIdentityField, type IdentityMode } from './companionPolicy.ts'
-import { getSessionsCache } from './sessionStore.ts'
+import { getPendingOps, getSessionsCache, removePendingOp, type CloudStatePendingOp } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
 import { applyGlobalReplyLengthFromCloud, applyReplyLengthPreferenceFromCloud, collectStoredReplyLengthPreferences, deleteGlobalReplyLengthFromCloud, deleteReplyLengthOverrideFromCloud, getStoredGlobalReplyLength, type ReplyLength } from './replyLength.ts'
 import { applySpacePostFromCloud, deleteSpacePostFromCloud } from './aiSpace.ts'
@@ -643,17 +643,68 @@ function captureAiProfiles(): void {
   profileSnapshot = next
 }
 
+function pendingProfileOps(entity: CloudStateEntity): CloudStatePendingOp[] {
+  const accountId = getAccount()?.account.trim() ?? ''
+  const sessionId = entity.entityId === GLOBAL ? undefined : entity.entityId
+  return getPendingOps().filter((op): op is CloudStatePendingOp =>
+    op.type === 'cloud-state' &&
+    op.kind === 'profile' &&
+    op.entityId === entity.entityId &&
+    (op.sessionId || undefined) === sessionId &&
+    (!op.accountId || op.accountId === accountId),
+  )
+}
+
+function latestPendingIdentityMode(entity: CloudStateEntity): IdentityMode | null {
+  const ops = pendingProfileOps(entity)
+  for (let index = ops.length - 1; index >= 0; index--) {
+    const payload = record(ops[index].payload)
+    if (isIdentityMode(payload?.identityMode)) return payload.identityMode
+  }
+  return null
+}
+
+function replacePendingProfileWithRebasedIdentity(
+  entity: CloudStateEntity,
+  profile: SyncedAIProfile,
+): void {
+  for (const op of pendingProfileOps(entity)) removePendingOp(op.id)
+  queue(
+    'profile',
+    entity.entityId,
+    profile,
+    false,
+    entity.entityId === GLOBAL ? undefined : entity.entityId,
+    undefined,
+    entity.version,
+  )
+}
+
 function applyAiProfileEntity(entity: CloudStateEntity): void {
   if (!entity.entityId) return
   const value = validAiProfile(entity.payload)
   if (!value) return
   const key = aiProfileStorageKey(entity.entityId)
+  const pendingIdentity = latestPendingIdentityMode(entity)
   const merged = mergeProfileIdentityField(localStorage.getItem(key), value)
+
+  // pull 总是在 push 之前：如果本机刚切过身份模式、pending 还没来得及上传，
+  // 旧云端 profile 不能先把这次明确选择盖回去。保留最新本地 pending 的 identityMode，
+  // 再把同一 profile op 重基到服务端刚下发的 version，避免下一步直接 conflict 丢掉选择。
+  if (pendingIdentity) merged.identityMode = pendingIdentity
+
   localStorage.setItem(key, JSON.stringify(merged))
   const mergedValue = validAiProfile(merged)
-  profileSnapshot.set(entity.entityId, value)
-  // 旧客户端若把缺字段的 profile 推上云，本机有明确选择时立即用同一实体补回，避免继续扩散。
-  if (!value.identityMode && mergedValue?.identityMode) captureAiProfiles()
+  if (!mergedValue) return
+  profileSnapshot.set(entity.entityId, mergedValue)
+
+  const identityNeedsRepair =
+    Boolean(mergedValue.identityMode) &&
+    mergedValue.identityMode !== value.identityMode
+
+  if (identityNeedsRepair) {
+    replacePendingProfileWithRebasedIdentity(entity, mergedValue)
+  }
 }
 
 function deleteAiProfileEntity(entity: CloudStateEntity): void {
