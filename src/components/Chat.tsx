@@ -968,7 +968,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (spaceBlock) {
       apiMessages.push({ role: 'system', content: spaceBlock })
     }
-    const allowEmbodiedLife = allowsEmbodiedLifeContext(resolveIdentityMode(activeSessionId || undefined))
+    const identityMode = resolveIdentityMode(activeSessionId || undefined)
+    const allowEmbodiedLife = allowsEmbodiedLifeContext(identityMode)
     // 未来约定注入（因果链第二环 TASK-FUTURE-AGENDA）：TA 记得「约好还没做的事」，
     // 对方问起/到期临近时能自然接，不会一问三不知；没约定返回空串跳过，不占上下文。
     const agendaBlock = buildFutureAgendaBlock(loadChatTopics(activeSessionId || undefined), new Date(), lang)
@@ -1094,7 +1095,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 非流式/流式漏网兜底（2026-09-05 晚）：部分中转站（doi 等）不给标准 SSE 逐字流，onToken 忙碌检测跑不到——
       // 完整文本到 finalize 时再查一次，命中照样截断进忙碌（忙语句之后的尾巴不落库）
       const availability = classifyAvailability(raw)
-      if (!busyTriggeredRef.current && raw && availability.state === 'unavailable' && availability.owner === 'SELF') {
+      const embodiedBusyProblem = raw ? looksEmbodiedSelfClaim(raw, identityMode) : false
+      // 身份边界前置只读 gate：自然/AI 的违规实体生活不能先被写成 busy 证据；
+      // 命中时不改 busy 状态、不 abort，让本轮继续进入下方 finalization/retry 修复。
+      if (!embodiedBusyProblem && !busyTriggeredRef.current && raw && availability.state === 'unavailable' && availability.owner === 'SELF') {
         busyTriggeredRef.current = true
         const cut = findBusyCutoff(raw)
         const busyText = cut > 0 && cut < raw.length ? raw.slice(0, cut) : raw
@@ -1120,7 +1124,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       thinking = cleanAttributionArtifacts(thinking, lang)
       const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)), lang)
-      const identityMode = resolveIdentityMode(activeSessionId || undefined)
       const attributionProblem = cleaned ? hasAttributionLeak(cleaned) : false
       const roboticProblem = cleaned ? looksRobotic(cleaned, identityMode) : false
       const fabricatedProblem = cleaned ? looksFabricated(cleaned) : false
@@ -1242,7 +1245,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           assistantText.current += t
           // 忙碌关键词检测：流式累积层截断，不是显示层
           const availability = classifyAvailability(assistantText.current)
-          if (!busyTriggeredRef.current && availability.state === 'unavailable' && availability.owner === 'SELF') {
+          const embodiedBusyProblem = looksEmbodiedSelfClaim(assistantText.current, identityMode)
+          // 只读 identity gate 必须早于 busy interception：命中时让流继续，
+          // 由 onDone -> finalize -> 既有 repair/fallback 处理，绝不污染 busy state。
+          if (!embodiedBusyProblem && !busyTriggeredRef.current && availability.state === 'unavailable' && availability.owner === 'SELF') {
             busyTriggeredRef.current = true
             const cutoff = findBusyCutoff(assistantText.current)
             if (cutoff > 0 && cutoff < assistantText.current.length) {
