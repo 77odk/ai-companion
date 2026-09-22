@@ -17,6 +17,7 @@ const {
   resolveIdentityMode,
   mergeProfileIdentityField,
   saveIdentityMode,
+  allowsEmbodiedLifeContext,
 } = await import('../src/lib/companionPolicy.ts')
 const { buildSystemPrompt, CHAT_RULES, CHAT_RULES_EN, looksRobotic } = await import('../src/lib/chatPrompts.ts')
 const { buildLlmMessages, canUseLlm } = await import('../src/lib/aiSpaceLlm.ts')
@@ -57,6 +58,9 @@ for (const policy of [natural, ai]) {
 }
 assert.equal(natural.disclosure, 'acknowledge-when-asked')
 assert.equal(ai.lifeExpressionModel, 'ai-native')
+assert.equal(allowsEmbodiedLifeContext('immersive'), true)
+assert.equal(allowsEmbodiedLifeContext('natural'), false)
+assert.equal(allowsEmbodiedLifeContext('ai'), false)
 
 console.log('\n[3] Chat：公共规则解耦，Identity Soul 按会话切换，语言约束覆盖思考链')
 assert.ok(!CHAT_RULES.includes('你是活人不是AI'))
@@ -106,11 +110,18 @@ const rolesSource = readFileSync(new URL('../src/components/RolesPage.tsx', impo
 const controlsSource = readFileSync(new URL('../src/components/ChatCompanionControls.tsx', import.meta.url), 'utf8')
 const appSource = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 const memorySource = readFileSync(new URL('../src/components/Memory.tsx', import.meta.url), 'utf8')
+const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
 assert.match(rolesSource, /clearAIProfile\(id\)/)
 assert.match(controlsSource, /loadSavedConfigs\(\)/)
 assert.match(controlsSource, /saveSettings\(\{/)
 assert.match(controlsSource, /saveIdentityMode\(sessionId, mode\)/)
 assert.match(appSource, /<ChatCompanionControls sessionId=/)
 assert.ok(!memorySource.includes('companionPolicy'), 'Memory 不直接感知身份模式')
+
+console.log('\n[7] Chat 现实生活硬边界：自然 / AI 不再注入实体生活块')
+assert.match(chatSource, /const allowEmbodiedLife = allowsEmbodiedLifeContext\(resolveIdentityMode\(activeSessionId \|\| undefined\)\)/)
+assert.match(chatSource, /if \(allowEmbodiedLife\) \{[\s\S]{0,300}buildSpacePostsBlock/)
+assert.match(chatSource, /if \(allowEmbodiedLife && !personaHasLifeAnchors\(persona\)\)/)
+assert.match(chatSource, /if \(allowEmbodiedLife && shouldInjectYourMoment\(recentUserTexts, lang\)\)/)
 
 console.log('\n身份模式 #13：全部通过')
