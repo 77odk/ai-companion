@@ -1,9 +1,7 @@
 // Memory UX Polish 专项：看原对话返回详情（A 源码契约）+ 成功反馈统一（B 契约 + C 真实原语行为）
-const ROOT = '/home/ubuntu/projects/ai-companion-mvp/frontend'
 const fs = await import('node:fs')
-const path = await import('node:path')
-const B = 'file://' + ROOT + '/src/lib/'
-const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8')
+const LIB = new URL('../src/lib/', import.meta.url)
+const read = (p) => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8')
 
 const store = new Map()
 let mode = 'ok' // ok | throw
@@ -75,8 +73,8 @@ rec('B8 TA「已记住」只绑定真实新增(memorySaved)，不依赖已被剥
   !/message\.memorySaved === true && extractMemories\(message\.content\)/.test(bubble))
 
 console.log('--- 行为：真实原语 ---')
-const mem = await import(B + 'memory.ts')
-const ss = await import(B + 'sessionStore.ts')
+const mem = await import(new URL('memory.ts', LIB).href)
+const ss = await import(new URL('sessionStore.ts', LIB).href)
 const SID = 'ux-polish-sid'
 
 store.clear(); mode = 'ok'
