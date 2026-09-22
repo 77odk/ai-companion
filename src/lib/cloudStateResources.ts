@@ -8,6 +8,7 @@ import {
 import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE, notifyDataChanged } from './dataChange.ts'
 import { getAccount } from './sync.ts'
 import { collectAllAIProfiles, getSessionStart, setSessionStart, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, clearContextBridge } from './storage.ts'
+import { BRIDGE_ACTIVE_TURNS } from './contextComposer.ts'
 import { isIdentityMode, mergeProfileIdentityField, type IdentityMode } from './companionPolicy.ts'
 import { getPendingOps, getSessionsCache, removePendingOp, type CloudStatePendingOp } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
@@ -593,7 +594,7 @@ function deleteRuntimeEntity(entity: CloudStateEntity): void {
 }
 
 // ---------- 角色资料（昵称/头像）云同步（2026-09-18 七七拍板）----------
-// 病根：新同步通道里没有「角色资料」这一类，手机新建的角色电脑上取不到 →
+// 病根：新同步通道里没有「角色资料」这一类，手机上新建的角色电脑上取不到 →
 // 旧规则「该角色没资料就回落全局那份」把老角色的头像名字借给了新角色（显示成饺子）。
 // 规则：每个角色一份实体（entityId=会话 id，session 作用域；全局那份 entityId='global'），
 // 应用照纪念日/主题同一条「云端权威」——手机上改的头像名字要能落到电脑上。
@@ -1063,7 +1064,17 @@ function applyContextBridgeEntity(entity: CloudStateEntity): void {
   // 只接受更新的承接记录（同一会话已承接则保持，turnsLeft 是本地轮次不覆盖）。
   if (local && local.bridgedAt >= bridgedAt) return
   const cloudContent = typeof payload.content === 'string' ? payload.content.trim() : ''
-  setContextBridge(sessionId, fromSessionId, cloudContent)
+  // 旧格式（无 content）或 content 为空：没有 evidence-only 摘要可注入，只恢复记录、不激活
+  // （turnsLeft=0 → Chat 注入条件 bridgeInfo.content.trim() 为 false，绝不把空桥重新激活）。
+  if (!cloudContent) {
+    setContextBridge(sessionId, fromSessionId, '')
+    contextBridgeSnapshot.set(sessionId, { fromSessionId, bridgedAt, content: '' })
+    notifyDataChanged()
+    return
+  }
+  // 云端首次恢复一个仍有效的 bridge：恢复 BRIDGE_ACTIVE_TURNS 参与轮数，
+  // 否则默认 turnsLeft=0 会让另一设备同步到 content 后永远不注入。
+  setContextBridge(sessionId, fromSessionId, cloudContent, BRIDGE_ACTIVE_TURNS)
   contextBridgeSnapshot.set(sessionId, { fromSessionId, bridgedAt, content: cloudContent })
   notifyDataChanged()
 }
