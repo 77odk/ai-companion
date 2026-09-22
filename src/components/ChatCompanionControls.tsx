@@ -5,9 +5,15 @@ import { isActiveConfig, loadSavedConfigs, type SavedConfig } from '../lib/saved
 import { loadSettings, saveModelHistory, saveSettings } from '../lib/storage'
 
 const IDENTITY_OPTIONS: Array<{ value: IdentityMode; label: string; note: string }> = [
-  { value: 'immersive', label: '沉浸', note: '更完整的真人感。TA 会拥有自己的日常、状态和生活轨迹。' },
-  { value: 'natural', label: '自然', note: '在 AI 与真人感之间保持平衡，不会把生活感演得太满。' },
-  { value: 'ai', label: 'AI 本体', note: '保留 AI 的真实身份，不假装拥有现实中的身体和日常生活。' },
+  { value: 'immersive', label: '沉浸', note: '完整真人感' },
+  { value: 'natural', label: '自然', note: '平衡真人感与 AI' },
+  { value: 'ai', label: 'AI 本体', note: '保留 AI 身份' },
+]
+
+const IDENTITY_DETAILS: Array<{ label: string; text: string }> = [
+  { label: '沉浸', text: '更完整的真人感。TA 会拥有自己的日常、状态和生活轨迹。' },
+  { label: '自然', text: '在 AI 与真人感之间保持平衡，有自己的状态，但不会刻意把生活感演得太满。' },
+  { label: 'AI 本体', text: '保留 AI 的真实身份。TA 仍会记得你、理解你、陪着你，但不会假装拥有现实中的身体和日常生活。' },
 ]
 
 function identityDisplayLabel(mode: IdentityMode): string {
@@ -26,6 +32,7 @@ export default function ChatCompanionControls({ sessionId }: { sessionId: string
   const [configs, setConfigs] = useState<SavedConfig[]>(() => loadSavedConfigs())
   const [modelLabel, setModelLabel] = useState(() => shortModelLabel(loadSavedConfigs()))
   const [open, setOpen] = useState<'identity' | 'model' | null>(null)
+  const [showIdentityHelp, setShowIdentityHelp] = useState(false)
 
   useEffect(() => {
     const refresh = () => {
@@ -35,7 +42,10 @@ export default function ChatCompanionControls({ sessionId }: { sessionId: string
       setModelLabel(shortModelLabel(nextConfigs))
     }
     const closeOutside = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(null)
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(null)
+        setShowIdentityHelp(false)
+      }
     }
     window.addEventListener(ELUVIN_DATA_CHANGE, refresh)
     window.addEventListener('model-settings-changed', refresh)
@@ -50,6 +60,13 @@ export default function ChatCompanionControls({ sessionId }: { sessionId: string
   const chooseIdentity = (mode: IdentityMode) => {
     if (saveIdentityMode(sessionId, mode)) setIdentityMode(mode)
     setOpen(null)
+    setShowIdentityHelp(false)
+  }
+
+  const toggleIdentityMenu = () => {
+    const nextOpen = open === 'identity' ? null : 'identity'
+    setOpen(nextOpen)
+    setShowIdentityHelp(false)
   }
 
   const chooseModel = (config: SavedConfig) => {
@@ -72,29 +89,51 @@ export default function ChatCompanionControls({ sessionId }: { sessionId: string
           type="button"
           className="chat-control-capsule"
           aria-expanded={open === 'identity'}
-          onClick={() => setOpen((value) => value === 'identity' ? null : 'identity')}
+          onClick={toggleIdentityMenu}
         >
           <span className="chat-control-dot" aria-hidden="true" />
           沉浸感 · {identityDisplayLabel(identityMode)}
         </button>
         {open === 'identity' && (
           <div className="chat-control-menu chat-identity-menu" role="menu">
-            <p className="chat-control-help">
-              决定 TA 在对话和空间里呈现多少现实生活感，不影响 TA 对你的记忆、关系和性格。
-            </p>
-            {IDENTITY_OPTIONS.map((option) => (
+            <div className="chat-control-menu-head">
+              <strong>{showIdentityHelp ? '沉浸感说明' : '选择沉浸感'}</strong>
               <button
-                key={option.value}
                 type="button"
-                className={option.value === identityMode ? 'is-active' : ''}
-                onClick={() => chooseIdentity(option.value)}
-                role="menuitemradio"
-                aria-checked={option.value === identityMode}
+                className="chat-control-help-button"
+                aria-label={showIdentityHelp ? '返回沉浸感选项' : '查看沉浸感说明'}
+                aria-expanded={showIdentityHelp}
+                onClick={() => setShowIdentityHelp((value) => !value)}
               >
-                <strong>{option.label}</strong>
-                <small>{option.note}</small>
+                {showIdentityHelp ? '‹' : '?'}
               </button>
-            ))}
+            </div>
+
+            {showIdentityHelp ? (
+              <div className="chat-identity-help" role="note">
+                <p>决定 TA 在对话和空间里呈现多少现实生活感，不影响 TA 对你的记忆、关系和性格。</p>
+                {IDENTITY_DETAILS.map((detail) => (
+                  <div key={detail.label} className="chat-identity-help-item">
+                    <strong>{detail.label}</strong>
+                    <span>{detail.text}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              IDENTITY_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={option.value === identityMode ? 'is-active' : ''}
+                  onClick={() => chooseIdentity(option.value)}
+                  role="menuitemradio"
+                  aria-checked={option.value === identityMode}
+                >
+                  <strong>{option.label}</strong>
+                  <small>{option.note}</small>
+                </button>
+              ))
+            )}
           </div>
         )}
       </div>
@@ -104,7 +143,10 @@ export default function ChatCompanionControls({ sessionId }: { sessionId: string
           type="button"
           className="chat-control-capsule chat-model-capsule"
           aria-expanded={open === 'model'}
-          onClick={() => setOpen((value) => value === 'model' ? null : 'model')}
+          onClick={() => {
+            setOpen((value) => value === 'model' ? null : 'model')
+            setShowIdentityHelp(false)
+          }}
         >
           {modelLabel}
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
