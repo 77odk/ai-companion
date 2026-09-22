@@ -56,3 +56,10 @@ test('controls render from active session id even before session cache fills', (
   assert.match(app, /activeChatSessionId && <ChatCompanionControls sessionId=\{activeChatSessionId\} \/>/)
   assert.doesNotMatch(app, /headerSession && <ChatCompanionControls/)
 })
+
+
+test('chat keeps a page-level safe-area fallback when controls are absent', () => {
+  assert.match(app, /chat-shell\$\{activeChatSessionId \? ' chat-shell-with-controls' : ''\}/)
+  assert.match(cssBlock('.chat-page'), /padding-bottom:\s*env\(safe-area-inset-bottom\)/)
+  assert.match(cssBlock('.chat-shell-with-controls > .chat-page'), /padding-bottom:\s*0/)
+})
