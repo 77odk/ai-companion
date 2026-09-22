@@ -61,7 +61,7 @@ export function buildCompactSource(
       let best = ''
       while (lo <= hi) {
         const mid = Math.floor((lo + hi) / 2)
-        const candidate = message.content.slice(-mid)
+        const candidate = mid === 0 ? '' : message.content.slice(-mid)
         if (estimateToken(candidate) <= remaining) {
           best = candidate
           lo = mid + 1
