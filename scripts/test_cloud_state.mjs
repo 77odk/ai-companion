@@ -1377,7 +1377,7 @@ test('PROFILE-ID-1: stale cloud pull cannot clobber a pending local identity sel
   resources.initCloudStateResourceAdapters()
   store.setSessionsCache([{ id: 'A', title: 'TA', persona: '' }])
   localStorage.setItem('ai_companion_ai_profile_A', JSON.stringify({
-    nickname: 'TA', avatar: '', identityMode: 'immersive',
+    nickname: '本地名', avatar: '', identityMode: 'immersive',
   }))
   window.dispatchEvent(new Event('eluvin-auth-change'))
 
@@ -1385,6 +1385,7 @@ test('PROFILE-ID-1: stale cloud pull cannot clobber a pending local identity sel
   let ops = cloudOps('profile')
   assert.equal(ops.length, 1)
   assert.equal(ops[0].payload.identityMode, 'natural')
+  assert.equal(ops[0].payload.nickname, '本地名')
   assert.equal(ops[0].baseVersion, 0)
 
   globalThis.fetch = async () => jsonResponse(pullBody(7, [{
@@ -1392,11 +1393,12 @@ test('PROFILE-ID-1: stale cloud pull cannot clobber a pending local identity sel
     entityId: 'A',
     sessionId: 'A',
     version: 7,
-    payload: { nickname: 'TA', avatar: '', identityMode: 'immersive' },
+    payload: { nickname: '旧云名', avatar: '', identityMode: 'immersive' },
   }]))
   await cloud.pullCloudState()
 
   assert.equal(companionPolicy.resolveIdentityMode('A'), 'natural', '刷新 pull 后仍保留本机刚选的自然档')
+  assert.equal(storage.loadAIProfile('A').nickname, '本地名', '同一 pending profile 里的本地资料修改也不能被旧云值吃掉')
   ops = cloudOps('profile')
   assert.equal(ops.length, 1, '旧 pending 被替换为一条 rebased profile op')
   assert.equal(ops[0].baseVersion, 7)
@@ -1407,6 +1409,7 @@ test('PROFILE-ID-1: stale cloud pull cannot clobber a pending local identity sel
     assert.equal(sent.length, 1)
     assert.equal(sent[0].baseVersion, 7)
     assert.equal(sent[0].payload.identityMode, 'natural')
+    assert.equal(sent[0].payload.nickname, '本地名')
     return jsonResponse({ results: [{ opId: sent[0].opId, status: 'applied', version: 8 }] })
   }
   await cloud.flushCloudStatePendingOps()
