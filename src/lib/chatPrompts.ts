@@ -232,8 +232,10 @@ export function looksEmbodiedSelfClaim(text: string, identityMode: IdentityMode 
     .map((part) => part.trim())
     .filter(Boolean)
 
+  // 部分中文词既能作物理谓词，也能只是更长名词/话题的前缀。
+  // 对这些歧义项加窄负向边界，避免“我在家人看来…”、“我在运动方面…”被当成实体生活。
   const physicalZh =
-    '(?:吃(?:了|完)?(?:饭|早餐|早饭|午饭|午餐|晚饭|晚餐)|喝(?:了|完)?(?:咖啡|茶|奶茶|水)|洗(?:了|完)?澡|冲(?:了|完)?澡|洗漱|睡(?:了|过)?(?:觉|一觉)?|起床|躺(?:在)?床(?:上)?|出门|散步|跑步|健身|运动|通勤|上班|下班|到(?:了)?公司|在公司|回(?:到)?家|到家|在家|坐地铁|在地铁上?|开车|做饭|下厨|买菜|逛街|上课|在教室|开(?:会|会议)|去医院|在医院|去学校|在学校|遛狗)'
+    '(?:吃(?:了|完)?(?:饭|早餐|早饭|午饭|午餐|晚饭|晚餐)|喝(?:了|完)?(?:咖啡|茶|奶茶|水)|洗(?:了|完)?澡|冲(?:了|完)?澡|洗漱|睡(?:了|过)?(?:觉|一觉)?|起床|躺(?:在)?床(?:上)?|出门|散步|跑步|健身(?!方面|相关|习惯|计划|知识|课程|行业|器材|方式)|运动(?!方面|相关|习惯|偏好|能力|强度|项目|医学|科学|营养|员|会|鞋|服|场|器材)|通勤(?!方面|方式|时间|距离|成本|习惯|路线)|上班(?!族|时间|制度|方式)|下班|到(?:了)?公司|在公司|回(?:到)?家|到家|在家(?!人|庭|乡|族|属|政|教|务|具|长|国)|坐地铁|在地铁上?|开车|做饭|下厨|买菜|逛街|上课|在教室|开(?:会|会议)(?!纪要|记录|安排|通知|资料|制度|主题)|去医院|在医院|去学校|在学校|遛狗)'
   const explicitSelfZh = new RegExp(
     `^我\\s*(?:(?:刚(?:刚|才)?|现在|这会儿?|正(?:在)?|正在|在|已经|还在|今天|今晚|昨晚|今早|早上|中午|晚上|刚从|刚到|刚回|准备(?:去)?|要(?:去)?|去|回)\\s*)?${physicalZh}`,
   )
@@ -242,7 +244,7 @@ export function looksEmbodiedSelfClaim(text: string, identityMode: IdentityMode 
   )
 
   const explicitSelfEn =
-    /^(?:(?:but|and|so)\s+)?I(?:(?:'m| am| was)\s+(?:(?:just|currently|still|already)\s+)?(?:eating|having (?:breakfast|lunch|dinner)|drinking (?:coffee|tea|water)|showering|taking a shower|sleeping|in bed|at home|at work|commuting|on the (?:subway|train|bus)|driving|cooking|making (?:breakfast|lunch|dinner)|out for a walk|working out|at the gym|in class)|\s+(?:just\s+)?(?:got home|came home|got off work|went out|went for a walk|ate (?:breakfast|lunch|dinner)|had (?:breakfast|lunch|dinner)|drank (?:coffee|tea|water)|cooked (?:breakfast|lunch|dinner)|drove (?:home|to work)))/i
+    /^(?:(?:but|and|so)\s+)?I(?:(?:'m| am| was)\s+(?:(?:just|currently|still|already)\s+)?(?:eating|having (?:breakfast|lunch|dinner)|drinking (?:coffee|tea|water)|showering|taking a shower|sleeping|in bed|at home|at work|commuting|on the (?:subway|train|bus)|driving|cooking|making (?:breakfast|lunch|dinner)|out for a walk|working out|at the gym|in class)|\s+(?:just\s+)?(?:got home|came home|got off work|went out|went for a walk|went to work(?!\s+on\b)|went to (?:the office|school|class|the gym|the hospital)|took (?:a )?shower|showered|slept\b|woke up|ate (?:breakfast|lunch|dinner)|had (?:breakfast|lunch|dinner)|drank (?:coffee|tea|water)|cooked (?:breakfast|lunch|dinner)|commuted|took (?:the )?(?:subway|train|bus)|drove (?:home|to work)))/i
   const implicitCurrentEn =
     /^(?:just|currently|still|already)\s+(?:eating|having (?:breakfast|lunch|dinner)|drinking (?:coffee|tea|water)|showering|sleeping|in bed|at home|at work|commuting|driving|cooking|out for a walk|working out|at the gym|in class|got home|came home|got off work|went out)/i
 
