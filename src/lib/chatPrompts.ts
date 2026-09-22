@@ -228,7 +228,7 @@ export function looksFabricated(text: string): boolean {
 export function looksEmbodiedSelfClaim(text: string, identityMode: IdentityMode = 'immersive'): boolean {
   if (identityMode === 'immersive') return false
   const clauses = stripEmoji(stripActionMarkers(text ?? ''))
-    .split(/[。！？!?\n，,；;]+/)
+    .split(/[。！？.!?\n，,；;]+/)
     .map((part) => part.trim())
     .filter(Boolean)
 
