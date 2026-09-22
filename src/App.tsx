@@ -843,7 +843,7 @@ export default function App() {
               />
             )}
             {view === 'chat' && (
-              <div className="chat-shell">
+              <div className={`chat-shell${activeChatSessionId ? ' chat-shell-with-controls' : ''}`}>
                 <Chat
                   key={headerSession ? String(headerSession.id) : 'no-session'}
                   onGoSettings={() => openSettings('main')}
