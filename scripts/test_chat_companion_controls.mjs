@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const css = readFileSync(new URL('../src/styles/ui2.css', import.meta.url), 'utf8')
 const controls = readFileSync(new URL('../src/components/ChatCompanionControls.tsx', import.meta.url), 'utf8')
+const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 
 function cssBlock(selector) {
   const escaped = selector.replace(/[.*+?^$()|[\]\\]/g, '\\$&')
@@ -47,4 +48,11 @@ test('immersion control keeps choices compact and moves detail behind help', () 
   const helpButton = cssBlock('.chat-control-menu .chat-control-help-button')
   assert.match(helpButton, /width:\s*26px/)
   assert.match(helpButton, /height:\s*26px/)
+})
+
+
+test('controls render from active session id even before session cache fills', () => {
+  assert.match(app, /const activeChatSessionId = getActiveSessionId\(\)/)
+  assert.match(app, /activeChatSessionId && <ChatCompanionControls sessionId=\{activeChatSessionId\} \/>/)
+  assert.doesNotMatch(app, /headerSession && <ChatCompanionControls/)
 })
