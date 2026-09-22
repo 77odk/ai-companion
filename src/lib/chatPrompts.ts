@@ -221,30 +221,37 @@ export function looksFabricated(text: string): boolean {
 }
 
 /** 是否在自然 / AI 本体档里出现了明确的 SELF 物理生活声明。
- * 只做保守护栏：要求第一人称/强当前标记 + 具体物理活动，避免把“你去吃饭吧”之类误判。
+ * 保守护栏：必须让物理谓词直接归属于 SELF（或强当前省略主语），不能靠“整句同时出现我 + 吃饭”判定。
+ * 先按逗号/分号切成最小子句，让“如果你累了…，我刚下班回家”只豁免前半句。
  * 沉浸档永远不拦；真正的表达仍由模型主导。
  */
 export function looksEmbodiedSelfClaim(text: string, identityMode: IdentityMode = 'immersive'): boolean {
   if (identityMode === 'immersive') return false
   const clauses = stripEmoji(stripActionMarkers(text ?? ''))
-    .split(/[。！？!?\n]+/)
+    .split(/[。！？!?\n，,；;]+/)
     .map((part) => part.trim())
     .filter(Boolean)
 
-  const hypotheticalZh = /(?:如果|假如|要是|假设|想象|比如)/
-  const hypotheticalEn = /\b(?:if|would|imagine|hypothetically|pretend)\b/i
-  const physicalZh = /(?:吃(?:饭|早餐|早饭|午饭|午餐|晚饭|晚餐)|喝(?:咖啡|茶|奶茶|水)|洗澡|冲澡|洗漱|睡觉|起床|躺(?:在)?床|在床上|出门|散步|跑步|健身|运动|通勤|上班|下班|到公司|在公司|回家|到家|在家|坐地铁|地铁上|开车|做饭|下厨|买菜|逛街|上课|在教室|去医院|在医院|去学校|在学校|遛狗)/
-  const selfZh = /(?:^|[，,；;]\s*)我(?:刚(?:刚|才)?|现在|这会儿?|正(?:在)?|正在|在|刚从|刚到|刚回|准备(?:去)?|要(?:去)?|去|回)?\s*/
-  const currentZh = /^(?:刚(?:刚|才)?|现在|这会儿?|正(?:在)?|正在)\s*/
+  const physicalZh =
+    '(?:吃(?:了|完)?(?:饭|早餐|早饭|午饭|午餐|晚饭|晚餐)|喝(?:了|完)?(?:咖啡|茶|奶茶|水)|洗(?:了|完)?澡|冲(?:了|完)?澡|洗漱|睡(?:了|过)?(?:觉|一觉)?|起床|躺(?:在)?床(?:上)?|出门|散步|跑步|健身|运动|通勤|上班|下班|到(?:了)?公司|在公司|回(?:到)?家|到家|在家|坐地铁|在地铁上?|开车|做饭|下厨|买菜|逛街|上课|在教室|去医院|在医院|去学校|在学校|遛狗)'
+  const explicitSelfZh = new RegExp(
+    `^我\\s*(?:(?:刚(?:刚|才)?|现在|这会儿?|正(?:在)?|正在|已经|还在|今天|今晚|昨晚|今早|早上|中午|晚上|刚从|刚到|刚回|准备(?:去)?|要(?:去)?|去|回)\\s*)?${physicalZh}`,
+  )
+  const implicitCurrentZh = new RegExp(
+    `^(?:刚(?:刚|才)?|现在|这会儿?|正(?:在)?|正在|已经|还在)\\s*${physicalZh}`,
+  )
 
-  const physicalEn = /\b(?:eating|having (?:breakfast|lunch|dinner)|drinking (?:coffee|tea|water)|showering|taking a shower|sleeping|in bed|at home|at work|commuting|on the (?:subway|train|bus)|driving|cooking|making (?:breakfast|lunch|dinner)|out for a walk|working out|at the gym|in class|got home|came home|got off work|went out)\b/i
-  const selfEn = /\bI(?:'m| am| just| have just| had just| was| went| got| came| took| ate| drank| cooked| drove)\b/i
+  const explicitSelfEn =
+    /^(?:(?:but|and|so)\s+)?I(?:(?:'m| am| was)\s+(?:(?:just|currently|still|already)\s+)?(?:eating|having (?:breakfast|lunch|dinner)|drinking (?:coffee|tea|water)|showering|taking a shower|sleeping|in bed|at home|at work|commuting|on the (?:subway|train|bus)|driving|cooking|making (?:breakfast|lunch|dinner)|out for a walk|working out|at the gym|in class)|\s+(?:just\s+)?(?:got home|came home|got off work|went out|went for a walk|ate (?:breakfast|lunch|dinner)|had (?:breakfast|lunch|dinner)|drank (?:coffee|tea|water)|cooked (?:breakfast|lunch|dinner)|drove (?:home|to work)))/i
+  const implicitCurrentEn =
+    /^(?:just|currently|still|already)\s+(?:eating|having (?:breakfast|lunch|dinner)|drinking (?:coffee|tea|water)|showering|sleeping|in bed|at home|at work|commuting|driving|cooking|out for a walk|working out|at the gym|in class|got home|came home|got off work|went out)/i
 
-  return clauses.some((clause) => {
-    if (hypotheticalZh.test(clause) || hypotheticalEn.test(clause)) return false
-    if ((selfZh.test(clause) || currentZh.test(clause)) && physicalZh.test(clause)) return true
-    return selfEn.test(clause) && physicalEn.test(clause)
-  })
+  return clauses.some((clause) =>
+    explicitSelfZh.test(clause) ||
+    implicitCurrentZh.test(clause) ||
+    explicitSelfEn.test(clause) ||
+    implicitCurrentEn.test(clause),
+  )
 }
 
 
