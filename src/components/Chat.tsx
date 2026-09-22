@@ -49,7 +49,7 @@ import { allowsBusyState, allowsEmbodiedLifeContext, buildIdentityBoundaryRepair
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
-import { composeContext, buildCompactedHistory, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
+import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -81,19 +81,12 @@ import MilestoneCard from './MilestoneCard'
 
 
 /**
- * PR #99 Session Bridge：找"可承接"的上一个会话 = 与当前会话同 title（同 TA）的最近一个非当前会话。
- * 角色隔离红线：title 不同（换过 TA）绝不承接；默认标题（新会话/我们的开始）不参与匹配，
- * 避免多个空会话误配。返回 null = 没有可承接的旧会话（UI 不显示入口）。
- * 承接内容 = 上一会话的有限聊天尾部（BRIDGE_TAIL_COUNT 条）+ 1 次模型生成的 evidence-only bridge，
- * 不再是"注入旧会话全部 Memory"。
+ * PR #99 Session Bridge：角色隔离必须使用真实稳定身份，不能拿可编辑 title/persona 猜。
+ * 当前 Session schema 没有独立 roleId，因此先 fail closed：不暴露跨 session 承接入口。
+ * 等数据层提供明确 same-role identity 后，再在这里接入；绝不跨角色搬聊天尾部。
  */
-function findBridgableSession(currentId: string): Session | null {
-  const list = getSessionsCache()
-  const current = list.find((s) => String(s.id) === currentId)
-  if (!current) return null
-  const title = (current.title ?? '').trim()
-  if (!title || title === '新会话' || title === '我们的开始') return null
-  return list.find((s) => String(s.id) !== currentId && (s.title ?? '').trim() === title) ?? null
+function findBridgableSession(_currentId: string): Session | null {
+  return null
 }
 
 const SendArrowIcon = () => (  <svg
@@ -1107,8 +1100,18 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       activeSessionId && compactDone && compactSummary.trim()
         ? buildCompactedHistory(compactSummary, history, COMPACT_KEEP_RECENT)
         : history
-    let composed = composeContext(apiMessages, historyForModel, bridgeBlocks, [timeTail])
+    const composed = composeContext(apiMessages, historyForModel, bridgeBlocks, [timeTail])
     setContextMeter({ used: composed.totalTokens, budget: composed.hardBudget })
+    if (composed.overBudget) {
+      // 当前用户消息 / 核心 system 本身已经放不进 64k：不静默裁用户原话，也不把超限请求发给 provider。
+      // 用户消息已经正常落历史；这里只撤掉空 assistant 占位并结束本轮流式状态。
+      setMessages([...messages, userMsg])
+      setStreaming(false)
+      streamingRef.current = false
+      partialTsRef.current = null
+      setError(lang === 'en' ? 'This message is too long for the current context. Please shorten it and send again.' : '这条消息加上当前上下文超过 64k，请缩短后再发。')
+      return
+    }
     // bridge 只临时参与：本轮真正纳入 payload 后递减轮次，归零后退出（记录保留，不再注入）。
     if (activeSessionId && bridgeInfo && bridgeInfo.turnsLeft > 0 && composed.includedBlockIds.includes('bridge')) {
       const nextTurns = bridgeInfo.turnsLeft - 1
@@ -1399,7 +1402,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       m.role === 'assistant'
         ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), uiLang), uiLang)
         : m.content
-    const olderLines = base.slice(0, -COMPACT_KEEP_RECENT).map((m) => `${m.role === 'user' ? 'USER' : 'TA'}: ${cleanBody(m)}`)
+    const olderHistory: ApiMessage[] = base.slice(0, -COMPACT_KEEP_RECENT).map((m) => ({
+      role: m.role,
+      content: cleanBody(m),
+    }))
+    const compactSource = buildCompactSource(olderHistory)
+    const olderLines = compactSource.map((m) => `${m.role === 'user' ? 'USER' : 'TA'}: ${m.content}`)
+    if (olderLines.length === 0) {
+      setContextNotice(uiLang === 'en' ? 'There is no safe earlier context to compact.' : '没有可安全压缩的更早上下文。')
+      return
+    }
     const prompt =
       uiLang === 'en'
         ? 'Below is the earlier part of a conversation. Summarize ONLY what actually happened — main topics, decisions, the user\'s preferences/state, and anything the assistant (TA) explicitly promised. Do not invent, infer, or add anything not in the text. Keep it concise and neutral.\n\n' +
