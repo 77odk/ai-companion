@@ -133,7 +133,8 @@ assert.ok(!memorySource.includes('companionPolicy'), 'Memory 不直接感知身�
 
 console.log('\n[7] Chat 现实生活边界：模型主导，硬编码实体生活只给沉浸')
 assert.match(chatSource, /const spaceBlock = buildSpacePostsBlock\(loadCurrentPosts\(activeSessionId \|\| undefined\), 5, lang\)/, 'Space 继续作为 identity-aware SELF 历史注入')
-assert.match(chatSource, /const allowEmbodiedLife = allowsEmbodiedLifeContext\(resolveIdentityMode\(activeSessionId \|\| undefined\)\)/)
+assert.match(chatSource, /const identityMode = resolveIdentityMode\(activeSessionId \|\| undefined\)/, '身份模式提前解析供 busy 与生活边界共用')
+assert.match(chatSource, /const allowEmbodiedLife = allowsEmbodiedLifeContext\(identityMode\)/, 'allowEmbodiedLife 从同一 identityMode 派生')
 assert.match(chatSource, /if \(allowEmbodiedLife && !personaHasLifeAnchors\(persona\)\)/, 'LIFE_BASELINE 仅沉浸')
 assert.match(chatSource, /if \(allowEmbodiedLife && shouldInjectYourMoment\(recentUserTexts, lang\)\)/, 'YourMoment 物理模板仅沉浸')
 
