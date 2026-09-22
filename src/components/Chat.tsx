@@ -1133,6 +1133,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           ? 'Your previous reply had a grounding or style problem. Forget that sentence and answer again: stay grounded in the available context, do not invent shared history, do not sound like customer service, and keep the reply natural and concise.'
           : '你刚才的回复有依据或表达问题。忘掉那句，重新回答：只用现有上下文里有依据的内容，不编共同经历，不要客服腔，保持自然简短。'
         const identityRepair = embodiedProblem ? buildIdentityBoundaryRepair(identityMode, lang) : ''
+        const safeFallback = lang === 'en'
+          ? "I'm not sure about that yet. Tell me a little more."
+          : '这个我还真没头绪，你跟我说说呗。'
         void chatCompletion(settings, [
           ...apiMessages,
           { role: 'assistant', content: cleaned },
@@ -1149,8 +1152,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               looksFabricated(retryCleaned) ||
               looksEmbodiedSelfClaim(retryCleaned, identityMode)
             ) {
-              const fallback = '这个我还真没头绪，你跟我说说呗。'
-              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: fallback, ts: assistantTs }]
+              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: safeFallback, ts: assistantTs }]
               commitFinal(final)
             } else {
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: retryCleaned, ts: assistantTs }]
@@ -1158,7 +1160,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             }
           })
           .catch(() => {
-            const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: cleaned, ts: assistantTs }]
+            // 已判定原回复存在问题时，repair 失败/超时也绝不把原违规文本重新放行。
+            const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: safeFallback, ts: assistantTs }]
             commitFinal(final)
           })
         return
