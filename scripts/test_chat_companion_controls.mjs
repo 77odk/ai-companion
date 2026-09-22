@@ -32,8 +32,16 @@ test('control popovers open upward and stay bounded on mobile', () => {
   assert.match(cssBlock('.chat-model-menu'), /100vw - 28px/)
 })
 
-test('immersion control uses product wording', () => {
+test('immersion control keeps choices compact and moves detail behind help', () => {
   assert.match(controls, /沉浸感 ·/)
   assert.match(controls, /AI 本体/)
+  assert.match(controls, /note: '完整真人感'/)
+  assert.match(controls, /note: '平衡真人感与 AI'/)
+  assert.match(controls, /note: '保留 AI 身份'/)
+  assert.match(controls, /查看沉浸感说明/)
+  assert.match(controls, /chat-identity-help/)
   assert.match(controls, /不影响 TA 对你的记忆、关系和性格/)
+  const helpButton = cssBlock('.chat-control-menu .chat-control-help-button')
+  assert.match(helpButton, /width:\s*26px/)
+  assert.match(helpButton, /height:\s*26px/)
 })
