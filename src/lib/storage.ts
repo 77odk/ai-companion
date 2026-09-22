@@ -257,6 +257,92 @@ export function setSessionStart(ts: number, sessionId?: string): void {
   localStorage.setItem(sessionStartKey(sessionId), String(ts))
 }
 
+// ---- 上下文压缩标记（Context Compact，PR #99 同一批次） ----
+// 每会话最多压缩一次（主动或达到阈值自动触发）。业务真实值存本地（number，模式同 session_start），
+// 由 cloudStateResources 的 context_compact adapter 同步上云——不是"只在本机"的 key。
+// 只影响"注入给模型的上下文"（历史折叠为近窗 + 记忆块），绝不删除原聊天记录（缓存/后端都不动）。
+
+const CONTEXT_COMPACT_KEY = 'ai_companion_context_compact'
+
+function contextCompactKey(sessionId?: string): string {
+  return sessionId ? `${CONTEXT_COMPACT_KEY}_sid_${sessionId}` : CONTEXT_COMPACT_KEY
+}
+
+/** 该会话最近一次上下文压缩的时间戳；没压缩过返回 0 */
+export function getContextCompactAt(sessionId?: string): number {
+  try {
+    const raw = localStorage.getItem(contextCompactKey(sessionId))
+    if (!raw) return 0
+    const n = Number(raw)
+    return Number.isFinite(n) && n > 0 ? n : 0
+  } catch {
+    return 0
+  }
+}
+
+/** 记录该会话已压缩（ts=0 表示清除，供云端 delete 用） */
+export function setContextCompactAt(ts: number, sessionId?: string): void {
+  try {
+    if (ts > 0) localStorage.setItem(contextCompactKey(sessionId), String(ts))
+    else localStorage.removeItem(contextCompactKey(sessionId))
+  } catch {
+    // 存不下不影响功能
+  }
+}
+
+// ---- 会话承接标记（Session Bridge，PR #99 同一批次） ----
+// 用户主动把"上一个同 TA 会话"的记忆承接进当前会话，每会话最多承接一次。
+// 业务真实值存本地 JSON（{fromSessionId, bridgedAt}），由 cloudStateResources 的
+// context_bridge adapter 同步上云。承接只注入旧会话的记忆块，原聊天记录不动。
+
+const CONTEXT_BRIDGE_KEY = 'ai_companion_context_bridge'
+
+function contextBridgeKey(sessionId?: string): string {
+  return sessionId ? `${CONTEXT_BRIDGE_KEY}_sid_${sessionId}` : CONTEXT_BRIDGE_KEY
+}
+
+export interface ContextBridgeState {
+  /** 承接来源会话 id（旧会话）；当前会话是目标 */
+  fromSessionId: string
+  /** 承接时间戳 */
+  bridgedAt: number
+}
+
+/** 该会话的承接状态；没承接过返回 null */
+export function getContextBridge(sessionId?: string): ContextBridgeState | null {
+  if (!sessionId) return null
+  try {
+    const raw = localStorage.getItem(contextBridgeKey(sessionId))
+    if (!raw) return null
+    const obj = JSON.parse(raw)
+    if (obj == null || typeof obj !== 'object') return null
+    const fromSessionId = typeof obj.fromSessionId === 'string' ? obj.fromSessionId : ''
+    const bridgedAt = typeof obj.bridgedAt === 'number' ? obj.bridgedAt : 0
+    if (!fromSessionId || !Number.isFinite(bridgedAt) || bridgedAt <= 0) return null
+    return { fromSessionId, bridgedAt }
+  } catch {
+    return null
+  }
+}
+
+/** 记录该会话已承接（来自旧会话 fromSessionId） */
+export function setContextBridge(sessionId: string, fromSessionId: string): void {
+  try {
+    localStorage.setItem(contextBridgeKey(sessionId), JSON.stringify({ fromSessionId, bridgedAt: Date.now() }))
+  } catch {
+    // 存不下不影响功能
+  }
+}
+
+/** 清除承接标记（供云端 delete 用） */
+export function clearContextBridge(sessionId?: string): void {
+  try {
+    localStorage.removeItem(contextBridgeKey(sessionId))
+  } catch {
+    // ignore
+  }
+}
+
 // ---- 聊天背景（按会话隔离，2026-08-25 七七拍板：全屏对标微信） ----
 
 const CHAT_BG_KEY = 'ai_companion_chat_bg'
