@@ -302,14 +302,32 @@ export default function App() {
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
   const loggedIn = useAuthState()
+  // ConsentGate V1：首次使用先过「开始之前」安全说明（本机已同意当前版本则直接跳过）
+  const [firstConsentDone, setFirstConsentDone] = useState<boolean>(() => !consentGateNeeded())
+  // 老用户轻量补确认：初始化就按当前账号判断，避免首帧先误打统计再盖 light consent。
+  const [needLightConsent, setNeedLightConsent] = useState<boolean>(() => {
+    const acct = getAccount()
+    return Boolean(isLoggedIn() && acct && !acct.consentVersion)
+  })
+  useEffect(() => {
+    if (!loggedIn) {
+      setNeedLightConsent(false)
+      return
+    }
+    const acct = getAccount()
+    setNeedLightConsent(Boolean(acct && !acct.consentVersion))
+  }, [loggedIn])
+
+  // 第一方访问统计：只有当前版本 consent 已完成，且不处于老用户 light consent 阶段才允许打点。
+  // pingSiteHit 自身还会做正式域名 allowlist + 单页防重，双层防线避免预览环境/StrictMode 污染统计。
+  useEffect(() => {
+    if (!firstConsentDone || needLightConsent) return
+    pingSiteHit(API_BASE)
+  }, [firstConsentDone, needLightConsent])
   // #21：旧 PWA 与线上 build SHA 不一致时提示刷新；“稍后”只在本次页面内生效，不落 storage。
   const [deployedUpdateVersion, setDeployedUpdateVersion] = useState<string | null>(null)
   const dismissedUpdateVersionRef = useRef<string | null>(null)
 
-  // 站点访问计数：打我们自己的后端（第一方，替代第三方脚本），每次页面加载一次，失败静默。
-  useEffect(() => {
-    pingSiteHit(API_BASE)
-  }, [])
   useEffect(() => {
     let cancelled = false
     const currentVersion = getCurrentBuildVersion()
@@ -350,15 +368,6 @@ export default function App() {
       void syncCloudState()
       void closeOldestCandidateWindowOnStartup()
     }
-  }, [loggedIn])
-  // ConsentGate V1：首次使用先过「开始之前」安全说明（本机已同意当前版本则直接跳过）
-  const [firstConsentDone, setFirstConsentDone] = useState<boolean>(() => !consentGateNeeded())
-  // 老用户轻量补确认：已登录但服务端无 consent 记录（或版本过期）时盖一层 light
-  const [needLightConsent, setNeedLightConsent] = useState(false)
-  useEffect(() => {
-    if (!loggedIn) return
-    const acct = getAccount()
-    if (acct && !acct.consentVersion) setNeedLightConsent(true)
   }, [loggedIn])
 
   // 聊天页头部：返回箭头 + 小星球资料卡入口；顶栏标题 = 当前角色名（微信式）

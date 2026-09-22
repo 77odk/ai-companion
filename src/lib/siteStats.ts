@@ -17,18 +17,22 @@ export interface SiteStats {
   todayUv: number
 }
 
-function isLocalDev(): boolean {
-  const host = typeof location !== 'undefined' ? location.hostname : ''
-  return host === 'localhost' || host === '127.0.0.1' || host === ''
+const OFFICIAL_FRONTEND_HOSTS = new Set(['eluvin.space'])
+let siteHitSent = false
+
+export function isOfficialFrontendHost(hostname?: string): boolean {
+  const host = (hostname ?? (typeof location !== 'undefined' ? location.hostname : '')).trim().toLowerCase()
+  return OFFICIAL_FRONTEND_HOSTS.has(host)
 }
 
 function toCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
 }
 
-/** 每次页面加载报一次。失败静默：统计绝不影响使用，本地开发不打点。 */
+/** 每次页面加载最多报一次。只允许正式站写统计；失败静默，绝不影响使用。 */
 export function pingSiteHit(apiBase: string): void {
-  if (isLocalDev() || !apiBase) return
+  if (!isOfficialFrontendHost() || !apiBase || siteHitSent) return
+  siteHitSent = true
   try {
     void fetch(`${apiBase}${HIT_PATH}`, {
       method: 'POST',
