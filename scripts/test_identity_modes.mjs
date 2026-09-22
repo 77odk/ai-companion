@@ -18,6 +18,7 @@ const {
   mergeProfileIdentityField,
   saveIdentityMode,
   allowsEmbodiedLifeContext,
+  allowsBusyState,
   buildIdentityBoundaryRepair,
 } = await import('../src/lib/companionPolicy.ts')
 const { buildSystemPrompt, CHAT_RULES, CHAT_RULES_EN, looksEmbodiedSelfClaim, looksRobotic } = await import('../src/lib/chatPrompts.ts')
@@ -62,6 +63,9 @@ assert.equal(ai.lifeExpressionModel, 'ai-native')
 assert.equal(allowsEmbodiedLifeContext('immersive'), true)
 assert.equal(allowsEmbodiedLifeContext('natural'), false)
 assert.equal(allowsEmbodiedLifeContext('ai'), false)
+assert.equal(allowsBusyState('immersive'), true, '真人忙碌只属于沉浸档')
+assert.equal(allowsBusyState('natural'), false, '自然档不进入 BusyState')
+assert.equal(allowsBusyState('ai'), false, 'AI 本体不进入 BusyState')
 
 console.log('\n[3] Chat：公共规则解耦，Identity Soul 按会话切换，语言约束覆盖思考链')
 assert.ok(!CHAT_RULES.includes('你是活人不是AI'))
@@ -85,6 +89,8 @@ assert.ok(naturalPrompt.includes('注意力、想法、情绪色彩'), '自然�
 assert.ok(naturalPrompt.includes('刚才还在想着你前面那句话'), '自然档有极短行为示例，不是模板池')
 assert.ok(aiPrompt.includes('AI 原生体验'), 'AI 本体以数字存在为自我来源')
 assert.ok(aiPrompt.includes('重新梳理我们聊到这里的脉络'), 'AI 本体有极短行为示例')
+assert.ok(naturalPrompt.includes('不要让对方等你去忙、离开或稍后回来'), '自然档提示词明确无真人 Busy')
+assert.ok(aiPrompt.includes('不要让对方等你去忙、离开或稍后回来'), 'AI 本体提示词明确无真人 Busy')
 assert.equal(looksRobotic('我是一个AI。', 'immersive'), true)
 assert.equal(looksRobotic('我是一个AI。', 'natural'), false)
 assert.equal(looksRobotic('有什么可以帮你的吗', 'ai'), true, 'AI 档仍拦客服腔')
@@ -131,12 +137,15 @@ assert.match(controlsSource, /saveIdentityMode\(sessionId, mode\)/)
 assert.match(appSource, /<ChatCompanionControls sessionId=/)
 assert.ok(!memorySource.includes('companionPolicy'), 'Memory 不直接感知身份模式')
 
-console.log('\n[7] Chat 现实生活边界：模型主导，硬编码实体生活只给沉浸')
-assert.match(chatSource, /const spaceBlock = buildSpacePostsBlock\(loadCurrentPosts\(activeSessionId \|\| undefined\), 5, lang\)/, 'Space 继续作为 identity-aware SELF 历史注入')
+console.log('\n[7] Chat 现实生活边界：模型主导，硬编码实体生活与真人 Busy 只给沉浸')
 assert.match(chatSource, /const identityMode = resolveIdentityMode\(activeSessionId \|\| undefined\)/, '身份模式提前解析供 busy 与生活边界共用')
 assert.match(chatSource, /const allowEmbodiedLife = allowsEmbodiedLifeContext\(identityMode\)/, 'allowEmbodiedLife 从同一 identityMode 派生')
+assert.match(chatSource, /const allowBusy = allowsBusyState\(identityMode\)/, 'Busy 能力从同一 identityMode 派生')
+assert.match(chatSource, /if \(allowEmbodiedLife\) \{\s*const spaceBlock = buildSpacePostsBlock/s, 'Space 历史只在沉浸档作为 SELF 事实注入')
 assert.match(chatSource, /if \(allowEmbodiedLife && !personaHasLifeAnchors\(persona\)\)/, 'LIFE_BASELINE 仅沉浸')
 assert.match(chatSource, /if \(allowEmbodiedLife && shouldInjectYourMoment\(recentUserTexts, lang\)\)/, 'YourMoment 物理模板仅沉浸')
+assert.ok(!chatSource.includes('pickBusyReply'), '真人 Busy 期间不再用本地话术假装即时回复')
+assert.ok(!chatSource.includes('busyReplyText'), '真人 Busy 期间保持真正的短暂不回复')
 
 console.log('\n[8] 弱模型护栏：只判明显 SELF 物理越界，正常状态感不误伤')
 assert.equal(looksEmbodiedSelfClaim('我刚洗完澡，准备躺床上。', 'natural'), true)
@@ -167,10 +176,12 @@ assert.match(buildIdentityBoundaryRepair('natural', 'zh'), /注意力、想法�
 assert.match(buildIdentityBoundaryRepair('ai', 'zh'), /AI 原生体验/)
 assert.match(chatSource, /looksEmbodiedSelfClaim\(cleaned, identityMode\)/)
 assert.match(chatSource, /looksEmbodiedSelfClaim\(retryCleaned, identityMode\)/)
-assert.match(chatSource, /const embodiedBusyProblem = raw \? looksEmbodiedSelfClaim\(raw, identityMode\) : false/, '非流式 busy 前必须先只读检查身份边界')
-assert.match(chatSource, /const embodiedBusyProblem = looksEmbodiedSelfClaim\(assistantText\.current, identityMode\)/, '流式 busy 前必须先只读检查身份边界')
-assert.ok(chatSource.includes("if (!embodiedBusyProblem && !busyTriggeredRef.current && raw && availability.state === 'unavailable'"), '非流式违规实体生活不能进入 busy')
-assert.ok(chatSource.includes("if (!embodiedBusyProblem && !busyTriggeredRef.current && availability.state === 'unavailable'"), '流式违规实体生活不能进入 busy')
+assert.ok(chatSource.includes("if (allowBusy && !busyTriggeredRef.current && raw && availability.state === 'unavailable'"), '非流式 Busy 只能在沉浸档进入')
+assert.ok(chatSource.includes("if (allowBusy && !busyTriggeredRef.current && availability.state === 'unavailable'"), '流式 Busy 只能在沉浸档进入')
+assert.match(chatSource, /const unavailableIdentityProblem = Boolean\(/, '自然 / AI 的离开话术转身份 repair，不进入 Busy')
+assert.match(chatSource, /!allowBusy && cleanedAvailability\?\.state === 'unavailable'/, '自然 / AI finalize 拦截不可用声明')
+assert.match(chatSource, /!allowBusy && retryAvailability\?\.state === 'unavailable'/, 'repair 后仍不能以离开话术落库')
+assert.match(chatSource, /if \(cleaned && identityProblem && retriedRef\.current\) \{\s*commitFinal\(\[\.\.\.messages, userMsg\]\)/s, '用户 Stop 命中身份问题时不落违规 partial，也不再发模型请求')
 assert.ok(chatSource.includes('repair 失败/超时也绝不把原违规文本重新放行'), 'repair 失败路径必须保留安全 fallback')
 assert.ok(!chatSource.includes("content: cleaned, ts: assistantTs }]\n            commitFinal(final)\n          })\n        return"), 'repair catch 不能重新提交 rejected cleaned')
 
