@@ -72,7 +72,7 @@
 
 ## 四、各模块保护边界
 
-- Chat：只允许动「Event 候选识别挂载」和「记忆注入旁挂载」两处；上传/合并/去重链路不许改；分条与显示顺序不许改。
+- Chat：允许动「Event 候选识别挂载」「记忆注入旁挂载」，以及「身份边界护栏」的限定薄挂载：身份模式可决定 Space 是否作为 SELF 事实注入、Busy 是否允许进入/恢复/Return，以及 finalization/retry 最终落库前的 detector + 一次 repair retry + 安全 fallback。**真人 Busy 只属于 immersive**；natural / ai 不得进入、恢复或补发 Busy Return，模型若输出“等我/稍后回来”只允许走身份 repair。用户主动 Stop 时不得为修复额外发模型请求，若 partial 已越过身份边界则不落该 assistant partial。上传/合并/去重链路不许改，分条与显示顺序不许改。
 - Memory：展示层可改；注入逻辑、隔离规则、生成逻辑不许改。
 - Event：独立对象、按 sessionId 隔离、软删、走全量同步——这四点不变；识别必须「共同主体 + 已发生动作」双命中，未来时间硬拒；每 session 每本地日最多 3 次 LLM 精判；不许从 Memory 聚类生成，不许从旧数据回填。
 - Session / Role：数据按 sessionId 隔离；「关于我」是全局 explicit（所有角色共享），聊天中记下的内容只属于当前角色，绝不互相注入；切换角色只覆写 persona，聊天记录与记忆绝不动。
