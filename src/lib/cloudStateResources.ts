@@ -7,7 +7,7 @@ import {
 } from './cloudState.ts'
 import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE, notifyDataChanged } from './dataChange.ts'
 import { getAccount } from './sync.ts'
-import { collectAllAIProfiles, getSessionStart, setSessionStart, getContextCompactAt, setContextCompactAt, getContextBridge, setContextBridge, clearContextBridge } from './storage.ts'
+import { collectAllAIProfiles, getSessionStart, setSessionStart, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, clearContextBridge } from './storage.ts'
 import { isIdentityMode, mergeProfileIdentityField, type IdentityMode } from './companionPolicy.ts'
 import { getPendingOps, getSessionsCache, removePendingOp, type CloudStatePendingOp } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
@@ -936,17 +936,22 @@ function deleteSessionStartEntity(entity: CloudStateEntity): void {
   notifyDataChanged()
 }
 
-// ── 上下文压缩标记（PR #99）：session 级实体，每会话最多压缩一次 ──
-// 只记录「已压缩」这个事实（跨设备跟随），不涉及聊天记录本身——压缩只影响注入层，原记录不删。
-let contextCompactSnapshot = new Map<string, number>()
+// ── 上下文压缩（PR #99）：session 级实体，每会话最多压缩 1 次 ──
+// 记录「已压缩」+ 压缩摘要（summary）；只影响注入层，原聊天记录不删。
+interface CompactRecord {
+  ts: number
+  summary: string
+}
 
-function contextCompactEntities(): Map<string, number> {
-  const out = new Map<string, number>()
+let contextCompactSnapshot = new Map<string, CompactRecord>()
+
+function contextCompactEntities(): Map<string, CompactRecord> {
+  const out = new Map<string, CompactRecord>()
   for (const session of getSessionsCache()) {
     const sid = String(session.id)
     if (!sid) continue
     const ts = getContextCompactAt(sid)
-    if (ts > 0) out.set(sid, ts)
+    if (ts > 0) out.set(sid, { ts, summary: getContextCompactSummary(sid) })
   }
   return out
 }
@@ -958,9 +963,12 @@ function resetContextCompactSnapshot(): void {
 function captureContextCompacts(): void {
   if (!getAccount()) return
   const next = contextCompactEntities()
-  for (const [sessionId, ts] of next) {
-    if (contextCompactSnapshot.get(sessionId) !== ts) {
-      queue('context_compact', sessionId, { compactedAt: ts }, false, sessionId)
+  for (const [sessionId, rec] of next) {
+    const prev = contextCompactSnapshot.get(sessionId)
+    if (!prev || prev.ts !== rec.ts || prev.summary !== rec.summary) {
+      const payload: { compactedAt: number; summary?: string } = { compactedAt: rec.ts }
+      if (rec.summary) payload.summary = rec.summary
+      queue('context_compact', sessionId, payload, false, sessionId)
     }
   }
   for (const [sessionId] of contextCompactSnapshot) {
@@ -972,14 +980,20 @@ function captureContextCompacts(): void {
 function applyContextCompactEntity(entity: CloudStateEntity): void {
   const sessionId = entity.sessionId || entity.entityId
   if (!sessionId || entity.entityId !== sessionId) return
-  const raw = (entity.payload as { compactedAt?: unknown } | null)?.compactedAt
+  const payload = entity.payload as { compactedAt?: unknown; summary?: unknown } | null
+  const raw = payload?.compactedAt
   const ts = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isFinite(ts) || ts <= 0) return
   const local = getContextCompactAt(sessionId)
   // 已压缩标记只前进：本机若更新（不可能晚于云端却更小），以更大的为准。
   if (local >= ts) return
   setContextCompactAt(ts, sessionId)
-  contextCompactSnapshot.set(sessionId, ts)
+  // 云端摘要（非空）在本地为空时写入；本地已有生成摘要则保留本地（每会话最多 1 次模型生成）。
+  const cloudSummary = typeof payload?.summary === 'string' ? payload.summary.trim() : ''
+  if (cloudSummary && !getContextCompactSummary(sessionId)) {
+    setContextCompactSummary(cloudSummary, sessionId)
+  }
+  contextCompactSnapshot.set(sessionId, { ts, summary: getContextCompactSummary(sessionId) })
   notifyDataChanged()
 }
 
@@ -987,15 +1001,17 @@ function deleteContextCompactEntity(entity: CloudStateEntity): void {
   const sessionId = entity.sessionId || entity.entityId
   if (!sessionId || entity.entityId !== sessionId) return
   setContextCompactAt(0, sessionId)
+  setContextCompactSummary('', sessionId)
   contextCompactSnapshot.delete(sessionId)
   notifyDataChanged()
 }
 
-// ── 会话承接标记（PR #99）：session 级实体，每会话最多承接一次 ──
-// 记录当前会话承接自哪个旧会话（fromSessionId + bridgedAt）；承接只注入旧会话记忆块。
+// ── 会话承接（PR #99）：session 级实体，每会话最多承接 1 次 ──
+// 记录承接自哪个旧会话 + evidence-only bridge 摘要；bridge 只临时参与后续约 6–10 轮（本地轮次）。
 interface BridgeRecord {
   fromSessionId: string
   bridgedAt: number
+  content: string
 }
 
 let contextBridgeSnapshot = new Map<string, BridgeRecord>()
@@ -1006,7 +1022,7 @@ function contextBridgeEntities(): Map<string, BridgeRecord> {
     const sid = String(session.id)
     if (!sid) continue
     const state = getContextBridge(sid)
-    if (state) out.set(sid, state)
+    if (state) out.set(sid, { fromSessionId: state.fromSessionId, bridgedAt: state.bridgedAt, content: state.content })
   }
   return out
 }
@@ -1018,10 +1034,15 @@ function resetContextBridgeSnapshot(): void {
 function captureContextBridges(): void {
   if (!getAccount()) return
   const next = contextBridgeEntities()
-  for (const [sessionId, state] of next) {
+  for (const [sessionId, rec] of next) {
     const prev = contextBridgeSnapshot.get(sessionId)
-    if (!prev || prev.fromSessionId !== state.fromSessionId || prev.bridgedAt !== state.bridgedAt) {
-      queue('context_bridge', sessionId, { fromSessionId: state.fromSessionId, bridgedAt: state.bridgedAt }, false, sessionId)
+    if (!prev || prev.fromSessionId !== rec.fromSessionId || prev.bridgedAt !== rec.bridgedAt || prev.content !== rec.content) {
+      const payload: { fromSessionId: string; bridgedAt: number; content?: string } = {
+        fromSessionId: rec.fromSessionId,
+        bridgedAt: rec.bridgedAt,
+      }
+      if (rec.content) payload.content = rec.content
+      queue('context_bridge', sessionId, payload, false, sessionId)
     }
   }
   for (const [sessionId] of contextBridgeSnapshot) {
@@ -1033,16 +1054,17 @@ function captureContextBridges(): void {
 function applyContextBridgeEntity(entity: CloudStateEntity): void {
   const sessionId = entity.sessionId || entity.entityId
   if (!sessionId || entity.entityId !== sessionId) return
-  const payload = entity.payload as { fromSessionId?: unknown; bridgedAt?: unknown } | null
+  const payload = entity.payload as { fromSessionId?: unknown; bridgedAt?: unknown; content?: unknown } | null
   if (!payload || typeof payload !== 'object') return
   const fromSessionId = typeof payload.fromSessionId === 'string' && payload.fromSessionId.trim() ? payload.fromSessionId.trim() : ''
   const bridgedAt = typeof payload.bridgedAt === 'number' ? payload.bridgedAt : Number(payload.bridgedAt)
   if (!fromSessionId || !Number.isFinite(bridgedAt) || bridgedAt <= 0) return
   const local = getContextBridge(sessionId)
-  // 只接受更新的承接记录（同一会话已承接则保持）。
+  // 只接受更新的承接记录（同一会话已承接则保持，turnsLeft 是本地轮次不覆盖）。
   if (local && local.bridgedAt >= bridgedAt) return
-  setContextBridge(sessionId, fromSessionId)
-  contextBridgeSnapshot.set(sessionId, { fromSessionId, bridgedAt })
+  const cloudContent = typeof payload.content === 'string' ? payload.content.trim() : ''
+  setContextBridge(sessionId, fromSessionId, cloudContent)
+  contextBridgeSnapshot.set(sessionId, { fromSessionId, bridgedAt, content: cloudContent })
   notifyDataChanged()
 }
 
