@@ -32,7 +32,7 @@ import {
   upsertMemoryCache,
   type PendingOp,
 } from '../lib/sessionStore'
-import { findBusyCutoff, inferBusyReason, pickBusyReply, randomBusyDurationMs, serializeBusyContext, type BusyState } from '../lib/aiBusy'
+import { findBusyCutoff, inferBusyReason, randomBusyDurationMs, serializeBusyContext, type BusyState } from '../lib/aiBusy'
 import { busyCycleId, cancelBusyReturn, triggerBusyReturn } from '../lib/busyReturn'
 import { busyReturnFallback, classifyAvailability, isGroundedBusyReturn, type AvailabilityDecision } from '../lib/availability'
 import { loadCurrentPosts } from '../lib/aiSpace'
@@ -45,9 +45,10 @@ import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTa
 import { buildIdentityContext } from '../lib/identityContext'
 import { dropRepeatedReplies } from '../lib/replyDedupe'
 import { buildReplyLengthInstruction, getEffectiveReplyLength, splitDetailedAssistantReply } from '../lib/replyLength'
-import { allowsEmbodiedLifeContext, buildIdentityBoundaryRepair, resolveIdentityMode } from '../lib/companionPolicy'
+import { allowsBusyState, allowsEmbodiedLifeContext, buildIdentityBoundaryRepair, resolveIdentityMode } from '../lib/companionPolicy'
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
+import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -137,7 +138,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [hasKey] = useState(() => Boolean(loadSettings().apiKey))
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [isBusy, setIsBusy] = useState(false)
-  const [busyReplyText, setBusyReplyText] = useState<string | null>(null)
   const persona = activeSession?.persona ?? loadPersona()
   const [milestone, setMilestone] = useState<{ day: number; hit: boolean; shown: boolean } | null>(null)
   const [showMilestone, setShowMilestone] = useState(false)
@@ -200,7 +200,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   // 忙碌状态相关 ref
   const busyTimerRef = useRef<number | null>(null)
   const busyTriggeredRef = useRef(false)
-  const busyRepliedRef = useRef(false)
   const enterBusyRef = useRef<(text: string, decision: AvailabilityDecision) => void>(() => {})
   const sendBusyReturnRef = useRef<(runId: number, sid: string, state: BusyState) => Promise<void>>(async () => {})
 
@@ -237,6 +236,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   // ---- 忙碌状态：进入忙碌 ----
   const enterBusy = (triggerText: string, decision: AvailabilityDecision) => {
     const sid = getActiveSessionId()
+    if (!sid || !allowsBusyState(resolveIdentityMode(sid))) return
     const duration = randomBusyDurationMs()
     const busyUntil = Date.now() + duration
     const reason = inferBusyReason(triggerText)
@@ -252,10 +252,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       activityOwner: 'SELF',
       triggerEvidence: decision.evidence,
     }
-    if (sid) saveBusyState(sid, state)
+    saveBusyState(sid, state)
     setIsBusy(true)
-    setBusyReplyText(null)
-    busyRepliedRef.current = false
     if (busyTimerRef.current !== null) {
       clearTimeout(busyTimerRef.current)
     }
@@ -276,6 +274,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       saveState: saveBusyState,
       isCurrent: (targetSid, cycleId) => {
         if (targetSid !== getActiveSessionId()) return false
+        if (!allowsBusyState(resolveIdentityMode(targetSid))) return false
         if (!getSessionsCache().some((item) => String(item.id) === targetSid)) return false
         const latest = getBusyState(targetSid)
         return latest.status === 'busy' && !latest.returnSent && busyCycleId(targetSid, latest) === cycleId
@@ -352,7 +351,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       onIdle: (targetSid) => {
         if (targetSid !== getActiveSessionId() || !mountedRef.current) return
         setIsBusy(false)
-        setBusyReplyText(null)
         if (busyTimerRef.current !== null) {
           window.clearTimeout(busyTimerRef.current)
           busyTimerRef.current = null
@@ -365,7 +363,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }
   sendBusyReturnRef.current = sendBusyReturn
 
-  // ---- 忙碌状态：忙碌中用户发消息，只回一句"在忙" ----
+  // ---- 真人忙碌：沉浸档里消息照常收下，但 TA 暂时不回复；忙完后主动回来接上。 ----
   const handleBusySend = (text: string) => {
     const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
     const next = [...messages, userMsg]
@@ -373,10 +371,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (activeSessionId) void uploadMessage(userMsg)
     setMessages(next)
     setInput('')
-    if (!busyRepliedRef.current) {
-      busyRepliedRef.current = true
-      setBusyReplyText(pickBusyReply())
-    }
   }
 
   useEffect(() => {
@@ -385,7 +379,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // UI2-03B-1：本次 mount 带 pending jump / 跳转保护窗口内，scroll-bottom 让位（由 jump 接管定位）
     if (jumpAtMountRef.current || jumpHoldRef.current || jumpSuppressRef.current || isChatJumpHolding()) return
     el.scrollTop = el.scrollHeight
-  }, [visibleMessages, busyReplyText])
+  }, [visibleMessages])
 
   // UI2-03B-1「看原对话」：消费 App 传来的一次性 jump target。
   // 用 useLayoutEffect：DOM commit 后、paint 前直接定位 —— 第一可见帧就在目标附近，
@@ -464,12 +458,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     setMessages(activeSessionId ? getMessagesCache(activeSessionId) : loadMessages())
     setActiveSession(null)
-    setBusyReplyText(null)
     if (activeSessionId) markRead(activeSessionId)
-    // 恢复忙碌状态：切换会话/挂载时检查
+    // 恢复忙碌状态：只有沉浸档允许恢复；自然 / AI 遇到旧 busy 立即取消，避免模式切换后继续“闭嘴”。
     if (activeSessionId) {
       const state = getBusyState(activeSessionId)
-      if (state.status === 'busy' && state.busyUntil > 0) {
+      if (!allowsBusyState(resolveIdentityMode(activeSessionId)) && state.status === 'busy') {
+        cancelBusyReturn(activeSessionId, state, { saveState: saveBusyState, onIdle: () => setIsBusy(false) })
+        setIsBusy(false)
+      } else if (state.status === 'busy' && state.busyUntil > 0) {
         if (Date.now() >= state.busyUntil && !state.returnSent) {
           // 忙碌已结束但没发回来的消息，补发
           setIsBusy(false)
@@ -477,7 +473,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         } else if (Date.now() < state.busyUntil) {
           // 还在忙碌中，恢复定时器
           setIsBusy(true)
-          busyRepliedRef.current = false
           const remaining = state.busyUntil - Date.now()
           const triggerRunId = runIdRef.current
           busyTimerRef.current = window.setTimeout(() => {
@@ -493,6 +488,26 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     } else {
       setIsBusy(false)
     }
+  }, [activeSessionId])
+
+  // 身份模式在聊天页内切换时即时收口 Busy：切到自然 / AI 立刻取消旧 cycle，不补发“忙完回来”。
+  useEffect(() => {
+    if (!activeSessionId) return
+    const syncBusyWithIdentity = () => {
+      if (allowsBusyState(resolveIdentityMode(activeSessionId))) return
+      const state = getBusyState(activeSessionId)
+      if (busyTimerRef.current !== null) {
+        window.clearTimeout(busyTimerRef.current)
+        busyTimerRef.current = null
+      }
+      if (state.status === 'busy') {
+        cancelBusyReturn(activeSessionId, state, { saveState: saveBusyState, onIdle: () => setIsBusy(false) })
+      } else {
+        setIsBusy(false)
+      }
+    }
+    window.addEventListener(ELUVIN_DATA_CHANGE, syncBusyWithIdentity)
+    return () => window.removeEventListener(ELUVIN_DATA_CHANGE, syncBusyWithIdentity)
   }, [activeSessionId])
 
   useEffect(() => {
@@ -710,11 +725,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
     }
 
-    // 忙碌中：不调 API，只回一句"在忙"
-    if (isBusy) {
+    // 真人忙碌只属于沉浸档。自然 / AI 即使残留 isBusy，也立即回正常聊天路径。
+    if (isBusy && activeSessionId && allowsBusyState(resolveIdentityMode(activeSessionId))) {
       handleBusySend(text)
       return
     }
+    if (isBusy) setIsBusy(false)
 
     const runId = ++runIdRef.current
     retriedRef.current = false
@@ -962,14 +978,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         })
       }
     }
-    // Space 本身已经按 identity policy 走模型主导生成（自然=轻状态，AI=AI-native），
-    // 所以仍作为 SELF 历史注入；真正的硬编码实体生活块只在沉浸档开放。
-    const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 5, lang)
-    if (spaceBlock) {
-      apiMessages.push({ role: 'system', content: spaceBlock })
-    }
     const identityMode = resolveIdentityMode(activeSessionId || undefined)
     const allowEmbodiedLife = allowsEmbodiedLifeContext(identityMode)
+    const allowBusy = allowsBusyState(identityMode)
+    // Space 旧动态没有 identityMode stamp。为避免从沉浸切到自然 / AI 后把旧吃饭、出门、地点继续当成 SELF 事实，
+    // v1 仅在沉浸档把 Space 历史注入 Chat；Space 页面本身仍照当前 identity policy 正常生成与展示。
+    if (allowEmbodiedLife) {
+      const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 5, lang)
+      if (spaceBlock) {
+        apiMessages.push({ role: 'system', content: spaceBlock })
+      }
+    }
     // 未来约定注入（因果链第二环 TASK-FUTURE-AGENDA）：TA 记得「约好还没做的事」，
     // 对方问起/到期临近时能自然接，不会一问三不知；没约定返回空串跳过，不占上下文。
     const agendaBlock = buildFutureAgendaBlock(loadChatTopics(activeSessionId || undefined), new Date(), lang)
@@ -1095,10 +1114,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 非流式/流式漏网兜底（2026-09-05 晚）：部分中转站（doi 等）不给标准 SSE 逐字流，onToken 忙碌检测跑不到——
       // 完整文本到 finalize 时再查一次，命中照样截断进忙碌（忙语句之后的尾巴不落库）
       const availability = classifyAvailability(raw)
-      const embodiedBusyProblem = raw ? looksEmbodiedSelfClaim(raw, identityMode) : false
-      // 身份边界前置只读 gate：自然/AI 的违规实体生活不能先被写成 busy 证据；
-      // 命中时不改 busy 状态、不 abort，让本轮继续进入下方 finalization/retry 修复。
-      if (!embodiedBusyProblem && !busyTriggeredRef.current && raw && availability.state === 'unavailable' && availability.owner === 'SELF') {
+      // Busy 是沉浸档专属能力；自然 / AI 的“等我/稍后回来”只作为身份违规继续走 finalization repair。
+      if (allowBusy && !busyTriggeredRef.current && raw && availability.state === 'unavailable' && availability.owner === 'SELF') {
         busyTriggeredRef.current = true
         const cut = findBusyCutoff(raw)
         const busyText = cut > 0 && cut < raw.length ? raw.slice(0, cut) : raw
@@ -1128,14 +1145,24 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const roboticProblem = cleaned ? looksRobotic(cleaned, identityMode) : false
       const fabricatedProblem = cleaned ? looksFabricated(cleaned) : false
       const embodiedProblem = cleaned ? looksEmbodiedSelfClaim(cleaned, identityMode) : false
-      if (cleaned && (attributionProblem || roboticProblem || fabricatedProblem || embodiedProblem) && !retriedRef.current) {
+      const cleanedAvailability = cleaned ? classifyAvailability(cleaned) : null
+      const unavailableIdentityProblem = Boolean(
+        cleaned && !allowBusy && cleanedAvailability?.state === 'unavailable' && cleanedAvailability.owner === 'SELF',
+      )
+      const identityProblem = embodiedProblem || unavailableIdentityProblem
+      // 用户主动 Stop 不再发第二次模型请求；若截停片段已经越过身份边界，直接不落这段 assistant 文本。
+      if (cleaned && identityProblem && retriedRef.current) {
+        commitFinal([...messages, userMsg])
+        return
+      }
+      if (cleaned && (attributionProblem || roboticProblem || fabricatedProblem || identityProblem) && !retriedRef.current) {
         retriedRef.current = true
         setError(null)
         setMessages([...messages, userMsg, { role: 'assistant', content: '…', ts: assistantTs }])
         const genericRepair = lang === 'en'
           ? 'Your previous reply had a grounding or style problem. Forget that sentence and answer again: stay grounded in the available context, do not invent shared history, do not sound like customer service, and keep the reply natural and concise.'
           : '你刚才的回复有依据或表达问题。忘掉那句，重新回答：只用现有上下文里有依据的内容，不编共同经历，不要客服腔，保持自然简短。'
-        const identityRepair = embodiedProblem ? buildIdentityBoundaryRepair(identityMode, lang) : ''
+        const identityRepair = identityProblem ? buildIdentityBoundaryRepair(identityMode, lang) : ''
         const safeFallback = lang === 'en'
           ? "I'm not sure about that yet. Tell me a little more."
           : '这个我还真没头绪，你跟我说说呗。'
@@ -1149,11 +1176,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         ])
           .then((retry) => {
             const retryCleaned = stripActionMarkers(stripEmoji(retry), lang)
+            const retryAvailability = retryCleaned ? classifyAvailability(retryCleaned) : null
             if (
               !retryCleaned ||
               looksRobotic(retryCleaned, identityMode) ||
               looksFabricated(retryCleaned) ||
-              looksEmbodiedSelfClaim(retryCleaned, identityMode)
+              looksEmbodiedSelfClaim(retryCleaned, identityMode) ||
+              (!allowBusy && retryAvailability?.state === 'unavailable' && retryAvailability.owner === 'SELF')
             ) {
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: safeFallback, ts: assistantTs }]
               commitFinal(final)
@@ -1243,12 +1272,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         onToken: (t) => {
           if (runId !== runIdRef.current) return
           assistantText.current += t
-          // 忙碌关键词检测：流式累积层截断，不是显示层
+          // Busy 只在沉浸档拦截流；自然 / AI 即使说“等我回来”也让流完成，再由 finalize repair。
           const availability = classifyAvailability(assistantText.current)
-          const embodiedBusyProblem = looksEmbodiedSelfClaim(assistantText.current, identityMode)
-          // 只读 identity gate 必须早于 busy interception：命中时让流继续，
-          // 由 onDone -> finalize -> 既有 repair/fallback 处理，绝不污染 busy state。
-          if (!embodiedBusyProblem && !busyTriggeredRef.current && availability.state === 'unavailable' && availability.owner === 'SELF') {
+          if (allowBusy && !busyTriggeredRef.current && availability.state === 'unavailable' && availability.owner === 'SELF') {
             busyTriggeredRef.current = true
             const cutoff = findBusyCutoff(assistantText.current)
             if (cutoff > 0 && cutoff < assistantText.current.length) {
@@ -1359,11 +1385,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 onAvatarClick={onOpenProfile}
               />
             ))}
-            {busyReplyText && (
-              <div style={{ color: '#888', fontSize: '13px', margin: '4px 0 4px 12px', paddingLeft: '28px' }}>
-                {busyReplyText}
-              </div>
-            )}
           </>
         )}
       </div>
