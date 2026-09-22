@@ -655,16 +655,17 @@ function pendingProfileOps(entity: CloudStateEntity): CloudStatePendingOp[] {
   )
 }
 
-function latestPendingIdentityMode(entity: CloudStateEntity): IdentityMode | null {
+function latestPendingProfile(entity: CloudStateEntity): SyncedAIProfile | null {
   const ops = pendingProfileOps(entity)
   for (let index = ops.length - 1; index >= 0; index--) {
-    const payload = record(ops[index].payload)
-    if (isIdentityMode(payload?.identityMode)) return payload.identityMode
+    if (ops[index].deleted) continue
+    const value = validAiProfile(ops[index].payload)
+    if (value) return value
   }
   return null
 }
 
-function replacePendingProfileWithRebasedIdentity(
+function replacePendingProfileWithRebasedValue(
   entity: CloudStateEntity,
   profile: SyncedAIProfile,
 ): void {
@@ -685,25 +686,23 @@ function applyAiProfileEntity(entity: CloudStateEntity): void {
   const value = validAiProfile(entity.payload)
   if (!value) return
   const key = aiProfileStorageKey(entity.entityId)
-  const pendingIdentity = latestPendingIdentityMode(entity)
-  const merged = mergeProfileIdentityField(localStorage.getItem(key), value)
+  const pending = latestPendingProfile(entity)
+  let merged = mergeProfileIdentityField(localStorage.getItem(key), value)
 
-  // pull 总是在 push 之前：如果本机刚切过身份模式、pending 还没来得及上传，
-  // 旧云端 profile 不能先把这次明确选择盖回去。保留最新本地 pending 的 identityMode，
-  // 再把同一 profile op 重基到服务端刚下发的 version，避免下一步直接 conflict 丢掉选择。
-  if (pendingIdentity) merged.identityMode = pendingIdentity
+  // pull 总是在 push 之前：本机刚改完 profile（包括身份模式）但 pending 还没上传时，
+  // 旧云端 canonical 不能先把这次本地明确修改盖掉。保留最新 pending 的业务字段，
+  // 再把同一实体重基到刚 pull 到的 version；这样刷新不会把 natural/AI 本体打回沉浸，
+  // 同时也不会误丢与身份切换一起发生的昵称/头像本地修改。
+  if (pending) merged = { ...merged, ...pending }
 
   localStorage.setItem(key, JSON.stringify(merged))
   const mergedValue = validAiProfile(merged)
   if (!mergedValue) return
   profileSnapshot.set(entity.entityId, mergedValue)
 
-  const identityNeedsRepair =
-    Boolean(mergedValue.identityMode) &&
-    mergedValue.identityMode !== value.identityMode
-
-  if (identityNeedsRepair) {
-    replacePendingProfileWithRebasedIdentity(entity, mergedValue)
+  const profileNeedsRepair = JSON.stringify(mergedValue) !== JSON.stringify(value)
+  if (profileNeedsRepair) {
+    replacePendingProfileWithRebasedValue(entity, mergedValue)
   }
 }
 
