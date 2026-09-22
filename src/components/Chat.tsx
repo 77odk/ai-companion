@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
+import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
@@ -45,7 +45,7 @@ import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTa
 import { buildIdentityContext } from '../lib/identityContext'
 import { dropRepeatedReplies } from '../lib/replyDedupe'
 import { buildReplyLengthInstruction, getEffectiveReplyLength, splitDetailedAssistantReply } from '../lib/replyLength'
-import { allowsEmbodiedLifeContext, resolveIdentityMode } from '../lib/companionPolicy'
+import { allowsEmbodiedLifeContext, buildIdentityBoundaryRepair, resolveIdentityMode } from '../lib/companionPolicy'
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 
@@ -962,15 +962,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         })
       }
     }
-    // 现实生活型上下文只属于「沉浸」。
-    // 自然 / AI 本体已经由 Identity Soul + Runtime 走非身体化表达，不能再把旧 Space 里的现实生活片段倒灌回来。
-    const allowEmbodiedLife = allowsEmbodiedLifeContext(resolveIdentityMode(activeSessionId || undefined))
-    if (allowEmbodiedLife) {
-      const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 5, lang)
-      if (spaceBlock) {
-        apiMessages.push({ role: 'system', content: spaceBlock })
-      }
+    // Space 本身已经按 identity policy 走模型主导生成（自然=轻状态，AI=AI-native），
+    // 所以仍作为 SELF 历史注入；真正的硬编码实体生活块只在沉浸档开放。
+    const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 5, lang)
+    if (spaceBlock) {
+      apiMessages.push({ role: 'system', content: spaceBlock })
     }
+    const allowEmbodiedLife = allowsEmbodiedLifeContext(resolveIdentityMode(activeSessionId || undefined))
     // 未来约定注入（因果链第二环 TASK-FUTURE-AGENDA）：TA 记得「约好还没做的事」，
     // 对方问起/到期临近时能自然接，不会一问三不知；没约定返回空串跳过，不占上下文。
     const agendaBlock = buildFutureAgendaBlock(loadChatTopics(activeSessionId || undefined), new Date(), lang)
@@ -1123,22 +1121,34 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       thinking = cleanAttributionArtifacts(thinking, lang)
       const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)), lang)
       const identityMode = resolveIdentityMode(activeSessionId || undefined)
-      if (cleaned && (hasAttributionLeak(cleaned) || looksRobotic(cleaned, identityMode) || looksFabricated(cleaned)) && !retriedRef.current) {
+      const attributionProblem = cleaned ? hasAttributionLeak(cleaned) : false
+      const roboticProblem = cleaned ? looksRobotic(cleaned, identityMode) : false
+      const fabricatedProblem = cleaned ? looksFabricated(cleaned) : false
+      const embodiedProblem = cleaned ? looksEmbodiedSelfClaim(cleaned, identityMode) : false
+      if (cleaned && (attributionProblem || roboticProblem || fabricatedProblem || embodiedProblem) && !retriedRef.current) {
         retriedRef.current = true
         setError(null)
         setMessages([...messages, userMsg, { role: 'assistant', content: '…', ts: assistantTs }])
+        const genericRepair = lang === 'en'
+          ? 'Your previous reply had a grounding or style problem. Forget that sentence and answer again: stay grounded in the available context, do not invent shared history, do not sound like customer service, and keep the reply natural and concise.'
+          : '你刚才的回复有依据或表达问题。忘掉那句，重新回答：只用现有上下文里有依据的内容，不编共同经历，不要客服腔，保持自然简短。'
+        const identityRepair = embodiedProblem ? buildIdentityBoundaryRepair(identityMode, lang) : ''
         void chatCompletion(settings, [
           ...apiMessages,
           { role: 'assistant', content: cleaned },
           {
             role: 'user',
-            content:
-              '你刚才的回复有问题（像客服/程序，或者说了没有依据的话、编造了我们共同经历）。忘掉那句，重新回答：说话要有依据，不知道的事就说不知道、让对方提醒你，别编造、别圆场、别装熟。像真人一样简短自然。',
+            content: identityRepair ? `${genericRepair}\n${identityRepair}` : genericRepair,
           },
         ])
           .then((retry) => {
             const retryCleaned = stripActionMarkers(stripEmoji(retry), lang)
-            if (!retryCleaned || looksRobotic(retryCleaned, identityMode) || looksFabricated(retryCleaned)) {
+            if (
+              !retryCleaned ||
+              looksRobotic(retryCleaned, identityMode) ||
+              looksFabricated(retryCleaned) ||
+              looksEmbodiedSelfClaim(retryCleaned, identityMode)
+            ) {
               const fallback = '这个我还真没头绪，你跟我说说呗。'
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: fallback, ts: assistantTs }]
               commitFinal(final)
