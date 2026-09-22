@@ -220,6 +220,34 @@ export function looksFabricated(text: string): boolean {
   return FABRICATED_PATTERNS.some((re) => re.test(t))
 }
 
+/** 是否在自然 / AI 本体档里出现了明确的 SELF 物理生活声明。
+ * 只做保守护栏：要求第一人称/强当前标记 + 具体物理活动，避免把“你去吃饭吧”之类误判。
+ * 沉浸档永远不拦；真正的表达仍由模型主导。
+ */
+export function looksEmbodiedSelfClaim(text: string, identityMode: IdentityMode = 'immersive'): boolean {
+  if (identityMode === 'immersive') return false
+  const clauses = stripEmoji(stripActionMarkers(text ?? ''))
+    .split(/[。！？!?\n]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+
+  const hypotheticalZh = /(?:如果|假如|要是|假设|想象|比如)/
+  const hypotheticalEn = /\b(?:if|would|imagine|hypothetically|pretend)\b/i
+  const physicalZh = /(?:吃(?:饭|早餐|早饭|午饭|午餐|晚饭|晚餐)|喝(?:咖啡|茶|奶茶|水)|洗澡|冲澡|洗漱|睡觉|起床|躺(?:在)?床|在床上|出门|散步|跑步|健身|运动|通勤|上班|下班|到公司|在公司|回家|到家|在家|坐地铁|地铁上|开车|做饭|下厨|买菜|逛街|上课|在教室|去医院|在医院|去学校|在学校|遛狗)/
+  const selfZh = /(?:^|[，,；;]\s*)我(?:刚(?:刚|才)?|现在|这会儿?|正(?:在)?|正在|在|刚从|刚到|刚回|准备(?:去)?|要(?:去)?|去|回)?\s*/
+  const currentZh = /^(?:刚(?:刚|才)?|现在|这会儿?|正(?:在)?|正在)\s*/
+
+  const physicalEn = /\b(?:eating|having (?:breakfast|lunch|dinner)|drinking (?:coffee|tea|water)|showering|taking a shower|sleeping|in bed|at home|at work|commuting|on the (?:subway|train|bus)|driving|cooking|making (?:breakfast|lunch|dinner)|out for a walk|working out|at the gym|in class|got home|came home|got off work|went out)\b/i
+  const selfEn = /\bI(?:'m| am| just| have just| had just| was| went| got| came| took| ate| drank| cooked| drove)\b/i
+
+  return clauses.some((clause) => {
+    if (hypotheticalZh.test(clause) || hypotheticalEn.test(clause)) return false
+    if ((selfZh.test(clause) || currentZh.test(clause)) && physicalZh.test(clause)) return true
+    return selfEn.test(clause) && physicalEn.test(clause)
+  })
+}
+
+
 /** 认识天数注入：从 getFirstSeen 算「认识第 N 天」 */
 export function buildRelationshipBlock(now: number = Date.now(), sessionId?: string, lang: Lang = 'zh'): string {
   try {
