@@ -1,5 +1,5 @@
 // AI 忙碌状态工具（TASK-BUSY）
-// TA 说"我去洗碗了""我先去开个会"这类表达"离开去忙"的话时，进入忙碌状态，4-5分钟后再回来。
+// TA 在沉浸档说"我去洗碗了""我先去开个会"这类表达"离开去忙"的话时，进入真人忙碌状态，3-5分钟后再回来。
 // 2026-09-05 升级：从词表精确匹配改为"离开意图"句式正则匹配——不枚举具体事情，匹配句式结构。
 // 纯逻辑抽成可单测的导出函数；localStorage 读写委托给 sessionStore。
 
@@ -179,12 +179,12 @@ export function findBusyCutoff(text: string): number {
 
 /**
  * 生成随机忙碌时长（毫秒）。
- * 3.5-5.5 分钟，随机浮动，别每次都准点。
+ * 3-5 分钟，随机浮动，别每次都准点。
  * 纯函数，可单测（传 rand 注入）。
  */
 export function randomBusyDurationMs(rand: () => number = Math.random): number {
-  const minMs = 3.5 * 60 * 1000
-  const maxMs = 5.5 * 60 * 1000
+  const minMs = 3 * 60 * 1000
+  const maxMs = 5 * 60 * 1000
   return Math.round(minMs + rand() * (maxMs - minMs))
 }
 
