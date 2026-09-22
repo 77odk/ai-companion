@@ -185,6 +185,10 @@ assert.match(chatSource, /const unavailableIdentityProblem = Boolean\(/, '自然
 assert.match(chatSource, /!liveAllowBusy && cleanedAvailability\?\.state === 'unavailable'/, '自然 / AI finalize 拦截不可用声明')
 assert.match(chatSource, /!retryAllowBusy && retryAvailability\?\.state === 'unavailable'/, 'repair 后按当前身份再次校验，不放行离开话术')
 assert.match(chatSource, /if \(cleaned && identityProblem && retriedRef\.current\) \{\s*commitFinal\(\[\.\.\.messages, userMsg\]\)/s, '用户 Stop 命中身份问题时不落违规 partial，也不再发模型请求')
+assert.match(chatSource, /looksEmbodiedSelfClaim\(text, liveIdentityMode\)/, 'pagehide / hidden partial 落库前也必须检查当前身份边界')
+assert.match(chatSource, /if \(identityProblem\) return\s*const partialReplyLength/s, '违规 partial 不得进入 commitPartialReply / pending upload')
+assert.match(chatSource, /else if \(retryAllowBusy && retryAvailability\?\.state === 'unavailable' && retryAvailability\.owner === 'SELF'\)/, 'repair 期间切回沉浸后，SELF 离开话术必须真正进入 Busy')
+assert.match(chatSource, /enterBusyRef\.current\(busyText, retryAvailability\)/, '沉浸 repair 的 unavailable 回复必须建立 Busy/Return 周期')
 assert.ok(chatSource.includes('repair 失败/超时也绝不把原违规文本重新放行'), 'repair 失败路径必须保留安全 fallback')
 assert.ok(!chatSource.includes("content: cleaned, ts: assistantTs }]\n            commitFinal(final)\n          })\n        return"), 'repair catch 不能重新提交 rejected cleaned')
 
