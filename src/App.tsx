@@ -371,11 +371,11 @@ export default function App() {
   }, [loggedIn])
 
   // 聊天页头部：返回箭头 + 小星球资料卡入口；顶栏标题 = 当前角色名（微信式）
-  const headerSession = (() => {
-    const sid = getActiveSessionId()
-    if (!sid) return null
-    return getSessionsCache().find((s) => String(s.id) === sid) ?? null
-  })()
+  // controls 只需要 active session id，不依赖 session cache 已经补齐；避免新建/离线会话首帧缺 controls 与底部 safe-area。
+  const activeChatSessionId = getActiveSessionId()
+  const headerSession = activeChatSessionId
+    ? getSessionsCache().find((s) => String(s.id) === activeChatSessionId) ?? null
+    : null
 
   // 老数据一键迁移：建云端会话 → 按升序传消息 → 传记忆（单条失败跳过不中断）→
   // 置位 → 进聊天。本地数据只读不删（红线）；createSession 失败才算整个迁移失败（不置位，可重试）。
@@ -853,7 +853,7 @@ export default function App() {
                     goView('chatprofile')
                   }}
                 />
-                {headerSession && <ChatCompanionControls sessionId={String(headerSession.id)} />}
+                {activeChatSessionId && <ChatCompanionControls sessionId={activeChatSessionId} />}
               </div>
             )}
             {view === 'settings' && (
