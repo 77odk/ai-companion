@@ -17,6 +17,12 @@ import {
   collectAllAIProfiles,
   applyAllAIProfiles,
   getSessionStart,
+  collectAllContextCompacts,
+  collectAllContextBridges,
+  applyCloudContextCompacts,
+  applyCloudContextBridges,
+  type ContextCompactSyncState,
+  type ContextBridgeState,
   type StoredMessage,
   type UserProfile,
   type AIProfile,
@@ -70,6 +76,10 @@ export interface SyncData {
   taRuntime?: Record<string, TaRuntimeState>
   /** TA 性别（sid → {g, locked}，'__global' = 无角色时的兜底）：换设备不丢，旧 blob 无此字段自然跳过 */
   genders?: Record<string, { g: AIGender; locked: boolean }>
+  /** Context Compact：session → compact 状态；继续走既有 /api/sync 全量 blob。 */
+  contextCompacts?: Record<string, ContextCompactSyncState>
+  /** Session Bridge：session → bridge 状态；含 canonical bridgedAt / 剩余轮数。 */
+  contextBridges?: Record<string, ContextBridgeState>
 }
 const ACCOUNT_KEY = 'ai_companion_account'
 const SETTINGS_KEY = 'ai_companion_settings'
@@ -319,6 +329,8 @@ export function collectData(): SyncData {
     theme: loadThemeState(),
     taRuntime: collectAllTaRuntime(),
     genders: collectAllGenders(),
+    contextCompacts: collectAllContextCompacts(),
+    contextBridges: collectAllContextBridges(),
   }
 }
 // ---- 合并策略（纯函数，可单测） ----
@@ -450,6 +462,9 @@ export function applyData(data: SyncData): void {
   applyCloudTaRuntime(d.taRuntime)
   // TA 性别：只增不改（本地锁定的一律不动；云端锁定的能带回锁定态）→ 换设备/清缓存不丢
   applyCloudGenders(d.genders)
+  // Context：沿用 /api/sync 全量 blob；旧 blob 没字段自然跳过。
+  applyCloudContextCompacts(d.contextCompacts)
+  applyCloudContextBridges(d.contextBridges)
   // 主题：本地没配过且云端有 → 用云端，并立即应用（TASK_THEME）
   if (localStorage.getItem(THEME_KEY) == null && d.theme && (d.theme.type === 'preset' || d.theme.type === 'custom')) {
     saveThemeState(d.theme)
