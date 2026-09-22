@@ -1,8 +1,8 @@
 // Memory 写失败复核：假成功判定修复的专项测试
 // A setItem throw / B 回读不一致 / C upsertMemoryCache 失败返回 null / D-E-F-G 成功提示绑定真实写入 / H 去重 / I marker 回归
-const SRC = '/home/ubuntu/projects/ai-companion-mvp/frontend'
-const B = 'file://' + SRC + '/src/lib/'
+const LIB = new URL('../src/lib/', import.meta.url)
 const { readFileSync } = await import('node:fs')
+const read = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
 
 const store = new Map()
 let mode = 'ok' // ok | throw | phantom（写入不生效：回读拿旧值）
@@ -17,9 +17,9 @@ globalThis.localStorage = {
   clear: () => store.clear(),
 }
 
-const mem = await import(B + 'memory.ts')
-const ss = await import(B + 'sessionStore.ts')
-const st = await import(B + 'storage.ts')
+const mem = await import(new URL('memory.ts', LIB).href)
+const ss = await import(new URL('sessionStore.ts', LIB).href)
+const st = await import(new URL('storage.ts', LIB).href)
 
 const R = []
 const ok = (v, name, extra = '') => { R.push([name, !!v, extra]); console.log(`${v ? 'PASS' : 'FAIL'}  ${name}${extra ? '  [' + extra + ']' : ''}`) }
@@ -61,8 +61,8 @@ mode = 'ok'
 ok(dAfter.length === 0, 'D global 写失败 → 返回未变更列表（调用方据此判定失败）', `len=${dAfter.length}`)
 
 // ---- E/F/G：两个成功提示的判定依据 ----（源码契约 + 行为）
-const chatSrc = readFileSync(SRC + '/src/components/Chat.tsx', 'utf8')
-const bubbleSrc = readFileSync(SRC + '/src/components/MessageBubble.tsx', 'utf8')
+const chatSrc = read('src/components/Chat.tsx')
+const bubbleSrc = read('src/components/MessageBubble.tsx')
 ok(/if \(!item\) return \{ ok: false, created: false \}/.test(chatSrc), 'E1 writeMemory：本地写失败立即返回 ok:false/created:false（不再继续当成功）')
 ok(/if \(res\.created\) created = true/.test(chatSrc) && /if \(created\) userMsg\.memorySaved = true/.test(chatSrc), 'E2 flushMemoryWrites：只有「真实新增(created)」才置 memorySaved（不再要求 explicit）')
 ok(/if \(memoryWroteThisTurn && assistantMsgs\.length > 0\)/.test(chatSrc), 'E3 TA 消息的「已记住」标记也来自真实写入结果')
