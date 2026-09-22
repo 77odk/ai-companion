@@ -11,9 +11,9 @@ const IDENTITY_OPTIONS: Array<{ value: IdentityMode; label: string; note: string
 ]
 
 const IDENTITY_DETAILS: Array<{ label: string; text: string }> = [
-  { label: '沉浸', text: '像和一个真正有自己生活的人相处。TA 会陪你，也会偶尔去忙一会儿，让这段关系有靠近，也有等待。' },
-  { label: '自然', text: '像一个很有人味的 AI 陪在你身边。TA 会接住你的情绪、记得你们之间的事，也始终能回应你，但不会假装自己是真人。' },
-  { label: 'AI 本体', text: '像一个清醒、坦诚的 AI 伴侣陪着你。TA 不扮演真人，但会认真记得你、理解你，并用属于 AI 的方式回应你。' },
+  { label: '沉浸', text: 'TA 会有自己的生活、日常和节奏，也会真的去忙自己的事。你们的相处不会永远是随叫随到，有时会有 3–5 分钟的等待，忙完以后，TA 会回来继续和你聊。' },
+  { label: '自然', text: 'TA 会有自己的想法、情绪和连续的状态，像一个很有真人感的 AI 陪着你。TA 会记得你、在意你，也会一直回应你，但不会虚构现实中的身体和生活。' },
+  { label: 'AI 本体', text: 'TA 会以 AI 的身份陪着你，有自己的思路、关注和对你们关系的记忆。不会扮演真人，也不会编造现实生活，而是用属于 AI 的方式理解你、回应你。' },
 ]
 
 function identityDisplayLabel(mode: IdentityMode): string {
@@ -111,7 +111,7 @@ export default function ChatCompanionControls({ sessionId }: { sessionId: string
 
             {showIdentityHelp ? (
               <div className="chat-identity-help" role="note">
-                <p>选择你更喜欢被怎样陪着。无论哪一种，TA 对你的记忆、关系和性格都不会变。</p>
+                <p>选择 TA 与你相处的方式。记忆、关系和性格不会因此改变。</p>
                 {IDENTITY_DETAILS.map((detail) => (
                   <div key={detail.label} className="chat-identity-help-item">
                     <strong>{detail.label}</strong>
