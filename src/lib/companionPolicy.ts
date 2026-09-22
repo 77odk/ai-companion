@@ -65,6 +65,10 @@ export function resolveCompanionPolicy(sessionId?: string): CompanionPolicy {
   return POLICIES[resolveIdentityMode(sessionId)]
 }
 
+export function allowsEmbodiedLifeContext(mode: IdentityMode): boolean {
+  return POLICIES[mode].lifeExpressionModel === 'embodied'
+}
+
 /** 保存后由现有 profile Cloud State capture 负责上云，模型 key 等敏感字段不在此对象里。 */
 export function saveIdentityMode(sessionId: string, mode: IdentityMode): boolean {
   if (!sessionId || !isIdentityMode(mode)) return false
