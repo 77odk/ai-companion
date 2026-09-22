@@ -3152,6 +3152,54 @@
 }
 
 /* 输入区去掉“白色大容器再套输入框”的网页表单感。 */
+/* PR #99 Context 批次：composer 上方 Meter 行（3px accent 细条 + Nk/64k + 压缩/承接按钮） */
+.chat-page .context-meter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 18px 4px;
+  min-height: 16px;
+}
+.chat-page .context-meter {
+  flex: 0 1 96px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ui2-hairline, rgba(51, 43, 40, 0.1));
+  overflow: hidden;
+}
+.chat-page .context-meter-bar {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--memory-accent, var(--eluvin-warm, #d8875f));
+  transition: width 0.3s ease;
+}
+.chat-page .context-meter-text {
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ui2-text-secondary, #817773);
+  white-space: nowrap;
+}
+.chat-page .context-meter-btn {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ui2-text-secondary, #817773);
+  cursor: pointer;
+  border-bottom: 1px dashed var(--ui2-hairline, rgba(51, 43, 40, 0.1));
+}
+.chat-page .context-meter-btn:disabled,
+.chat-page .context-meter-btn[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+.chat-page .context-notice {
+  margin: 0 18px 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ui2-text-secondary, #817773);
+}
 .chat-page .composer {
   margin: 0 12px 6px;
   padding: 0;
