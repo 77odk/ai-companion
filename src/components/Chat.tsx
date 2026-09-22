@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import MessageBubble from './MessageBubble'
 import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
-import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
+import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextBridge, setContextBridge, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
 import { getAccount } from '../lib/sync'
@@ -48,7 +48,8 @@ import { buildReplyLengthInstruction, getEffectiveReplyLength, splitDetailedAssi
 import { allowsBusyState, allowsEmbodiedLifeContext, buildIdentityBoundaryRepair, resolveIdentityMode } from '../lib/companionPolicy'
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
-import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
+import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
+import { composeContext, compactHistory, COMPACT_KEEP_RECENT, COMPACT_USAGE_THRESHOLD, type ContextBlock } from '../lib/contextComposer'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -74,14 +75,26 @@ import { extractOpeningLine } from '../lib/customPersona'
 import { getMilestoneStatus, markMilestoneShown } from '../lib/milestone'
 import { getWeeklyReviews } from '../lib/weeklyReview'
 import { recordChatTopic, loadChatTopics } from '../lib/chatTopics'
-import { composeContext } from '../lib/contextComposer'
 import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
 import { processEventCandidate } from '../lib/eventDetector'
 import MilestoneCard from './MilestoneCard'
 
 
-const SendArrowIcon = () => (
-  <svg
+/**
+ * PR #99 Session Bridge：找"可承接"的旧会话 = 与当前会话同 title（同 TA）的最近一个非当前会话。
+ * 角色隔离红线：title 不同（换过 TA）绝不承接；默认标题（新会话/我们的开始）不参与匹配，
+ * 避免多个空会话误配。返回 null = 没有可承接的旧会话（UI 不显示入口）。
+ */
+function findBridgableSession(currentId: string): Session | null {
+  const list = getSessionsCache()
+  const current = list.find((s) => String(s.id) === currentId)
+  if (!current) return null
+  const title = (current.title ?? '').trim()
+  if (!title || title === '新会话' || title === '我们的开始') return null
+  return list.find((s) => String(s.id) !== currentId && (s.title ?? '').trim() === title) ?? null
+}
+
+const SendArrowIcon = () => (  <svg
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -139,6 +152,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const persona = activeSession?.persona ?? loadPersona()
   const [milestone, setMilestone] = useState<{ day: number; hit: boolean; shown: boolean } | null>(null)
   const [showMilestone, setShowMilestone] = useState(false)
+  // PR #99 Context 批次：Meter 显示最近一次发送的上下文用量（本地计算，不新增 LLM 调用）
+  const [contextMeter, setContextMeter] = useState<{ used: number; budget: number } | null>(null)
+  // Compact：每会话最多压缩一次（主动或达到阈值自动触发）；原聊天记录绝不删除
+  const [compactDone, setCompactDone] = useState(() => activeSessionId ? getContextCompactAt(activeSessionId) > 0 : false)
+  // Bridge：用户主动把"上一个同 TA 会话"的记忆承接进当前会话，最多一次
+  const [bridgeInfo, setBridgeInfo] = useState(() => activeSessionId ? getContextBridge(activeSessionId) : null)
+  const [contextNotice, setContextNotice] = useState<string | null>(null)
 
   const sessionStart = useMemo(() => getSessionStart(activeSessionId || undefined), [activeSessionId])
   const visibleMessages = useMemo(
@@ -1059,6 +1079,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       return { role: m.role, content: mark ? mark + body : body }
     })
 
+    // PR #99 Session Bridge：已承接时，把旧会话的记忆作为 memory 优先级块注入（不新增 LLM 调用）。
+    // 只承接"上一个同 TA 的会话"的记忆（同 title = 同 TA），角色隔离红线：绝不跨 TA 串记忆。
+    const bridgeBlocks: ContextBlock[] = []
+    if (activeSessionId && bridgeInfo) {
+      const fromMemories = getMemoriesCache(bridgeInfo.fromSessionId)
+      const bridgeBlock = buildMemoryBlock(fromMemories, lang)
+      if (bridgeBlock) {
+        bridgeBlocks.push({ id: 'bridge', content: bridgeBlock, priority: 'memory' })
+      }
+    }
     // 时间感知也属于最终 payload：必须和 system/history 一起受 64k 硬预算约束。
     const timeTail: ApiMessage = {
       role: 'system',
@@ -1068,7 +1098,24 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           ? '\nNote: time tags like [3 min ago] in the conversation history are system annotations, not part of any message. Never output such tags in your replies.'
           : '\n注：对话历史里 [3 分钟前]/[昨天] 这类标签是系统自动标注的，不是消息内容。你的回复里绝对不要出现这类时间标签。'),
     }
-    const composed = composeContext(apiMessages, history, [], [timeTail])
+    let composed = composeContext(apiMessages, history, bridgeBlocks, [timeTail])
+    // PR #99 Context Compact：结构性压缩 = history 只注入最近 COMPACT_KEEP_RECENT 条；
+    // 原聊天记录（缓存/后端）绝不删除。已压缩（主动或自动）→ 此后每次 send 恒用近窗；
+    // 未压缩且达到软预算阈值（usage ≥ 0.7）→ 自动压缩一次并记录（每会话最多 1 次）。
+    // 纯本地计算，不新增 LLM 调用。
+    if (activeSessionId) {
+      if (compactDone) {
+        const cut = compactHistory(history, COMPACT_KEEP_RECENT)
+        composed = composeContext(apiMessages, cut.history, bridgeBlocks, [timeTail])
+      } else if (composed.usage >= COMPACT_USAGE_THRESHOLD) {
+        const cut = compactHistory(history, COMPACT_KEEP_RECENT)
+        composed = composeContext(apiMessages, cut.history, bridgeBlocks, [timeTail])
+        setContextCompactAt(Date.now(), activeSessionId)
+        notifyDataChanged()
+        setCompactDone(true)
+      }
+    }
+    setContextMeter({ used: composed.totalTokens, budget: composed.hardBudget })
     apiMessages.splice(0, apiMessages.length, ...composed.messages)
 
     const commitFinal = (final: StoredMessage[]) => {
@@ -1281,7 +1328,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         onToken: (t) => {
           if (runId !== runIdRef.current) return
           assistantText.current += t
-          // Busy 只在沉浸档拦截流；自然 / AI 即使说“等我回来”也让流完成，再由 finalize repair。
+          // Busy 只在沉浸档拦截流；自然 / AI 即使说"等我回来"也让流完成，再由 finalize repair。
           const availability = classifyAvailability(assistantText.current)
           const liveAllowBusy = allowsBusyState(resolveIdentityMode(activeSessionId || undefined))
           if (liveAllowBusy && !busyTriggeredRef.current && availability.state === 'unavailable' && availability.owner === 'SELF') {
@@ -1332,8 +1379,31 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (injected) send(injected)
   }, [send])
 
-  const handleSend = () => {
-    const text = input
+  // PR #99 Context Compact：用户主动压缩（每会话最多 1 次；已压缩则按钮置灰）。
+  // 只记录"已压缩"，此后 send 恒用近窗注入；原聊天记录不删。
+  const handleCompact = () => {
+    if (!activeSessionId || compactDone) return
+    const uiLang = getSessionLang(activeSessionId)
+    setContextCompactAt(Date.now(), activeSessionId)
+    notifyDataChanged()
+    setCompactDone(true)
+    setContextNotice(uiLang === 'en' ? 'Longer history folded to the recent window.' : '已把更早的对话折叠成近窗。')
+  }
+
+  // PR #99 Session Bridge：用户主动承接旧会话记忆（每会话最多 1 次）。
+  // 只承接同 title（同 TA）旧会话的记忆，角色隔离红线不变；原记录不删。
+  const handleBridge = () => {
+    if (!activeSessionId || bridgeInfo) return
+    const uiLang = getSessionLang(activeSessionId)
+    const source = findBridgableSession(activeSessionId)
+    if (!source) return
+    setContextBridge(activeSessionId, String(source.id))
+    notifyDataChanged()
+    setBridgeInfo({ fromSessionId: String(source.id), bridgedAt: Date.now() })
+    setContextNotice(uiLang === 'en' ? 'Brought back the memories TA kept from before.' : '已把 TA 之前的记忆带回来了。')
+  }
+
+  const handleSend = () => {    const text = input
     if (!text.trim() || streaming) return
     send(text)
     // 移动端连续聊天：发送后保持 textarea 焦点，让软键盘像微信一样继续留在屏幕上。
@@ -1428,6 +1498,32 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         </div>
       )}
 
+      {activeSessionId && (
+        <div className="context-meter-row">
+          <div className="context-meter" aria-hidden="true">
+            <div
+              className="context-meter-bar"
+              style={{ width: contextMeter ? `${Math.min(100, Math.round((contextMeter.used / contextMeter.budget) * 100))}%` : '0%' }}
+            />
+          </div>
+          <span className="context-meter-text">
+            {contextMeter ? `${Math.max(1, Math.round(contextMeter.used / 1024))}k / ${Math.round(contextMeter.budget / 1024)}k` : '—'}
+          </span>
+          {!compactDone && (
+            <button type="button" className="context-meter-btn" onClick={handleCompact} aria-label="压缩上下文">
+              压缩
+            </button>
+          )}
+          {!bridgeInfo && findBridgableSession(activeSessionId) && (
+            <button type="button" className="context-meter-btn" onClick={handleBridge} aria-label="承接旧记忆">
+              承接
+            </button>
+          )}
+        </div>
+      )}
+      {contextNotice && (
+        <div className="context-notice" role="status">{contextNotice}</div>
+      )}
       <div className="composer">
         <textarea
           ref={inputRef}
