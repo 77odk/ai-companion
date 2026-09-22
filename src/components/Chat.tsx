@@ -45,7 +45,7 @@ import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTa
 import { buildIdentityContext } from '../lib/identityContext'
 import { dropRepeatedReplies } from '../lib/replyDedupe'
 import { buildReplyLengthInstruction, getEffectiveReplyLength, splitDetailedAssistantReply } from '../lib/replyLength'
-import { resolveIdentityMode } from '../lib/companionPolicy'
+import { allowsEmbodiedLifeContext, resolveIdentityMode } from '../lib/companionPolicy'
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 
@@ -962,10 +962,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         })
       }
     }
-    // TA 最近发过的动态注入：让 TA 知道自己的空间历史，被问"你发过…"时有真凭据（TASK-SPACE-CHAT）
-    const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 5, lang)
-    if (spaceBlock) {
-      apiMessages.push({ role: 'system', content: spaceBlock })
+    // 现实生活型上下文只属于「沉浸」。
+    // 自然 / AI 本体已经由 Identity Soul + Runtime 走非身体化表达，不能再把旧 Space 里的现实生活片段倒灌回来。
+    const allowEmbodiedLife = allowsEmbodiedLifeContext(resolveIdentityMode(activeSessionId || undefined))
+    if (allowEmbodiedLife) {
+      const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 5, lang)
+      if (spaceBlock) {
+        apiMessages.push({ role: 'system', content: spaceBlock })
+      }
     }
     // 未来约定注入（因果链第二环 TASK-FUTURE-AGENDA）：TA 记得「约好还没做的事」，
     // 对方问起/到期临近时能自然接，不会一问三不知；没约定返回空串跳过，不占上下文。
@@ -973,8 +977,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (agendaBlock) {
       apiMessages.push({ role: 'system', content: agendaBlock })
     }
-    // 生活基线：人设没写生活信息时补中性事实锚，让 TA 说"在洗碗/翻书"有根（TASK-SPACE-CHAT）
-    if (!personaHasLifeAnchors(persona)) {
+    // 生活基线会补身体 / 居住 / 饮食等现实锚，只能给沉浸档。
+    if (allowEmbodiedLife && !personaHasLifeAnchors(persona)) {
       apiMessages.push({ role: 'system', content: lang === 'en' ? LIFE_BASELINE_EN : LIFE_BASELINE })
     }
     // 【你的时刻】分享钩子（TASK-YOUR-MOMENT）：低频给 TA 此刻的生活画面，让"自己有日子在过"落地成画面，
@@ -984,7 +988,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       .filter((m) => m.role === 'user')
       .slice(-3)
       .map((m) => m.content)
-    if (shouldInjectYourMoment(recentUserTexts, lang)) {
+    if (allowEmbodiedLife && shouldInjectYourMoment(recentUserTexts, lang)) {
       const momentBlock = buildYourMomentBlock(persona, new Date(), lang)
       if (momentBlock) {
         apiMessages.push({
