@@ -1444,3 +1444,51 @@ test('PROFILE-ID-2: legacy cloud profile missing identityMode is repaired at the
   assert.equal(ops[0].baseVersion, 3, '补回旧客户端缺失字段时直接基于刚 pull 的 canonical version')
   assert.equal(ops[0].payload.identityMode, 'ai')
 })
+
+
+test('PROFILE-ID-3: pending profile tombstone survives a pull and is rebased instead of resurrected', async () => {
+  clearState('identity-tombstone')
+  resources.initCloudStateResourceAdapters()
+  store.setSessionsCache([{ id: 'A', title: 'TA', persona: '' }])
+  localStorage.setItem('ai_companion_ai_profile_A', JSON.stringify({
+    nickname: '本地名', avatar: '', identityMode: 'immersive',
+  }))
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+
+  // 刚切了身份档（pending 编辑还没上传），紧接着删掉这个角色
+  assert.equal(companionPolicy.saveIdentityMode('A', 'natural'), true)
+  storage.clearAIProfile('A')   // 产品删角色的真实路径：清资料 key → notifyDataChanged → 入队墓碑
+  let ops = cloudOps('profile')
+  assert.equal(ops.length, 2, '一条未上传编辑 + 一条墓碑')
+  assert.equal(ops[0].deleted, undefined)
+  assert.equal(ops[1].deleted, true)
+
+  // 下一次 pull 带回更老的云端 canonical profile
+  globalThis.fetch = async () => jsonResponse(pullBody(7, [{
+    kind: 'profile',
+    entityId: 'A',
+    sessionId: 'A',
+    version: 7,
+    payload: { nickname: '旧云名', avatar: '', identityMode: 'immersive' },
+  }]))
+  await cloud.pullCloudState()
+
+  assert.equal(localStorage.getItem('ai_companion_ai_profile_A'), null, '已删除的资料不被 pull 复活')
+  ops = cloudOps('profile')
+  assert.equal(ops.length, 1, '只剩一条重基后的墓碑，旧编辑被丢弃')
+  assert.equal(ops[0].deleted, true, '删除意图保留')
+  assert.equal(ops[0].baseVersion, 7, '墓碑重基到刚 pull 的 canonical version')
+  assert.equal(ops[0].payload, undefined, '墓碑不带 payload，绝不排非删除的覆盖 op')
+
+  // push 真的把删除送出去
+  let sentProfileOps = null
+  globalThis.fetch = async (_url, init) => {
+    sentProfileOps = JSON.parse(init.body).ops.filter((op) => op.kind === 'profile')
+    return jsonResponse({ results: sentProfileOps.map((op) => ({ opId: op.opId, status: 'applied', version: 8 })) })
+  }
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(sentProfileOps.length, 1)
+  assert.equal(sentProfileOps[0].deleted, true, '推送的是删除而不是资料覆盖')
+  assert.equal(sentProfileOps[0].baseVersion, 7)
+  assert.equal(cloudOps('profile').length, 0)
+})

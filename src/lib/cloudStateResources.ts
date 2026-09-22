@@ -655,21 +655,21 @@ function pendingProfileOps(entity: CloudStateEntity): CloudStatePendingOp[] {
   )
 }
 
-function latestPendingProfile(entity: CloudStateEntity): SyncedAIProfile | null {
+/** 该实体最新一条 pending op（队尾 = 最新）。删除意图与编辑一视同仁，不往后翻找更旧的编辑。 */
+function newestPendingProfileOp(entity: CloudStateEntity): CloudStatePendingOp | null {
   const ops = pendingProfileOps(entity)
-  for (let index = ops.length - 1; index >= 0; index--) {
-    if (ops[index].deleted) continue
-    const value = validAiProfile(ops[index].payload)
-    if (value) return value
-  }
-  return null
+  return ops.length ? ops[ops.length - 1] : null
+}
+
+function dropPendingProfileOps(entity: CloudStateEntity): void {
+  for (const op of pendingProfileOps(entity)) removePendingOp(op.id)
 }
 
 function replacePendingProfileWithRebasedValue(
   entity: CloudStateEntity,
   profile: SyncedAIProfile,
 ): void {
-  for (const op of pendingProfileOps(entity)) removePendingOp(op.id)
+  dropPendingProfileOps(entity)
   queue(
     'profile',
     entity.entityId,
@@ -681,12 +681,36 @@ function replacePendingProfileWithRebasedValue(
   )
 }
 
+/** 最新 pending 是墓碑（角色已删）：只把墓碑重基到刚 pull 的 canonical version，绝不改成本地覆盖。 */
+function rebasePendingProfileTombstone(entity: CloudStateEntity): void {
+  dropPendingProfileOps(entity)
+  queue(
+    'profile',
+    entity.entityId,
+    undefined,
+    true,
+    entity.entityId === GLOBAL ? undefined : entity.entityId,
+    undefined,
+    entity.version,
+  )
+}
+
 function applyAiProfileEntity(entity: CloudStateEntity): void {
   if (!entity.entityId) return
   const value = validAiProfile(entity.payload)
   if (!value) return
   const key = aiProfileStorageKey(entity.entityId)
-  const pending = latestPendingProfile(entity)
+  const newest = newestPendingProfileOp(entity)
+
+  // 最新一条 pending 是墓碑（角色刚被删）时，删除意图优先：绝不写回本机资料、也不排非删除 op，
+  // 只把墓碑重基到刚 pull 的 version。否则旧 baseVersion 的删除会被后续 conflict 掉，
+  // 已删除角色的资料会在云端与本机一起复活。
+  if (newest?.deleted) {
+    rebasePendingProfileTombstone(entity)
+    return
+  }
+
+  const pending = newest ? validAiProfile(newest.payload) : null
   let merged = mergeProfileIdentityField(localStorage.getItem(key), value)
 
   // pull 总是在 push 之前：本机刚改完 profile（包括身份模式）但 pending 还没上传时，
