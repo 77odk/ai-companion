@@ -158,7 +158,7 @@ assert.equal(looksEmbodiedSelfClaim('如果我有身体，可能会想出去散�
 assert.equal(looksEmbodiedSelfClaim('如果你累了就休息，我刚下班回家。', 'natural'), true, '条件前缀不能豁免后半句真实 SELF 越界')
 assert.equal(looksEmbodiedSelfClaim('I just got home from work.', 'natural'), true)
 assert.equal(looksEmbodiedSelfClaim('I hear you. I just got home.', 'natural'), true, '英文句号切分后，后句明确 SELF 越界仍要识别')
-assert.equal(looksEmbodiedSelfClaim("I'm glad you're eating dinner.", 'natural'), false, 'USER 的 physical predicate 不能因 I'm 共现而误判')
+assert.equal(looksEmbodiedSelfClaim("I'm glad you're eating dinner.", 'natural'), false, 'USER 的 physical predicate 不能因 I-am 共现而误判')
 assert.equal(looksEmbodiedSelfClaim('I would tell you more, but I just got home from work.', 'ai'), true, 'hypothetical preamble cannot hide later SELF claim')
 assert.equal(looksEmbodiedSelfClaim('I was still thinking about what you said earlier.', 'natural'), false)
 assert.equal(looksEmbodiedSelfClaim('我刚洗完澡。', 'natural'), true, '常见完成体也要识别')
