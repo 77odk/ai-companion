@@ -119,6 +119,11 @@ assert.match(cloudSource, /registerCloudStateAdapter\('context_bridge'/, 'contex
 assert.match(cloudSource, /compactedAt: rec\.ts/, 'compact 标记随现有 Cloud State 同步')
 assert.match(cloudSource, /summary: getContextCompactSummary/, 'compact 摘要随 Cloud State 同步')
 assert.match(cloudSource, /fromSessionId: rec\.fromSessionId/, 'bridge 记录随现有 Cloud State 同步')
+// 跨设备恢复：云端首次恢复仍有效的 bridge 时恢复参与轮数（否则另一设备同步后永不注入）
+assert.match(cloudSource, /setContextBridge\(sessionId, fromSessionId, cloudContent, BRIDGE_ACTIVE_TURNS\)/, '云端恢复 bridge 恢复 BRIDGE_ACTIVE_TURNS 轮次')
+// 旧格式（无 content）的 bridge 不能被重新激活：空摘要只恢复记录，turnsLeft=0 → 不注入
+assert.match(cloudSource, /if \(!cloudContent\) \{/, '旧格式无 content 的 bridge 走不激活分支')
+assert.match(cloudSource, /setContextBridge\(sessionId, fromSessionId, ''\)/, '空 content 恢复记录但不激活')
 // 原聊天记录零删除：Chat 不新增删除类调用
 assert.ok(!chatSource.includes('clearMessagesCache'), 'Chat 不清理消息缓存')
 assert.ok(!chatSource.includes('deleteMessage'), 'Chat 不删除消息')
