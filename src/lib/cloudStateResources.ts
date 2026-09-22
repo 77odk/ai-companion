@@ -9,7 +9,7 @@ import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE, notifyDataChanged } from './dat
 import { getAccount } from './sync.ts'
 import { collectAllAIProfiles, getSessionStart, setSessionStart } from './storage.ts'
 import { isIdentityMode, mergeProfileIdentityField, type IdentityMode } from './companionPolicy.ts'
-import { getSessionsCache } from './sessionStore.ts'
+import { getPendingOps, getSessionsCache, removePendingOp, type CloudStatePendingOp } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
 import { applyGlobalReplyLengthFromCloud, applyReplyLengthPreferenceFromCloud, collectStoredReplyLengthPreferences, deleteGlobalReplyLengthFromCloud, deleteReplyLengthOverrideFromCloud, getStoredGlobalReplyLength, type ReplyLength } from './replyLength.ts'
 import { applySpacePostFromCloud, deleteSpacePostFromCloud } from './aiSpace.ts'
@@ -643,17 +643,91 @@ function captureAiProfiles(): void {
   profileSnapshot = next
 }
 
+function pendingProfileOps(entity: CloudStateEntity): CloudStatePendingOp[] {
+  const accountId = getAccount()?.account.trim() ?? ''
+  const sessionId = entity.entityId === GLOBAL ? undefined : entity.entityId
+  return getPendingOps().filter((op): op is CloudStatePendingOp =>
+    op.type === 'cloud-state' &&
+    op.kind === 'profile' &&
+    op.entityId === entity.entityId &&
+    (op.sessionId || undefined) === sessionId &&
+    (!op.accountId || op.accountId === accountId),
+  )
+}
+
+/** 该实体最新一条 pending op（队尾 = 最新）。删除意图与编辑一视同仁，不往后翻找更旧的编辑。 */
+function newestPendingProfileOp(entity: CloudStateEntity): CloudStatePendingOp | null {
+  const ops = pendingProfileOps(entity)
+  return ops.length ? ops[ops.length - 1] : null
+}
+
+function dropPendingProfileOps(entity: CloudStateEntity): void {
+  for (const op of pendingProfileOps(entity)) removePendingOp(op.id)
+}
+
+function replacePendingProfileWithRebasedValue(
+  entity: CloudStateEntity,
+  profile: SyncedAIProfile,
+): void {
+  dropPendingProfileOps(entity)
+  queue(
+    'profile',
+    entity.entityId,
+    profile,
+    false,
+    entity.entityId === GLOBAL ? undefined : entity.entityId,
+    undefined,
+    entity.version,
+  )
+}
+
+/** 最新 pending 是墓碑（角色已删）：只把墓碑重基到刚 pull 的 canonical version，绝不改成本地覆盖。 */
+function rebasePendingProfileTombstone(entity: CloudStateEntity): void {
+  dropPendingProfileOps(entity)
+  queue(
+    'profile',
+    entity.entityId,
+    undefined,
+    true,
+    entity.entityId === GLOBAL ? undefined : entity.entityId,
+    undefined,
+    entity.version,
+  )
+}
+
 function applyAiProfileEntity(entity: CloudStateEntity): void {
   if (!entity.entityId) return
   const value = validAiProfile(entity.payload)
   if (!value) return
   const key = aiProfileStorageKey(entity.entityId)
-  const merged = mergeProfileIdentityField(localStorage.getItem(key), value)
+  const newest = newestPendingProfileOp(entity)
+
+  // 最新一条 pending 是墓碑（角色刚被删）时，删除意图优先：绝不写回本机资料、也不排非删除 op，
+  // 只把墓碑重基到刚 pull 的 version。否则旧 baseVersion 的删除会被后续 conflict 掉，
+  // 已删除角色的资料会在云端与本机一起复活。
+  if (newest?.deleted) {
+    rebasePendingProfileTombstone(entity)
+    return
+  }
+
+  const pending = newest ? validAiProfile(newest.payload) : null
+  let merged = mergeProfileIdentityField(localStorage.getItem(key), value)
+
+  // pull 总是在 push 之前：本机刚改完 profile（包括身份模式）但 pending 还没上传时，
+  // 旧云端 canonical 不能先把这次本地明确修改盖掉。保留最新 pending 的业务字段，
+  // 再把同一实体重基到刚 pull 到的 version；这样刷新不会把 natural/AI 本体打回沉浸，
+  // 同时也不会误丢与身份切换一起发生的昵称/头像本地修改。
+  if (pending) merged = { ...merged, ...pending }
+
   localStorage.setItem(key, JSON.stringify(merged))
   const mergedValue = validAiProfile(merged)
-  profileSnapshot.set(entity.entityId, value)
-  // 旧客户端若把缺字段的 profile 推上云，本机有明确选择时立即用同一实体补回，避免继续扩散。
-  if (!value.identityMode && mergedValue?.identityMode) captureAiProfiles()
+  if (!mergedValue) return
+  profileSnapshot.set(entity.entityId, mergedValue)
+
+  const profileNeedsRepair = JSON.stringify(mergedValue) !== JSON.stringify(value)
+  if (profileNeedsRepair) {
+    replacePendingProfileWithRebasedValue(entity, mergedValue)
+  }
 }
 
 function deleteAiProfileEntity(entity: CloudStateEntity): void {

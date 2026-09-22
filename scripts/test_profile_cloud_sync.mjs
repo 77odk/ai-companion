@@ -68,7 +68,9 @@ check('apply 写该角色自己的 key',
   src.includes('const key = aiProfileStorageKey(entity.entityId)') &&
   src.includes('localStorage.setItem(key, JSON.stringify(merged))'))
 check('旧客户端缺身份字段时保留本机选择', src.includes('mergeProfileIdentityField(localStorage.getItem(key), value)'))
-check('本机有明确选择时补回云端字段', src.includes('if (!value.identityMode && mergedValue?.identityMode) captureAiProfiles()'))
+check('本机有明确选择时补回云端字段',
+  src.includes('const profileNeedsRepair = JSON.stringify(mergedValue) !== JSON.stringify(value)') &&
+  src.includes('replacePendingProfileWithRebasedValue(entity, mergedValue)'))
 check('delete 只删该角色那份', src.includes('localStorage.removeItem(aiProfileStorageKey(entity.entityId))'))
 check('会话实体带 session 作用域', /queue\('profile', entityId, value, false, entityId === GLOBAL \? undefined : entityId\)/.test(src))
 check('只认 data: 开头的头像（防脏值）', src.includes("startsWith('data:')"))
