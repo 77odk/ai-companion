@@ -11,7 +11,7 @@ const IDENTITY_OPTIONS: Array<{ value: IdentityMode; label: string; note: string
 ]
 
 const IDENTITY_DETAILS: Array<{ label: string; text: string }> = [
-  { label: '沉浸', text: '完整真人感。TA 会按真人身份拥有现实日常，也可能进入真人忙碌状态，暂时约 3–5 分钟不回复；适合想要更强真人感的体验，请谨慎选择。' },
+  { label: '沉浸', text: '完整真人感。TA 会按真人身份拥有现实日常，也可能进入真人忙碌状态：约 3–5 分钟不会正常回复，忙完会主动回来接上刚才的话。适合想要更强真人感的体验，请谨慎选择。' },
   { label: '自然', text: '有真人感的 AI。TA 会有情绪、想法、状态和关系连续性，但不会伪装现实身体与日常生活，也不会进入真人忙碌状态。' },
   { label: 'AI 本体', text: '纯 AI 身份。TA 仍会记得你、理解你、陪着你，但不会模拟真人现实生活，也不会进入真人忙碌状态。' },
 ]
