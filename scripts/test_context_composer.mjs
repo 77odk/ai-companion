@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { composeContext, CONTEXT_HARD_BUDGET, buildCompactedHistory, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_TAIL_COUNT } from '../src/lib/contextComposer.ts'
+import { composeContext, CONTEXT_HARD_BUDGET, COMPACT_INPUT_BUDGET, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_TAIL_COUNT } from '../src/lib/contextComposer.ts'
 import { estimateToken } from '../src/lib/token.ts'
 
 const core = [{ role: 'system', content: 'core persona' }]
@@ -12,6 +12,11 @@ assert.ok(result.totalTokens <= 500, 'final payload must stay inside supplied ha
 assert.deepEqual(result.messages[0], core[0], 'core must stay first')
 assert.deepEqual(result.messages.at(-1), tail[0], 'time tail must stay last and count inside budget')
 assert.equal(result.totalTokens, result.messages.reduce((sum, m) => sum + estimateToken(m.content), 0))
+assert.equal(result.overBudget, false, 'normal payload is not over budget')
+
+const hugeNewest = composeContext(core, [{ role: 'user', content: '超'.repeat(2000) }], [], tail, 500)
+assert.equal(hugeNewest.overBudget, true, 'single oversized newest message must be rejected instead of breaking hard cap')
+assert.ok(hugeNewest.totalTokens <= 500, 'over-budget marker must still keep composed payload under hard cap')
 
 const blocks = composeContext(core, [], [
   { id: 'ambient', content: 'ambient', priority: 'ambient' },
@@ -39,6 +44,8 @@ assert.equal(short.length, 6, '不足近窗也保留 summary + 全部原消息')
 assert.equal(buildCompactedHistory('', longHistory, COMPACT_KEEP_RECENT).length, COMPACT_KEEP_RECENT, 'summary 为空退回最近原始消息')
 assert.deepEqual(buildCompactedHistory('摘要', []), [], '空 history 返回空')
 assert.ok(!buildCompactedHistory('摘要', longHistory).some((m) => m.content === 'msg-0'), '较老消息不直接注入（被摘要替代）')
+const compactInput = buildCompactSource(Array.from({ length: 200 }, () => ({ role: 'user', content: '较老历史 '.repeat(1000) })))
+assert.ok(compactInput.reduce((sum, m) => sum + estimateToken(m.content), 0) <= COMPACT_INPUT_BUDGET, 'Compact 单次模型输入受安全预算限制')
 
 // ── PR #99：Bridge 常量 + 块可被 composer 纳入（memory 优先级）──
 console.log('\n[bridge] evidence-only bridge 块注入')
@@ -75,12 +82,13 @@ setContextCompactAt(0, 'S1')
 assert.equal(getContextCompactAt('S1'), 0, 'ts=0 清除')
 setContextCompactAt(111, 'S1')
 assert.equal(getContextBridge('S1'), null, '未承接返回 null')
-setContextBridge('S1', 'S0', '交接摘要', 8)
+setContextBridge('S1', 'S0', '交接摘要', 8, 777)
 const bridgedState = getContextBridge('S1')
 assert.ok(bridgedState, '承接状态可回读')
 assert.equal(bridgedState.fromSessionId, 'S0', '承接来源正确')
 assert.equal(bridgedState.content, '交接摘要', 'bridge 摘要可回读')
 assert.equal(bridgedState.turnsLeft, 8, '初始参与轮数 = 8')
+assert.equal(bridgedState.bridgedAt, 777, 'Bridge 可保留 canonical bridgedAt')
 setContextBridgeTurns('S1', 4)
 assert.equal(getContextBridge('S1')?.turnsLeft, 4, '轮数可递减回读')
 assert.equal(getContextBridge('S1')?.fromSessionId, 'S0', '递减不改承接来源')
@@ -92,9 +100,11 @@ assert.equal(getContextBridge('S1'), null, '清除后返回 null')
 console.log('\n[contract] Chat 与 Cloud State 接入契约')
 const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
 const cloudSource = readFileSync(new URL('../src/lib/cloudStateResources.ts', import.meta.url), 'utf8')
+const syncSource = readFileSync(new URL('../src/lib/sync.ts', import.meta.url), 'utf8')
 // Meter：只展示最近一次发送的用量，不新增 LLM
 assert.match(chatSource, /context-meter-row/, 'Meter 行渲染')
 assert.match(chatSource, /setContextMeter\(\{ used: composed\.totalTokens, budget: composed\.hardBudget \}\)/, 'Meter 数据来自 composer 实际结果')
+assert.match(chatSource, /if \(composed\.overBudget\)/, '超过 64k 时在 provider 调用前停止')
 // Compact：用户主动触发 + 1 次模型生成 summary + summary/recent raw 注入 + 不删原记录
 assert.match(chatSource, /buildCompactedHistory\(compactSummary, history, COMPACT_KEEP_RECENT\)/, '已压缩后注入 = summary + 最近原始消息')
 assert.match(chatSource, /setContextCompactSummary\(trimmed, activeSessionId\)/, '模型生成的摘要持久化')
@@ -104,8 +114,9 @@ assert.ok(!chatSource.includes('composed.usage >= COMPACT_USAGE_THRESHOLD'), '�
 assert.ok(!chatSource.includes('compactHistory('), '已删除 slice 裁剪式压缩')
 assert.ok(!chatSource.includes('saveMessagesCache(sessionId'), 'Chat 不因 compact 改动消息缓存')
 // Bridge：承接 = 上一会话有限聊天尾部 + 1 次模型生成 evidence-only bridge；不再注入旧会话 Memory
-assert.match(chatSource, /findBridgableSession\(activeSessionId\)/, '主动承接入口存在')
-assert.match(chatSource, /\(s\.title \?\? ''\)\.trim\(\) === title/, '承接只匹配同 title（同 TA），不跨角色')
+assert.match(chatSource, /findBridgableSession\(activeSessionId\)/, '承接入口仍由同一守卫控制')
+assert.match(chatSource, /function findBridgableSession\(_currentId: string\): Session \| null \{\s*return null\s*\}/, '没有稳定 roleId 时 Bridge fail closed')
+assert.ok(!chatSource.includes("(s.title ?? '').trim() === title"), '禁止用可编辑 title 猜角色身份')
 assert.match(chatSource, /bridgeInfo \|\| streaming \|\| contextBusy\) return/, '已承接后不再重复（每会话最多 1 次）')
 assert.match(chatSource, /getMessagesCache\(String\(source\.id\)\)\.slice\(-BRIDGE_TAIL_COUNT\)/, '承接只取上一会话有限聊天尾部')
 assert.match(chatSource, /const content = await chatCompletion\(/, '承接最多 1 次模型调用（主动）')
@@ -113,17 +124,13 @@ assert.match(chatSource, /setContextBridge\(activeSessionId, String\(source\.id\
 assert.match(chatSource, /bridgeInfo\.content\.trim\(\)/, 'bridge 以摘要内容注入，不读旧会话记忆')
 assert.ok(!chatSource.includes('getMemoriesCache(bridgeInfo.fromSessionId)'), '已删除"注入旧会话全部 Memory"行为')
 assert.match(chatSource, /bridgeInfo\.turnsLeft - 1/, 'bridge 每轮递减，临时参与后退出')
-// Cloud State：两个新 kind 注册（上云，不是只在本机），payload 带新语义字段
-assert.match(cloudSource, /registerCloudStateAdapter\('context_compact'/, 'context_compact 注册 Cloud State')
-assert.match(cloudSource, /registerCloudStateAdapter\('context_bridge'/, 'context_bridge 注册 Cloud State')
-assert.match(cloudSource, /compactedAt: rec\.ts/, 'compact 标记随现有 Cloud State 同步')
-assert.match(cloudSource, /summary: getContextCompactSummary/, 'compact 摘要随 Cloud State 同步')
-assert.match(cloudSource, /fromSessionId: rec\.fromSessionId/, 'bridge 记录随现有 Cloud State 同步')
-// 跨设备恢复：云端首次恢复仍有效的 bridge 时恢复参与轮数（否则另一设备同步后永不注入）
-assert.match(cloudSource, /setContextBridge\(sessionId, fromSessionId, cloudContent, BRIDGE_ACTIVE_TURNS\)/, '云端恢复 bridge 恢复 BRIDGE_ACTIVE_TURNS 轮次')
-// 旧格式（无 content）的 bridge 不能被重新激活：空摘要只恢复记录，turnsLeft=0 → 不注入
-assert.match(cloudSource, /if \(!cloudContent\) \{/, '旧格式无 content 的 bridge 走不激活分支')
-assert.match(cloudSource, /setContextBridge\(sessionId, fromSessionId, ''\)/, '空 content 恢复记录但不激活')
+// 同步：Context 只并入既有 /api/sync 全量 blob，不注册第二套 /api/state kind
+assert.match(syncSource, /contextCompacts: collectAllContextCompacts\(\)/, 'compact 进入 collectData 全量 blob')
+assert.match(syncSource, /contextBridges: collectAllContextBridges\(\)/, 'bridge 进入 collectData 全量 blob')
+assert.match(syncSource, /applyCloudContextCompacts\(d\.contextCompacts\)/, 'compact 从全量 blob 恢复')
+assert.match(syncSource, /applyCloudContextBridges\(d\.contextBridges\)/, 'bridge 从全量 blob 恢复')
+assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_compact'"), '不再注册 context_compact /api/state adapter')
+assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_bridge'"), '不再注册 context_bridge /api/state adapter')
 // 原聊天记录零删除：Chat 不新增删除类调用
 assert.ok(!chatSource.includes('clearMessagesCache'), 'Chat 不清理消息缓存')
 assert.ok(!chatSource.includes('deleteMessage'), 'Chat 不删除消息')
