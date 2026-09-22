@@ -5,10 +5,14 @@ import { isActiveConfig, loadSavedConfigs, type SavedConfig } from '../lib/saved
 import { loadSettings, saveModelHistory, saveSettings } from '../lib/storage'
 
 const IDENTITY_OPTIONS: Array<{ value: IdentityMode; label: string; note: string }> = [
-  { value: 'immersive', label: '沉浸', note: 'TA 始终以真人身份相处' },
-  { value: 'natural', label: '自然', note: '被问起时自然承认 AI 身份' },
-  { value: 'ai', label: 'AI', note: '明确以 AI 身份陪伴' },
+  { value: 'immersive', label: '沉浸', note: '更完整的真人感。TA 会拥有自己的日常、状态和生活轨迹。' },
+  { value: 'natural', label: '自然', note: '在 AI 与真人感之间保持平衡，不会把生活感演得太满。' },
+  { value: 'ai', label: 'AI 本体', note: '保留 AI 的真实身份，不假装拥有现实中的身体和日常生活。' },
 ]
+
+function identityDisplayLabel(mode: IdentityMode): string {
+  return mode === 'ai' ? 'AI 本体' : identityModeLabel(mode)
+}
 
 function shortModelLabel(configs: SavedConfig[]): string {
   const current = loadSettings()
@@ -71,10 +75,13 @@ export default function ChatCompanionControls({ sessionId }: { sessionId: string
           onClick={() => setOpen((value) => value === 'identity' ? null : 'identity')}
         >
           <span className="chat-control-dot" aria-hidden="true" />
-          {identityModeLabel(identityMode)}
+          沉浸感 · {identityDisplayLabel(identityMode)}
         </button>
         {open === 'identity' && (
           <div className="chat-control-menu chat-identity-menu" role="menu">
+            <p className="chat-control-help">
+              决定 TA 在对话和空间里呈现多少现实生活感，不影响 TA 对你的记忆、关系和性格。
+            </p>
             {IDENTITY_OPTIONS.map((option) => (
               <button
                 key={option.value}
