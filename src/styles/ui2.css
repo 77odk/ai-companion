@@ -176,6 +176,10 @@
    这里由 Chat 页面自己承担：只留合理 bottom spacing + env(safe-area-inset-bottom)，
    不保留原 Nav 56px 空白；键盘打开时 safe-area 归零，输入框仍可见。 */
 .chat-page {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.chat-shell-with-controls > .chat-page {
   padding-bottom: 0;
 }
 
