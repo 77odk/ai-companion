@@ -33,10 +33,13 @@ for (const [input, state] of cases) {
   })
 }
 
-test('Chat streaming and finalize use the same unavailable + SELF policy', () => {
+test('Chat gates Busy by identity mode and repairs unavailable claims outside immersive', () => {
   const source = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
-  assert.equal((source.match(/classifyAvailability\(/g) ?? []).length, 2)
-  assert.equal((source.match(/availability\.state === 'unavailable' && availability\.owner === 'SELF'/g) ?? []).length, 2)
+  assert.match(source, /const allowBusy = allowsBusyState\(identityMode\)/)
+  assert.equal((source.match(/allowBusy && !busyTriggeredRef\.current/g) ?? []).length, 2)
+  assert.match(source, /const unavailableIdentityProblem = Boolean\(/)
+  assert.match(source, /!allowBusy && cleanedAvailability\?\.state === 'unavailable'/)
+  assert.match(source, /!allowBusy && retryAvailability\?\.state === 'unavailable'/)
   assert.doesNotMatch(source, /containsBusyKeyword/)
 })
 
