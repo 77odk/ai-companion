@@ -74,13 +74,11 @@ import { extractOpeningLine } from '../lib/customPersona'
 import { getMilestoneStatus, markMilestoneShown } from '../lib/milestone'
 import { getWeeklyReviews } from '../lib/weeklyReview'
 import { recordChatTopic, loadChatTopics } from '../lib/chatTopics'
-import { estimateToken, truncateByToken } from '../lib/token'
+import { composeContext } from '../lib/contextComposer'
 import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
 import { processEventCandidate } from '../lib/eventDetector'
 import MilestoneCard from './MilestoneCard'
 
-/** 总输入 token 预算：系统提示词+记忆注入+历史消息合计不超过此值 */
-const TOTAL_INPUT_BUDGET = 64000
 
 const SendArrowIcon = () => (
   <svg
@@ -1052,34 +1050,26 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
     }
 
-    // 按总 token 预算动态截断：系统消息占多少，剩下的全给历史消息
-    const systemTokens = apiMessages.reduce((sum, m) => sum + estimateToken(m.content), 0)
-    const historyBudget = Math.max(0, TOTAL_INPUT_BUDGET - systemTokens)
-    const history: ApiMessage[] = truncateByToken(
-      base.map((m) => {
-        const body =
-          m.role === 'assistant'
-            ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), lang), lang)
-            : m.content
-        // 时间流逝标记（只注入不改存储）：让 TA 感知每条消息隔了多久
-        const mark = msgTimeMark(m.ts, lang)
-        return { role: m.role, content: mark ? mark + body : body }
-      }),
-      historyBudget,
-    )
-    apiMessages.push(...history)
+    const history: ApiMessage[] = base.map((m) => {
+      const body =
+        m.role === 'assistant'
+          ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), lang), lang)
+          : m.content
+      const mark = msgTimeMark(m.ts, lang)
+      return { role: m.role, content: mark ? mark + body : body }
+    })
 
-    // 时间感知（2026-09-05 夜 乔修）：系统提示词开头的时间会被长历史冲淡，部分模型（官方 deepseek 正文/doi 套壳）
-    // 生成回复时不看开头。在历史末尾（紧贴要回应的上文）再注入一条此刻时间——数据注入不是设定，所有模型统一可见。
-    // 追加防学样说明：历史消息里的 [x分钟前/x小时前/昨天] 标签是系统标注，模型回复严禁输出同类标签（2026-09-05 夜二修：TA 把标签学走了）
-    apiMessages.push({
+    // 时间感知也属于最终 payload：必须和 system/history 一起受 64k 硬预算约束。
+    const timeTail: ApiMessage = {
       role: 'system',
       content:
         buildTimeContext(Date.now(), lang) +
         (lang === 'en'
           ? '\nNote: time tags like [3 min ago] in the conversation history are system annotations, not part of any message. Never output such tags in your replies.'
           : '\n注：对话历史里 [3 分钟前]/[昨天] 这类标签是系统自动标注的，不是消息内容。你的回复里绝对不要出现这类时间标签。'),
-    })
+    }
+    const composed = composeContext(apiMessages, history, [], [timeTail])
+    apiMessages.splice(0, apiMessages.length, ...composed.messages)
 
     const commitFinal = (final: StoredMessage[]) => {
       persistMessages(final)
