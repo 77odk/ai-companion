@@ -147,23 +147,59 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const persona = activeSession?.persona ?? loadPersona()
   const [milestone, setMilestone] = useState<{ day: number; hit: boolean; shown: boolean } | null>(null)
   const [showMilestone, setShowMilestone] = useState(false)
+  // 刷新对话只推进当前 session 的上下文分界线；历史仍完整保留。
+  const sessionStart = getSessionStart(activeSessionId || undefined)
   // PR #99 Context 批次：Meter 显示最近一次发送的上下文用量（本地计算，不新增 LLM 调用）
   const [contextMeter, setContextMeter] = useState<{ used: number; budget: number } | null>(null)
   // Compact：用户主动「压缩」→ 最多 1 次模型调用，把较老历史压成 summary；之后注入 = summary + recent raw。
   // 每会话最多压缩 1 次；原聊天记录绝不删除。summary 持久化，刷新后无需再调模型。
-  const [compactDone, setCompactDone] = useState(() => activeSessionId ? getContextCompactAt(activeSessionId) > 0 : false)
-  const [compactSummary, setCompactSummary] = useState(() => activeSessionId ? getContextCompactSummary(activeSessionId) : '')
+  const [compactDone, setCompactDone] = useState(() => {
+    if (!activeSessionId) return false
+    const compactedAt = getContextCompactAt(activeSessionId)
+    return compactedAt > 0 && compactedAt >= sessionStart
+  })
+  const [compactSummary, setCompactSummary] = useState(() => {
+    if (!activeSessionId) return ''
+    const compactedAt = getContextCompactAt(activeSessionId)
+    return compactedAt > 0 && compactedAt >= sessionStart ? getContextCompactSummary(activeSessionId) : ''
+  })
   // Bridge：用户主动「承接」→ 最多 1 次模型调用生成 evidence-only bridge，临时参与约 6–10 轮后退出。
-  const [bridgeInfo, setBridgeInfo] = useState(() => activeSessionId ? getContextBridge(activeSessionId) : null)
+  const [bridgeInfo, setBridgeInfo] = useState(() => {
+    if (!activeSessionId) return null
+    const stored = getContextBridge(activeSessionId)
+    return stored && stored.bridgedAt >= sessionStart ? stored : null
+  })
   // contextBusy：防止 Compact / Bridge 的模型调用并发（每次最多 1 次）。
   const [contextBusy, setContextBusy] = useState<'compact' | 'bridge' | null>(null)
   const [contextNotice, setContextNotice] = useState<string | null>(null)
 
-  const sessionStart = useMemo(() => getSessionStart(activeSessionId || undefined), [activeSessionId])
   const visibleMessages = useMemo(
     () => filterSessionMessages(messages, sessionStart),
     [messages, sessionStart],
   )
+
+  // 切角色 / 刷新上下文后，Compact 与 Bridge 只能沿用当前 segment 之后生成的状态。
+  // 旧 segment 的摘要/bridge 仍可保存在存储与云端，但绝不能重新注入到“重新开始”的上下文。
+  useEffect(() => {
+    if (!activeSessionId) {
+      setCompactDone(false)
+      setCompactSummary('')
+      setBridgeInfo(null)
+      setContextMeter(null)
+      setContextNotice(null)
+      setContextBusy(null)
+      return
+    }
+    const compactedAt = getContextCompactAt(activeSessionId)
+    const compactIsCurrent = compactedAt > 0 && compactedAt >= sessionStart
+    setCompactDone(compactIsCurrent)
+    setCompactSummary(compactIsCurrent ? getContextCompactSummary(activeSessionId) : '')
+    const storedBridge = getContextBridge(activeSessionId)
+    setBridgeInfo(storedBridge && storedBridge.bridgedAt >= sessionStart ? storedBridge : null)
+    setContextMeter(null)
+    setContextNotice(null)
+    setContextBusy(null)
+  }, [activeSessionId, sessionStart])
   // UI2-03B-1：jump effect 只依赖 pendingJump/session，消息列表通过 ref 读取最新值 ——
   // 这样消息每次更新都不会重跑 jump effect（否则 cleanup 会把跳转保护窗口的定时器提前清掉）
   const visibleMessagesRef = useRef(visibleMessages)
@@ -1081,7 +1117,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // PR #99 Session Bridge：已承接时，注入 evidence-only bridge 摘要（memory 优先级块，不新增 LLM 调用）。
     // 只临时参与后续约 BRIDGE_ACTIVE_TURNS 轮（turnsLeft 递减，归零后退出注入）；不写 Memory / Event。
     const bridgeBlocks: ContextBlock[] = []
-    if (activeSessionId && bridgeInfo && bridgeInfo.turnsLeft > 0 && bridgeInfo.content.trim()) {
+    if (activeSessionId && bridgeInfo && bridgeInfo.bridgedAt >= sessionStart && bridgeInfo.turnsLeft > 0 && bridgeInfo.content.trim()) {
       bridgeBlocks.push({ id: 'bridge', content: bridgeInfo.content, priority: 'memory' })
     }
     // 时间感知也属于最终 payload：必须和 system/history 一起受 64k 硬预算约束。
