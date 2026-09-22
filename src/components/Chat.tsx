@@ -571,6 +571,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const sid = getActiveSessionId()
       const lang = sid ? getSessionLang(sid) : 'zh'
       const text = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)), lang)
+      const liveIdentityMode = resolveIdentityMode(sid || undefined)
+      const partialAvailability = text ? classifyAvailability(text) : null
+      const identityProblem = Boolean(
+        text && (
+          looksEmbodiedSelfClaim(text, liveIdentityMode) ||
+          (!allowsBusyState(liveIdentityMode) && partialAvailability?.state === 'unavailable' && partialAvailability.owner === 'SELF')
+        ),
+      )
+      // 后台/关页兜底也必须守身份边界：违规 partial 宁可不落库、不进 pending upload。
+      if (identityProblem) return
       const partialReplyLength = sid
         ? getEffectiveReplyLength(getAccount()?.account ?? '', sid)
         : 'natural'
@@ -1190,6 +1200,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             ) {
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: safeFallback, ts: assistantTs }]
               commitFinal(final)
+            } else if (retryAllowBusy && retryAvailability?.state === 'unavailable' && retryAvailability.owner === 'SELF') {
+              busyTriggeredRef.current = true
+              const cut = findBusyCutoff(retryCleaned)
+              const busyText = cut > 0 && cut < retryCleaned.length ? retryCleaned.slice(0, cut) : retryCleaned
+              enterBusyRef.current(busyText, retryAvailability)
             } else {
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: retryCleaned, ts: assistantTs }]
               commitFinal(final)
