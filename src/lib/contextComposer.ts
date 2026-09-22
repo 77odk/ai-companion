@@ -4,20 +4,27 @@ import { estimateToken, truncateByToken } from './token.ts'
 export const CONTEXT_HARD_BUDGET = 64000
 export const CONTEXT_SOFT_BUDGET = 45000
 
-/** 上下文压缩后保留的最近消息条数（PR #99：Compact 结构性压缩，无 LLM） */
+/** 上下文压缩后保留的最近原始消息条数（Compact = 较老历史压成 summary + 保留最近原始消息） */
 export const COMPACT_KEEP_RECENT = 12
-/** 自动压缩触发阈值：context usage（totalTokens / hardBudget）≥ 0.7 时，未压缩过则自动压缩一次 */
-export const COMPACT_USAGE_THRESHOLD = 0.7
+/** Session Bridge：bridge 生成后临时参与对话的轮次数（约 6–10 轮，取 8） */
+export const BRIDGE_ACTIVE_TURNS = 8
+/** Session Bridge：从上一会话取聊天尾部参与承接的最大消息条数（有限尾部，禁止搬完整旧聊天） */
+export const BRIDGE_TAIL_COUNT = 30
 
 /**
- * 结构性上下文压缩（PR #99）：把 history 折叠为「最近 keepRecent 条」。
- * 纯注入层裁剪：原聊天记录（本地缓存 / 后端）一律不动，绝不删除。
- * 返回 compacted=true 表示真的发生了折叠（history 变短了）。
+ * PR #99：Compact 之后的注入列表 = [较老历史摘要(system)] + [最近 keepRecent 条原始消息]。
+ * summary 为空时退回只注入最近原始消息。
+ * 纯注入层组装：原聊天记录（本地缓存 / 后端）一律不动，绝不删除。
  */
-export function compactHistory(history: ApiMessage[], keepRecent: number = COMPACT_KEEP_RECENT): { history: ApiMessage[]; compacted: boolean } {
-  if (!Array.isArray(history) || history.length === 0) return { history: [], compacted: false }
-  if (history.length <= keepRecent) return { history, compacted: false }
-  return { history: history.slice(-keepRecent), compacted: true }
+export function buildCompactedHistory(
+  summary: string,
+  history: ApiMessage[],
+  keepRecent: number = COMPACT_KEEP_RECENT,
+): ApiMessage[] {
+  if (!Array.isArray(history) || history.length === 0) return []
+  const recent = history.length > keepRecent ? history.slice(-keepRecent) : history
+  const s = summary.trim()
+  return s ? [{ role: 'system', content: s }, ...recent] : recent
 }
 
 export type ContextPriority = 'core' | 'memory' | 'event' | 'runtime' | 'ambient'
