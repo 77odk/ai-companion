@@ -32,8 +32,8 @@ test('context meter is compact, token-based, and placed after model controls', (
   assert.match(chat, /真实值/)
   assert.match(chat, /估算/)
   assert.match(chat, /还没有数据/)
-  assert.match(chat, />整理</)
-  assert.match(chat, />承接</)
+  assert.match(chat, /'整理'/)
+  assert.match(chat, /'承接'/)
   assert.ok(
     chat.indexOf('<ChatCompanionControls sessionId={activeSessionId} />') < chat.indexOf('className="context-meter-slot"'),
     'Context 控件在身份/模型控件之后',
