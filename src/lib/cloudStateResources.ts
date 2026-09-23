@@ -53,10 +53,10 @@ function opId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `cloud-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function queue(kind: string, entityId: string, payload?: unknown, deleted?: boolean, sessionId?: string, generationSlotId?: string, baseVersion?: number): void {
+function queue(kind: string, entityId: string, payload?: unknown, deleted?: boolean, sessionId?: string, generationSlotId?: string, baseVersion?: number, fixedOpId?: string): void {
   if (!getAccount()) return
   enqueueCloudStateOp({
-    opId: opId(), kind, entityId,
+    opId: fixedOpId ?? opId(), kind, entityId,
     baseVersion: baseVersion ?? getCloudStateVersion(kind, entityId, undefined, sessionId),
     ...(sessionId ? { sessionId } : {}),
     ...(generationSlotId ? { generationSlotId } : {}),
@@ -643,6 +643,33 @@ function captureAiProfiles(): void {
   profileSnapshot = next
 }
 
+const LEGACY_BACKFILL_VERSION = 'p0a-v1'
+const LEGACY_BACKFILL_MARKER_PREFIX = 'ai_companion_cloud_backfill_p0a_v1_'
+
+function legacyBackfillOpId(accountId: string, kind: string, entityId: string, stage = 'probe'): string {
+  return [LEGACY_BACKFILL_VERSION, kind, encodeURIComponent(accountId), encodeURIComponent(entityId), stage].join(':')
+}
+
+function isLegacyProfileIdentityProbe(op: CloudStatePendingOp | null, accountId: string, entityId: string): boolean {
+  return Boolean(op && op.opId === legacyBackfillOpId(accountId, 'profile-identity', entityId))
+}
+
+function hasPendingCloudOp(kind: string, entityId: string, sessionId?: string): boolean {
+  const accountId = getAccount()?.account.trim() ?? ''
+  return getPendingOps().some((op) =>
+    op.type === 'cloud-state' &&
+    op.kind === kind &&
+    op.entityId === entityId &&
+    (op.sessionId || undefined) === (sessionId || undefined) &&
+    (!op.accountId || op.accountId === accountId),
+  )
+}
+
+function explicitLocalIdentityMode(entityId: string): IdentityMode | null {
+  const raw = record(readJson(aiProfileStorageKey(entityId)))
+  return isIdentityMode(raw?.identityMode) ? raw.identityMode : null
+}
+
 function pendingProfileOps(entity: CloudStateEntity): CloudStatePendingOp[] {
   const accountId = getAccount()?.account.trim() ?? ''
   const sessionId = entity.entityId === GLOBAL ? undefined : entity.entityId
@@ -701,12 +728,40 @@ function applyAiProfileEntity(entity: CloudStateEntity): void {
   if (!value) return
   const key = aiProfileStorageKey(entity.entityId)
   const newest = newestPendingProfileOp(entity)
+  const accountId = getAccount()?.account.trim() ?? ''
 
   // 最新一条 pending 是墓碑（角色刚被删）时，删除意图优先：绝不写回本机资料、也不排非删除 op，
   // 只把墓碑重基到刚 pull 的 version。否则旧 baseVersion 的删除会被后续 conflict 掉，
   // 已删除角色的资料会在云端与本机一起复活。
   if (newest?.deleted) {
     rebasePendingProfileTombstone(entity)
+    return
+  }
+
+  // P0-A 旧身份档补种是一次性 probe：baseVersion=0 只用来确认云端有没有 canonical。
+  // 若云端已有 identityMode，云端直接赢；若只缺这一个字段，只把本机明确 identityMode
+  // 合进刚拉到的 canonical，昵称/头像等字段绝不从旧设备整份覆盖。
+  if (isLegacyProfileIdentityProbe(newest, accountId, entity.entityId)) {
+    const probe = newest ? validAiProfile(newest.payload) : null
+    const localMode = probe?.identityMode
+    dropPendingProfileOps(entity)
+    const merged = !isIdentityMode(value.identityMode) && isIdentityMode(localMode)
+      ? { ...value, identityMode: localMode }
+      : value
+    localStorage.setItem(key, JSON.stringify(merged))
+    profileSnapshot.set(entity.entityId, merged)
+    if (!isIdentityMode(value.identityMode) && isIdentityMode(localMode)) {
+      queue(
+        'profile',
+        entity.entityId,
+        merged,
+        false,
+        entity.entityId === GLOBAL ? undefined : entity.entityId,
+        undefined,
+        entity.version,
+        legacyBackfillOpId(accountId, 'profile-identity', entity.entityId, `repair-${entity.version}`),
+      )
+    }
     return
   }
 
@@ -830,6 +885,68 @@ function captureReplyLengths(): void {
     if (!next.has(sessionId)) queue('reply_length', sessionId, undefined, true, value.sessionId)
   }
   replyLengthPreferenceSnapshot = next
+}
+
+/**
+ * P0-A：把 Cloud State 上线前已经存在的显式身份/回复长度补种一次。
+ * 不加新协议：全部仍走现有 outbox + pull-before-push。
+ * probe 固定 baseVersion=0：云端已有实体时一定 conflict/拉 canonical，绝不让旧设备直接覆盖；
+ * 云端没有实体时才创建。profile conflict 见 applyAiProfileEntity，只允许补 identityMode 一个字段。
+ */
+export function queueLegacyCloudStateBackfill(): void {
+  const account = getAccount()
+  if (!account) return
+  const accountId = account.account.trim()
+  if (!accountId) return
+  const marker = `${LEGACY_BACKFILL_MARKER_PREFIX}${encodeURIComponent(accountId)}`
+  if (localStorage.getItem(marker) === '1') return
+
+  const profiles = profileEntities()
+  for (const [entityId, value] of profiles) {
+    if (entityId === GLOBAL) continue
+    const sessionId = entityId
+    if (!explicitLocalIdentityMode(entityId) || hasPendingCloudOp('profile', entityId, sessionId)) continue
+    queue(
+      'profile',
+      entityId,
+      value,
+      false,
+      sessionId,
+      undefined,
+      0,
+      legacyBackfillOpId(accountId, 'profile-identity', entityId),
+    )
+  }
+
+  const globalReply = getStoredGlobalReplyLength(accountId)
+  if (globalReply && !hasPendingCloudOp('reply_length_global', GLOBAL)) {
+    queue(
+      'reply_length_global',
+      GLOBAL,
+      { mode: globalReply },
+      false,
+      undefined,
+      undefined,
+      0,
+      legacyBackfillOpId(accountId, 'reply-length-global', GLOBAL),
+    )
+  }
+
+  for (const [sessionId, value] of replyLengthPreferenceEntities()) {
+    if (hasPendingCloudOp('reply_length', sessionId, sessionId)) continue
+    queue(
+      'reply_length',
+      sessionId,
+      { mode: value.mode, followGlobal: value.followGlobal },
+      false,
+      sessionId,
+      undefined,
+      0,
+      legacyBackfillOpId(accountId, 'reply-length', sessionId),
+    )
+  }
+
+  localStorage.setItem(marker, '1')
 }
 
 function applyGlobalReplyLengthEntity(entity: CloudStateEntity): void {
