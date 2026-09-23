@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
+import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
@@ -49,7 +49,7 @@ import { allowsBusyState, allowsEmbodiedLifeContext, buildIdentityBoundaryRepair
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
-import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, CONTEXT_SOFT_BUDGET, type ContextBlock } from '../lib/contextComposer'
+import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -88,6 +88,13 @@ import ChatCompanionControls from './ChatCompanionControls'
  */
 function hasBridgableHistory(messages: StoredMessage[], sessionStart: number): boolean {
   return sessionStart > 0 && messages.some((message) => message.ts < sessionStart)
+}
+
+function formatTokenCount(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return '—'
+  if (value < 1000) return String(Math.round(value))
+  const compact = value >= 10000 ? (value / 1000).toFixed(0) : (value / 1000).toFixed(1)
+  return `${compact.replace(/\.0$/, '')}k`
 }
 
 const SendArrowIcon = () => (  <svg
@@ -150,8 +157,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [showMilestone, setShowMilestone] = useState(false)
   // 刷新对话只推进当前 session 的上下文分界线；历史仍完整保留。
   const sessionStart = getSessionStart(activeSessionId || undefined)
-  // PR #99 Context 批次：Meter 显示最近一次发送的上下文用量（本地计算，不新增 LLM 调用）
-  const [contextMeter, setContextMeter] = useState<{ used: number; budget: number } | null>(null)
+  // Context：上一轮 provider usage 优先；拿不到 usage 才显示本地估算。两者都没有时显示“还没有数据”。
+  const [contextMeter, setContextMeter] = useState<{
+    used: number
+    budget: number
+    source: 'actual' | 'estimate'
+  } | null>(null)
   // Compact：用户主动「压缩」→ 最多 1 次模型调用，把较老历史压成 summary；之后注入 = summary + recent raw。
   // 每会话最多压缩 1 次；原聊天记录绝不删除。summary 持久化，刷新后无需再调模型。
   const [compactDone, setCompactDone] = useState(() => {
@@ -1153,24 +1164,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (activeSessionId && bridgeInfo && bridgeInfo.bridgedAt >= sessionStart && bridgeInfo.turnsLeft > 0 && bridgeInfo.content.trim()) {
       bridgeBlocks.push({ id: 'bridge', content: bridgeInfo.content, priority: 'memory' })
     }
-    // 时间感知也属于最终 payload：必须和 system/history 一起受 64k 硬预算约束。
-    const timeTail: ApiMessage = {
-      role: 'system',
-      content:
-        buildTimeContext(Date.now(), lang) +
-        (lang === 'en'
-          ? '\nNote: time tags like [3 min ago] in the conversation history are system annotations, not part of any message. Never output such tags in your replies.'
-          : '\n注：对话历史里 [3 分钟前]/[昨天] 这类标签是系统自动标注的，不是消息内容。你的回复里绝对不要出现这类时间标签。'),
-    }
-    // PR #99 Context Compact：已压缩时，注入 = [较老历史摘要(system)] + [最近原始消息]，
-    // 不是把历史裁成只剩近窗。原聊天记录（缓存/后端）绝不删除。压缩是用户主动行为（每会话最多 1 次模型调用），
-    // 普通聊天不做任何自动模型调用。
+    // PR #99 Context Compact：已压缩时，注入 = [较老历史摘要(system)] + [最近原始消息]。
+    // 当前时间已经在 buildSystemPrompt 中注入一次；这里不再追加第二条时间 system。
     const historyForModel =
       activeSessionId && compactDone && compactSummary.trim()
         ? buildCompactedHistory(compactSummary, history, COMPACT_KEEP_RECENT)
         : history
-    const composed = composeContext(apiMessages, historyForModel, bridgeBlocks, [timeTail])
-    setContextMeter({ used: composed.totalTokens, budget: composed.hardBudget })
+    const composed = composeContext(apiMessages, historyForModel, bridgeBlocks)
+    setContextMeter({ used: composed.totalTokens, budget: composed.hardBudget, source: 'estimate' })
     if (composed.overBudget) {
       // 当前用户消息 / 核心 system 本身已经放不进 64k：不静默裁用户原话，也不把超限请求发给 provider。
       // 用户消息已经正常落历史；这里只撤掉空 assistant 占位并结束本轮流式状态。
@@ -1418,8 +1419,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             enterBusyRef.current(assistantText.current, availability)
           }
         },
-        onDone: (reasoning) => {
+        onDone: (reasoning, usage) => {
           if (runId !== runIdRef.current) return
+          // provider 真正返回 prompt_tokens 时覆盖估算；中转站不回 usage 就保留 estimate。
+          if (usage && Number.isFinite(usage.promptTokens)) {
+            setContextMeter({
+              used: usage.promptTokens,
+              budget: composed.hardBudget,
+              source: 'actual',
+            })
+          }
           // 第27条：收集模型独立思考字段 reasoning_content，finalize 时合并到 thinking
           if (reasoning) reasoningRef.current = reasoning
           streamEndedRef.current = true
@@ -1708,6 +1717,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
         {activeSessionId && (
           <div className="chat-inline-controls">
+            <ChatCompanionControls sessionId={activeSessionId} />
             <div
               className="context-meter-slot"
               onBlur={(event) => {
@@ -1718,47 +1728,50 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 type="button"
                 className="context-meter-circle"
                 aria-label={contextMeter
-                  ? `上下文占用约 ${Math.max(1, Math.round((contextMeter.used / CONTEXT_SOFT_BUDGET) * 100))}%`
-                  : '查看上下文占用'}
+                  ? `上下文${contextMeter.source === 'actual' ? '真实' : '估算'}用量 ${formatTokenCount(contextMeter.used)} / ${formatTokenCount(contextMeter.budget)}`
+                  : '查看上下文用量'}
                 aria-expanded={contextMenuOpen}
                 onClick={() => setContextMenuOpen((value) => !value)}
               >
                 <span
                   className="context-meter-ring"
                   data-level={contextMeter
-                    ? contextMeter.used >= CONTEXT_SOFT_BUDGET
+                    ? contextMeter.used >= contextMeter.budget
                       ? 'over'
-                      : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.85
+                      : contextMeter.used >= contextMeter.budget * 0.85
                         ? 'high'
-                        : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.7
+                        : contextMeter.used >= contextMeter.budget * 0.7
                           ? 'warn'
                           : 'normal'
                     : 'idle'}
                   style={{
                     background: contextMeter
-                      ? `conic-gradient(var(--context-meter-accent) ${Math.min(100, Math.max(0, Math.round((contextMeter.used / CONTEXT_SOFT_BUDGET) * 100)))}%, var(--ui2-hairline, rgba(51, 43, 40, 0.1)) 0)`
+                      ? `conic-gradient(var(--context-meter-accent) ${Math.min(100, Math.max(0, Math.round((contextMeter.used / contextMeter.budget) * 100)))}%, var(--ui2-hairline, rgba(51, 43, 40, 0.1)) 0)`
                       : undefined,
                   }}
                 >
                   <span className="context-meter-value">
-                    {contextMeter ? `${Math.max(1, Math.round((contextMeter.used / CONTEXT_SOFT_BUDGET) * 100))}%` : '—'}
+                    {contextMeter ? formatTokenCount(contextMeter.used) : '—'}
                   </span>
                 </span>
               </button>
 
               {contextMenuOpen && (
                 <div className="context-meter-popover">
-                  <strong>上下文</strong>
+                  <div className="context-meter-summary">
+                    <strong>{contextMeter ? `${formatTokenCount(contextMeter.used)} / ${formatTokenCount(contextMeter.budget)}` : '还没有数据'}</strong>
+                    {contextMeter && (
+                      <span className="context-meter-source">
+                        {contextMeter.source === 'actual' ? '真实值' : '估算'}
+                      </span>
+                    )}
+                  </div>
                   <p>
-                    {!contextMeter
-                      ? '发送一条消息后会显示当前上下文占用。'
-                      : contextMeter.used >= CONTEXT_SOFT_BUDGET
-                        ? '上下文已经很满，建议现在整理或承接到新一段。'
-                        : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.85
-                          ? '上下文接近安全上限，建议尽快整理。'
-                          : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.7
-                            ? '上下文开始变长，可以继续聊，也可以先整理。'
-                            : '上下文状态正常。'}
+                    {contextMeter
+                      ? contextMeter.source === 'actual'
+                        ? '上一轮模型返回的输入 token。'
+                        : '服务商没返回 usage，按本地算法估算；实际以服务商为准。'
+                      : '发送一条消息后显示；有 usage 用真实值，没有则显示估算。'}
                   </p>
                   <div className="context-meter-actions">
                     {!compactDone && (
@@ -1770,7 +1783,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                         }}
                         disabled={contextBusy !== null}
                       >
-                        {contextBusy === 'compact' ? '整理中…' : '整理后继续聊'}
+                        {contextBusy === 'compact' ? '整理中…' : '整理'}
                       </button>
                     )}
                     {!bridgeInfo && hasBridgableHistory(messages, sessionStart) && (
@@ -1782,14 +1795,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                         }}
                         disabled={contextBusy !== null}
                       >
-                        {contextBusy === 'bridge' ? '承接中…' : '承接到新一段'}
+                        {contextBusy === 'bridge' ? '承接中…' : '承接'}
                       </button>
                     )}
                   </div>
                 </div>
               )}
             </div>
-            <ChatCompanionControls sessionId={activeSessionId} />
           </div>
         )}
 
