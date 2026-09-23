@@ -133,7 +133,7 @@ export function stripEmoji(text: string): string {
 export function stripTimeLabels(text: string): string {
   if (!text) return ''
   const LABEL =
-    '[\\[［【]\\s*(?:刚刚|此刻|现在|今天|昨天|前天|刚才|\\d+\\s*(?:秒|分钟|个小时|小时|天|个月|年)前|' +
+    '[\\[［【]\\s*(?:刚刚|此刻|当前|现在|今天|昨天|前天|刚才|\\d+\\s*(?:秒|分钟|个小时|小时|天|个月|年)前|' +
     'just now|\\d+\\s*(?:secs?|seconds|mins?|minutes|hours?|hrs?|days?)\\s+ago)\\s*[\\]］】]'
   return text
     .replace(new RegExp(`^(?:\\s*${LABEL})+\\s*`, 'u'), '')
