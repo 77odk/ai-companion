@@ -1,12 +1,12 @@
-name: P1D measure
+name: P1D verify
 on:
   push:
     branches:
       - fix/p1d-code-convergence-performance
 jobs:
-  measure:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -14,7 +14,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm test
       - run: npm run build
+      - run: npm run lint
       - name: Asset sizes
         run: |
           find dist/assets -maxdepth 1 -type f -printf '%f %s bytes\n' | sort -k2 -nr
