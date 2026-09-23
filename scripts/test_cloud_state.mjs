@@ -1623,23 +1623,27 @@ test('P0-A BACKFILL-3: legacy reply-length probes are deterministic and cloud ca
 
   globalThis.fetch = async (_url, init = {}) => {
     const sent = JSON.parse(init.body).ops
-    return jsonResponse({ results: sent.map(op => op.kind === 'reply_length_global'
-      ? {
+    const results = sent.map(op => {
+      if (op.kind === 'reply_length_global') {
+        return {
           opId: op.opId,
           status: 'conflict',
           entity: { kind: 'reply_length_global', entityId: 'global', version: 6, payload: { mode: 'medium' } },
         }
-      : {
-          opId: op.opId,
-          status: 'conflict',
-          entity: {
-            kind: 'reply_length',
-            entityId: 'A',
-            sessionId: 'A',
-            version: 7,
-            payload: { mode: 'natural', followGlobal: true },
-          },
-        })) })
+      }
+      return {
+        opId: op.opId,
+        status: 'conflict',
+        entity: {
+          kind: 'reply_length',
+          entityId: 'A',
+          sessionId: 'A',
+          version: 7,
+          payload: { mode: 'natural', followGlobal: true },
+        },
+      }
+    })
+    return jsonResponse({ results })
   }
   await cloud.flushCloudStatePendingOps()
 
