@@ -1807,7 +1807,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                     <strong>{contextMeter ? `上下文 ${Math.round((contextMeter.used / contextMeter.budget) * 100)}%` : '还没有数据'}</strong>
                     {contextMeter && (
                       <span className="context-meter-source">
-                        {contextMeter.source === 'actual' ? '真实值' : '估算'}
+                        {contextMeter.source === 'actual' ? '本轮真实' : '本轮估算'}
                       </span>
                     )}
                   </div>
