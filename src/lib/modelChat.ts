@@ -157,8 +157,10 @@ function zhipuThinking(settings: ModelSettings): Record<string, unknown> | undef
 
 /** 讨思考的通用参数：默认所有服务商都带上（2026-09-23 七七要求），不支持的靠降级兜底 */
 const ASK_THINKING_OPTS: Record<string, unknown> = {
+  // OpenAI 标准字段，控制思考力度（Gemini 兼容层认）
   reasoning_effort: 'high',
-  extra_body: { thinking_config: { include_thoughts: true } },
+  // Gemini 官方兼容层的线上格式是 extra_body.google.thinking_config（外层必须包 google，不能直接放 thinking_config）
+  extra_body: { google: { thinking_config: { include_thoughts: true } } },
 }
 
 /** 本次打开期间，哪些「地址 + 模型」已经退回过思考参数（不支持思考链） */
