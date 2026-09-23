@@ -154,6 +154,35 @@ function personaHit(a: RuntimeActivity, persona: string): boolean {
   return Boolean(a.persona && persona && a.persona.test(persona))
 }
 
+// “上课”不能作为所有成年角色的通用随机日常；只有人设明确带校园/授课语境时才进 routine 池。
+// 聊天里 TA 自己明确说“在上课”仍可通过 Chat override 写入，不受此过滤影响。
+const CLASS_PERSONA_RE = /学生|大学|学院|学校|校园|研究生|本科|高中|初中|课程|课表|上课|老师|教师|教授|讲师|助教/
+
+function activityAllowedForPersona(activity: RuntimeActivity, persona: string): boolean {
+  return activity.id !== 'class' || CLASS_PERSONA_RE.test(persona)
+}
+
+function seededRuntimeRand(seed: string): () => number {
+  let state = 2166136261
+  for (let i = 0; i < seed.length; i += 1) {
+    state ^= seed.charCodeAt(i)
+    state = Math.imul(state, 16777619)
+  }
+  return () => {
+    state += 0x6d2b79f5
+    let t = state
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function defaultRuntimeRand(sessionKey: string, now: number, previousActivityId = ''): () => number {
+  const d = new Date(now)
+  const day = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+  return seededRuntimeRand(`${sessionKey}|${day}|${runtimeSlot(d)}|${previousActivityId || 'start'}`)
+}
+
 function minuteOfDay(now: Date): number {
   return now.getHours() * 60 + now.getMinutes()
 }
@@ -175,8 +204,18 @@ function activityWindowEnd(activity: RuntimeActivity, now: Date): number | null 
 
 function pickActivity(now: Date, persona: string, recentIds: readonly string[], rand: () => number, mode: IdentityMode = 'immersive'): RuntimeActivity {
   const slot = runtimeSlot(now)
-  let pool = ACTIVITIES.filter((a) => activityAllowedForMode(a, mode) && activityAllowedAt(a, now))
-  if (pool.length === 0) pool = ACTIVITIES.filter((a) => activityAllowedForMode(a, mode) && a.slots.includes(slot))
+  let pool = ACTIVITIES.filter((a) =>
+    activityAllowedForMode(a, mode) &&
+    activityAllowedForPersona(a, persona) &&
+    activityAllowedAt(a, now),
+  )
+  if (pool.length === 0) {
+    pool = ACTIVITIES.filter((a) =>
+      activityAllowedForMode(a, mode) &&
+      activityAllowedForPersona(a, persona) &&
+      a.slots.includes(slot),
+    )
+  }
   if (pool.length === 0) return ACTIVITIES.find((activity) => activityAllowedForMode(activity, mode)) ?? ACTIVITIES[0]
 
   // 最近 3 个活动能避则避：比只禁「连续重复」多一层，但候选过少时自动退化，不造死循环。
@@ -226,14 +265,15 @@ export function getOrAdvanceTaRuntime(
   sessionId: string | undefined,
   persona: string,
   now: number,
-  rand: () => number = Math.random,
+  rand?: () => number,
 ): TaRuntimeState {
   const map = loadAll()
   const key = sessionId || GUEST_KEY
   const cur = map[key]
   const mode = resolveIdentityMode(sessionId)
+  const effectiveRand = rand ?? defaultRuntimeRand(key, now, cur?.activityId)
   if (!cur || typeof cur.activityId !== 'string') {
-    const fresh = createState(pickActivity(new Date(now), persona, [], rand, mode), now, rand, persona)
+    const fresh = createState(pickActivity(new Date(now), persona, [], effectiveRand, mode), now, effectiveRand, persona)
     map[key] = fresh
     saveAll(map)
     return fresh
@@ -243,7 +283,13 @@ export function getOrAdvanceTaRuntime(
   const recentIds = Array.isArray(cur.recentActivityIds) && cur.recentActivityIds.length > 0
     ? cur.recentActivityIds
     : [cur.activityId]
-  const next = createState(pickActivity(new Date(now), persona, recentIds, rand, mode), now, rand, persona, recentIds)
+  const next = createState(
+    pickActivity(new Date(now), persona, recentIds, effectiveRand, mode),
+    now,
+    effectiveRand,
+    persona,
+    recentIds,
+  )
   map[key] = next
   saveAll(map)
   return next
@@ -289,6 +335,7 @@ const RUNTIME_TEXT_START_RULES: readonly RuntimeTextRule[] = [
   { activityId: 'movie', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:看电影|看剧|追剧|看动漫)/, en: /\b(?:i(?:'m| am)?\s+)?(?:watching|going to watch) (?:a )?(?:movie|film|show|series|anime)\b/i },
   { activityId: 'gaming', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:打游戏|玩游戏|开黑|打排位)/, en: /\b(?:i(?:'m| am)?\s+)?(?:gaming|playing (?:a )?game|playing games|going to play)\b/i },
   { activityId: 'class', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:上课|听课)/, en: /\b(?:i(?:'m| am)?\s+)?(?:in class|going to class|attending class)\b/i },
+  { activityId: 'work', zh: /(?:我)?(?:已经|刚|刚刚|才)?(?:到公司|到单位|到办公室|到工位|到岗)(?:了)?/, en: /\b(?:i\s+)?(?:just\s+)?(?:got to work|arrived at (?:work|the office)|made it to (?:work|the office))\b/i },
   { activityId: 'commute', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:通勤|去上班|去公司|回公司|上班路上)/, en: /\b(?:i(?:'m| am)?\s+)?(?:commuting|on my way to work|going to work|heading to work)\b/i },
   { activityId: 'work', zh: /(?:忙(?:着)?工作|处理工作|赶工作|工作中|开始工作|继续工作|加班|开会)/, en: /\b(?:working|at work|in a meeting)\b/i },
   { activityId: 'errand', zh: /(?:我)?(?:正(?:在)?|在|去|先去|出去|准备)?(?:办事|办点事|买东西|取快递)/, en: /\b(?:i(?:'m| am)?\s+)?(?:running errands?|going out for errands?|picking up a package)\b/i },
@@ -422,7 +469,7 @@ export function syncTaRuntimeFromAssistantText(
   text: string,
   now: number = Date.now(),
   persona: string = getSessionPersona(sessionId),
-  rand: () => number = Math.random,
+  rand?: () => number,
 ): TaRuntimeState | null {
   const key = sessionId || GUEST_KEY
   const map = loadAll()
@@ -449,7 +496,14 @@ export function syncTaRuntimeFromAssistantText(
   }
 
   if (!cur) return null
-  const next = createState(pickActivity(new Date(now), persona, recentIds, rand, resolveIdentityMode(sessionId)), now, rand, persona, recentIds)
+  const effectiveRand = rand ?? defaultRuntimeRand(key, now, cur.activityId)
+  const next = createState(
+    pickActivity(new Date(now), persona, recentIds, effectiveRand, resolveIdentityMode(sessionId)),
+    now,
+    effectiveRand,
+    persona,
+    recentIds,
+  )
   map[key] = next
   saveAll(map)
   return next
