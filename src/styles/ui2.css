@@ -1209,8 +1209,9 @@
   text-align: center;
   color: var(--ui2-text);
   background:
-    radial-gradient(120% 55% at 50% -12%, color-mix(in srgb, var(--eluvin-warm) 18%, transparent), transparent 62%),
-    var(--ui2-canvas);
+    radial-gradient(105% 52% at 50% -8%, rgba(247, 200, 198, 0.42), transparent 62%),
+    radial-gradient(72% 34% at 16% 82%, rgba(255, 217, 199, 0.26), transparent 70%),
+    #fff9f6;
 }
 
 .welcome-inner {
@@ -1222,43 +1223,47 @@
   align-items: center;
 }
 
-/* ---- 品牌 logo：Warm 光（不是主题色油漆） ---- */
+/* ---- 品牌 logo：直接消费正式「记忆之书」图标，不再用 CSS 方块 + 文字忆伪造 ---- */
 .welcome-logo {
-  width: 88px;
-  height: 88px;
-  border-radius: 30px;
-  margin-bottom: 22px;
-  background: linear-gradient(150deg, color-mix(in srgb, var(--eluvin-warm) 26%, #fff), var(--eluvin-warm));
-  color: #fff;
-  box-shadow: 0 14px 40px color-mix(in srgb, var(--eluvin-warm) 32%, transparent);
+  width: 116px;
+  height: 116px;
+  margin-bottom: 20px;
+  border-radius: 34px;
+  overflow: hidden;
+  box-shadow:
+    0 18px 42px rgba(201, 125, 115, 0.18),
+    0 4px 12px rgba(236, 170, 163, 0.18);
 }
 
-.welcome-logo-mark {
-  font-size: 42px;
+.welcome-logo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 /* ---- 名称层级：ELUVIN 在上（品牌），忆文在下 ---- */
 .welcome-en {
-  margin: 0 0 6px;
-  font-size: 18px;
+  margin: 0 0 7px;
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: 0.36em;
-  color: var(--eluvin-warm-deep);
+  letter-spacing: 0.38em;
+  color: #c97d73;
 }
 
 .welcome-name {
-  margin: 0 0 12px;
-  font-size: 27px;
-  font-weight: 750;
-  letter-spacing: 0.16em;
-  color: var(--ui2-text);
+  margin: 0 0 11px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #332b28;
 }
 
 .welcome-slogan {
   margin: 0 0 8px;
   font-size: 15px;
-  letter-spacing: 0.1em;
-  color: var(--ui2-text);
+  letter-spacing: 0.12em;
+  color: #554a46;
 }
 
 /* ---- 时间轨迹：两条逐渐靠近的线 + 微弱节点（Warm 品牌光） ---- */
@@ -1296,14 +1301,14 @@
 .welcome-start {
   width: min(240px, 100%);
   padding: 13px 0;
-  border: 1px solid color-mix(in srgb, var(--eluvin-warm) 34%, transparent);
+  border: 1px solid rgba(201, 125, 115, 0.24);
   border-radius: 999px;
-  background: linear-gradient(150deg, color-mix(in srgb, var(--eluvin-warm) 14%, #fff), color-mix(in srgb, var(--eluvin-warm) 24%, #fff));
-  color: var(--eluvin-warm-deep);
+  background: linear-gradient(135deg, rgba(247, 200, 198, 0.62), rgba(255, 217, 199, 0.72));
+  color: #a95f57;
   font: inherit;
   font-size: 16px;
   font-weight: 600;
-  box-shadow: 0 10px 28px color-mix(in srgb, var(--eluvin-warm) 16%, transparent);
+  box-shadow: 0 10px 28px rgba(201, 125, 115, 0.12);
   cursor: pointer;
 }
 
