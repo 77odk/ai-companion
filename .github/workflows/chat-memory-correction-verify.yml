@@ -1,0 +1,25 @@
+name: chat memory correction verify
+on:
+  push:
+    branches:
+      - feat/chat-memory-correction-consent
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Memory correction tests
+        run: node scripts/test_memory_correction.mjs
+      - name: Memory regression tests
+        run: node scripts/test_memory_distill.mjs && node scripts/test_memory_instruction.mjs && node scripts/test_memory_page_cloud_refresh.mjs && node scripts/test_memory_upload_retry_safe.mjs
+      - name: Context and sync regressions
+        run: node scripts/test_context_usage.mjs && node scripts/test_context_composer.mjs && node scripts/test_sync.mjs
+      - run: npm run build
+      - run: npm run lint
