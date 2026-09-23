@@ -1363,6 +1363,80 @@
   color: var(--eluvin-warm-deep);
 }
 
+
+/* ---- Welcome reference-match preview：按用户确认图复刻；只保留真实交互热区 ---- */
+.welcome-reference-page {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
+  padding: 0;
+  background: #fff8f4;
+  text-align: initial;
+}
+
+.welcome-reference-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: 50% 50%;
+  user-select: none;
+  pointer-events: none;
+}
+
+.welcome-reference-slogan {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 48.35%;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  color: rgba(70, 58, 54, 0.72);
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
+  font-size: clamp(11px, 3.2vw, 14px);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.24em;
+  text-shadow: 0 1px 10px rgba(255, 250, 247, 0.65);
+}
+
+.welcome-reference-hit {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  width: min(64%, 286px);
+  border: 0;
+  padding: 0;
+  transform: translateX(-50%);
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.welcome-reference-primary {
+  top: 73.65%;
+  height: 7.4%;
+  min-height: 52px;
+  border-radius: 999px;
+}
+
+.welcome-reference-secondary {
+  top: 82.2%;
+  height: 7.1%;
+  min-height: 50px;
+  border-radius: 999px;
+}
+
+.welcome-reference-hit:focus-visible {
+  outline: 2px solid rgba(201, 125, 115, 0.7);
+  outline-offset: 3px;
+}
+
 /* ==========================================================================
    prefers-reduced-motion：全 UI2 动效收敛
    ========================================================================== */
