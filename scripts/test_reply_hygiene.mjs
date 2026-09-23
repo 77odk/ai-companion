@@ -22,6 +22,9 @@ const ok = (name, cond, extra = '') => {
 // ---- stripTimeLabels：开头标签 ----
 eq('开头 [3 分钟前]', stripTimeLabels('[3 分钟前] 真要睡就早点。'), '真要睡就早点。')
 eq('开头 [此刻]', stripTimeLabels('[此刻] 好了，要不要说说看？'), '好了，要不要说说看？')
+eq('开头 [当前]', stripTimeLabels('[当前] 那就少冰。'), '那就少冰。')
+eq('全角 【当前】', stripTimeLabels('【当前】对了，话梅排骨晚上也给你安排上。'), '对了，话梅排骨晚上也给你安排上。')
+eq('全角方括号 ［当前］', stripTimeLabels('［当前］慢点喝。'), '慢点喝。')
 eq('开头多个标签', stripTimeLabels('[3 分钟前] [此刻] 嗯。'), '嗯。')
 eq('全角括号 【2 小时前】', stripTimeLabels('【2 小时前】刚到家'), '刚到家')
 eq('英文 [3 min ago]', stripTimeLabels('[3 min ago] Just got home'), 'Just got home')
