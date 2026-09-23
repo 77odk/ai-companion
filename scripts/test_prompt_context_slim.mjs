@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { composeContext } from '../src/lib/contextComposer.ts'
 import { buildSystemPrompt } from '../src/lib/chatPrompts.ts'
 import { estimateToken } from '../src/lib/token.ts'
@@ -42,5 +43,15 @@ assert.match(prompt, /点外卖/)
 assert.match(prompt, /上厕所/)
 assert.ok(!prompt.includes('特别是对方明确说你们的关系、你的身份、或对你的称呼'), '旧版重复长说明已移除')
 assert.ok(estimateToken(prompt) < 1800, `默认 system prompt 不再无限膨胀（当前估算 ${estimateToken(prompt)} tokens）`)
+
+console.log('\n[4] 功能上下文做减法：不再把重复/低相关块每轮塞进 core')
+const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+assert.ok(!chatSource.includes('apiMessages.push('), '功能上下文不再永久塞进不可裁剪 core')
+assert.ok(!chatSource.includes('buildSelfTimelineBlock'), '最近 TA 原话已有 history + 时间标记，不重复注入 SelfTimeline')
+assert.match(chatSource, /getRecentEvents\(activeSessionId \|\| undefined, 3\)/, 'Event 常驻窗口从 5 条收窄到 3 条')
+assert.match(chatSource, /buildSpacePostsBlock\(loadCurrentPosts\(activeSessionId \|\| undefined\), 2, lang\)/, 'Space 常驻窗口从 5 条收窄到 2 条')
+assert.match(chatSource, /const journalRelevant = /, '周记仅在本轮相关时取')
+assert.match(chatSource, /shouldShareMoment && !personaHasLifeAnchors\(persona\)/, '生活基线只在需要分享 TA 近况时注入')
+assert.match(chatSource, /composeContext\(apiMessages, historyForModel, \[\.\.\.contextBlocks, \.\.\.bridgeBlocks\]\)/, '功能上下文统一走现有 ContextBlock')
 
 console.log('\nprompt/context slim：全部通过')
