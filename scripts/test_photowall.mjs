@@ -6,6 +6,7 @@ import {
   photoUrl,
   loadLocalPhotos,
   saveLocalPhotos,
+  saveLocalPhotoMetadata,
   addLocalPhoto,
   mergePhotos,
   dataUrlBytes,
@@ -62,6 +63,10 @@ const loaded = loadLocalPhotos('s1')
 ok(loaded.length === 2 && loaded[0].id === 'p1', '写入后读回')
 ok(photoKey('s2') === 'ai_space_photos_s2' && photoKey(undefined) === 'ai_space_photos_global', '会话隔离 key')
 ok(loadLocalPhotos('s2').length === 0, '会话隔离：s2 读不到 s1')
+saveLocalPhotoMetadata([photo('cloud-1', 400, { dataUrl: 'data:image/jpeg;base64,AAAA' })], 'cloud-s1')
+const cachedMeta = loadLocalPhotos('cloud-s1')
+ok(cachedMeta.length === 1 && cachedMeta[0].id === 'cloud-1', '登录用户元数据可本地缓存')
+ok(cachedMeta[0].dataUrl === undefined, '登录用户本地缓存不长期保存 dataUrl')
 const afterAdd = addLocalPhoto(photo('p3', 300), 's1')
 ok(afterAdd.length === 3 && afterAdd[0].id === 'p3', 'addLocalPhoto 追加到最前')
 ok(loadLocalPhotos('s1').length === 3, 'addLocalPhoto 持久化')
@@ -82,6 +87,18 @@ ok(merged2.length === 1 && merged2[0].dataUrl === 'data:image/jpeg;base64,xx', '
 // 云端覆盖同 id 尺寸（以云端为准）
 const merged3 = mergePhotos([photo('p5', 100, { width: 10 })], [photo('p5', 100, { width: 800 })])
 ok(merged3[0].width === 800, '同 id 云端信息优先')
+
+// ---- 组件接线契约 ----
+const { readFileSync } = await import('node:fs')
+const aiSpaceSource = readFileSync(new URL('../src/components/AISpace.tsx', import.meta.url), 'utf8')
+const archiveSource = readFileSync(new URL('../src/components/PhotoWallArchive.tsx', import.meta.url), 'utf8')
+ok(aiSpaceSource.includes('setPhotos(local)'), '切换 session 先切回该 session 本地照片，不沿用上一角色')
+ok(aiSpaceSource.includes('saveLocalPhotoMetadata(next, sid)'), '上传/云端合并后缓存登录用户元数据')
+ok(aiSpaceSource.includes('dataUrl: scaled.dataUrl'), '上传成功后先用本地压缩图即时展示')
+ok(aiSpaceSource.includes('照片暂时没加载出来，稍后再试。'), '列表读取失败不再静默伪装空墙')
+ok(aiSpaceSource.includes('有照片暂时没显示出来，照片还在，稍后再试。'), '单图加载失败给明确状态')
+ok(archiveSource.includes('loading="eager"'), '首屏预览不再 lazy，避免可见照片延迟/漏加载')
+ok(archiveSource.includes('onPhotoLoadError?.(photo)'), '图片失败会回传错误状态')
 
 // ---- dataUrl 字节估算 ----
 ok(dataUrlBytes('data:image/jpeg;base64,AAAA') === 3, 'base64 长度 ×0.75 估算（4 字符 → 3 字节）')

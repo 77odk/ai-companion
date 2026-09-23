@@ -8,6 +8,7 @@ interface Props {
   uploading: number
   error: string | null
   photoSrc: (photo: PhotoMeta) => string
+  onPhotoLoadError?: (photo: PhotoMeta) => void
   onAdd: () => void
 }
 
@@ -28,7 +29,7 @@ function fmtMD(ts: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
-export default function PhotoWallArchive({ photos, uploading, error, photoSrc, onAdd }: Props) {
+export default function PhotoWallArchive({ photos, uploading, error, photoSrc, onPhotoLoadError, onAdd }: Props) {
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const touchStartX = useRef<number | null>(null)
@@ -105,7 +106,12 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
                     transform: `translate(${x}px, ${y}px) rotate(${angle}deg)`,
                   }}
                 >
-                  <img src={photoSrc(photo)} alt="" loading="lazy" />
+                  <img
+                    src={photoSrc(photo)}
+                    alt=""
+                    loading="eager"
+                    onError={() => onPhotoLoadError?.(photo)}
+                  />
                 </span>
               )
             })}
@@ -156,7 +162,12 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
                         onClick={() => setSelectedId(photo.id)}
                       >
                         <span className="photo-archive-pin" aria-hidden="true" />
-                        <img src={photoSrc(photo)} alt="" loading="lazy" />
+                        <img
+                          src={photoSrc(photo)}
+                          alt=""
+                          loading="lazy"
+                          onError={() => onPhotoLoadError?.(photo)}
+                        />
                         <span className="photo-archive-date">{fmtMD(photo.createdAt)}</span>
                       </button>
                     ))}
@@ -218,6 +229,8 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
           <img
             src={photoSrc(sorted[selectedIndex])}
             alt=""
+            loading="eager"
+            onError={() => onPhotoLoadError?.(sorted[selectedIndex])}
             onClick={(event) => event.stopPropagation()}
           />
           <button
