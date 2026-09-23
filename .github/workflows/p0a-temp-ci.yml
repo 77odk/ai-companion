@@ -1,0 +1,21 @@
+name: P0A temporary CI
+on:
+  push:
+    branches:
+      - fix/p0a-cross-device-consistency
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: P0-A targeted tests
+        run: node --test scripts/test_cloud_state.mjs scripts/test_session.mjs scripts/test_profile_cloud_sync.mjs scripts/test_reply_length.mjs scripts/test_session_store.mjs
+      - run: npm run build
+      - run: npm run lint
