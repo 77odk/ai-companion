@@ -565,31 +565,42 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     return () => window.removeEventListener(ELUVIN_DATA_CHANGE, syncBusyWithIdentity)
   }, [activeSessionId])
 
+  // P0-A：会话消息恢复只复用现有 session API + merge；不建第二套同步层。
+  // 调用方保证先 flush pending 再 pull，避免“本机看见已发送、服务端还没收到”的窗口继续扩大。
+  const refreshSessionMessages = useCallback(async (sessionId: string) => {
+    const token = getToken()
+    if (!token || !sessionId) return
+    const res = await getSession(token, sessionId)
+    if (!res.ok || !mountedRef.current || String(getActiveSessionId()) !== String(sessionId)) return
+    const cloud: StoredMessage[] = res.data.messages
+      .map((m) => ({ role: m.role, content: m.content, ts: Date.parse(m.createdAt), thinking: m.thinking }))
+      .filter((m) => Number.isFinite(m.ts))
+    const merged = mergeSessionMessages(getMessagesCache(sessionId), cloud)
+    saveMessagesCache(sessionId, merged)
+    setActiveSession(res.data.session)
+    if (merged.length > 0) {
+      setMessages(merged)
+      markRead(sessionId)
+      return
+    }
+    const opening = extractOpeningLine(res.data.session.persona)
+    if (!opening) {
+      setMessages([])
+      markRead(sessionId)
+      return
+    }
+    const firstMsg: StoredMessage = { role: 'assistant', content: opening, ts: Date.now() }
+    saveMessagesCache(sessionId, [firstMsg])
+    setMessages([firstMsg])
+    markRead(sessionId)
+  }, [])
+
+  // 记忆沿用原来的“进入当前聊天时拉一次”；P0-A 不扩大 Memory 同步行为。
   useEffect(() => {
     if (!activeSessionId) return
     const token = getToken()
     if (!token) return
     let cancelled = false
-    getSession(token, activeSessionId).then((res) => {
-      if (cancelled || !res.ok) return
-      setActiveSession(res.data.session)
-      const cloud: StoredMessage[] = res.data.messages
-        .map((m) => ({ role: m.role, content: m.content, ts: Date.parse(m.createdAt), thinking: m.thinking }))
-        .filter((m) => Number.isFinite(m.ts))
-      const merged = mergeSessionMessages(getMessagesCache(activeSessionId), cloud)
-      saveMessagesCache(activeSessionId, merged)
-      setMessages(merged)
-      markRead(activeSessionId)
-      if (merged.length === 0) {
-        const opening = extractOpeningLine(res.data.session.persona)
-        if (opening) {
-          const firstMsg: StoredMessage = { role: 'assistant', content: opening, ts: Date.now() }
-          saveMessagesCache(activeSessionId, [firstMsg])
-          setMessages([firstMsg])
-          markRead(activeSessionId)
-        }
-      }
-    })
     listMemories(token, activeSessionId).then((res) => {
       if (cancelled || !res.ok) return
       const cloudMem = res.data.memories.map(sessionMemoryToItem)
@@ -659,9 +670,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     document.addEventListener('visibilitychange', onVisible)
   }, [])
 
-  // #20：Memory 补传只在聊天挂载 / 网络恢复时触发；session 级 ref 防重入。
-  // 具体去重与对账全部在独立 helper，Chat 不碰上传/合并/去重链路。
+  // #20 + P0-A：沿用同一 pending outbox。挂载/联网/回前台时先补传消息，再拉当前 session 收敛。
+  // 不轮询；生成中的聊天不做 pull，避免把正在显示的流式占位覆盖掉。
   const memoryRetryInFlightRef = useRef<Set<string>>(new Set())
+  const sessionRecoveryInFlightRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!activeSessionId) return
@@ -677,20 +689,35 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
     }
 
-    const token = getToken()
-    if (token) {
-      void flushPendingOps(token)
+    const runSessionRecovery = async () => {
+      const token = getToken()
+      if (!token || sessionRecoveryInFlightRef.current.has(activeSessionId)) return
+      sessionRecoveryInFlightRef.current.add(activeSessionId)
+      try {
+        await flushPendingOps(token)
+        if (!streamingRef.current) await refreshSessionMessages(activeSessionId)
+      } finally {
+        sessionRecoveryInFlightRef.current.delete(activeSessionId)
+      }
+    }
+
+    void runSessionRecovery()
+    void runMemoryRetry()
+
+    const onOnline = () => {
+      void runSessionRecovery()
       void runMemoryRetry()
     }
-    const onOnline = () => {
-      const t = getToken()
-      if (!t) return
-      void flushPendingOps(t)
-      void runMemoryRetry()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void runSessionRecovery()
     }
     window.addEventListener('online', onOnline)
-    return () => window.removeEventListener('online', onOnline)
-  }, [activeSessionId])
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [activeSessionId, refreshSessionMessages])
 
   useEffect(() => {
     mountedRef.current = true
