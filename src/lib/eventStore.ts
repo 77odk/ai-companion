@@ -12,7 +12,8 @@ export type EventType = (typeof EVENT_TYPES)[number]
 
 export const EVENT_SOURCE_CHAT = 'chat'
 export const EVENT_SOURCE_MANUAL = 'manual'
-export type EventSource = 'chat' | 'manual'
+export const EVENT_SOURCE_SYSTEM = 'system'
+export type EventSource = 'chat' | 'manual' | 'system'
 
 export interface CompanionEvent {
   /** 随机不可猜（crypto.randomUUID，Node/浏览器通用） */
@@ -177,6 +178,8 @@ export function getRecentEvents(sessionId?: string, n = 5): CompanionEvent[] {
  * 校验不过返回 null（不写库）；成功写库并广播数据变更。
  */
 export function createEvent(input: {
+  /** 可选稳定 id：系统确定事件（如关系里程碑）用它做跨设备幂等；普通事件仍随机。 */
+  id?: string
   sessionId?: string
   type?: EventType
   title: string
@@ -189,9 +192,15 @@ export function createEvent(input: {
   const type = input.type ?? 'activity'
   const err = validateEventInput({ title: input.title, occurredAt: input.occurredAt, type })
   if (err) return null
+  const list = readRaw(sid)
+  const stableId = input.id?.trim()
+  if (stableId) {
+    const existing = list.find((item) => item.id === stableId)
+    if (existing) return existing
+  }
   const now = Date.now()
   const ev: CompanionEvent = {
-    id: newEventId(),
+    id: stableId || newEventId(),
     sessionId: sid,
     type,
     title: input.title.trim(),
@@ -202,7 +211,6 @@ export function createEvent(input: {
     confidence: typeof input.confidence === 'number' ? input.confidence : 1,
     source: input.source,
   }
-  const list = readRaw(sid)
   list.push(ev)
   writeRaw(sid, list)
   return ev

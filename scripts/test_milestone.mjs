@@ -2,7 +2,8 @@
 // 直接导入纯逻辑 TS（Node 22+ 原生类型剥离），不依赖任何构建工具。
 // 覆盖：认识天数判定（第 7/30/100/365 天命中，其他不中）/ 里程碑日标记往返 / 模板文案
 
-import { getKnownDays, getMilestoneStatus, markMilestoneShown, milestoneText, MILESTONE_DAYS } from '../src/lib/milestone.ts'
+import { ensureMilestoneEvent, getKnownDays, getMilestoneStatus, latestReachedMilestoneDay, markMilestoneShown, milestoneText, MILESTONE_DAYS } from '../src/lib/milestone.ts'
+import { getEvents } from '../src/lib/eventStore.ts'
 
 let passed = 0
 let failed = 0
@@ -86,6 +87,26 @@ ok(milestoneText(100).includes('一百天'), '100 天文案提「一百天」')
 ok(milestoneText(365).includes('一年'), '365 天文案提「一年」')
 ok(milestoneText(730).includes('两年'), '730 天文案提「两年」')
 ok(milestoneText(42).includes('认识'), '非里程碑天 → 兜底文案')
+
+
+
+console.log('\n[7] P0-B：最近已到里程碑直接接入 Event，且跨设备幂等')
+resetStore()
+const first31 = firstSeen(2026, 7, 25)
+const now31 = new Date(2026, 8, 24, 12, 0).getTime() // 第31天，最近里程碑=30
+localStorage.setItem('ai_companion_first_seen', String(first31))
+eq(getKnownDays(now31), 31, '当前已到第31天')
+eq(latestReachedMilestoneDay(31), 30, '第31天补最近已到的30天里程碑')
+const ev1 = ensureMilestoneEvent(30, now31)
+const ev2 = ensureMilestoneEvent(30, now31)
+ok(Boolean(ev1), '30天里程碑可直接创建 Event')
+eq(ev2?.id, ev1?.id, '重复调用返回同一个稳定 id')
+const milestoneEvents = getEvents().filter((e) => e.type === 'milestone')
+eq(milestoneEvents.length, 1, '同一系统里程碑只落一条 Event')
+eq(milestoneEvents[0].source, 'system', '系统确定里程碑标记为 system source')
+eq(milestoneEvents[0].title, '认识第 30 天', 'Event 标题是确定事实')
+const occurred = new Date(milestoneEvents[0].occurredAt)
+eq(occurred.getDate(), 23, '第30天 occurredAt 落在实际里程碑日，不拿第31天打开 App 的时间冒充')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)
