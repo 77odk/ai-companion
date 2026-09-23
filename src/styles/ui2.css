@@ -200,7 +200,7 @@
 .chat-companion-controls {
   position: relative;
   z-index: 9;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   width: auto;
   min-width: 0;
   padding: 0;
@@ -222,6 +222,8 @@
 
 .chat-model-slot {
   display: flex;
+  flex: 0 0 auto;
+  max-width: min(156px, 40vw);
 }
 
 .chat-control-capsule {
@@ -284,8 +286,8 @@
 }
 
 .chat-model-menu {
-  right: 0;
-  width: min(280px, calc(100vw - 28px));
+  right: auto;
+  width: min(280px, calc(100vw - 24px));
 }
 
 .chat-control-menu-head {
@@ -3233,10 +3235,11 @@
 
 .chat-page .context-meter-popover {
   position: absolute;
-  left: 0;
+  right: 0;
+  left: auto;
   bottom: calc(100% + 8px);
-  width: min(286px, calc(100vw - 36px));
-  padding: 12px;
+  width: min(232px, calc(100vw - 24px));
+  padding: 10px;
   border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
   border-radius: 14px;
   background: color-mix(in srgb, var(--color-card) 98%, transparent);
@@ -3245,30 +3248,46 @@
   backdrop-filter: blur(18px);
 }
 
-.chat-page .context-meter-popover > strong {
-  display: block;
-  margin-bottom: 5px;
+.chat-page .context-meter-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.chat-page .context-meter-summary strong {
   color: var(--color-text);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 650;
+}
+
+.chat-page .context-meter-source {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary-soft) 54%, transparent);
+  color: var(--color-primary-deep);
+  font-size: 9px;
+  line-height: 1.35;
 }
 
 .chat-page .context-meter-popover > p {
   margin: 0;
   color: var(--ui2-text-secondary, #817773);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .chat-page .context-meter-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .chat-page .context-meter-actions button {
-  min-height: 30px;
-  padding: 6px 10px;
+  min-height: 28px;
+  padding: 5px 9px;
   border: 1px solid color-mix(in srgb, var(--color-border) 64%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-card) 88%, transparent);
