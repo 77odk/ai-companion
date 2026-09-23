@@ -3,33 +3,60 @@ interface Props {
   onGoGuide: () => void
 }
 
-// Welcome 视觉按用户确认参考图复刻。
-// 保留既有 onStart / onGoGuide 行为，只替换展示层。
 export default function Welcome({ onStart, onGoGuide }: Props) {
   return (
     <div className="welcome-page welcome-reference-page">
       <img
-        className="welcome-reference-art"
-        src="/brand/welcome-reference-mobile.jpg"
+        className="welcome-reference-scene"
+        src="/brand/welcome-scene.svg"
         alt=""
         aria-hidden="true"
       />
 
-      <p className="welcome-reference-slogan">忆过往，成文思</p>
+      <div className="welcome-reference-topline">
+        <p>在时间里，和你一起。</p>
+        <span>ALWAYS WITH YOU.</span>
+      </div>
 
-      <button
-        type="button"
-        className="welcome-reference-hit welcome-reference-primary"
-        onClick={onStart}
-        aria-label="登录 / 注册"
-      />
+      <main className="welcome-reference-content">
+        <img
+          className="welcome-reference-logo"
+          src="/brand/eluvin-book-icon.jpg"
+          alt="忆文"
+        />
 
-      <button
-        type="button"
-        className="welcome-reference-hit welcome-reference-secondary"
-        onClick={onGoGuide}
-        aria-label="先了解一下"
-      />
+        <h1>忆文</h1>
+        <p className="welcome-reference-en">ELUVIN</p>
+        <p className="welcome-reference-slogan">忆过往，成文思</p>
+
+        <span className="welcome-reference-divider" aria-hidden="true" />
+
+        <p className="welcome-reference-lead">
+          不只是记忆，
+          <br />
+          而是我们一起走过的每一天。
+        </p>
+
+        <p className="welcome-reference-keywords">记忆 · 陪伴 · 成长 · 更久的我们</p>
+
+        <div className="welcome-reference-actions">
+          <button type="button" className="welcome-reference-primary" onClick={onStart}>
+            <span>登录 / 注册</span>
+            <span aria-hidden="true">→</span>
+          </button>
+
+          <button type="button" className="welcome-reference-secondary" onClick={onGoGuide}>
+            <span>先了解一下</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </main>
+
+      <p className="welcome-reference-note" aria-hidden="true">
+        记录时光，
+        <br />
+        也记录我们。 ♡
+      </p>
     </div>
   )
 }
