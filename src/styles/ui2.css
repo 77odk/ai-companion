@@ -200,9 +200,9 @@
 .chat-companion-controls {
   position: relative;
   z-index: 9;
-  flex: none;
+  flex: 1 1 auto;
   width: auto;
-  min-width: max-content;
+  min-width: 0;
   padding: 0;
   display: flex;
   align-items: center;
@@ -214,7 +214,9 @@
 
 .chat-control-slot {
   position: relative;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: min(174px, 42vw);
   pointer-events: auto;
 }
 
@@ -224,7 +226,7 @@
 
 .chat-control-capsule {
   min-height: 28px;
-  max-width: 174px;
+  max-width: 100%;
   padding: 5px 10px;
   display: inline-flex;
   align-items: center;
@@ -3165,14 +3167,7 @@
   gap: 8px;
   min-height: 30px;
   padding: 2px 6px 0;
-  overflow-x: auto;
-  overflow-y: visible;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-.chat-page .chat-inline-controls::-webkit-scrollbar {
-  display: none;
+  overflow: visible;
 }
 
 .chat-page .context-meter-slot {
