@@ -257,6 +257,127 @@ export function setSessionStart(ts: number, sessionId?: string): void {
   localStorage.setItem(sessionStartKey(sessionId), String(ts))
 }
 
+// ---- Context Meter（session 级当前上下文状态） ----
+// 与聊天会话生命周期一致：退出/刷新页面不清；只有 sessionStart 推进后旧段状态才失效。
+// 继续走既有 /api/sync 全量 blob，不新增后端接口。
+
+const CONTEXT_METER_KEY = 'ai_companion_context_meter'
+
+export interface ContextMeterState {
+  /** 这份统计属于哪一段上下文；必须与当前 sessionStart 相同才展示。 */
+  sessionStart: number
+  /** 当前这一段会话实际送进模型的上下文总量；真实 usage 优先，无 usage 时为本地估算。 */
+  used: number
+  budget: number
+  source: 'actual' | 'estimate'
+  /** 最近一轮请求统计，仅用于明细。 */
+  inputTokens: number
+  outputTokens?: number
+  cachedTokens?: number
+  updatedAt: number
+}
+
+function contextMeterKey(sessionId: string): string {
+  return `${CONTEXT_METER_KEY}_sid_${sessionId}`
+}
+
+function normalizeContextMeterState(raw: unknown): ContextMeterState | null {
+  if (!raw || typeof raw !== 'object') return null
+  const value = raw as Partial<ContextMeterState>
+  const sessionStart = Number(value.sessionStart)
+  const used = Number(value.used)
+  const budget = Number(value.budget)
+  const inputTokens = Number(value.inputTokens)
+  const updatedAt = Number(value.updatedAt)
+  const source = value.source === 'actual' ? 'actual' : value.source === 'estimate' ? 'estimate' : null
+  if (
+    !Number.isFinite(sessionStart) || sessionStart < 0 ||
+    !Number.isFinite(used) || used < 0 ||
+    !Number.isFinite(budget) || budget <= 0 ||
+    !Number.isFinite(inputTokens) || inputTokens < 0 ||
+    !Number.isFinite(updatedAt) || updatedAt <= 0 ||
+    !source
+  ) return null
+  const outputTokens = typeof value.outputTokens === 'number' && Number.isFinite(value.outputTokens) && value.outputTokens >= 0
+    ? value.outputTokens
+    : undefined
+  const cachedTokens = typeof value.cachedTokens === 'number' && Number.isFinite(value.cachedTokens) && value.cachedTokens >= 0
+    ? value.cachedTokens
+    : undefined
+  return {
+    sessionStart,
+    used,
+    budget,
+    source,
+    inputTokens,
+    ...(outputTokens == null ? {} : { outputTokens }),
+    ...(cachedTokens == null ? {} : { cachedTokens }),
+    updatedAt,
+  }
+}
+
+export function getContextMeterState(sessionId?: string): ContextMeterState | null {
+  if (!sessionId) return null
+  try {
+    const raw = localStorage.getItem(contextMeterKey(sessionId))
+    return raw ? normalizeContextMeterState(JSON.parse(raw)) : null
+  } catch {
+    return null
+  }
+}
+
+export function saveContextMeterState(sessionId: string, state: ContextMeterState): ContextMeterState | null {
+  if (!sessionId) return null
+  try {
+    const previous = getContextMeterState(sessionId)
+    const normalized = normalizeContextMeterState({
+      ...state,
+      updatedAt: Math.max(Number(state.updatedAt) || Date.now(), (previous?.updatedAt ?? 0) + 1),
+    })
+    if (!normalized) return null
+    localStorage.setItem(contextMeterKey(sessionId), JSON.stringify(normalized))
+    notifyDataChanged()
+    return normalized
+  } catch {
+    return null
+  }
+}
+
+export function collectAllContextMeters(): Record<string, ContextMeterState> {
+  const out: Record<string, ContextMeterState> = {}
+  const prefix = `${CONTEXT_METER_KEY}_sid_`
+  forEachLocalStorageKey((key) => {
+    if (!key.startsWith(prefix)) return
+    const sid = key.slice(prefix.length)
+    if (!sid) return
+    const state = getContextMeterState(sid)
+    if (state) out[sid] = state
+  })
+  return out
+}
+
+/** 同一 session：新 sessionStart 胜；同一段内 updatedAt 新者胜。旧 blob 无字段时自然跳过。 */
+export function applyCloudContextMeters(raw?: Record<string, ContextMeterState>): void {
+  if (!raw || typeof raw !== 'object') return
+  for (const [sid, value] of Object.entries(raw)) {
+    if (!sid) continue
+    const cloud = normalizeContextMeterState(value)
+    if (!cloud) continue
+    const local = getContextMeterState(sid)
+    if (
+      !local ||
+      cloud.sessionStart > local.sessionStart ||
+      (cloud.sessionStart === local.sessionStart && cloud.updatedAt > local.updatedAt)
+    ) {
+      try {
+        localStorage.setItem(contextMeterKey(sid), JSON.stringify(cloud))
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
 // ---- 上下文压缩（Context Compact，PR #99 同一批次） ----
 // 每会话最多压缩 1 次：用户主动「压缩」→ 最多 1 次模型调用，把较老历史压成 summary，
 // 同时保留最近原始消息；之后注入 = summary + recent raw messages。
