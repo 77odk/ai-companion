@@ -1445,16 +1445,21 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           if (mountedRef.current) {
             const estimatedOutput = estimateToken(assistantText.current)
             if (usage && Number.isFinite(usage.promptTokens)) {
-              const outputTokens = Number.isFinite(usage.completionTokens)
+              const reportedCompletion = typeof usage.completionTokens === 'number' && Number.isFinite(usage.completionTokens)
                 ? usage.completionTokens
-                : Number.isFinite(usage.totalTokens)
-                  ? Math.max(0, usage.totalTokens - usage.promptTokens)
-                  : undefined
-              const totalTokens = Number.isFinite(usage.totalTokens)
+                : undefined
+              const reportedTotal = typeof usage.totalTokens === 'number' && Number.isFinite(usage.totalTokens)
                 ? usage.totalTokens
-                : outputTokens == null
-                  ? undefined
-                  : usage.promptTokens + outputTokens
+                : undefined
+              const cachedTokens = typeof usage.cachedPromptTokens === 'number' && Number.isFinite(usage.cachedPromptTokens)
+                ? usage.cachedPromptTokens
+                : undefined
+              const outputTokens = reportedCompletion ?? (
+                reportedTotal == null ? undefined : Math.max(0, reportedTotal - usage.promptTokens)
+              )
+              const totalTokens = reportedTotal ?? (
+                outputTokens == null ? undefined : usage.promptTokens + outputTokens
+              )
               setContextMeter({
                 used: usage.promptTokens,
                 budget: composed.hardBudget,
@@ -1462,7 +1467,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 inputTokens: usage.promptTokens,
                 ...(outputTokens == null ? {} : { outputTokens }),
                 ...(totalTokens == null ? {} : { totalTokens }),
-                ...(Number.isFinite(usage.cachedPromptTokens) ? { cachedTokens: usage.cachedPromptTokens } : {}),
+                ...(cachedTokens == null ? {} : { cachedTokens }),
               })
             } else {
               setContextMeter({
