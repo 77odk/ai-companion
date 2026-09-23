@@ -1514,8 +1514,8 @@
 
 .welcome-reference-actions {
   width: min(100%, 288px);
-  margin-top: auto;
-  padding-top: 26px;
+  margin-top: 88px;
+  padding-top: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1610,7 +1610,8 @@
   }
 
   .welcome-reference-actions {
-    padding-top: 18px;
+    margin-top: 54px;
+    padding-top: 0;
   }
 }
 
