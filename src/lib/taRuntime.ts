@@ -413,7 +413,7 @@ function explicitSelfCurrentClause(clause: string): boolean {
   // “好，我去…” / “我正在…” / “我刚…” 等明确自我当前动作。
   if (/(?:^|[，,；;]\s*)我(?:现在|正(?:在)?|还在|在|去|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/.test(t)) return true
   // 省主语但带强当前标记：“先去洗澡”“正在看书”“刚到家”。
-  if (/^(?:现在|正(?:在)?|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/.test(t)) return true
+  if (/^(?:现在|正(?:在)?|还在|在|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/.test(t)) return true
   // 很短的口语自述：“洗澡去了”“看书呢”，避免把“看书这件事…”之类泛提及当当前状态。
   if (t.length <= 16 && /(?:去了|中|呢|着呢|一会儿?|一下|了)$/.test(t)) return true
   // English: only explicit first-person/current constructions.
