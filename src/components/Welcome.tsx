@@ -44,7 +44,7 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
 
       <div className="welcome-inner">
         <div className="welcome-logo">
-          <img src="/brand/eluvin-book-icon.svg" alt="忆文" />
+          <img src="/brand/eluvin-book-icon.jpg" alt="忆文" />
         </div>
 
         <p className="welcome-en">ELUVIN</p>
