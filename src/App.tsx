@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Welcome from './components/Welcome'
 import RolePicker, { type NaturalSetup } from './components/RolePicker'
 import Chat from './components/Chat'
-import ChatCompanionControls from './components/ChatCompanionControls'
 import Settings, { type SettingsPage } from './components/Settings'
 import AISpace from './components/AISpace'
 import ChatProfile from './components/ChatProfile'
@@ -843,7 +842,7 @@ export default function App() {
               />
             )}
             {view === 'chat' && (
-              <div className={`chat-shell${activeChatSessionId ? ' chat-shell-with-controls' : ''}`}>
+              <div className="chat-shell">
                 <Chat
                   key={headerSession ? String(headerSession.id) : 'no-session'}
                   onGoSettings={() => openSettings('main')}
@@ -853,7 +852,6 @@ export default function App() {
                     goView('chatprofile')
                   }}
                 />
-                {activeChatSessionId && <ChatCompanionControls sessionId={activeChatSessionId} />}
               </div>
             )}
             {view === 'settings' && (
