@@ -15,6 +15,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Full test baseline
+        continue-on-error: true
+        run: npm test
       - name: P1-C targeted tests
         run: node scripts/test_chat_companion_controls.mjs && node scripts/test_context_composer.mjs && node scripts/test_identity_modes.mjs && node scripts/test_model_usage.mjs && node scripts/test_prompt_context_slim.mjs && node scripts/test_memory_instruction.mjs
       - run: npm run build
