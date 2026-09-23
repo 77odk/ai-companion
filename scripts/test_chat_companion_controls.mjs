@@ -23,14 +23,14 @@ test('composer and companion controls share one visual panel', () => {
   assert.match(cssBlock('.chat-page .chat-composer-panel'), /env\(safe-area-inset-bottom\)/)
 })
 
-test('context meter shows cumulative context percent and full token details', () => {
+test('context meter shows session context percent and per-turn token details', () => {
   assert.match(chat, /className="context-meter-circle"/)
   assert.match(chat, /className="context-meter-ring"/)
   assert.match(chat, /Math\.round\(\(contextMeter\.used \/ contextMeter\.budget\) \* 100\)/)
   assert.match(chat, /上下文总量/)
-  assert.match(chat, /输入 tokens/)
-  assert.match(chat, /输出 tokens/)
-  assert.match(chat, /总 tokens/)
+  assert.match(chat, /本轮输入/)
+  assert.match(chat, /本轮输出/)
+  assert.doesNotMatch(chat, /<span>总 tokens<\/span>/)
   assert.match(chat, /Cache 命中/)
   assert.match(chat, /source: 'estimate'/)
   assert.match(chat, /source: 'actual'/)
