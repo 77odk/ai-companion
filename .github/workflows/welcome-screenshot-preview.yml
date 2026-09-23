@@ -26,16 +26,7 @@ jobs:
           cat /tmp/eluvin-preview.log
           exit 1
       - name: Capture 390x844 Welcome
-        run: |
-          cat > /tmp/capture.mjs <<'EOF'
-          import { chromium } from 'playwright'
-          const browser = await chromium.launch({ headless: true })
-          const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
-          await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' })
-          await page.screenshot({ path: 'welcome-390x844.png', fullPage: false })
-          await browser.close()
-          EOF
-          npx -y -p playwright@1.55.0 node /tmp/capture.mjs
+        run: npx -y playwright@1.55.0 screenshot --viewport-size="390,844" --wait-for-timeout=1500 http://127.0.0.1:4173/ welcome-390x844.png
       - uses: actions/upload-artifact@v4
         with:
           name: welcome-390x844
