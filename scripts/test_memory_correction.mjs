@@ -28,7 +28,15 @@ globalThis.fetch = async (url, init = {}) => {
   )
 }
 
-const { correctMemoryText, removeMemory } = await import('../src/lib/memoryCorrection.ts')
+const {
+  correctMemoryText,
+  removeMemory,
+  looksLikeMemoryCorrectionIntent,
+  extractMemoryCorrectionProposal,
+  stripMemoryCorrectionMarkers,
+  hasMemoryCorrectionMarker,
+  refreshMemoryCorrectionTarget,
+} = await import('../src/lib/memoryCorrection.ts')
 const { getMemoriesCache, saveMemoriesCache } = await import('../src/lib/sessionStore.ts')
 
 let passed = 0
@@ -57,6 +65,8 @@ const original = {
 
 console.log('\n[1] Detail 来源语义与空态')
 const component = fs.readFileSync(new URL('../src/components/Memory.tsx', import.meta.url), 'utf8')
+const chatComponent = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+const promptSource = fs.readFileSync(new URL('../src/lib/chatPrompts.ts', import.meta.url), 'utf8')
 check('source 有值展示真实 source', component.includes('selected.item.source.trim()'))
 check('source 无值显示诚实空态', component.includes('没有保留当时原文'))
 check('三层标题明确区分', ['当时你说', 'TA 当时回应', 'TA 最后记住'].every((text) => component.includes(text)))
@@ -219,6 +229,34 @@ check('详情页有删除入口', component.includes('memory-delete-trigger'))
 check('删除要二次确认', component.includes('memory-delete-confirm') && component.includes('确认删除'))
 check('删除成功后回记忆长河', component.includes('setConfirmingDelete(false)') && component.includes("setView('river')"))
 check('删除失败就地提示不静默', component.includes('setDeleteError(result.message)'))
+
+console.log('\n[10] 聊天内 AI 纠正申请 + 用户确认门')
+check('粗筛能识别“我说错了”', looksLikeMemoryCorrectionIntent('我刚才说错了，我其实喜欢咖啡'))
+check('普通聊天不误判纠正', !looksLikeMemoryCorrectionIntent('今天喝了杯咖啡'))
+const zhProposal = extractMemoryCorrectionProposal('行，我先问你要不要改。\n【纠正记忆·s:41】用户只是不喜欢黑咖啡')
+check('中文纠正 marker 可提取', zhProposal?.ref === 's:41' && zhProposal?.value === '用户只是不喜欢黑咖啡')
+const enProposal = extractMemoryCorrectionProposal('Want me to fix that?\n[Correct Memory g:abc-1] The user likes coffee.')
+check('英文纠正 marker 可提取', enProposal?.ref === 'g:abc-1' && enProposal?.value === 'The user likes coffee.')
+check('纠正 marker 不进入聊天正文', stripMemoryCorrectionMarkers('好，我先不动。\n【纠正记忆·s:41】新事实') === '好，我先不动。')
+check('流式半截纠正 marker 也隐藏', stripMemoryCorrectionMarkers('好。\n【纠正记忆·s:') === '好。')
+check('能识别纠正 marker 并阻断普通 Memory fallback', hasMemoryCorrectionMarker('【纠正记忆·s:41】新事实'))
+
+store.clear()
+store.set('ai_companion_memory', JSON.stringify([original]))
+const freshGlobal = refreshMemoryCorrectionTarget({ kind: 'global', item: original })
+check('确认前可重新解析当前 global 目标', freshGlobal?.kind === 'global' && freshGlobal.item.text === original.text)
+store.set('ai_companion_memory', JSON.stringify([{ ...original, text: '别处已经改过' }]))
+check('目标内容已变化时拒绝旧提案覆盖', refreshMemoryCorrectionTarget({ kind: 'global', item: original }) === null)
+
+check('Memory block 支持仅在纠正轮注入内部编号', promptSource.includes('[M:${ref}]'))
+check('Chat 有纠正意图粗筛', chatComponent.includes('looksLikeMemoryCorrectionIntent(text)'))
+check('Chat 纠正轮给模型独立 consent 协议', chatComponent.includes("id: 'memory-correction-consent'"))
+check('Chat marker 命中时禁止普通记忆写入', chatComponent.includes('if (hasMemoryCorrectionMarker(rawText)) return false'))
+check('Chat 只先生成待确认提案', chatComponent.includes('setPendingMemoryCorrection(proposedCorrection)'))
+check('Chat 有“确认纠正”与“先不改”两个动作', chatComponent.includes('确认纠正') && chatComponent.includes('先不改'))
+check('确认时复用现有 correctMemoryText', chatComponent.includes('await correctMemoryText(freshTarget, pendingMemoryCorrection.value)'))
+check('确认前再次校验目标未被别处修改', chatComponent.includes('refreshMemoryCorrectionTarget(pendingMemoryCorrection.target)'))
+check('纠正 marker 在流式展示前被剥离', chatComponent.includes('stripMemoryCorrectionMarkers(stripMemoryMarkers(assistantText.current))'))
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed) process.exit(1)
