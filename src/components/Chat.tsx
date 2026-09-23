@@ -72,7 +72,7 @@ import { getSessionLang, saveSessionLang } from '../lib/sessionStore'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
-import { getMilestoneStatus, markMilestoneShown } from '../lib/milestone'
+import { ensureMilestoneEvent, getMilestoneStatus, latestReachedMilestoneDay, markMilestoneShown } from '../lib/milestone'
 import { getWeeklyReviews } from '../lib/weeklyReview'
 import { recordChatTopic, loadChatTopics } from '../lib/chatTopics'
 import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
@@ -794,7 +794,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }, [activeSessionId])
 
   useEffect(() => {
-    const st = getMilestoneStatus(Date.now(), getActiveSessionId() || undefined)
+    const now = Date.now()
+    const sid = getActiveSessionId() || undefined
+    const st = getMilestoneStatus(now, sid)
+    const reached = latestReachedMilestoneDay(st.day)
+    if (reached) ensureMilestoneEvent(reached, now, sid)
     if (st.hit && !st.shown) {
       setMilestone(st)
       setShowMilestone(true)
