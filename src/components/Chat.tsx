@@ -937,7 +937,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const explicitCandidates: ExplicitCandidate[] = []
     const memInstr = detectMemoryInstruction(text)
     const isRetort = !memInstr.isInstruction && isMemoryRetort(text)
-    if (memInstr.isInstruction && !(correctionIntent && correctionTargets.size > 0)) {
+    if (memInstr.isInstruction) {
       const content = (memInstr.fact ?? stripMemoryKeyword(text)).trim()
       if (content.length >= 4) {
         explicitCandidates.push({ text: content, source: text, topic: inferTopic(content) })
@@ -1168,7 +1168,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         })
       }
     }
-    if (memInstr.isInstruction) {
+    if (memInstr.isInstruction && !(correctionIntent && correctionTargets.size > 0)) {
       if (lang === 'en') {
         contextBlocks.push({
           id: 'memory-explicit',
