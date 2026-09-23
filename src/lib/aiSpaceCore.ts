@@ -556,7 +556,8 @@ export function planBackfillSlots(
 
   // 生成某天动态的时间戳：今天只在「今天已过去的时段」里挑（最晚 now-5 分钟，最早 7:00），
   // 过去的日子（昨天/前天）用 7:00-23:59 全时段随机——绝不让时间戳落在未来，也绝不被拖到凌晨。
-  const pickTime = (day: number, evidenceAt?: number): number | null =>
+  const pickTime = (day: number): number | null => pickPostTimeForDay(day, now, rand)
+  const pickEventTime = (day: number, evidenceAt?: number): number | null =>
     pickPostTimeForDay(day, now, rand, evidenceAt)
 
   // 当天是否已被窗口覆盖（lastVisit 是今天之前的日子 → 今天在窗口里，事件当天在窗口内规划）
@@ -570,7 +571,7 @@ export function planBackfillSlots(
       // 事件日：优先 1 条事件动态（趁热发，不吞日常配额、不被日常 2 条吞掉）；已发过事件则当天不再补
       if (u.event >= 1 || u.total >= MAX_TOTAL_PER_DAY) continue
       const evidenceAt = eventEvidenceAt?.get(dk)
-      const t = pickTime(day, evidenceAt)
+      const t = pickEventTime(day, evidenceAt)
       if (t != null) out.push({ at: t, source: 'event', ...(evidenceAt ? { evidenceAt } : {}) })
     } else {
       // 非事件日：TA 也有自己的生活——按概率发 1 条，不是天天刷屏
@@ -592,7 +593,7 @@ export function planBackfillSlots(
     dayUsage(posts, todayKey, ledger).total < MAX_TOTAL_PER_DAY
   ) {
     const evidenceAt = eventEvidenceAt?.get(todayKey)
-    const t = pickTime(todayStart, evidenceAt)
+    const t = pickEventTime(todayStart, evidenceAt)
     if (t != null) out.push({ at: t, source: 'event', ...(evidenceAt ? { evidenceAt } : {}) })
   }
   return out.sort((a, b) => a.at - b.at)
