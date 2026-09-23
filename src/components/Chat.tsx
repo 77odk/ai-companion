@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import MessageBubble from './MessageBubble'
 import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
-import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, type StoredMessage } from '../lib/storage'
+import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, getContextMeterState, saveContextMeterState, type ContextMeterState, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
 import { getAccount } from '../lib/sync'
@@ -157,16 +157,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [showMilestone, setShowMilestone] = useState(false)
   // 刷新对话只推进当前 session 的上下文分界线；历史仍完整保留。
   const sessionStart = getSessionStart(activeSessionId || undefined)
-  // Context：used 只表示当前会话此刻的上下文占用（composeContext 累积量）；
-  // provider usage 只用于展示“本轮输入 / 本轮输出 / Cache 命中”，绝不反过来覆盖会话总量。
-  const [contextMeter, setContextMeter] = useState<{
-    used: number
-    budget: number
-    source: 'actual' | 'estimate'
-    inputTokens: number
-    outputTokens?: number
-    cachedTokens?: number
-  } | null>(null)
+  // Context 是 session 级业务状态，不是页面临时 state：退出/刷新后从本地恢复，并随 /api/sync 全量 blob 上云。
+  // used = 当前这一段会话实际送进模型的上下文总量；provider prompt_tokens 有值时优先作为真实口径。
+  const [contextMeter, setContextMeter] = useState<ContextMeterState | null>(() => {
+    if (!activeSessionId) return null
+    const stored = getContextMeterState(activeSessionId)
+    return stored && stored.sessionStart === sessionStart ? stored : null
+  })
   // Compact：用户主动「压缩」→ 最多 1 次模型调用，把较老历史压成 summary；之后注入 = summary + recent raw。
   // 每会话最多压缩 1 次；原聊天记录绝不删除。summary 持久化，刷新后无需再调模型。
   const [compactDone, setCompactDone] = useState(() => {
@@ -213,7 +210,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     setCompactSummary(compactIsCurrent ? getContextCompactSummary(activeSessionId) : '')
     const storedBridge = getContextBridge(activeSessionId)
     setBridgeInfo(storedBridge && storedBridge.bridgedAt >= sessionStart ? storedBridge : null)
-    setContextMeter(null)
+    const storedMeter = getContextMeterState(activeSessionId)
+    setContextMeter(storedMeter && storedMeter.sessionStart === sessionStart ? storedMeter : null)
     setContextNotice(null)
     setContextBusy(null)
   }, [activeSessionId, sessionStart])
@@ -1185,12 +1183,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         ? buildCompactedHistory(compactSummary, history, COMPACT_KEEP_RECENT)
         : history
     const composed = composeContext(apiMessages, historyForModel, [...contextBlocks, ...bridgeBlocks])
-    setContextMeter({
+    const estimatedMeter: ContextMeterState = {
+      sessionStart,
       used: composed.totalTokens,
       budget: composed.hardBudget,
       source: 'estimate',
       inputTokens: composed.totalTokens,
-    })
+      updatedAt: Date.now(),
+    }
+    const savedEstimate = activeSessionId ? saveContextMeterState(activeSessionId, estimatedMeter) : estimatedMeter
+    if (mountedRef.current) setContextMeter(savedEstimate ?? estimatedMeter)
     if (composed.overBudget) {
       // 当前用户消息 / 核心 system 本身已经放不进 64k：不静默裁用户原话，也不把超限请求发给 provider。
       // 用户消息已经正常落历史；这里只撤掉空 assistant 占位并结束本轮流式状态。
@@ -1440,40 +1442,46 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         },
         onDone: (reasoning, usage) => {
           if (runId !== runIdRef.current) return
-          // 会话总量始终来自本轮 composeContext 的累计上下文；provider usage 只描述这一轮请求。
-          if (mountedRef.current) {
-            const estimatedOutput = estimateToken(assistantText.current)
-            if (usage && Number.isFinite(usage.promptTokens)) {
-              const reportedCompletion = typeof usage.completionTokens === 'number' && Number.isFinite(usage.completionTokens)
-                ? usage.completionTokens
-                : undefined
-              const reportedTotal = typeof usage.totalTokens === 'number' && Number.isFinite(usage.totalTokens)
-                ? usage.totalTokens
-                : undefined
-              const cachedTokens = typeof usage.cachedPromptTokens === 'number' && Number.isFinite(usage.cachedPromptTokens)
-                ? usage.cachedPromptTokens
-                : undefined
-              const outputTokens = reportedCompletion ?? (
-                reportedTotal == null ? undefined : Math.max(0, reportedTotal - usage.promptTokens)
-              )
-              setContextMeter({
-                used: composed.totalTokens,
-                budget: composed.hardBudget,
-                source: 'actual',
-                inputTokens: usage.promptTokens,
-                ...(outputTokens == null ? {} : { outputTokens }),
-                ...(cachedTokens == null ? {} : { cachedTokens }),
-              })
-            } else {
-              setContextMeter({
-                used: composed.totalTokens,
-                budget: composed.hardBudget,
-                source: 'estimate',
-                inputTokens: composed.totalTokens,
-                outputTokens: estimatedOutput,
-              })
+          // 最新请求的 prompt_tokens 就是当前整份输入上下文的真实体积；无 usage 才回退 composeContext 估算。
+          // 无论 Chat 组件是否还挂载，都先写 session 存储；这样退出聊天时本轮完成也不会把 Context 丢掉。
+          const estimatedOutput = estimateToken(assistantText.current)
+          let nextMeter: ContextMeterState
+          if (usage && Number.isFinite(usage.promptTokens)) {
+            const reportedCompletion = typeof usage.completionTokens === 'number' && Number.isFinite(usage.completionTokens)
+              ? usage.completionTokens
+              : undefined
+            const reportedTotal = typeof usage.totalTokens === 'number' && Number.isFinite(usage.totalTokens)
+              ? usage.totalTokens
+              : undefined
+            const cachedTokens = typeof usage.cachedPromptTokens === 'number' && Number.isFinite(usage.cachedPromptTokens)
+              ? usage.cachedPromptTokens
+              : undefined
+            const outputTokens = reportedCompletion ?? (
+              reportedTotal == null ? undefined : Math.max(0, reportedTotal - usage.promptTokens)
+            )
+            nextMeter = {
+              sessionStart,
+              used: usage.promptTokens,
+              budget: composed.hardBudget,
+              source: 'actual',
+              inputTokens: usage.promptTokens,
+              ...(outputTokens == null ? {} : { outputTokens }),
+              ...(cachedTokens == null ? {} : { cachedTokens }),
+              updatedAt: Date.now(),
+            }
+          } else {
+            nextMeter = {
+              sessionStart,
+              used: composed.totalTokens,
+              budget: composed.hardBudget,
+              source: 'estimate',
+              inputTokens: composed.totalTokens,
+              outputTokens: estimatedOutput,
+              updatedAt: Date.now(),
             }
           }
+          const savedMeter = activeSessionId ? saveContextMeterState(activeSessionId, nextMeter) : nextMeter
+          if (mountedRef.current) setContextMeter(savedMeter ?? nextMeter)
           // 第27条：收集模型独立思考字段 reasoning_content，finalize 时合并到 thinking
           if (reasoning) reasoningRef.current = reasoning
           streamEndedRef.current = true
