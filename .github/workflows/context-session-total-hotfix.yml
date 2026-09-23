@@ -1,0 +1,21 @@
+name: context session total hotfix verify
+on:
+  push:
+    branches:
+      - fix/context-session-total-time-label
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Targeted tests
+        run: node scripts/test_reply_hygiene.mjs && node scripts/test_chat_companion_controls.mjs && node scripts/test_context_composer.mjs
+      - run: npm run build
+      - run: npm run lint
