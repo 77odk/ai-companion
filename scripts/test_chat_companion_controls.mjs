@@ -23,12 +23,22 @@ test('composer and companion controls share one visual panel', () => {
   assert.match(cssBlock('.chat-page .chat-composer-panel'), /env\(safe-area-inset-bottom\)/)
 })
 
-test('context meter is a circle on the same horizontal row as the capsules', () => {
+test('context meter is compact, token-based, and placed after model controls', () => {
   assert.match(chat, /className="context-meter-circle"/)
   assert.match(chat, /className="context-meter-ring"/)
-  assert.match(chat, /CONTEXT_SOFT_BUDGET/)
-  assert.match(chat, /整理后继续聊/)
-  assert.match(chat, /承接到新一段/)
+  assert.match(chat, /formatTokenCount\(contextMeter\.used\)/)
+  assert.match(chat, /source: 'estimate'/)
+  assert.match(chat, /source: 'actual'/)
+  assert.match(chat, /真实值/)
+  assert.match(chat, /估算/)
+  assert.match(chat, /还没有数据/)
+  assert.match(chat, />整理</)
+  assert.match(chat, />承接</)
+  assert.ok(
+    chat.indexOf('<ChatCompanionControls sessionId={activeSessionId} />') < chat.indexOf('className="context-meter-slot"'),
+    'Context 控件在身份/模型控件之后',
+  )
+  assert.doesNotMatch(chat, /CONTEXT_SOFT_BUDGET/)
   assert.doesNotMatch(chat, /context-meter-bar/)
   const inline = cssBlock('.chat-page .chat-inline-controls')
   assert.match(inline, /display:\s*flex/)
@@ -51,20 +61,26 @@ test('model capsule stays beside the identity capsule instead of being pushed ri
   assert.match(row, /flex-wrap:\s*nowrap/)
 })
 
-test('control popovers still open upward and stay bounded on mobile', () => {
+test('control popovers stay bounded on mobile and model menu clamps to its button', () => {
   const menu = cssBlock('.chat-control-menu')
   assert.match(menu, /bottom:\s*calc\(100% \+ 8px\)/)
   assert.match(menu, /max-height:/)
   assert.match(menu, /overflow-y:\s*auto/)
   assert.match(cssBlock('.chat-identity-menu'), /100vw - 28px/)
-  assert.match(cssBlock('.chat-model-menu'), /100vw - 28px/)
+  assert.match(cssBlock('.chat-model-menu'), /100vw - 24px/)
+  assert.match(controls, /modelButtonRef/)
+  assert.match(controls, /getBoundingClientRect\(\)/)
+  assert.match(controls, /Math\.max\(12, Math\.min\(centered, viewportWidth - menuWidth - 12\)\)/)
+  assert.match(controls, /position: 'fixed'/)
   const meter = cssBlock('.chat-page .context-meter-popover')
-  assert.match(meter, /bottom:\s*calc\(100% \+ 8px\)/)
-  assert.match(meter, /100vw - 36px/)
+  assert.match(meter, /right:\s*0/)
+  assert.match(meter, /100vw - 24px/)
 })
 
-test('immersion control keeps the approved choices and help copy', () => {
-  assert.match(controls, /沉浸感 ·/)
+test('immersion control shows only the selected value while keeping approved choices/help', () => {
+  assert.doesNotMatch(controls, /沉浸感 · \{identityDisplayLabel/)
+  assert.match(controls, /\{identityDisplayLabel\(identityMode\)\}/)
+  assert.match(controls, /return mode === 'ai' \? 'AI本体'/)
   assert.match(controls, /AI 本体/)
   assert.match(controls, /note: '完整真人感'/)
   assert.match(controls, /note: '平衡真人感与 AI'/)
