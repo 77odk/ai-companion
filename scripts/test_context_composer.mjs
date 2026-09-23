@@ -105,10 +105,10 @@ const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.met
 const cloudSource = readFileSync(new URL('../src/lib/cloudStateResources.ts', import.meta.url), 'utf8')
 const syncSource = readFileSync(new URL('../src/lib/sync.ts', import.meta.url), 'utf8')
 const promptSource = readFileSync(new URL('../src/lib/chatPrompts.ts', import.meta.url), 'utf8')
-// Meter：发送前显示本地估算；provider 回 prompt_tokens 后覆盖为真实值，不新增额外 LLM
+// Meter：会话总量始终来自 composeContext 累积量；provider usage 只补本轮输入/输出/Cache，不新增额外 LLM
 assert.match(chatSource, /context-meter-slot/, 'Meter 控件渲染')
 assert.match(chatSource, /used: composed\.totalTokens,[\s\S]*source: 'estimate',[\s\S]*inputTokens: composed\.totalTokens/, '发送前保留本地输入估算')
-assert.match(chatSource, /used: usage\.promptTokens,[\s\S]*source: 'actual',[\s\S]*inputTokens: usage\.promptTokens/, 'provider usage 返回后覆盖为真实输入 token')
+assert.match(chatSource, /used: composed\.totalTokens,[\s\S]*source: 'actual',[\s\S]*inputTokens: usage\.promptTokens/, 'provider usage 只补本轮输入，不覆盖会话总量')
 assert.match(chatSource, /if \(composed\.overBudget\)/, '超过 64k 时在 provider 调用前停止')
 assert.doesNotMatch(chatSource, /buildTimeContext\(Date\.now\(\), lang\)/, 'Chat 不再重复追加第二份当前时间')
 assert.match(promptSource, /【此刻时间】/, 'System Prompt 仍保留当前时间注入')
