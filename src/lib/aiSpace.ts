@@ -41,7 +41,7 @@ import {
   buildReplyMessages,
   extractImageCaption,
 } from './aiSpaceLlm.ts'
-import { loadChatTopics, collectTopicDays } from './chatTopics.ts'
+import { loadChatTopics, collectTopicDays, collectTopicEvidenceAt } from './chatTopics.ts'
 import { chatCompletion } from './api.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { getFirstSeen, loadPersona, loadSettings } from './storage.ts'
@@ -328,10 +328,20 @@ export function refreshSpace(
   // 事件日 = 话题日 + 约定发生日（因果链第一步：collectTopicDays 只收 ≤今天 的 futureDay，未来约定不预生成）
   const topics = loadChatTopics(sessionId)
   const activeDays = collectTopicDays(topics, dayKeyOf(now))
+  const eventEvidenceAt = collectTopicEvidenceAt(topics)
   // v3 配额账本（只留今天的键）：计划时已用额度 = max(现存动态, 账本)——删了动态配额照扣
   const ledger = todayLedger(sessionId, now)
   const relationshipStart = getFirstSeen(sessionId)
-  const slots = planBackfillSlots(prev.lastVisit, now, prev.posts, activeDays, Math.random, ledger, relationshipStart)
+  const slots = planBackfillSlots(
+    prev.lastVisit,
+    now,
+    prev.posts,
+    activeDays,
+    Math.random,
+    ledger,
+    relationshipStart,
+    eventEvidenceAt,
+  )
 
   // 空人设也能进入生活页：有模型就用当前身份策略生成；没模型才落安全兜底。
   if (!persona.trim()) {
