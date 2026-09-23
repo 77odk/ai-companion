@@ -1,0 +1,21 @@
+name: P0B temporary CI
+on:
+  push:
+    branches:
+      - fix/p0b-runtime-event-time
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: P0-B targeted tests
+        run: node scripts/test_ta_runtime.mjs && node scripts/test_milestone.mjs && node scripts/test_space_time_fix.mjs && node scripts/test_event_store.mjs && node scripts/test_event_v2.mjs && node scripts/test_aispace_v3.mjs
+      - run: npm run build
+      - run: npm run lint
