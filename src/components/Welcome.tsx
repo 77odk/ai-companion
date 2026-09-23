@@ -18,6 +18,7 @@ function handleRefresh(): void {
 // UI2-02：Welcome 是「进入 Eluvin 世界之前的一扇门」。
 // 移除 feature pills 展示（对应功能仍在，只是品牌入口不再陈列）；
 // 保留：忆文 / ELUVIN / 官方 slogan「忆过往，成文思」/ 既有 onStart / onGoGuide / 强刷入口（复用 forceRefresh）。
+// Brand Refresh preview：只把原来的文字占位 Logo 换成已确认的「记忆之书」品牌图标，不动页面流程。
 export default function Welcome({ onStart, onGoGuide }: Props) {
   // 站点访问数字走我们自己的后端（第一方），取不到就不显示，不填 0 也不编数字。
   const [visitors, setVisitors] = useState<number | null>(null)
@@ -42,8 +43,8 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
       </button>
 
       <div className="welcome-inner">
-        <div className="welcome-logo" aria-hidden="true">
-          <span className="welcome-logo-mark">忆</span>
+        <div className="welcome-logo">
+          <img src="/brand/eluvin-book-icon.svg" alt="忆文" />
         </div>
 
         <p className="welcome-en">ELUVIN</p>
