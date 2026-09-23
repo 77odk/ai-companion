@@ -49,7 +49,7 @@ import { allowsBusyState, allowsEmbodiedLifeContext, buildIdentityBoundaryRepair
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
-import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
+import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, CONTEXT_SOFT_BUDGET, type ContextBlock } from '../lib/contextComposer'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -78,6 +78,7 @@ import { recordChatTopic, loadChatTopics } from '../lib/chatTopics'
 import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
 import { processEventCandidate } from '../lib/eventDetector'
 import MilestoneCard from './MilestoneCard'
+import ChatCompanionControls from './ChatCompanionControls'
 
 
 /**
@@ -172,6 +173,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   // contextBusy：防止 Compact / Bridge 的模型调用并发（每次最多 1 次）。
   const [contextBusy, setContextBusy] = useState<'compact' | 'bridge' | null>(null)
   const [contextNotice, setContextNotice] = useState<string | null>(null)
+  const [contextMenuOpen, setContextMenuOpen] = useState(false)
 
   const visibleMessages = useMemo(
     () => filterSessionMessages(messages, sessionStart),
@@ -1638,75 +1640,130 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         </div>
       )}
 
-      {activeSessionId && (
-        <div className="context-meter-row">
-          <div className="context-meter" aria-hidden="true">
-            <div
-              className="context-meter-bar"
-              style={{ width: contextMeter ? `${Math.min(100, Math.round((contextMeter.used / contextMeter.budget) * 100))}%` : '0%' }}
-            />
-          </div>
-          <span className="context-meter-text">
-            {contextMeter ? `${Math.max(1, Math.round(contextMeter.used / 1024))}k / ${Math.round(contextMeter.budget / 1024)}k` : '—'}
-          </span>
-          {!compactDone && (
-            <button
-              type="button"
-              className="context-meter-btn"
-              onClick={handleCompact}
-              disabled={contextBusy !== null}
-              aria-label="压缩上下文"
-            >
-              {contextBusy === 'compact' ? '压缩中…' : '压缩'}
+      <div className="chat-composer-panel">
+        <div className="composer">
+          <textarea
+            ref={inputRef}
+            className="composer-input"
+            rows={1}
+            placeholder={isBusy ? 'TA 正在忙，消息会稍后回复' : '说点什么…'}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                handleSend()
+              }
+            }}
+          />
+          {streaming ? (
+            <button className="btn btn-stop" onClick={handleStop}>
+              停止
             </button>
-          )}
-          {!bridgeInfo && hasBridgableHistory(messages, sessionStart) && (
+          ) : (
             <button
               type="button"
-              className="context-meter-btn"
-              onClick={handleBridge}
-              disabled={contextBusy !== null}
-              aria-label="承接旧记忆"
+              className="btn btn-send"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={handleSend}
+              disabled={!input.trim()}
+              aria-label="发送"
+              title="发送"
             >
-              {contextBusy === 'bridge' ? '承接中…' : '承接'}
+              <SendArrowIcon />
             </button>
           )}
         </div>
-      )}
-      {contextNotice && (
-        <div className="context-notice" role="status">{contextNotice}</div>
-      )}
-      <div className="composer">
-        <textarea
-          ref={inputRef}
-          className="composer-input"
-          rows={1}
-          placeholder={isBusy ? 'TA 正在忙，消息会稍后回复' : '说点什么…'}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault()
-              handleSend()
-            }
-          }}
-        />
-        {streaming ? (
-          <button className="btn btn-stop" onClick={handleStop}>
-            停止
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="btn btn-send"
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={handleSend}
-            disabled={!input.trim()}
-            aria-label="发送"
-            title="发送"
-          >
-            <SendArrowIcon />
-          </button>
+
+        {activeSessionId && (
+          <div className="chat-inline-controls">
+            <div
+              className="context-meter-slot"
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setContextMenuOpen(false)
+              }}
+            >
+              <button
+                type="button"
+                className="context-meter-circle"
+                aria-label={contextMeter
+                  ? `上下文占用约 ${Math.max(1, Math.round((contextMeter.used / CONTEXT_SOFT_BUDGET) * 100))}%`
+                  : '查看上下文占用'}
+                aria-expanded={contextMenuOpen}
+                onClick={() => setContextMenuOpen((value) => !value)}
+              >
+                <span
+                  className="context-meter-ring"
+                  data-level={contextMeter
+                    ? contextMeter.used >= CONTEXT_SOFT_BUDGET
+                      ? 'over'
+                      : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.85
+                        ? 'high'
+                        : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.7
+                          ? 'warn'
+                          : 'normal'
+                    : 'idle'}
+                  style={{
+                    background: contextMeter
+                      ? `conic-gradient(var(--context-meter-accent) ${Math.min(100, Math.max(0, Math.round((contextMeter.used / CONTEXT_SOFT_BUDGET) * 100)))}%, var(--ui2-hairline, rgba(51, 43, 40, 0.1)) 0)`
+                      : undefined,
+                  }}
+                >
+                  <span className="context-meter-value">
+                    {contextMeter ? `${Math.max(1, Math.round((contextMeter.used / CONTEXT_SOFT_BUDGET) * 100))}%` : '—'}
+                  </span>
+                </span>
+              </button>
+
+              {contextMenuOpen && (
+                <div className="context-meter-popover">
+                  <strong>上下文</strong>
+                  <p>
+                    {!contextMeter
+                      ? '发送一条消息后会显示当前上下文占用。'
+                      : contextMeter.used >= CONTEXT_SOFT_BUDGET
+                        ? '上下文已经很满，建议现在整理或承接到新一段。'
+                        : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.85
+                          ? '上下文接近安全上限，建议尽快整理。'
+                          : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.7
+                            ? '上下文开始变长，可以继续聊，也可以先整理。'
+                            : '上下文状态正常。'}
+                  </p>
+                  <div className="context-meter-actions">
+                    {!compactDone && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setContextMenuOpen(false)
+                          void handleCompact()
+                        }}
+                        disabled={contextBusy !== null}
+                      >
+                        {contextBusy === 'compact' ? '整理中…' : '整理后继续聊'}
+                      </button>
+                    )}
+                    {!bridgeInfo && hasBridgableHistory(messages, sessionStart) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setContextMenuOpen(false)
+                          void handleBridge()
+                        }}
+                        disabled={contextBusy !== null}
+                      >
+                        {contextBusy === 'bridge' ? '承接中…' : '承接到新一段'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            <ChatCompanionControls sessionId={activeSessionId} />
+          </div>
+        )}
+
+        {contextNotice && (
+          <div className="context-notice" role="status">{contextNotice}</div>
         )}
       </div>
 
