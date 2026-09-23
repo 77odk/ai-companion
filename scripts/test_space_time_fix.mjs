@@ -15,6 +15,9 @@ function ok(cond, name, detail = '') {
   if (cond) { passed++; console.log(`  ✓ ${name}`) }
   else { failed++; console.log(`  ✗ ${name}${detail ? ' → ' + detail : ''}`) }
 }
+function eq(actual, expected, name) {
+  ok(actual === expected, name, `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`)
+}
 
 const DAY = 86400000
 const dayStart = (ts) => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime() }
