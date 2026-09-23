@@ -70,7 +70,7 @@ globalThis.localStorage = {
   key: (index) => [...store.keys()][index] ?? null,
   get length() { return store.size },
 }
-const { getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, clearContextBridge } = await import('../src/lib/storage.ts')
+const { getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, clearContextBridge, getContextMeterState, saveContextMeterState, collectAllContextMeters, applyCloudContextMeters } = await import('../src/lib/storage.ts')
 assert.equal(getContextCompactAt('S1'), 0, '未压缩返回 0')
 assert.equal(getContextCompactSummary('S1'), '', '未压缩无摘要')
 setContextCompactSummary('早期摘要', 'S1')
@@ -99,16 +99,62 @@ assert.equal(getContextBridge('S2'), null, '承接会话隔离')
 clearContextBridge('S1')
 assert.equal(getContextBridge('S1'), null, '清除后返回 null')
 
+
+// Context Meter：session 级持久化；同一段按 updatedAt 新者胜，新 sessionStart 永远压过旧段。
+const meter1 = saveContextMeterState('S1', {
+  sessionStart: 0,
+  used: 12000,
+  budget: 64000,
+  source: 'actual',
+  inputTokens: 12000,
+  outputTokens: 42,
+  cachedTokens: 9000,
+  updatedAt: 1000,
+})
+assert.ok(meter1, 'Context Meter 可写入')
+assert.equal(getContextMeterState('S1')?.used, 12000, 'Context Meter 刷新后可从 localStorage 回读')
+assert.equal(getContextMeterState('S2'), null, 'Context Meter 按 session 隔离')
+assert.equal(collectAllContextMeters().S1?.used, 12000, 'Context Meter 进入全量同步收集')
+
+applyCloudContextMeters({
+  S1: {
+    sessionStart: 0,
+    used: 13000,
+    budget: 64000,
+    source: 'actual',
+    inputTokens: 13000,
+    outputTokens: 36,
+    cachedTokens: 9000,
+    updatedAt: 2000,
+  },
+})
+assert.equal(getContextMeterState('S1')?.used, 13000, '同一会话段云端 updatedAt 新者覆盖')
+
+applyCloudContextMeters({
+  S1: {
+    sessionStart: 5000,
+    used: 800,
+    budget: 64000,
+    source: 'estimate',
+    inputTokens: 800,
+    updatedAt: 1500,
+  },
+})
+assert.equal(getContextMeterState('S1')?.sessionStart, 5000, '新的 sessionStart 即使 updatedAt 较小也压过旧会话段')
+assert.equal(getContextMeterState('S1')?.used, 800, '新会话段从自己的 Context 重新计数')
+
 // ── PR #99：Chat.tsx / cloudStateResources.ts 源码契约 ──
 console.log('\n[contract] Chat 与 Cloud State 接入契约')
 const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
 const cloudSource = readFileSync(new URL('../src/lib/cloudStateResources.ts', import.meta.url), 'utf8')
 const syncSource = readFileSync(new URL('../src/lib/sync.ts', import.meta.url), 'utf8')
 const promptSource = readFileSync(new URL('../src/lib/chatPrompts.ts', import.meta.url), 'utf8')
-// Meter：会话总量始终来自 composeContext 累积量；provider usage 只补本轮输入/输出/Cache，不新增额外 LLM
+// Meter：session 级持久化；真实 prompt_tokens 代表当前整份输入上下文，无 usage 才用本地 compose 估算。
 assert.match(chatSource, /context-meter-slot/, 'Meter 控件渲染')
-assert.match(chatSource, /used: composed\.totalTokens,[\s\S]*source: 'estimate',[\s\S]*inputTokens: composed\.totalTokens/, '发送前保留本地输入估算')
-assert.match(chatSource, /used: composed\.totalTokens,[\s\S]*source: 'actual',[\s\S]*inputTokens: usage\.promptTokens/, 'provider usage 只补本轮输入，不覆盖会话总量')
+assert.match(chatSource, /getContextMeterState\(activeSessionId\)/, '进入会话时从 session 存储恢复 Meter')
+assert.match(chatSource, /saveContextMeterState\(activeSessionId, estimatedMeter\)/, '发送前估算写入 session 存储')
+assert.match(chatSource, /used: composed\.totalTokens,[\s\S]*source: 'estimate',[\s\S]*inputTokens: composed\.totalTokens/, '无真实 usage 时保留本地 payload 估算')
+assert.match(chatSource, /used: usage\.promptTokens,[\s\S]*source: 'actual',[\s\S]*inputTokens: usage\.promptTokens/, 'provider prompt_tokens 作为当前上下文真实总量')
 assert.match(chatSource, /if \(composed\.overBudget\)/, '超过 64k 时在 provider 调用前停止')
 assert.doesNotMatch(chatSource, /buildTimeContext\(Date\.now\(\), lang\)/, 'Chat 不再重复追加第二份当前时间')
 assert.match(promptSource, /【此刻时间】/, 'System Prompt 仍保留当前时间注入')
@@ -144,10 +190,13 @@ assert.match(chatSource, /bridgeInfo\.turnsLeft - 1/, 'bridge 每轮递减，临
 // 同步：Context 只并入既有 /api/sync 全量 blob，不注册第二套 /api/state kind
 assert.match(syncSource, /contextCompacts: collectAllContextCompacts\(\)/, 'compact 进入 collectData 全量 blob')
 assert.match(syncSource, /contextBridges: collectAllContextBridges\(\)/, 'bridge 进入 collectData 全量 blob')
+assert.match(syncSource, /contextMeters: collectAllContextMeters\(\)/, 'Context Meter 进入 collectData 全量 blob')
 assert.match(syncSource, /applyCloudContextCompacts\(d\.contextCompacts\)/, 'compact 从全量 blob 恢复')
 assert.match(syncSource, /applyCloudContextBridges\(d\.contextBridges\)/, 'bridge 从全量 blob 恢复')
+assert.match(syncSource, /applyCloudContextMeters\(d\.contextMeters\)/, 'Context Meter 从全量 blob 恢复')
 assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_compact'"), '不再注册 context_compact /api/state adapter')
 assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_bridge'"), '不再注册 context_bridge /api/state adapter')
+assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_meter'"), 'Context Meter 不另开 /api/state，同样走全量 blob')
 // 原聊天记录零删除：Chat 不新增删除类调用
 assert.ok(!chatSource.includes('clearMessagesCache'), 'Chat 不清理消息缓存')
 assert.ok(!chatSource.includes('deleteMessage'), 'Chat 不删除消息')
