@@ -10,6 +10,8 @@ export const COMPACT_INPUT_BUDGET = 42000
 export const COMPACT_KEEP_RECENT = 12
 /** Session Bridge：bridge 生成后临时参与对话的轮次数（约 6–10 轮，取 8） */
 export const BRIDGE_ACTIVE_TURNS = 8
+/** Session Bridge 单次模型输入预算：同样给 instruction / 输出留余量，不能只限消息条数。 */
+export const BRIDGE_INPUT_BUDGET = 42000
 /** Session Bridge：从上一会话取聊天尾部参与承接的最大消息条数（有限尾部，禁止搬完整旧聊天） */
 export const BRIDGE_TAIL_COUNT = 30
 
