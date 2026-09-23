@@ -911,11 +911,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // 唯一写入出口：send 里不再抢先写；finalize / busy 截断 / 失败路径都从这里落库。
     // 同一轮绝不产生「原话 + 提炼」两条同义记忆（planMemoryWrites 内部归并 + 落库判重双保险）。
     const flushMemoryWrites = (rawText: string) => {
+      // 纠正申请必须先经过用户确认；这一轮禁止 fallback 新写一条矛盾 Memory。
+      if (hasMemoryCorrectionMarker(rawText)) return false
       if (explicitCandidates.length === 0 && !rawText) return
       const plans = planMemoryWrites(explicitCandidates, rawText ? extractMemories(rawText) : [], userMsg.content.trim())
-      // 当轮 TA 回应短快照（仅追溯展示；去记忆标记/思考链后截断，不整段复制聊天历史）
+      // 当轮 TA 回应短快照（仅追溯展示；去系统标记/思考链后截断，不整段复制聊天历史）
       const replySnapshot = rawText
-        ? stripMemoryMarkers(stripThinkBlocks(rawText, lang)).trim().slice(0, 160) || undefined
+        ? stripMemoryCorrectionMarkers(stripMemoryMarkers(stripThinkBlocks(rawText, lang))).trim().slice(0, 160) || undefined
         : undefined
       let created = false
       for (const p of plans) {
@@ -931,6 +933,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // TASK-MEM-DISTILL：本地显式检测先收集候选、不抢先写——等模型回复的【记忆】marker 到达后统一归并
     // （有 marker 对应 → 只写一条提炼版 explicit；无对应 marker → fallback 写本地候选；只有 marker → 保持 inferred）
     // 候选的 explicit 身份来自用户证据（用户明确说过），text 若被 marker 匹配则采用模型提炼 wording。
+    const correctionIntent = !pendingMemoryCorrection && looksLikeMemoryCorrectionIntent(text)
     const explicitCandidates: ExplicitCandidate[] = []
     const memInstr = detectMemoryInstruction(text)
     const isRetort = !memInstr.isInstruction && isMemoryRetort(text)
@@ -1022,18 +1025,48 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // 核心 system 只留稳定身份/规则；Memory/Event/Runtime/Space 等都走现有 ContextBlock，
     // 避免所有功能永久挤进不可裁剪的 core。
     const contextBlocks: ContextBlock[] = []
+    const correctionTargets = new Map<string, MemoryCorrectionTarget>()
 
     const contextText = base
       .slice(-6)
       .map((m) => (m.role === 'assistant'
-        ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), lang), lang)
+        ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(m.content)), lang), lang)
         : m.content))
       .join('\n')
     const memory = recallSessionMemories(activeSessionId, contextText)
     if (memory.length > 0) {
-      const memoryBlock = buildMemoryBlock(memory, lang)
+      const refByItem = new Map<object, string>()
+      if (correctionIntent) {
+        const globalItems = loadMemory()
+        const sessionItems = activeSessionId ? getMemoriesCache(activeSessionId) : []
+        const token = getToken() ?? ''
+        for (const m of memory) {
+          const globalMatch = globalItems.filter((item) => item.id === m.id && item.text === m.text)
+          const sessionMatch = sessionItems.filter((item) => item.id === m.id && item.text === m.text)
+          if (globalMatch.length + sessionMatch.length !== 1) continue
+          if (globalMatch.length === 1) {
+            const ref = `g:${m.id}`
+            refByItem.set(m, ref)
+            correctionTargets.set(ref, { kind: 'global', item: globalMatch[0] })
+          } else if (activeSessionId && sessionMatch.length === 1) {
+            const ref = `s:${m.id}`
+            refByItem.set(m, ref)
+            correctionTargets.set(ref, { kind: 'session', sessionId: activeSessionId, item: sessionMatch[0], token })
+          }
+        }
+      }
+      const memoryBlock = buildMemoryBlock(memory, lang, correctionIntent ? (item) => refByItem.get(item) : undefined)
       if (memoryBlock) {
         contextBlocks.push({ id: 'memory', content: memoryBlock, priority: 'memory' })
+      }
+      if (correctionTargets.size > 0) {
+        contextBlocks.push({
+          id: 'memory-correction-consent',
+          priority: 'core',
+          content: lang === 'en'
+            ? 'USER may be correcting a stored fact. Only if they clearly replace/deny one numbered [M:...] memory, ask naturally for confirmation and end with exactly one line: [Correct Memory <g:id or s:id>] <the complete corrected fact>. This is only a proposal; do not claim it is already changed. Do not emit a normal [Memory] marker for the same fact.'
+            : '用户这句话可能在纠正旧记忆。只有在他明确否定/替换上面某条带 [M:...] 编号的记忆时，先自然询问是否要改，并在回复末尾单独输出一行【纠正记忆·g:id或s:id】纠正后的完整事实。这个标记只是申请，不能说已经改好；同一事实不要再输出普通【记忆】标记。一次最多一条。',
+        })
       }
       const now = Date.now()
       for (const m of memory) {
@@ -1288,7 +1321,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         thinking = thinkFromReasoning || thinkFromContent
       }
       thinking = cleanAttributionArtifacts(thinking, lang)
-      const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)), lang)
+      const correctionProposal = extractMemoryCorrectionProposal(raw)
+      const correctionTarget = correctionProposal ? correctionTargets.get(correctionProposal.ref) : undefined
+      const proposedCorrection = correctionTarget && correctionProposal && correctionProposal.value !== correctionTarget.item.text
+        ? { target: correctionTarget, value: correctionProposal.value }
+        : null
+      const cleaned = stripActionMarkers(
+        stripEmoji(stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(raw)), lang)),
+        lang,
+      )
       const attributionProblem = cleaned ? hasAttributionLeak(cleaned) : false
       const roboticProblem = cleaned ? looksRobotic(cleaned, liveIdentityMode) : false
       const fabricatedProblem = cleaned ? looksFabricated(cleaned) : false
@@ -1323,7 +1364,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           },
         ])
           .then((retry) => {
-            const retryCleaned = stripActionMarkers(stripEmoji(retry), lang)
+            const retryCleaned = stripActionMarkers(stripEmoji(stripMemoryCorrectionMarkers(stripMemoryMarkers(retry))), lang)
             const retryAvailability = retryCleaned ? classifyAvailability(retryCleaned) : null
             const retryIdentityMode = resolveIdentityMode(activeSessionId || undefined)
             const retryAllowBusy = allowsBusyState(retryIdentityMode)
@@ -1372,6 +1413,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         assistantMsgs[0].memorySaved = true
       }
       const final: StoredMessage[] = [...messages, userMsg, ...assistantMsgs]
+      if (proposedCorrection && mountedRef.current) {
+        setPendingMemoryCorrection(proposedCorrection)
+        setMemoryCorrectionNotice(null)
+      }
       commitFinal(final)
     }
     finalizeRef.current = finalize
@@ -1384,7 +1429,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         return
       }
       const clean = cleanStreamingAttributionArtifacts(
-        stripThinkBlocks(stripMemoryMarkers(assistantText.current), lang),
+        stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(assistantText.current)), lang),
         lang,
       )
       const total = clean.length
@@ -1514,7 +1559,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     const thinkMs = computeThinkDelayMs(text.length)
     thinkTimerRef.current = window.setTimeout(startStream, thinkMs)
-  }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, isBusy, persistMessages, uploadMessage, bridgeInfo, compactDone, compactSummary])
+  }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, isBusy, persistMessages, uploadMessage, bridgeInfo, compactDone, compactSummary, pendingMemoryCorrection])
 
   useEffect(() => {
     const injected = takeChatMessage()
