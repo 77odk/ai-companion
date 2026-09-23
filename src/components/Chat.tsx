@@ -50,7 +50,7 @@ import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
 import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
 import { estimateToken } from '../lib/token'
-import { correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
+import { clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, savePendingMemoryCorrection, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -186,7 +186,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [contextBusy, setContextBusy] = useState<'compact' | 'bridge' | null>(null)
   const [contextNotice, setContextNotice] = useState<string | null>(null)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
-  const [pendingMemoryCorrection, setPendingMemoryCorrection] = useState<{ target: MemoryCorrectionTarget; value: string } | null>(null)
+  const [pendingMemoryCorrection, setPendingMemoryCorrection] = useState<{ target: MemoryCorrectionTarget; value: string } | null>(() =>
+    activeSessionId ? loadPendingMemoryCorrection(activeSessionId, sessionStart, getToken() ?? '') : null,
+  )
   const [memoryCorrectionBusy, setMemoryCorrectionBusy] = useState(false)
   const [memoryCorrectionNotice, setMemoryCorrectionNotice] = useState<string | null>(null)
 
@@ -205,6 +207,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       setContextMeter(null)
       setContextNotice(null)
       setContextBusy(null)
+      setPendingMemoryCorrection(null)
+      setMemoryCorrectionBusy(false)
+      setMemoryCorrectionNotice(null)
       return
     }
     const compactedAt = getContextCompactAt(activeSessionId)
@@ -217,7 +222,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     setContextMeter(storedUsage && storedUsage.sessionStart === sessionStart ? storedUsage : null)
     setContextNotice(null)
     setContextBusy(null)
-    setPendingMemoryCorrection(null)
+    setPendingMemoryCorrection(loadPendingMemoryCorrection(activeSessionId, sessionStart, getToken() ?? ''))
     setMemoryCorrectionBusy(false)
     setMemoryCorrectionNotice(null)
   }, [activeSessionId, sessionStart])
@@ -1424,6 +1429,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const final: StoredMessage[] = [...messages, userMsg, ...assistantMsgs]
       if (proposedCorrection && mountedRef.current) {
         setPendingMemoryCorrection(proposedCorrection)
+        if (activeSessionId) savePendingMemoryCorrection(activeSessionId, sessionStart, proposedCorrection)
         setMemoryCorrectionNotice(null)
       }
       commitFinal(final)
@@ -1734,6 +1740,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const freshTarget = refreshMemoryCorrectionTarget(pendingMemoryCorrection.target)
     if (!freshTarget) {
       setPendingMemoryCorrection(null)
+      if (activeSessionId) clearPendingMemoryCorrection(activeSessionId)
       setMemoryCorrectionNotice('这条记忆已经发生变化，没有覆盖它。你可以再告诉 TA 一次。')
       return
     }
@@ -1747,6 +1754,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       notifyMemoryUpdated()
       setPendingMemoryCorrection(null)
+      if (activeSessionId) clearPendingMemoryCorrection(activeSessionId)
       setMemoryCorrectionNotice(result.changed ? '已按你的确认纠正这条记忆。' : '这条记忆已经是这个内容了。')
     } finally {
       setMemoryCorrectionBusy(false)
@@ -1756,6 +1764,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const rejectPendingMemoryCorrection = () => {
     if (memoryCorrectionBusy) return
     setPendingMemoryCorrection(null)
+    if (activeSessionId) clearPendingMemoryCorrection(activeSessionId)
     setMemoryCorrectionNotice('没有修改记忆。')
   }
 
