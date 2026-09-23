@@ -255,6 +255,100 @@ export function getSessionStart(sessionId?: string): number {
 
 export function setSessionStart(ts: number, sessionId?: string): void {
   localStorage.setItem(sessionStartKey(sessionId), String(ts))
+  const usage = getContextUsage(sessionId)
+  if (usage && usage.sessionStart !== ts) clearContextUsage(sessionId, false)
+}
+
+// ---- Context Meter：按 session 持久化当前上下文占用 ----
+
+const CONTEXT_USAGE_KEY = 'ai_companion_context_usage'
+
+function contextUsageKey(sessionId?: string): string {
+  return sessionId ? `${CONTEXT_USAGE_KEY}_sid_${sessionId}` : CONTEXT_USAGE_KEY
+}
+
+export interface ContextUsageState {
+  /** 当前上下文段起点；和 sessionStart 不一致时视为旧段数据。 */
+  sessionStart: number
+  /** 当前会话此刻占用的上下文 token。 */
+  used: number
+  budget: number
+  /** 最近一轮 usage 是否来自 provider；无 usage 时为 estimate。 */
+  source: 'actual' | 'estimate'
+  /** 最近一轮请求输入 / 输出 / cache，仅作明细。 */
+  inputTokens: number
+  outputTokens?: number
+  cachedTokens?: number
+  updatedAt: number
+}
+
+function normalizeContextUsage(raw: unknown): ContextUsageState | null {
+  if (!raw || typeof raw !== 'object') return null
+  const value = raw as Partial<ContextUsageState>
+  const sessionStart = Number(value.sessionStart)
+  const used = Number(value.used)
+  const budget = Number(value.budget)
+  const inputTokens = Number(value.inputTokens)
+  const updatedAt = Number(value.updatedAt)
+  if (
+    !Number.isFinite(sessionStart) || sessionStart < 0 ||
+    !Number.isFinite(used) || used < 0 ||
+    !Number.isFinite(budget) || budget <= 0 ||
+    !Number.isFinite(inputTokens) || inputTokens < 0 ||
+    !Number.isFinite(updatedAt) || updatedAt <= 0
+  ) return null
+  const outputTokens = typeof value.outputTokens === 'number' && Number.isFinite(value.outputTokens) && value.outputTokens >= 0
+    ? value.outputTokens
+    : undefined
+  const cachedTokens = typeof value.cachedTokens === 'number' && Number.isFinite(value.cachedTokens) && value.cachedTokens >= 0
+    ? value.cachedTokens
+    : undefined
+  return {
+    sessionStart,
+    used,
+    budget,
+    source: value.source === 'actual' ? 'actual' : 'estimate',
+    inputTokens,
+    ...(outputTokens == null ? {} : { outputTokens }),
+    ...(cachedTokens == null ? {} : { cachedTokens }),
+    updatedAt,
+  }
+}
+
+export function getContextUsage(sessionId?: string): ContextUsageState | null {
+  try {
+    const raw = localStorage.getItem(contextUsageKey(sessionId))
+    return raw ? normalizeContextUsage(JSON.parse(raw)) : null
+  } catch {
+    return null
+  }
+}
+
+function writeContextUsage(state: ContextUsageState, sessionId?: string, notify = false): void {
+  try {
+    localStorage.setItem(contextUsageKey(sessionId), JSON.stringify(state))
+    if (notify) notifyDataChanged()
+  } catch {
+    // 存不下不影响聊天
+  }
+}
+
+export function setContextUsage(state: Omit<ContextUsageState, 'updatedAt'> & { updatedAt?: number }, sessionId?: string): void {
+  const normalized = normalizeContextUsage({
+    ...state,
+    updatedAt: Number.isFinite(state.updatedAt) && Number(state.updatedAt) > 0 ? Number(state.updatedAt) : Date.now(),
+  })
+  if (!normalized) return
+  writeContextUsage(normalized, sessionId, true)
+}
+
+export function clearContextUsage(sessionId?: string, notify = true): void {
+  try {
+    localStorage.removeItem(contextUsageKey(sessionId))
+    if (notify) notifyDataChanged()
+  } catch {
+    // ignore
+  }
 }
 
 // ---- 上下文压缩（Context Compact，PR #99 同一批次） ----
@@ -411,6 +505,35 @@ function forEachLocalStorageKey(visitor: (key: string) => void): void {
     }
   } catch {
     // ignore
+  }
+}
+
+/** Context Meter：汇总所有 session 的最近上下文状态，继续走既有 /api/sync 全量 blob。 */
+export function collectAllContextUsages(): Record<string, ContextUsageState> {
+  const out: Record<string, ContextUsageState> = {}
+  const prefix = `${CONTEXT_USAGE_KEY}_sid_`
+  forEachLocalStorageKey((key) => {
+    if (!key.startsWith(prefix)) return
+    const sid = key.slice(prefix.length)
+    if (!sid) return
+    const state = getContextUsage(sid)
+    if (state) out[sid] = state
+  })
+  return out
+}
+
+/** 同一 session：更晚的 sessionStart 胜；同一上下文段内 updatedAt 更新者胜。 */
+export function applyCloudContextUsages(raw?: Record<string, ContextUsageState>): void {
+  if (!raw || typeof raw !== 'object') return
+  for (const [sid, value] of Object.entries(raw)) {
+    if (!sid) continue
+    const cloud = normalizeContextUsage(value)
+    if (!cloud) continue
+    const local = getContextUsage(sid)
+    const cloudWins = !local
+      || cloud.sessionStart > local.sessionStart
+      || (cloud.sessionStart === local.sessionStart && cloud.updatedAt > local.updatedAt)
+    if (cloudWins) writeContextUsage(cloud, sid, false)
   }
 }
 
