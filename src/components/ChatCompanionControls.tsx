@@ -77,6 +77,7 @@ export default function ChatCompanionControls({ sessionId }: { sessionId: string
         left,
         right: 'auto',
         top: Math.max(12, rect.top - 8),
+        bottom: 'auto',
         width: menuWidth,
         transform: 'translateY(-100%)',
       })
