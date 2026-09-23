@@ -28,27 +28,32 @@ export function looksLikeMemoryCorrectionIntent(text: string): boolean {
 
 /** 模型只可申请，不可直接落库；一次最多取第一条完整申请。 */
 export function extractMemoryCorrectionProposal(text: string): MemoryCorrectionProposal | null {
-  for (const line of String(text ?? '').split('\n')) {
-    const zh = /^\s*【纠正记忆[·・]\s*([gs]:[A-Za-z0-9._-]+)】\s*(.+?)\s*$/.exec(line)
-    if (zh?.[1] && zh[2]?.trim()) return { ref: zh[1], value: zh[2].trim() }
-    const en = /^\s*\[Correct Memory\s+([gs]:[A-Za-z0-9._-]+)\]\s*(.+?)\s*$/i.exec(line)
-    if (en?.[1] && en[2]?.trim()) return { ref: en[1], value: en[2].trim() }
-  }
+  const raw = String(text ?? '')
+  const zh = /【纠正记忆[·・]\s*([gs]:[A-Za-z0-9._-]+)】\s*([^\n]+)/.exec(raw)
+  if (zh?.[1] && zh[2]?.trim()) return { ref: zh[1], value: zh[2].trim() }
+  const en = /\[Correct Memory\s+([gs]:[A-Za-z0-9._-]+)\]\s*([^\n]+)/i.exec(raw)
+  if (en?.[1] && en[2]?.trim()) return { ref: en[1], value: en[2].trim() }
   return null
 }
 
-/** 展示/落聊天记录时物理剥掉申请标记；流式半截标记也不展示给用户。 */
+/** 展示/落聊天记录时物理剥掉申请标记；即使弱模型把标记贴在正文末尾也不泄漏。 */
 export function stripMemoryCorrectionMarkers(text: string): string {
   return String(text ?? '')
     .split('\n')
-    .filter((line) => !/^\s*(?:【纠正记忆|\[Correct Memory\b)/i.test(line))
+    .map((line) => {
+      const zhAt = line.indexOf('【纠正记忆')
+      const enMatch = /\[Correct Memory\b/i.exec(line)
+      const cutAt = zhAt >= 0 && enMatch ? Math.min(zhAt, enMatch.index) : zhAt >= 0 ? zhAt : enMatch?.index ?? -1
+      return cutAt >= 0 ? line.slice(0, cutAt).trimEnd() : line
+    })
+    .filter((line) => line.trim() !== '')
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
 
 export function hasMemoryCorrectionMarker(text: string): boolean {
-  return String(text ?? '').split('\n').some((line) => /^\s*(?:【纠正记忆|\[Correct Memory\b)/i.test(line))
+  return /【纠正记忆|\[Correct Memory\b/i.test(String(text ?? ''))
 }
 
 /**
