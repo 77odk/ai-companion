@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
 import { identityModeLabel, resolveIdentityMode, saveIdentityMode, type IdentityMode } from '../lib/companionPolicy'
 import { isActiveConfig, loadSavedConfigs, type SavedConfig } from '../lib/savedConfigs'
@@ -28,8 +28,6 @@ function shortModelLabel(configs: SavedConfig[]): string {
 
 export default function ChatCompanionControls({ sessionId }: { sessionId: string }) {
   const rootRef = useRef<HTMLDivElement>(null)
-  const modelButtonRef = useRef<HTMLButtonElement>(null)
-  const [modelMenuStyle, setModelMenuStyle] = useState<CSSProperties | undefined>(undefined)
   const [identityMode, setIdentityMode] = useState<IdentityMode>(() => resolveIdentityMode(sessionId))
   const [configs, setConfigs] = useState<SavedConfig[]>(() => loadSavedConfigs())
   const [modelLabel, setModelLabel] = useState(() => shortModelLabel(loadSavedConfigs()))
@@ -58,38 +56,6 @@ export default function ChatCompanionControls({ sessionId }: { sessionId: string
       document.removeEventListener('pointerdown', closeOutside)
     }
   }, [sessionId])
-
-  useEffect(() => {
-    if (open !== 'model') {
-      setModelMenuStyle(undefined)
-      return
-    }
-    const place = () => {
-      const button = modelButtonRef.current
-      if (!button) return
-      const rect = button.getBoundingClientRect()
-      const viewportWidth = window.visualViewport?.width ?? window.innerWidth
-      const menuWidth = Math.min(280, Math.max(216, viewportWidth - 24))
-      const centered = rect.left + rect.width / 2 - menuWidth / 2
-      const left = Math.max(12, Math.min(centered, viewportWidth - menuWidth - 12))
-      setModelMenuStyle({
-        position: 'fixed',
-        left,
-        right: 'auto',
-        top: Math.max(12, rect.top - 8),
-        bottom: 'auto',
-        width: menuWidth,
-        transform: 'translateY(-100%)',
-      })
-    }
-    place()
-    window.addEventListener('resize', place)
-    window.visualViewport?.addEventListener('resize', place)
-    return () => {
-      window.removeEventListener('resize', place)
-      window.visualViewport?.removeEventListener('resize', place)
-    }
-  }, [open])
 
   const chooseIdentity = (mode: IdentityMode) => {
     if (saveIdentityMode(sessionId, mode)) setIdentityMode(mode)
@@ -173,7 +139,6 @@ export default function ChatCompanionControls({ sessionId }: { sessionId: string
 
       <div className="chat-control-slot chat-model-slot">
         <button
-          ref={modelButtonRef}
           type="button"
           className="chat-control-capsule chat-model-capsule"
           aria-expanded={open === 'model'}
@@ -188,7 +153,7 @@ export default function ChatCompanionControls({ sessionId }: { sessionId: string
           </svg>
         </button>
         {open === 'model' && (
-          <div className="chat-control-menu chat-model-menu" role="menu" style={modelMenuStyle}>
+          <div className="chat-control-menu chat-model-menu" role="menu">
             {configs.length > 0 ? configs.map((config) => {
               const active = isActiveConfig(loadSettings(), config)
               return (
