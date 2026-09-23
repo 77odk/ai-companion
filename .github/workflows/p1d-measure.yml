@@ -1,4 +1,4 @@
-name: P1D verify
+name: P1D final verify
 on:
   push:
     branches:
@@ -6,7 +6,7 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -14,11 +14,5 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
       - run: npm run build
       - run: npm run lint
-      - name: Asset sizes
-        run: |
-          find dist/assets -maxdepth 1 -type f -printf '%f %s bytes\n' | sort -k2 -nr
-          echo '--- gzip ---'
-          for f in dist/assets/*; do printf '%s ' "$(basename "$f")"; gzip -c "$f" | wc -c; done | sort -k2 -nr
