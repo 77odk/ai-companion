@@ -14,6 +14,58 @@ export type MemoryRemovalResult = { ok: true } | { ok: false; message: string }
 
 const MEMORY_NOT_SYNCED = '这段记忆还没同步完成，请稍后再试'
 
+export interface MemoryCorrectionProposal {
+  ref: string
+  value: string
+}
+
+/** 低成本粗筛：只决定“这一轮要不要把纠正协议告诉模型”，不直接改任何记忆。 */
+export function looksLikeMemoryCorrectionIntent(text: string): boolean {
+  const t = String(text ?? '').trim()
+  if (!t) return false
+  return /说错|讲错|记错|不是|不对|更正|纠正|改成|应该是|其实|i was wrong|i misspoke|actually|correction|i meant|not .+ but/i.test(t)
+}
+
+/** 模型只可申请，不可直接落库；一次最多取第一条完整申请。 */
+export function extractMemoryCorrectionProposal(text: string): MemoryCorrectionProposal | null {
+  for (const line of String(text ?? '').split('\n')) {
+    const zh = /^\s*【纠正记忆[·・]\s*([gs]:[A-Za-z0-9._-]+)】\s*(.+?)\s*$/.exec(line)
+    if (zh?.[1] && zh[2]?.trim()) return { ref: zh[1], value: zh[2].trim() }
+    const en = /^\s*\[Correct Memory\s+([gs]:[A-Za-z0-9._-]+)\]\s*(.+?)\s*$/i.exec(line)
+    if (en?.[1] && en[2]?.trim()) return { ref: en[1], value: en[2].trim() }
+  }
+  return null
+}
+
+/** 展示/落聊天记录时物理剥掉申请标记；流式半截标记也不展示给用户。 */
+export function stripMemoryCorrectionMarkers(text: string): string {
+  return String(text ?? '')
+    .split('\n')
+    .filter((line) => !/^\s*(?:【纠正记忆|\[Correct Memory\b)/i.test(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+export function hasMemoryCorrectionMarker(text: string): boolean {
+  return String(text ?? '').split('\n').some((line) => /^\s*(?:【纠正记忆|\[Correct Memory\b)/i.test(line))
+}
+
+/**
+ * 用户点“确认纠正”前再对一次当前值。
+ * 如果别的设备/页面已经改过这条，就拒绝用旧提案覆盖新值。
+ */
+export function refreshMemoryCorrectionTarget(target: MemoryCorrectionTarget): MemoryCorrectionTarget | null {
+  if (target.kind === 'global') {
+    const current = loadMemory().find((memory) => memory.id === target.item.id)
+    if (!current || current.text !== target.item.text) return null
+    return { kind: 'global', item: current }
+  }
+  const current = resolveCurrentSessionMemory(getMemoriesCache(target.sessionId), target.item)
+  if (!current || current.text !== target.item.text) return null
+  return { ...target, item: current }
+}
+
 function isServerMemoryId(id: string): boolean {
   return /^[1-9]\d*$/.test(id)
 }
