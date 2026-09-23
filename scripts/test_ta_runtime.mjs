@@ -470,5 +470,82 @@ group('J. 聊天动作 → Runtime')
   ok(chatSrc.lastIndexOf('syncTaRuntimeFromAssistantText(') > chatSrc.indexOf('const commitFinal ='), 'J10 写回挂在最终 commit 出口，不碰流式半截文本')
 }
 
+
+
+group('K. P0-B：事实优先 + routine 收紧 + 跨设备确定性')
+{
+  eq(
+    detectTaRuntimeDecision('我到公司了。', 'commute'),
+    { type: 'start', activityId: 'work' },
+    'K1 “到公司了”直接落 work，不再先 finish commute 后重抽',
+  )
+
+  eq(
+    detectTaRuntimeDecision('我还在课上，十一点二十下课，先陪你笑两句。', 'coffee'),
+    { type: 'start', activityId: 'class' },
+    'K1b “我还在课上”是明确当前事实 → class，压过旧 coffee',
+  )
+  eq(
+    detectTaRuntimeDecision('在课上，刚结束一节课间，咖啡快喝完了。', 'coffee'),
+    { type: 'start', activityId: 'class' },
+    'K1c “在课上”仍优先识别 class，不被咖啡措辞带偏',
+  )
+  eq(
+    detectTaRuntimeDecision('咖啡快喝完了。', 'coffee'),
+    null,
+    'K1d “快喝完了”仍在进行中，不能误判 finish 后重抽',
+  )
+  eq(
+    detectTaRuntimeDecision('咖啡喝完了。', 'coffee'),
+    { type: 'finish' },
+    'K1e 明确“咖啡喝完了”才允许 finish',
+  )
+
+  clearLS()
+  const commuteAt = new Date(2026, 8, 23, 9, 0, 0).getTime()
+  localStorage.setItem('ai_companion_ta_runtime', JSON.stringify({
+    office: {
+      activityId: 'commute',
+      label: '正在通勤路上',
+      startedAt: commuteAt - 30 * 60_000,
+      plannedUntil: commuteAt + 30 * 60_000,
+      updatedAt: commuteAt - 30 * 60_000,
+      source: 'routine',
+      recentActivityIds: ['commute'],
+    },
+  }))
+  const arrived = syncTaRuntimeFromAssistantText('office', '我到公司了。', commuteAt, '', RAND_HALF)
+  eq(arrived.activityId, 'work', 'K2 commute 中明确到公司 → 当前状态立即 work')
+
+  clearLS()
+  const classProbeAt = new Date(2026, 8, 23, 14, 0, 0).getTime()
+  let inventedClass = false
+  for (let i = 0; i < 120; i++) {
+    const state = getOrAdvanceTaRuntime(`adult-${i}`, '28岁，在公司做产品经理', classProbeAt, () => i / 120)
+    if (state.activityId === 'class') inventedClass = true
+  }
+  ok(!inventedClass, 'K3 非学生/教师人设的 routine 不再随机“正在上课”')
+
+  clearLS()
+  let studentClassSeen = false
+  for (let i = 0; i < 240; i++) {
+    const state = getOrAdvanceTaRuntime(`student-${i}`, '大学生，平时有课表', classProbeAt, () => i / 240)
+    if (state.activityId === 'class') studentClassSeen = true
+  }
+  ok(studentClassSeen, 'K4 明确学生人设仍保留 class 活动')
+
+  clearLS()
+  const deterministicAt = new Date(2026, 8, 23, 14, 20, 0).getTime()
+  const d1 = getOrAdvanceTaRuntime('same-device-input', '在公司工作', deterministicAt)
+  clearLS()
+  const d2 = getOrAdvanceTaRuntime('same-device-input', '在公司工作', deterministicAt)
+  eq(d2.activityId, d1.activityId, 'K5 同 session + 时段 + 前态输入，默认 routine 活动确定一致')
+  eq(
+    d2.plannedUntil - d2.startedAt,
+    d1.plannedUntil - d1.startedAt,
+    'K5 同输入的默认 routine 时长也确定一致',
+  )
+}
+
 console.log(`\n结果：${pass} 通过，${fail} 失败`)
 if (fail > 0) process.exit(1)

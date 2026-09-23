@@ -94,3 +94,20 @@ export function collectTopicDays(topics: ChatTopic[], todayKey: string): Set<str
   }
   return out
 }
+
+/**
+ * 事件动态的因果时间下界：只取“那一天实际聊到这件事”的最新时间。
+ * futureDay 只是约定发生日，不是当天已经发生的聊天证据，所以绝不拿它当 evidenceAt。
+ */
+export function collectTopicEvidenceAt(topics: ChatTopic[]): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const t of topics) {
+    if (!t || typeof t !== 'object' || !Number.isFinite(t.ts) || t.ts <= 0) continue
+    const d = new Date(t.ts)
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const key = `${d.getFullYear()}-${m}-${day}`
+    out.set(key, Math.max(out.get(key) ?? 0, t.ts))
+  }
+  return out
+}

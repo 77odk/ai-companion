@@ -53,10 +53,10 @@ function opId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `cloud-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function queue(kind: string, entityId: string, payload?: unknown, deleted?: boolean, sessionId?: string, generationSlotId?: string, baseVersion?: number): void {
+function queue(kind: string, entityId: string, payload?: unknown, deleted?: boolean, sessionId?: string, generationSlotId?: string, baseVersion?: number, fixedOpId?: string): void {
   if (!getAccount()) return
   enqueueCloudStateOp({
-    opId: opId(), kind, entityId,
+    opId: fixedOpId ?? opId(), kind, entityId,
     baseVersion: baseVersion ?? getCloudStateVersion(kind, entityId, undefined, sessionId),
     ...(sessionId ? { sessionId } : {}),
     ...(generationSlotId ? { generationSlotId } : {}),
@@ -643,6 +643,10 @@ function captureAiProfiles(): void {
   profileSnapshot = next
 }
 
+function legacyBackfillOpId(accountId: string, kind: string, entityId: string, stage = 'probe'): string {
+  return ['p0a-v1', kind, encodeURIComponent(accountId), encodeURIComponent(entityId), stage].join(':')
+}
+
 function pendingProfileOps(entity: CloudStateEntity): CloudStatePendingOp[] {
   const accountId = getAccount()?.account.trim() ?? ''
   const sessionId = entity.entityId === GLOBAL ? undefined : entity.entityId
@@ -668,6 +672,7 @@ function dropPendingProfileOps(entity: CloudStateEntity): void {
 function replacePendingProfileWithRebasedValue(
   entity: CloudStateEntity,
   profile: SyncedAIProfile,
+  fixedOpId?: string,
 ): void {
   dropPendingProfileOps(entity)
   queue(
@@ -678,6 +683,7 @@ function replacePendingProfileWithRebasedValue(
     entity.entityId === GLOBAL ? undefined : entity.entityId,
     undefined,
     entity.version,
+    fixedOpId,
   )
 }
 
@@ -701,12 +707,30 @@ function applyAiProfileEntity(entity: CloudStateEntity): void {
   if (!value) return
   const key = aiProfileStorageKey(entity.entityId)
   const newest = newestPendingProfileOp(entity)
+  const accountId = getAccount()?.account.trim() ?? ''
 
-  // 最新一条 pending 是墓碑（角色刚被删）时，删除意图优先：绝不写回本机资料、也不排非删除 op，
-  // 只把墓碑重基到刚 pull 的 version。否则旧 baseVersion 的删除会被后续 conflict 掉，
-  // 已删除角色的资料会在云端与本机一起复活。
   if (newest?.deleted) {
     rebasePendingProfileTombstone(entity)
+    return
+  }
+
+  // 旧身份补种 probe 只允许把 identityMode 合到刚拉回的 canonical；资料其它字段永远以云端为准。
+  if (newest?.opId === legacyBackfillOpId(accountId, 'profile-identity', entity.entityId)) {
+    const localMode = validAiProfile(newest.payload)?.identityMode
+    const merged = !isIdentityMode(value.identityMode) && isIdentityMode(localMode)
+      ? { ...value, identityMode: localMode }
+      : value
+    localStorage.setItem(key, JSON.stringify(merged))
+    profileSnapshot.set(entity.entityId, merged)
+    if (!isIdentityMode(value.identityMode) && isIdentityMode(localMode)) {
+      replacePendingProfileWithRebasedValue(
+        entity,
+        merged,
+        legacyBackfillOpId(accountId, 'profile-identity', entity.entityId, `repair-${entity.version}`),
+      )
+    } else {
+      dropPendingProfileOps(entity)
+    }
     return
   }
 
@@ -830,6 +854,43 @@ function captureReplyLengths(): void {
     if (!next.has(sessionId)) queue('reply_length', sessionId, undefined, true, value.sessionId)
   }
   replyLengthPreferenceSnapshot = next
+}
+
+/** 只补 Cloud State 上线前已存在的显式旧值；baseVersion=0 让已有云端实体走 conflict/canonical。 */
+export function queueLegacyCloudStateBackfill(): void {
+  const accountId = getAccount()?.account.trim() ?? ''
+  if (!accountId) return
+  const marker = `ai_companion_cloud_backfill_p0a_v1_${encodeURIComponent(accountId)}`
+  if (localStorage.getItem(marker) === '1') return
+
+  const pending = new Set(
+    getPendingOps()
+      .filter((op): op is CloudStatePendingOp => op.type === 'cloud-state')
+      .map(op => `${op.kind}\u0000${op.sessionId || ''}\u0000${op.entityId}`),
+  )
+  const hasPending = (kind: string, entityId: string, sessionId = '') =>
+    pending.has(`${kind}\u0000${sessionId}\u0000${entityId}`)
+
+  for (const [entityId, value] of profileEntities()) {
+    if (entityId === GLOBAL || hasPending('profile', entityId, entityId)) continue
+    const raw = record(readJson(aiProfileStorageKey(entityId)))
+    if (!isIdentityMode(raw?.identityMode)) continue
+    queue('profile', entityId, value, false, entityId, undefined, 0,
+      legacyBackfillOpId(accountId, 'profile-identity', entityId))
+  }
+
+  const globalReply = getStoredGlobalReplyLength(accountId)
+  if (globalReply && !hasPending('reply_length_global', GLOBAL)) {
+    queue('reply_length_global', GLOBAL, { mode: globalReply }, false, undefined, undefined, 0,
+      legacyBackfillOpId(accountId, 'reply-length-global', GLOBAL))
+  }
+
+  for (const [sessionId, value] of replyLengthPreferenceEntities()) {
+    if (hasPending('reply_length', sessionId, sessionId)) continue
+    queue('reply_length', sessionId, { mode: value.mode, followGlobal: value.followGlobal }, false, sessionId, undefined, 0,
+      legacyBackfillOpId(accountId, 'reply-length', sessionId))
+  }
+  localStorage.setItem(marker, '1')
 }
 
 function applyGlobalReplyLengthEntity(entity: CloudStateEntity): void {

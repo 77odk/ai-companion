@@ -13,13 +13,21 @@ import { buildAttributionLegend, cleanAttributionArtifacts, formatAttributedLine
  * 每条记忆带上它的记录日期，块首加一行极短的数据说明——同一件事前后说法不一致时以更新的为准。
  * 说明只写在记忆块里（这是数据，不是人设），不进 persona、不额外堆规则。
  */
-export function buildMemoryBlock(items: MemoryItem[], lang: Lang = 'zh'): string | null {
+export function buildMemoryBlock(
+  items: MemoryItem[],
+  lang: Lang = 'zh',
+  correctionRef?: (item: MemoryItem) => string | null | undefined,
+): string | null {
   const valid = (Array.isArray(items) ? items : []).filter((m) => m && typeof m.text === 'string' && m.text.trim())
   if (valid.length === 0) return null
   const header = lang === 'en'
     ? 'Memories about them that are still relevant now (later lines are newer; if two lines contradict each other, trust the newer one):'
     : '关于对方，以下是当前仍可参考的记忆（越靠后越新；同一件事前后说法不一致时，以更新的为准）：'
-  const lines = valid.map((m) => `- ${memoryDay(m, lang)} ${formatAttributedLine(m.text, 'USER', lang)}`)
+  const lines = valid.map((m) => {
+    const ref = correctionRef?.(m)
+    const tag = ref ? `[M:${ref}] ` : ''
+    return `- ${tag}${memoryDay(m, lang)} ${formatAttributedLine(m.text, 'USER', lang)}`
+  })
   return `${header}\n${lines.join('\n')}`
 }
 
@@ -44,18 +52,18 @@ export interface ApiMessage {
 /** 聊天规矩：合并原底线+分寸+此刻+按设定，4句人话，功能全保留不啰嗦 */
 export const CHAT_RULES =
   '【聊天规矩】' +
-  '1. 不知道的事就说不知道，让对方告诉你；别编造事实、共同经历或现实事件，也别圆场。' +
-  '2. 像自然的私聊：短句口语，不用emoji，话多就拆成几条短消息发，别堆一大段。' +
-  '3. 对方说事先接住，顺着刚说的内容追一两个真正相关的细节，别连环盘问，也别问完马上换题；合适时自然带一点你自己的连续状态，但具体怎样表达必须服从当前身份模式。别整段只围着对方转，也别只问只评价。' +
-  '4. 对方在倾诉时先让路接住；对方冷淡回嗯哦…，就递一个具体、可接的话头继续聊，别确认情绪也别顺势拜拜。'
+  '1. 不知道就说不知道；不编事实、共同经历或现实事件。' +
+  '2. 像自然私聊：短句口语，不用emoji；内容多就拆成几条。' +
+  '3. 先接住刚说的话，再追一两个相关细节；别连环盘问、突然换题或只问只评。自己的连续状态服从当前身份模式。' +
+  '4. 对方倾诉时先接住；只回嗯哦时，递一个具体可接的话头，不要顺势结束。历史里的方括号时间标签只是系统注记，回复不要照抄。'
 
 /** 聊天规矩 EN 版：约束等价，英文口语自然 */
 export const CHAT_RULES_EN =
   '[Ground Rules] ' +
-  '1. If you don\'t know something, say so and let them tell you. Never invent facts, shared memories, or real-world events, and don\'t talk your way out of it.' +
-  '2. Text like a natural private conversation: short sentences, casual tone, no emoji. If you have a lot to say, split it into a few short messages instead of one big block.' +
-  '3. Catch what they just said first and follow up on one or two genuinely relevant details; do not machine-gun questions or switch topics immediately. When it fits, bring in a little of your own continuous state, but how you express SELF must follow the current identity mode. Do not make the whole reply about them, and do not only ask or evaluate.' +
-  '4. If they are opening up, give them the floor. If they go quiet with short replies, offer one concrete thread they can respond to; do not interrogate their mood or rush to say goodbye.'
+  '1. If you do not know, say so. Never invent facts, shared memories, or real-world events.' +
+  '2. Text like a natural private chat: short, casual sentences, no emoji; split long thoughts into a few messages.' +
+  '3. Respond to what they just said, then follow one or two relevant details. Do not machine-gun questions, abruptly switch topics, or only ask/evaluate. SELF continuity follows the current identity mode.' +
+  '4. When they open up, give them room. If they only say mm/okay, offer one concrete thread instead of ending the chat. Bracketed time tags in history are system annotations; never copy them into replies.'
 
 /** 初始身份：用户没设专属人设时的兜底（用户设了就用专属人设，本段不注入） */
 export const DEFAULT_IDENTITY =
@@ -101,33 +109,19 @@ export function buildAnniversaryBlock(list: Anniversary[], lang: Lang = 'zh'): s
 
 /** 自主记忆规则：显式指令硬触发 + 隐式灵敏度。值得记住的信息用一整行标记输出，前端会自动收好 */
 const MEMORY_INSTRUCTION =
-  '记忆规则：' +
-  '对方明确让你记的时候（"帮我记一下""帮我记""记住""记下来""别忘了""你要记住"这类话），' +
-  '必须把话里的事实提炼出来，单独一整行写下【记忆·主题】内容，并且向对方确认一句已经记下了。' +
-  '对方没明说，但聊到了值得长期记住的事——个人喜好、作息时间、身体情况、重要经历、个人习惯——也要自动提炼成记忆；' +
-  '临时玩笑、一次性的随口吐槽，不用存。' +
-  '只保存客观事实，不保存主观闲聊；已经记过的内容不要再次新增。' +
-  '记下的内容只写对方明确说出的那件事本身：不加主语（不写"对方/TA/名字"）、不解释、不推断、不补充他没说的结论，保持简洁、稳定，适合长期记忆。' +
-  '记忆属于当前这段对话，别把别的会话里的事混进来。' +
-  '每次提取完，都在回复末尾单独一整行输出【记忆·主题】要记住的内容，主题用几个字概括这一类' +
-  '（比如：饮食、宠物、家人、健康、工作、日子、其他，或你觉得更贴切的词），同一类内容永远用同一个主题词，方便归拢。' +
-  '特别是对方明确说你们的关系、你的身份、或对你的称呼（"你是我的男朋友""你是我老公""你叫我宝贝"），一定要记住。' +
-  '记住身份后，以后就按这个身份和对方相处，别再用"你叫我什么就是什么"那种话。'
+  '【记忆规则】' +
+  '对方明确说“记住/别忘/记下来”时，提炼真实事实，回复末尾单独输出【记忆·主题】内容，并简短确认。' +
+  '没明确要求时，只自动记长期稳定、以后还会有用的事实：稳定偏好、长期作息/习惯、健康信息、重要经历、关系/身份/称呼。' +
+  '临时状态和一次性琐事（例如正在吃饭、点外卖、上厕所、临时出门）不自动存，除非对方明确让你记。' +
+  '只写对方明确说出的事实，不推断、不解释、不补结论；已记过的不重复。记忆只属于当前会话。'
 
 /** 自主记忆规则 EN 版 */
 const MEMORY_INSTRUCTION_EN =
-  'Memory rules: ' +
-  'When they explicitly ask you to remember something ("remember this", "note this", "keep this in mind", "don\'t forget", "memorize this", "write this down"), ' +
-  'you must extract the fact from what they said, write it on its own line as [Memory: Topic] content, and briefly confirm to them that you\'ve noted it. ' +
-  'Even when they don\'t explicitly ask, if the conversation touches on things worth long-term remembering — personal preferences, sleep schedule, health conditions, important experiences, personal habits — automatically extract them as memories. ' +
-  'Temporary jokes and one-off casual rants don\'t need saving. ' +
-  'Only save objective facts, not subjective chit-chat. Don\'t re-add things you\'ve already remembered. ' +
-  'The memory content must be exactly the fact they explicitly stated — no added subject (don\'t write "they/you/their name"), no explanation, no inference, no extra conclusions. Keep it short and stable for long-term memory. ' +
-  'Memories belong to this current conversation. Don\'t mix in things from other conversations. ' +
-  'After each extraction, output [Memory: Topic] the thing to remember on its own line at the end of your reply. The topic should be a few words summarizing the category ' +
-  '(e.g. Food, Pets, Family, Health, Work, Dates, Other, or whatever fits better). Always use the same topic word for the same category to keep things organized. ' +
-  'Especially when they explicitly state your relationship, your identity, or what they call you ("you\'re my boyfriend", "you\'re my husband", "call me baby"), you must remember it. ' +
-  'Once you remember the identity, interact with them as that identity from then on — don\'t fall back on "whatever you call me is what I am".'
+  '[Memory Rules] ' +
+  'When they explicitly say remember/note/don\'t forget, extract the stated fact, append one standalone [Memory: Topic] line, and briefly confirm. ' +
+  'Without an explicit request, only save stable facts likely to matter later: lasting preferences, long-term routines/habits, health information, important experiences, relationship/identity/names. ' +
+  'Do not auto-save temporary states or one-off trivia such as eating now, ordering takeout, using the bathroom, or a one-time errand unless they explicitly ask. ' +
+  'Store only what they actually stated: no inference, explanation, or added conclusion; do not duplicate existing memories, and keep memories within this conversation.'
 
 // 硬过滤：删掉 emoji / 表情符号（模型不听话，物理删，保底）
 export function stripEmoji(text: string): string {
@@ -147,7 +141,7 @@ export function stripEmoji(text: string): string {
 export function stripTimeLabels(text: string): string {
   if (!text) return ''
   const LABEL =
-    '[\\[［【]\\s*(?:刚刚|此刻|现在|今天|昨天|前天|刚才|\\d+\\s*(?:秒|分钟|个小时|小时|天|个月|年)前|' +
+    '[\\[［【]\\s*(?:刚刚|此刻|当前|现在|今天|昨天|前天|刚才|\\d+\\s*(?:秒|分钟|个小时|小时|天|个月|年)前|' +
     'just now|\\d+\\s*(?:secs?|seconds|mins?|minutes|hours?|hrs?|days?)\\s+ago)\\s*[\\]］】]'
   return text
     .replace(new RegExp(`^(?:\\s*${LABEL})+\\s*`, 'u'), '')
@@ -168,7 +162,10 @@ export function stripActionMarkers(text: string, lang?: Lang): string {
     .trim()
 }
 
-// 人机味关键词：命中说明这轮回复像客服/程序，需要重写
+// 回复风格护栏按身份模式分档：
+// - 沉浸：AI 身份披露 + 明显客服/设定腔都需要重写。
+// - 自然：允许承认 AI 身份，但仍避免明显客服/设定腔。
+// - AI：不因为“像 AI / 像客服”而重写；事实、归因、物理现实边界由其它 guard 单独负责。
 const IDENTITY_DISCLOSURE_PATTERNS = [
   /(作为(一个)?(AI|人工智能|程序|助手|模型|机器人))/,
   /(我是(一个)?(AI|人工智能|程序|助手|模型|机器人|语言模型))/,
@@ -177,15 +174,14 @@ const IDENTITY_DISCLOSURE_PATTERNS = [
   /\b(I'?m (just? )?an? (AI|assistant|language model|bot|robot))\b/i,
 ]
 
-const ROBOTIC_PATTERNS = [
+const SERVICE_STYLE_PATTERNS = [
   /(有什么可以帮你的吗|有什么我可以帮你的吗)/,
   /(很高兴(能)?为你服务|随时为你服务)/,
-  /((TA|AI|这个|那)?(指的是|是指|的意思))/,
   /(我可以帮助你|我能帮助你|需要我帮你)/,
   /(作为你的(虚拟|智能|AI)(助手|伴侣|伙伴))/,
   /(按照(我的|你的)?(设定|人设)|根据(我的|你的)?(设定|人设))/,
   /(我的(设定|人设)(是|里|写)|(设定|人设)(里|中)写)/,
-  // 英文 AI 腔
+  // 英文客服 / 设定腔
   /\b(how can I (help|assist) you|what can I do for you|is there anything I can help)\b/i,
   /\b(I'?m (happy|glad) to (help|assist)|I'?m here to help)\b/i,
   /\b(feel free to (ask|reach out)|let me know if you (need|have) any (questions?|help))\b/i,
@@ -209,9 +205,12 @@ const FABRICATED_PATTERNS = [
 
 export function looksRobotic(text: string, identityMode: IdentityMode = 'immersive'): boolean {
   const t = stripEmoji(text ?? '')
-  // 身份披露与客服腔分开维护，新增/调序规则不会静默改变模式语义。
+  // AI 档明确允许 AI-native / 服务型表达；这里只退出风格审查，不退出 grounding / fabricated / embodied / attribution guards。
+  if (identityMode === 'ai') return false
+  // 自然档允许承认自己是 AI；沉浸档仍禁止身份披露。
   if (identityMode === 'immersive' && IDENTITY_DISCLOSURE_PATTERNS.some((re) => re.test(t))) return true
-  return ROBOTIC_PATTERNS.some((re) => re.test(t))
+  // “指的是 / 是指 / 的意思”是正常解释句，不再作为任何身份模式的客服腔证据。
+  return SERVICE_STYLE_PATTERNS.some((re) => re.test(t))
 }
 
 /** 是否在编造共同经历，命中触发重写 */

@@ -17,7 +17,7 @@ const IDENTITY_DETAILS: Array<{ label: string; text: string }> = [
 ]
 
 function identityDisplayLabel(mode: IdentityMode): string {
-  return mode === 'ai' ? 'AI 本体' : identityModeLabel(mode)
+  return mode === 'ai' ? 'AI本体' : identityModeLabel(mode)
 }
 
 function shortModelLabel(configs: SavedConfig[]): string {
@@ -91,8 +91,7 @@ export default function ChatCompanionControls({ sessionId }: { sessionId: string
           aria-expanded={open === 'identity'}
           onClick={toggleIdentityMenu}
         >
-          <span className="chat-control-dot" aria-hidden="true" />
-          沉浸感 · {identityDisplayLabel(identityMode)}
+          {identityDisplayLabel(identityMode)}
         </button>
         {open === 'identity' && (
           <div className="chat-control-menu chat-identity-menu" role="menu">

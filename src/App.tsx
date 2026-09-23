@@ -1,19 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Welcome from './components/Welcome'
-import RolePicker, { type NaturalSetup } from './components/RolePicker'
+import type { NaturalSetup } from './components/RolePicker'
 import Chat from './components/Chat'
-import Settings, { type SettingsPage } from './components/Settings'
-import AISpace from './components/AISpace'
-import ChatProfile from './components/ChatProfile'
-import ChatSettings from './components/ChatSettings'
-import AboutMe from './components/AboutMe'
-import WeeklyPage from './components/WeeklyPage'
-import GuideDetail from './components/Guide'
+import type { SettingsPage } from './components/Settings'
 import LoginGate from './components/LoginGate'
 import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
 import { getAccount, API_BASE } from './lib/sync'
 import { pingSiteHit } from './lib/siteStats'
-import RolesPage from './components/RolesPage'
 import { PlanetIcon } from './components/spaceIcons'
 import type { ChatJumpTarget, MemoryReturnTarget } from './lib/chatJump'
 import {
@@ -56,11 +49,23 @@ import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh } from './lib/forceRefresh'
 import { checkDeployedBuild, getCurrentBuildVersion, subscribeDeployedBuild } from './lib/appVersion'
 import Home from './components/Home'
-import SpaceLife from './components/SpaceLife'
-import Memory from './components/Memory'
 import { initCloudStateSync, syncCloudState } from './lib/cloudState'
+import { queueLegacyCloudStateBackfill } from './lib/cloudStateResources'
 import { closeOldestCandidateWindowOnStartup } from './lib/eventDetector'
 import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from './lib/taRuntime'
+
+// Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
+const RolePicker = lazy(() => import('./components/RolePicker'))
+const Settings = lazy(() => import('./components/Settings'))
+const AISpace = lazy(() => import('./components/AISpace'))
+const ChatProfile = lazy(() => import('./components/ChatProfile'))
+const ChatSettings = lazy(() => import('./components/ChatSettings'))
+const AboutMe = lazy(() => import('./components/AboutMe'))
+const WeeklyPage = lazy(() => import('./components/WeeklyPage'))
+const GuideDetail = lazy(() => import('./components/Guide'))
+const RolesPage = lazy(() => import('./components/RolesPage'))
+const SpaceLife = lazy(() => import('./components/SpaceLife'))
+const Memory = lazy(() => import('./components/Memory'))
 
 type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
@@ -426,6 +431,9 @@ export default function App() {
       const sessions = res.data.sessions
       // S1 头部入口要显示当前角色名：列表直接落缓存，切换/重进不用等角色列表页
       setSessionsCache(sessions)
+      // P0-A：sessions 已知后，用现有 Cloud State outbox 一次性补种上线前的显式旧值。
+      // helper 自己只补云端缺失项；已有 canonical 绝不被旧设备覆盖。
+      queueLegacyCloudStateBackfill()
       const active = resolveActiveSession(sessions, getActiveSessionId())
       if (active) {
         // 有云端会话 → 按上次主视图恢复（无合法记录回首页）；聊天/空间都从首页进
@@ -638,6 +646,7 @@ export default function App() {
           </div>
         </div>
       )}
+      <Suspense fallback={<div className="session-loading" />}>
       {loggedIn && needLightConsent ? (
         // ConsentGate V1：老用户/登录态无服务端 consent 记录 → 轻量补确认（同意后上报服务端留档）
         <ConsentGate mode="light" onDone={() => setNeedLightConsent(false)} />
@@ -937,6 +946,7 @@ export default function App() {
           )}
         </>
       )}
+      </Suspense>
     </div>
   )
 }

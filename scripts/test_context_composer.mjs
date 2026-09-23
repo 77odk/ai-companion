@@ -104,10 +104,17 @@ console.log('\n[contract] Chat 与 Cloud State 接入契约')
 const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
 const cloudSource = readFileSync(new URL('../src/lib/cloudStateResources.ts', import.meta.url), 'utf8')
 const syncSource = readFileSync(new URL('../src/lib/sync.ts', import.meta.url), 'utf8')
-// Meter：只展示最近一次发送的用量，不新增 LLM
-assert.match(chatSource, /context-meter-row/, 'Meter 行渲染')
-assert.match(chatSource, /setContextMeter\(\{ used: composed\.totalTokens, budget: composed\.hardBudget \}\)/, 'Meter 数据来自 composer 实际结果')
+const promptSource = readFileSync(new URL('../src/lib/chatPrompts.ts', import.meta.url), 'utf8')
+// Meter：session 级持久化；真实 usage 优先校准当前上下文总量，无 usage 才用 compose 估算
+assert.match(chatSource, /context-meter-slot/, 'Meter 控件渲染')
+assert.match(chatSource, /getContextUsage\(activeSessionId\)/, '进入会话从 session 持久化恢复 Meter')
+assert.match(chatSource, /setContextUsage\(estimatedContextState, activeSessionId\)/, '发送时估算 Meter 持久化')
+assert.match(chatSource, /used: composed\.totalTokens,[\s\S]*source: 'estimate',[\s\S]*inputTokens: composed\.totalTokens/, '发送前保留本地输入估算')
+assert.match(chatSource, /used: usage\.promptTokens \+ \(outputTokens \?\? 0\)/, 'provider usage 返回后用真实 prompt + output 校准当前上下文总量')
+assert.match(chatSource, /setContextUsage\(actualContextState, activeSessionId\)/, '真实 usage 结果写回 session 持久化')
 assert.match(chatSource, /if \(composed\.overBudget\)/, '超过 64k 时在 provider 调用前停止')
+assert.doesNotMatch(chatSource, /buildTimeContext\(Date\.now\(\), lang\)/, 'Chat 不再重复追加第二份当前时间')
+assert.match(promptSource, /【此刻时间】/, 'System Prompt 仍保留当前时间注入')
 // Compact：用户主动触发 + 1 次模型生成 summary + summary/recent raw 注入 + 不删原记录
 assert.match(chatSource, /buildCompactedHistory\(compactSummary, history, COMPACT_KEEP_RECENT\)/, '已压缩后注入 = summary + 最近原始消息')
 assert.match(chatSource, /setContextCompactSummary\(trimmed, activeSessionId\)/, '模型生成的摘要持久化')
@@ -118,7 +125,11 @@ assert.match(chatSource, /compactedAt >= sessionStart/, 'Compact 只对当前刷
 assert.match(chatSource, /const summary = await chatCompletion\(/, '压缩最多 1 次模型调用（主动）')
 assert.ok(!chatSource.includes('composed.usage >= COMPACT_USAGE_THRESHOLD'), '已删除阈值自动压缩（普通聊天 0 自动模型调用）')
 assert.ok(!chatSource.includes('compactHistory('), '已删除 slice 裁剪式压缩')
-assert.ok(!chatSource.includes('saveMessagesCache(sessionId'), 'Chat 不因 compact 改动消息缓存')
+const compactSection = chatSource.slice(
+  chatSource.indexOf('const handleCompact = async () =>'),
+  chatSource.indexOf('const handleBridge = async () =>'),
+)
+assert.ok(!compactSection.includes('saveMessagesCache('), 'Compact 不改动消息缓存')
 // Bridge：承接 = 上一会话有限聊天尾部 + 1 次模型生成 evidence-only bridge；不再注入旧会话 Memory
 assert.match(chatSource, /hasBridgableHistory\(messages, sessionStart\)/, 'Bridge 只由同一 session 的刷新边界控制')
 assert.match(chatSource, /messages\.filter\(\(message\) => message\.ts < sessionStart\)\.slice\(-BRIDGE_TAIL_COUNT\)/, 'Bridge 只取同一 session 刷新前有限尾部')
@@ -136,10 +147,13 @@ assert.match(chatSource, /bridgeInfo\.turnsLeft - 1/, 'bridge 每轮递减，临
 // 同步：Context 只并入既有 /api/sync 全量 blob，不注册第二套 /api/state kind
 assert.match(syncSource, /contextCompacts: collectAllContextCompacts\(\)/, 'compact 进入 collectData 全量 blob')
 assert.match(syncSource, /contextBridges: collectAllContextBridges\(\)/, 'bridge 进入 collectData 全量 blob')
+assert.match(syncSource, /contextUsages: collectAllContextUsages\(\)/, 'Context usage 进入 collectData 全量 blob')
 assert.match(syncSource, /applyCloudContextCompacts\(d\.contextCompacts\)/, 'compact 从全量 blob 恢复')
 assert.match(syncSource, /applyCloudContextBridges\(d\.contextBridges\)/, 'bridge 从全量 blob 恢复')
+assert.match(syncSource, /applyCloudContextUsages\(d\.contextUsages\)/, 'Context usage 从全量 blob 恢复')
 assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_compact'"), '不再注册 context_compact /api/state adapter')
 assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_bridge'"), '不再注册 context_bridge /api/state adapter')
+assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_usage'"), 'Context usage 不新增 /api/state adapter')
 // 原聊天记录零删除：Chat 不新增删除类调用
 assert.ok(!chatSource.includes('clearMessagesCache'), 'Chat 不清理消息缓存')
 assert.ok(!chatSource.includes('deleteMessage'), 'Chat 不删除消息')

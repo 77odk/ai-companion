@@ -4,6 +4,7 @@
 // 认识天数从 getFirstSeen 算（B2d 已有），与聊天注入的 buildRelationshipBlock 同一算法。
 
 import { getFirstSeen } from './storage.ts'
+import { createEvent, type CompanionEvent } from './eventStore.ts'
 
 export const MILESTONE_DAYS = [7, 30, 100, 365, 730] as const
 
@@ -50,6 +51,47 @@ export function getMilestoneStatus(
   const day = getKnownDays(now, sessionId)
   const hit = (MILESTONE_DAYS as readonly number[]).includes(day)
   return { day, hit, shown: hit ? readShown(day) : false }
+}
+
+
+/** 已达到的最近一个系统里程碑；用于 Event 补齐，不影响卡片只在“当天”展示的既有逻辑。 */
+export function latestReachedMilestoneDay(knownDays: number): MilestoneDay | null {
+  const reached = MILESTONE_DAYS.filter((day) => day <= knownDays)
+  return reached.length > 0 ? reached[reached.length - 1] : null
+}
+
+/**
+ * 把系统已知的关系里程碑接入现有 Event。
+ * id 稳定、跨设备幂等；occurredAt 按 firstSeen 的本地日历推到对应里程碑日，不拿“今天打开 App”的时间冒充。
+ */
+export function ensureMilestoneEvent(
+  day: MilestoneDay,
+  now: number = Date.now(),
+  sessionId?: string,
+): CompanionEvent | null {
+  if (!(MILESTONE_DAYS as readonly number[]).includes(day)) return null
+  const first = new Date(getFirstSeen(sessionId))
+  const occurredAt = new Date(
+    first.getFullYear(),
+    first.getMonth(),
+    first.getDate() + day - 1,
+    12,
+    0,
+    0,
+    0,
+  ).getTime()
+  if (!Number.isFinite(occurredAt) || occurredAt > now) return null
+  const sid = sessionId?.trim() || ''
+  return createEvent({
+    id: `milestone-known-days:${encodeURIComponent(sid || '_global')}:${day}`,
+    sessionId,
+    type: 'milestone',
+    title: `认识第 ${day} 天`,
+    description: `你们认识满 ${day} 天了。`,
+    occurredAt,
+    confidence: 1,
+    source: 'system',
+  })
 }
 
 /** 里程碑模板文案（TA 口吻，有温度；认识天数不写进文案，卡片上另算大字） */

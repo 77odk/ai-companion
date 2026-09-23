@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
+import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
-import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, type StoredMessage } from '../lib/storage'
+import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, getContextUsage, setContextUsage, type ContextUsageState, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
 import { getAccount } from '../lib/sync'
@@ -39,7 +39,6 @@ import { loadCurrentPosts } from '../lib/aiSpace'
 import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELINE_EN } from '../lib/spaceChatInject'
 import { commitPartialReply } from '../lib/partialReply'
 import { buildFutureAgendaBlock } from '../lib/futureAgenda'
-import { buildSelfTimelineBlock } from '../lib/selfTimeline'
 import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYourMoment } from '../lib/yourMoment'
 import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTaRuntimeFromAssistantText } from '../lib/taRuntime'
 import { buildIdentityContext } from '../lib/identityContext'
@@ -49,7 +48,9 @@ import { allowsBusyState, allowsEmbodiedLifeContext, buildIdentityBoundaryRepair
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
-import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, CONTEXT_SOFT_BUDGET, type ContextBlock } from '../lib/contextComposer'
+import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
+import { estimateToken } from '../lib/token'
+import { clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, savePendingMemoryCorrection, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -72,7 +73,7 @@ import { getSessionLang, saveSessionLang } from '../lib/sessionStore'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
-import { getMilestoneStatus, markMilestoneShown } from '../lib/milestone'
+import { ensureMilestoneEvent, getMilestoneStatus, latestReachedMilestoneDay, markMilestoneShown } from '../lib/milestone'
 import { getWeeklyReviews } from '../lib/weeklyReview'
 import { recordChatTopic, loadChatTopics } from '../lib/chatTopics'
 import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
@@ -88,6 +89,13 @@ import ChatCompanionControls from './ChatCompanionControls'
  */
 function hasBridgableHistory(messages: StoredMessage[], sessionStart: number): boolean {
   return sessionStart > 0 && messages.some((message) => message.ts < sessionStart)
+}
+
+function formatTokenCount(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return '—'
+  if (value < 1000) return String(Math.round(value))
+  const compact = value >= 10000 ? (value / 1000).toFixed(0) : (value / 1000).toFixed(1)
+  return `${compact.replace(/\.0$/, '')}k`
 }
 
 const SendArrowIcon = () => (  <svg
@@ -152,8 +160,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [showMilestone, setShowMilestone] = useState(false)
   // 刷新对话只推进当前 session 的上下文分界线；历史仍完整保留。
   const sessionStart = getSessionStart(activeSessionId || undefined)
-  // PR #99 Context 批次：Meter 显示最近一次发送的上下文用量（本地计算，不新增 LLM 调用）
-  const [contextMeter, setContextMeter] = useState<{ used: number; budget: number } | null>(null)
+  // Context：session 级状态。退出聊天 / 页面刷新不清零；只有 sessionStart 真推进才进入新上下文段。
+  const [contextMeter, setContextMeter] = useState<ContextUsageState | null>(() => {
+    if (!activeSessionId) return null
+    const stored = getContextUsage(activeSessionId)
+    return stored && stored.sessionStart === sessionStart ? stored : null
+  })
   // Compact：用户主动「压缩」→ 最多 1 次模型调用，把较老历史压成 summary；之后注入 = summary + recent raw。
   // 每会话最多压缩 1 次；原聊天记录绝不删除。summary 持久化，刷新后无需再调模型。
   const [compactDone, setCompactDone] = useState(() => {
@@ -176,6 +188,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [contextBusy, setContextBusy] = useState<'compact' | 'bridge' | null>(null)
   const [contextNotice, setContextNotice] = useState<string | null>(null)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
+  const [pendingMemoryCorrection, setPendingMemoryCorrection] = useState<{ target: MemoryCorrectionTarget; value: string } | null>(() =>
+    activeSessionId ? loadPendingMemoryCorrection(activeSessionId, sessionStart, getToken() ?? '') : null,
+  )
+  const [memoryCorrectionBusy, setMemoryCorrectionBusy] = useState(false)
+  const [memoryCorrectionNotice, setMemoryCorrectionNotice] = useState<string | null>(null)
 
   const visibleMessages = useMemo(
     () => filterSessionMessages(messages, sessionStart),
@@ -198,6 +215,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       setContextMeter(null)
       setContextNotice(null)
       setContextBusy(null)
+      setPendingMemoryCorrection(null)
+      setMemoryCorrectionBusy(false)
+      setMemoryCorrectionNotice(null)
       return
     }
     const compactedAt = getContextCompactAt(activeSessionId)
@@ -206,9 +226,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     setCompactSummary(compactIsCurrent ? getContextCompactSummary(activeSessionId) : '')
     const storedBridge = getContextBridge(activeSessionId)
     setBridgeInfo(storedBridge && storedBridge.bridgedAt >= sessionStart ? storedBridge : null)
-    setContextMeter(null)
+    const storedUsage = getContextUsage(activeSessionId)
+    setContextMeter(storedUsage && storedUsage.sessionStart === sessionStart ? storedUsage : null)
     setContextNotice(null)
     setContextBusy(null)
+    setPendingMemoryCorrection(loadPendingMemoryCorrection(activeSessionId, sessionStart, getToken() ?? ''))
+    setMemoryCorrectionBusy(false)
+    setMemoryCorrectionNotice(null)
   }, [activeSessionId, sessionStart])
   // UI2-03B-1：jump effect 只依赖 pendingJump/session，消息列表通过 ref 读取最新值 ——
   // 这样消息每次更新都不会重跑 jump effect（否则 cleanup 会把跳转保护窗口的定时器提前清掉）
@@ -573,31 +597,42 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     return () => window.removeEventListener(ELUVIN_DATA_CHANGE, syncBusyWithIdentity)
   }, [activeSessionId])
 
+  // P0-A：会话消息恢复只复用现有 session API + merge；不建第二套同步层。
+  // 调用方保证先 flush pending 再 pull，避免“本机看见已发送、服务端还没收到”的窗口继续扩大。
+  const refreshSessionMessages = useCallback(async (sessionId: string) => {
+    const token = getToken()
+    if (!token || !sessionId) return
+    const res = await getSession(token, sessionId)
+    if (!res.ok || !mountedRef.current || String(getActiveSessionId()) !== String(sessionId)) return
+    const cloud: StoredMessage[] = res.data.messages
+      .map((m) => ({ role: m.role, content: m.content, ts: Date.parse(m.createdAt), thinking: m.thinking }))
+      .filter((m) => Number.isFinite(m.ts))
+    const merged = mergeSessionMessages(getMessagesCache(sessionId), cloud)
+    saveMessagesCache(sessionId, merged)
+    setActiveSession(res.data.session)
+    if (merged.length > 0) {
+      setMessages(merged)
+      markRead(sessionId)
+      return
+    }
+    const opening = extractOpeningLine(res.data.session.persona)
+    if (!opening) {
+      setMessages([])
+      markRead(sessionId)
+      return
+    }
+    const firstMsg: StoredMessage = { role: 'assistant', content: opening, ts: Date.now() }
+    saveMessagesCache(sessionId, [firstMsg])
+    setMessages([firstMsg])
+    markRead(sessionId)
+  }, [])
+
+  // 记忆沿用原来的“进入当前聊天时拉一次”；P0-A 不扩大 Memory 同步行为。
   useEffect(() => {
     if (!activeSessionId) return
     const token = getToken()
     if (!token) return
     let cancelled = false
-    getSession(token, activeSessionId).then((res) => {
-      if (cancelled || !res.ok) return
-      setActiveSession(res.data.session)
-      const cloud: StoredMessage[] = res.data.messages
-        .map((m) => ({ role: m.role, content: m.content, ts: Date.parse(m.createdAt), thinking: m.thinking }))
-        .filter((m) => Number.isFinite(m.ts))
-      const merged = mergeSessionMessages(getMessagesCache(activeSessionId), cloud)
-      saveMessagesCache(activeSessionId, merged)
-      setMessages(merged)
-      markRead(activeSessionId)
-      if (merged.length === 0) {
-        const opening = extractOpeningLine(res.data.session.persona)
-        if (opening) {
-          const firstMsg: StoredMessage = { role: 'assistant', content: opening, ts: Date.now() }
-          saveMessagesCache(activeSessionId, [firstMsg])
-          setMessages([firstMsg])
-          markRead(activeSessionId)
-        }
-      }
-    })
     listMemories(token, activeSessionId).then((res) => {
       if (cancelled || !res.ok) return
       const cloudMem = res.data.memories.map(sessionMemoryToItem)
@@ -633,7 +668,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       const sid = getActiveSessionId()
       const lang = sid ? getSessionLang(sid) : 'zh'
-      const text = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)), lang)
+      const text = stripActionMarkers(
+        stripEmoji(stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(raw)), lang)),
+        lang,
+      )
       const liveIdentityMode = resolveIdentityMode(sid || undefined)
       const partialAvailability = text ? classifyAvailability(text) : null
       const identityProblem = Boolean(
@@ -667,9 +705,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     document.addEventListener('visibilitychange', onVisible)
   }, [])
 
-  // #20：Memory 补传只在聊天挂载 / 网络恢复时触发；session 级 ref 防重入。
-  // 具体去重与对账全部在独立 helper，Chat 不碰上传/合并/去重链路。
+  // #20 + P0-A：沿用同一 pending outbox。挂载/联网/回前台时先补传消息，再拉当前 session 收敛。
+  // 不轮询；生成中的聊天不做 pull，避免把正在显示的流式占位覆盖掉。
   const memoryRetryInFlightRef = useRef<Set<string>>(new Set())
+  const sessionRecoveryInFlightRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!activeSessionId) return
@@ -685,20 +724,35 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
     }
 
-    const token = getToken()
-    if (token) {
-      void flushPendingOps(token)
+    const runSessionRecovery = async () => {
+      const token = getToken()
+      if (!token || sessionRecoveryInFlightRef.current.has(activeSessionId)) return
+      sessionRecoveryInFlightRef.current.add(activeSessionId)
+      try {
+        await flushPendingOps(token)
+        if (!streamingRef.current) await refreshSessionMessages(activeSessionId)
+      } finally {
+        sessionRecoveryInFlightRef.current.delete(activeSessionId)
+      }
+    }
+
+    void runSessionRecovery()
+    void runMemoryRetry()
+
+    const onOnline = () => {
+      void runSessionRecovery()
       void runMemoryRetry()
     }
-    const onOnline = () => {
-      const t = getToken()
-      if (!t) return
-      void flushPendingOps(t)
-      void runMemoryRetry()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void runSessionRecovery()
     }
     window.addEventListener('online', onOnline)
-    return () => window.removeEventListener('online', onOnline)
-  }, [activeSessionId])
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [activeSessionId, refreshSessionMessages])
 
   useEffect(() => {
     mountedRef.current = true
@@ -775,7 +829,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }, [activeSessionId])
 
   useEffect(() => {
-    const st = getMilestoneStatus(Date.now(), getActiveSessionId() || undefined)
+    const now = Date.now()
+    const sid = getActiveSessionId() || undefined
+    const st = getMilestoneStatus(now, sid)
+    const reached = latestReachedMilestoneDay(st.day)
+    if (reached) ensureMilestoneEvent(reached, now, sid)
     if (st.hit && !st.shown) {
       setMilestone(st)
       setShowMilestone(true)
@@ -869,11 +927,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // 唯一写入出口：send 里不再抢先写；finalize / busy 截断 / 失败路径都从这里落库。
     // 同一轮绝不产生「原话 + 提炼」两条同义记忆（planMemoryWrites 内部归并 + 落库判重双保险）。
     const flushMemoryWrites = (rawText: string) => {
+      // 纠正申请必须先经过用户确认；只要本轮存在可纠正目标，就禁止 fallback 新写一条矛盾 Memory。
+      if ((correctionIntent && correctionTargets.size > 0) || hasMemoryCorrectionMarker(rawText)) return false
       if (explicitCandidates.length === 0 && !rawText) return
       const plans = planMemoryWrites(explicitCandidates, rawText ? extractMemories(rawText) : [], userMsg.content.trim())
-      // 当轮 TA 回应短快照（仅追溯展示；去记忆标记/思考链后截断，不整段复制聊天历史）
+      // 当轮 TA 回应短快照（仅追溯展示；去系统标记/思考链后截断，不整段复制聊天历史）
       const replySnapshot = rawText
-        ? stripMemoryMarkers(stripThinkBlocks(rawText, lang)).trim().slice(0, 160) || undefined
+        ? stripMemoryCorrectionMarkers(stripMemoryMarkers(stripThinkBlocks(rawText, lang))).trim().slice(0, 160) || undefined
         : undefined
       let created = false
       for (const p of plans) {
@@ -889,6 +949,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // TASK-MEM-DISTILL：本地显式检测先收集候选、不抢先写——等模型回复的【记忆】marker 到达后统一归并
     // （有 marker 对应 → 只写一条提炼版 explicit；无对应 marker → fallback 写本地候选；只有 marker → 保持 inferred）
     // 候选的 explicit 身份来自用户证据（用户明确说过），text 若被 marker 匹配则采用模型提炼 wording。
+    const correctionIntent = !pendingMemoryCorrection && looksLikeMemoryCorrectionIntent(text)
     const explicitCandidates: ExplicitCandidate[] = []
     const memInstr = detectMemoryInstruction(text)
     const isRetort = !memInstr.isInstruction && isMemoryRetort(text)
@@ -977,18 +1038,51 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           (replyPreference ? '\n\n' + replyPreference : ''),
       },
     ]
+    // 核心 system 只留稳定身份/规则；Memory/Event/Runtime/Space 等都走现有 ContextBlock，
+    // 避免所有功能永久挤进不可裁剪的 core。
+    const contextBlocks: ContextBlock[] = []
+    const correctionTargets = new Map<string, MemoryCorrectionTarget>()
 
     const contextText = base
       .slice(-6)
       .map((m) => (m.role === 'assistant'
-        ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), lang), lang)
+        ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(m.content)), lang), lang)
         : m.content))
       .join('\n')
     const memory = recallSessionMemories(activeSessionId, contextText)
     if (memory.length > 0) {
-      const memoryBlock = buildMemoryBlock(memory, lang)
+      const refByItem = new Map<object, string>()
+      if (correctionIntent) {
+        const globalItems = loadMemory()
+        const sessionItems = activeSessionId ? getMemoriesCache(activeSessionId) : []
+        const token = getToken() ?? ''
+        for (const m of memory) {
+          const globalMatch = globalItems.filter((item) => item.id === m.id && item.text === m.text)
+          const sessionMatch = sessionItems.filter((item) => item.id === m.id && item.text === m.text)
+          if (globalMatch.length + sessionMatch.length !== 1) continue
+          if (globalMatch.length === 1) {
+            const ref = `g:${m.id}`
+            refByItem.set(m, ref)
+            correctionTargets.set(ref, { kind: 'global', item: globalMatch[0] })
+          } else if (activeSessionId && sessionMatch.length === 1) {
+            const ref = `s:${m.id}`
+            refByItem.set(m, ref)
+            correctionTargets.set(ref, { kind: 'session', sessionId: activeSessionId, item: sessionMatch[0], token })
+          }
+        }
+      }
+      const memoryBlock = buildMemoryBlock(memory, lang, correctionIntent ? (item) => refByItem.get(item) : undefined)
       if (memoryBlock) {
-        apiMessages.push({ role: 'system', content: memoryBlock })
+        contextBlocks.push({ id: 'memory', content: memoryBlock, priority: 'memory' })
+      }
+      if (correctionTargets.size > 0) {
+        contextBlocks.push({
+          id: 'memory-correction-consent',
+          priority: 'core',
+          content: lang === 'en'
+            ? 'USER may be correcting a stored fact. Only if they clearly replace/deny one numbered [M:...] memory, ask naturally for confirmation and end with exactly one line: [Correct Memory <g:id or s:id>] <the complete corrected fact>. This is only a proposal; do not claim it is already changed. Do not emit a normal [Memory] marker for the same fact.'
+            : '用户这句话可能在纠正旧记忆。只有在他明确否定/替换上面某条带 [M:...] 编号的记忆时，先自然询问是否要改，并在回复末尾单独输出一行【纠正记忆·g:id或s:id】纠正后的完整事实。这个标记只是申请，不能说已经改好；同一事实不要再输出普通【记忆】标记。一次最多一条。',
+        })
       }
       const now = Date.now()
       for (const m of memory) {
@@ -999,13 +1093,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     // Event（E3 二处）：最近 5 条一起经历过的事注入（记忆注入之后、自我时间线之前）；
     // 只作背景信息，不让 TA 直接复述
-    const recentEvents = getRecentEvents(activeSessionId || undefined, 5)
+    const recentEvents = getRecentEvents(activeSessionId || undefined, 3)
     if (recentEvents.length > 0) {
       const eventsHeader = lang === 'en'
         ? 'Background info — things you two have been through together (do not repeat these lines as-is):\n'
         : '以上是背景信息，不要直接复述这些句子——你们一起经历过的事：\n'
-      apiMessages.push({
-        role: 'system',
+      contextBlocks.push({
+        id: 'events',
+        priority: 'event',
         content:
           eventsHeader +
           recentEvents.map((e) => {
@@ -1014,11 +1109,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           }).join('\n'),
       })
     }
-    // 自我时间线：TA 刚说过的话，让它记得自己做过什么，不依附忙碌机制（TASK-SELF-TIMELINE）
-    const timelineBlock = buildSelfTimelineBlock(base, Date.now(), lang)
-    if (timelineBlock) {
-      apiMessages.push({ role: 'system', content: timelineBlock })
-    }
+    // 最近 TA 原话已经完整存在 history + 相对时间标记里，不再重复塞一份 SelfTimeline system。
     // TA Runtime（TASK-TA-RUNTIME-V1）：Home 与 Chat 读同一份持久状态、同一 lazy getter。
     // 未到期取同一 activity；到期由 getter 推进，之后 Home 再读也是同一新状态。零额外 LLM。
     const runtime = getOrAdvanceTaRuntime(
@@ -1028,25 +1119,28 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     )
     const runtimeCtx = buildTaRuntimeContext(runtime, lang)
     if (runtimeCtx) {
-      apiMessages.push({ role: 'system', content: runtimeCtx })
+      contextBlocks.push({ id: 'runtime', content: runtimeCtx, priority: 'runtime' })
     }
     const identityCtx = buildIdentityContext(activeSessionId || undefined, lang)
     if (identityCtx) {
-      apiMessages.push({ role: 'system', content: identityCtx })
+      contextBlocks.push({ id: 'identity', content: identityCtx, priority: 'core' })
     }
-    const weeklyList = getWeeklyReviews(activeSessionId || undefined)
+    const journalRelevant = /周记|周报|周总结|这周|上周|本周|journal|weekly/i.test(text)
+    const weeklyList = journalRelevant ? getWeeklyReviews(activeSessionId || undefined) : []
     if (weeklyList.length > 0) {
       const w = weeklyList[0]
       // TASK-JOURNAL-INJECT：不只带标题，带最近一篇正文前 200 字摘要，被问"周记写的啥"有内容可答
       const excerpt = (w.content ?? '').trim().slice(0, 200)
       if (lang === 'en') {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'weekly-review',
+          priority: 'ambient',
           content: `Your most recent journal entry to them is "${w.title}" (${w.weekLabel}).${excerpt ? `\n${formatAttributedLine(excerpt, 'SELF', 'en')}` : ''}\nIf they bring it up, respond in the tone and content of this entry.`,
         })
       } else {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'weekly-review',
+          priority: 'ambient',
           content: `你最近写给对方的周记是「${w.title}」（${w.weekLabel}）。${excerpt ? `\n${formatAttributedLine(excerpt, 'SELF', 'zh')}` : ''}\n对方要是提起周记，就照这篇的语气和内容回应。`,
         })
       }
@@ -1056,61 +1150,68 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // Space 旧动态没有 identityMode stamp。为避免从沉浸切到自然 / AI 后把旧吃饭、出门、地点继续当成 SELF 事实，
     // v1 仅在沉浸档把 Space 历史注入 Chat；Space 页面本身仍照当前 identity policy 正常生成与展示。
     if (allowEmbodiedLife) {
-      const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 5, lang)
+      const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 2, lang)
       if (spaceBlock) {
-        apiMessages.push({ role: 'system', content: spaceBlock })
+        contextBlocks.push({ id: 'space-posts', content: spaceBlock, priority: 'ambient' })
       }
     }
     // 未来约定注入（因果链第二环 TASK-FUTURE-AGENDA）：TA 记得「约好还没做的事」，
     // 对方问起/到期临近时能自然接，不会一问三不知；没约定返回空串跳过，不占上下文。
     const agendaBlock = buildFutureAgendaBlock(loadChatTopics(activeSessionId || undefined), new Date(), lang)
     if (agendaBlock) {
-      apiMessages.push({ role: 'system', content: agendaBlock })
+      contextBlocks.push({ id: 'future-agenda', content: agendaBlock, priority: 'event' })
     }
-    // 生活基线会补身体 / 居住 / 饮食等现实锚，只能给沉浸档。
-    if (allowEmbodiedLife && !personaHasLifeAnchors(persona)) {
-      apiMessages.push({ role: 'system', content: lang === 'en' ? LIFE_BASELINE_EN : LIFE_BASELINE })
-    }
-    // 【你的时刻】分享钩子（TASK-YOUR-MOMENT）：低频给 TA 此刻的生活画面，让"自己有日子在过"落地成画面，
-    // 不每次回复都带——只在 对方最近消息冷淡/很短、或连续几条都不长、或对方主动问 TA 近况 时触发；
-    // 人设没生活锚时 buildYourMomentBlock 返回空串 → 跳过，不占上下文。不动聊天记录存储/上传/去重/忙碌逻辑。
+    // 生活基线 / 你的时刻只在这一轮真的需要 TA 分享自己近况时才进上下文，不再每轮常驻。
     const recentUserTexts = base
       .filter((m) => m.role === 'user')
       .slice(-3)
       .map((m) => m.content)
-    if (allowEmbodiedLife && shouldInjectYourMoment(recentUserTexts, lang)) {
+    const shouldShareMoment = allowEmbodiedLife && shouldInjectYourMoment(recentUserTexts, lang)
+    if (shouldShareMoment && !personaHasLifeAnchors(persona)) {
+      contextBlocks.push({
+        id: 'life-baseline',
+        content: lang === 'en' ? LIFE_BASELINE_EN : LIFE_BASELINE,
+        priority: 'ambient',
+      })
+    }
+    if (shouldShareMoment) {
       const momentBlock = buildYourMomentBlock(persona, new Date(), lang)
       if (momentBlock) {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'your-moment',
+          priority: 'ambient',
           content: `${lang === 'en' ? MOMENT_GUIDE_EN : MOMENT_GUIDE_ZH}\n${formatAttributedLine(momentBlock, 'SELF', lang)}`,
         })
       }
     }
-    if (memInstr.isInstruction) {
+    if (memInstr.isInstruction && !(correctionIntent && correctionTargets.size > 0)) {
       if (lang === 'en') {
-        apiMessages.push({
-          role: 'system',
-          content: `USER just asked you to remember: ${formatAttributedLine(memInstr.fact ?? text, 'USER', 'en')}. Write ONLY the fact USER explicitly stated — no added subject, explanation, inference, or extra conclusion. Keep it short and stable for long-term memory. At the end of your reply, output a separate line with [Memory: Topic] marker (topic word summarizes the category), write this fact as the content, and briefly confirm in your reply that you've noted it.`,
+        contextBlocks.push({
+          id: 'memory-explicit',
+          priority: 'core',
+          content: `USER just asked you to remember: ${formatAttributedLine(memInstr.fact ?? text, 'USER', 'en')}. Write only that stated fact, with no inference or added conclusion. End with one [Memory: Topic] line and briefly confirm it was noted.`,
         })
       } else {
-        apiMessages.push({
-          role: 'system',
-          content: `USER 刚要求你记住：${formatAttributedLine(memInstr.fact ?? text, 'USER', 'zh')}。只写 USER 明确说出的这句事实本身：不加主语、不解释、不推断、不补充没说的结论，保持简洁、稳定，适合长期记忆。请在回复末尾单独一行输出【记忆·主题】标记（主题词概括类别），内容写这条事实，并在回复里简短确认已经记下。`,
+        contextBlocks.push({
+          id: 'memory-explicit',
+          priority: 'core',
+          content: `USER 刚要求你记住：${formatAttributedLine(memInstr.fact ?? text, 'USER', 'zh')}。只写这条明确事实，不推断、不补充；回复末尾单独一行输出【记忆·主题】内容，并简短确认已记下。`,
         })
       }
-    } else if (isRetort) {
+    } else if (isRetort && !(correctionIntent && correctionTargets.size > 0)) {
       if (lang === 'en') {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'memory-retort',
+          priority: 'core',
           content:
-            'They just reminded you to note down something mentioned earlier. Extract facts worth long-term remembering from the recent conversation (schedule, preferences, health conditions, important experiences, etc.). Write only the facts they actually stated — no added subjects, no explanation, no inference, no extra conclusions. Keep them short and stable. Output a separate [Memory: Topic] line at the end of your reply, and confirm you\'ve noted it.',
+            'They reminded you to save something from the recent conversation. Extract only stable facts they actually stated; do not infer. End with one [Memory: Topic] line and confirm it was noted.',
         })
       } else {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'memory-retort',
+          priority: 'core',
           content:
-            '用户刚才在提醒你记下之前提到的信息。从最近的对话里提取值得长期记住的事实（作息、喜好、身体情况、重要经历等）。每条只写用户实际说过的那些事实本身：不加主语、不解释、不推断、不补充，保持简洁稳定。在回复末尾单独一行输出【记忆·主题】标记，并确认已经记下。',
+            '用户在提醒你记下最近提过的信息。只提取用户实际说过、适合长期保留的稳定事实，不推断不补充；回复末尾输出一行【记忆·主题】内容，并确认已记下。',
         })
       }
     }
@@ -1130,24 +1231,23 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (activeSessionId && bridgeInfo && bridgeInfo.bridgedAt >= sessionStart && bridgeInfo.turnsLeft > 0 && bridgeInfo.content.trim()) {
       bridgeBlocks.push({ id: 'bridge', content: bridgeInfo.content, priority: 'memory' })
     }
-    // 时间感知也属于最终 payload：必须和 system/history 一起受 64k 硬预算约束。
-    const timeTail: ApiMessage = {
-      role: 'system',
-      content:
-        buildTimeContext(Date.now(), lang) +
-        (lang === 'en'
-          ? '\nNote: time tags like [3 min ago] in the conversation history are system annotations, not part of any message. Never output such tags in your replies.'
-          : '\n注：对话历史里 [3 分钟前]/[昨天] 这类标签是系统自动标注的，不是消息内容。你的回复里绝对不要出现这类时间标签。'),
-    }
-    // PR #99 Context Compact：已压缩时，注入 = [较老历史摘要(system)] + [最近原始消息]，
-    // 不是把历史裁成只剩近窗。原聊天记录（缓存/后端）绝不删除。压缩是用户主动行为（每会话最多 1 次模型调用），
-    // 普通聊天不做任何自动模型调用。
+    // PR #99 Context Compact：已压缩时，注入 = [较老历史摘要(system)] + [最近原始消息]。
+    // 当前时间已经在 buildSystemPrompt 中注入一次；这里不再追加第二条时间 system。
     const historyForModel =
       activeSessionId && compactDone && compactSummary.trim()
         ? buildCompactedHistory(compactSummary, history, COMPACT_KEEP_RECENT)
         : history
-    const composed = composeContext(apiMessages, historyForModel, bridgeBlocks, [timeTail])
-    setContextMeter({ used: composed.totalTokens, budget: composed.hardBudget })
+    const composed = composeContext(apiMessages, historyForModel, [...contextBlocks, ...bridgeBlocks])
+    const estimatedContextState: ContextUsageState = {
+      sessionStart,
+      used: composed.totalTokens,
+      budget: composed.hardBudget,
+      source: 'estimate',
+      inputTokens: composed.totalTokens,
+      updatedAt: Date.now(),
+    }
+    setContextMeter(estimatedContextState)
+    if (activeSessionId) setContextUsage(estimatedContextState, activeSessionId)
     if (composed.overBudget) {
       // 当前用户消息 / 核心 system 本身已经放不进 64k：不静默裁用户原话，也不把超限请求发给 provider。
       // 用户消息已经正常落历史；这里只撤掉空 assistant 占位并结束本轮流式状态。
@@ -1237,7 +1337,21 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         thinking = thinkFromReasoning || thinkFromContent
       }
       thinking = cleanAttributionArtifacts(thinking, lang)
-      const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)), lang)
+      const explicitCorrectionProposal = extractMemoryCorrectionProposal(raw)
+      const markerMemories = extractMemories(raw)
+      const fallbackCorrectionProposal =
+        !explicitCorrectionProposal && correctionIntent && correctionTargets.size === 1 && markerMemories.length === 1
+          ? { ref: [...correctionTargets.keys()][0], value: markerMemories[0].text }
+          : null
+      const correctionProposal = explicitCorrectionProposal ?? fallbackCorrectionProposal
+      const correctionTarget = correctionProposal ? correctionTargets.get(correctionProposal.ref) : undefined
+      const proposedCorrection = correctionTarget && correctionProposal && correctionProposal.value !== correctionTarget.item.text
+        ? { target: correctionTarget, value: correctionProposal.value }
+        : null
+      const cleaned = stripActionMarkers(
+        stripEmoji(stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(raw)), lang)),
+        lang,
+      )
       const attributionProblem = cleaned ? hasAttributionLeak(cleaned) : false
       const roboticProblem = cleaned ? looksRobotic(cleaned, liveIdentityMode) : false
       const fabricatedProblem = cleaned ? looksFabricated(cleaned) : false
@@ -1256,13 +1370,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         retriedRef.current = true
         setError(null)
         setMessages([...messages, userMsg, { role: 'assistant', content: '…', ts: assistantTs }])
-        const genericRepair = lang === 'en'
-          ? 'Your previous reply had a grounding or style problem. Forget that sentence and answer again: stay grounded in the available context, do not invent shared history, do not sound like customer service, and keep the reply natural and concise.'
-          : '你刚才的回复有依据或表达问题。忘掉那句，重新回答：只用现有上下文里有依据的内容，不编共同经历，不要客服腔，保持自然简短。'
+        const genericRepair = liveIdentityMode === 'ai'
+          ? (lang === 'en'
+              ? 'Your previous reply had a grounding or reality-boundary problem. Answer again using only supported context, without inventing shared history or human physical experiences. Do not rewrite merely because the wording sounds like an AI or assistant.'
+              : '你刚才的回复有依据或现实边界问题。重新回答：只用现有上下文里有依据的内容，不编共同经历、不编人的现实经历；不要因为表达像 AI 或助手就改写。')
+          : (lang === 'en'
+              ? 'Your previous reply had a grounding or style problem. Forget that sentence and answer again: stay grounded in the available context, do not invent shared history, do not sound like customer service, and keep the reply natural and concise.'
+              : '你刚才的回复有依据或表达问题。忘掉那句，重新回答：只用现有上下文里有依据的内容，不编共同经历，不要客服腔，保持自然简短。')
         const identityRepair = identityProblem ? buildIdentityBoundaryRepair(liveIdentityMode, lang) : ''
         const safeFallback = lang === 'en'
-          ? "I'm not sure about that yet. Tell me a little more."
-          : '这个我还真没头绪，你跟我说说呗。'
+          ? "That answer didn't come out reliably, so I won't pretend it did."
+          : '刚才那句没答稳，我不拿不确定的话糊弄你。'
         void chatCompletion(settings, [
           ...apiMessages,
           { role: 'assistant', content: cleaned },
@@ -1272,7 +1390,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           },
         ])
           .then((retry) => {
-            const retryCleaned = stripActionMarkers(stripEmoji(retry), lang)
+            const retryCleaned = stripActionMarkers(stripEmoji(stripMemoryCorrectionMarkers(stripMemoryMarkers(retry))), lang)
             const retryAvailability = retryCleaned ? classifyAvailability(retryCleaned) : null
             const retryIdentityMode = resolveIdentityMode(activeSessionId || undefined)
             const retryAllowBusy = allowsBusyState(retryIdentityMode)
@@ -1321,6 +1439,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         assistantMsgs[0].memorySaved = true
       }
       const final: StoredMessage[] = [...messages, userMsg, ...assistantMsgs]
+      if (proposedCorrection) {
+        if (activeSessionId) savePendingMemoryCorrection(activeSessionId, sessionStart, proposedCorrection)
+        if (mountedRef.current) {
+          setPendingMemoryCorrection(proposedCorrection)
+          setMemoryCorrectionNotice(null)
+        }
+      }
       commitFinal(final)
     }
     finalizeRef.current = finalize
@@ -1333,7 +1458,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         return
       }
       const clean = cleanStreamingAttributionArtifacts(
-        stripThinkBlocks(stripMemoryMarkers(assistantText.current), lang),
+        stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(assistantText.current)), lang),
         lang,
       )
       const total = clean.length
@@ -1395,8 +1520,51 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             enterBusyRef.current(assistantText.current, availability)
           }
         },
-        onDone: (reasoning) => {
+        onDone: (reasoning, usage) => {
           if (runId !== runIdRef.current) return
+          // 会话总量始终来自本轮 composeContext 的累计上下文；provider usage 只描述这一轮请求。
+          if (mountedRef.current) {
+            const estimatedOutput = estimateToken(assistantText.current)
+            if (usage && Number.isFinite(usage.promptTokens)) {
+              const reportedCompletion = typeof usage.completionTokens === 'number' && Number.isFinite(usage.completionTokens)
+                ? usage.completionTokens
+                : undefined
+              const reportedTotal = typeof usage.totalTokens === 'number' && Number.isFinite(usage.totalTokens)
+                ? usage.totalTokens
+                : undefined
+              const cachedTokens = typeof usage.cachedPromptTokens === 'number' && Number.isFinite(usage.cachedPromptTokens)
+                ? usage.cachedPromptTokens
+                : undefined
+              const outputTokens = reportedCompletion ?? (
+                reportedTotal == null ? undefined : Math.max(0, reportedTotal - usage.promptTokens)
+              )
+              const actualContextState: ContextUsageState = {
+                sessionStart,
+                // 当前回复完成后，当前上下文 = 本轮真实 prompt + 本轮输出；下一轮会以这段历史继续。
+                used: usage.promptTokens + (outputTokens ?? 0),
+                budget: composed.hardBudget,
+                source: 'actual',
+                inputTokens: usage.promptTokens,
+                ...(outputTokens == null ? {} : { outputTokens }),
+                ...(cachedTokens == null ? {} : { cachedTokens }),
+                updatedAt: Date.now(),
+              }
+              setContextMeter(actualContextState)
+              if (activeSessionId) setContextUsage(actualContextState, activeSessionId)
+            } else {
+              const estimatedContextState: ContextUsageState = {
+                sessionStart,
+                used: composed.totalTokens + estimatedOutput,
+                budget: composed.hardBudget,
+                source: 'estimate',
+                inputTokens: composed.totalTokens,
+                outputTokens: estimatedOutput,
+                updatedAt: Date.now(),
+              }
+              setContextMeter(estimatedContextState)
+              if (activeSessionId) setContextUsage(estimatedContextState, activeSessionId)
+            }
+          }
           // 第27条：收集模型独立思考字段 reasoning_content，finalize 时合并到 thinking
           if (reasoning) reasoningRef.current = reasoning
           streamEndedRef.current = true
@@ -1420,7 +1588,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     const thinkMs = computeThinkDelayMs(text.length)
     thinkTimerRef.current = window.setTimeout(startStream, thinkMs)
-  }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, isBusy, persistMessages, uploadMessage, bridgeInfo, compactDone, compactSummary])
+  }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, isBusy, persistMessages, uploadMessage, bridgeInfo, compactDone, compactSummary, pendingMemoryCorrection])
 
   useEffect(() => {
     const injected = takeChatMessage()
@@ -1581,6 +1749,39 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     setShowMilestone(false)
   }
 
+  const confirmPendingMemoryCorrection = async () => {
+    if (!pendingMemoryCorrection || memoryCorrectionBusy) return
+    const freshTarget = refreshMemoryCorrectionTarget(pendingMemoryCorrection.target)
+    if (!freshTarget) {
+      setPendingMemoryCorrection(null)
+      if (activeSessionId) clearPendingMemoryCorrection(activeSessionId)
+      setMemoryCorrectionNotice('这条记忆已经发生变化，没有覆盖它。你可以再告诉 TA 一次。')
+      return
+    }
+    setMemoryCorrectionBusy(true)
+    setMemoryCorrectionNotice(null)
+    try {
+      const result = await correctMemoryText(freshTarget, pendingMemoryCorrection.value)
+      if (!result.ok) {
+        setMemoryCorrectionNotice(result.message)
+        return
+      }
+      notifyMemoryUpdated()
+      setPendingMemoryCorrection(null)
+      if (activeSessionId) clearPendingMemoryCorrection(activeSessionId)
+      setMemoryCorrectionNotice(result.changed ? '已按你的确认纠正这条记忆。' : '这条记忆已经是这个内容了。')
+    } finally {
+      setMemoryCorrectionBusy(false)
+    }
+  }
+
+  const rejectPendingMemoryCorrection = () => {
+    if (memoryCorrectionBusy) return
+    setPendingMemoryCorrection(null)
+    if (activeSessionId) clearPendingMemoryCorrection(activeSessionId)
+    setMemoryCorrectionNotice('没有修改记忆。')
+  }
+
   const isEmpty = visibleMessages.length === 0
   const chatBg = useMemo(() => loadChatBg(activeSessionId ?? undefined), [activeSessionId])
 
@@ -1648,6 +1849,30 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         </div>
       )}
 
+      {pendingMemoryCorrection && (
+        <div className="memory-correction-consent" role="group" aria-label="确认纠正记忆">
+          <div className="memory-correction-consent-title">TA 想纠正一条记忆</div>
+          <div className="memory-correction-consent-row">
+            <span>原来记的是</span>
+            <strong>{pendingMemoryCorrection.target.item.text}</strong>
+          </div>
+          <div className="memory-correction-consent-row">
+            <span>准备改成</span>
+            <strong>{pendingMemoryCorrection.value}</strong>
+          </div>
+          <div className="memory-correction-consent-actions">
+            <button type="button" onClick={rejectPendingMemoryCorrection} disabled={memoryCorrectionBusy}>先不改</button>
+            <button type="button" onClick={() => void confirmPendingMemoryCorrection()} disabled={memoryCorrectionBusy}>
+              {memoryCorrectionBusy ? '正在纠正…' : '确认纠正'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {memoryCorrectionNotice && (
+        <div className="memory-correction-notice" role="status">{memoryCorrectionNotice}</div>
+      )}
+
       <div className="chat-composer-panel">
         <div className="composer">
           <textarea
@@ -1687,6 +1912,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
         {activeSessionId && (
           <div className="chat-inline-controls">
+            <ChatCompanionControls sessionId={activeSessionId} />
             <div
               className="context-meter-slot"
               onBlur={(event) => {
@@ -1697,48 +1923,59 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 type="button"
                 className="context-meter-circle"
                 aria-label={contextMeter
-                  ? `上下文占用约 ${Math.max(1, Math.round((contextMeter.used / CONTEXT_SOFT_BUDGET) * 100))}%`
-                  : '查看上下文占用'}
+                  ? `上下文占用 ${Math.round((contextMeter.used / contextMeter.budget) * 100)}%`
+                  : '查看上下文用量'}
                 aria-expanded={contextMenuOpen}
                 onClick={() => setContextMenuOpen((value) => !value)}
               >
                 <span
                   className="context-meter-ring"
                   data-level={contextMeter
-                    ? contextMeter.used >= CONTEXT_SOFT_BUDGET
+                    ? contextMeter.used >= contextMeter.budget
                       ? 'over'
-                      : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.85
+                      : contextMeter.used >= contextMeter.budget * 0.85
                         ? 'high'
-                        : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.7
+                        : contextMeter.used >= contextMeter.budget * 0.7
                           ? 'warn'
                           : 'normal'
                     : 'idle'}
                   style={{
                     background: contextMeter
-                      ? `conic-gradient(var(--context-meter-accent) ${Math.min(100, Math.max(0, Math.round((contextMeter.used / CONTEXT_SOFT_BUDGET) * 100)))}%, var(--ui2-hairline, rgba(51, 43, 40, 0.1)) 0)`
+                      ? `conic-gradient(var(--context-meter-accent) ${Math.min(100, Math.max(0, Math.round((contextMeter.used / contextMeter.budget) * 100)))}%, var(--ui2-hairline, rgba(51, 43, 40, 0.1)) 0)`
                       : undefined,
                   }}
                 >
                   <span className="context-meter-value">
-                    {contextMeter ? `${Math.max(1, Math.round((contextMeter.used / CONTEXT_SOFT_BUDGET) * 100))}%` : '—'}
+                    {contextMeter ? `${Math.min(100, Math.max(0, Math.round((contextMeter.used / contextMeter.budget) * 100)))}%` : '—'}
                   </span>
                 </span>
               </button>
 
               {contextMenuOpen && (
                 <div className="context-meter-popover">
-                  <strong>上下文</strong>
-                  <p>
-                    {!contextMeter
-                      ? '发送一条消息后会显示当前上下文占用。'
-                      : contextMeter.used >= CONTEXT_SOFT_BUDGET
-                        ? '上下文已经很满，建议现在整理或承接到新一段。'
-                        : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.85
-                          ? '上下文接近安全上限，建议尽快整理。'
-                          : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.7
-                            ? '上下文开始变长，可以继续聊，也可以先整理。'
-                            : '上下文状态正常。'}
-                  </p>
+                  <div className="context-meter-summary">
+                    <strong>{contextMeter ? `上下文 ${Math.round((contextMeter.used / contextMeter.budget) * 100)}%` : '还没有数据'}</strong>
+                    {contextMeter && (
+                      <span className="context-meter-source">
+                        {contextMeter.source === 'actual' ? '本轮真实' : '本轮估算'}
+                      </span>
+                    )}
+                  </div>
+                  {contextMeter ? (
+                    <div className="context-meter-stats">
+                      <span>上下文总量</span><strong>{formatTokenCount(contextMeter.used)} / {formatTokenCount(contextMeter.budget)}</strong>
+                      <span>本轮输入</span><strong>{formatTokenCount(contextMeter.inputTokens)}</strong>
+                      <span>本轮输出</span><strong>{contextMeter.outputTokens == null ? '—' : formatTokenCount(contextMeter.outputTokens)}</strong>
+                      <span>Cache 命中</span><strong>{contextMeter.cachedTokens == null ? '—' : formatTokenCount(contextMeter.cachedTokens)}</strong>
+                    </div>
+                  ) : (
+                    <p>发送一条消息后显示。</p>
+                  )}
+                  {contextMeter && (
+                    <p>{contextMeter.source === 'actual'
+                      ? '上下文总量属于当前会话并持续保存；本轮输入 / 输出 / Cache 来自服务商 usage。'
+                      : '上下文总量属于当前会话并持续保存；服务商没返回 usage，本轮数据按本地估算。'}</p>
+                  )}
                   <div className="context-meter-actions">
                     {!compactDone && (
                       <button
@@ -1749,7 +1986,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                         }}
                         disabled={contextBusy !== null}
                       >
-                        {contextBusy === 'compact' ? '整理中…' : '整理后继续聊'}
+                        {contextBusy === 'compact' ? '整理中…' : '整理'}
                       </button>
                     )}
                     {!bridgeInfo && hasBridgableHistory(messages, sessionStart) && (
@@ -1761,14 +1998,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                         }}
                         disabled={contextBusy !== null}
                       >
-                        {contextBusy === 'bridge' ? '承接中…' : '承接到新一段'}
+                        {contextBusy === 'bridge' ? '承接中…' : '承接'}
                       </button>
                     )}
                   </div>
                 </div>
               )}
             </div>
-            <ChatCompanionControls sessionId={activeSessionId} />
           </div>
         )}
 

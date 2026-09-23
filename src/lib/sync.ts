@@ -19,10 +19,13 @@ import {
   getSessionStart,
   collectAllContextCompacts,
   collectAllContextBridges,
+  collectAllContextUsages,
   applyCloudContextCompacts,
   applyCloudContextBridges,
+  applyCloudContextUsages,
   type ContextCompactSyncState,
   type ContextBridgeState,
+  type ContextUsageState,
   type StoredMessage,
   type UserProfile,
   type AIProfile,
@@ -80,6 +83,8 @@ export interface SyncData {
   contextCompacts?: Record<string, ContextCompactSyncState>
   /** Session Bridge：session → bridge 状态；含 canonical bridgedAt / 剩余轮数。 */
   contextBridges?: Record<string, ContextBridgeState>
+  /** Context Meter：session → 当前上下文占用 + 最近一轮 usage；沿用 /api/sync 全量 blob。 */
+  contextUsages?: Record<string, ContextUsageState>
 }
 const ACCOUNT_KEY = 'ai_companion_account'
 const SETTINGS_KEY = 'ai_companion_settings'
@@ -331,6 +336,7 @@ export function collectData(): SyncData {
     genders: collectAllGenders(),
     contextCompacts: collectAllContextCompacts(),
     contextBridges: collectAllContextBridges(),
+    contextUsages: collectAllContextUsages(),
   }
 }
 // ---- 合并策略（纯函数，可单测） ----
@@ -465,6 +471,7 @@ export function applyData(data: SyncData): void {
   // Context：沿用 /api/sync 全量 blob；旧 blob 没字段自然跳过。
   applyCloudContextCompacts(d.contextCompacts)
   applyCloudContextBridges(d.contextBridges)
+  applyCloudContextUsages(d.contextUsages)
   // 主题：本地没配过且云端有 → 用云端，并立即应用（TASK_THEME）
   if (localStorage.getItem(THEME_KEY) == null && d.theme && (d.theme.type === 'preset' || d.theme.type === 'custom')) {
     saveThemeState(d.theme)

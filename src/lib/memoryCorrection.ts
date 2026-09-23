@@ -14,6 +14,156 @@ export type MemoryRemovalResult = { ok: true } | { ok: false; message: string }
 
 const MEMORY_NOT_SYNCED = '这段记忆还没同步完成，请稍后再试'
 
+export interface MemoryCorrectionProposal {
+  ref: string
+  value: string
+}
+
+/** 低成本粗筛：只决定“这一轮要不要把纠正协议告诉模型”，不直接改任何记忆。 */
+export function looksLikeMemoryCorrectionIntent(text: string): boolean {
+  const t = String(text ?? '').trim()
+  if (!t) return false
+  return /(?:说错|讲错|记错|写错)(?:了|啦)?|(?:更正|纠正)(?:一下)?|(?:改成|改为).+|不是.{1,30}(?:而是|应该是|其实是|才是)|其实(?:不是|应该是)|i was wrong|i misspoke|correction|i meant|not .+ but .+/i.test(t)
+}
+
+/** 模型只可申请，不可直接落库；一次最多取第一条完整申请。 */
+export function extractMemoryCorrectionProposal(text: string): MemoryCorrectionProposal | null {
+  const raw = String(text ?? '')
+  const zh = /【纠正记忆[·・]\s*([gs]:[A-Za-z0-9._-]+)】\s*([^\n]+)/.exec(raw)
+  if (zh?.[1] && zh[2]?.trim()) return { ref: zh[1], value: zh[2].trim() }
+  const en = /\[Correct Memory\s+([gs]:[A-Za-z0-9._-]+)\]\s*([^\n]+)/i.exec(raw)
+  if (en?.[1] && en[2]?.trim()) return { ref: en[1], value: en[2].trim() }
+  return null
+}
+
+/** 展示/落聊天记录时物理剥掉申请标记；即使弱模型把标记贴在正文末尾也不泄漏。 */
+export function stripMemoryCorrectionMarkers(text: string): string {
+  return String(text ?? '')
+    .split('\n')
+    .map((line) => {
+      const zhAt = line.indexOf('【纠正记忆')
+      const enMatch = /\[Correct Memory\b/i.exec(line)
+      const cutAt = zhAt >= 0 && enMatch ? Math.min(zhAt, enMatch.index) : zhAt >= 0 ? zhAt : enMatch?.index ?? -1
+      return cutAt >= 0 ? line.slice(0, cutAt).trimEnd() : line
+    })
+    .filter((line) => line.trim() !== '')
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+export function hasMemoryCorrectionMarker(text: string): boolean {
+  return /【纠正记忆|\[Correct Memory\b/i.test(String(text ?? ''))
+}
+
+/**
+ * 用户点“确认纠正”前再对一次当前值。
+ * 如果别的设备/页面已经改过这条，就拒绝用旧提案覆盖新值。
+ */
+export function refreshMemoryCorrectionTarget(target: MemoryCorrectionTarget): MemoryCorrectionTarget | null {
+  if (target.kind === 'global') {
+    const current = loadMemory().find((memory) => memory.id === target.item.id)
+    if (!current || current.text !== target.item.text) return null
+    return { kind: 'global', item: current }
+  }
+  const current = resolveCurrentSessionMemory(getMemoriesCache(target.sessionId), target.item)
+  if (!current || current.text !== target.item.text) return null
+  return { ...target, item: current }
+}
+
+const PENDING_CORRECTION_KEY = 'ai_companion_pending_memory_correction'
+
+interface StoredPendingMemoryCorrection {
+  sessionStart: number
+  kind: 'global' | 'session'
+  item: MemoryItem
+  value: string
+}
+
+function pendingCorrectionKey(sessionId: string): string {
+  return `${PENDING_CORRECTION_KEY}_sid_${sessionId}`
+}
+
+/**
+ * 未确认提案只存本机，不进云同步；它不是事实，只是等待用户授权的 UI 状态。
+ * 退出聊天 / 刷新页面后仍能继续确认，同一个 sessionStart 内才有效。
+ */
+export function savePendingMemoryCorrection(
+  sessionId: string,
+  sessionStart: number,
+  proposal: { target: MemoryCorrectionTarget; value: string },
+): void {
+  if (!sessionId || !proposal.value.trim()) return
+  const payload: StoredPendingMemoryCorrection = {
+    sessionStart,
+    kind: proposal.target.kind,
+    item: proposal.target.item,
+    value: proposal.value.trim(),
+  }
+  try {
+    localStorage.setItem(pendingCorrectionKey(sessionId), JSON.stringify(payload))
+  } catch {
+    // 本地暂存失败不影响本轮确认
+  }
+}
+
+export function clearPendingMemoryCorrection(sessionId: string): void {
+  if (!sessionId) return
+  try {
+    localStorage.removeItem(pendingCorrectionKey(sessionId))
+  } catch {
+    // ignore
+  }
+}
+
+export function loadPendingMemoryCorrection(
+  sessionId: string,
+  sessionStart: number,
+  token = '',
+): { target: MemoryCorrectionTarget; value: string } | null {
+  if (!sessionId) return null
+  try {
+    const raw = localStorage.getItem(pendingCorrectionKey(sessionId))
+    if (!raw) return null
+    const stored = JSON.parse(raw) as Partial<StoredPendingMemoryCorrection>
+    if (
+      Number(stored.sessionStart) !== sessionStart ||
+      (stored.kind !== 'global' && stored.kind !== 'session') ||
+      !stored.item ||
+      typeof stored.item !== 'object' ||
+      typeof stored.item.id !== 'string' ||
+      typeof stored.item.text !== 'string' ||
+      typeof stored.value !== 'string' ||
+      !stored.value.trim()
+    ) {
+      clearPendingMemoryCorrection(sessionId)
+      return null
+    }
+
+    if (stored.kind === 'global') {
+      const matches = loadMemory().filter((item) => item.id === stored.item!.id && item.text === stored.item!.text)
+      if (matches.length !== 1) {
+        clearPendingMemoryCorrection(sessionId)
+        return null
+      }
+      return { target: { kind: 'global', item: matches[0] }, value: stored.value.trim() }
+    }
+
+    const current = resolveCurrentSessionMemory(getMemoriesCache(sessionId), stored.item as MemoryItem)
+    if (!current || current.text !== stored.item.text) {
+      clearPendingMemoryCorrection(sessionId)
+      return null
+    }
+    return {
+      target: { kind: 'session', sessionId, item: current, token },
+      value: stored.value.trim(),
+    }
+  } catch {
+    clearPendingMemoryCorrection(sessionId)
+    return null
+  }
+}
+
 function isServerMemoryId(id: string): boolean {
   return /^[1-9]\d*$/.test(id)
 }
