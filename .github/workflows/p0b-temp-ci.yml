@@ -7,7 +7,7 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,6 +15,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Full test baseline
+        continue-on-error: true
+        run: npm test
       - name: P0-B targeted tests
         run: node scripts/test_ta_runtime.mjs && node scripts/test_milestone.mjs && node scripts/test_space_time_fix.mjs && node scripts/test_event_store.mjs && node scripts/test_event_v2.mjs && node scripts/test_aispace_v3.mjs
       - run: npm run build
