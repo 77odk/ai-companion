@@ -66,6 +66,101 @@ export function refreshMemoryCorrectionTarget(target: MemoryCorrectionTarget): M
   return { ...target, item: current }
 }
 
+const PENDING_CORRECTION_KEY = 'ai_companion_pending_memory_correction'
+
+interface StoredPendingMemoryCorrection {
+  sessionStart: number
+  kind: 'global' | 'session'
+  itemId: string
+  oldText: string
+  value: string
+}
+
+function pendingCorrectionKey(sessionId: string): string {
+  return `${PENDING_CORRECTION_KEY}_sid_${sessionId}`
+}
+
+/**
+ * 未确认提案只存本机，不进云同步；它不是事实，只是等待用户授权的 UI 状态。
+ * 退出聊天 / 刷新页面后仍能继续确认，同一个 sessionStart 内才有效。
+ */
+export function savePendingMemoryCorrection(
+  sessionId: string,
+  sessionStart: number,
+  proposal: { target: MemoryCorrectionTarget; value: string },
+): void {
+  if (!sessionId || !proposal.value.trim()) return
+  const payload: StoredPendingMemoryCorrection = {
+    sessionStart,
+    kind: proposal.target.kind,
+    itemId: proposal.target.item.id,
+    oldText: proposal.target.item.text,
+    value: proposal.value.trim(),
+  }
+  try {
+    localStorage.setItem(pendingCorrectionKey(sessionId), JSON.stringify(payload))
+  } catch {
+    // 本地暂存失败不影响本轮确认
+  }
+}
+
+export function clearPendingMemoryCorrection(sessionId: string): void {
+  if (!sessionId) return
+  try {
+    localStorage.removeItem(pendingCorrectionKey(sessionId))
+  } catch {
+    // ignore
+  }
+}
+
+export function loadPendingMemoryCorrection(
+  sessionId: string,
+  sessionStart: number,
+  token = '',
+): { target: MemoryCorrectionTarget; value: string } | null {
+  if (!sessionId) return null
+  try {
+    const raw = localStorage.getItem(pendingCorrectionKey(sessionId))
+    if (!raw) return null
+    const stored = JSON.parse(raw) as Partial<StoredPendingMemoryCorrection>
+    if (
+      Number(stored.sessionStart) !== sessionStart ||
+      (stored.kind !== 'global' && stored.kind !== 'session') ||
+      typeof stored.itemId !== 'string' ||
+      typeof stored.oldText !== 'string' ||
+      typeof stored.value !== 'string' ||
+      !stored.value.trim()
+    ) {
+      clearPendingMemoryCorrection(sessionId)
+      return null
+    }
+
+    if (stored.kind === 'global') {
+      const matches = loadMemory().filter((item) => item.id === stored.itemId && item.text === stored.oldText)
+      if (matches.length !== 1) {
+        clearPendingMemoryCorrection(sessionId)
+        return null
+      }
+      return { target: { kind: 'global', item: matches[0] }, value: stored.value.trim() }
+    }
+
+    const matches = getMemoriesCache(sessionId).filter(
+      (item) => item.id === stored.itemId && item.text === stored.oldText,
+    )
+    if (matches.length !== 1) {
+      clearPendingMemoryCorrection(sessionId)
+      return null
+    }
+    return {
+      target: { kind: 'session', sessionId, item: matches[0], token },
+      value: stored.value.trim(),
+    }
+  } catch {
+    clearPendingMemoryCorrection(sessionId)
+    return null
+  }
+}
+
 function isServerMemoryId(id: string): boolean {
   return /^[1-9]\d*$/.test(id)
 }
