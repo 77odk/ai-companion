@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { composeContext, CONTEXT_HARD_BUDGET, COMPACT_INPUT_BUDGET, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_TAIL_COUNT } from '../src/lib/contextComposer.ts'
+import { composeContext, CONTEXT_HARD_BUDGET, COMPACT_INPUT_BUDGET, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT } from '../src/lib/contextComposer.ts'
 import { estimateToken } from '../src/lib/token.ts'
 
 const core = [{ role: 'system', content: 'core persona' }]
@@ -50,7 +50,10 @@ assert.ok(compactInput.reduce((sum, m) => sum + estimateToken(m.content), 0) <= 
 // ── PR #99：Bridge 常量 + 块可被 composer 纳入（memory 优先级）──
 console.log('\n[bridge] evidence-only bridge 块注入')
 assert.equal(BRIDGE_ACTIVE_TURNS, 8, 'bridge 临时参与轮数 = 8（约 6–10）')
+assert.equal(BRIDGE_INPUT_BUDGET, 42000, 'Bridge 单次模型输入预算 = 42k')
 assert.equal(BRIDGE_TAIL_COUNT, 30, '承接只取上一会话最近 30 条聊天尾部')
+const bridgeInput = buildCompactSource(Array.from({ length: 30 }, () => ({ role: 'user', content: '上一段 '.repeat(4000) })), BRIDGE_INPUT_BUDGET)
+assert.ok(bridgeInput.reduce((sum, m) => sum + estimateToken(m.content), 0) <= BRIDGE_INPUT_BUDGET, 'Bridge 单次模型输入同时受 token 预算限制')
 const bridgeBlock = { id: 'bridge', content: 'evidence-only 交接摘要', priority: 'memory' }
 const bridged = composeContext(core, [], [bridgeBlock], [], CONTEXT_HARD_BUDGET)
 assert.ok(bridged.includedBlockIds.includes('bridge'), 'bridge 块应被纳入 composer')
@@ -109,6 +112,8 @@ assert.match(chatSource, /if \(composed\.overBudget\)/, '超过 64k 时在 provi
 assert.match(chatSource, /buildCompactedHistory\(compactSummary, history, COMPACT_KEEP_RECENT\)/, '已压缩后注入 = summary + 最近原始消息')
 assert.match(chatSource, /setContextCompactSummary\(trimmed, activeSessionId\)/, '模型生成的摘要持久化')
 assert.match(chatSource, /setContextCompactAt\(Date\.now\(\), activeSessionId\)/, '压缩成功记录时间戳')
+assert.match(chatSource, /const compactBoundary = sessionStart/, 'Compact 发起时捕获刷新边界')
+assert.match(chatSource, /getSessionStart\(activeSessionId\) !== compactBoundary/, 'Compact 写回前必须确认刷新边界未变化')
 assert.match(chatSource, /compactedAt >= sessionStart/, 'Compact 只对当前刷新段生效')
 assert.match(chatSource, /const summary = await chatCompletion\(/, '压缩最多 1 次模型调用（主动）')
 assert.ok(!chatSource.includes('composed.usage >= COMPACT_USAGE_THRESHOLD'), '已删除阈值自动压缩（普通聊天 0 自动模型调用）')
@@ -117,6 +122,9 @@ assert.ok(!chatSource.includes('saveMessagesCache(sessionId'), 'Chat 不因 comp
 // Bridge：承接 = 上一会话有限聊天尾部 + 1 次模型生成 evidence-only bridge；不再注入旧会话 Memory
 assert.match(chatSource, /hasBridgableHistory\(messages, sessionStart\)/, 'Bridge 只由同一 session 的刷新边界控制')
 assert.match(chatSource, /messages\.filter\(\(message\) => message\.ts < sessionStart\)\.slice\(-BRIDGE_TAIL_COUNT\)/, 'Bridge 只取同一 session 刷新前有限尾部')
+assert.match(chatSource, /buildCompactSource\(bridgeHistory, BRIDGE_INPUT_BUDGET\)/, 'Bridge 尾部除了条数上限，还必须受 token 预算限制')
+assert.match(chatSource, /const bridgeBoundary = sessionStart/, 'Bridge 发起时捕获刷新边界')
+assert.match(chatSource, /getSessionStart\(activeSessionId\) !== bridgeBoundary/, 'Bridge 写回前必须确认刷新边界未变化')
 assert.ok(!chatSource.includes("(s.title ?? '').trim() === title"), '禁止用可编辑 title 猜角色身份')
 assert.match(chatSource, /bridgeInfo \|\| streaming \|\| contextBusy\) return/, '已承接后不再重复（每会话最多 1 次）')
 assert.match(chatSource, /const content = await chatCompletion\(/, '承接最多 1 次模型调用（主动）')
