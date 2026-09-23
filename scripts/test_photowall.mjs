@@ -96,7 +96,8 @@ ok(aiSpaceSource.includes('setPhotos(local)'), '切换 session 先切回该 sess
 ok(aiSpaceSource.includes('saveLocalPhotoMetadata(next, sid)'), '上传/云端合并后缓存登录用户元数据')
 ok(aiSpaceSource.includes('dataUrl: scaled.dataUrl'), '上传成功后先用本地压缩图即时展示')
 ok(aiSpaceSource.includes('照片暂时没加载出来，稍后再试。'), '列表读取失败不再静默伪装空墙')
-ok(aiSpaceSource.includes('有照片暂时没显示出来，照片还在，稍后再试。'), '单图加载失败给明确状态')
+ok(aiSpaceSource.includes("const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，稍后再试。'"), '单图加载失败文案集中维护')
+ok(aiSpaceSource.includes('setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? current : null)'), '列表/上传成功不会覆盖已发生的图片加载失败提示')
 ok(archiveSource.includes('loading="eager"'), '首屏预览不再 lazy，避免可见照片延迟/漏加载')
 ok(archiveSource.includes('onPhotoLoadError?.(photo)'), '图片失败会回传错误状态')
 
