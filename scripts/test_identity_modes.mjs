@@ -143,8 +143,9 @@ assert.match(chatSource, /const identityMode = resolveIdentityMode\(activeSessio
 assert.match(chatSource, /const allowEmbodiedLife = allowsEmbodiedLifeContext\(identityMode\)/, 'allowEmbodiedLife 从同一 identityMode 派生')
 assert.match(chatSource, /const liveAllowBusy = allowsBusyState\(resolveIdentityMode\(activeSessionId \|\| undefined\)\)/, 'Busy 能力从当前 identityMode 实时派生（生成中切模式不沿用闭包）')
 assert.match(chatSource, /if \(allowEmbodiedLife\) \{\s*const spaceBlock = buildSpacePostsBlock/s, 'Space 历史只在沉浸档作为 SELF 事实注入')
-assert.match(chatSource, /if \(allowEmbodiedLife && !personaHasLifeAnchors\(persona\)\)/, 'LIFE_BASELINE 仅沉浸')
-assert.match(chatSource, /if \(allowEmbodiedLife && shouldInjectYourMoment\(recentUserTexts, lang\)\)/, 'YourMoment 物理模板仅沉浸')
+assert.match(chatSource, /const shouldShareMoment = allowEmbodiedLife && shouldInjectYourMoment\(recentUserTexts, lang\)/, '生活分享开关仍只属于沉浸档')
+assert.match(chatSource, /if \(shouldShareMoment && !personaHasLifeAnchors\(persona\)\)/, 'LIFE_BASELINE 仅沉浸且仅相关轮次')
+assert.match(chatSource, /if \(shouldShareMoment\)/, 'YourMoment 物理模板仅在沉浸且相关轮次')
 assert.ok(!chatSource.includes('pickBusyReply'), '真人 Busy 期间不再用本地话术假装即时回复')
 assert.ok(!chatSource.includes('busyReplyText'), '真人 Busy 期间保持真正的短暂不回复')
 
