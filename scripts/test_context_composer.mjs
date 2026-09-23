@@ -147,10 +147,13 @@ assert.match(chatSource, /bridgeInfo\.turnsLeft - 1/, 'bridge 每轮递减，临
 // 同步：Context 只并入既有 /api/sync 全量 blob，不注册第二套 /api/state kind
 assert.match(syncSource, /contextCompacts: collectAllContextCompacts\(\)/, 'compact 进入 collectData 全量 blob')
 assert.match(syncSource, /contextBridges: collectAllContextBridges\(\)/, 'bridge 进入 collectData 全量 blob')
+assert.match(syncSource, /contextUsages: collectAllContextUsages\(\)/, 'Context usage 进入 collectData 全量 blob')
 assert.match(syncSource, /applyCloudContextCompacts\(d\.contextCompacts\)/, 'compact 从全量 blob 恢复')
 assert.match(syncSource, /applyCloudContextBridges\(d\.contextBridges\)/, 'bridge 从全量 blob 恢复')
+assert.match(syncSource, /applyCloudContextUsages\(d\.contextUsages\)/, 'Context usage 从全量 blob 恢复')
 assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_compact'"), '不再注册 context_compact /api/state adapter')
 assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_bridge'"), '不再注册 context_bridge /api/state adapter')
+assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_usage'"), 'Context usage 不新增 /api/state adapter')
 // 原聊天记录零删除：Chat 不新增删除类调用
 assert.ok(!chatSource.includes('clearMessagesCache'), 'Chat 不清理消息缓存')
 assert.ok(!chatSource.includes('deleteMessage'), 'Chat 不删除消息')
