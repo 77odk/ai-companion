@@ -31,6 +31,7 @@ const aiSpace = await import('../src/lib/aiSpace.ts')
 const taRuntime = await import('../src/lib/taRuntime.ts')
 const weeklyReview = await import('../src/lib/weeklyReview.ts')
 const companionPolicy = await import('../src/lib/companionPolicy.ts')
+const replyLength = await import('../src/lib/replyLength.ts')
 
 function login(account = 'account-a') {
   localStorage.setItem('ai_companion_account', JSON.stringify({ account, token: `token-${account}` }))
@@ -1491,4 +1492,162 @@ test('PROFILE-ID-3: pending profile tombstone survives a pull and is rebased ins
   assert.equal(sentProfileOps[0].deleted, true, '推送的是删除而不是资料覆盖')
   assert.equal(sentProfileOps[0].baseVersion, 7)
   assert.equal(cloudOps('profile').length, 0)
+})
+
+
+test('P0-A BACKFILL-1: existing cloud identity wins over stale legacy device profile', async () => {
+  clearState('p0a-profile-existing')
+  resources.initCloudStateResourceAdapters()
+  store.setSessionsCache([{ id: 'A', title: 'TA', persona: '' }])
+  localStorage.setItem('ai_companion_ai_profile_A', JSON.stringify({
+    nickname: '旧本地名',
+    avatar: 'data:image/png;base64,LOCAL',
+    identityMode: 'ai',
+  }))
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+
+  resources.queueLegacyCloudStateBackfill()
+  let ops = cloudOps('profile')
+  assert.equal(ops.length, 1)
+  assert.equal(ops[0].baseVersion, 0)
+  assert.match(ops[0].opId, /^p0a-v1:profile-identity:/)
+
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).includes('/api/state/pull')) return jsonResponse(pullBody(0, []))
+    const sent = JSON.parse(init.body).ops
+    return jsonResponse({ results: [{
+      opId: sent[0].opId,
+      status: 'conflict',
+      entity: {
+        kind: 'profile',
+        entityId: 'A',
+        sessionId: 'A',
+        version: 9,
+        payload: {
+          nickname: '云端新名',
+          avatar: 'data:image/png;base64,CLOUD',
+          identityMode: 'immersive',
+        },
+      },
+    }] })
+  }
+  await cloud.syncCloudState()
+
+  const profile = storage.loadAIProfile('A')
+  assert.equal(profile.nickname, '云端新名')
+  assert.equal(profile.avatar, 'data:image/png;base64,CLOUD')
+  assert.equal(profile.identityMode, 'immersive', '云端已有 identityMode 时旧设备绝不能盖回去')
+  assert.equal(cloudOps('profile').length, 0)
+})
+
+test('P0-A BACKFILL-2: missing cloud identity repairs only that field on canonical profile', async () => {
+  clearState('p0a-profile-missing-field')
+  resources.initCloudStateResourceAdapters()
+  store.setSessionsCache([{ id: 'A', title: 'TA', persona: '' }])
+  localStorage.setItem('ai_companion_ai_profile_A', JSON.stringify({
+    nickname: '旧本地名',
+    avatar: 'data:image/png;base64,LOCAL',
+    identityMode: 'natural',
+  }))
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+
+  resources.queueLegacyCloudStateBackfill()
+  const probe = cloudOps('profile')[0]
+  assert.equal(probe.baseVersion, 0)
+
+  globalThis.fetch = async (_url, init = {}) => {
+    const sent = JSON.parse(init.body).ops
+    return jsonResponse({ results: [{
+      opId: sent[0].opId,
+      status: 'conflict',
+      entity: {
+        kind: 'profile',
+        entityId: 'A',
+        sessionId: 'A',
+        version: 4,
+        payload: {
+          nickname: '云端权威名',
+          avatar: 'data:image/png;base64,CLOUD',
+        },
+      },
+    }] })
+  }
+  await cloud.flushCloudStatePendingOps()
+
+  const profile = storage.loadAIProfile('A')
+  assert.equal(profile.nickname, '云端权威名')
+  assert.equal(profile.avatar, 'data:image/png;base64,CLOUD')
+  assert.equal(profile.identityMode, 'natural')
+
+  const repair = cloudOps('profile')
+  assert.equal(repair.length, 1)
+  assert.equal(repair[0].baseVersion, 4)
+  assert.equal(repair[0].payload.nickname, '云端权威名')
+  assert.equal(repair[0].payload.avatar, 'data:image/png;base64,CLOUD')
+  assert.equal(repair[0].payload.identityMode, 'natural')
+  assert.match(repair[0].opId, /:repair-4$/)
+
+  globalThis.fetch = async (_url, init = {}) => {
+    const sent = JSON.parse(init.body).ops
+    return jsonResponse({ results: sent.map(op => ({ opId: op.opId, status: 'applied', version: 5 })) })
+  }
+  await cloud.flushCloudStatePendingOps()
+  assert.equal(cloudOps('profile').length, 0)
+})
+
+test('P0-A BACKFILL-3: legacy reply-length probes are deterministic and cloud canonical wins', async () => {
+  clearState('p0a-reply')
+  resources.initCloudStateResourceAdapters()
+  store.setSessionsCache([{ id: 'A', title: 'TA', persona: '' }])
+  const account = encodeURIComponent('p0a-reply')
+  localStorage.setItem(`ai_companion_reply_length_global_${account}`, 'short')
+  localStorage.setItem(
+    `ai_companion_reply_length_override_${account}_A`,
+    JSON.stringify({ mode: 'long', followGlobal: false }),
+  )
+  window.dispatchEvent(new Event('eluvin-auth-change'))
+
+  resources.queueLegacyCloudStateBackfill()
+  const first = store.getPendingOps().filter(op => op.type === 'cloud-state')
+  assert.equal(first.filter(op => op.kind === 'reply_length_global').length, 1)
+  assert.equal(first.filter(op => op.kind === 'reply_length').length, 1)
+  assert.ok(first.every(op => op.baseVersion === 0))
+  assert.ok(first.every(op => op.opId.startsWith('p0a-v1:')))
+
+  resources.queueLegacyCloudStateBackfill()
+  assert.equal(
+    store.getPendingOps().filter(op => op.type === 'cloud-state').length,
+    first.length,
+    '同账号重复执行不重复排队',
+  )
+
+  globalThis.fetch = async (_url, init = {}) => {
+    const sent = JSON.parse(init.body).ops
+    return jsonResponse({ results: sent.map(op => op.kind === 'reply_length_global'
+      ? {
+          opId: op.opId,
+          status: 'conflict',
+          entity: { kind: 'reply_length_global', entityId: 'global', version: 6, payload: { mode: 'medium' } },
+        }
+      : {
+          opId: op.opId,
+          status: 'conflict',
+          entity: {
+            kind: 'reply_length',
+            entityId: 'A',
+            sessionId: 'A',
+            version: 7,
+            payload: { mode: 'natural', followGlobal: true },
+          },
+        })) })
+  }
+  await cloud.flushCloudStatePendingOps()
+
+  assert.equal(replyLength.getStoredGlobalReplyLength('p0a-reply'), 'medium')
+  assert.deepEqual(replyLength.getStoredReplyLengthPreference('p0a-reply', 'A'), {
+    mode: 'natural',
+    followGlobal: true,
+  })
+  assert.equal(cloudOps('reply_length_global').length, 0)
+  assert.equal(cloudOps('reply_length').length, 0)
 })
