@@ -1,0 +1,22 @@
+name: P1D measure
+on:
+  push:
+    branches:
+      - fix/p1d-code-convergence-performance
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Asset sizes
+        run: |
+          find dist/assets -maxdepth 1 -type f -printf '%f %s bytes\n' | sort -k2 -nr
+          echo '--- gzip ---'
+          for f in dist/assets/*; do printf '%s ' "$(basename "$f")"; gzip -c "$f" | wc -c; done | sort -k2 -nr
