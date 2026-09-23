@@ -201,10 +201,44 @@ export async function chatCompletion(
   }
 }
 
+export interface ModelUsage {
+  /** 这一轮真正送进模型的输入 token；Context Meter 优先显示这个。 */
+  promptTokens: number
+  completionTokens?: number
+  totalTokens?: number
+  cachedPromptTokens?: number
+}
+
+function parseModelUsage(value: unknown): ModelUsage | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const usage = value as Record<string, unknown>
+  const promptTokens = Number(usage.prompt_tokens)
+  if (!Number.isFinite(promptTokens) || promptTokens < 0) return undefined
+  const completionTokens = Number(usage.completion_tokens)
+  const totalTokens = Number(usage.total_tokens)
+  const details = usage.prompt_tokens_details
+  const cachedPromptTokens = details && typeof details === 'object'
+    ? Number((details as Record<string, unknown>).cached_tokens)
+    : Number(usage.prompt_cache_hit_tokens)
+  return {
+    promptTokens,
+    ...(Number.isFinite(completionTokens) ? { completionTokens } : {}),
+    ...(Number.isFinite(totalTokens) ? { totalTokens } : {}),
+    ...(Number.isFinite(cachedPromptTokens) ? { cachedPromptTokens } : {}),
+  }
+}
+
+function streamUsageOptions(settings: ModelSettings): Record<string, unknown> {
+  // DeepSeek 官方支持在最后一个流式包返回 usage；中转站兼容性不一，不能强塞给所有 OpenAI-compatible 服务。
+  return /(?:^|\.)api\.deepseek\.com$/i.test(new URL(settings.baseUrl).hostname)
+    ? { stream_options: { include_usage: true } }
+    : {}
+}
+
 export interface StreamHandlers {
   onToken: (text: string) => void
-  /** 流结束回调，reasoning 是模型独立思考字段（reasoning_content）累积的原文，没有则 undefined */
-  onDone: (reasoning?: string) => void
+  /** 流结束回调；usage 拿不到时为 undefined，调用方必须退回本地估算。 */
+  onDone: (reasoning?: string, usage?: ModelUsage) => void
   onError: (err: ChatError) => void
 }
 
@@ -223,7 +257,13 @@ export function streamChat(
       resp = await fetchOrThrow(url, {
         method: 'POST',
         headers: buildHeaders(settings),
-        body: JSON.stringify({ model: settings.model, messages, stream: true, ...zhipuThinking(settings) }),
+        body: JSON.stringify({
+          model: settings.model,
+          messages,
+          stream: true,
+          ...streamUsageOptions(settings),
+          ...zhipuThinking(settings),
+        }),
         signal: controller.signal,
       })
     } catch (e) {
@@ -249,6 +289,7 @@ export function streamChat(
       let finished = false
       // 第27条：收集模型独立思考字段 reasoning_content（DeepSeek/Qwen/Kimi/豆包等 OpenAI 兼容标准）
       let reasoningBuffer = ''
+      let usage: ModelUsage | undefined
 
       while (!finished) {
         const { done, value } = await reader.read()
@@ -267,6 +308,8 @@ export function streamChat(
           }
           try {
             const json = JSON.parse(data)
+            const parsedUsage = parseModelUsage(json.usage)
+            if (parsedUsage) usage = parsedUsage
             const delta = json.choices?.[0]?.delta
             const content = delta?.content
             if (typeof content === 'string' && content.length > 0) {
@@ -282,7 +325,7 @@ export function streamChat(
           }
         }
       }
-      handlers.onDone(reasoningBuffer || undefined)
+      handlers.onDone(reasoningBuffer || undefined, usage)
     } catch (e) {
       if (controller.signal.aborted) return
       handlers.onError(e instanceof ChatError ? e : new ChatError('unknown', '出错了，请稍后重试'))
