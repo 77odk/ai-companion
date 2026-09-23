@@ -451,6 +451,8 @@ export function dayStartOf(ts: number): number {
 export interface SpaceSlot {
   at: number
   source: SpaceSource
+  /** 仅 event 槽可带：聊天证据真实发生时间；约定 futureDay 不带。 */
+  evidenceAt?: number
 }
 
 /**
@@ -473,16 +475,34 @@ export interface SpaceSlot {
 /** 某天该几点发：过去的日子全天随机；今天只挑「已经过去的时段」（最晚 now-5 分钟，最早 7:00）。
  *  ★2026-09-18 修：首访路径原来对「今天」也用全天随机，会造出未来时间戳的动态
  *  （显示成「刚刚」永远不变）——两条路径统一走这里，时间戳绝不落在未来。 */
-function pickPostTimeForDay(day: number, now: number, rand: () => number): number | null {
+function pickPostTimeForDay(
+  day: number,
+  now: number,
+  rand: () => number,
+  evidenceAt?: number,
+): number | null {
   const todayStart = dayStartOf(now)
-  if (day >= todayStart) {
-    const lo = todayStart + 7 * 60 * 60 * 1000
-    if (now < lo) return null
-    const hi = now - 5 * 60 * 1000
-    if (hi <= lo) return lo
-    return lo + Math.floor(rand() * (hi - lo))
+
+  // 日常动态与没有真实聊天证据的约定日保持原来的自然随机逻辑。
+  if (!Number.isFinite(evidenceAt)) {
+    if (day >= todayStart) {
+      const lo = todayStart + 7 * 60 * 60 * 1000
+      if (now < lo) return null
+      const hi = now - 5 * 60 * 1000
+      if (hi <= lo) return lo
+      return lo + Math.floor(rand() * (hi - lo))
+    }
+    return pickDayPostHour(day, rand)
   }
-  return pickDayPostHour(day, rand)
+
+  // 事件动态必须晚于证据；若证据已经晚到没有可用时段，本轮就不发，不硬造时间线。
+  const targetDayStart = dayStartOf(day)
+  const lo = Math.max(targetDayStart + 7 * 60 * 60 * 1000, evidenceAt as number)
+  const hi = day >= todayStart
+    ? now - 5 * 60 * 1000
+    : targetDayStart + DAY_INTERVAL_MS - 1
+  if (hi <= lo) return null
+  return lo + Math.floor(rand() * (hi - lo))
 }
 
 export function planBackfillSlots(
@@ -493,6 +513,7 @@ export function planBackfillSlots(
   rand: () => number = Math.random,
   ledger?: SpaceLedger,
   notBefore?: number,
+  eventEvidenceAt?: ReadonlyMap<string, number>,
 ): SpaceSlot[] {
   const h = new Date(now).getHours()
   // 认识边界按本地自然日：新角色只能从认识 TA 的那一天开始铺动态，绝不回填更早日期。
@@ -511,9 +532,10 @@ export function planBackfillSlots(
       const u = dayUsage(posts, dk, ledger)
       if (isEvent ? u.event >= 1 : u.daily >= MAX_POSTS_PER_DAY) continue
       if (u.total >= MAX_TOTAL_PER_DAY) continue
-      const at = pickPostTimeForDay(day, now, rand)
-      if (at == null) continue   // 今天还没到 7 点：TA 今天还没发圈
-      out.push({ at, source: isEvent ? 'event' : 'daily' })
+      const evidenceAt = isEvent ? eventEvidenceAt?.get(dk) : undefined
+      const at = pickPostTimeForDay(day, now, rand, evidenceAt)
+      if (at == null) continue   // 今天还没到 7 点，或事件证据已经晚到没有可用区间
+      out.push({ at, source: isEvent ? 'event' : 'daily', ...(evidenceAt ? { evidenceAt } : {}) })
     }
     return out.sort((a, b) => a.at - b.at)
   }
@@ -534,7 +556,8 @@ export function planBackfillSlots(
 
   // 生成某天动态的时间戳：今天只在「今天已过去的时段」里挑（最晚 now-5 分钟，最早 7:00），
   // 过去的日子（昨天/前天）用 7:00-23:59 全时段随机——绝不让时间戳落在未来，也绝不被拖到凌晨。
-  const pickTime = (day: number): number | null => pickPostTimeForDay(day, now, rand)
+  const pickTime = (day: number, evidenceAt?: number): number | null =>
+    pickPostTimeForDay(day, now, rand, evidenceAt)
 
   // 当天是否已被窗口覆盖（lastVisit 是今天之前的日子 → 今天在窗口里，事件当天在窗口内规划）
   const todayCovered = todayStart > lastDay && days.includes(todayStart)
@@ -546,8 +569,9 @@ export function planBackfillSlots(
     if (isEvent) {
       // 事件日：优先 1 条事件动态（趁热发，不吞日常配额、不被日常 2 条吞掉）；已发过事件则当天不再补
       if (u.event >= 1 || u.total >= MAX_TOTAL_PER_DAY) continue
-      const t = pickTime(day)
-      if (t != null) out.push({ at: t, source: 'event' })
+      const evidenceAt = eventEvidenceAt?.get(dk)
+      const t = pickTime(day, evidenceAt)
+      if (t != null) out.push({ at: t, source: 'event', ...(evidenceAt ? { evidenceAt } : {}) })
     } else {
       // 非事件日：TA 也有自己的生活——按概率发 1 条，不是天天刷屏
       if (u.daily < MAX_POSTS_PER_DAY && u.total < MAX_TOTAL_PER_DAY && rand() < BACKFILL_LIFE_CHANCE) {
@@ -567,8 +591,9 @@ export function planBackfillSlots(
     dayUsage(posts, todayKey, ledger).event < 1 &&
     dayUsage(posts, todayKey, ledger).total < MAX_TOTAL_PER_DAY
   ) {
-    const t = pickTime(todayStart)
-    if (t != null) out.push({ at: t, source: 'event' })
+    const evidenceAt = eventEvidenceAt?.get(todayKey)
+    const t = pickTime(todayStart, evidenceAt)
+    if (t != null) out.push({ at: t, source: 'event', ...(evidenceAt ? { evidenceAt } : {}) })
   }
   return out.sort((a, b) => a.at - b.at)
 }
