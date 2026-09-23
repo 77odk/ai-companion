@@ -334,7 +334,7 @@ const RUNTIME_TEXT_START_RULES: readonly RuntimeTextRule[] = [
   { activityId: 'exercise', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:运动|健身|跑步|游泳|瑜伽|打球)/, en: /\b(?:i(?:'m| am)?\s+)?(?:working out|exercising|running|swimming|doing yoga|going to the gym)\b/i },
   { activityId: 'movie', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:看电影|看剧|追剧|看动漫)/, en: /\b(?:i(?:'m| am)?\s+)?(?:watching|going to watch) (?:a )?(?:movie|film|show|series|anime)\b/i },
   { activityId: 'gaming', zh: /(?:我)?(?:正(?:在)?|在|去|先|准备)?(?:打游戏|玩游戏|开黑|打排位)/, en: /\b(?:i(?:'m| am)?\s+)?(?:gaming|playing (?:a )?game|playing games|going to play)\b/i },
-  { activityId: 'class', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:上课|听课)/, en: /\b(?:i(?:'m| am)?\s+)?(?:in class|going to class|attending class)\b/i },
+  { activityId: 'class', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:上课|听课|在课上|课上)/, en: /\b(?:i(?:'m| am)?\s+)?(?:in class|going to class|attending class)\b/i },
   { activityId: 'work', zh: /(?:我)?(?:已经|刚|刚刚|才)?(?:到公司|到单位|到办公室|到工位|到岗)(?:了)?/, en: /\b(?:i\s+)?(?:just\s+)?(?:got to work|arrived at (?:work|the office)|made it to (?:work|the office))\b/i },
   { activityId: 'commute', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:通勤|去上班|去公司|回公司|上班路上)/, en: /\b(?:i(?:'m| am)?\s+)?(?:commuting|on my way to work|going to work|heading to work)\b/i },
   { activityId: 'work', zh: /(?:忙(?:着)?工作|处理工作|赶工作|工作中|开始工作|继续工作|加班|开会)/, en: /\b(?:working|at work|in a meeting)\b/i },
@@ -400,13 +400,20 @@ function blockedAsFutureOrNegative(clause: string): boolean {
   return ZH_FUTURE_RE.test(clause) || EN_FUTURE_RE.test(clause) || ZH_NEGATIVE_RE.test(clause) || EN_NEGATIVE_RE.test(clause)
 }
 
+/** “快喝完了 / 马上下课了 / 还没忙完”是进行中，不是完成事实，不能触发 finish 后重抽。 */
+function looksNotFinishedYet(clause: string): boolean {
+  const t = clause.trim()
+  return /(?:快|快要|马上|就要|差不多(?:要)?|还没|尚未|没有|没).{0,8}(?:完|结束|下课|下班|回来)/.test(t)
+    || /\b(?:almost|about to|not yet|haven't|hasn't|still not)\b/i.test(t)
+}
+
 function explicitSelfCurrentClause(clause: string): boolean {
   const t = clause.trim()
   if (!t) return false
   // “好，我去…” / “我正在…” / “我刚…” 等明确自我当前动作。
   if (/(?:^|[，,；;]\s*)我(?:现在|正(?:在)?|还在|在|去|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/.test(t)) return true
   // 省主语但带强当前标记：“先去洗澡”“正在看书”“刚到家”。
-  if (/^(?:现在|正(?:在)?|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/.test(t)) return true
+  if (/^(?:现在|正(?:在)?|还在|在|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/.test(t)) return true
   // 很短的口语自述：“洗澡去了”“看书呢”，避免把“看书这件事…”之类泛提及当当前状态。
   if (t.length <= 16 && /(?:去了|中|呢|着呢|一会儿?|一下|了)$/.test(t)) return true
   // English: only explicit first-person/current constructions.
@@ -431,6 +438,7 @@ export function detectTaRuntimeDecision(text: string, currentActivityId?: string
   if (currentActivityId) {
     for (const clause of clauses) {
       if (isClearlyOtherPersonClause(clause) || /(?:吗|嘛|么|没|没有)$/.test(clause.trim())) continue
+      if (looksNotFinishedYet(clause)) continue
       const zh = FINISH_PATTERNS[currentActivityId]
       const en = FINISH_PATTERNS_EN[currentActivityId]
       if ((zh && zh.test(clause)) || (en && en.test(clause))) return { type: 'finish' }

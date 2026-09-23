@@ -49,6 +49,7 @@ import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAt
 import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
 import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
+import { estimateToken } from '../lib/token'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -158,9 +159,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const sessionStart = getSessionStart(activeSessionId || undefined)
   // Context：上一轮 provider usage 优先；拿不到 usage 才显示本地估算。两者都没有时显示“还没有数据”。
   const [contextMeter, setContextMeter] = useState<{
+    /** 当前整份上下文占用；实际值优先用 provider prompt_tokens。 */
     used: number
     budget: number
     source: 'actual' | 'estimate'
+    inputTokens: number
+    outputTokens?: number
+    totalTokens?: number
+    cachedTokens?: number
   } | null>(null)
   // Compact：用户主动「压缩」→ 最多 1 次模型调用，把较老历史压成 summary；之后注入 = summary + recent raw。
   // 每会话最多压缩 1 次；原聊天记录绝不删除。summary 持久化，刷新后无需再调模型。
@@ -1180,7 +1186,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         ? buildCompactedHistory(compactSummary, history, COMPACT_KEEP_RECENT)
         : history
     const composed = composeContext(apiMessages, historyForModel, [...contextBlocks, ...bridgeBlocks])
-    setContextMeter({ used: composed.totalTokens, budget: composed.hardBudget, source: 'estimate' })
+    setContextMeter({
+      used: composed.totalTokens,
+      budget: composed.hardBudget,
+      source: 'estimate',
+      inputTokens: composed.totalTokens,
+    })
     if (composed.overBudget) {
       // 当前用户消息 / 核心 system 本身已经放不进 64k：不静默裁用户原话，也不把超限请求发给 provider。
       // 用户消息已经正常落历史；这里只撤掉空 assistant 占位并结束本轮流式状态。
@@ -1430,13 +1441,44 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         },
         onDone: (reasoning, usage) => {
           if (runId !== runIdRef.current) return
-          // provider 真正返回 prompt_tokens 时覆盖估算；中转站不回 usage 就保留 estimate。
-          if (mountedRef.current && usage && Number.isFinite(usage.promptTokens)) {
-            setContextMeter({
-              used: usage.promptTokens,
-              budget: composed.hardBudget,
-              source: 'actual',
-            })
+          // prompt_tokens = 当前整份上下文输入量，用它算 64k 占比；其余 usage 只在点开明细里展示。
+          if (mountedRef.current) {
+            const estimatedOutput = estimateToken(assistantText.current)
+            if (usage && Number.isFinite(usage.promptTokens)) {
+              const reportedCompletion = typeof usage.completionTokens === 'number' && Number.isFinite(usage.completionTokens)
+                ? usage.completionTokens
+                : undefined
+              const reportedTotal = typeof usage.totalTokens === 'number' && Number.isFinite(usage.totalTokens)
+                ? usage.totalTokens
+                : undefined
+              const cachedTokens = typeof usage.cachedPromptTokens === 'number' && Number.isFinite(usage.cachedPromptTokens)
+                ? usage.cachedPromptTokens
+                : undefined
+              const outputTokens = reportedCompletion ?? (
+                reportedTotal == null ? undefined : Math.max(0, reportedTotal - usage.promptTokens)
+              )
+              const totalTokens = reportedTotal ?? (
+                outputTokens == null ? undefined : usage.promptTokens + outputTokens
+              )
+              setContextMeter({
+                used: usage.promptTokens,
+                budget: composed.hardBudget,
+                source: 'actual',
+                inputTokens: usage.promptTokens,
+                ...(outputTokens == null ? {} : { outputTokens }),
+                ...(totalTokens == null ? {} : { totalTokens }),
+                ...(cachedTokens == null ? {} : { cachedTokens }),
+              })
+            } else {
+              setContextMeter({
+                used: composed.totalTokens,
+                budget: composed.hardBudget,
+                source: 'estimate',
+                inputTokens: composed.totalTokens,
+                outputTokens: estimatedOutput,
+                totalTokens: composed.totalTokens + estimatedOutput,
+              })
+            }
           }
           // 第27条：收集模型独立思考字段 reasoning_content，finalize 时合并到 thinking
           if (reasoning) reasoningRef.current = reasoning
@@ -1737,7 +1779,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 type="button"
                 className="context-meter-circle"
                 aria-label={contextMeter
-                  ? `上下文${contextMeter.source === 'actual' ? '真实' : '估算'}用量 ${formatTokenCount(contextMeter.used)} / ${formatTokenCount(contextMeter.budget)}`
+                  ? `上下文占用 ${Math.round((contextMeter.used / contextMeter.budget) * 100)}%`
                   : '查看上下文用量'}
                 aria-expanded={contextMenuOpen}
                 onClick={() => setContextMenuOpen((value) => !value)}
@@ -1760,7 +1802,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                   }}
                 >
                   <span className="context-meter-value">
-                    {contextMeter ? formatTokenCount(contextMeter.used) : '—'}
+                    {contextMeter ? `${Math.min(100, Math.max(0, Math.round((contextMeter.used / contextMeter.budget) * 100)))}%` : '—'}
                   </span>
                 </span>
               </button>
@@ -1768,20 +1810,29 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               {contextMenuOpen && (
                 <div className="context-meter-popover">
                   <div className="context-meter-summary">
-                    <strong>{contextMeter ? `${formatTokenCount(contextMeter.used)} / ${formatTokenCount(contextMeter.budget)}` : '还没有数据'}</strong>
+                    <strong>{contextMeter ? `上下文 ${Math.round((contextMeter.used / contextMeter.budget) * 100)}%` : '还没有数据'}</strong>
                     {contextMeter && (
                       <span className="context-meter-source">
                         {contextMeter.source === 'actual' ? '真实值' : '估算'}
                       </span>
                     )}
                   </div>
-                  <p>
-                    {contextMeter
-                      ? contextMeter.source === 'actual'
-                        ? '上一轮模型返回的输入 token。'
-                        : '服务商没返回 usage，按本地算法估算；实际以服务商为准。'
-                      : '发送一条消息后显示；有 usage 用真实值，没有则显示估算。'}
-                  </p>
+                  {contextMeter ? (
+                    <div className="context-meter-stats">
+                      <span>上下文总量</span><strong>{formatTokenCount(contextMeter.used)} / {formatTokenCount(contextMeter.budget)}</strong>
+                      <span>输入 tokens</span><strong>{formatTokenCount(contextMeter.inputTokens)}</strong>
+                      <span>输出 tokens</span><strong>{contextMeter.outputTokens == null ? '—' : formatTokenCount(contextMeter.outputTokens)}</strong>
+                      <span>总 tokens</span><strong>{contextMeter.totalTokens == null ? '—' : formatTokenCount(contextMeter.totalTokens)}</strong>
+                      <span>Cache 命中</span><strong>{contextMeter.cachedTokens == null ? '—' : formatTokenCount(contextMeter.cachedTokens)}</strong>
+                    </div>
+                  ) : (
+                    <p>发送一条消息后显示。</p>
+                  )}
+                  {contextMeter && (
+                    <p>{contextMeter.source === 'actual'
+                      ? '以上来自上一轮服务商 usage；未返回的项目显示 —。'
+                      : '服务商没返回 usage，输入/输出/总量为本地估算；Cache 命中无法估算。'}</p>
+                  )}
                   <div className="context-meter-actions">
                     {!compactDone && (
                       <button

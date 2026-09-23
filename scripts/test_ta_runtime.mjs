@@ -480,6 +480,27 @@ group('K. P0-B：事实优先 + routine 收紧 + 跨设备确定性')
     'K1 “到公司了”直接落 work，不再先 finish commute 后重抽',
   )
 
+  eq(
+    detectTaRuntimeDecision('我还在课上，十一点二十下课，先陪你笑两句。', 'coffee'),
+    { type: 'start', activityId: 'class' },
+    'K1b “我还在课上”是明确当前事实 → class，压过旧 coffee',
+  )
+  eq(
+    detectTaRuntimeDecision('在课上，刚结束一节课间，咖啡快喝完了。', 'coffee'),
+    { type: 'start', activityId: 'class' },
+    'K1c “在课上”仍优先识别 class，不被咖啡措辞带偏',
+  )
+  eq(
+    detectTaRuntimeDecision('咖啡快喝完了。', 'coffee'),
+    null,
+    'K1d “快喝完了”仍在进行中，不能误判 finish 后重抽',
+  )
+  eq(
+    detectTaRuntimeDecision('咖啡喝完了。', 'coffee'),
+    { type: 'finish' },
+    'K1e 明确“咖啡喝完了”才允许 finish',
+  )
+
   clearLS()
   const commuteAt = new Date(2026, 8, 23, 9, 0, 0).getTime()
   localStorage.setItem('ai_companion_ta_runtime', JSON.stringify({

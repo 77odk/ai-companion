@@ -198,7 +198,7 @@
 }
 
 .chat-companion-controls {
-  position: relative;
+  position: static;
   z-index: 9;
   flex: 0 1 auto;
   width: auto;
@@ -221,6 +221,7 @@
 }
 
 .chat-model-slot {
+  position: static;
   display: flex;
   flex: 0 0 auto;
   max-width: min(156px, 40vw);
@@ -286,8 +287,11 @@
 }
 
 .chat-model-menu {
+  left: 50%;
   right: auto;
-  width: min(280px, calc(100vw - 24px));
+  width: min(340px, calc(100% - 12px));
+  min-width: 0;
+  transform: translateX(-50%);
   z-index: 30;
 }
 
@@ -3154,6 +3158,8 @@
 /* 输入区去掉“白色大容器再套输入框”的网页表单感。 */
 /* P0-C + P1-F UI 校正：输入框与控制条是一体；Context Meter 为圆环，并与沉浸感/模型胶囊同一水平线。 */
 .chat-page .chat-composer-panel {
+  position: relative;
+  overflow: visible;
   margin: 0 12px;
   padding: 6px 6px calc(8px + env(safe-area-inset-bottom));
   border: 1px solid color-mix(in srgb, var(--color-border) 54%, transparent);
@@ -3174,7 +3180,7 @@
 }
 
 .chat-page .context-meter-slot {
-  position: relative;
+  position: static;
   z-index: 10;
   flex: none;
 }
@@ -3236,10 +3242,13 @@
 
 .chat-page .context-meter-popover {
   position: absolute;
-  right: 0;
-  left: auto;
+  left: 50%;
+  right: auto;
   bottom: calc(100% + 8px);
-  width: min(232px, calc(100vw - 24px));
+  width: min(340px, calc(100% - 12px));
+  max-width: calc(100vw - 24px);
+  transform: translateX(-50%);
+  z-index: 30;
   padding: 10px;
   border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
   border-radius: 14px;
@@ -3271,6 +3280,28 @@
   color: var(--color-primary-deep);
   font-size: 9px;
   line-height: 1.35;
+}
+
+.chat-page .context-meter-stats {
+  margin: 8px 0 6px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 12px;
+  align-items: baseline;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.chat-page .context-meter-stats > span {
+  color: var(--ui2-text-secondary, #817773);
+}
+
+.chat-page .context-meter-stats > strong {
+  color: var(--color-text);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .chat-page .context-meter-popover > p {
