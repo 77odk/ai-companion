@@ -911,8 +911,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // 唯一写入出口：send 里不再抢先写；finalize / busy 截断 / 失败路径都从这里落库。
     // 同一轮绝不产生「原话 + 提炼」两条同义记忆（planMemoryWrites 内部归并 + 落库判重双保险）。
     const flushMemoryWrites = (rawText: string) => {
-      // 纠正申请必须先经过用户确认；这一轮禁止 fallback 新写一条矛盾 Memory。
-      if (hasMemoryCorrectionMarker(rawText)) return false
+      // 纠正申请必须先经过用户确认；只要本轮存在可纠正目标，就禁止 fallback 新写一条矛盾 Memory。
+      if ((correctionIntent && correctionTargets.size > 0) || hasMemoryCorrectionMarker(rawText)) return false
       if (explicitCandidates.length === 0 && !rawText) return
       const plans = planMemoryWrites(explicitCandidates, rawText ? extractMemories(rawText) : [], userMsg.content.trim())
       // 当轮 TA 回应短快照（仅追溯展示；去系统标记/思考链后截断，不整段复制聊天历史）
@@ -937,7 +937,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const explicitCandidates: ExplicitCandidate[] = []
     const memInstr = detectMemoryInstruction(text)
     const isRetort = !memInstr.isInstruction && isMemoryRetort(text)
-    if (memInstr.isInstruction) {
+    if (memInstr.isInstruction && !(correctionIntent && correctionTargets.size > 0)) {
       const content = (memInstr.fact ?? stripMemoryKeyword(text)).trim()
       if (content.length >= 4) {
         explicitCandidates.push({ text: content, source: text, topic: inferTopic(content) })
@@ -1182,7 +1182,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           content: `USER 刚要求你记住：${formatAttributedLine(memInstr.fact ?? text, 'USER', 'zh')}。只写这条明确事实，不推断、不补充；回复末尾单独一行输出【记忆·主题】内容，并简短确认已记下。`,
         })
       }
-    } else if (isRetort) {
+    } else if (isRetort && !(correctionIntent && correctionTargets.size > 0)) {
       if (lang === 'en') {
         contextBlocks.push({
           id: 'memory-retort',
@@ -1321,7 +1321,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         thinking = thinkFromReasoning || thinkFromContent
       }
       thinking = cleanAttributionArtifacts(thinking, lang)
-      const correctionProposal = extractMemoryCorrectionProposal(raw)
+      const explicitCorrectionProposal = extractMemoryCorrectionProposal(raw)
+      const markerMemories = extractMemories(raw)
+      const fallbackCorrectionProposal =
+        !explicitCorrectionProposal && correctionIntent && correctionTargets.size === 1 && markerMemories.length === 1
+          ? { ref: [...correctionTargets.keys()][0], value: markerMemories[0].text }
+          : null
+      const correctionProposal = explicitCorrectionProposal ?? fallbackCorrectionProposal
       const correctionTarget = correctionProposal ? correctionTargets.get(correctionProposal.ref) : undefined
       const proposedCorrection = correctionTarget && correctionProposal && correctionProposal.value !== correctionTarget.item.text
         ? { target: correctionTarget, value: correctionProposal.value }
