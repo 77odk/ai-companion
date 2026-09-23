@@ -157,15 +157,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [showMilestone, setShowMilestone] = useState(false)
   // 刷新对话只推进当前 session 的上下文分界线；历史仍完整保留。
   const sessionStart = getSessionStart(activeSessionId || undefined)
-  // Context：上一轮 provider usage 优先；拿不到 usage 才显示本地估算。两者都没有时显示“还没有数据”。
+  // Context：used 只表示当前会话此刻的上下文占用（composeContext 累积量）；
+  // provider usage 只用于展示“本轮输入 / 本轮输出 / Cache 命中”，绝不反过来覆盖会话总量。
   const [contextMeter, setContextMeter] = useState<{
-    /** 当前整份上下文占用；实际值优先用 provider prompt_tokens。 */
     used: number
     budget: number
     source: 'actual' | 'estimate'
     inputTokens: number
     outputTokens?: number
-    totalTokens?: number
     cachedTokens?: number
   } | null>(null)
   // Compact：用户主动「压缩」→ 最多 1 次模型调用，把较老历史压成 summary；之后注入 = summary + recent raw。
@@ -1441,7 +1440,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         },
         onDone: (reasoning, usage) => {
           if (runId !== runIdRef.current) return
-          // prompt_tokens = 当前整份上下文输入量，用它算 64k 占比；其余 usage 只在点开明细里展示。
+          // 会话总量始终来自本轮 composeContext 的累计上下文；provider usage 只描述这一轮请求。
           if (mountedRef.current) {
             const estimatedOutput = estimateToken(assistantText.current)
             if (usage && Number.isFinite(usage.promptTokens)) {
@@ -1457,16 +1456,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               const outputTokens = reportedCompletion ?? (
                 reportedTotal == null ? undefined : Math.max(0, reportedTotal - usage.promptTokens)
               )
-              const totalTokens = reportedTotal ?? (
-                outputTokens == null ? undefined : usage.promptTokens + outputTokens
-              )
               setContextMeter({
-                used: usage.promptTokens,
+                used: composed.totalTokens,
                 budget: composed.hardBudget,
                 source: 'actual',
                 inputTokens: usage.promptTokens,
                 ...(outputTokens == null ? {} : { outputTokens }),
-                ...(totalTokens == null ? {} : { totalTokens }),
                 ...(cachedTokens == null ? {} : { cachedTokens }),
               })
             } else {
@@ -1476,7 +1471,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 source: 'estimate',
                 inputTokens: composed.totalTokens,
                 outputTokens: estimatedOutput,
-                totalTokens: composed.totalTokens + estimatedOutput,
               })
             }
           }
@@ -1820,9 +1814,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                   {contextMeter ? (
                     <div className="context-meter-stats">
                       <span>上下文总量</span><strong>{formatTokenCount(contextMeter.used)} / {formatTokenCount(contextMeter.budget)}</strong>
-                      <span>输入 tokens</span><strong>{formatTokenCount(contextMeter.inputTokens)}</strong>
-                      <span>输出 tokens</span><strong>{contextMeter.outputTokens == null ? '—' : formatTokenCount(contextMeter.outputTokens)}</strong>
-                      <span>总 tokens</span><strong>{contextMeter.totalTokens == null ? '—' : formatTokenCount(contextMeter.totalTokens)}</strong>
+                      <span>本轮输入</span><strong>{formatTokenCount(contextMeter.inputTokens)}</strong>
+                      <span>本轮输出</span><strong>{contextMeter.outputTokens == null ? '—' : formatTokenCount(contextMeter.outputTokens)}</strong>
                       <span>Cache 命中</span><strong>{contextMeter.cachedTokens == null ? '—' : formatTokenCount(contextMeter.cachedTokens)}</strong>
                     </div>
                   ) : (
@@ -1830,8 +1823,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                   )}
                   {contextMeter && (
                     <p>{contextMeter.source === 'actual'
-                      ? '以上来自上一轮服务商 usage；未返回的项目显示 —。'
-                      : '服务商没返回 usage，输入/输出/总量为本地估算；Cache 命中无法估算。'}</p>
+                      ? '上下文总量是当前会话累计量；本轮输入 / 输出 / Cache 来自服务商 usage。'
+                      : '上下文总量是当前会话累计量；服务商没返回 usage，本轮输入 / 输出按本地估算，Cache 无法估算。'}</p>
                   )}
                   <div className="context-meter-actions">
                     {!compactDone && (
