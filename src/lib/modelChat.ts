@@ -230,9 +230,13 @@ function parseModelUsage(value: unknown): ModelUsage | undefined {
 
 function streamUsageOptions(settings: ModelSettings): Record<string, unknown> {
   // DeepSeek 官方支持在最后一个流式包返回 usage；中转站兼容性不一，不能强塞给所有 OpenAI-compatible 服务。
-  return /(?:^|\.)api\.deepseek\.com$/i.test(new URL(settings.baseUrl).hostname)
-    ? { stream_options: { include_usage: true } }
-    : {}
+  try {
+    return /(?:^|\.)api\.deepseek\.com$/i.test(new URL(settings.baseUrl).hostname)
+      ? { stream_options: { include_usage: true } }
+      : {}
+  } catch {
+    return {}
+  }
 }
 
 export interface StreamHandlers {
