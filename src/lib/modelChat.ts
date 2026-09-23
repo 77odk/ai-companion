@@ -103,9 +103,8 @@ function buildHeaders(settings: ModelSettings): Record<string, string> {
 /** 测试连接：发一个最小请求，验证 Key 可用 */
 export async function testConnection(settings: ModelSettings): Promise<void> {
   const url = buildUrl(settings, '/chat/completions')
-  let resp: Response
-  try {
-    resp = await fetchOrThrow(url, {
+  const send = (withThinking: boolean) =>
+    fetchOrThrow(url, {
       method: 'POST',
       headers: buildHeaders(settings),
       body: JSON.stringify({
@@ -114,9 +113,21 @@ export async function testConnection(settings: ModelSettings): Promise<void> {
         // 第二批④：思考模型（Gemini/DeepSeek-R1等）需要更多 token 思考，10 不够
         max_tokens: 100,
         stream: false,
-        ...zhipuThinking(settings),
+        ...thinkingRequestOpts(settings, withThinking),
       }),
     })
+  let resp: Response
+  try {
+    resp = await send(true)
+    if (!resp.ok) {
+      const bodyText = await resp.text().catch(() => '')
+      if (looksLikeThinkingRejection(resp.status, bodyText)) {
+        markThinkingUnsupported(settings)
+        resp = await send(false)
+      } else {
+        throw mapHttpError(resp.status, bodyText)
+      }
+    }
   } catch (e) {
     if (e instanceof ChatError) throw e
     throw new ChatError('unknown', '连接失败，请检查设置')
@@ -144,6 +155,70 @@ function zhipuThinking(settings: ModelSettings): Record<string, unknown> | undef
   return settings.baseUrl.includes('bigmodel.cn') ? { thinking: { type: 'disabled' } } : undefined
 }
 
+/** 讨思考的通用参数：默认所有服务商都带上（2026-09-23 七七要求），不支持的靠降级兜底 */
+const ASK_THINKING_OPTS: Record<string, unknown> = {
+  // OpenAI 标准字段，控制思考力度（Gemini 兼容层认）
+  reasoning_effort: 'high',
+  // Gemini 官方兼容层的线上格式是 extra_body.google.thinking_config（外层必须包 google，不能直接放 thinking_config）
+  extra_body: { google: { thinking_config: { include_thoughts: true } } },
+}
+
+/** 本次打开期间，哪些「地址 + 模型」已经退回过思考参数（不支持思考链） */
+const thinkingUnsupportedKeys = new Set<string>()
+
+function modelKey(settings: ModelSettings): string {
+  return `${(settings.baseUrl || '').trim()}|${(settings.model || '').trim()}`
+}
+
+/** 这个模型是不是已被判定不支持思考链（聊天页据此显示灰色小字） */
+export function isThinkingUnsupported(settings: ModelSettings): boolean {
+  return thinkingUnsupportedKeys.has(modelKey(settings))
+}
+
+/** 标记「该模型不支持思考链」+ 通知界面显示灰色小字 */
+function markThinkingUnsupported(settings: ModelSettings): void {
+  const key = modelKey(settings)
+  if (thinkingUnsupportedKeys.has(key)) return
+  thinkingUnsupportedKeys.add(key)
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('yiwem:thinking-unsupported'))
+    }
+  } catch {
+    // 非浏览器环境（单测）忽略
+  }
+}
+
+/** 服务商是不是在拒绝我们加的思考字段（只有 400/422 才可能是这个原因） */
+export function looksLikeThinkingRejection(status: number, bodyText = ''): boolean {
+  if (status !== 400 && status !== 422) return false
+  const body = bodyText.toLowerCase()
+  if (!body) return true
+  return (
+    body.includes('reasoning_effort') ||
+    body.includes('extra_body') ||
+    body.includes('thinking') ||
+    body.includes('unknown') ||
+    body.includes('unrecognized') ||
+    body.includes('unsupported') ||
+    body.includes('invalid') ||
+    body.includes('unexpected')
+  )
+}
+
+/**
+ * 思考（内心戏）请求参数。默认所有服务商都带上（带不动就降级，见各请求处）。
+ * - 智谱是例外：它开了思考正文会变空（历史坑），只能关着
+ * - 已被判定不支持思考链的模型：不带，免得每次都多撞一次错误
+ */
+export function thinkingRequestOpts(settings: ModelSettings, withThinking = true): Record<string, unknown> | undefined {
+  const zhipu = zhipuThinking(settings)
+  if (zhipu) return zhipu
+  if (!withThinking) return undefined
+  if (isThinkingUnsupported(settings)) return undefined
+  return ASK_THINKING_OPTS
+}
+
 export interface ChatCompletionOpts {
   maxTokens?: number
   temperature?: number
@@ -163,9 +238,8 @@ export async function chatCompletion(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
-  let resp: Response
-  try {
-    resp = await fetchOrThrow(url, {
+  const send = (withThinking: boolean) =>
+    fetchOrThrow(url, {
       method: 'POST',
       headers: buildHeaders(settings),
       body: JSON.stringify({
@@ -174,10 +248,22 @@ export async function chatCompletion(
         stream: false,
         max_tokens: maxTokens,
         temperature,
-        ...zhipuThinking(settings),
+        ...thinkingRequestOpts(settings, withThinking),
       }),
       signal: controller.signal,
     })
+  let resp: Response
+  try {
+    resp = await send(true)
+    if (!resp.ok) {
+      const bodyText = await resp.text().catch(() => '')
+      if (looksLikeThinkingRejection(resp.status, bodyText)) {
+        markThinkingUnsupported(settings)
+        resp = await send(false)
+      } else {
+        throw mapHttpError(resp.status, bodyText)
+      }
+    }
   } catch (e) {
     if (e instanceof ChatError) throw e
     if (controller.signal.aborted) throw new ChatError('bad-request', '请求超时，请稍后重试')
@@ -256,9 +342,8 @@ export function streamChat(
   const url = buildUrl(settings, '/chat/completions')
 
   void (async () => {
-    let resp: Response
-    try {
-      resp = await fetchOrThrow(url, {
+    const send = (withThinking: boolean) =>
+      fetchOrThrow(url, {
         method: 'POST',
         headers: buildHeaders(settings),
         body: JSON.stringify({
@@ -266,10 +351,24 @@ export function streamChat(
           messages,
           stream: true,
           ...streamUsageOptions(settings),
-          ...zhipuThinking(settings),
+          ...thinkingRequestOpts(settings, withThinking),
         }),
         signal: controller.signal,
       })
+    let resp: Response
+    try {
+      resp = await send(true)
+      // 该模型不吃思考参数 → 记一笔、通知界面显示灰色小字，去掉参数再发一次（聊天绝不能断）
+      if (!resp.ok) {
+        const bodyText = await resp.text().catch(() => '')
+        if (looksLikeThinkingRejection(resp.status, bodyText)) {
+          markThinkingUnsupported(settings)
+          resp = await send(false)
+        } else {
+          handlers.onError(mapHttpError(resp.status, bodyText))
+          return
+        }
+      }
     } catch (e) {
       if (controller.signal.aborted) return
       handlers.onError(e instanceof ChatError ? e : new ChatError('unknown', '出错了，请稍后重试'))
@@ -319,8 +418,8 @@ export function streamChat(
             if (typeof content === 'string' && content.length > 0) {
               handlers.onToken(content)
             }
-            // 收集 reasoning_content（模型独立思考字段，不进正文）
-            const reasoning = delta?.reasoning_content
+            // 收集思考内容（标准字段 reasoning_content；少数网关用 reasoning）
+            const reasoning = delta?.reasoning_content ?? delta?.reasoning
             if (typeof reasoning === 'string' && reasoning.length > 0) {
               reasoningBuffer += reasoning
             }
