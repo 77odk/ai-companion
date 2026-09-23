@@ -6,6 +6,7 @@
 
 import { getSessionStart, setSessionStart, saveMessages, loadMessages } from '../src/lib/storage.ts'
 import { filterSessionMessages } from '../src/lib/aiSpaceDetail.ts'
+import { readFileSync } from 'node:fs'
 
 let passed = 0
 let failed = 0
@@ -108,6 +109,28 @@ saveMessages([
 const all = loadMessages()
 eq(all.length, 2, '两条都还在（不删刷新前的）')
 eq(all[0].content, '刷新前的话', '刷新前的聊天记录仍在 localStorage')
+
+
+console.log('\n[8] P0-A 前台恢复：只复用现有 pending + session pull')
+const chatSrc = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+const recoveryStart = chatSrc.indexOf('const runSessionRecovery = async () =>')
+const recoveryEnd = recoveryStart >= 0 ? chatSrc.indexOf('const onOnline = () =>', recoveryStart) : -1
+const recoveryBlock = recoveryStart >= 0 && recoveryEnd > recoveryStart
+  ? chatSrc.slice(recoveryStart, recoveryEnd)
+  : ''
+ok(recoveryStart >= 0, '存在单一 session recovery 路径')
+ok(
+  recoveryBlock.indexOf('await flushPendingOps(token)') >= 0 &&
+  recoveryBlock.indexOf('await refreshSessionMessages(activeSessionId)') > recoveryBlock.indexOf('await flushPendingOps(token)'),
+  '恢复顺序固定为先补传 pending、再拉当前 session',
+)
+ok(
+  chatSrc.includes("document.addEventListener('visibilitychange', onVisible)") &&
+  chatSrc.includes("document.visibilityState === 'visible'"),
+  '回到前台会触发现有 session recovery',
+)
+ok(recoveryBlock.includes('!streamingRef.current'), '流式生成中不 pull 覆盖当前回复')
+ok(!recoveryBlock.includes('setInterval('), '恢复链没有新增轮询')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)
