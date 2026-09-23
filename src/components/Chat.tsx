@@ -49,7 +49,7 @@ import { allowsBusyState, allowsEmbodiedLifeContext, buildIdentityBoundaryRepair
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
-import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
+import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -1448,6 +1448,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       setContextNotice(uiLang === 'en' ? 'There is no safe earlier context to compact.' : '没有可安全压缩的更早上下文。')
       return
     }
+    const compactBoundary = sessionStart
     const prompt =
       uiLang === 'en'
         ? 'Below is the earlier part of a conversation. Summarize ONLY what actually happened — main topics, decisions, the user\'s preferences/state, and anything the assistant (TA) explicitly promised. Do not invent, infer, or add anything not in the text. Keep it concise and neutral.\n\n' +
@@ -1466,6 +1467,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       )
       const trimmed = summary.trim()
       if (!trimmed) throw new Error('empty summary')
+      // 请求期间如果用户再次「刷新对话」，旧段结果必须作废，不能写进新 boundary。
+      if (getSessionStart(activeSessionId) !== compactBoundary) return
       setContextCompactSummary(trimmed, activeSessionId)
       setContextCompactAt(Date.now(), activeSessionId)
       notifyDataChanged()
@@ -1500,7 +1503,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       m.role === 'assistant'
         ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), uiLang), uiLang)
         : m.content
-    const lines = tail.map((m) => `${m.role === 'user' ? 'USER' : 'TA'}: ${cleanBody(m)}`)
+    const bridgeHistory: ApiMessage[] = tail.map((m) => ({ role: m.role, content: cleanBody(m) }))
+    const bridgeSource = buildCompactSource(bridgeHistory, BRIDGE_INPUT_BUDGET)
+    if (bridgeSource.length === 0) {
+      setContextNotice(uiLang === 'en' ? 'There is no safe earlier context to bridge.' : '没有可安全承接的上一段对话。')
+      return
+    }
+    const lines = bridgeSource.map((m) => `${m.role === 'user' ? 'USER' : 'TA'}: ${m.content}`)
+    const bridgeBoundary = sessionStart
     const prompt =
       uiLang === 'en'
         ? 'Below is the recent tail from before this same conversation was refreshed. Write a short evidence-only handover note covering: 1) what you two were talking about, 2) unfinished topics, 3) the user\'s current state, 4) any explicit promises the companion made, 5) necessary referents (who "he/she" means). Only state what is actually in the text. Never invent or infer. Keep it in plain concise notes.\n\n' +
@@ -1519,6 +1529,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       )
       const trimmed = content.trim()
       if (!trimmed) throw new Error('empty bridge')
+      // Bridge 只属于发起请求时的刷新段；期间若再次刷新，旧结果直接丢弃。
+      if (getSessionStart(activeSessionId) !== bridgeBoundary) return
       const bridgedAt = Date.now()
       setContextBridge(activeSessionId, activeSessionId, trimmed, BRIDGE_ACTIVE_TURNS, bridgedAt)
       notifyDataChanged()
