@@ -104,10 +104,14 @@ console.log('\n[contract] Chat 与 Cloud State 接入契约')
 const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
 const cloudSource = readFileSync(new URL('../src/lib/cloudStateResources.ts', import.meta.url), 'utf8')
 const syncSource = readFileSync(new URL('../src/lib/sync.ts', import.meta.url), 'utf8')
-// Meter：只展示最近一次发送的用量，不新增 LLM
-assert.match(chatSource, /context-meter-row/, 'Meter 行渲染')
-assert.match(chatSource, /setContextMeter\(\{ used: composed\.totalTokens, budget: composed\.hardBudget \}\)/, 'Meter 数据来自 composer 实际结果')
+const promptSource = readFileSync(new URL('../src/lib/chatPrompts.ts', import.meta.url), 'utf8')
+// Meter：发送前显示本地估算；provider 回 prompt_tokens 后覆盖为真实值，不新增额外 LLM
+assert.match(chatSource, /context-meter-slot/, 'Meter 控件渲染')
+assert.match(chatSource, /setContextMeter\(\{ used: composed\.totalTokens, budget: composed\.hardBudget, source: 'estimate' \}\)/, '发送前保留本地估算')
+assert.match(chatSource, /used: usage\.promptTokens,[\s\S]*source: 'actual'/, 'provider usage 返回后覆盖为真实输入 token')
 assert.match(chatSource, /if \(composed\.overBudget\)/, '超过 64k 时在 provider 调用前停止')
+assert.doesNotMatch(chatSource, /buildTimeContext\(Date\.now\(\), lang\)/, 'Chat 不再重复追加第二份当前时间')
+assert.match(promptSource, /【此刻时间】/, 'System Prompt 仍保留当前时间注入')
 // Compact：用户主动触发 + 1 次模型生成 summary + summary/recent raw 注入 + 不删原记录
 assert.match(chatSource, /buildCompactedHistory\(compactSummary, history, COMPACT_KEEP_RECENT\)/, '已压缩后注入 = summary + 最近原始消息')
 assert.match(chatSource, /setContextCompactSummary\(trimmed, activeSessionId\)/, '模型生成的摘要持久化')
@@ -118,7 +122,11 @@ assert.match(chatSource, /compactedAt >= sessionStart/, 'Compact 只对当前刷
 assert.match(chatSource, /const summary = await chatCompletion\(/, '压缩最多 1 次模型调用（主动）')
 assert.ok(!chatSource.includes('composed.usage >= COMPACT_USAGE_THRESHOLD'), '已删除阈值自动压缩（普通聊天 0 自动模型调用）')
 assert.ok(!chatSource.includes('compactHistory('), '已删除 slice 裁剪式压缩')
-assert.ok(!chatSource.includes('saveMessagesCache(sessionId'), 'Chat 不因 compact 改动消息缓存')
+const compactSection = chatSource.slice(
+  chatSource.indexOf('const handleCompact = async () =>'),
+  chatSource.indexOf('const handleBridge = async () =>'),
+)
+assert.ok(!compactSection.includes('saveMessagesCache('), 'Compact 不改动消息缓存')
 // Bridge：承接 = 上一会话有限聊天尾部 + 1 次模型生成 evidence-only bridge；不再注入旧会话 Memory
 assert.match(chatSource, /hasBridgableHistory\(messages, sessionStart\)/, 'Bridge 只由同一 session 的刷新边界控制')
 assert.match(chatSource, /messages\.filter\(\(message\) => message\.ts < sessionStart\)\.slice\(-BRIDGE_TAIL_COUNT\)/, 'Bridge 只取同一 session 刷新前有限尾部')

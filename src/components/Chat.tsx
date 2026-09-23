@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
+import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
@@ -39,7 +39,6 @@ import { loadCurrentPosts } from '../lib/aiSpace'
 import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELINE_EN } from '../lib/spaceChatInject'
 import { commitPartialReply } from '../lib/partialReply'
 import { buildFutureAgendaBlock } from '../lib/futureAgenda'
-import { buildSelfTimelineBlock } from '../lib/selfTimeline'
 import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYourMoment } from '../lib/yourMoment'
 import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTaRuntimeFromAssistantText } from '../lib/taRuntime'
 import { buildIdentityContext } from '../lib/identityContext'
@@ -49,7 +48,7 @@ import { allowsBusyState, allowsEmbodiedLifeContext, buildIdentityBoundaryRepair
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
-import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, CONTEXT_SOFT_BUDGET, type ContextBlock } from '../lib/contextComposer'
+import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -88,6 +87,13 @@ import ChatCompanionControls from './ChatCompanionControls'
  */
 function hasBridgableHistory(messages: StoredMessage[], sessionStart: number): boolean {
   return sessionStart > 0 && messages.some((message) => message.ts < sessionStart)
+}
+
+function formatTokenCount(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return '—'
+  if (value < 1000) return String(Math.round(value))
+  const compact = value >= 10000 ? (value / 1000).toFixed(0) : (value / 1000).toFixed(1)
+  return `${compact.replace(/\.0$/, '')}k`
 }
 
 const SendArrowIcon = () => (  <svg
@@ -150,8 +156,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [showMilestone, setShowMilestone] = useState(false)
   // 刷新对话只推进当前 session 的上下文分界线；历史仍完整保留。
   const sessionStart = getSessionStart(activeSessionId || undefined)
-  // PR #99 Context 批次：Meter 显示最近一次发送的上下文用量（本地计算，不新增 LLM 调用）
-  const [contextMeter, setContextMeter] = useState<{ used: number; budget: number } | null>(null)
+  // Context：上一轮 provider usage 优先；拿不到 usage 才显示本地估算。两者都没有时显示“还没有数据”。
+  const [contextMeter, setContextMeter] = useState<{
+    used: number
+    budget: number
+    source: 'actual' | 'estimate'
+  } | null>(null)
   // Compact：用户主动「压缩」→ 最多 1 次模型调用，把较老历史压成 summary；之后注入 = summary + recent raw。
   // 每会话最多压缩 1 次；原聊天记录绝不删除。summary 持久化，刷新后无需再调模型。
   const [compactDone, setCompactDone] = useState(() => {
@@ -1000,6 +1010,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           (replyPreference ? '\n\n' + replyPreference : ''),
       },
     ]
+    // 核心 system 只留稳定身份/规则；Memory/Event/Runtime/Space 等都走现有 ContextBlock，
+    // 避免所有功能永久挤进不可裁剪的 core。
+    const contextBlocks: ContextBlock[] = []
 
     const contextText = base
       .slice(-6)
@@ -1011,7 +1024,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (memory.length > 0) {
       const memoryBlock = buildMemoryBlock(memory, lang)
       if (memoryBlock) {
-        apiMessages.push({ role: 'system', content: memoryBlock })
+        contextBlocks.push({ id: 'memory', content: memoryBlock, priority: 'memory' })
       }
       const now = Date.now()
       for (const m of memory) {
@@ -1022,13 +1035,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     // Event（E3 二处）：最近 5 条一起经历过的事注入（记忆注入之后、自我时间线之前）；
     // 只作背景信息，不让 TA 直接复述
-    const recentEvents = getRecentEvents(activeSessionId || undefined, 5)
+    const recentEvents = getRecentEvents(activeSessionId || undefined, 3)
     if (recentEvents.length > 0) {
       const eventsHeader = lang === 'en'
         ? 'Background info — things you two have been through together (do not repeat these lines as-is):\n'
         : '以上是背景信息，不要直接复述这些句子——你们一起经历过的事：\n'
-      apiMessages.push({
-        role: 'system',
+      contextBlocks.push({
+        id: 'events',
+        priority: 'event',
         content:
           eventsHeader +
           recentEvents.map((e) => {
@@ -1037,11 +1051,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           }).join('\n'),
       })
     }
-    // 自我时间线：TA 刚说过的话，让它记得自己做过什么，不依附忙碌机制（TASK-SELF-TIMELINE）
-    const timelineBlock = buildSelfTimelineBlock(base, Date.now(), lang)
-    if (timelineBlock) {
-      apiMessages.push({ role: 'system', content: timelineBlock })
-    }
+    // 最近 TA 原话已经完整存在 history + 相对时间标记里，不再重复塞一份 SelfTimeline system。
     // TA Runtime（TASK-TA-RUNTIME-V1）：Home 与 Chat 读同一份持久状态、同一 lazy getter。
     // 未到期取同一 activity；到期由 getter 推进，之后 Home 再读也是同一新状态。零额外 LLM。
     const runtime = getOrAdvanceTaRuntime(
@@ -1051,25 +1061,28 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     )
     const runtimeCtx = buildTaRuntimeContext(runtime, lang)
     if (runtimeCtx) {
-      apiMessages.push({ role: 'system', content: runtimeCtx })
+      contextBlocks.push({ id: 'runtime', content: runtimeCtx, priority: 'runtime' })
     }
     const identityCtx = buildIdentityContext(activeSessionId || undefined, lang)
     if (identityCtx) {
-      apiMessages.push({ role: 'system', content: identityCtx })
+      contextBlocks.push({ id: 'identity', content: identityCtx, priority: 'core' })
     }
-    const weeklyList = getWeeklyReviews(activeSessionId || undefined)
+    const journalRelevant = /周记|周报|周总结|这周|上周|本周|journal|weekly/i.test(text)
+    const weeklyList = journalRelevant ? getWeeklyReviews(activeSessionId || undefined) : []
     if (weeklyList.length > 0) {
       const w = weeklyList[0]
       // TASK-JOURNAL-INJECT：不只带标题，带最近一篇正文前 200 字摘要，被问"周记写的啥"有内容可答
       const excerpt = (w.content ?? '').trim().slice(0, 200)
       if (lang === 'en') {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'weekly-review',
+          priority: 'ambient',
           content: `Your most recent journal entry to them is "${w.title}" (${w.weekLabel}).${excerpt ? `\n${formatAttributedLine(excerpt, 'SELF', 'en')}` : ''}\nIf they bring it up, respond in the tone and content of this entry.`,
         })
       } else {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'weekly-review',
+          priority: 'ambient',
           content: `你最近写给对方的周记是「${w.title}」（${w.weekLabel}）。${excerpt ? `\n${formatAttributedLine(excerpt, 'SELF', 'zh')}` : ''}\n对方要是提起周记，就照这篇的语气和内容回应。`,
         })
       }
@@ -1079,61 +1092,68 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // Space 旧动态没有 identityMode stamp。为避免从沉浸切到自然 / AI 后把旧吃饭、出门、地点继续当成 SELF 事实，
     // v1 仅在沉浸档把 Space 历史注入 Chat；Space 页面本身仍照当前 identity policy 正常生成与展示。
     if (allowEmbodiedLife) {
-      const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 5, lang)
+      const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 2, lang)
       if (spaceBlock) {
-        apiMessages.push({ role: 'system', content: spaceBlock })
+        contextBlocks.push({ id: 'space-posts', content: spaceBlock, priority: 'ambient' })
       }
     }
     // 未来约定注入（因果链第二环 TASK-FUTURE-AGENDA）：TA 记得「约好还没做的事」，
     // 对方问起/到期临近时能自然接，不会一问三不知；没约定返回空串跳过，不占上下文。
     const agendaBlock = buildFutureAgendaBlock(loadChatTopics(activeSessionId || undefined), new Date(), lang)
     if (agendaBlock) {
-      apiMessages.push({ role: 'system', content: agendaBlock })
+      contextBlocks.push({ id: 'future-agenda', content: agendaBlock, priority: 'event' })
     }
-    // 生活基线会补身体 / 居住 / 饮食等现实锚，只能给沉浸档。
-    if (allowEmbodiedLife && !personaHasLifeAnchors(persona)) {
-      apiMessages.push({ role: 'system', content: lang === 'en' ? LIFE_BASELINE_EN : LIFE_BASELINE })
-    }
-    // 【你的时刻】分享钩子（TASK-YOUR-MOMENT）：低频给 TA 此刻的生活画面，让"自己有日子在过"落地成画面，
-    // 不每次回复都带——只在 对方最近消息冷淡/很短、或连续几条都不长、或对方主动问 TA 近况 时触发；
-    // 人设没生活锚时 buildYourMomentBlock 返回空串 → 跳过，不占上下文。不动聊天记录存储/上传/去重/忙碌逻辑。
+    // 生活基线 / 你的时刻只在这一轮真的需要 TA 分享自己近况时才进上下文，不再每轮常驻。
     const recentUserTexts = base
       .filter((m) => m.role === 'user')
       .slice(-3)
       .map((m) => m.content)
-    if (allowEmbodiedLife && shouldInjectYourMoment(recentUserTexts, lang)) {
+    const shouldShareMoment = allowEmbodiedLife && shouldInjectYourMoment(recentUserTexts, lang)
+    if (shouldShareMoment && !personaHasLifeAnchors(persona)) {
+      contextBlocks.push({
+        id: 'life-baseline',
+        content: lang === 'en' ? LIFE_BASELINE_EN : LIFE_BASELINE,
+        priority: 'ambient',
+      })
+    }
+    if (shouldShareMoment) {
       const momentBlock = buildYourMomentBlock(persona, new Date(), lang)
       if (momentBlock) {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'your-moment',
+          priority: 'ambient',
           content: `${lang === 'en' ? MOMENT_GUIDE_EN : MOMENT_GUIDE_ZH}\n${formatAttributedLine(momentBlock, 'SELF', lang)}`,
         })
       }
     }
     if (memInstr.isInstruction) {
       if (lang === 'en') {
-        apiMessages.push({
-          role: 'system',
-          content: `USER just asked you to remember: ${formatAttributedLine(memInstr.fact ?? text, 'USER', 'en')}. Write ONLY the fact USER explicitly stated — no added subject, explanation, inference, or extra conclusion. Keep it short and stable for long-term memory. At the end of your reply, output a separate line with [Memory: Topic] marker (topic word summarizes the category), write this fact as the content, and briefly confirm in your reply that you've noted it.`,
+        contextBlocks.push({
+          id: 'memory-explicit',
+          priority: 'core',
+          content: `USER just asked you to remember: ${formatAttributedLine(memInstr.fact ?? text, 'USER', 'en')}. Write only that stated fact, with no inference or added conclusion. End with one [Memory: Topic] line and briefly confirm it was noted.`,
         })
       } else {
-        apiMessages.push({
-          role: 'system',
-          content: `USER 刚要求你记住：${formatAttributedLine(memInstr.fact ?? text, 'USER', 'zh')}。只写 USER 明确说出的这句事实本身：不加主语、不解释、不推断、不补充没说的结论，保持简洁、稳定，适合长期记忆。请在回复末尾单独一行输出【记忆·主题】标记（主题词概括类别），内容写这条事实，并在回复里简短确认已经记下。`,
+        contextBlocks.push({
+          id: 'memory-explicit',
+          priority: 'core',
+          content: `USER 刚要求你记住：${formatAttributedLine(memInstr.fact ?? text, 'USER', 'zh')}。只写这条明确事实，不推断、不补充；回复末尾单独一行输出【记忆·主题】内容，并简短确认已记下。`,
         })
       }
     } else if (isRetort) {
       if (lang === 'en') {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'memory-retort',
+          priority: 'core',
           content:
-            'They just reminded you to note down something mentioned earlier. Extract facts worth long-term remembering from the recent conversation (schedule, preferences, health conditions, important experiences, etc.). Write only the facts they actually stated — no added subjects, no explanation, no inference, no extra conclusions. Keep them short and stable. Output a separate [Memory: Topic] line at the end of your reply, and confirm you\'ve noted it.',
+            'They reminded you to save something from the recent conversation. Extract only stable facts they actually stated; do not infer. End with one [Memory: Topic] line and confirm it was noted.',
         })
       } else {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'memory-retort',
+          priority: 'core',
           content:
-            '用户刚才在提醒你记下之前提到的信息。从最近的对话里提取值得长期记住的事实（作息、喜好、身体情况、重要经历等）。每条只写用户实际说过的那些事实本身：不加主语、不解释、不推断、不补充，保持简洁稳定。在回复末尾单独一行输出【记忆·主题】标记，并确认已经记下。',
+            '用户在提醒你记下最近提过的信息。只提取用户实际说过、适合长期保留的稳定事实，不推断不补充；回复末尾输出一行【记忆·主题】内容，并确认已记下。',
         })
       }
     }
@@ -1153,24 +1173,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (activeSessionId && bridgeInfo && bridgeInfo.bridgedAt >= sessionStart && bridgeInfo.turnsLeft > 0 && bridgeInfo.content.trim()) {
       bridgeBlocks.push({ id: 'bridge', content: bridgeInfo.content, priority: 'memory' })
     }
-    // 时间感知也属于最终 payload：必须和 system/history 一起受 64k 硬预算约束。
-    const timeTail: ApiMessage = {
-      role: 'system',
-      content:
-        buildTimeContext(Date.now(), lang) +
-        (lang === 'en'
-          ? '\nNote: time tags like [3 min ago] in the conversation history are system annotations, not part of any message. Never output such tags in your replies.'
-          : '\n注：对话历史里 [3 分钟前]/[昨天] 这类标签是系统自动标注的，不是消息内容。你的回复里绝对不要出现这类时间标签。'),
-    }
-    // PR #99 Context Compact：已压缩时，注入 = [较老历史摘要(system)] + [最近原始消息]，
-    // 不是把历史裁成只剩近窗。原聊天记录（缓存/后端）绝不删除。压缩是用户主动行为（每会话最多 1 次模型调用），
-    // 普通聊天不做任何自动模型调用。
+    // PR #99 Context Compact：已压缩时，注入 = [较老历史摘要(system)] + [最近原始消息]。
+    // 当前时间已经在 buildSystemPrompt 中注入一次；这里不再追加第二条时间 system。
     const historyForModel =
       activeSessionId && compactDone && compactSummary.trim()
         ? buildCompactedHistory(compactSummary, history, COMPACT_KEEP_RECENT)
         : history
-    const composed = composeContext(apiMessages, historyForModel, bridgeBlocks, [timeTail])
-    setContextMeter({ used: composed.totalTokens, budget: composed.hardBudget })
+    const composed = composeContext(apiMessages, historyForModel, [...contextBlocks, ...bridgeBlocks])
+    setContextMeter({ used: composed.totalTokens, budget: composed.hardBudget, source: 'estimate' })
     if (composed.overBudget) {
       // 当前用户消息 / 核心 system 本身已经放不进 64k：不静默裁用户原话，也不把超限请求发给 provider。
       // 用户消息已经正常落历史；这里只撤掉空 assistant 占位并结束本轮流式状态。
@@ -1418,8 +1428,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             enterBusyRef.current(assistantText.current, availability)
           }
         },
-        onDone: (reasoning) => {
+        onDone: (reasoning, usage) => {
           if (runId !== runIdRef.current) return
+          // provider 真正返回 prompt_tokens 时覆盖估算；中转站不回 usage 就保留 estimate。
+          if (mountedRef.current && usage && Number.isFinite(usage.promptTokens)) {
+            setContextMeter({
+              used: usage.promptTokens,
+              budget: composed.hardBudget,
+              source: 'actual',
+            })
+          }
           // 第27条：收集模型独立思考字段 reasoning_content，finalize 时合并到 thinking
           if (reasoning) reasoningRef.current = reasoning
           streamEndedRef.current = true
@@ -1708,6 +1726,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
         {activeSessionId && (
           <div className="chat-inline-controls">
+            <ChatCompanionControls sessionId={activeSessionId} />
             <div
               className="context-meter-slot"
               onBlur={(event) => {
@@ -1718,47 +1737,50 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 type="button"
                 className="context-meter-circle"
                 aria-label={contextMeter
-                  ? `上下文占用约 ${Math.max(1, Math.round((contextMeter.used / CONTEXT_SOFT_BUDGET) * 100))}%`
-                  : '查看上下文占用'}
+                  ? `上下文${contextMeter.source === 'actual' ? '真实' : '估算'}用量 ${formatTokenCount(contextMeter.used)} / ${formatTokenCount(contextMeter.budget)}`
+                  : '查看上下文用量'}
                 aria-expanded={contextMenuOpen}
                 onClick={() => setContextMenuOpen((value) => !value)}
               >
                 <span
                   className="context-meter-ring"
                   data-level={contextMeter
-                    ? contextMeter.used >= CONTEXT_SOFT_BUDGET
+                    ? contextMeter.used >= contextMeter.budget
                       ? 'over'
-                      : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.85
+                      : contextMeter.used >= contextMeter.budget * 0.85
                         ? 'high'
-                        : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.7
+                        : contextMeter.used >= contextMeter.budget * 0.7
                           ? 'warn'
                           : 'normal'
                     : 'idle'}
                   style={{
                     background: contextMeter
-                      ? `conic-gradient(var(--context-meter-accent) ${Math.min(100, Math.max(0, Math.round((contextMeter.used / CONTEXT_SOFT_BUDGET) * 100)))}%, var(--ui2-hairline, rgba(51, 43, 40, 0.1)) 0)`
+                      ? `conic-gradient(var(--context-meter-accent) ${Math.min(100, Math.max(0, Math.round((contextMeter.used / contextMeter.budget) * 100)))}%, var(--ui2-hairline, rgba(51, 43, 40, 0.1)) 0)`
                       : undefined,
                   }}
                 >
                   <span className="context-meter-value">
-                    {contextMeter ? `${Math.max(1, Math.round((contextMeter.used / CONTEXT_SOFT_BUDGET) * 100))}%` : '—'}
+                    {contextMeter ? formatTokenCount(contextMeter.used) : '—'}
                   </span>
                 </span>
               </button>
 
               {contextMenuOpen && (
                 <div className="context-meter-popover">
-                  <strong>上下文</strong>
+                  <div className="context-meter-summary">
+                    <strong>{contextMeter ? `${formatTokenCount(contextMeter.used)} / ${formatTokenCount(contextMeter.budget)}` : '还没有数据'}</strong>
+                    {contextMeter && (
+                      <span className="context-meter-source">
+                        {contextMeter.source === 'actual' ? '真实值' : '估算'}
+                      </span>
+                    )}
+                  </div>
                   <p>
-                    {!contextMeter
-                      ? '发送一条消息后会显示当前上下文占用。'
-                      : contextMeter.used >= CONTEXT_SOFT_BUDGET
-                        ? '上下文已经很满，建议现在整理或承接到新一段。'
-                        : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.85
-                          ? '上下文接近安全上限，建议尽快整理。'
-                          : contextMeter.used >= CONTEXT_SOFT_BUDGET * 0.7
-                            ? '上下文开始变长，可以继续聊，也可以先整理。'
-                            : '上下文状态正常。'}
+                    {contextMeter
+                      ? contextMeter.source === 'actual'
+                        ? '上一轮模型返回的输入 token。'
+                        : '服务商没返回 usage，按本地算法估算；实际以服务商为准。'
+                      : '发送一条消息后显示；有 usage 用真实值，没有则显示估算。'}
                   </p>
                   <div className="context-meter-actions">
                     {!compactDone && (
@@ -1770,7 +1792,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                         }}
                         disabled={contextBusy !== null}
                       >
-                        {contextBusy === 'compact' ? '整理中…' : '整理后继续聊'}
+                        {contextBusy === 'compact' ? '整理中…' : '整理'}
                       </button>
                     )}
                     {!bridgeInfo && hasBridgableHistory(messages, sessionStart) && (
@@ -1782,14 +1804,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                         }}
                         disabled={contextBusy !== null}
                       >
-                        {contextBusy === 'bridge' ? '承接中…' : '承接到新一段'}
+                        {contextBusy === 'bridge' ? '承接中…' : '承接'}
                       </button>
                     )}
                   </div>
                 </div>
               )}
             </div>
-            <ChatCompanionControls sessionId={activeSessionId} />
           </div>
         )}
 
