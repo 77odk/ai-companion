@@ -105,10 +105,13 @@ const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.met
 const cloudSource = readFileSync(new URL('../src/lib/cloudStateResources.ts', import.meta.url), 'utf8')
 const syncSource = readFileSync(new URL('../src/lib/sync.ts', import.meta.url), 'utf8')
 const promptSource = readFileSync(new URL('../src/lib/chatPrompts.ts', import.meta.url), 'utf8')
-// Meter：会话总量始终来自 composeContext 累积量；provider usage 只补本轮输入/输出/Cache，不新增额外 LLM
+// Meter：session 级持久化；真实 usage 优先校准当前上下文总量，无 usage 才用 compose 估算
 assert.match(chatSource, /context-meter-slot/, 'Meter 控件渲染')
+assert.match(chatSource, /getContextUsage\(activeSessionId\)/, '进入会话从 session 持久化恢复 Meter')
+assert.match(chatSource, /setContextUsage\(estimatedContextState, activeSessionId\)/, '发送时估算 Meter 持久化')
 assert.match(chatSource, /used: composed\.totalTokens,[\s\S]*source: 'estimate',[\s\S]*inputTokens: composed\.totalTokens/, '发送前保留本地输入估算')
-assert.match(chatSource, /used: composed\.totalTokens,[\s\S]*source: 'actual',[\s\S]*inputTokens: usage\.promptTokens/, 'provider usage 只补本轮输入，不覆盖会话总量')
+assert.match(chatSource, /used: usage\.promptTokens \+ \(outputTokens \?\? 0\)/, 'provider usage 返回后用真实 prompt + output 校准当前上下文总量')
+assert.match(chatSource, /setContextUsage\(actualContextState, activeSessionId\)/, '真实 usage 结果写回 session 持久化')
 assert.match(chatSource, /if \(composed\.overBudget\)/, '超过 64k 时在 provider 调用前停止')
 assert.doesNotMatch(chatSource, /buildTimeContext\(Date\.now\(\), lang\)/, 'Chat 不再重复追加第二份当前时间')
 assert.match(promptSource, /【此刻时间】/, 'System Prompt 仍保留当前时间注入')
@@ -144,10 +147,13 @@ assert.match(chatSource, /bridgeInfo\.turnsLeft - 1/, 'bridge 每轮递减，临
 // 同步：Context 只并入既有 /api/sync 全量 blob，不注册第二套 /api/state kind
 assert.match(syncSource, /contextCompacts: collectAllContextCompacts\(\)/, 'compact 进入 collectData 全量 blob')
 assert.match(syncSource, /contextBridges: collectAllContextBridges\(\)/, 'bridge 进入 collectData 全量 blob')
+assert.match(syncSource, /contextUsages: collectAllContextUsages\(\)/, 'Context usage 进入 collectData 全量 blob')
 assert.match(syncSource, /applyCloudContextCompacts\(d\.contextCompacts\)/, 'compact 从全量 blob 恢复')
 assert.match(syncSource, /applyCloudContextBridges\(d\.contextBridges\)/, 'bridge 从全量 blob 恢复')
+assert.match(syncSource, /applyCloudContextUsages\(d\.contextUsages\)/, 'Context usage 从全量 blob 恢复')
 assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_compact'"), '不再注册 context_compact /api/state adapter')
 assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_bridge'"), '不再注册 context_bridge /api/state adapter')
+assert.ok(!cloudSource.includes("registerCloudStateAdapter('context_usage'"), 'Context usage 不新增 /api/state adapter')
 // 原聊天记录零删除：Chat 不新增删除类调用
 assert.ok(!chatSource.includes('clearMessagesCache'), 'Chat 不清理消息缓存')
 assert.ok(!chatSource.includes('deleteMessage'), 'Chat 不删除消息')
