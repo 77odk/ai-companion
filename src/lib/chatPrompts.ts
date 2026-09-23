@@ -13,13 +13,21 @@ import { buildAttributionLegend, cleanAttributionArtifacts, formatAttributedLine
  * 每条记忆带上它的记录日期，块首加一行极短的数据说明——同一件事前后说法不一致时以更新的为准。
  * 说明只写在记忆块里（这是数据，不是人设），不进 persona、不额外堆规则。
  */
-export function buildMemoryBlock(items: MemoryItem[], lang: Lang = 'zh'): string | null {
+export function buildMemoryBlock(
+  items: MemoryItem[],
+  lang: Lang = 'zh',
+  correctionRef?: (item: MemoryItem) => string | null | undefined,
+): string | null {
   const valid = (Array.isArray(items) ? items : []).filter((m) => m && typeof m.text === 'string' && m.text.trim())
   if (valid.length === 0) return null
   const header = lang === 'en'
     ? 'Memories about them that are still relevant now (later lines are newer; if two lines contradict each other, trust the newer one):'
     : '关于对方，以下是当前仍可参考的记忆（越靠后越新；同一件事前后说法不一致时，以更新的为准）：'
-  const lines = valid.map((m) => `- ${memoryDay(m, lang)} ${formatAttributedLine(m.text, 'USER', lang)}`)
+  const lines = valid.map((m) => {
+    const ref = correctionRef?.(m)
+    const tag = ref ? `[M:${ref}] ` : ''
+    return `- ${tag}${memoryDay(m, lang)} ${formatAttributedLine(m.text, 'USER', lang)}`
+  })
   return `${header}\n${lines.join('\n')}`
 }
 
