@@ -103,9 +103,8 @@ function buildHeaders(settings: ModelSettings): Record<string, string> {
 /** 测试连接：发一个最小请求，验证 Key 可用 */
 export async function testConnection(settings: ModelSettings): Promise<void> {
   const url = buildUrl(settings, '/chat/completions')
-  let resp: Response
-  try {
-    resp = await fetchOrThrow(url, {
+  const send = (withThinking: boolean) =>
+    fetchOrThrow(url, {
       method: 'POST',
       headers: buildHeaders(settings),
       body: JSON.stringify({
@@ -114,9 +113,21 @@ export async function testConnection(settings: ModelSettings): Promise<void> {
         // 第二批④：思考模型（Gemini/DeepSeek-R1等）需要更多 token 思考，10 不够
         max_tokens: 100,
         stream: false,
-        ...thinkingRequestOpts(settings),
+        ...thinkingRequestOpts(settings, withThinking),
       }),
     })
+  let resp: Response
+  try {
+    resp = await send(true)
+    if (!resp.ok) {
+      const bodyText = await resp.text().catch(() => '')
+      if (looksLikeThinkingRejection(resp.status, bodyText)) {
+        markThinkingUnsupported(settings)
+        resp = await send(false)
+      } else {
+        throw mapHttpError(resp.status, bodyText)
+      }
+    }
   } catch (e) {
     if (e instanceof ChatError) throw e
     throw new ChatError('unknown', '连接失败，请检查设置')
@@ -144,31 +155,66 @@ function zhipuThinking(settings: ModelSettings): Record<string, unknown> | undef
   return settings.baseUrl.includes('bigmodel.cn') ? { thinking: { type: 'disabled' } } : undefined
 }
 
-/** 是不是 Gemini：官方兼容层域名，或模型名以 gemini 开头（走中转站的情况） */
-export function isGeminiProvider(settings: ModelSettings): boolean {
-  const base = (settings.baseUrl || '').toLowerCase()
-  const model = (settings.model || '').trim().toLowerCase()
+/** 讨思考的通用参数：默认所有服务商都带上（2026-09-23 七七要求），不支持的靠降级兜底 */
+const ASK_THINKING_OPTS: Record<string, unknown> = {
+  reasoning_effort: 'high',
+  extra_body: { thinking_config: { include_thoughts: true } },
+}
+
+/** 本次打开期间，哪些「地址 + 模型」已经退回过思考参数（不支持思考链） */
+const thinkingUnsupportedKeys = new Set<string>()
+
+function modelKey(settings: ModelSettings): string {
+  return `${(settings.baseUrl || '').trim()}|${(settings.model || '').trim()}`
+}
+
+/** 这个模型是不是已被判定不支持思考链（聊天页据此显示灰色小字） */
+export function isThinkingUnsupported(settings: ModelSettings): boolean {
+  return thinkingUnsupportedKeys.has(modelKey(settings))
+}
+
+/** 标记「该模型不支持思考链」+ 通知界面显示灰色小字 */
+function markThinkingUnsupported(settings: ModelSettings): void {
+  const key = modelKey(settings)
+  if (thinkingUnsupportedKeys.has(key)) return
+  thinkingUnsupportedKeys.add(key)
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('yiwem:thinking-unsupported'))
+    }
+  } catch {
+    // 非浏览器环境（单测）忽略
+  }
+}
+
+/** 服务商是不是在拒绝我们加的思考字段（只有 400/422 才可能是这个原因） */
+export function looksLikeThinkingRejection(status: number, bodyText = ''): boolean {
+  if (status !== 400 && status !== 422) return false
+  const body = bodyText.toLowerCase()
+  if (!body) return true
   return (
-    base.includes('generativelanguage.googleapis.com') || base.includes('googleapis.com') || model.startsWith('gemini')
+    body.includes('reasoning_effort') ||
+    body.includes('extra_body') ||
+    body.includes('thinking') ||
+    body.includes('unknown') ||
+    body.includes('unrecognized') ||
+    body.includes('unsupported') ||
+    body.includes('invalid') ||
+    body.includes('unexpected')
   )
 }
 
 /**
- * 思考（内心戏）请求参数。各家的开法不一样，不能塞同一个字段（不认识的会报 400）：
- * - 智谱：照旧关掉思考（它开了会让正文变空）
- * - Gemini 官方：默认不吐思考摘要，要开口讨 —— extra_body.thinking_config.include_thoughts
- * - Gemini 走中转站：只带标准字段 reasoning_effort，别塞官方私有字段，免被拒
- * - 其它服务商：一个字段都不加（DeepSeek / Qwen / Kimi / 豆包本来就回 reasoning_content）
+ * 思考（内心戏）请求参数。默认所有服务商都带上（带不动就降级，见各请求处）。
+ * - 智谱是例外：它开了思考正文会变空（历史坑），只能关着
+ * - 已被判定不支持思考链的模型：不带，免得每次都多撞一次错误
  */
-export function thinkingRequestOpts(settings: ModelSettings): Record<string, unknown> | undefined {
+export function thinkingRequestOpts(settings: ModelSettings, withThinking = true): Record<string, unknown> | undefined {
   const zhipu = zhipuThinking(settings)
   if (zhipu) return zhipu
-  if (!isGeminiProvider(settings)) return undefined
-  const base = (settings.baseUrl || '').toLowerCase()
-  if (base.includes('googleapis.com')) {
-    return { reasoning_effort: 'high', extra_body: { thinking_config: { include_thoughts: true } } }
-  }
-  return { reasoning_effort: 'high' }
+  if (!withThinking) return undefined
+  if (isThinkingUnsupported(settings)) return undefined
+  return ASK_THINKING_OPTS
 }
 
 export interface ChatCompletionOpts {
@@ -190,9 +236,8 @@ export async function chatCompletion(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
-  let resp: Response
-  try {
-    resp = await fetchOrThrow(url, {
+  const send = (withThinking: boolean) =>
+    fetchOrThrow(url, {
       method: 'POST',
       headers: buildHeaders(settings),
       body: JSON.stringify({
@@ -201,10 +246,22 @@ export async function chatCompletion(
         stream: false,
         max_tokens: maxTokens,
         temperature,
-        ...thinkingRequestOpts(settings),
+        ...thinkingRequestOpts(settings, withThinking),
       }),
       signal: controller.signal,
     })
+  let resp: Response
+  try {
+    resp = await send(true)
+    if (!resp.ok) {
+      const bodyText = await resp.text().catch(() => '')
+      if (looksLikeThinkingRejection(resp.status, bodyText)) {
+        markThinkingUnsupported(settings)
+        resp = await send(false)
+      } else {
+        throw mapHttpError(resp.status, bodyText)
+      }
+    }
   } catch (e) {
     if (e instanceof ChatError) throw e
     if (controller.signal.aborted) throw new ChatError('bad-request', '请求超时，请稍后重试')
@@ -245,14 +302,32 @@ export function streamChat(
   const url = buildUrl(settings, '/chat/completions')
 
   void (async () => {
-    let resp: Response
-    try {
-      resp = await fetchOrThrow(url, {
+    const send = (withThinking: boolean) =>
+      fetchOrThrow(url, {
         method: 'POST',
         headers: buildHeaders(settings),
-        body: JSON.stringify({ model: settings.model, messages, stream: true, ...thinkingRequestOpts(settings) }),
+        body: JSON.stringify({
+          model: settings.model,
+          messages,
+          stream: true,
+          ...thinkingRequestOpts(settings, withThinking),
+        }),
         signal: controller.signal,
       })
+    let resp: Response
+    try {
+      resp = await send(true)
+      // 该模型不吃思考参数 → 记一笔、通知界面显示灰色小字，去掉参数再发一次（聊天绝不能断）
+      if (!resp.ok) {
+        const bodyText = await resp.text().catch(() => '')
+        if (looksLikeThinkingRejection(resp.status, bodyText)) {
+          markThinkingUnsupported(settings)
+          resp = await send(false)
+        } else {
+          handlers.onError(mapHttpError(resp.status, bodyText))
+          return
+        }
+      }
     } catch (e) {
       if (controller.signal.aborted) return
       handlers.onError(e instanceof ChatError ? e : new ChatError('unknown', '出错了，请稍后重试'))

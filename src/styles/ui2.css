@@ -3161,6 +3161,13 @@
   backdrop-filter: blur(12px);
 }
 
+.chat-page .chat-thinking-hint {
+  margin: 6px 4px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ui2-text-muted, rgba(51, 43, 40, 0.45));
+}
+
 .chat-page .chat-inline-controls {
   display: flex;
   align-items: center;

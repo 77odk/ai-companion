@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
+import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
@@ -143,6 +143,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [error, setError] = useState<string | null>(null)
   const [failedText, setFailedText] = useState<string | null>(null)
   const [hasKey] = useState(() => Boolean(loadSettings().apiKey))
+  // 该模型不支持思考链：请求被服务商拒了以后由 modelChat 降级并通知，这里只负责显示一行灰字
+  const [thinkingUnsupported, setThinkingUnsupported] = useState(() => isThinkingUnsupported(loadSettings()))
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [isBusy, setIsBusy] = useState(false)
   const persona = activeSession?.persona ?? loadPersona()
@@ -182,6 +184,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
   // 切角色 / 刷新上下文后，Compact 与 Bridge 只能沿用当前 segment 之后生成的状态。
   // 旧 segment 的摘要/bridge 仍可保存在存储与云端，但绝不能重新注入到“重新开始”的上下文。
+  useEffect(() => {
+    const onThinkingUnsupported = () => setThinkingUnsupported(true)
+    window.addEventListener('yiwem:thinking-unsupported', onThinkingUnsupported)
+    return () => window.removeEventListener('yiwem:thinking-unsupported', onThinkingUnsupported)
+  }, [])
+
   useEffect(() => {
     if (!activeSessionId) {
       setCompactDone(false)
@@ -1674,6 +1682,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             </button>
           )}
         </div>
+
+        {thinkingUnsupported && <p className="chat-thinking-hint">该模型不支持思考链</p>}
 
         {activeSessionId && (
           <div className="chat-inline-controls">
