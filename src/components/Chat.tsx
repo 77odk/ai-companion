@@ -1362,13 +1362,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         retriedRef.current = true
         setError(null)
         setMessages([...messages, userMsg, { role: 'assistant', content: '…', ts: assistantTs }])
-        const genericRepair = lang === 'en'
-          ? 'Your previous reply had a grounding or style problem. Forget that sentence and answer again: stay grounded in the available context, do not invent shared history, do not sound like customer service, and keep the reply natural and concise.'
-          : '你刚才的回复有依据或表达问题。忘掉那句，重新回答：只用现有上下文里有依据的内容，不编共同经历，不要客服腔，保持自然简短。'
+        const genericRepair = liveIdentityMode === 'ai'
+          ? (lang === 'en'
+              ? 'Your previous reply had a grounding or reality-boundary problem. Answer again using only supported context, without inventing shared history or human physical experiences. Do not rewrite merely because the wording sounds like an AI or assistant.'
+              : '你刚才的回复有依据或现实边界问题。重新回答：只用现有上下文里有依据的内容，不编共同经历、不编人的现实经历；不要因为表达像 AI 或助手就改写。')
+          : (lang === 'en'
+              ? 'Your previous reply had a grounding or style problem. Forget that sentence and answer again: stay grounded in the available context, do not invent shared history, do not sound like customer service, and keep the reply natural and concise.'
+              : '你刚才的回复有依据或表达问题。忘掉那句，重新回答：只用现有上下文里有依据的内容，不编共同经历，不要客服腔，保持自然简短。')
         const identityRepair = identityProblem ? buildIdentityBoundaryRepair(liveIdentityMode, lang) : ''
         const safeFallback = lang === 'en'
-          ? "I'm not sure about that yet. Tell me a little more."
-          : '这个我还真没头绪，你跟我说说呗。'
+          ? "That answer didn't come out reliably, so I won't pretend it did."
+          : '刚才那句没答稳，我不拿不确定的话糊弄你。'
         void chatCompletion(settings, [
           ...apiMessages,
           { role: 'assistant', content: cleaned },

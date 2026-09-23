@@ -162,7 +162,10 @@ export function stripActionMarkers(text: string, lang?: Lang): string {
     .trim()
 }
 
-// 人机味关键词：命中说明这轮回复像客服/程序，需要重写
+// 回复风格护栏按身份模式分档：
+// - 沉浸：AI 身份披露 + 明显客服/设定腔都需要重写。
+// - 自然：允许承认 AI 身份，但仍避免明显客服/设定腔。
+// - AI：不因为“像 AI / 像客服”而重写；事实、归因、物理现实边界由其它 guard 单独负责。
 const IDENTITY_DISCLOSURE_PATTERNS = [
   /(作为(一个)?(AI|人工智能|程序|助手|模型|机器人))/,
   /(我是(一个)?(AI|人工智能|程序|助手|模型|机器人|语言模型))/,
@@ -171,15 +174,14 @@ const IDENTITY_DISCLOSURE_PATTERNS = [
   /\b(I'?m (just? )?an? (AI|assistant|language model|bot|robot))\b/i,
 ]
 
-const ROBOTIC_PATTERNS = [
+const SERVICE_STYLE_PATTERNS = [
   /(有什么可以帮你的吗|有什么我可以帮你的吗)/,
   /(很高兴(能)?为你服务|随时为你服务)/,
-  /((TA|AI|这个|那)?(指的是|是指|的意思))/,
   /(我可以帮助你|我能帮助你|需要我帮你)/,
   /(作为你的(虚拟|智能|AI)(助手|伴侣|伙伴))/,
   /(按照(我的|你的)?(设定|人设)|根据(我的|你的)?(设定|人设))/,
   /(我的(设定|人设)(是|里|写)|(设定|人设)(里|中)写)/,
-  // 英文 AI 腔
+  // 英文客服 / 设定腔
   /\b(how can I (help|assist) you|what can I do for you|is there anything I can help)\b/i,
   /\b(I'?m (happy|glad) to (help|assist)|I'?m here to help)\b/i,
   /\b(feel free to (ask|reach out)|let me know if you (need|have) any (questions?|help))\b/i,
@@ -203,9 +205,12 @@ const FABRICATED_PATTERNS = [
 
 export function looksRobotic(text: string, identityMode: IdentityMode = 'immersive'): boolean {
   const t = stripEmoji(text ?? '')
-  // 身份披露与客服腔分开维护，新增/调序规则不会静默改变模式语义。
+  // AI 档明确允许 AI-native / 服务型表达；这里只退出风格审查，不退出 grounding / fabricated / embodied / attribution guards。
+  if (identityMode === 'ai') return false
+  // 自然档允许承认自己是 AI；沉浸档仍禁止身份披露。
   if (identityMode === 'immersive' && IDENTITY_DISCLOSURE_PATTERNS.some((re) => re.test(t))) return true
-  return ROBOTIC_PATTERNS.some((re) => re.test(t))
+  // “指的是 / 是指 / 的意思”是正常解释句，不再作为任何身份模式的客服腔证据。
+  return SERVICE_STYLE_PATTERNS.some((re) => re.test(t))
 }
 
 /** 是否在编造共同经历，命中触发重写 */

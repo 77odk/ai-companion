@@ -91,9 +91,17 @@ assert.ok(aiPrompt.includes('AI 原生体验'), 'AI 本体以数字存在为自�
 assert.ok(aiPrompt.includes('重新梳理我们聊到这里的脉络'), 'AI 本体有极短行为示例')
 assert.ok(naturalPrompt.includes('不要让对方等你去忙、离开或稍后回来'), '自然档提示词明确无真人 Busy')
 assert.ok(aiPrompt.includes('不要让对方等你去忙、离开或稍后回来'), 'AI 本体提示词明确无真人 Busy')
-assert.equal(looksRobotic('我是一个AI。', 'immersive'), true)
-assert.equal(looksRobotic('我是一个AI。', 'natural'), false)
-assert.equal(looksRobotic('有什么可以帮你的吗', 'ai'), true, 'AI 档仍拦客服腔')
+assert.equal(looksRobotic('我是一个AI。', 'immersive'), true, '沉浸档继续拦 AI 身份披露')
+assert.equal(looksRobotic('我是一个AI。', 'natural'), false, '自然档允许在需要时承认 AI 身份')
+assert.equal(looksRobotic('我是一个AI。', 'ai'), false, 'AI 档允许直接表达 AI 身份')
+assert.equal(looksRobotic('有什么可以帮你的吗', 'immersive'), true, '沉浸档继续拦明显客服模板')
+assert.equal(looksRobotic('有什么可以帮你的吗', 'natural'), true, '自然档继续拦明显客服模板')
+assert.equal(looksRobotic('有什么可以帮你的吗', 'ai'), false, 'AI 档不因客服/助手式表达触发二次调用')
+for (const mode of ['immersive', 'natural', 'ai']) {
+  assert.equal(looksRobotic('这个指的是一种神经反应。', mode), false, `${mode} 正常解释“指的是”不误杀`)
+  assert.equal(looksRobotic('痒痒穴的意思是身体某些更敏感的部位。', mode), false, `${mode} 正常解释“的意思”不误杀`)
+  assert.equal(looksRobotic('它是指大脑对触碰刺激的预测。', mode), false, `${mode} 正常解释“是指”不误杀`)
+}
 
 console.log('\n[4] TA Life：空人设可走模型，身份规则控制生活表达与语言')
 const ready = { apiKey: 'local-only', baseUrl: 'https://example.invalid/v1', model: 'test' }
@@ -192,6 +200,10 @@ assert.match(chatSource, /if \(identityProblem\) return\s*const partialReplyLeng
 assert.match(chatSource, /else if \(retryAllowBusy && retryAvailability\?\.state === 'unavailable' && retryAvailability\.owner === 'SELF'\)/, 'repair 期间切回沉浸后，SELF 离开话术必须真正进入 Busy')
 assert.match(chatSource, /enterBusyRef\.current\(busyText, retryAvailability\)/, '沉浸 repair 的 unavailable 回复必须建立 Busy/Return 周期')
 assert.ok(chatSource.includes('repair 失败/超时也绝不把原违规文本重新放行'), 'repair 失败路径必须保留安全 fallback')
+assert.ok(chatSource.includes("liveIdentityMode === 'ai'"), 'AI 档 repair 单独分流，不继承真人化客服腔压力')
+assert.ok(chatSource.includes('不要因为表达像 AI 或助手就改写'), 'AI repair 明确不因 AI-native 表达二次重写')
+assert.ok(!chatSource.includes('这个我还真没头绪，你跟我说说呗。'), '旧装傻 fallback 不得回来')
+assert.ok(chatSource.includes('刚才那句没答稳，我不拿不确定的话糊弄你。'), 'repair 双失败使用诚实 fallback')
 assert.ok(!chatSource.includes("content: cleaned, ts: assistantTs }]\n            commitFinal(final)\n          })\n        return"), 'repair catch 不能重新提交 rejected cleaned')
 
 console.log('\n身份模式 #13：全部通过')
