@@ -35,11 +35,13 @@ for (const [input, state] of cases) {
 
 test('Chat gates Busy by identity mode and repairs unavailable claims outside immersive', () => {
   const source = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
-  assert.match(source, /const allowBusy = allowsBusyState\(identityMode\)/)
-  assert.equal((source.match(/allowBusy && !busyTriggeredRef\.current/g) ?? []).length, 2)
+  // 产品定义演进：身份模式按实时读取（live/resolve）门控 Busy（Codex 修复"生成中途切换模式"），
+  // 语义与旧 `const allowBusy = allowsBusyState(identityMode)` 等价但不再缓存请求开始的模式。
+  assert.match(source, /const liveAllowBusy = allowsBusyState\(liveIdentityMode\)/)
+  assert.ok((source.match(/busyTriggeredRef\.current = true/g) ?? []).length >= 2, 'Busy 触发点存在且受身份门控')
   assert.match(source, /const unavailableIdentityProblem = Boolean\(/)
-  assert.match(source, /!allowBusy && cleanedAvailability\?\.state === 'unavailable'/)
-  assert.match(source, /!allowBusy && retryAvailability\?\.state === 'unavailable'/)
+  assert.match(source, /!liveAllowBusy && cleanedAvailability\?\.state === 'unavailable'/)
+  assert.match(source, /!retryAllowBusy && retryAvailability\?\.state === 'unavailable'/)
   assert.doesNotMatch(source, /containsBusyKeyword/)
 })
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import MessageBubble from './MessageBubble'
 import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
-import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, type StoredMessage } from '../lib/storage'
+import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
 import { getAccount } from '../lib/sync'
@@ -48,7 +48,8 @@ import { buildReplyLengthInstruction, getEffectiveReplyLength, splitDetailedAssi
 import { allowsBusyState, allowsEmbodiedLifeContext, buildIdentityBoundaryRepair, resolveIdentityMode } from '../lib/companionPolicy'
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
-import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
+import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
+import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -74,16 +75,21 @@ import { extractOpeningLine } from '../lib/customPersona'
 import { getMilestoneStatus, markMilestoneShown } from '../lib/milestone'
 import { getWeeklyReviews } from '../lib/weeklyReview'
 import { recordChatTopic, loadChatTopics } from '../lib/chatTopics'
-import { estimateToken, truncateByToken } from '../lib/token'
 import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
 import { processEventCandidate } from '../lib/eventDetector'
 import MilestoneCard from './MilestoneCard'
 
-/** 总输入 token 预算：系统提示词+记忆注入+历史消息合计不超过此值 */
-const TOTAL_INPUT_BUDGET = 64000
 
-const SendArrowIcon = () => (
-  <svg
+/**
+ * PR #99 Session Bridge：只承接“同一 session 刷新前”的历史。
+ * sessionStart 是当前角色的上下文分界线，因此天然满足角色隔离；
+ * 禁止再用可编辑 title/persona 去猜“是不是同一个 TA”。
+ */
+function hasBridgableHistory(messages: StoredMessage[], sessionStart: number): boolean {
+  return sessionStart > 0 && messages.some((message) => message.ts < sessionStart)
+}
+
+const SendArrowIcon = () => (  <svg
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -141,12 +147,59 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const persona = activeSession?.persona ?? loadPersona()
   const [milestone, setMilestone] = useState<{ day: number; hit: boolean; shown: boolean } | null>(null)
   const [showMilestone, setShowMilestone] = useState(false)
+  // 刷新对话只推进当前 session 的上下文分界线；历史仍完整保留。
+  const sessionStart = getSessionStart(activeSessionId || undefined)
+  // PR #99 Context 批次：Meter 显示最近一次发送的上下文用量（本地计算，不新增 LLM 调用）
+  const [contextMeter, setContextMeter] = useState<{ used: number; budget: number } | null>(null)
+  // Compact：用户主动「压缩」→ 最多 1 次模型调用，把较老历史压成 summary；之后注入 = summary + recent raw。
+  // 每会话最多压缩 1 次；原聊天记录绝不删除。summary 持久化，刷新后无需再调模型。
+  const [compactDone, setCompactDone] = useState(() => {
+    if (!activeSessionId) return false
+    const compactedAt = getContextCompactAt(activeSessionId)
+    return compactedAt > 0 && compactedAt >= sessionStart
+  })
+  const [compactSummary, setCompactSummary] = useState(() => {
+    if (!activeSessionId) return ''
+    const compactedAt = getContextCompactAt(activeSessionId)
+    return compactedAt > 0 && compactedAt >= sessionStart ? getContextCompactSummary(activeSessionId) : ''
+  })
+  // Bridge：用户主动「承接」→ 最多 1 次模型调用生成 evidence-only bridge，临时参与约 6–10 轮后退出。
+  const [bridgeInfo, setBridgeInfo] = useState(() => {
+    if (!activeSessionId) return null
+    const stored = getContextBridge(activeSessionId)
+    return stored && stored.bridgedAt >= sessionStart ? stored : null
+  })
+  // contextBusy：防止 Compact / Bridge 的模型调用并发（每次最多 1 次）。
+  const [contextBusy, setContextBusy] = useState<'compact' | 'bridge' | null>(null)
+  const [contextNotice, setContextNotice] = useState<string | null>(null)
 
-  const sessionStart = useMemo(() => getSessionStart(activeSessionId || undefined), [activeSessionId])
   const visibleMessages = useMemo(
     () => filterSessionMessages(messages, sessionStart),
     [messages, sessionStart],
   )
+
+  // 切角色 / 刷新上下文后，Compact 与 Bridge 只能沿用当前 segment 之后生成的状态。
+  // 旧 segment 的摘要/bridge 仍可保存在存储与云端，但绝不能重新注入到“重新开始”的上下文。
+  useEffect(() => {
+    if (!activeSessionId) {
+      setCompactDone(false)
+      setCompactSummary('')
+      setBridgeInfo(null)
+      setContextMeter(null)
+      setContextNotice(null)
+      setContextBusy(null)
+      return
+    }
+    const compactedAt = getContextCompactAt(activeSessionId)
+    const compactIsCurrent = compactedAt > 0 && compactedAt >= sessionStart
+    setCompactDone(compactIsCurrent)
+    setCompactSummary(compactIsCurrent ? getContextCompactSummary(activeSessionId) : '')
+    const storedBridge = getContextBridge(activeSessionId)
+    setBridgeInfo(storedBridge && storedBridge.bridgedAt >= sessionStart ? storedBridge : null)
+    setContextMeter(null)
+    setContextNotice(null)
+    setContextBusy(null)
+  }, [activeSessionId, sessionStart])
   // UI2-03B-1：jump effect 只依赖 pendingJump/session，消息列表通过 ref 读取最新值 ——
   // 这样消息每次更新都不会重跑 jump effect（否则 cleanup 会把跳转保护窗口的定时器提前清掉）
   const visibleMessagesRef = useRef(visibleMessages)
@@ -1052,34 +1105,56 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
     }
 
-    // 按总 token 预算动态截断：系统消息占多少，剩下的全给历史消息
-    const systemTokens = apiMessages.reduce((sum, m) => sum + estimateToken(m.content), 0)
-    const historyBudget = Math.max(0, TOTAL_INPUT_BUDGET - systemTokens)
-    const history: ApiMessage[] = truncateByToken(
-      base.map((m) => {
-        const body =
-          m.role === 'assistant'
-            ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), lang), lang)
-            : m.content
-        // 时间流逝标记（只注入不改存储）：让 TA 感知每条消息隔了多久
-        const mark = msgTimeMark(m.ts, lang)
-        return { role: m.role, content: mark ? mark + body : body }
-      }),
-      historyBudget,
-    )
-    apiMessages.push(...history)
+    const history: ApiMessage[] = base.map((m) => {
+      const body =
+        m.role === 'assistant'
+          ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), lang), lang)
+          : m.content
+      const mark = msgTimeMark(m.ts, lang)
+      return { role: m.role, content: mark ? mark + body : body }
+    })
 
-    // 时间感知（2026-09-05 夜 乔修）：系统提示词开头的时间会被长历史冲淡，部分模型（官方 deepseek 正文/doi 套壳）
-    // 生成回复时不看开头。在历史末尾（紧贴要回应的上文）再注入一条此刻时间——数据注入不是设定，所有模型统一可见。
-    // 追加防学样说明：历史消息里的 [x分钟前/x小时前/昨天] 标签是系统标注，模型回复严禁输出同类标签（2026-09-05 夜二修：TA 把标签学走了）
-    apiMessages.push({
+    // PR #99 Session Bridge：已承接时，注入 evidence-only bridge 摘要（memory 优先级块，不新增 LLM 调用）。
+    // 只临时参与后续约 BRIDGE_ACTIVE_TURNS 轮（turnsLeft 递减，归零后退出注入）；不写 Memory / Event。
+    const bridgeBlocks: ContextBlock[] = []
+    if (activeSessionId && bridgeInfo && bridgeInfo.bridgedAt >= sessionStart && bridgeInfo.turnsLeft > 0 && bridgeInfo.content.trim()) {
+      bridgeBlocks.push({ id: 'bridge', content: bridgeInfo.content, priority: 'memory' })
+    }
+    // 时间感知也属于最终 payload：必须和 system/history 一起受 64k 硬预算约束。
+    const timeTail: ApiMessage = {
       role: 'system',
       content:
         buildTimeContext(Date.now(), lang) +
         (lang === 'en'
           ? '\nNote: time tags like [3 min ago] in the conversation history are system annotations, not part of any message. Never output such tags in your replies.'
           : '\n注：对话历史里 [3 分钟前]/[昨天] 这类标签是系统自动标注的，不是消息内容。你的回复里绝对不要出现这类时间标签。'),
-    })
+    }
+    // PR #99 Context Compact：已压缩时，注入 = [较老历史摘要(system)] + [最近原始消息]，
+    // 不是把历史裁成只剩近窗。原聊天记录（缓存/后端）绝不删除。压缩是用户主动行为（每会话最多 1 次模型调用），
+    // 普通聊天不做任何自动模型调用。
+    const historyForModel =
+      activeSessionId && compactDone && compactSummary.trim()
+        ? buildCompactedHistory(compactSummary, history, COMPACT_KEEP_RECENT)
+        : history
+    const composed = composeContext(apiMessages, historyForModel, bridgeBlocks, [timeTail])
+    setContextMeter({ used: composed.totalTokens, budget: composed.hardBudget })
+    if (composed.overBudget) {
+      // 当前用户消息 / 核心 system 本身已经放不进 64k：不静默裁用户原话，也不把超限请求发给 provider。
+      // 用户消息已经正常落历史；这里只撤掉空 assistant 占位并结束本轮流式状态。
+      setMessages([...messages, userMsg])
+      setStreaming(false)
+      streamingRef.current = false
+      partialTsRef.current = null
+      setError(lang === 'en' ? 'This message is too long for the current context. Please shorten it and send again.' : '这条消息加上当前上下文超过 64k，请缩短后再发。')
+      return
+    }
+    // bridge 只临时参与：本轮真正纳入 payload 后递减轮次，归零后退出（记录保留，不再注入）。
+    if (activeSessionId && bridgeInfo && bridgeInfo.turnsLeft > 0 && composed.includedBlockIds.includes('bridge')) {
+      const nextTurns = bridgeInfo.turnsLeft - 1
+      setContextBridgeTurns(activeSessionId, nextTurns)
+      setBridgeInfo({ ...bridgeInfo, turnsLeft: nextTurns })
+    }
+    apiMessages.splice(0, apiMessages.length, ...composed.messages)
 
     const commitFinal = (final: StoredMessage[]) => {
       persistMessages(final)
@@ -1291,7 +1366,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         onToken: (t) => {
           if (runId !== runIdRef.current) return
           assistantText.current += t
-          // Busy 只在沉浸档拦截流；自然 / AI 即使说“等我回来”也让流完成，再由 finalize repair。
+          // Busy 只在沉浸档拦截流；自然 / AI 即使说"等我回来"也让流完成，再由 finalize repair。
           const availability = classifyAvailability(assistantText.current)
           const liveAllowBusy = allowsBusyState(resolveIdentityMode(activeSessionId || undefined))
           if (liveAllowBusy && !busyTriggeredRef.current && availability.state === 'unavailable' && availability.owner === 'SELF') {
@@ -1335,15 +1410,140 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     const thinkMs = computeThinkDelayMs(text.length)
     thinkTimerRef.current = window.setTimeout(startStream, thinkMs)
-  }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, isBusy, persistMessages, uploadMessage])
+  }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, isBusy, persistMessages, uploadMessage, bridgeInfo, compactDone, compactSummary])
 
   useEffect(() => {
     const injected = takeChatMessage()
     if (injected) send(injected)
   }, [send])
 
-  const handleSend = () => {
-    const text = input
+  // PR #99 Context Compact：用户主动压缩（每会话最多 1 次；已压缩则按钮置灰）。
+  // 最多 1 次模型调用：把较老历史（COMPACT_KEEP_RECENT 之前的消息）压成 summary；
+  // 之后上下文 = summary + 最近原始消息。原聊天记录（缓存/后端）绝不删除。
+  // 普通聊天不自动调模型；失败可重试（不占用"最多 1 次"）。
+  const handleCompact = async () => {
+    if (!activeSessionId || compactDone || streaming || contextBusy) return
+    const uiLang = getSessionLang(activeSessionId)
+    const settings = loadSettings()
+    if (!settings.apiKey || !settings.baseUrl || !settings.model) {
+      setError('还没接上 TA，去「我的」页填一下 API Key 就能聊了')
+      return
+    }
+    const base = visibleMessages
+    if (base.length <= COMPACT_KEEP_RECENT) {
+      setContextNotice(uiLang === 'en' ? 'The conversation is short enough — no need to compact.' : '对话还短，不需要压缩。')
+      return
+    }
+    const cleanBody = (m: StoredMessage) =>
+      m.role === 'assistant'
+        ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), uiLang), uiLang)
+        : m.content
+    const olderHistory: ApiMessage[] = base.slice(0, -COMPACT_KEEP_RECENT).map((m) => ({
+      role: m.role,
+      content: cleanBody(m),
+    }))
+    const compactSource = buildCompactSource(olderHistory)
+    const olderLines = compactSource.map((m) => `${m.role === 'user' ? 'USER' : 'TA'}: ${m.content}`)
+    if (olderLines.length === 0) {
+      setContextNotice(uiLang === 'en' ? 'There is no safe earlier context to compact.' : '没有可安全压缩的更早上下文。')
+      return
+    }
+    const compactBoundary = sessionStart
+    const prompt =
+      uiLang === 'en'
+        ? 'Below is the earlier part of a conversation. Summarize ONLY what actually happened — main topics, decisions, the user\'s preferences/state, and anything the assistant (TA) explicitly promised. Do not invent, infer, or add anything not in the text. Keep it concise and neutral.\n\n' +
+          olderLines.join('\n')
+        : '以下是这段对话较早的部分。只总结真实发生的内容——聊了什么、有什么决定、用户的偏好/状态、TA 明确作出的承诺。不要编造、不要推断、不要添加文本里没有的内容。保持简洁中立。\n\n' +
+          olderLines.join('\n')
+    setContextBusy('compact')
+    try {
+      const summary = await chatCompletion(
+        settings,
+        [
+          { role: 'system', content: prompt },
+          { role: 'user', content: uiLang === 'en' ? 'Please compact the earlier part into a summary.' : '请把更早的部分压缩成摘要。' },
+        ],
+        { maxTokens: 700, temperature: 0.3 },
+      )
+      const trimmed = summary.trim()
+      if (!trimmed) throw new Error('empty summary')
+      // 请求期间如果用户再次「刷新对话」，旧段结果必须作废，不能写进新 boundary。
+      if (getSessionStart(activeSessionId) !== compactBoundary) return
+      setContextCompactSummary(trimmed, activeSessionId)
+      setContextCompactAt(Date.now(), activeSessionId)
+      notifyDataChanged()
+      setCompactDone(true)
+      setCompactSummary(trimmed)
+      setContextNotice(uiLang === 'en' ? 'Compressed the earlier conversation into a summary.' : '已把更早的对话压缩成摘要。')
+    } catch {
+      setContextNotice(uiLang === 'en' ? 'Compaction failed. Try again.' : '压缩失败，请再试一次。')
+    } finally {
+      setContextBusy(null)
+    }
+  }
+
+  // PR #99 Session Bridge：用户主动承接“同一角色刷新前”的上一段上下文（每次刷新后最多 1 次）。
+  // 最多 1 次模型调用：只取 sessionStart 之前的有限聊天尾部（BRIDGE_TAIL_COUNT 条），
+  // 生成 evidence-only bridge；绝不跨 session / 跨角色，也不写 Memory / Event。
+  const handleBridge = async () => {
+    if (!activeSessionId || bridgeInfo || streaming || contextBusy) return
+    const uiLang = getSessionLang(activeSessionId)
+    if (!hasBridgableHistory(messages, sessionStart)) return
+    const settings = loadSettings()
+    if (!settings.apiKey || !settings.baseUrl || !settings.model) {
+      setError('还没接上 TA，去「我的」页填一下 API Key 就能聊了')
+      return
+    }
+    const tail = messages.filter((message) => message.ts < sessionStart).slice(-BRIDGE_TAIL_COUNT)
+    if (tail.length === 0) {
+      setContextNotice(uiLang === 'en' ? 'There is no earlier context to bridge.' : '没有可承接的上一段对话。')
+      return
+    }
+    const cleanBody = (m: StoredMessage) =>
+      m.role === 'assistant'
+        ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), uiLang), uiLang)
+        : m.content
+    const bridgeHistory: ApiMessage[] = tail.map((m) => ({ role: m.role, content: cleanBody(m) }))
+    const bridgeSource = buildCompactSource(bridgeHistory, BRIDGE_INPUT_BUDGET)
+    if (bridgeSource.length === 0) {
+      setContextNotice(uiLang === 'en' ? 'There is no safe earlier context to bridge.' : '没有可安全承接的上一段对话。')
+      return
+    }
+    const lines = bridgeSource.map((m) => `${m.role === 'user' ? 'USER' : 'TA'}: ${m.content}`)
+    const bridgeBoundary = sessionStart
+    const prompt =
+      uiLang === 'en'
+        ? 'Below is the recent tail from before this same conversation was refreshed. Write a short evidence-only handover note covering: 1) what you two were talking about, 2) unfinished topics, 3) the user\'s current state, 4) any explicit promises the companion made, 5) necessary referents (who "he/she" means). Only state what is actually in the text. Never invent or infer. Keep it in plain concise notes.\n\n' +
+          lines.join('\n')
+        : '下面是这个同一会话刷新前最近的一小段对话。请写一份简短、仅基于事实的交接摘要，覆盖：1）你们刚才在聊什么 2）未完成的事项 3）用户当前状态 4）TA 已明确作出的承诺 5）必要指代（“他/她”指谁）。只写文本里确实出现的内容，禁止编造或推断。用简洁的要点书写。\n\n' +
+          lines.join('\n')
+    setContextBusy('bridge')
+    try {
+      const content = await chatCompletion(
+        settings,
+        [
+          { role: 'system', content: prompt },
+          { role: 'user', content: uiLang === 'en' ? 'Please write the handover note.' : '请写这份交接摘要。' },
+        ],
+        { maxTokens: 600, temperature: 0.3 },
+      )
+      const trimmed = content.trim()
+      if (!trimmed) throw new Error('empty bridge')
+      // Bridge 只属于发起请求时的刷新段；期间若再次刷新，旧结果直接丢弃。
+      if (getSessionStart(activeSessionId) !== bridgeBoundary) return
+      const bridgedAt = Date.now()
+      setContextBridge(activeSessionId, activeSessionId, trimmed, BRIDGE_ACTIVE_TURNS, bridgedAt)
+      notifyDataChanged()
+      setBridgeInfo({ fromSessionId: activeSessionId, bridgedAt, content: trimmed, turnsLeft: BRIDGE_ACTIVE_TURNS })
+      setContextNotice(uiLang === 'en' ? 'Picked up where the conversation left off before refresh.' : '已接上刷新前的上一段对话。')
+    } catch {
+      setContextNotice(uiLang === 'en' ? 'Bridge failed. Try again.' : '承接失败，请再试一次。')
+    } finally {
+      setContextBusy(null)
+    }
+  }
+
+  const handleSend = () => {    const text = input
     if (!text.trim() || streaming) return
     send(text)
     // 移动端连续聊天：发送后保持 textarea 焦点，让软键盘像微信一样继续留在屏幕上。
@@ -1438,6 +1638,44 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         </div>
       )}
 
+      {activeSessionId && (
+        <div className="context-meter-row">
+          <div className="context-meter" aria-hidden="true">
+            <div
+              className="context-meter-bar"
+              style={{ width: contextMeter ? `${Math.min(100, Math.round((contextMeter.used / contextMeter.budget) * 100))}%` : '0%' }}
+            />
+          </div>
+          <span className="context-meter-text">
+            {contextMeter ? `${Math.max(1, Math.round(contextMeter.used / 1024))}k / ${Math.round(contextMeter.budget / 1024)}k` : '—'}
+          </span>
+          {!compactDone && (
+            <button
+              type="button"
+              className="context-meter-btn"
+              onClick={handleCompact}
+              disabled={contextBusy !== null}
+              aria-label="压缩上下文"
+            >
+              {contextBusy === 'compact' ? '压缩中…' : '压缩'}
+            </button>
+          )}
+          {!bridgeInfo && hasBridgableHistory(messages, sessionStart) && (
+            <button
+              type="button"
+              className="context-meter-btn"
+              onClick={handleBridge}
+              disabled={contextBusy !== null}
+              aria-label="承接旧记忆"
+            >
+              {contextBusy === 'bridge' ? '承接中…' : '承接'}
+            </button>
+          )}
+        </div>
+      )}
+      {contextNotice && (
+        <div className="context-notice" role="status">{contextNotice}</div>
+      )}
       <div className="composer">
         <textarea
           ref={inputRef}
