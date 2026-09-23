@@ -655,7 +655,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       const sid = getActiveSessionId()
       const lang = sid ? getSessionLang(sid) : 'zh'
-      const text = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(raw), lang)), lang)
+      const text = stripActionMarkers(
+        stripEmoji(stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(raw)), lang)),
+        lang,
+      )
       const liveIdentityMode = resolveIdentityMode(sid || undefined)
       const partialAvailability = text ? classifyAvailability(text) : null
       const identityProblem = Boolean(
