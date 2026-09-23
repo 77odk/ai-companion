@@ -167,9 +167,9 @@ export function stripActionMarkers(text: string, lang?: Lang): string {
 // - 自然：允许承认 AI 身份，但仍避免明显客服/设定腔。
 // - AI：不因为“像 AI / 像客服”而重写；事实、归因、物理现实边界由其它 guard 单独负责。
 const IDENTITY_DISCLOSURE_PATTERNS = [
-  /(作为(一个)?(AI|人工智能|程序|助手|模型|机器人))/,
-  /(我是(一个)?(AI|人工智能|程序|助手|模型|机器人|语言模型))/,
-  /(我(是|叫|就是)?(你的)?(TA|AI助手))/,
+  /(作为\s*(?:一个\s*)?(?:AI|人工智能|程序|助手|模型|机器人))/,
+  /(我是\s*(?:一个\s*)?(?:AI|人工智能|程序|助手|模型|机器人|语言模型))/,
+  /(我(?:是|叫|就是)?\s*(?:你的\s*)?(?:TA|AI\s*助手))/,
   /\b(as an? (AI|artificial intelligence|language model|assistant|bot|robot))\b/i,
   /\b(I'?m (just? )?an? (AI|assistant|language model|bot|robot))\b/i,
 ]
