@@ -3282,6 +3282,28 @@
   line-height: 1.35;
 }
 
+.chat-page .context-meter-stats {
+  margin: 8px 0 6px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 12px;
+  align-items: baseline;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.chat-page .context-meter-stats > span {
+  color: var(--ui2-text-secondary, #817773);
+}
+
+.chat-page .context-meter-stats > strong {
+  color: var(--color-text);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .chat-page .context-meter-popover > p {
   margin: 0;
   color: var(--ui2-text-secondary, #817773);
