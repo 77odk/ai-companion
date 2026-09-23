@@ -23,7 +23,7 @@ export interface MemoryCorrectionProposal {
 export function looksLikeMemoryCorrectionIntent(text: string): boolean {
   const t = String(text ?? '').trim()
   if (!t) return false
-  return /说错|讲错|记错|不是|不对|更正|纠正|改成|应该是|其实|i was wrong|i misspoke|actually|correction|i meant|not .+ but/i.test(t)
+  return /(?:说错|讲错|记错|写错)(?:了|啦)?|(?:更正|纠正)(?:一下)?|(?:改成|改为).+|不是.{1,30}(?:而是|应该是|其实是|才是)|其实(?:不是|应该是)|i was wrong|i misspoke|correction|i meant|not .+ but .+/i.test(t)
 }
 
 /** 模型只可申请，不可直接落库；一次最多取第一条完整申请。 */
