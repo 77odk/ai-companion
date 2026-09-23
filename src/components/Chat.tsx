@@ -50,6 +50,7 @@ import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
 import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
 import { estimateToken } from '../lib/token'
+import { correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -185,6 +186,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [contextBusy, setContextBusy] = useState<'compact' | 'bridge' | null>(null)
   const [contextNotice, setContextNotice] = useState<string | null>(null)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
+  const [pendingMemoryCorrection, setPendingMemoryCorrection] = useState<{ target: MemoryCorrectionTarget; value: string } | null>(null)
+  const [memoryCorrectionBusy, setMemoryCorrectionBusy] = useState(false)
+  const [memoryCorrectionNotice, setMemoryCorrectionNotice] = useState<string | null>(null)
 
   const visibleMessages = useMemo(
     () => filterSessionMessages(messages, sessionStart),
@@ -213,6 +217,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     setContextMeter(storedUsage && storedUsage.sessionStart === sessionStart ? storedUsage : null)
     setContextNotice(null)
     setContextBusy(null)
+    setPendingMemoryCorrection(null)
+    setMemoryCorrectionBusy(false)
+    setMemoryCorrectionNotice(null)
   }, [activeSessionId, sessionStart])
   // UI2-03B-1：jump effect 只依赖 pendingJump/session，消息列表通过 ref 读取最新值 ——
   // 这样消息每次更新都不会重跑 jump effect（否则 cleanup 会把跳转保护窗口的定时器提前清掉）
