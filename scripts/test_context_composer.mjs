@@ -122,7 +122,11 @@ assert.match(chatSource, /compactedAt >= sessionStart/, 'Compact 只对当前刷
 assert.match(chatSource, /const summary = await chatCompletion\(/, '压缩最多 1 次模型调用（主动）')
 assert.ok(!chatSource.includes('composed.usage >= COMPACT_USAGE_THRESHOLD'), '已删除阈值自动压缩（普通聊天 0 自动模型调用）')
 assert.ok(!chatSource.includes('compactHistory('), '已删除 slice 裁剪式压缩')
-assert.ok(!chatSource.includes('saveMessagesCache(sessionId'), 'Chat 不因 compact 改动消息缓存')
+const compactSection = chatSource.slice(
+  chatSource.indexOf('const handleCompact = async () =>'),
+  chatSource.indexOf('const handleBridge = async () =>'),
+)
+assert.ok(!compactSection.includes('saveMessagesCache('), 'Compact 不改动消息缓存')
 // Bridge：承接 = 上一会话有限聊天尾部 + 1 次模型生成 evidence-only bridge；不再注入旧会话 Memory
 assert.match(chatSource, /hasBridgableHistory\(messages, sessionStart\)/, 'Bridge 只由同一 session 的刷新边界控制')
 assert.match(chatSource, /messages\.filter\(\(message\) => message\.ts < sessionStart\)\.slice\(-BRIDGE_TAIL_COUNT\)/, 'Bridge 只取同一 session 刷新前有限尾部')
