@@ -1815,7 +1815,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                     <strong>{contextMeter ? `上下文 ${Math.round((contextMeter.used / contextMeter.budget) * 100)}%` : '还没有数据'}</strong>
                     {contextMeter && (
                       <span className="context-meter-source">
-                        {contextMeter.source === 'actual' ? '本轮真实' : '本轮估算'}
+                        {contextMeter.source === 'actual' ? '真实上下文' : '估算上下文'}
                       </span>
                     )}
                   </div>
@@ -1831,8 +1831,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                   )}
                   {contextMeter && (
                     <p>{contextMeter.source === 'actual'
-                      ? '上下文总量是当前会话累计量；本轮输入 / 输出 / Cache 来自服务商 usage。'
-                      : '上下文总量是当前会话累计量；服务商没返回 usage，本轮输入 / 输出按本地估算，Cache 无法估算。'}</p>
+                      ? '上下文总量取最近一轮真实 prompt_tokens；本轮输入 / 输出 / Cache 来自服务商 usage。'
+                      : '服务商没返回 usage；上下文总量与本轮输入 / 输出按本地 payload 估算，Cache 无法估算。'}</p>
                   )}
                   <div className="context-meter-actions">
                     {!compactDone && (
