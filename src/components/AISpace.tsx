@@ -5,6 +5,7 @@ import { getActiveSessionId } from '../lib/sessionStore'
 import { getWeeklyReviews, type WeeklyReview } from '../lib/weeklyReview'
 import {
   loadLocalPhotos,
+  saveLocalPhotoMetadata,
   addLocalPhoto,
   mergePhotos,
   photoUrl,
@@ -53,12 +54,23 @@ export default function AISpace({ onOpenWeekly }: Props) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
+    const local = loadLocalPhotos(sid)
+    setPhotos(local)
+    setPhotoError(null)
     if (!sid) return
+
     const token = getToken()
     if (!token) return
+
     let alive = true
     listPhotos(token, sid).then((res) => {
-      if (!alive || !res.ok || !res.data) return
+      if (!alive) return
+      if (!res.ok || !res.data) {
+        setPhotoError(local.length > 0
+          ? '云端照片暂时没加载完整，本机已有的先保留。'
+          : '照片暂时没加载出来，稍后再试。')
+        return
+      }
       const cloud: PhotoMeta[] = res.data.photos.map((photo) => ({
         id: photo.id,
         sessionId: photo.sessionId,
@@ -66,7 +78,13 @@ export default function AISpace({ onOpenWeekly }: Props) {
         height: photo.height,
         createdAt: normalizePhotoCreatedAt(photo.createdAt),
       }))
-      setPhotos((prev) => mergePhotos(prev, cloud))
+      setPhotos((prev) => {
+        const current = prev.every((photo) => photo.sessionId === sid) ? prev : local
+        const next = mergePhotos(current, cloud)
+        saveLocalPhotoMetadata(next, sid)
+        return next
+      })
+      setPhotoError(null)
     })
     return () => {
       alive = false
@@ -90,14 +108,22 @@ export default function AISpace({ onOpenWeekly }: Props) {
       const res = await uploadPhoto(token, sid, scaled.dataUrl, scaled.width, scaled.height)
       if (res.ok && res.data) {
         const photo = res.data.photo
+        // 上传成功后先直接显示刚压缩好的本地图，不再等图片 GET 才“出现”。
+        // localStorage 只落元数据，dataUrl 只留在当前页面内存里。
         const meta: PhotoMeta = {
           id: photo.id,
           sessionId: photo.sessionId,
           width: photo.width,
           height: photo.height,
           createdAt: normalizePhotoCreatedAt(photo.createdAt),
+          dataUrl: scaled.dataUrl,
         }
-        setPhotos((prev) => mergePhotos([meta], prev))
+        setPhotos((prev) => {
+          const next = mergePhotos([meta], prev)
+          saveLocalPhotoMetadata(next, sid)
+          return next
+        })
+        setPhotoError(null)
       } else if (res.status === 413) {
         setPhotoError('图片太大（超过 4MB），换一张小点的')
       } else {
@@ -134,6 +160,9 @@ export default function AISpace({ onOpenWeekly }: Props) {
           uploading={photoUploading}
           error={photoError}
           photoSrc={(photo) => photo.dataUrl ?? photoUrl(photo.id, token)}
+          onPhotoLoadError={() => {
+            setPhotoError('有照片暂时没显示出来，照片还在，稍后再试。')
+          }}
           onAdd={() => fileInputRef.current?.click()}
         />
         <input
