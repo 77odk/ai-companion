@@ -1720,6 +1720,36 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     setShowMilestone(false)
   }
 
+  const confirmPendingMemoryCorrection = async () => {
+    if (!pendingMemoryCorrection || memoryCorrectionBusy) return
+    const freshTarget = refreshMemoryCorrectionTarget(pendingMemoryCorrection.target)
+    if (!freshTarget) {
+      setPendingMemoryCorrection(null)
+      setMemoryCorrectionNotice('这条记忆已经发生变化，没有覆盖它。你可以再告诉 TA 一次。')
+      return
+    }
+    setMemoryCorrectionBusy(true)
+    setMemoryCorrectionNotice(null)
+    try {
+      const result = await correctMemoryText(freshTarget, pendingMemoryCorrection.value)
+      if (!result.ok) {
+        setMemoryCorrectionNotice(result.message)
+        return
+      }
+      notifyMemoryUpdated()
+      setPendingMemoryCorrection(null)
+      setMemoryCorrectionNotice(result.changed ? '已按你的确认纠正这条记忆。' : '这条记忆已经是这个内容了。')
+    } finally {
+      setMemoryCorrectionBusy(false)
+    }
+  }
+
+  const rejectPendingMemoryCorrection = () => {
+    if (memoryCorrectionBusy) return
+    setPendingMemoryCorrection(null)
+    setMemoryCorrectionNotice('没有修改记忆。')
+  }
+
   const isEmpty = visibleMessages.length === 0
   const chatBg = useMemo(() => loadChatBg(activeSessionId ?? undefined), [activeSessionId])
 
@@ -1785,6 +1815,30 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             />
           )}
         </div>
+      )}
+
+      {pendingMemoryCorrection && (
+        <div className="memory-correction-consent" role="group" aria-label="确认纠正记忆">
+          <div className="memory-correction-consent-title">TA 想纠正一条记忆</div>
+          <div className="memory-correction-consent-row">
+            <span>原来记的是</span>
+            <strong>{pendingMemoryCorrection.target.item.text}</strong>
+          </div>
+          <div className="memory-correction-consent-row">
+            <span>准备改成</span>
+            <strong>{pendingMemoryCorrection.value}</strong>
+          </div>
+          <div className="memory-correction-consent-actions">
+            <button type="button" onClick={rejectPendingMemoryCorrection} disabled={memoryCorrectionBusy}>先不改</button>
+            <button type="button" onClick={() => void confirmPendingMemoryCorrection()} disabled={memoryCorrectionBusy}>
+              {memoryCorrectionBusy ? '正在纠正…' : '确认纠正'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {memoryCorrectionNotice && (
+        <div className="memory-correction-notice" role="status">{memoryCorrectionNotice}</div>
       )}
 
       <div className="chat-composer-panel">
