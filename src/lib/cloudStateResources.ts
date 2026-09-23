@@ -643,31 +643,8 @@ function captureAiProfiles(): void {
   profileSnapshot = next
 }
 
-const LEGACY_BACKFILL_VERSION = 'p0a-v1'
-const LEGACY_BACKFILL_MARKER_PREFIX = 'ai_companion_cloud_backfill_p0a_v1_'
-
 function legacyBackfillOpId(accountId: string, kind: string, entityId: string, stage = 'probe'): string {
-  return [LEGACY_BACKFILL_VERSION, kind, encodeURIComponent(accountId), encodeURIComponent(entityId), stage].join(':')
-}
-
-function isLegacyProfileIdentityProbe(op: CloudStatePendingOp | null, accountId: string, entityId: string): boolean {
-  return Boolean(op && op.opId === legacyBackfillOpId(accountId, 'profile-identity', entityId))
-}
-
-function hasPendingCloudOp(kind: string, entityId: string, sessionId?: string): boolean {
-  const accountId = getAccount()?.account.trim() ?? ''
-  return getPendingOps().some((op) =>
-    op.type === 'cloud-state' &&
-    op.kind === kind &&
-    op.entityId === entityId &&
-    (op.sessionId || undefined) === (sessionId || undefined) &&
-    (!op.accountId || op.accountId === accountId),
-  )
-}
-
-function explicitLocalIdentityMode(entityId: string): IdentityMode | null {
-  const raw = record(readJson(aiProfileStorageKey(entityId)))
-  return isIdentityMode(raw?.identityMode) ? raw.identityMode : null
+  return ['p0a-v1', kind, encodeURIComponent(accountId), encodeURIComponent(entityId), stage].join(':')
 }
 
 function pendingProfileOps(entity: CloudStateEntity): CloudStatePendingOp[] {
@@ -695,6 +672,7 @@ function dropPendingProfileOps(entity: CloudStateEntity): void {
 function replacePendingProfileWithRebasedValue(
   entity: CloudStateEntity,
   profile: SyncedAIProfile,
+  fixedOpId?: string,
 ): void {
   dropPendingProfileOps(entity)
   queue(
@@ -705,6 +683,7 @@ function replacePendingProfileWithRebasedValue(
     entity.entityId === GLOBAL ? undefined : entity.entityId,
     undefined,
     entity.version,
+    fixedOpId,
   )
 }
 
@@ -730,37 +709,27 @@ function applyAiProfileEntity(entity: CloudStateEntity): void {
   const newest = newestPendingProfileOp(entity)
   const accountId = getAccount()?.account.trim() ?? ''
 
-  // 最新一条 pending 是墓碑（角色刚被删）时，删除意图优先：绝不写回本机资料、也不排非删除 op，
-  // 只把墓碑重基到刚 pull 的 version。否则旧 baseVersion 的删除会被后续 conflict 掉，
-  // 已删除角色的资料会在云端与本机一起复活。
   if (newest?.deleted) {
     rebasePendingProfileTombstone(entity)
     return
   }
 
-  // P0-A 旧身份档补种是一次性 probe：baseVersion=0 只用来确认云端有没有 canonical。
-  // 若云端已有 identityMode，云端直接赢；若只缺这一个字段，只把本机明确 identityMode
-  // 合进刚拉到的 canonical，昵称/头像等字段绝不从旧设备整份覆盖。
-  if (isLegacyProfileIdentityProbe(newest, accountId, entity.entityId)) {
-    const probe = newest ? validAiProfile(newest.payload) : null
-    const localMode = probe?.identityMode
-    dropPendingProfileOps(entity)
+  // 旧身份补种 probe 只允许把 identityMode 合到刚拉回的 canonical；资料其它字段永远以云端为准。
+  if (newest?.opId === legacyBackfillOpId(accountId, 'profile-identity', entity.entityId)) {
+    const localMode = validAiProfile(newest.payload)?.identityMode
     const merged = !isIdentityMode(value.identityMode) && isIdentityMode(localMode)
       ? { ...value, identityMode: localMode }
       : value
     localStorage.setItem(key, JSON.stringify(merged))
     profileSnapshot.set(entity.entityId, merged)
     if (!isIdentityMode(value.identityMode) && isIdentityMode(localMode)) {
-      queue(
-        'profile',
-        entity.entityId,
+      replacePendingProfileWithRebasedValue(
+        entity,
         merged,
-        false,
-        entity.entityId === GLOBAL ? undefined : entity.entityId,
-        undefined,
-        entity.version,
         legacyBackfillOpId(accountId, 'profile-identity', entity.entityId, `repair-${entity.version}`),
       )
+    } else {
+      dropPendingProfileOps(entity)
     }
     return
   }
@@ -887,65 +856,40 @@ function captureReplyLengths(): void {
   replyLengthPreferenceSnapshot = next
 }
 
-/**
- * P0-A：把 Cloud State 上线前已经存在的显式身份/回复长度补种一次。
- * 不加新协议：全部仍走现有 outbox + pull-before-push。
- * probe 固定 baseVersion=0：云端已有实体时一定 conflict/拉 canonical，绝不让旧设备直接覆盖；
- * 云端没有实体时才创建。profile conflict 见 applyAiProfileEntity，只允许补 identityMode 一个字段。
- */
+/** 只补 Cloud State 上线前已存在的显式旧值；baseVersion=0 让已有云端实体走 conflict/canonical。 */
 export function queueLegacyCloudStateBackfill(): void {
-  const account = getAccount()
-  if (!account) return
-  const accountId = account.account.trim()
+  const accountId = getAccount()?.account.trim() ?? ''
   if (!accountId) return
-  const marker = `${LEGACY_BACKFILL_MARKER_PREFIX}${encodeURIComponent(accountId)}`
+  const marker = `ai_companion_cloud_backfill_p0a_v1_${encodeURIComponent(accountId)}`
   if (localStorage.getItem(marker) === '1') return
 
-  const profiles = profileEntities()
-  for (const [entityId, value] of profiles) {
-    if (entityId === GLOBAL) continue
-    const sessionId = entityId
-    if (!explicitLocalIdentityMode(entityId) || hasPendingCloudOp('profile', entityId, sessionId)) continue
-    queue(
-      'profile',
-      entityId,
-      value,
-      false,
-      sessionId,
-      undefined,
-      0,
-      legacyBackfillOpId(accountId, 'profile-identity', entityId),
-    )
+  const pending = new Set(
+    getPendingOps()
+      .filter((op): op is CloudStatePendingOp => op.type === 'cloud-state')
+      .map(op => `${op.kind}\u0000${op.sessionId || ''}\u0000${op.entityId}`),
+  )
+  const hasPending = (kind: string, entityId: string, sessionId = '') =>
+    pending.has(`${kind}\u0000${sessionId}\u0000${entityId}`)
+
+  for (const [entityId, value] of profileEntities()) {
+    if (entityId === GLOBAL || hasPending('profile', entityId, entityId)) continue
+    const raw = record(readJson(aiProfileStorageKey(entityId)))
+    if (!isIdentityMode(raw?.identityMode)) continue
+    queue('profile', entityId, value, false, entityId, undefined, 0,
+      legacyBackfillOpId(accountId, 'profile-identity', entityId))
   }
 
   const globalReply = getStoredGlobalReplyLength(accountId)
-  if (globalReply && !hasPendingCloudOp('reply_length_global', GLOBAL)) {
-    queue(
-      'reply_length_global',
-      GLOBAL,
-      { mode: globalReply },
-      false,
-      undefined,
-      undefined,
-      0,
-      legacyBackfillOpId(accountId, 'reply-length-global', GLOBAL),
-    )
+  if (globalReply && !hasPending('reply_length_global', GLOBAL)) {
+    queue('reply_length_global', GLOBAL, { mode: globalReply }, false, undefined, undefined, 0,
+      legacyBackfillOpId(accountId, 'reply-length-global', GLOBAL))
   }
 
   for (const [sessionId, value] of replyLengthPreferenceEntities()) {
-    if (hasPendingCloudOp('reply_length', sessionId, sessionId)) continue
-    queue(
-      'reply_length',
-      sessionId,
-      { mode: value.mode, followGlobal: value.followGlobal },
-      false,
-      sessionId,
-      undefined,
-      0,
-      legacyBackfillOpId(accountId, 'reply-length', sessionId),
-    )
+    if (hasPending('reply_length', sessionId, sessionId)) continue
+    queue('reply_length', sessionId, { mode: value.mode, followGlobal: value.followGlobal }, false, sessionId, undefined, 0,
+      legacyBackfillOpId(accountId, 'reply-length', sessionId))
   }
-
   localStorage.setItem(marker, '1')
 }
 
