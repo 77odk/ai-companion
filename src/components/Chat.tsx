@@ -1427,10 +1427,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         assistantMsgs[0].memorySaved = true
       }
       const final: StoredMessage[] = [...messages, userMsg, ...assistantMsgs]
-      if (proposedCorrection && mountedRef.current) {
-        setPendingMemoryCorrection(proposedCorrection)
+      if (proposedCorrection) {
         if (activeSessionId) savePendingMemoryCorrection(activeSessionId, sessionStart, proposedCorrection)
-        setMemoryCorrectionNotice(null)
+        if (mountedRef.current) {
+          setPendingMemoryCorrection(proposedCorrection)
+          setMemoryCorrectionNotice(null)
+        }
       }
       commitFinal(final)
     }
