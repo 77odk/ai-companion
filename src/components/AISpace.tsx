@@ -38,6 +38,8 @@ function normalizePhotoCreatedAt(value: unknown): number {
   return 0
 }
 
+const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，稍后再试。'
+
 export default function AISpace({ onOpenWeekly }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
@@ -52,6 +54,10 @@ export default function AISpace({ onOpenWeekly }: Props) {
   const [photoUploading, setPhotoUploading] = useState(0)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const clearNonImagePhotoError = () => {
+    setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? current : null)
+  }
 
   useEffect(() => {
     const local = loadLocalPhotos(sid)
@@ -84,7 +90,7 @@ export default function AISpace({ onOpenWeekly }: Props) {
         saveLocalPhotoMetadata(next, sid)
         return next
       })
-      setPhotoError(null)
+      clearNonImagePhotoError()
     })
     return () => {
       alive = false
@@ -123,7 +129,7 @@ export default function AISpace({ onOpenWeekly }: Props) {
           saveLocalPhotoMetadata(next, sid)
           return next
         })
-        setPhotoError(null)
+        clearNonImagePhotoError()
       } else if (res.status === 413) {
         setPhotoError('图片太大（超过 4MB），换一张小点的')
       } else {
@@ -161,7 +167,7 @@ export default function AISpace({ onOpenWeekly }: Props) {
           error={photoError}
           photoSrc={(photo) => photo.dataUrl ?? photoUrl(photo.id, token)}
           onPhotoLoadError={() => {
-            setPhotoError('有照片暂时没显示出来，照片还在，稍后再试。')
+            setPhotoError(PHOTO_IMAGE_LOAD_ERROR)
           }}
           onAdd={() => fileInputRef.current?.click()}
         />
