@@ -69,6 +69,23 @@ export function addLocalPhoto(photo: PhotoMeta, sessionId?: string): PhotoMeta[]
 }
 
 /**
+ * 登录用户只缓存元数据，不把图片 dataUrl 长期塞进 localStorage。
+ * 这样刷新时可立即知道“这里有照片”并直接发起图片读取，同时避免撑爆浏览器配额。
+ */
+export function saveLocalPhotoMetadata(photos: PhotoMeta[], sessionId?: string): void {
+  saveLocalPhotos(
+    (photos ?? []).map((photo) => ({
+      id: photo.id,
+      sessionId: photo.sessionId,
+      width: photo.width,
+      height: photo.height,
+      createdAt: photo.createdAt,
+    })),
+    sessionId,
+  )
+}
+
+/**
  * 本地 + 云端合并：按 id 去重，云端优先（云端有 dataUrl 的覆盖本地）；createdAt 倒序。
  * 契约：列表接口按需拉、不进 /api/sync 同步包，前端在进入照片墙时拉一次合并。
  */
