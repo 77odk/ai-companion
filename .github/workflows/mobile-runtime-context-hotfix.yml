@@ -1,0 +1,21 @@
+name: mobile runtime context hotfix verify
+on:
+  push:
+    branches:
+      - fix/mobile-context-runtime-hotfix
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Targeted tests
+        run: node scripts/test_ta_runtime.mjs && node scripts/test_chat_companion_controls.mjs && node scripts/test_context_composer.mjs && node scripts/test_model_usage.mjs
+      - run: npm run build
+      - run: npm run lint
