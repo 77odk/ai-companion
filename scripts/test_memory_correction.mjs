@@ -36,6 +36,9 @@ const {
   stripMemoryCorrectionMarkers,
   hasMemoryCorrectionMarker,
   refreshMemoryCorrectionTarget,
+  savePendingMemoryCorrection,
+  loadPendingMemoryCorrection,
+  clearPendingMemoryCorrection,
 } = await import('../src/lib/memoryCorrection.ts')
 const { getMemoriesCache, saveMemoriesCache } = await import('../src/lib/sessionStore.ts')
 
@@ -251,12 +254,39 @@ check('目标内容已变化时拒绝旧提案覆盖', refreshMemoryCorrectionTa
 check('Memory block 支持仅在纠正轮注入内部编号', promptSource.includes('[M:${ref}]'))
 check('Chat 有纠正意图粗筛', chatComponent.includes('looksLikeMemoryCorrectionIntent(text)'))
 check('Chat 纠正轮给模型独立 consent 协议', chatComponent.includes("id: 'memory-correction-consent'"))
-check('Chat marker 命中时禁止普通记忆写入', chatComponent.includes('if (hasMemoryCorrectionMarker(rawText)) return false'))
+check('Chat 纠正轮禁止普通记忆写入', chatComponent.includes('(correctionIntent && correctionTargets.size > 0) || hasMemoryCorrectionMarker(rawText)'))
 check('Chat 只先生成待确认提案', chatComponent.includes('setPendingMemoryCorrection(proposedCorrection)'))
 check('Chat 有“确认纠正”与“先不改”两个动作', chatComponent.includes('确认纠正') && chatComponent.includes('先不改'))
 check('确认时复用现有 correctMemoryText', chatComponent.includes('await correctMemoryText(freshTarget, pendingMemoryCorrection.value)'))
 check('确认前再次校验目标未被别处修改', chatComponent.includes('refreshMemoryCorrectionTarget(pendingMemoryCorrection.target)'))
 check('纠正 marker 在流式展示前被剥离', chatComponent.includes('stripMemoryCorrectionMarkers(stripMemoryMarkers(assistantText.current))'))
+check('纠正 marker 在后台半截落库前也被剥离', chatComponent.includes('stripMemoryCorrectionMarkers(stripMemoryMarkers(raw))'))
+check('纠正提案只本地暂存，不走 notifyDataChanged/cloud sync', !fs.readFileSync(new URL('../src/lib/memoryCorrection.ts', import.meta.url), 'utf8').includes("notifyDataChanged"))
+
+store.clear()
+store.set('ai_companion_memory', JSON.stringify([original]))
+savePendingMemoryCorrection('role-consent', 123, {
+  target: { kind: 'global', item: original },
+  value: '用户只是不喜欢黑咖啡',
+})
+const restoredGlobal = loadPendingMemoryCorrection('role-consent', 123, 'token-x')
+check('待确认提案退出再进可恢复', restoredGlobal?.target.kind === 'global' && restoredGlobal.value === '用户只是不喜欢黑咖啡')
+check('推进 sessionStart 后旧待确认提案失效', loadPendingMemoryCorrection('role-consent', 124, 'token-x') === null)
+
+store.clear()
+const optimistic = { ...original, id: '1788211200000-local' }
+const serverCopy = { ...optimistic, id: '905' }
+saveMemoriesCache('role-consent-session', [optimistic])
+savePendingMemoryCorrection('role-consent-session', 222, {
+  target: { kind: 'session', sessionId: 'role-consent-session', item: optimistic, token: 'token-x' },
+  value: '纠正后的事实',
+})
+saveMemoriesCache('role-consent-session', [serverCopy])
+const restoredSession = loadPendingMemoryCorrection('role-consent-session', 222, 'fresh-token')
+check('待确认提案可跨临时 ID reconcile 恢复', restoredSession?.target.kind === 'session' && restoredSession.target.item.id === '905')
+check('恢复 session 提案使用当前 token，不持久化旧 token', restoredSession?.target.kind === 'session' && restoredSession.target.token === 'fresh-token')
+clearPendingMemoryCorrection('role-consent-session')
+check('拒绝/确认后可清掉本地待确认提案', loadPendingMemoryCorrection('role-consent-session', 222, 'fresh-token') === null)
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed) process.exit(1)
