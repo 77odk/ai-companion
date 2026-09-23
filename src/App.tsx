@@ -1,19 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Welcome from './components/Welcome'
-import RolePicker, { type NaturalSetup } from './components/RolePicker'
+import type { NaturalSetup } from './components/RolePicker'
 import Chat from './components/Chat'
-import Settings, { type SettingsPage } from './components/Settings'
-import AISpace from './components/AISpace'
-import ChatProfile from './components/ChatProfile'
-import ChatSettings from './components/ChatSettings'
-import AboutMe from './components/AboutMe'
-import WeeklyPage from './components/WeeklyPage'
-import GuideDetail from './components/Guide'
+import type { SettingsPage } from './components/Settings'
 import LoginGate from './components/LoginGate'
 import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
 import { getAccount, API_BASE } from './lib/sync'
 import { pingSiteHit } from './lib/siteStats'
-import RolesPage from './components/RolesPage'
 import { PlanetIcon } from './components/spaceIcons'
 import type { ChatJumpTarget, MemoryReturnTarget } from './lib/chatJump'
 import {
@@ -56,12 +49,23 @@ import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh } from './lib/forceRefresh'
 import { checkDeployedBuild, getCurrentBuildVersion, subscribeDeployedBuild } from './lib/appVersion'
 import Home from './components/Home'
-import SpaceLife from './components/SpaceLife'
-import Memory from './components/Memory'
 import { initCloudStateSync, syncCloudState } from './lib/cloudState'
 import { queueLegacyCloudStateBackfill } from './lib/cloudStateResources'
 import { closeOldestCandidateWindowOnStartup } from './lib/eventDetector'
 import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from './lib/taRuntime'
+
+// Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
+const RolePicker = lazy(() => import('./components/RolePicker'))
+const Settings = lazy(() => import('./components/Settings'))
+const AISpace = lazy(() => import('./components/AISpace'))
+const ChatProfile = lazy(() => import('./components/ChatProfile'))
+const ChatSettings = lazy(() => import('./components/ChatSettings'))
+const AboutMe = lazy(() => import('./components/AboutMe'))
+const WeeklyPage = lazy(() => import('./components/WeeklyPage'))
+const GuideDetail = lazy(() => import('./components/Guide'))
+const RolesPage = lazy(() => import('./components/RolesPage'))
+const SpaceLife = lazy(() => import('./components/SpaceLife'))
+const Memory = lazy(() => import('./components/Memory'))
 
 type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
@@ -642,6 +646,7 @@ export default function App() {
           </div>
         </div>
       )}
+      <Suspense fallback={<div className="session-loading" />}>
       {loggedIn && needLightConsent ? (
         // ConsentGate V1：老用户/登录态无服务端 consent 记录 → 轻量补确认（同意后上报服务端留档）
         <ConsentGate mode="light" onDone={() => setNeedLightConsent(false)} />
@@ -941,6 +946,7 @@ export default function App() {
           )}
         </>
       )}
+      </Suspense>
     </div>
   )
 }
