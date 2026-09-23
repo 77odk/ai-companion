@@ -1422,7 +1422,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         onDone: (reasoning, usage) => {
           if (runId !== runIdRef.current) return
           // provider 真正返回 prompt_tokens 时覆盖估算；中转站不回 usage 就保留 estimate。
-          if (usage && Number.isFinite(usage.promptTokens)) {
+          if (mountedRef.current && usage && Number.isFinite(usage.promptTokens)) {
             setContextMeter({
               used: usage.promptTokens,
               budget: composed.hardBudget,
