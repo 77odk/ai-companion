@@ -71,8 +71,7 @@ const PENDING_CORRECTION_KEY = 'ai_companion_pending_memory_correction'
 interface StoredPendingMemoryCorrection {
   sessionStart: number
   kind: 'global' | 'session'
-  itemId: string
-  oldText: string
+  item: MemoryItem
   value: string
 }
 
@@ -93,8 +92,7 @@ export function savePendingMemoryCorrection(
   const payload: StoredPendingMemoryCorrection = {
     sessionStart,
     kind: proposal.target.kind,
-    itemId: proposal.target.item.id,
-    oldText: proposal.target.item.text,
+    item: proposal.target.item,
     value: proposal.value.trim(),
   }
   try {
@@ -126,8 +124,10 @@ export function loadPendingMemoryCorrection(
     if (
       Number(stored.sessionStart) !== sessionStart ||
       (stored.kind !== 'global' && stored.kind !== 'session') ||
-      typeof stored.itemId !== 'string' ||
-      typeof stored.oldText !== 'string' ||
+      !stored.item ||
+      typeof stored.item !== 'object' ||
+      typeof stored.item.id !== 'string' ||
+      typeof stored.item.text !== 'string' ||
       typeof stored.value !== 'string' ||
       !stored.value.trim()
     ) {
@@ -136,7 +136,7 @@ export function loadPendingMemoryCorrection(
     }
 
     if (stored.kind === 'global') {
-      const matches = loadMemory().filter((item) => item.id === stored.itemId && item.text === stored.oldText)
+      const matches = loadMemory().filter((item) => item.id === stored.item!.id && item.text === stored.item!.text)
       if (matches.length !== 1) {
         clearPendingMemoryCorrection(sessionId)
         return null
@@ -144,15 +144,13 @@ export function loadPendingMemoryCorrection(
       return { target: { kind: 'global', item: matches[0] }, value: stored.value.trim() }
     }
 
-    const matches = getMemoriesCache(sessionId).filter(
-      (item) => item.id === stored.itemId && item.text === stored.oldText,
-    )
-    if (matches.length !== 1) {
+    const current = resolveCurrentSessionMemory(getMemoriesCache(sessionId), stored.item as MemoryItem)
+    if (!current || current.text !== stored.item.text) {
       clearPendingMemoryCorrection(sessionId)
       return null
     }
     return {
-      target: { kind: 'session', sessionId, item: matches[0], token },
+      target: { kind: 'session', sessionId, item: current, token },
       value: stored.value.trim(),
     }
   } catch {
