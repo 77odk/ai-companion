@@ -571,7 +571,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const token = getToken()
     if (!token || !sessionId) return
     const res = await getSession(token, sessionId)
-    if (!res.ok || String(getActiveSessionId()) !== String(sessionId)) return
+    if (!res.ok || !mountedRef.current || String(getActiveSessionId()) !== String(sessionId)) return
     const cloud: StoredMessage[] = res.data.messages
       .map((m) => ({ role: m.role, content: m.content, ts: Date.parse(m.createdAt), thinking: m.thinking }))
       .filter((m) => Number.isFinite(m.ts))
