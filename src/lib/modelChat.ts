@@ -114,7 +114,7 @@ export async function testConnection(settings: ModelSettings): Promise<void> {
         // 第二批④：思考模型（Gemini/DeepSeek-R1等）需要更多 token 思考，10 不够
         max_tokens: 100,
         stream: false,
-        ...zhipuThinking(settings),
+        ...thinkingRequestOpts(settings),
       }),
     })
   } catch (e) {
@@ -142,6 +142,33 @@ export async function testConnection(settings: ModelSettings): Promise<void> {
 /** 智谱 GLM 思考模型默认开启思考，内容会跑进 reasoning 导致 content 空；统一关掉 */
 function zhipuThinking(settings: ModelSettings): Record<string, unknown> | undefined {
   return settings.baseUrl.includes('bigmodel.cn') ? { thinking: { type: 'disabled' } } : undefined
+}
+
+/** 是不是 Gemini：官方兼容层域名，或模型名以 gemini 开头（走中转站的情况） */
+export function isGeminiProvider(settings: ModelSettings): boolean {
+  const base = (settings.baseUrl || '').toLowerCase()
+  const model = (settings.model || '').trim().toLowerCase()
+  return (
+    base.includes('generativelanguage.googleapis.com') || base.includes('googleapis.com') || model.startsWith('gemini')
+  )
+}
+
+/**
+ * 思考（内心戏）请求参数。各家的开法不一样，不能塞同一个字段（不认识的会报 400）：
+ * - 智谱：照旧关掉思考（它开了会让正文变空）
+ * - Gemini 官方：默认不吐思考摘要，要开口讨 —— extra_body.thinking_config.include_thoughts
+ * - Gemini 走中转站：只带标准字段 reasoning_effort，别塞官方私有字段，免被拒
+ * - 其它服务商：一个字段都不加（DeepSeek / Qwen / Kimi / 豆包本来就回 reasoning_content）
+ */
+export function thinkingRequestOpts(settings: ModelSettings): Record<string, unknown> | undefined {
+  const zhipu = zhipuThinking(settings)
+  if (zhipu) return zhipu
+  if (!isGeminiProvider(settings)) return undefined
+  const base = (settings.baseUrl || '').toLowerCase()
+  if (base.includes('googleapis.com')) {
+    return { reasoning_effort: 'high', extra_body: { thinking_config: { include_thoughts: true } } }
+  }
+  return { reasoning_effort: 'high' }
 }
 
 export interface ChatCompletionOpts {
@@ -174,7 +201,7 @@ export async function chatCompletion(
         stream: false,
         max_tokens: maxTokens,
         temperature,
-        ...zhipuThinking(settings),
+        ...thinkingRequestOpts(settings),
       }),
       signal: controller.signal,
     })
@@ -223,7 +250,7 @@ export function streamChat(
       resp = await fetchOrThrow(url, {
         method: 'POST',
         headers: buildHeaders(settings),
-        body: JSON.stringify({ model: settings.model, messages, stream: true, ...zhipuThinking(settings) }),
+        body: JSON.stringify({ model: settings.model, messages, stream: true, ...thinkingRequestOpts(settings) }),
         signal: controller.signal,
       })
     } catch (e) {
@@ -272,8 +299,8 @@ export function streamChat(
             if (typeof content === 'string' && content.length > 0) {
               handlers.onToken(content)
             }
-            // 收集 reasoning_content（模型独立思考字段，不进正文）
-            const reasoning = delta?.reasoning_content
+            // 收集思考内容（标准字段 reasoning_content；少数网关用 reasoning）
+            const reasoning = delta?.reasoning_content ?? delta?.reasoning
             if (typeof reasoning === 'string' && reasoning.length > 0) {
               reasoningBuffer += reasoning
             }
