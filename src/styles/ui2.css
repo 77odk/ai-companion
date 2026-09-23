@@ -1364,77 +1364,254 @@
 }
 
 
-/* ---- Welcome reference-match preview：按用户确认图复刻；只保留真实交互热区 ---- */
+/* ---- Welcome reference-match：按参考图重做为可响应的真实 UI ---- */
 .welcome-reference-page {
   position: relative;
-  display: block;
   width: 100%;
   height: 100%;
   min-height: 100dvh;
   overflow: hidden;
   padding: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  color: #332b28;
   background: #fff8f4;
-  text-align: initial;
+  text-align: center;
 }
 
-.welcome-reference-art {
+.welcome-reference-scene {
   position: absolute;
   inset: 0;
+  z-index: 0;
   width: 100%;
   height: 100%;
   display: block;
   object-fit: cover;
   object-position: 50% 50%;
-  user-select: none;
   pointer-events: none;
+  user-select: none;
+}
+
+.welcome-reference-page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(62% 44% at 50% 48%, rgba(255,255,255,.72), rgba(255,255,255,.34) 48%, transparent 76%),
+    linear-gradient(180deg, rgba(255,255,255,.12), transparent 20%, transparent 76%, rgba(255,248,244,.08));
+}
+
+.welcome-reference-topline {
+  position: absolute;
+  z-index: 3;
+  top: max(22px, env(safe-area-inset-top));
+  right: 7.5%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: rgba(45, 39, 37, .86);
+}
+
+.welcome-reference-topline p {
+  margin: 0;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
+  font-size: 15px;
+  font-style: italic;
+  letter-spacing: .05em;
+  line-height: 1.35;
+}
+
+.welcome-reference-topline span {
+  font-size: 7.5px;
+  letter-spacing: .34em;
+  color: rgba(75, 65, 61, .72);
+}
+
+.welcome-reference-content {
+  position: relative;
+  z-index: 3;
+  width: min(100%, 390px);
+  min-height: 100%;
+  padding:
+    max(102px, calc(env(safe-area-inset-top) + 76px))
+    24px
+    max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.welcome-reference-logo {
+  width: clamp(132px, 39vw, 154px);
+  aspect-ratio: 1;
+  display: block;
+  object-fit: cover;
+  border-radius: 32px;
+  box-shadow:
+    0 18px 40px rgba(196, 113, 105, .16),
+    0 4px 14px rgba(224, 158, 148, .14);
+}
+
+.welcome-reference-content h1 {
+  margin: 16px 0 2px;
+  color: #2f2a28;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
+  font-size: clamp(40px, 12vw, 52px);
+  font-weight: 500;
+  letter-spacing: .11em;
+  line-height: 1.02;
+}
+
+.welcome-reference-en {
+  margin: 4px 0 0;
+  color: #37302d;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .52em;
+  text-indent: .52em;
+  line-height: 1;
 }
 
 .welcome-reference-slogan {
-  position: absolute;
-  z-index: 2;
-  left: 50%;
-  top: 48.35%;
-  margin: 0;
-  transform: translate(-50%, -50%);
-  white-space: nowrap;
-  color: rgba(70, 58, 54, 0.72);
+  margin: 8px 0 0;
+  color: rgba(69, 58, 54, .66);
   font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
-  font-size: clamp(11px, 3.2vw, 14px);
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: 0.24em;
-  text-shadow: 0 1px 10px rgba(255, 250, 247, 0.65);
+  font-size: 11.5px;
+  letter-spacing: .22em;
+  text-indent: .22em;
+  line-height: 1.2;
 }
 
-.welcome-reference-hit {
-  position: absolute;
-  z-index: 3;
-  left: 50%;
-  width: min(64%, 286px);
-  border: 0;
-  padding: 0;
-  transform: translateX(-50%);
-  background: transparent;
+.welcome-reference-divider {
+  width: 24px;
+  height: 1px;
+  margin: 21px 0 17px;
+  background: rgba(66, 55, 51, .55);
+}
+
+.welcome-reference-lead {
+  margin: 0;
+  color: rgba(54, 46, 43, .88);
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
+  font-size: clamp(16px, 4.6vw, 19px);
+  font-weight: 500;
+  letter-spacing: .12em;
+  line-height: 1.85;
+}
+
+.welcome-reference-keywords {
+  margin: 20px 0 0;
+  color: rgba(103, 80, 74, .72);
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
+  font-size: 12.5px;
+  letter-spacing: .16em;
+  line-height: 1.4;
+}
+
+.welcome-reference-actions {
+  width: min(100%, 288px);
+  margin-top: auto;
+  padding-top: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.welcome-reference-actions button {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 22px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: .04em;
   -webkit-tap-highlight-color: transparent;
 }
 
+.welcome-reference-actions button > span:first-child {
+  grid-column: 2;
+}
+
+.welcome-reference-actions button > span:last-child {
+  grid-column: 3;
+  justify-self: end;
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
+}
+
 .welcome-reference-primary {
-  top: 73.65%;
-  height: 7.4%;
-  min-height: 52px;
-  border-radius: 999px;
+  border: 0;
+  background: linear-gradient(90deg, #e68186, #d87174);
+  color: #fff;
+  box-shadow: 0 10px 28px rgba(194, 100, 105, .18);
 }
 
 .welcome-reference-secondary {
-  top: 82.2%;
-  height: 7.1%;
-  min-height: 50px;
-  border-radius: 999px;
+  border: 1px solid rgba(208, 105, 109, .74);
+  background: rgba(255, 250, 247, .46);
+  color: #cf6c6e;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22);
 }
 
-.welcome-reference-hit:focus-visible {
-  outline: 2px solid rgba(201, 125, 115, 0.7);
+.welcome-reference-actions button:active {
+  transform: translateY(1px);
+}
+
+.welcome-reference-actions button:focus-visible {
+  outline: 2px solid rgba(201, 125, 115, .76);
   outline-offset: 3px;
+}
+
+.welcome-reference-note {
+  position: absolute;
+  z-index: 3;
+  left: 20px;
+  bottom: max(24px, calc(env(safe-area-inset-bottom) + 10px));
+  margin: 0;
+  transform: rotate(-7deg);
+  color: rgba(187, 121, 111, .72);
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
+  font-size: 11px;
+  font-style: italic;
+  letter-spacing: .07em;
+  line-height: 1.55;
+  pointer-events: none;
+}
+
+@media (max-height: 760px) {
+  .welcome-reference-content {
+    padding-top: max(86px, calc(env(safe-area-inset-top) + 64px));
+  }
+
+  .welcome-reference-logo {
+    width: 122px;
+  }
+
+  .welcome-reference-content h1 {
+    margin-top: 12px;
+    font-size: 40px;
+  }
+
+  .welcome-reference-divider {
+    margin: 16px 0 13px;
+  }
+
+  .welcome-reference-keywords {
+    margin-top: 14px;
+  }
+
+  .welcome-reference-actions {
+    padding-top: 18px;
+  }
 }
 
 /* ==========================================================================
