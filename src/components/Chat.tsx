@@ -39,7 +39,6 @@ import { loadCurrentPosts } from '../lib/aiSpace'
 import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELINE_EN } from '../lib/spaceChatInject'
 import { commitPartialReply } from '../lib/partialReply'
 import { buildFutureAgendaBlock } from '../lib/futureAgenda'
-import { buildSelfTimelineBlock } from '../lib/selfTimeline'
 import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYourMoment } from '../lib/yourMoment'
 import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTaRuntimeFromAssistantText } from '../lib/taRuntime'
 import { buildIdentityContext } from '../lib/identityContext'
@@ -1011,6 +1010,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           (replyPreference ? '\n\n' + replyPreference : ''),
       },
     ]
+    // 核心 system 只留稳定身份/规则；Memory/Event/Runtime/Space 等都走现有 ContextBlock，
+    // 避免所有功能永久挤进不可裁剪的 core。
+    const contextBlocks: ContextBlock[] = []
 
     const contextText = base
       .slice(-6)
@@ -1022,7 +1024,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (memory.length > 0) {
       const memoryBlock = buildMemoryBlock(memory, lang)
       if (memoryBlock) {
-        apiMessages.push({ role: 'system', content: memoryBlock })
+        contextBlocks.push({ id: 'memory', content: memoryBlock, priority: 'memory' })
       }
       const now = Date.now()
       for (const m of memory) {
@@ -1033,13 +1035,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     // Event（E3 二处）：最近 5 条一起经历过的事注入（记忆注入之后、自我时间线之前）；
     // 只作背景信息，不让 TA 直接复述
-    const recentEvents = getRecentEvents(activeSessionId || undefined, 5)
+    const recentEvents = getRecentEvents(activeSessionId || undefined, 3)
     if (recentEvents.length > 0) {
       const eventsHeader = lang === 'en'
         ? 'Background info — things you two have been through together (do not repeat these lines as-is):\n'
         : '以上是背景信息，不要直接复述这些句子——你们一起经历过的事：\n'
-      apiMessages.push({
-        role: 'system',
+      contextBlocks.push({
+        id: 'events',
+        priority: 'event',
         content:
           eventsHeader +
           recentEvents.map((e) => {
@@ -1048,11 +1051,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           }).join('\n'),
       })
     }
-    // 自我时间线：TA 刚说过的话，让它记得自己做过什么，不依附忙碌机制（TASK-SELF-TIMELINE）
-    const timelineBlock = buildSelfTimelineBlock(base, Date.now(), lang)
-    if (timelineBlock) {
-      apiMessages.push({ role: 'system', content: timelineBlock })
-    }
+    // 最近 TA 原话已经完整存在 history + 相对时间标记里，不再重复塞一份 SelfTimeline system。
     // TA Runtime（TASK-TA-RUNTIME-V1）：Home 与 Chat 读同一份持久状态、同一 lazy getter。
     // 未到期取同一 activity；到期由 getter 推进，之后 Home 再读也是同一新状态。零额外 LLM。
     const runtime = getOrAdvanceTaRuntime(
@@ -1062,25 +1061,28 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     )
     const runtimeCtx = buildTaRuntimeContext(runtime, lang)
     if (runtimeCtx) {
-      apiMessages.push({ role: 'system', content: runtimeCtx })
+      contextBlocks.push({ id: 'runtime', content: runtimeCtx, priority: 'runtime' })
     }
     const identityCtx = buildIdentityContext(activeSessionId || undefined, lang)
     if (identityCtx) {
-      apiMessages.push({ role: 'system', content: identityCtx })
+      contextBlocks.push({ id: 'identity', content: identityCtx, priority: 'core' })
     }
-    const weeklyList = getWeeklyReviews(activeSessionId || undefined)
+    const journalRelevant = /周记|周报|周总结|这周|上周|本周|journal|weekly/i.test(text)
+    const weeklyList = journalRelevant ? getWeeklyReviews(activeSessionId || undefined) : []
     if (weeklyList.length > 0) {
       const w = weeklyList[0]
       // TASK-JOURNAL-INJECT：不只带标题，带最近一篇正文前 200 字摘要，被问"周记写的啥"有内容可答
       const excerpt = (w.content ?? '').trim().slice(0, 200)
       if (lang === 'en') {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'weekly-review',
+          priority: 'ambient',
           content: `Your most recent journal entry to them is "${w.title}" (${w.weekLabel}).${excerpt ? `\n${formatAttributedLine(excerpt, 'SELF', 'en')}` : ''}\nIf they bring it up, respond in the tone and content of this entry.`,
         })
       } else {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'weekly-review',
+          priority: 'ambient',
           content: `你最近写给对方的周记是「${w.title}」（${w.weekLabel}）。${excerpt ? `\n${formatAttributedLine(excerpt, 'SELF', 'zh')}` : ''}\n对方要是提起周记，就照这篇的语气和内容回应。`,
         })
       }
@@ -1090,61 +1092,68 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // Space 旧动态没有 identityMode stamp。为避免从沉浸切到自然 / AI 后把旧吃饭、出门、地点继续当成 SELF 事实，
     // v1 仅在沉浸档把 Space 历史注入 Chat；Space 页面本身仍照当前 identity policy 正常生成与展示。
     if (allowEmbodiedLife) {
-      const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 5, lang)
+      const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 2, lang)
       if (spaceBlock) {
-        apiMessages.push({ role: 'system', content: spaceBlock })
+        contextBlocks.push({ id: 'space-posts', content: spaceBlock, priority: 'ambient' })
       }
     }
     // 未来约定注入（因果链第二环 TASK-FUTURE-AGENDA）：TA 记得「约好还没做的事」，
     // 对方问起/到期临近时能自然接，不会一问三不知；没约定返回空串跳过，不占上下文。
     const agendaBlock = buildFutureAgendaBlock(loadChatTopics(activeSessionId || undefined), new Date(), lang)
     if (agendaBlock) {
-      apiMessages.push({ role: 'system', content: agendaBlock })
+      contextBlocks.push({ id: 'future-agenda', content: agendaBlock, priority: 'event' })
     }
-    // 生活基线会补身体 / 居住 / 饮食等现实锚，只能给沉浸档。
-    if (allowEmbodiedLife && !personaHasLifeAnchors(persona)) {
-      apiMessages.push({ role: 'system', content: lang === 'en' ? LIFE_BASELINE_EN : LIFE_BASELINE })
-    }
-    // 【你的时刻】分享钩子（TASK-YOUR-MOMENT）：低频给 TA 此刻的生活画面，让"自己有日子在过"落地成画面，
-    // 不每次回复都带——只在 对方最近消息冷淡/很短、或连续几条都不长、或对方主动问 TA 近况 时触发；
-    // 人设没生活锚时 buildYourMomentBlock 返回空串 → 跳过，不占上下文。不动聊天记录存储/上传/去重/忙碌逻辑。
+    // 生活基线 / 你的时刻只在这一轮真的需要 TA 分享自己近况时才进上下文，不再每轮常驻。
     const recentUserTexts = base
       .filter((m) => m.role === 'user')
       .slice(-3)
       .map((m) => m.content)
-    if (allowEmbodiedLife && shouldInjectYourMoment(recentUserTexts, lang)) {
+    const shouldShareMoment = allowEmbodiedLife && shouldInjectYourMoment(recentUserTexts, lang)
+    if (shouldShareMoment && !personaHasLifeAnchors(persona)) {
+      contextBlocks.push({
+        id: 'life-baseline',
+        content: lang === 'en' ? LIFE_BASELINE_EN : LIFE_BASELINE,
+        priority: 'ambient',
+      })
+    }
+    if (shouldShareMoment) {
       const momentBlock = buildYourMomentBlock(persona, new Date(), lang)
       if (momentBlock) {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'your-moment',
+          priority: 'ambient',
           content: `${lang === 'en' ? MOMENT_GUIDE_EN : MOMENT_GUIDE_ZH}\n${formatAttributedLine(momentBlock, 'SELF', lang)}`,
         })
       }
     }
     if (memInstr.isInstruction) {
       if (lang === 'en') {
-        apiMessages.push({
-          role: 'system',
-          content: `USER just asked you to remember: ${formatAttributedLine(memInstr.fact ?? text, 'USER', 'en')}. Write ONLY the fact USER explicitly stated — no added subject, explanation, inference, or extra conclusion. Keep it short and stable for long-term memory. At the end of your reply, output a separate line with [Memory: Topic] marker (topic word summarizes the category), write this fact as the content, and briefly confirm in your reply that you've noted it.`,
+        contextBlocks.push({
+          id: 'memory-explicit',
+          priority: 'core',
+          content: `USER just asked you to remember: ${formatAttributedLine(memInstr.fact ?? text, 'USER', 'en')}. Write only that stated fact, with no inference or added conclusion. End with one [Memory: Topic] line and briefly confirm it was noted.`,
         })
       } else {
-        apiMessages.push({
-          role: 'system',
-          content: `USER 刚要求你记住：${formatAttributedLine(memInstr.fact ?? text, 'USER', 'zh')}。只写 USER 明确说出的这句事实本身：不加主语、不解释、不推断、不补充没说的结论，保持简洁、稳定，适合长期记忆。请在回复末尾单独一行输出【记忆·主题】标记（主题词概括类别），内容写这条事实，并在回复里简短确认已经记下。`,
+        contextBlocks.push({
+          id: 'memory-explicit',
+          priority: 'core',
+          content: `USER 刚要求你记住：${formatAttributedLine(memInstr.fact ?? text, 'USER', 'zh')}。只写这条明确事实，不推断、不补充；回复末尾单独一行输出【记忆·主题】内容，并简短确认已记下。`,
         })
       }
     } else if (isRetort) {
       if (lang === 'en') {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'memory-retort',
+          priority: 'core',
           content:
-            'They just reminded you to note down something mentioned earlier. Extract facts worth long-term remembering from the recent conversation (schedule, preferences, health conditions, important experiences, etc.). Write only the facts they actually stated — no added subjects, no explanation, no inference, no extra conclusions. Keep them short and stable. Output a separate [Memory: Topic] line at the end of your reply, and confirm you\'ve noted it.',
+            'They reminded you to save something from the recent conversation. Extract only stable facts they actually stated; do not infer. End with one [Memory: Topic] line and confirm it was noted.',
         })
       } else {
-        apiMessages.push({
-          role: 'system',
+        contextBlocks.push({
+          id: 'memory-retort',
+          priority: 'core',
           content:
-            '用户刚才在提醒你记下之前提到的信息。从最近的对话里提取值得长期记住的事实（作息、喜好、身体情况、重要经历等）。每条只写用户实际说过的那些事实本身：不加主语、不解释、不推断、不补充，保持简洁稳定。在回复末尾单独一行输出【记忆·主题】标记，并确认已经记下。',
+            '用户在提醒你记下最近提过的信息。只提取用户实际说过、适合长期保留的稳定事实，不推断不补充；回复末尾输出一行【记忆·主题】内容，并确认已记下。',
         })
       }
     }
@@ -1170,7 +1179,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       activeSessionId && compactDone && compactSummary.trim()
         ? buildCompactedHistory(compactSummary, history, COMPACT_KEEP_RECENT)
         : history
-    const composed = composeContext(apiMessages, historyForModel, bridgeBlocks)
+    const composed = composeContext(apiMessages, historyForModel, [...contextBlocks, ...bridgeBlocks])
     setContextMeter({ used: composed.totalTokens, budget: composed.hardBudget, source: 'estimate' })
     if (composed.overBudget) {
       // 当前用户消息 / 核心 system 本身已经放不进 64k：不静默裁用户原话，也不把超限请求发给 provider。
