@@ -1,0 +1,21 @@
+name: P1C temporary CI
+on:
+  push:
+    branches:
+      - fix/p1c-context-prompt-controls
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: P1-C targeted tests
+        run: node scripts/test_chat_companion_controls.mjs && node scripts/test_context_composer.mjs && node scripts/test_identity_modes.mjs && node scripts/test_model_usage.mjs && node scripts/test_prompt_context_slim.mjs && node scripts/test_memory_instruction.mjs
+      - run: npm run build
+      - run: npm run lint
