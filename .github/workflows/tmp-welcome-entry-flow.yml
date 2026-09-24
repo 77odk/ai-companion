@@ -1,0 +1,115 @@
+name: temp welcome entry flow
+on:
+  push:
+    branches:
+      - feat/welcome-product-intro-3d
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Verify public education flow and authenticated bypass
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/eluvin-preview.log 2>&1 &
+          cat > welcome-entry-flow.mjs <<'EOF'
+          import { chromium } from 'playwright'
+          import assert from 'node:assert/strict'
+
+          const browser = await chromium.launch({ headless: true })
+
+          const mockApi = async (page) => {
+            await page.route('**/api/**', async (route) => {
+              const url = new URL(route.request().url())
+              const method = route.request().method()
+              if (url.pathname === '/api/site-stats') {
+                return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ uv: 1, pv: 1 }) })
+              }
+              if (url.pathname === '/api/sessions' && method === 'GET') {
+                return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: [] }) })
+              }
+              if (url.pathname === '/api/state/pull') {
+                return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ changes: [], cursor: 0, hasMore: false }) })
+              }
+              if (url.pathname === '/api/state/push') {
+                return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ results: [] }) })
+              }
+              return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+            })
+          }
+
+          // 1) Logged-out visitor: Welcome has one primary education path, no direct start.
+          {
+            const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+            await mockApi(page)
+            await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
+
+            const welcome = page.locator('.welcome-reference-page')
+            await welcome.waitFor({ state: 'visible' })
+            assert.equal(await page.getByRole('button', { name: /开始遇见 TA/ }).count(), 0, 'Welcome has no direct start CTA')
+            await page.getByRole('button', { name: /先了解一下/ }).waitFor({ state: 'visible' })
+            await page.getByRole('button', { name: /已有账号，登录/ }).waitFor({ state: 'visible' })
+
+            await page.getByRole('button', { name: /先了解一下/ }).click()
+            await page.locator('.product-intro-v1').waitFor({ state: 'visible' })
+            await page.locator('.intro-scene-final').scrollIntoViewIfNeeded()
+            await page.getByRole('button', { name: /开始遇见 TA/ }).waitFor({ state: 'visible' })
+            await page.screenshot({ path: 'welcome-product-education-390x844.png', fullPage: false })
+            await page.close()
+          }
+
+          // 2) Returning logged-out account holder: weak Login bypass goes to existing gate.
+          {
+            const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+            await mockApi(page)
+            await page.addInitScript(() => {
+              localStorage.setItem('eluvin_consent', JSON.stringify({ version: 'v1', consentedAt: new Date().toISOString() }))
+            })
+            await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
+            await page.getByRole('button', { name: /已有账号，登录/ }).click()
+            await page.locator('.login-gate').waitFor({ state: 'visible' })
+            await page.screenshot({ path: 'welcome-returning-login-390x844.png', fullPage: false })
+            await page.close()
+          }
+
+          // 3) Authenticated user: refresh bypasses Welcome/ProductIntro and restores via cloud session flow.
+          {
+            const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+            await mockApi(page)
+            await page.addInitScript(() => {
+              localStorage.setItem('ai_companion_account', JSON.stringify({
+                token: 'qa-token',
+                account: 'qa@example.com',
+                consentVersion: 'v1',
+              }))
+              localStorage.setItem('eluvin_consent', JSON.stringify({ version: 'v1', consentedAt: new Date().toISOString() }))
+            })
+            await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
+            await page.waitForTimeout(350)
+            assert.equal(await page.locator('.welcome-reference-page').count(), 0, 'authenticated entry skips Welcome')
+            assert.equal(await page.locator('.product-intro-v1').count(), 0, 'authenticated entry skips ProductIntro')
+            await page.screenshot({ path: 'authenticated-bypass-390x844.png', fullPage: false })
+            await page.close()
+          }
+
+          await browser.close()
+          EOF
+          node welcome-entry-flow.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: welcome-entry-flow-390x844
+          path: |
+            welcome-product-education-390x844.png
+            welcome-returning-login-390x844.png
+            authenticated-bypass-390x844.png
+          if-no-files-found: error
