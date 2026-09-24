@@ -1647,3 +1647,434 @@
     transform: none;
   }
 }
+
+
+/* ---------- V1.2 · palette B with paper white ---------- */
+/*
+  B 方案：
+  纸面白（替换原 B 奶白纸） / 暖米杏 / 柔和粉橘 / 珊瑚粉点缀 / 柔玫瑰 / 玫瑰棕阴影
+  仅调整 ProductIntro 色彩，不改结构、文案与 3D 几何。
+*/
+.product-intro-v1 {
+  --intro-paper: #fff3ee;
+  --intro-paper-2: #ffe9d9;
+  --intro-paper-3: #ffd1b7;
+  --intro-peach: #ffa588;
+  --intro-coral: #f78b8b;
+  --intro-coral-deep: #d1746b;
+  --intro-ink: #6f4d4a;
+  --intro-muted: #987775;
+  --intro-cream: #fff3ee;
+  --intro-night: #e5b7ae;
+  --intro-night-2: #d9938d;
+  --intro-amber: #ffd1b7;
+  background: #fff3ee;
+}
+
+/* 01 · 序章：纸面白为主，只让粉橘像光一样进入，不铺满整屏。 */
+.intro-scene-hero {
+  background:
+    radial-gradient(circle at 86% 12%, rgba(255, 209, 183, .72), transparent 31%),
+    radial-gradient(circle at 8% 24%, rgba(247, 139, 139, .20), transparent 33%),
+    radial-gradient(circle at 74% 78%, rgba(255, 165, 136, .22), transparent 35%),
+    linear-gradient(180deg, #fff3ee 0%, #fff6f1 48%, #ffe9d9 100%);
+  color: #76514f;
+}
+
+.intro-aurora-a {
+  background: rgba(255, 209, 183, .62);
+}
+
+.intro-aurora-b {
+  background: rgba(247, 139, 139, .18);
+}
+
+.intro-grain {
+  opacity: .045;
+  background-image:
+    linear-gradient(rgba(116, 76, 73, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(116, 76, 73, .025) 1px, transparent 1px);
+}
+
+.intro-hero-copy h1 {
+  color: #855b59;
+  -webkit-text-stroke: .22px rgba(119, 77, 75, .08);
+  text-shadow:
+    0 1px 0 #f7cbc4,
+    0 2px 0 #eeb4ad,
+    0 3px 0 #d99089,
+    0 12px 26px rgba(160, 102, 99, .16);
+}
+
+.intro-body-on-dark {
+  color: rgba(112, 78, 76, .78);
+}
+
+.intro-kicker-light {
+  color: rgba(129, 82, 80, .68);
+}
+
+.intro-brand-line {
+  color: rgba(129, 82, 80, .56);
+  text-shadow: none;
+}
+
+.intro-book-ground {
+  background: rgba(183, 116, 106, .16);
+  filter: blur(17px);
+}
+
+.intro-book-back-cover {
+  background: linear-gradient(135deg, #f19a90 0%, #df827c 58%, #c86f6a 100%);
+  box-shadow:
+    0 28px 48px rgba(181, 108, 101, .20),
+    inset 0 1px 0 rgba(255,255,255,.32),
+    inset 0 -7px 16px rgba(165, 88, 83, .10);
+}
+
+.intro-book-spine {
+  background: linear-gradient(90deg, #cf766f, #eda099 46%, #d77f78);
+}
+
+.intro-book-page-block {
+  background:
+    repeating-linear-gradient(
+      180deg,
+      #fff3ee 0,
+      #fff3ee 3px,
+      #efd8cf 4px
+    );
+}
+
+.intro-book-page-block span {
+  background: #ffe9d9;
+  border-right-color: rgba(209, 116, 107, .18);
+}
+
+.intro-book-front-cover {
+  border-color: rgba(255,255,255,.82);
+  background:
+    radial-gradient(circle at 78% 12%, rgba(255,255,255,.82), transparent 30%),
+    radial-gradient(circle at 12% 74%, rgba(255, 209, 183, .30), transparent 34%),
+    linear-gradient(145deg, #fff7f3 0%, #fff3ee 52%, #ffe9d9 100%);
+  box-shadow:
+    0 26px 46px rgba(183, 108, 101, .17),
+    inset 12px 0 24px rgba(247, 139, 139, .055),
+    inset -12px -10px 26px rgba(209, 116, 107, .055);
+}
+
+.intro-book-front-cover::before {
+  border-color: rgba(209, 116, 107, .14);
+}
+
+.intro-book-front-cover::after {
+  background: linear-gradient(90deg, rgba(209,116,107,.08), rgba(255,255,255,.36), transparent);
+}
+
+.intro-cover-rule {
+  background: linear-gradient(90deg, rgba(209,116,107,.10), rgba(209,116,107,.28), transparent);
+}
+
+.intro-book-front-cover strong {
+  color: #d1746b;
+  text-shadow:
+    0 1px 0 #f5c6bf,
+    0 2px 0 #e9aaa3,
+    0 7px 16px rgba(172, 104, 98, .13);
+}
+
+.intro-book-front-cover small,
+.intro-book-front-cover em {
+  color: rgba(128, 82, 79, .52);
+}
+
+/* 02 · 记得 */
+.intro-scene-memory {
+  background:
+    radial-gradient(circle at 82% 12%, rgba(255, 209, 183, .56), transparent 31%),
+    radial-gradient(circle at 8% 76%, rgba(247, 139, 139, .12), transparent 34%),
+    linear-gradient(180deg, #fff3ee 0%, #fff8f4 46%, #ffe9d9 100%);
+}
+
+.intro-paper-light {
+  background: rgba(255, 209, 183, .48);
+}
+
+.intro-memory-shadow {
+  background: rgba(187, 115, 107, .12);
+}
+
+.intro-memory-left-page,
+.intro-memory-right-page {
+  border-color: rgba(209, 116, 107, .12);
+  background:
+    linear-gradient(90deg, rgba(247, 139, 139, .035), transparent 18%),
+    #fff3ee;
+  color: #6f4d4a;
+  box-shadow: 0 20px 36px rgba(177, 105, 98, .11);
+}
+
+.intro-memory-gutter {
+  background: linear-gradient(90deg, transparent, rgba(176, 105, 99, .15), transparent);
+}
+
+.intro-page-number,
+.intro-date-mark {
+  color: rgba(128, 82, 79, .42);
+}
+
+.intro-hand-line.faded,
+.intro-memory-right-page p {
+  color: rgba(111, 77, 74, .58);
+}
+
+.intro-writing-line {
+  background: rgba(209, 116, 107, .14);
+}
+
+.intro-page-curl {
+  background:
+    radial-gradient(circle at 100% 100%, rgba(188, 116, 108, .12), transparent 48%),
+    linear-gradient(135deg, transparent 49%, #ffd1b7 50%, #fff3ee 73%);
+  box-shadow: -12px -10px 22px rgba(181, 108, 101, .09);
+}
+
+/* 03 · 经过 */
+.intro-scene-time {
+  background:
+    radial-gradient(circle at 86% 24%, rgba(247, 139, 139, .16), transparent 32%),
+    radial-gradient(circle at 12% 80%, rgba(255, 209, 183, .54), transparent 35%),
+    linear-gradient(180deg, #fff6f1 0%, #ffe9d9 56%, #f6d8ce 100%);
+}
+
+.intro-time-haze {
+  background: rgba(247, 139, 139, .10);
+}
+
+.intro-time-page {
+  border-color: rgba(209, 116, 107, .12);
+  background:
+    linear-gradient(90deg, rgba(209, 116, 107, .045), transparent 16%),
+    #fff3ee;
+  box-shadow: 0 26px 46px rgba(177, 105, 98, .12);
+}
+
+.intro-time-page-edge {
+  background: repeating-linear-gradient(180deg, #ffe9d9 0 2px, #e8c6bd 3px);
+}
+
+.intro-time-kicker {
+  color: rgba(128, 82, 79, .44);
+}
+
+.intro-time-page strong {
+  color: #b96461;
+  text-shadow:
+    0 2px 0 #edb2ab,
+    0 8px 18px rgba(166, 96, 91, .12);
+}
+
+.intro-time-page small,
+.intro-time-node {
+  color: rgba(111, 77, 74, .62);
+}
+
+.intro-time-axis {
+  background: linear-gradient(180deg, rgba(209,116,107,.34), rgba(209,116,107,.08));
+}
+
+.intro-time-node i {
+  border-color: rgba(209,116,107,.34);
+  background: #fff3ee;
+}
+
+.intro-time-photo {
+  border-color: rgba(255, 243, 238, .94);
+  background: linear-gradient(150deg, #f3b6aa, #ffd1b7 56%, #d9938d);
+  box-shadow: 0 13px 20px rgba(177, 105, 98, .11);
+}
+
+.intro-time-loose-page {
+  border-color: rgba(209,116,107,.10);
+  background: #ffe9d9;
+  box-shadow: 0 18px 32px rgba(177, 105, 98, .08);
+}
+
+/* 04 · 内核：不切深色场，保持 B 方案的柔和层次。 */
+.intro-scene-engine {
+  background:
+    radial-gradient(circle at 50% 52%, rgba(255, 209, 183, .48), transparent 29%),
+    radial-gradient(circle at 12% 18%, rgba(247, 139, 139, .14), transparent 31%),
+    radial-gradient(circle at 88% 78%, rgba(255, 165, 136, .14), transparent 31%),
+    linear-gradient(180deg, #f8e4dc 0%, #f2d5cd 48%, #e5b7ae 100%);
+  color: #75514f;
+}
+
+.intro-engine-copy h2 {
+  color: #855b59;
+  -webkit-text-stroke: .22px rgba(119, 77, 75, .08);
+  text-shadow:
+    0 1px 0 #efc2bc,
+    0 2px 0 #e4aaa4,
+    0 3px 0 #cd8782,
+    0 12px 26px rgba(157, 96, 92, .14);
+}
+
+.intro-engine-glow {
+  background: rgba(255, 209, 183, .38);
+}
+
+.intro-engine-layer {
+  border-color: rgba(255,255,255,.56);
+  background:
+    linear-gradient(120deg, rgba(255,255,255,.46), transparent 30%),
+    linear-gradient(180deg, rgba(255, 243, 238, .90), rgba(255, 209, 183, .64));
+  box-shadow:
+    0 24px 42px rgba(168, 99, 94, .12),
+    inset 0 1px 0 rgba(255,255,255,.72);
+}
+
+.intro-engine-layer::after {
+  background: linear-gradient(90deg, rgba(209,116,107,.10), rgba(209,116,107,.26), transparent);
+}
+
+.intro-engine-layer small {
+  color: rgba(111, 77, 74, .48);
+}
+
+.intro-engine-layer strong {
+  color: #6f4d4a;
+}
+
+.intro-engine-layer.layer-eluvin {
+  border-color: rgba(255,255,255,.72);
+  background:
+    radial-gradient(circle at 12% 50%, rgba(255,255,255,.72), transparent 24%),
+    linear-gradient(180deg, #fff3ee, #ffe9d9);
+}
+
+/* 05 · 门槛：最干净的纸面白。 */
+.intro-scene-threshold {
+  background:
+    radial-gradient(circle at 90% 8%, rgba(255, 209, 183, .32), transparent 30%),
+    linear-gradient(180deg, #fff3ee 0%, #fff8f4 50%, #fff3ee 100%);
+}
+
+.intro-threshold-sheet {
+  border-color: rgba(209, 116, 107, .11);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.70), transparent 14%),
+    #fff3ee;
+  box-shadow:
+    0 24px 44px rgba(168, 99, 94, .08),
+    8px 10px 0 #ffe9d9,
+    14px 16px 0 #ffd1b7;
+}
+
+.intro-threshold-sheet::before,
+.intro-sheet-rule,
+.intro-sheet-row {
+  border-color: rgba(209, 116, 107, .10);
+}
+
+.intro-threshold-sheet::before,
+.intro-sheet-rule {
+  background: rgba(209, 116, 107, .11);
+}
+
+.intro-sheet-label {
+  color: rgba(111, 77, 74, .42);
+}
+
+.intro-sheet-row b {
+  color: #d1746b;
+}
+
+.intro-sheet-row span,
+.intro-threshold-copy b,
+.intro-threshold-ending {
+  color: #6f4d4a;
+}
+
+.intro-sheet-signature {
+  color: rgba(111, 77, 74, .28);
+}
+
+.intro-threshold-copy p {
+  color: #8a6b68;
+}
+
+.intro-threshold-ending {
+  border-top-color: rgba(209, 116, 107, .11);
+}
+
+/* 06 · 终章：回到柔和粉橘光，不铺高饱和底色。 */
+.intro-scene-final {
+  background:
+    radial-gradient(circle at 50% 24%, rgba(255, 209, 183, .62), transparent 29%),
+    radial-gradient(circle at 10% 78%, rgba(247, 139, 139, .16), transparent 34%),
+    radial-gradient(circle at 88% 80%, rgba(255, 165, 136, .14), transparent 31%),
+    linear-gradient(180deg, #fff3ee 0%, #f8e2da 56%, #e5b7ae 100%);
+  color: #75514f;
+}
+
+.intro-aurora-final {
+  background: rgba(255, 209, 183, .48);
+}
+
+.intro-final-book-shadow {
+  background: rgba(171, 101, 95, .15);
+}
+
+.intro-final-book-pages {
+  background: repeating-linear-gradient(180deg, #fff3ee 0 3px, #e8cec5 4px);
+}
+
+.intro-final-book-cover {
+  border-color: rgba(255,255,255,.78);
+  background:
+    radial-gradient(circle at 74% 12%, rgba(255,255,255,.80), transparent 28%),
+    linear-gradient(145deg, #fff7f3 0%, #fff3ee 55%, #ffe9d9 100%);
+  box-shadow:
+    0 26px 42px rgba(168, 99, 94, .14),
+    inset 10px 0 20px rgba(209, 116, 107, .055);
+}
+
+.intro-final-book-cover::before {
+  border-color: rgba(209, 116, 107, .14);
+}
+
+.intro-final-book-cover strong {
+  color: #d1746b;
+  text-shadow:
+    0 1px 0 #f5c6bf,
+    0 2px 0 #e9aaa3,
+    0 7px 15px rgba(172, 104, 98, .12);
+}
+
+.intro-final-book-cover small {
+  color: rgba(128, 82, 79, .48);
+}
+
+.intro-final-copy h2 {
+  color: #855b59;
+  -webkit-text-stroke: .22px rgba(119, 77, 75, .08);
+  text-shadow:
+    0 1px 0 #efc2bc,
+    0 2px 0 #e4aaa4,
+    0 3px 0 #cd8782,
+    0 12px 26px rgba(157, 96, 92, .14);
+}
+
+.intro-final-copy .intro-body {
+  color: rgba(112, 78, 76, .76);
+}
+
+.intro-start {
+  border-color: rgba(209, 116, 107, .16);
+  background: rgba(255, 243, 238, .94);
+  color: #a75f5b;
+  box-shadow:
+    0 18px 34px rgba(168, 99, 94, .12),
+    inset 0 1px 0 rgba(255,255,255,.90);
+}
