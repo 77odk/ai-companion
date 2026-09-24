@@ -8152,3 +8152,391 @@ html, body {
     padding-right: 14px;
   }
 }
+
+
+/* ========== RolePicker editorial UI V2 · CSS-only, no decorative assets ========== */
+
+/* 一级：从卡片选择器改成“两个开篇方式”。只靠排版、编号和细线。 */
+.role-choice-page {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--color-primary) 4%, var(--color-bg)) 0%,
+      var(--color-bg) 34%,
+      var(--color-bg) 100%);
+}
+
+.role-choice-page .role-inner {
+  max-width: 390px;
+}
+
+.role-choice-page .role-choice-heading {
+  margin: clamp(54px, 10vh, 86px) 0 38px;
+  text-align: left;
+}
+
+.role-choice-page .role-choice-eyebrow {
+  margin-bottom: 10px;
+  font-size: 10px;
+  letter-spacing: .24em;
+  text-transform: uppercase;
+}
+
+.role-choice-page .role-title {
+  text-align: left;
+  font-size: clamp(28px, 8vw, 34px);
+  font-weight: 650;
+  letter-spacing: -.035em;
+  line-height: 1.18;
+}
+
+.role-choice-page .role-sub {
+  max-width: 305px;
+  margin: 12px 0 0;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.role-choice-page .role-choice-list {
+  gap: 0;
+  border-top: 1px solid color-mix(in srgb, var(--color-text) 16%, transparent);
+}
+
+.role-choice-page .role-choice-card {
+  position: relative;
+  min-height: 0;
+  padding: 34px 0 31px 52px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 16%, transparent);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  gap: 16px;
+}
+
+.role-choice-page .role-choice-card:hover {
+  border-color: color-mix(in srgb, var(--color-text) 20%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 3%, transparent);
+  box-shadow: none;
+}
+
+.role-choice-page .role-choice-card:active {
+  transform: none;
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+}
+
+.role-choice-page .role-choice-card::before {
+  position: absolute;
+  left: 2px;
+  top: 34px;
+  color: var(--color-primary-deep);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  opacity: .86;
+}
+
+.role-choice-page .role-choice-card:nth-child(1)::before { content: "01"; }
+.role-choice-page .role-choice-card:nth-child(2)::before { content: "02"; }
+
+.role-choice-page .role-choice-card-kicker {
+  margin-bottom: 9px;
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: .08em;
+  color: var(--color-text-muted);
+}
+
+.role-choice-page .role-card-name {
+  font-size: 23px;
+  font-weight: 620;
+  letter-spacing: -.02em;
+}
+
+.role-choice-page .role-card-tagline {
+  max-width: 260px;
+  margin-top: 9px;
+  font-size: 12.5px;
+  line-height: 1.72;
+}
+
+.role-choice-page .role-choice-chevron {
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+}
+
+.role-choice-page .role-choice-chevron svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.35;
+}
+
+.role-choice-page .role-choice-note {
+  display: none;
+}
+
+.role-choice-page .role-choice-login {
+  margin-top: auto;
+  padding-top: 34px;
+}
+
+/* 自定义：把“设置表单”变成一页人物草稿。 */
+.role-modal-overlay .role-modal {
+  border-radius: 24px 24px 0 0;
+}
+
+.role-modal .role-modal-header {
+  border-bottom: 0;
+  padding-bottom: 4px;
+}
+
+.role-modal .role-modal-title {
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -.02em;
+}
+
+.role-modal .role-modal-body {
+  padding-top: 8px;
+}
+
+.role-modal .field {
+  gap: 7px;
+  margin-bottom: 22px;
+}
+
+.role-modal .field > label {
+  font-size: 13px;
+  font-weight: 620;
+  letter-spacing: .01em;
+}
+
+.role-modal .field > .input:not(.persona-input) {
+  height: 44px;
+  padding: 9px 1px 8px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 20%, transparent);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.role-modal .field > .input:not(.persona-input):focus {
+  border-bottom-color: color-mix(in srgb, var(--color-primary-deep) 68%, transparent);
+  box-shadow: none;
+}
+
+.role-modal .role-personality-label {
+  margin-top: 5px;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -.02em;
+}
+
+.role-modal #setup-personality.persona-input {
+  min-height: 132px;
+  padding: 15px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-text) 14%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-primary) 3%, var(--color-bg));
+  box-shadow: none;
+  line-height: 1.7;
+}
+
+.role-modal #setup-personality.persona-input:focus {
+  border-color: color-mix(in srgb, var(--color-primary-deep) 48%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 7%, transparent);
+}
+
+.role-template-entry {
+  margin-top: 2px;
+  padding: 10px 1px 8px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+  border-radius: 0;
+  background: transparent;
+}
+
+.role-template-entry-title {
+  font-size: 12px;
+  font-weight: 560;
+  color: var(--color-primary-deep);
+}
+
+.role-template-entry-desc {
+  margin-top: 2px;
+  font-size: 10.5px;
+}
+
+.role-template-entry-action {
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.role-form-section-title {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 30px 0 19px;
+  color: var(--color-text);
+}
+
+.role-form-section-title::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: color-mix(in srgb, var(--color-text) 13%, transparent);
+}
+
+.role-form-section-title span {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+
+.role-modal #setup-background.persona-input {
+  min-height: 84px;
+  padding: 12px 1px 10px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 18%, transparent);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* 模板库：目录，不是卡片墙。 */
+.role-template-sheet {
+  padding-left: 20px;
+  padding-right: 20px;
+  border-radius: 24px 24px 0 0;
+}
+
+.role-template-sheet-header {
+  min-height: 62px;
+  padding-bottom: 13px;
+}
+
+.role-template-heading-copy h3,
+.role-template-sheet-header h3 {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -.02em;
+}
+
+.role-template-heading-copy p {
+  margin-top: 5px;
+  font-size: 11.5px;
+}
+
+.role-template-list {
+  counter-reset: role-template;
+  padding: 0;
+}
+
+.role-template-row {
+  position: relative;
+  counter-increment: role-template;
+  min-height: 64px;
+  padding: 14px 4px 14px 47px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 13%, transparent);
+  border-radius: 0;
+  background: transparent;
+}
+
+.role-template-row::before {
+  content: counter(role-template, decimal-leading-zero);
+  position: absolute;
+  left: 2px;
+  top: 16px;
+  width: 30px;
+  color: var(--color-primary-deep);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  opacity: .82;
+}
+
+.role-template-row.featured {
+  margin: 0;
+  padding: 17px 4px 17px 47px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 13%, transparent);
+  border-radius: 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-primary) 8%, transparent),
+    transparent 72%
+  );
+}
+
+.role-template-row-title {
+  font-size: 14.5px;
+  font-weight: 620;
+}
+
+.role-template-row-tagline {
+  margin-top: 1px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.role-template-row-chevron {
+  display: none;
+}
+
+.role-template-badge {
+  min-height: 17px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 9px;
+}
+
+.role-template-preview {
+  padding-top: 14px;
+}
+
+.role-template-preview-title h4 {
+  font-size: 26px;
+  font-weight: 640;
+  letter-spacing: -.025em;
+}
+
+.role-template-preview-tagline {
+  margin-top: 8px;
+  margin-bottom: 22px;
+}
+
+.role-template-preview-persona {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1.88;
+}
+
+.role-template-preserve-note {
+  margin-top: 22px;
+  padding-top: 13px;
+  border-top: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
+@media (max-height: 720px) {
+  .role-choice-page .role-choice-heading {
+    margin-top: 22px;
+    margin-bottom: 24px;
+  }
+
+  .role-choice-page .role-choice-card {
+    padding-top: 24px;
+    padding-bottom: 23px;
+  }
+
+  .role-choice-page .role-choice-card::before {
+    top: 24px;
+  }
+}
