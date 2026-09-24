@@ -103,9 +103,9 @@ jobs:
           await registerButton.scrollIntoViewIfNeeded()
           assert.ok(await registerButton.isVisible(), 'primary button remains reachable in keyboard-height viewport')
 
+          console.log(JSON.stringify({ overflow, pageErrors, consoleErrors }))
           assert.equal(pageErrors.length, 0, '0 pageerror')
           assert.equal(consoleErrors.length, 0, '0 console error excluding Cloudflare/beacon noise')
-          console.log(JSON.stringify({ overflow, pageErrors, consoleErrors }))
           await browser.close()
           EOF
           node login-page-validation.mjs
