@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { applyRoleTemplatePersonality, ROLE_TEMPLATES, type RoleTemplate } from '../lib/personaTemplates'
+import { applyRoleTemplatePersonality, ROLE_TEMPLATES, type RoleTemplate, type RoleTemplateCategory } from '../lib/personaTemplates'
 import {
   buildCustomPersona,
   canSavePersonaLength,
@@ -77,6 +77,14 @@ const NICKNAME_PLACEHOLDER = '给 TA 起个名字'
 const PERSONALITY_PLACEHOLDER = '例如：慢热、有自己的想法，说话不多，但熟悉以后会变得很亲近'
 const BACKGROUND_PLACEHOLDER = '你们是什么关系、怎样认识，或者 TA 有哪些重要经历'
 const OPENING_PLACEHOLDER = 'TA 第一次和你见面时，会说什么？'
+
+const TEMPLATE_FILTERS: Array<{ id: 'all' | RoleTemplateCategory; label: string }> = [
+  { id: 'all', label: '全部' },
+  { id: 'lover', label: '恋人' },
+  { id: 'friend', label: '朋友' },
+  { id: 'companion', label: '陪伴' },
+  { id: 'personality', label: '个性' },
+]
 
 export default function RolePicker({
   mode,
@@ -323,6 +331,7 @@ function RoleSetupModal({
   const [previewTemplate, setPreviewTemplate] = useState<RoleTemplate | null>(null)
   const [pendingTemplate, setPendingTemplate] = useState<RoleTemplate | null>(null)
   const [appliedTemplateName, setAppliedTemplateName] = useState('')
+  const [templateCategory, setTemplateCategory] = useState<'all' | RoleTemplateCategory>('all')
 
   const setField = <K extends keyof RoleSetupState>(key: K, value: RoleSetupState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -338,6 +347,9 @@ function RoleSetupModal({
   const valid = isNatural
     ? true
     : form.nickname.trim() !== '' && form.personality.trim() !== '' && personaLengthValid
+  const visibleTemplates = templateCategory === 'all'
+    ? ROLE_TEMPLATES
+    : ROLE_TEMPLATES.filter((template) => template.category === templateCategory)
 
   const applyTemplate = (template: RoleTemplate) => {
     // 回归红线：模板只允许写 personality。其余 6 个字段完全不经过这里。
@@ -381,38 +393,47 @@ function RoleSetupModal({
         </div>
 
         <div className="role-modal-body">
-          <div className="field">
-            <label>TA头像 <span className="optional-mark">选填</span></label>
-            <AvatarPicker value={form.avatar} onChange={(avatar) => setField('avatar', avatar)} kind="ai" />
-          </div>
+          <p className="role-modal-intro">
+            {isNatural
+              ? '不用提前决定 TA 是什么样的人，先留下一点认识的线索。'
+              : '先写下你已经知道的部分，其余的可以以后慢慢补。'}
+          </p>
 
-          <div className="field">
-            <label htmlFor="setup-nickname">
-              TA姓名 <span className={isNatural ? 'optional-mark' : 'required-mark'}>{isNatural ? '选填' : '必填'}</span>
-            </label>
-            <input
-              id="setup-nickname"
-              className="input"
-              placeholder={NICKNAME_PLACEHOLDER}
-              value={form.nickname}
-              onChange={(e) => setField('nickname', e.target.value)}
-              maxLength={30}
-              autoComplete="off"
-            />
-            {isNatural && <p className="hint role-modal-hint">不填也可以，进入聊天后会先用「TA」称呼。</p>}
-          </div>
+          <div className="role-identity-grid">
+            <div className="role-avatar-field">
+              <AvatarPicker value={form.avatar} onChange={(avatar) => setField('avatar', avatar)} kind="ai" />
+            </div>
 
-          <div className="field">
-            <label htmlFor="setup-remark">TA备注 <span className="optional-mark">选填</span></label>
-            <input
-              id="setup-remark"
-              className="input"
-              placeholder="比如：TA 喜欢怎么被你称呼、你们之间的小约定"
-              value={form.remark}
-              onChange={(e) => setField('remark', e.target.value)}
-              maxLength={60}
-              autoComplete="off"
-            />
+            <div className="role-identity-fields">
+              <div className="field">
+                <label htmlFor="setup-nickname">
+                  TA姓名 <span className={isNatural ? 'optional-mark' : 'required-mark'}>{isNatural ? '选填' : '必填'}</span>
+                </label>
+                <input
+                  id="setup-nickname"
+                  className="input"
+                  placeholder={NICKNAME_PLACEHOLDER}
+                  value={form.nickname}
+                  onChange={(e) => setField('nickname', e.target.value)}
+                  maxLength={30}
+                  autoComplete="off"
+                />
+                {isNatural && <p className="hint role-modal-hint">不填也可以，进入聊天后会先用「TA」称呼。</p>}
+              </div>
+
+              <div className="field">
+                <label htmlFor="setup-remark">TA备注 <span className="optional-mark">选填</span></label>
+                <input
+                  id="setup-remark"
+                  className="input"
+                  placeholder="比如只有你会这样叫 TA"
+                  value={form.remark}
+                  onChange={(e) => setField('remark', e.target.value)}
+                  maxLength={60}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="field">
@@ -547,7 +568,19 @@ function RoleSetupModal({
                     {previewTemplate.featured && <span className="role-template-badge">推荐</span>}
                   </div>
                   <p className="role-template-preview-tagline">{previewTemplate.tagline}</p>
-                  <p className="role-template-preview-persona">{previewTemplate.persona}</p>
+
+                  <section className="role-template-preview-section">
+                    <h5>人设描述</h5>
+                    <p className="role-template-preview-persona">{previewTemplate.persona}</p>
+                  </section>
+
+                  <section className="role-template-preview-section">
+                    <h5>适合的场景</h5>
+                    <div className="role-template-tag-list">
+                      {previewTemplate.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                    </div>
+                  </section>
+
                   <p className="role-template-preserve-note">使用后只替换「性格特质」，姓名、头像、备注、性别、关系背景和开场白都不会改变。</p>
                 </div>
 
@@ -562,16 +595,31 @@ function RoleSetupModal({
                 <div className="role-template-sheet-header">
                   <span className="role-template-header-spacer" aria-hidden="true" />
                   <div className="role-template-heading-copy">
-                    <h3>人设模板</h3>
-                    <p>先选一个起点，使用后仍然可以继续修改。</p>
+                    <h3>从一个起点开始</h3>
+                    <p>这些只是起点，之后都可以继续修改。</p>
                   </div>
                   <button type="button" className="role-template-close" onClick={() => setTemplateLibraryOpen(false)} aria-label="关闭模板库">
                     ×
                   </button>
                 </div>
 
+                <div className="role-template-filters" role="tablist" aria-label="模板分类">
+                  {TEMPLATE_FILTERS.map((filter) => (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={templateCategory === filter.id}
+                      className={`role-template-filter${templateCategory === filter.id ? ' active' : ''}`}
+                      onClick={() => setTemplateCategory(filter.id)}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="role-template-list">
-                  {ROLE_TEMPLATES.map((template) => (
+                  {visibleTemplates.map((template) => (
                     <button
                       key={template.id}
                       type="button"
