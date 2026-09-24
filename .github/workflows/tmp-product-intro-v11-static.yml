@@ -1,0 +1,103 @@
+name: temp product intro v1.1 static
+on:
+  push:
+    branches:
+      - feat/welcome-product-intro-3d
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Capture V1.1 six scenes at 390x844
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/eluvin-preview.log 2>&1 &
+          cat > product-intro-v11-static.mjs <<'EOF'
+          import { chromium } from 'playwright'
+          import assert from 'node:assert/strict'
+
+          const browser = await chromium.launch({ headless: true })
+          const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
+          const pageErrors = []
+          const consoleErrors = []
+          page.on('pageerror', (err) => pageErrors.push(String(err)))
+          page.on('console', (msg) => {
+            if (msg.type() !== 'error') return
+            const t = msg.text()
+            if (/beacon|cloudflare|favicon/i.test(t)) return
+            consoleErrors.push(t)
+          })
+          await page.route('**/api/site-stats', async (route) => {
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ uv: 1, pv: 1 }) })
+          })
+
+          await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
+          await page.getByRole('button', { name: /先了解一下/ }).click()
+          await page.locator('.product-intro-v1').waitFor({ state: 'visible' })
+
+          const scenes = [
+            ['.intro-scene-hero', '01-hero-icon-palette.png'],
+            ['.intro-scene-memory', '02-memory-icon-palette.png'],
+            ['.intro-scene-time', '03-time-icon-palette.png'],
+            ['.intro-scene-engine', '04-engine-icon-palette.png'],
+            ['.intro-scene-threshold', '05-threshold-icon-palette.png'],
+            ['.intro-scene-final', '06-final-icon-palette.png'],
+          ]
+
+          const main = page.locator('.product-intro-v1 main')
+          for (const [selector, filename] of scenes) {
+            const scene = page.locator(selector)
+            await scene.scrollIntoViewIfNeeded()
+            await page.waitForTimeout(120)
+            await page.screenshot({ path: filename, fullPage: false })
+            const box = await scene.boundingBox()
+            assert.ok(box && box.width > 350, selector + ' is visible')
+          }
+
+          const title = page.locator('.intro-scene-hero h1')
+          const titleStyle = await title.evaluate((el) => {
+            const s = getComputedStyle(el)
+            return {
+              family: s.fontFamily,
+              transform: s.transform,
+              textShadow: s.textShadow,
+              color: s.color,
+            }
+          })
+          assert.match(titleStyle.family, /Kaiti SC|STKaiti|KaiTi|Songti SC|STSong|serif/)
+          assert.notEqual(titleStyle.transform, 'none', 'hero title has spatial transform')
+          assert.notEqual(titleStyle.textShadow, 'none', 'hero title has depth shadow')
+
+          const rootStyle = await page.locator('.product-intro-v1').evaluate((el) => getComputedStyle(el))
+          const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+          assert.ok(overflow <= 0, 'no horizontal overflow')
+          assert.equal(pageErrors.length, 0, '0 pageerror')
+          assert.equal(consoleErrors.length, 0, '0 unexpected console error')
+          console.log(JSON.stringify({ titleStyle, overflow }))
+
+          await browser.close()
+          EOF
+          node product-intro-v11-static.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: product-intro-v11-static-390x844
+          path: |
+            01-hero-icon-palette.png
+            02-memory-icon-palette.png
+            03-time-icon-palette.png
+            04-engine-icon-palette.png
+            05-threshold-icon-palette.png
+            06-final-icon-palette.png
+          if-no-files-found: error
