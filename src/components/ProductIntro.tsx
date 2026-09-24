@@ -198,6 +198,7 @@ export default function ProductIntro({ onBack, onStart }: Props) {
         scene.style.setProperty('--intro-focus', focus.toFixed(4))
         scene.style.setProperty('--intro-turn-angle', `${(-116 * exit).toFixed(2)}deg`)
         scene.style.setProperty('--intro-turn-opacity', turnOpacity.toFixed(4))
+        scene.style.setProperty('--intro-fold-opacity', (turnOpacity * 0.82).toFixed(4))
         scene.style.setProperty('--intro-fold-x', `${foldX.toFixed(2)}px`)
         scene.style.setProperty('--intro-fold-rotate', `${foldRotate.toFixed(2)}deg`)
         scene.style.setProperty('--intro-fold-skew', `${foldSkew.toFixed(2)}deg`)
