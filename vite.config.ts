@@ -37,6 +37,27 @@ function buildVersionAsset(version: string): Plugin {
   }
 }
 
+// 图标缓存破口：iOS 把 apple-touch-icon 存 4 小时，重新「添加到主屏幕」也可能拿到旧图。
+// 给图标 URL 带上构建指纹，每次构建都是新地址，系统必定重新抓。
+const iconVersion = buildVersionSlice()
+
+function buildVersionSlice(): string {
+  const v = resolveBuildVersion()
+  return v.replace(/[^0-9a-zA-Z]/g, '').slice(0, 8)
+}
+
+function iconCacheBust(version: string): Plugin {
+  const suffix = `?v=${version}`
+  return {
+    name: 'eluvin-icon-cache-bust',
+    transformIndexHtml(html: string) {
+      return html
+        .replace('/brand/apple-eluvin-180.png', `/brand/apple-eluvin-180.png${suffix}`)
+        .replace('/brand/favicon-eluvin.png', `/brand/favicon-eluvin.png${suffix}`)
+    },
+  }
+}
+
 const buildVersion = resolveBuildVersion()
 
 // https://vite.dev/config/
@@ -53,6 +74,7 @@ export default defineConfig({
   plugins: [
     react(),
     buildVersionAsset(buildVersion),
+    iconCacheBust(iconVersion),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['brand/pwa-eluvin-192.png', 'brand/pwa-eluvin-512.png', 'brand/apple-eluvin-180.png'],
@@ -68,19 +90,19 @@ export default defineConfig({
         scope: './',
         icons: [
           {
-            src: 'brand/pwa-eluvin-192.png',
+            src: `brand/pwa-eluvin-192.png?v=${iconVersion}`,
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: 'brand/pwa-eluvin-512.png',
+            src: `brand/pwa-eluvin-512.png?v=${iconVersion}`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: 'brand/pwa-eluvin-maskable-512.png',
+            src: `brand/pwa-eluvin-maskable-512.png?v=${iconVersion}`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
