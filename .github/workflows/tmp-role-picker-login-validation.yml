@@ -1,0 +1,45 @@
+name: temp role picker login validation
+on:
+  push:
+    branches:
+      - feat/role-picker-template-library
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Capture login placement
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/eluvin-preview.log 2>&1 &
+          cat > role-login.mjs <<'EOF'
+          import { chromium } from 'playwright'
+          const browser = await chromium.launch({ headless: true })
+          const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
+          await page.addInitScript(() => {
+            localStorage.setItem('eluvin_consent', JSON.stringify({ version: 'v1', consentedAt: '2026-09-24T00:00:00.000Z' }))
+          })
+          await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
+          await page.getByRole('button', { name: /开始遇见 TA/ }).click()
+          await page.getByRole('heading', { name: '想怎么认识 TA？' }).waitFor({ state: 'visible' })
+          await page.screenshot({ path: 'role-choice-login-adjusted.png', fullPage: true })
+          await browser.close()
+          EOF
+          node role-login.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: role-choice-login-adjusted
+          path: role-choice-login-adjusted.png
+          if-no-files-found: error
