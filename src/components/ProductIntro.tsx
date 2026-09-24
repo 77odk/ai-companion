@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import ProductIntroAtmosphere from './ProductIntroAtmosphere'
 import './ProductIntro.css'
 
 interface Props {
@@ -279,6 +280,7 @@ export default function ProductIntro({ onBack, onStart }: Props) {
   return (
     <div ref={rootRef} className="product-intro-v1">
       <BackButton onBack={onBack} />
+      <ProductIntroAtmosphere />
 
       <main ref={mainRef}>
         <section className="intro-scene intro-scene-hero" aria-labelledby="intro-hero-title">
