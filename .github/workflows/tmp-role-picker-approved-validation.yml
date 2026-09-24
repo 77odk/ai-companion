@@ -1,0 +1,61 @@
+name: temp role picker approved validation
+on:
+  push:
+    branches:
+      - feat/role-picker-template-library
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Capture approved role UI
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/eluvin-preview.log 2>&1 &
+          cat > role-approved.mjs <<'EOF'
+          import { chromium } from 'playwright'
+          const browser = await chromium.launch({ headless: true })
+          const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
+          await page.addInitScript(() => {
+            localStorage.setItem('eluvin_consent', JSON.stringify({ version: 'v1', consentedAt: '2026-09-24T00:00:00.000Z' }))
+          })
+          await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
+          await page.getByRole('button', { name: /开始遇见 TA/ }).click()
+          await page.getByRole('heading', { name: '想怎么认识 TA？' }).waitFor({ state: 'visible' })
+          await page.screenshot({ path: 'role-choice-approved.png', fullPage: true })
+
+          await page.getByRole('button', { name: /自定义 TA/ }).click()
+          await page.getByRole('heading', { name: '自定义 TA' }).waitFor({ state: 'visible' })
+          await page.screenshot({ path: 'role-custom-approved.png', fullPage: true })
+
+          await page.getByRole('button', { name: /人设模板/ }).click()
+          await page.getByRole('heading', { name: '从一个起点开始' }).waitFor({ state: 'visible' })
+          await page.screenshot({ path: 'role-templates-approved.png', fullPage: true })
+
+          await page.getByRole('button', { name: /慢热靠近/ }).click()
+          await page.getByRole('heading', { name: '慢热靠近' }).waitFor({ state: 'visible' })
+          await page.screenshot({ path: 'role-template-detail-approved.png', fullPage: true })
+          await browser.close()
+          EOF
+          node role-approved.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: role-picker-approved-390x844
+          path: |
+            role-choice-approved.png
+            role-custom-approved.png
+            role-templates-approved.png
+            role-template-detail-approved.png
+          if-no-files-found: error
