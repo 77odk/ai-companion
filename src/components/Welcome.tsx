@@ -31,9 +31,7 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
         <p className="welcome-reference-en">ELUVIN</p>
         <p className="welcome-reference-slogan">忆过往，成文思</p>
 
-        <p className="welcome-reference-note-inline" aria-hidden="true">
-          记录时光，也记录我们。 ♡
-        </p>
+        <span className="welcome-reference-divider" aria-hidden="true" />
 
         <p className="welcome-reference-lead">
           不只是记忆，
