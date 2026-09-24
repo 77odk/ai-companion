@@ -36,12 +36,8 @@
     <line x1="22" y1="64" x2="92" y2="64" stroke="#a46f6a" stroke-width="1" opacity=".35"/>
   </g>
   <g transform="translate(-52 635) rotate(-8 140 80)" filter="url(#shadow)">
-    <path d="M0 32 Q78 2 166 30 L184 143 Q96 112 8 150 Z" fill="url(#paper)"/>
-    <path d="M166 30 Q235 3 303 22 L315 132 Q246 111 184 143 Z" fill="#f8ebe4"/>
-    <path d="M174 31 L184 143" stroke="#d8b9b2" stroke-width="1.2"/>
-    <path d="M20 54 C70 40 116 42 151 51" stroke="#d8c4bd" stroke-width="1" opacity=".45"/>
-    <path d="M25 71 C75 58 116 59 150 68" stroke="#d8c4bd" stroke-width="1" opacity=".35"/>
-    <path d="M210 49 C247 42 279 45 302 51" stroke="#d8c4bd" stroke-width="1" opacity=".4"/>
+    <path d="M0 32 Q78 2 166 30 L184 143 Q96 112 8 150 Z" fill="url(#paper)" opacity=".93"/>
+    <path d="M166 30 Q235 3 303 22 L315 132 Q246 111 184 143 Z" fill="#f8ebe4" opacity=".90"/>
   </g>
   <g opacity=".48" filter="url(#blur10)">
     <ellipse cx="365" cy="735" rx="24" ry="10" fill="#efb4b4" transform="rotate(-24 365 735)"/>
