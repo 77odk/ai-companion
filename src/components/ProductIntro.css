@@ -2149,6 +2149,7 @@
   --intro-focus: 1;
   --intro-turn-angle: 0deg;
   --intro-turn-opacity: 0;
+  --intro-fold-opacity: 0;
   --intro-fold-x: 318px;
   --intro-fold-rotate: 28deg;
   --intro-fold-skew: 4deg;
@@ -2213,7 +2214,7 @@
   left: 0;
   width: 96px;
   pointer-events: none;
-  opacity: calc(var(--intro-turn-opacity) * .82);
+  opacity: var(--intro-fold-opacity);
   transform-origin: center center;
   transform:
     perspective(900px)
