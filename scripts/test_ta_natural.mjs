@@ -39,7 +39,7 @@ assert.match(rolePicker, /if \(isLoggedIn\(\) && allowEmptyPersona\) persistSetu
 assert.match(rolePicker, /buildCustomPersona\(\{/)
 assert.match(rolePicker, /不知道怎么填，或者还没想好？/)
 assert.match(rolePicker, /ROLE_TEMPLATES\.map/)
-assert.match(rolePicker, /setForm\(\(prev\) => \(\{ \.\.\.prev, personality: template\.persona \}\)\)/)
+assert.match(rolePicker, /setForm\(\(prev\) => applyRoleTemplatePersonality\(prev, template\)\)/)
 assert.doesNotMatch(rolePicker, /nickname:\s*template\.charName/)
 assert.doesNotMatch(rolePicker, /gender:\s*template\.gender/)
 assert.match(rolePicker, /姓名、头像、备注、性别、关系背景和开场白都不会改变/)
