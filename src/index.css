@@ -8540,3 +8540,481 @@ html, body {
     top: 24px;
   }
 }
+
+
+/* ========== RolePicker approved UI · theme-token implementation ========== */
+
+/* 所有页面底色只走现有主题 token，不写死设计稿米白。 */
+.role-choice-page,
+.role-modal-overlay,
+.role-modal,
+.role-modal-body,
+.role-modal-footer,
+.role-template-sheet {
+  background: var(--color-bg);
+}
+
+/* 01 / 02：开放式路径，不再是功能卡片。 */
+.role-choice-page {
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.role-choice-page .role-choice-heading {
+  margin: clamp(58px, 11vh, 92px) 0 42px;
+}
+
+.role-choice-page .role-choice-eyebrow {
+  display: none;
+}
+
+.role-choice-page .role-title {
+  max-width: 300px;
+  font-size: clamp(30px, 8.2vw, 35px);
+  line-height: 1.22;
+  font-weight: 650;
+}
+
+.role-choice-page .role-sub {
+  max-width: 292px;
+  margin-top: 14px;
+  line-height: 1.78;
+}
+
+.role-choice-page .role-choice-list {
+  border-top: 0;
+}
+
+.role-choice-page .role-choice-card {
+  padding: 28px 4px 28px 52px;
+}
+
+.role-choice-page .role-choice-card::before {
+  top: 29px;
+  font-size: 15px;
+}
+
+.role-choice-page .role-choice-card-kicker {
+  display: none;
+}
+
+.role-choice-page .role-card-name {
+  font-size: 23px;
+  line-height: 1.2;
+}
+
+.role-choice-page .role-card-tagline {
+  max-width: 245px;
+  margin-top: 11px;
+  font-size: 12.5px;
+  line-height: 1.72;
+}
+
+.role-choice-page .role-choice-card:first-child {
+  border-top: 1px solid color-mix(in srgb, var(--color-text) 14%, transparent);
+}
+
+.role-choice-page .role-choice-card:last-child {
+  border-bottom: 0;
+}
+
+.role-choice-page .role-choice-chevron {
+  align-self: center;
+}
+
+/* 自定义 / 直接认识：同一套编辑母版。 */
+.role-modal {
+  border-radius: 0 !important;
+}
+
+.role-modal .role-modal-header {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  padding: 8px 16px 6px;
+}
+
+.role-modal .role-modal-title {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: center;
+  font-size: 21px;
+  font-weight: 650;
+}
+
+.role-modal .role-modal-close {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 28px;
+  color: var(--color-text);
+}
+
+.role-modal .role-modal-close:hover {
+  background: transparent;
+  color: var(--color-primary-deep);
+}
+
+.role-modal .role-modal-body {
+  padding: 0 20px 24px;
+  gap: 0;
+}
+
+.role-modal-intro {
+  margin: 0 0 22px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.role-identity-grid {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 22px;
+}
+
+.role-identity-fields {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.role-identity-fields .field {
+  margin: 0;
+}
+
+.role-avatar-field .avatar-pick-area {
+  align-items: center;
+  gap: 6px;
+}
+
+.role-avatar-field .avatar-preview {
+  width: 72px;
+  height: 72px;
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--color-border) 86%, var(--color-text-muted));
+  background: color-mix(in srgb, var(--color-card) 72%, var(--color-bg));
+}
+
+.role-avatar-field .avatar-pick-actions {
+  justify-content: center;
+}
+
+.role-avatar-field .avatar-upload-btn {
+  min-height: 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.role-avatar-field .avatar-upload-icon {
+  display: none;
+}
+
+.role-modal .field {
+  margin-bottom: 20px;
+}
+
+.role-modal .field > label {
+  font-size: 12.5px;
+}
+
+.role-modal .optional-mark,
+.role-modal .required-mark {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin-left: 4px;
+  font-size: 10.5px;
+}
+
+.role-modal .required-mark {
+  color: var(--color-primary-deep);
+}
+
+.role-modal .gender-options {
+  gap: 6px;
+}
+
+.role-modal .gender-option {
+  padding: 8px 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 12px;
+}
+
+.role-modal .gender-option.active {
+  background: color-mix(in srgb, var(--color-primary) 11%, var(--color-bg));
+  border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+}
+
+.role-modal .role-personality-label {
+  margin: 6px 0 2px;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.role-modal #setup-personality.persona-input {
+  min-height: 142px;
+  padding: 15px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-card) 58%, var(--color-bg));
+}
+
+.role-template-entry {
+  padding: 10px 0 9px;
+}
+
+.role-template-entry-title {
+  font-size: 12px;
+}
+
+.role-form-section-title {
+  margin: 28px 0 18px;
+}
+
+.role-form-section-title span {
+  font-size: 16px;
+}
+
+.role-modal #setup-background.persona-input {
+  min-height: 76px;
+}
+
+.role-modal .role-modal-footer {
+  padding: 10px 20px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.role-modal .role-modal-actions {
+  width: 100%;
+}
+
+.role-modal .role-modal-actions .btn {
+  min-height: 46px;
+}
+
+.role-modal .role-modal-actions .btn-primary {
+  flex: 1.35;
+}
+
+.role-modal .role-modal-actions .btn-ghost {
+  flex: .65;
+}
+
+/* 模板库：Bottom Sheet + 轻筛选 + 目录。 */
+.role-template-sheet {
+  max-height: min(86dvh, 730px);
+  padding: 8px 20px calc(14px + env(safe-area-inset-bottom));
+  border-radius: 24px 24px 0 0;
+}
+
+.role-template-sheet-header {
+  min-height: 64px;
+  padding-bottom: 12px;
+}
+
+.role-template-heading-copy h3 {
+  font-size: 21px;
+  font-weight: 650;
+}
+
+.role-template-heading-copy p {
+  margin-top: 5px;
+  font-size: 11.5px;
+}
+
+.role-template-filters {
+  flex: none;
+  display: flex;
+  gap: 7px;
+  margin: 0 0 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.role-template-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.role-template-filter {
+  flex: none;
+  min-width: 54px;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-card) 38%, transparent);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.role-template-filter.active {
+  border-color: color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.role-template-list {
+  padding: 0;
+}
+
+.role-template-row {
+  min-height: 66px;
+  padding: 14px 2px 14px 46px;
+}
+
+.role-template-row.featured {
+  padding: 15px 2px 15px 46px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-primary) 8%, transparent),
+    transparent 82%
+  );
+}
+
+.role-template-row::before {
+  top: 17px;
+  font-size: 12px;
+}
+
+.role-template-row-title {
+  font-size: 14px;
+}
+
+.role-template-row-tagline {
+  max-width: 250px;
+  font-size: 11px;
+}
+
+/* 模板详情：直接阅读，不再“卡片里套卡片”。 */
+.role-template-preview {
+  padding: 12px 1px 18px;
+}
+
+.role-template-preview-title {
+  align-items: center;
+}
+
+.role-template-preview-title h4 {
+  font-size: 27px;
+  line-height: 1.18;
+}
+
+.role-template-preview-tagline {
+  margin: 9px 0 24px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.role-template-preview-section {
+  margin: 0 0 24px;
+}
+
+.role-template-preview-section h5 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.role-template-preview-section h5::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
+.role-template-preview-persona {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-size: 13.5px;
+  line-height: 1.88;
+}
+
+.role-template-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.role-template-tag-list span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-bg));
+  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.role-template-preserve-note {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--color-text) 11%, transparent);
+}
+
+.role-template-sheet-footer {
+  background: var(--color-bg);
+  border-top-color: color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.role-template-use {
+  min-height: 46px;
+}
+
+/* 390×844：保持单屏密度，但不强行压缩内容。 */
+@media (max-width: 390px) {
+  .role-choice-page {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .role-identity-grid {
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .role-avatar-field .avatar-preview {
+    width: 68px;
+    height: 68px;
+  }
+
+  .role-template-sheet {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+}
+
+@media (max-height: 720px) {
+  .role-choice-page .role-choice-heading {
+    margin-top: 28px;
+    margin-bottom: 26px;
+  }
+
+  .role-modal-intro {
+    margin-bottom: 16px;
+  }
+
+  .role-identity-grid {
+    margin-bottom: 16px;
+  }
+
+  .role-modal .field {
+    margin-bottom: 16px;
+  }
+}
