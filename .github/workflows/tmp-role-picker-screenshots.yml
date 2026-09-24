@@ -20,7 +20,7 @@ jobs:
       - name: Capture 390x844 role UI
         run: |
           npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/eluvin-preview.log 2>&1 &
-          cat > /tmp/role-shots.mjs <<'EOF'
+          cat > role-shots.mjs <<'EOF'
           import { chromium } from 'playwright'
           const browser = await chromium.launch({ headless: true })
           const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
@@ -40,7 +40,7 @@ jobs:
           await page.screenshot({ path: 'role-templates-390x844.png', fullPage: true })
           await browser.close()
           EOF
-          node /tmp/role-shots.mjs
+          node role-shots.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: role-picker-390x844
