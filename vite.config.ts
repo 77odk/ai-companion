@@ -55,7 +55,7 @@ export default defineConfig({
     buildVersionAsset(buildVersion),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['pwa-192.png', 'pwa-512.png', 'apple-touch-icon.png'],
+      includeAssets: ['brand/pwa-eluvin-192.png', 'brand/pwa-eluvin-512.png', 'brand/apple-eluvin-180.png'],
       manifest: {
         name: '忆文·Eluvin',
         short_name: '忆文·Eluvin',
@@ -68,19 +68,19 @@ export default defineConfig({
         scope: './',
         icons: [
           {
-            src: 'pwa-192.png',
+            src: 'brand/pwa-eluvin-192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: 'pwa-512.png',
+            src: 'brand/pwa-eluvin-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: 'pwa-512.png',
+            src: 'brand/pwa-eluvin-maskable-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',

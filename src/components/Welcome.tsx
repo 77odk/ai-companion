@@ -47,7 +47,7 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
         <div className="welcome-reference-logo-frame">
           <img
             className="welcome-reference-logo"
-            src="/brand/eluvin-book-icon.jpg"
+            src="/brand/eluvin-book-icon-cutout.png"
             alt="忆文"
           />
         </div>
