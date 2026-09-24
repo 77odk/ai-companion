@@ -17,6 +17,17 @@ export interface RoleTemplate {
   gender?: 'male' | 'female'
 }
 
+/**
+ * 模板应用的唯一写入口：只替换 personality。
+ * 泛型保留调用方其余字段，防止姓名 / 头像 / 备注 / 性别 / 背景 / 开场白被模板误覆盖。
+ */
+export function applyRoleTemplatePersonality<T extends { personality: string }>(
+  form: T,
+  template: RoleTemplate,
+): T {
+  return { ...form, personality: template.persona }
+}
+
 export const ROLE_TEMPLATES: RoleTemplate[] = [
   {
     id: 'general',
