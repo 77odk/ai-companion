@@ -423,7 +423,7 @@ function RoleSetupModal({
 
           {!isNatural && (
             <div className="field">
-              <label htmlFor="setup-personality">性格特质 <span className="required-mark">必填</span></label>
+              <label htmlFor="setup-personality" className="role-personality-label">TA 是怎样的人？ <span className="required-mark">必填</span></label>
               <textarea
                 id="setup-personality"
                 className="input persona-input"
@@ -435,19 +435,21 @@ function RoleSetupModal({
 
               <button type="button" className="role-template-entry" onClick={() => setTemplateLibraryOpen(true)}>
                 <span className="role-template-entry-copy">
-                  <span className="role-template-entry-title">不知道怎么填，或者还没想好？</span>
-                  <span className="role-template-entry-desc">
-                    {appliedTemplateName ? `已使用「${appliedTemplateName}」，还可以继续改` : '可以先用模板库里的设定，再慢慢改成你想要的 TA。'}
+                  <span className="role-template-entry-title">
+                    {appliedTemplateName ? `已使用「${appliedTemplateName}」` : '还没想好？从一个人设模板开始'}
                   </span>
+                  {appliedTemplateName && <span className="role-template-entry-desc">可以继续修改，或换一个起点。</span>}
                 </span>
-                <span className="role-template-entry-action">看看模板</span>
+                <span className="role-template-entry-action">→</span>
               </button>
             </div>
           )}
 
           {!isNatural && (
-            <div className="field">
-              <label htmlFor="setup-background">关系&背景设定 <span className="optional-mark">选填</span></label>
+            <>
+              <div className="role-form-section-title"><span>关于你们</span></div>
+              <div className="field">
+              <label htmlFor="setup-background">关系与过去 <span className="optional-mark">选填</span></label>
               <textarea
                 id="setup-background"
                 className="input persona-input"
@@ -456,12 +458,13 @@ function RoleSetupModal({
                 onChange={(e) => setField('background', e.target.value)}
                 rows={3}
               />
-            </div>
+              </div>
+            </>
           )}
 
           {!isNatural && (
             <div className="field">
-              <label htmlFor="setup-opening">开场第一句 <span className="optional-mark">选填</span></label>
+              <label htmlFor="setup-opening">TA 第一次会和你说什么 <span className="optional-mark">选填</span></label>
               <input
                 id="setup-opening"
                 className="input"
