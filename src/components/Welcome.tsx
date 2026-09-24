@@ -1,9 +1,31 @@
+import { useEffect, useState } from 'react'
+import { fetchSiteStats } from '../lib/siteStats'
+import { API_BASE } from '../lib/sync'
+
 interface Props {
   onStart: () => void
   onGoGuide: () => void
 }
 
+// UI2-02 返修：Web ↻ 语义 = 更新当前 Web 客户端，不是「确认已看过 Welcome」。
+// Welcome 刷新保持 Welcome 由 visitState 的会话级 visit marker 承担；forceRefresh 只负责更新客户端。
+function handleRefresh(): void {
+  void import('../lib/forceRefresh').then((m) => m.forceRefresh())
+}
+
 export default function Welcome({ onStart, onGoGuide }: Props) {
+  // 站点访问数字走我们自己的后端（第一方），取不到就不显示，不填 0 也不编数字。
+  const [visitors, setVisitors] = useState<number | null>(null)
+  useEffect(() => {
+    let alive = true
+    void fetchSiteStats(API_BASE).then((stats) => {
+      if (alive && stats && stats.uv > 0) setVisitors(stats.uv)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
   return (
     <div className="welcome-page welcome-reference-page">
       <img
@@ -13,10 +35,13 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
         aria-hidden="true"
       />
 
-      <div className="welcome-reference-topline">
-        <p>在时间里，和你一起。</p>
-        <span>ALWAYS WITH YOU.</span>
-      </div>
+      <button
+        type="button"
+        className="welcome-refresh"
+        onClick={handleRefresh}
+      >
+        ↻ 检查更新
+      </button>
 
       <main className="welcome-reference-content">
         <div className="welcome-reference-logo-frame">
@@ -33,17 +58,9 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
 
         <span className="welcome-reference-divider" aria-hidden="true" />
 
-        <p className="welcome-reference-lead">
-          不只是记忆，
-          <br />
-          而是我们一起走过的每一天。
-        </p>
-
-        <p className="welcome-reference-keywords">记忆 · 陪伴 · 成长 · 更久的我们</p>
-
         <div className="welcome-reference-actions">
           <button type="button" className="welcome-reference-primary" onClick={onStart}>
-            <span>登录 / 注册</span>
+            <span>开始遇见 TA</span>
             <span aria-hidden="true">→</span>
           </button>
 
@@ -57,6 +74,14 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
       <p className="welcome-reference-note" aria-hidden="true">
         记录时光，<br />也记录我们
       </p>
+
+      {/* 页尾：关键词行 + 第一方访问人数（访问人数在最下） */}
+      <div className="welcome-reference-footer" aria-hidden="true">
+        <p className="welcome-reference-keywords">记忆 · 陪伴 · 成长 · 更久的我们</p>
+        {visitors !== null && (
+          <p className="welcome-reference-count">已有 {visitors} 人访问</p>
+        )}
+      </div>
     </div>
   )
 }

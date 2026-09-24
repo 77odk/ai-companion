@@ -1404,33 +1404,6 @@
     linear-gradient(180deg, rgba(255,255,255,.12), transparent 20%, transparent 76%, rgba(255,248,244,.08));
 }
 
-.welcome-reference-topline {
-  position: absolute;
-  z-index: 3;
-  top: max(22px, env(safe-area-inset-top));
-  right: 7.5%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  color: rgba(45, 39, 37, .86);
-}
-
-.welcome-reference-topline p {
-  margin: 0;
-  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
-  font-size: 15px;
-  font-style: italic;
-  letter-spacing: .05em;
-  line-height: 1.35;
-}
-
-.welcome-reference-topline span {
-  font-size: 7.5px;
-  letter-spacing: .34em;
-  color: rgba(75, 65, 61, .72);
-}
-
 .welcome-reference-content {
   position: relative;
   z-index: 3;
@@ -1467,11 +1440,12 @@
 .welcome-reference-content h1 {
   margin: 16px 0 2px;
   color: #2f2a28;
-  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
-  font-size: clamp(42px, 12vw, 51px);
+  /* 参考图的「忆文」更接近楷体手写骨架，而不是宋体标题字。 */
+  font-family: "STKaiti", "Kaiti SC", "KaiTi", "DFKai-SB", "FangSong", "Songti SC", "STSong", serif;
+  font-size: clamp(42px, 11.8vw, 49px);
   font-weight: 400;
-  letter-spacing: .055em;
-  line-height: 1.02;
+  letter-spacing: .025em;
+  line-height: 1.04;
 }
 
 .welcome-reference-en {
@@ -1501,28 +1475,39 @@
   background: rgba(66, 55, 51, .55);
 }
 
-.welcome-reference-lead {
-  margin: 0;
-  color: rgba(54, 46, 43, .88);
-  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
-  font-size: clamp(16px, 4.6vw, 19px);
-  font-weight: 500;
-  letter-spacing: .12em;
-  line-height: 1.85;
-}
-
 .welcome-reference-keywords {
-  margin: 20px 0 0;
-  color: rgba(103, 80, 74, .72);
+  margin: 0;
+  color: rgba(103, 80, 74, .78);
   font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
   font-size: 12.5px;
   letter-spacing: .16em;
   line-height: 1.4;
 }
 
+/* ---- 页尾：关键词行 + 第一方访问人数（访问人数在最下） ---- */
+.welcome-reference-footer {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  bottom: max(34px, calc(env(safe-area-inset-bottom) + 22px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+}
+
+.welcome-reference-count {
+  margin: 0;
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  color: rgba(103, 80, 74, .55);
+}
+
 .welcome-reference-actions {
   width: min(100%, 288px);
-  margin-top: 88px;
+  margin-top: 148px;
   padding-top: 0;
   display: flex;
   flex-direction: column;
@@ -1611,10 +1596,6 @@
 
   .welcome-reference-divider {
     margin: 16px 0 13px;
-  }
-
-  .welcome-reference-keywords {
-    margin-top: 14px;
   }
 
   .welcome-reference-actions {
