@@ -172,7 +172,11 @@ export default function RolePicker({
         if (!res.ok) throw new Error(res.message)
         setActiveSessionId(String(res.data.id))
         createdTitle = res.data.title
-        saveProfileForSession(s, String(res.data.id))
+        // Natural 允许姓名为空，但会话级 profile 也必须有安全称呼，避免只读 ai_profile 的页面出现空名字。
+        const profileState = allowEmptyPersona && !s.nickname.trim()
+          ? { ...s, nickname: res.data.title?.trim() || 'TA' }
+          : s
+        saveProfileForSession(profileState, String(res.data.id))
       } else if (allowEmptyPersona) {
         // UI 允许 Natural 名字留空；游客登录链仍需要一个安全标题，内部用 TA 兜底，不把空串交给建会话。
         onNaturalLogin?.({
