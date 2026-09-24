@@ -399,6 +399,11 @@ function RoleSetupModal({
               : '先写下你已经知道的部分，其余的可以以后慢慢补。'}
           </p>
 
+          <div className="role-edit-section-label">
+            <span>01</span>
+            <strong>基本信息</strong>
+          </div>
+
           <div className="role-identity-grid">
             <div className="role-avatar-field">
               <AvatarPicker value={form.avatar} onChange={(avatar) => setField('avatar', avatar)} kind="ai" uploadLabel="添加照片" showHint={false} />
@@ -443,7 +448,12 @@ function RoleSetupModal({
           </div>
 
           {!isNatural && (
-            <div className="field">
+            <>
+              <div className="role-edit-section-label role-edit-section-label-personality">
+                <span>02</span>
+                <strong>性格</strong>
+              </div>
+              <div className="field">
               <label htmlFor="setup-personality" className="role-personality-label">TA 是怎样的人？ <span className="required-mark">必填</span></label>
               <textarea
                 id="setup-personality"
@@ -463,12 +473,16 @@ function RoleSetupModal({
                 </span>
                 <span className="role-template-entry-action">→</span>
               </button>
-            </div>
+              </div>
+            </>
           )}
 
           {!isNatural && (
             <>
-              <div className="role-form-section-title"><span>关于你们</span></div>
+              <div className="role-edit-section-label role-edit-section-label-relationship">
+                <span>03</span>
+                <strong>关于你们</strong>
+              </div>
               <div className="field">
               <label htmlFor="setup-background">关系与过去 <span className="optional-mark">选填</span></label>
               <textarea
