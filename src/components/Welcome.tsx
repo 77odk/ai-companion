@@ -3,8 +3,8 @@ import { fetchSiteStats } from '../lib/siteStats'
 import { API_BASE } from '../lib/sync'
 
 interface Props {
-  onStart: () => void
   onGoGuide: () => void
+  onLogin: () => void
 }
 
 // UI2-02 返修：Web ↻ 语义 = 更新当前 Web 客户端，不是「确认已看过 Welcome」。
@@ -13,7 +13,7 @@ function handleRefresh(): void {
   void import('../lib/forceRefresh').then((m) => m.forceRefresh())
 }
 
-export default function Welcome({ onStart, onGoGuide }: Props) {
+export default function Welcome({ onGoGuide, onLogin }: Props) {
   // 站点访问数字走我们自己的后端（第一方），取不到就不显示，不填 0 也不编数字。
   const [visitors, setVisitors] = useState<number | null>(null)
   useEffect(() => {
@@ -65,14 +65,13 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
         </p>
 
         <div className="welcome-reference-actions">
-          <button type="button" className="welcome-reference-primary" onClick={onStart}>
-            <span>开始遇见 TA</span>
+          <button type="button" className="welcome-reference-primary" onClick={onGoGuide}>
+            <span>先了解一下</span>
             <span aria-hidden="true">→</span>
           </button>
 
-          <button type="button" className="welcome-reference-secondary" onClick={onGoGuide}>
-            <span>先了解一下</span>
-            <span aria-hidden="true">→</span>
+          <button type="button" className="welcome-reference-login" onClick={onLogin}>
+            已有账号，登录
           </button>
         </div>
       </main>
