@@ -1,0 +1,116 @@
+name: temp product intro scroll v2
+on:
+  push:
+    branches:
+      - feat/welcome-product-intro-3d
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Verify scroll narrative at 390x844
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/eluvin-preview.log 2>&1 &
+          cat > intro-scroll-v2.mjs <<'EOF'
+          import { chromium } from 'playwright'
+          import assert from 'node:assert/strict'
+
+          const browser = await chromium.launch({ headless: true })
+          const errors = []
+
+          const openIntro = async (page) => {
+            page.on('pageerror', err => errors.push(String(err)))
+            page.on('console', msg => {
+              if (msg.type() === 'error' && !/favicon|beacon|cloudflare/i.test(msg.text())) errors.push(msg.text())
+            })
+            await page.route('**/api/site-stats', async route => {
+              await route.fulfill({status:200,contentType:'application/json',body:'{"uv":1,"pv":1}'})
+            })
+            await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
+            await page.getByRole('button', { name: /先了解一下/ }).click()
+            await page.locator('.product-intro-v1').waitFor({ state: 'visible' })
+          }
+
+          const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
+          await openIntro(page)
+
+          const root = page.locator('.product-intro-v1')
+          const main = page.locator('.product-intro-v1 main')
+          const hero = page.locator('.intro-scene-hero')
+          assert.equal(await root.getAttribute('data-motion'), 'on')
+
+          const heroHeight = await hero.evaluate(el => el.getBoundingClientRect().height)
+          const samples = [0.18, 0.42, 0.68]
+          const states = []
+
+          for (let i = 0; i < samples.length; i++) {
+            await main.evaluate((el, top) => { el.scrollTop = top }, heroHeight * samples[i])
+            await page.waitForTimeout(90)
+            const state = await hero.evaluate(el => ({
+              exit: Number(getComputedStyle(el).getPropertyValue('--intro-exit')),
+              turnOpacity: Number(getComputedStyle(el).getPropertyValue('--intro-turn-opacity')),
+              turnTransform: getComputedStyle(el, '::after').transform,
+              bookTransform: getComputedStyle(el.querySelector('.intro-book-volume')).transform,
+              copyTransform: getComputedStyle(el.querySelector('.intro-hero-copy')).transform,
+            }))
+            states.push(state)
+            await page.screenshot({ path: `scroll-turn-${i + 1}.png`, fullPage: false })
+          }
+
+          assert.ok(states[0].exit < states[1].exit && states[1].exit < states[2].exit, 'scroll progress increases')
+          assert.ok(states[1].turnOpacity > 0.5, 'page-turn sheet is visible mid transition')
+          assert.notEqual(states[0].turnTransform, states[1].turnTransform, 'page-turn transform changes')
+          assert.notEqual(states[0].bookTransform, states[2].bookTransform, 'book perspective changes')
+          assert.notEqual(states[0].copyTransform, states[2].copyTransform, 'copy parallax changes')
+
+          const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+          assert.ok(overflow <= 0, 'no horizontal overflow')
+
+          // Scroll forward and back: progress must be reversible rather than one-shot.
+          await main.evaluate((el, top) => { el.scrollTop = top }, heroHeight * 0.72)
+          await page.waitForTimeout(80)
+          const forward = Number(await hero.evaluate(el => getComputedStyle(el).getPropertyValue('--intro-exit')))
+          await main.evaluate((el, top) => { el.scrollTop = top }, heroHeight * 0.22)
+          await page.waitForTimeout(80)
+          const backward = Number(await hero.evaluate(el => getComputedStyle(el).getPropertyValue('--intro-exit')))
+          assert.ok(backward < forward, 'scroll animation reverses')
+
+          // Reduced-motion: no rAF motion layer.
+          const reduced = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
+          await reduced.emulateMedia({ reducedMotion: 'reduce' })
+          await reduced.route('**/api/site-stats', async route => {
+            await route.fulfill({status:200,contentType:'application/json',body:'{"uv":1,"pv":1}'})
+          })
+          await reduced.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
+          await reduced.getByRole('button', { name: /先了解一下/ }).click()
+          await reduced.locator('.product-intro-v1').waitFor({ state: 'visible' })
+          assert.equal(await reduced.locator('.product-intro-v1').getAttribute('data-motion'), 'reduced')
+          await reduced.screenshot({ path: 'reduced-motion.png', fullPage: false })
+
+          assert.equal(errors.length, 0, errors.join('\n'))
+          console.log(JSON.stringify({ states, overflow }))
+          await browser.close()
+          EOF
+          node intro-scroll-v2.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: product-intro-scroll-v2-390x844
+          path: |
+            scroll-turn-1.png
+            scroll-turn-2.png
+            scroll-turn-3.png
+            reduced-motion.png
+          if-no-files-found: error
