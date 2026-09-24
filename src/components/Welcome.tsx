@@ -58,6 +58,12 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
 
         <span className="welcome-reference-divider" aria-hidden="true" />
 
+        <p className="welcome-reference-lead">
+          不只是记忆，
+          <br />
+          而是我们一起走过的每一天。
+        </p>
+
         <div className="welcome-reference-actions">
           <button type="button" className="welcome-reference-primary" onClick={onStart}>
             <span>开始遇见 TA</span>

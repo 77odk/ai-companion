@@ -1468,11 +1468,39 @@
   line-height: 1.2;
 }
 
+/* 轻艺术字副标题：楷体气质、分两行（逗号后换行），不抢主标题 */
+.welcome-reference-lead {
+  margin: 0 0 0;
+  color: rgba(79, 64, 58, .74);
+  font-family: "LXGW WenKai Subset", "Kaiti SC", "STKaiti", "KaiTi", "FangSong", "Songti SC", "STSong", serif;
+  font-size: 16px;
+  letter-spacing: .06em;
+  line-height: 1.75;
+}
+
+/* 轻艺术字副标题：霞鹜文楷（开源楷体，仅含本句 17 字符子集，3.8KB 自托管） */
+@font-face {
+  font-family: 'LXGW WenKai Subset';
+  src: url('/fonts/lxgw-wenkai-subset.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 .welcome-reference-divider {
   width: 24px;
   height: 1px;
-  margin: 21px 0 17px;
+  margin: 24px 0 18px;
   background: rgba(66, 55, 51, .55);
+}
+
+.welcome-reference-lead {
+  margin: 0 0 0;
+  color: rgba(79, 64, 58, .74);
+  font-family: "LXGW WenKai Subset", "Kaiti SC", "STKaiti", "KaiTi", "FangSong", "Songti SC", "STSong", serif;
+  font-size: 16px;
+  letter-spacing: .06em;
+  line-height: 1.75;
 }
 
 .welcome-reference-keywords {
@@ -1507,7 +1535,7 @@
 
 .welcome-reference-actions {
   width: min(100%, 288px);
-  margin-top: 148px;
+  margin-top: 40px;
   padding-top: 0;
   display: flex;
   flex-direction: column;
