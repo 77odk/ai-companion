@@ -2377,3 +2377,32 @@
     transform: rotate(-1.8deg);
   }
 }
+
+
+/* ---------- V3 · atmosphere canvas ---------- */
+.intro-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: .62;
+  mix-blend-mode: soft-light;
+}
+
+.product-intro-v1 main {
+  position: relative;
+  z-index: 1;
+}
+
+.intro-back {
+  z-index: 50;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-atmosphere {
+    opacity: .44;
+  }
+}
