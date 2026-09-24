@@ -40,29 +40,28 @@ export default function LoginGate({ onDone, onGoGuide, onBack }: Props) {
       </div>
 
       <div className="login-gate-inner">
-        <div className="login-gate-logo" aria-label="忆文">
-          <span>忆</span>
-        </div>
+        <img
+          className="login-gate-logo"
+          src="/brand/eluvin-book-icon-cutout.png"
+          alt="忆文"
+        />
 
-        <h1 className="login-gate-title">登录后，TA 才会记得你</h1>
-        <p className="login-gate-sub">
-          聊天、记忆、纪念日都会跟着你的账号走，换个设备也能找回来。
-        </p>
+        <h1 className="login-gate-title">欢迎回来</h1>
+        <p className="login-gate-sub">登录后，TA 才能继续记得你。</p>
 
         <div className="login-gate-card">
-          <LoginForm onSuccess={onDone} />
+          <LoginForm onSuccess={onDone} variant="gate" />
         </div>
 
-        <button type="button" className="login-gate-guide" onClick={onGoGuide}>
-          先看看教程
-        </button>
-
-        <button type="button" className="login-gate-refresh" onClick={() => location.reload()}>
-          检查更新
-        </button>
-        <button type="button" className="login-gate-refresh" onClick={handleForceRefresh}>
-          强制刷新
-        </button>
+        <div className="login-gate-weak-actions">
+          <button type="button" className="login-gate-guide" onClick={onGoGuide}>
+            先看看教程
+          </button>
+          <span aria-hidden="true">·</span>
+          <button type="button" className="login-gate-refresh" onClick={handleForceRefresh}>
+            强制刷新
+          </button>
+        </div>
       </div>
     </div>
   )
