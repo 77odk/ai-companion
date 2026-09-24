@@ -548,7 +548,7 @@ function RoleSetupModal({
               <>
                 <div className="role-template-sheet-header">
                   <button type="button" className="role-template-back" onClick={() => setPreviewTemplate(null)}>‹ 返回</button>
-                  <h3>模板预览</h3>
+                  <span className="role-template-preview-header-spacer" aria-hidden="true" />
                   <button
                     type="button"
                     className="role-template-close"
