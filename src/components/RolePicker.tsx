@@ -387,8 +387,8 @@ function RoleSetupModal({
       <div className="role-modal">
         <div className="role-modal-header">
           <h2 className="role-modal-title">{title}</h2>
-          <button type="button" className="role-modal-close" onClick={onClose} aria-label="关闭">
-            ×
+          <button type="button" className="role-modal-close" onClick={onClose} aria-label="返回">
+            ‹
           </button>
         </div>
 
@@ -401,7 +401,7 @@ function RoleSetupModal({
 
           <div className="role-identity-grid">
             <div className="role-avatar-field">
-              <AvatarPicker value={form.avatar} onChange={(avatar) => setField('avatar', avatar)} kind="ai" />
+              <AvatarPicker value={form.avatar} onChange={(avatar) => setField('avatar', avatar)} kind="ai" uploadLabel="添加照片" showHint={false} />
             </div>
 
             <div className="role-identity-fields">
