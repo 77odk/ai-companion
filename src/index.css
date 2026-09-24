@@ -9038,3 +9038,267 @@ html, body {
   font-weight: 600;
   color: var(--color-primary-deep);
 }
+
+
+/* ========== LoginGate visual refresh · scoped, behavior unchanged ========== */
+.login-gate {
+  min-height: 100dvh;
+  height: 100%;
+  padding: calc(12px + env(safe-area-inset-top)) 20px calc(22px + env(safe-area-inset-bottom));
+  background: var(--color-bg);
+}
+
+.login-gate-header {
+  min-height: 40px;
+}
+
+.login-gate-inner {
+  width: 100%;
+  max-width: 352px;
+  margin: 10px auto 0;
+  align-items: center;
+}
+
+.login-gate-logo {
+  width: 70px;
+  height: 70px;
+  margin: 4px auto 14px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  object-fit: contain;
+  display: block;
+}
+
+.login-gate-title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.login-gate-sub {
+  margin: 0 0 24px;
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.login-gate-card {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* 登录 / 注册：只在登录墙改成细下划线，不影响「账号与同步」页。 */
+.login-gate .account-tabs {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 0 0 24px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.login-gate .account-tab {
+  position: relative;
+  padding: 10px 0 11px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.login-gate .account-tab.on {
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text);
+  font-weight: 650;
+}
+
+.login-gate .account-tab.on::after {
+  content: "";
+  position: absolute;
+  left: 24%;
+  right: 24%;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--color-primary-deep);
+}
+
+.login-gate .field {
+  gap: 7px;
+  margin-bottom: 17px;
+}
+
+.login-gate .field > label,
+.login-gate .login-field-label-row > label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.login-gate .input {
+  min-height: 46px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 92%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-card) 66%, var(--color-bg));
+  color: var(--color-text);
+  font-size: 14px;
+  box-shadow: none;
+}
+
+.login-gate .input:focus {
+  border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.login-field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.login-inline-forgot {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary-deep);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.login-gate .settings-actions {
+  margin-top: 4px;
+}
+
+.login-gate .settings-actions .btn-primary {
+  width: 100%;
+  min-height: 47px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.login-switch-hint {
+  margin: 14px 0 0;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.login-switch-hint button {
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary-deep);
+  font: inherit;
+  font-weight: 600;
+}
+
+.login-gate .account-format-hint,
+.login-gate .test-result {
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.login-gate .account-mode-label {
+  margin: 0 0 18px;
+  text-align: center;
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.login-gate .account-toggle {
+  display: block;
+  margin: 14px auto 0;
+  font-size: 11.5px;
+}
+
+.login-gate .forgot-code-row {
+  gap: 8px;
+}
+
+.login-gate .forgot-code-row .btn {
+  min-height: 46px;
+  padding-left: 12px;
+  padding-right: 12px;
+  white-space: nowrap;
+}
+
+.login-gate-weak-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 24px auto 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.login-gate-guide,
+.login-gate-refresh {
+  margin: 0;
+  padding: 5px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.login-gate-guide:hover,
+.login-gate-refresh:hover {
+  color: var(--color-primary-deep);
+  text-decoration: none;
+}
+
+@media (max-height: 720px) {
+  .login-gate {
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+
+  .login-gate-inner {
+    margin-top: 2px;
+  }
+
+  .login-gate-logo {
+    width: 58px;
+    height: 58px;
+    margin-bottom: 9px;
+  }
+
+  .login-gate-title {
+    font-size: 20px;
+  }
+
+  .login-gate-sub {
+    margin-bottom: 16px;
+  }
+
+  .login-gate .account-tabs {
+    margin-bottom: 16px;
+  }
+
+  .login-gate .field {
+    margin-bottom: 13px;
+  }
+
+  .login-gate-weak-actions {
+    margin-top: 16px;
+  }
+}
