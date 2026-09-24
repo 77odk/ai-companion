@@ -7,10 +7,12 @@ interface Props {
   onChange: (avatar: string) => void
   /** 默认头像样式：user=人形（我的头像），ai=心形（TA 的头像） */
   kind?: 'user' | 'ai'
+  uploadLabel?: string
+  showHint?: boolean
 }
 
 /** 头像选择：上传图片 + 默认头像兜底。avatar 存 dataURL（上传压缩后），空字符串表示用默认头像 */
-export default function AvatarPicker({ value, onChange, kind = 'user' }: Props) {
+export default function AvatarPicker({ value, onChange, kind = 'user', uploadLabel = '上传图片', showHint = true }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const isImage = value.startsWith('data:')
 
@@ -49,7 +51,7 @@ export default function AvatarPicker({ value, onChange, kind = 'user' }: Props) 
             <path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
             <circle cx="12" cy="13.5" r="3.2" />
           </svg>
-          上传图片
+          {uploadLabel}
         </button>
         {isImage && (
           <button type="button" className="btn btn-ghost avatar-upload-btn" onClick={() => onChange('')}>
@@ -64,7 +66,7 @@ export default function AvatarPicker({ value, onChange, kind = 'user' }: Props) 
         hidden
         onChange={handleFile}
       />
-      <p className="hint">上传的图片会自动裁剪成方形小图，只存你浏览器本地</p>
+      {showHint && <p className="hint">上传的图片会自动裁剪成方形小图，只存你浏览器本地</p>}
     </div>
   )
 }
