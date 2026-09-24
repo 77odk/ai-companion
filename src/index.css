@@ -9018,3 +9018,13 @@ html, body {
     margin-bottom: 16px;
   }
 }
+
+
+/* Approved template directory numbering: 通用模板从 00 开始。 */
+.role-template-list {
+  counter-reset: role-template -1;
+}
+
+.role-template-preview-header-spacer {
+  min-width: 1px;
+}
