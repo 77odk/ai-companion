@@ -253,16 +253,16 @@ export default function App() {
     restoreScroll(view)
   }, [view, restoreScroll])
 
-  // UI2-02 NAV：主视图记 lastPrimaryView（只允许 home/aispace/memory/settings）；
-  // Welcome 记当前会话 visit marker（登录用户在 Welcome 刷新仍停留 Welcome），离开 Welcome 即清除。
+  // UI2-02 NAV：主视图记 lastPrimaryView（只允许 home/aispace/memory/settings）。
+  // Welcome marker 只服务未登录展示；一旦有登录态立即清掉，避免认证用户刷新又回营销页。
   useEffect(() => {
-    if (view === 'welcome') {
+    if (view === 'welcome' && !loggedIn) {
       markVisitWelcome()
-    } else if (view !== 'loading') {
+    } else if (view !== 'loading' || loggedIn) {
       clearVisitWelcome()
     }
     if (isPrimaryView(view)) markPrimaryView(view)
-  }, [view])
+  }, [view, loggedIn])
 
   // 二级页（资料卡/关于我/周记）的来源：从哪进返回哪（聊天/忆览/空间/我的）
   const [detailFrom, setDetailFrom] = useState<View>('chat')
@@ -617,7 +617,7 @@ export default function App() {
     goView('role')
   }
 
-  // 已登录用户首次挂载（initialView='loading'）时拉会话分流；开机欢迎页时等「开始使用」再分流。
+  // 已登录用户首次挂载直接从 loading 拉云端会话分流；登录成功后同样走这条会话恢复链。
   // redirectBySessions 内部已置位 redirectStarted，这里只需判重。
   useEffect(() => {
     if (!loggedIn || redirectStarted.current || view !== 'loading') return
