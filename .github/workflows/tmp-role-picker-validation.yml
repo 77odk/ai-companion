@@ -5,6 +5,8 @@ on:
       - feat/role-picker-template-library
 jobs:
   validate:
+    env:
+      TZ: Asia/Shanghai
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
