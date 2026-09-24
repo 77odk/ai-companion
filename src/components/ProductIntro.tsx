@@ -13,7 +13,13 @@ export default function ProductIntro({ onBack, onStart }: Props) {
     if (!el) return
     const max = Math.max(1, el.scrollHeight - el.clientHeight)
     const progress = Math.min(1, Math.max(0, el.scrollTop / max))
+    const heroPhase = Math.min(1, progress * 4.2)
     el.style.setProperty('--intro-progress', progress.toFixed(4))
+    el.style.setProperty('--intro-book-y', `${Math.round(heroPhase * 18)}px`)
+    el.style.setProperty('--intro-book-turn', `${(-7 + heroPhase * 10).toFixed(2)}deg`)
+    el.style.setProperty('--intro-leaf-a', `${(-30 - heroPhase * 28).toFixed(2)}deg`)
+    el.style.setProperty('--intro-leaf-b', `${(-54 - heroPhase * 42).toFixed(2)}deg`)
+    el.style.setProperty('--intro-orbit-y', `${Math.round(heroPhase * -8)}px`)
   }, [])
 
   useEffect(() => {
