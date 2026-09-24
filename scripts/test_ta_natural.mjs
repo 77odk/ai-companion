@@ -28,7 +28,7 @@ assert.match(rolePicker, /TA姓名[\s\S]*isNatural \? 'optional-mark' : 'require
 assert.match(rolePicker, /setup\.kind === 'natural'[\s\S]*proceed\('', s, null, true\)/)
 assert.match(rolePicker, /if \(!allowEmptyPersona && !persona\.trim\(\)\) return/)
 assert.match(rolePicker, /createSession\(getToken\(\), \{ persona, title \}\)/)
-assert.match(rolePicker, /saveProfileForSession\(s, String\(res\.data\.id\)\)/)
+assert.match(rolePicker, /saveProfileForSession\(profileState, String\(res\.data\.id\)\)/)
 assert.match(rolePicker, /startChat: allowEmptyPersona/)
 assert.match(rolePicker, /nickname: s\.nickname\.trim\(\) \|\| 'TA'/)
 assert.match(rolePicker, /nickname: res\.data\.title\?\.trim\(\) \|\| 'TA'/)
