@@ -1654,35 +1654,35 @@
   Keep A's exact color placement / gradient geometry / opacity hierarchy.
   Replace only the palette:
   paper white #FFF3EE
-  warm rice-apricot #FFE9D9
-  soft peach-orange #FFD1B7
-  coral accent #FFA588
-  soft rose #F78B8B
-  rose-brown shadow #D1746B
+  warm rice-apricot #fff0e7
+  soft peach-orange #ffddcc
+  coral accent #f8b5a0
+  soft rose #f2a0a0
+  rose-brown shadow #cf8a83
 */
 .product-intro-v1 {
   --intro-ink: #6f4d4a;
   --intro-muted: #987775;
   --intro-paper: #fff3ee;
-  --intro-paper-2: #ffe9d9;
-  --intro-paper-3: #ffd1b7;
-  --intro-night: #f78b8b;
-  --intro-night-2: #ffa588;
-  --intro-amber: #ffd1b7;
-  --intro-peach: #ffa588;
-  --intro-coral: #f78b8b;
-  --intro-coral-deep: #d1746b;
+  --intro-paper-2: #fff0e7;
+  --intro-paper-3: #ffddcc;
+  --intro-night: #f2a0a0;
+  --intro-night-2: #f8b5a0;
+  --intro-amber: #ffddcc;
+  --intro-peach: #f8b5a0;
+  --intro-coral: #f2a0a0;
+  --intro-coral-deep: #cf8a83;
   --intro-cream: #fff3ee;
-  background: #ffa588;
+  background: #f8b5a0;
 }
 
 .intro-copy h2 {
   color: #9b5d59;
   -webkit-text-stroke: .25px rgba(119, 76, 72, .10);
   text-shadow:
-    0 1px 0 #ffd1b7,
-    0 2px 0 #efa59c,
-    0 3px 0 #d9837a,
+    0 1px 0 #ffddcc,
+    0 2px 0 #efb4ad,
+    0 3px 0 #dc958d,
     0 10px 22px rgba(156, 94, 88, .17);
 }
 
@@ -1692,10 +1692,10 @@
   color: #fff3ee;
   -webkit-text-stroke: .3px rgba(255, 243, 238, .30);
   text-shadow:
-    0 1px 0 #ffd1b7,
-    0 2px 0 #f0aba1,
-    0 3px 0 #df8f86,
-    0 4px 0 #d1746b,
+    0 1px 0 #ffddcc,
+    0 2px 0 #f0bab3,
+    0 3px 0 #dfa19a,
+    0 4px 0 #cf8a83,
     0 14px 28px rgba(151, 82, 77, .22);
 }
 
@@ -1742,7 +1742,7 @@
     radial-gradient(circle at 84% 16%, rgba(255, 233, 217, .94), transparent 34%),
     radial-gradient(circle at 78% 70%, rgba(255, 209, 183, .88), transparent 36%),
     radial-gradient(circle at 16% 80%, rgba(255, 165, 136, .72), transparent 38%),
-    linear-gradient(145deg, #f78b8b 0%, #ffa588 34%, #ffd1b7 70%, #fff3ee 100%);
+    linear-gradient(145deg, #f2a0a0 0%, #f8b5a0 34%, #ffddcc 70%, #fff3ee 100%);
   color: #fff3ee;
 }
 
@@ -1773,7 +1773,7 @@
 
 .intro-book-back-cover {
   background:
-    linear-gradient(135deg, #f78b8b 0%, #e48079 58%, #d1746b 100%);
+    linear-gradient(135deg, #f2a0a0 0%, #e89a91 58%, #cf8a83 100%);
   box-shadow:
     0 28px 48px rgba(177, 101, 94, .26),
     inset 0 1px 0 rgba(255,255,255,.28),
@@ -1786,7 +1786,7 @@
       180deg,
       #fff3ee 0,
       #fff3ee 3px,
-      #ead5cc 4px
+      #efe0d9 4px
     );
   box-shadow:
     inset -8px 0 14px rgba(209,116,107,.10),
@@ -1795,11 +1795,11 @@
 
 .intro-book-page-block span {
   border-right-color: rgba(209,116,107,.20);
-  background: #ffe9d9;
+  background: #fff0e7;
 }
 
 .intro-book-spine {
-  background: linear-gradient(90deg, #d1746b, #f78b8b 46%, #dc8179);
+  background: linear-gradient(90deg, #cf8a83, #f2a0a0 46%, #dda09a);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,.24),
     inset 0 0 12px rgba(151,82,77,.11);
@@ -1810,7 +1810,7 @@
   background:
     radial-gradient(circle at 78% 12%, rgba(255,255,255,.86), transparent 30%),
     radial-gradient(circle at 12% 74%, rgba(255,209,183,.34), transparent 34%),
-    linear-gradient(145deg, #fff3ee 0%, #ffe9d9 50%, #ffd1b7 100%);
+    linear-gradient(145deg, #fff3ee 0%, #fff0e7 50%, #ffddcc 100%);
   box-shadow:
     0 26px 46px rgba(177,101,94,.20),
     inset 12px 0 24px rgba(247,139,139,.075),
@@ -1835,12 +1835,12 @@
 }
 
 .intro-book-front-cover strong {
-  color: #d1746b;
+  color: #cf8a83;
   font-size: 27px;
   font-weight: 600;
   text-shadow:
-    0 1px 0 #ffd1b7,
-    0 2px 0 #efa59c,
+    0 1px 0 #ffddcc,
+    0 2px 0 #efb4ad,
     0 7px 16px rgba(177,101,94,.15);
 }
 
@@ -1857,7 +1857,7 @@
   background:
     radial-gradient(circle at 80% 10%, rgba(255,209,183,.80), transparent 31%),
     radial-gradient(circle at 8% 74%, rgba(247,139,139,.28), transparent 34%),
-    linear-gradient(180deg, #ffe9d9 0%, #fff3ee 44%, #ffe9d9 100%);
+    linear-gradient(180deg, #fff0e7 0%, #fff3ee 44%, #fff0e7 100%);
 }
 
 .intro-paper-light {
@@ -1900,7 +1900,7 @@
 .intro-page-curl {
   background:
     radial-gradient(circle at 100% 100%, rgba(177,101,94,.18), transparent 48%),
-    linear-gradient(135deg, transparent 49%, #ffd1b7 50%, #fff3ee 73%);
+    linear-gradient(135deg, transparent 49%, #ffddcc 50%, #fff3ee 73%);
   box-shadow: -12px -10px 22px rgba(177,101,94,.10);
 }
 
@@ -1909,7 +1909,7 @@
   background:
     radial-gradient(circle at 86% 24%, rgba(247,139,139,.34), transparent 32%),
     radial-gradient(circle at 14% 78%, rgba(255,209,183,.86), transparent 35%),
-    linear-gradient(180deg, #fff3ee 0%, #ffe9d9 48%, #ffd1b7 100%);
+    linear-gradient(180deg, #fff3ee 0%, #fff0e7 48%, #ffddcc 100%);
 }
 
 .intro-time-haze {
@@ -1927,7 +1927,7 @@
 
 .intro-time-page-edge {
   background:
-    repeating-linear-gradient(180deg, #ffe9d9 0 2px, #e7c5bb 3px);
+    repeating-linear-gradient(180deg, #fff0e7 0 2px, #ecd5ce 3px);
 }
 
 .intro-time-kicker {
@@ -1937,7 +1937,7 @@
 .intro-time-page strong {
   color: #b96561;
   text-shadow:
-    0 2px 0 #ffd1b7,
+    0 2px 0 #ffddcc,
     0 8px 18px rgba(177,101,94,.14);
 }
 
@@ -1957,13 +1957,13 @@
 
 .intro-time-photo {
   border-color: rgba(255,243,238,.90);
-  background: linear-gradient(150deg, #f78b8b, #ffd1b7 56%, #d1746b);
+  background: linear-gradient(150deg, #f2a0a0, #ffddcc 56%, #cf8a83);
   box-shadow: 0 13px 20px rgba(177,101,94,.15);
 }
 
 .intro-time-loose-page {
   border-color: rgba(209,116,107,.12);
-  background: #ffe9d9;
+  background: #fff0e7;
   box-shadow: 0 18px 32px rgba(177,101,94,.10);
 }
 
@@ -1973,7 +1973,7 @@
     radial-gradient(circle at 50% 52%, rgba(255,233,217,.62), transparent 29%),
     radial-gradient(circle at 16% 15%, rgba(209,116,107,.38), transparent 31%),
     radial-gradient(circle at 84% 78%, rgba(255,209,183,.52), transparent 30%),
-    linear-gradient(155deg, #d1746b 0%, #f78b8b 40%, #ffa588 72%, #ffd1b7 100%);
+    linear-gradient(155deg, #cf8a83 0%, #f2a0a0 40%, #f8b5a0 72%, #ffddcc 100%);
   color: #fff3ee;
 }
 
@@ -2019,7 +2019,7 @@
 .intro-scene-threshold {
   background:
     radial-gradient(circle at 90% 8%, rgba(255,209,183,.56), transparent 30%),
-    linear-gradient(180deg, #fff3ee 0%, #fff3ee 50%, #ffe9d9 100%);
+    linear-gradient(180deg, #fff3ee 0%, #fff3ee 50%, #fff0e7 100%);
 }
 
 .intro-threshold-sheet {
@@ -2029,8 +2029,8 @@
     #fff3ee;
   box-shadow:
     0 24px 44px rgba(166,96,90,.10),
-    8px 10px 0 #ffe9d9,
-    14px 16px 0 #ffd1b7;
+    8px 10px 0 #fff0e7,
+    14px 16px 0 #ffddcc;
 }
 
 .intro-threshold-sheet::before,
@@ -2052,7 +2052,7 @@
 }
 
 .intro-sheet-row b {
-  color: #d1746b;
+  color: #cf8a83;
 }
 
 .intro-sheet-row span {
@@ -2082,7 +2082,7 @@
     radial-gradient(circle at 50% 26%, rgba(255,233,217,.82), transparent 29%),
     radial-gradient(circle at 14% 76%, rgba(209,116,107,.46), transparent 34%),
     radial-gradient(circle at 86% 78%, rgba(255,209,183,.58), transparent 31%),
-    linear-gradient(150deg, #d1746b 0%, #f78b8b 42%, #ffa588 72%, #ffd1b7 100%);
+    linear-gradient(150deg, #cf8a83 0%, #f2a0a0 42%, #f8b5a0 72%, #ffddcc 100%);
   color: #fff3ee;
 }
 
@@ -2096,14 +2096,14 @@
 
 .intro-final-book-pages {
   background:
-    repeating-linear-gradient(180deg, #fff3ee 0 3px, #e7c5bb 4px);
+    repeating-linear-gradient(180deg, #fff3ee 0 3px, #ecd5ce 4px);
 }
 
 .intro-final-book-cover {
   border-color: rgba(255,255,255,.65);
   background:
     radial-gradient(circle at 74% 12%, rgba(255,255,255,.80), transparent 28%),
-    linear-gradient(145deg, #fff3ee 0%, #ffe9d9 55%, #ffd1b7 100%);
+    linear-gradient(145deg, #fff3ee 0%, #fff0e7 55%, #ffddcc 100%);
   box-shadow:
     0 26px 42px rgba(151,82,77,.21),
     inset 10px 0 20px rgba(209,116,107,.07);
@@ -2118,11 +2118,11 @@
 }
 
 .intro-final-book-cover strong {
-  color: #d1746b;
+  color: #cf8a83;
   font-weight: 600;
   text-shadow:
-    0 1px 0 #ffd1b7,
-    0 2px 0 #efa59c,
+    0 1px 0 #ffddcc,
+    0 2px 0 #efb4ad,
     0 7px 15px rgba(177,101,94,.14);
 }
 
