@@ -1970,10 +1970,10 @@
 /* 04 · same A distribution, B colors */
 .intro-scene-engine {
   background:
-    radial-gradient(circle at 12% 8%, rgba(242, 160, 160, .54), transparent 34%),
-    radial-gradient(circle at 84% 16%, rgba(255, 240, 231, .94), transparent 34%),
-    radial-gradient(circle at 78% 70%, rgba(255, 221, 204, .88), transparent 36%),
-    radial-gradient(circle at 16% 80%, rgba(248, 181, 160, .72), transparent 38%),
+    radial-gradient(circle at 12% 8%, rgba(247, 139, 139, .54), transparent 34%),
+    radial-gradient(circle at 84% 16%, rgba(255, 233, 217, .94), transparent 34%),
+    radial-gradient(circle at 78% 70%, rgba(255, 209, 183, .88), transparent 36%),
+    radial-gradient(circle at 16% 80%, rgba(255, 165, 136, .72), transparent 38%),
     linear-gradient(145deg, #f2a0a0 0%, #f8b5a0 34%, #ffddcc 70%, #fff3ee 100%);
   color: #fff3ee;
 }
@@ -2080,10 +2080,10 @@
 /* 06 · same A distribution, B colors */
 .intro-scene-final {
   background:
-    radial-gradient(circle at 12% 8%, rgba(242, 160, 160, .54), transparent 34%),
-    radial-gradient(circle at 84% 16%, rgba(255, 240, 231, .94), transparent 34%),
-    radial-gradient(circle at 78% 70%, rgba(255, 221, 204, .88), transparent 36%),
-    radial-gradient(circle at 16% 80%, rgba(248, 181, 160, .72), transparent 38%),
+    radial-gradient(circle at 12% 8%, rgba(247, 139, 139, .54), transparent 34%),
+    radial-gradient(circle at 84% 16%, rgba(255, 233, 217, .94), transparent 34%),
+    radial-gradient(circle at 78% 70%, rgba(255, 209, 183, .88), transparent 36%),
+    radial-gradient(circle at 16% 80%, rgba(255, 165, 136, .72), transparent 38%),
     linear-gradient(145deg, #f2a0a0 0%, #f8b5a0 34%, #ffddcc 70%, #fff3ee 100%);
   color: #fff3ee;
 }
