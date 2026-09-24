@@ -44,6 +44,9 @@ jobs:
           await page.addInitScript(() => {
             localStorage.setItem('eluvin_consent', JSON.stringify({ version: 'v1', consentedAt: '2026-09-24T00:00:00.000Z' }))
           })
+          await page.route('**/api/site-stats', async (route) => {
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ uv: 1, pv: 1 }) })
+          })
 
           await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
           await page.getByRole('button', { name: /开始遇见 TA/ }).click()
@@ -76,6 +79,9 @@ jobs:
               body: JSON.stringify({ error: '密码至少 6 位' }),
             })
           })
+          assert.equal(pageErrors.length, 0, '0 pageerror before expected auth failure')
+          assert.equal(consoleErrors.length, 0, '0 console error before expected auth failure')
+
           await page.locator('#account-email').fill('qa@example.com')
           await page.locator('#account-password').fill('123')
           await page.getByLabel('出生年').selectOption({ index: 1 })
@@ -84,6 +90,8 @@ jobs:
           await page.getByRole('button', { name: '注册', exact: true }).last().click()
           await page.getByText(/密码至少 6 位/).waitFor({ state: 'visible' })
           await page.screenshot({ path: 'register-view-390x844.png', fullPage: true })
+          // 这条 400 是 QA 为验证错误提示故意制造的网络错误，不属于页面 console regression。
+          consoleErrors.length = 0
 
           await page.getByRole('tab', { name: '登录' }).click()
           await page.getByRole('button', { name: '忘记密码？' }).click()
