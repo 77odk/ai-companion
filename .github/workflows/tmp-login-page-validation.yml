@@ -1,0 +1,119 @@
+name: temp login page validation
+on:
+  push:
+    branches:
+      - feat/login-page-refresh
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: node scripts/test_auth.mjs
+      - run: npm run build
+      - run: npm run lint
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Validate login page at 390x844
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/eluvin-preview.log 2>&1 &
+          cat > login-page-validation.mjs <<'EOF'
+          import { chromium } from 'playwright'
+          import assert from 'node:assert/strict'
+
+          const browser = await chromium.launch({ headless: true })
+          const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
+          const pageErrors = []
+          const consoleErrors = []
+          page.on('pageerror', (err) => pageErrors.push(String(err)))
+          page.on('console', (msg) => {
+            if (msg.type() !== 'error') return
+            const t = msg.text()
+            if (/beacon|cloudflare/i.test(t)) return
+            consoleErrors.push(t)
+          })
+
+          await page.addInitScript(() => {
+            localStorage.setItem('eluvin_consent', JSON.stringify({ version: 'v1', consentedAt: '2026-09-24T00:00:00.000Z' }))
+          })
+
+          await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
+          await page.getByRole('button', { name: /开始遇见 TA/ }).click()
+          await page.getByRole('button', { name: '已有账号直接登录' }).click()
+          await page.getByRole('heading', { name: '欢迎回来' }).waitFor({ state: 'visible' })
+
+          assert.equal(await page.locator('.login-gate-logo').getAttribute('src'), '/brand/eluvin-book-icon-cutout.png')
+          assert.equal(await page.locator('#account-email').getAttribute('type'), 'email')
+          assert.equal(await page.locator('#account-password').getAttribute('type'), 'password')
+          assert.equal(await page.getByRole('button', { name: '检查更新' }).count(), 0)
+          assert.equal(await page.getByRole('button', { name: '先看看教程' }).count(), 1)
+          assert.equal(await page.getByRole('button', { name: '强制刷新' }).count(), 1)
+
+          let overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+          assert.ok(overflow <= 0, 'login view has no horizontal overflow')
+          await page.screenshot({ path: 'login-view-390x844.png', fullPage: true })
+
+          await page.getByRole('tab', { name: '注册' }).click()
+          await page.locator('#reg-code').waitFor({ state: 'visible' })
+          assert.equal(await page.getByLabel('出生年').count(), 1)
+          assert.equal(await page.getByLabel('出生月').count(), 1)
+          assert.equal(await page.getByLabel('出生日').count(), 1)
+          await page.locator('#account-email').fill('bad-email')
+          await page.getByText('现在只支持邮箱登录，填一下邮箱地址').waitFor({ state: 'visible' })
+
+          await page.route('**/api/register', async (route) => {
+            await route.fulfill({
+              status: 400,
+              contentType: 'application/json',
+              body: JSON.stringify({ error: '密码至少 6 位' }),
+            })
+          })
+          await page.locator('#account-email').fill('qa@example.com')
+          await page.locator('#account-password').fill('123')
+          await page.getByLabel('出生年').selectOption({ index: 1 })
+          await page.getByLabel('出生月').selectOption('01')
+          await page.getByLabel('出生日').selectOption('01')
+          await page.getByRole('button', { name: '注册', exact: true }).last().click()
+          await page.getByText(/密码至少 6 位/).waitFor({ state: 'visible' })
+          await page.screenshot({ path: 'register-view-390x844.png', fullPage: true })
+
+          await page.getByRole('tab', { name: '登录' }).click()
+          await page.getByRole('button', { name: '忘记密码？' }).click()
+          await page.getByText('找回密码').waitFor({ state: 'visible' })
+          assert.equal(await page.locator('#forgot-account').getAttribute('type'), 'email')
+          assert.equal(await page.locator('#forgot-new-password').getAttribute('type'), 'password')
+          await page.screenshot({ path: 'forgot-view-390x844.png', fullPage: true })
+          await page.getByRole('button', { name: '想起来了，返回登录' }).click()
+          await page.getByRole('tab', { name: '登录' }).waitFor({ state: 'visible' })
+
+          overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+          assert.ok(overflow <= 0, 'all login flows have no horizontal overflow')
+
+          await page.setViewportSize({ width: 390, height: 500 })
+          await page.getByRole('tab', { name: '注册' }).click()
+          const registerButton = page.getByRole('button', { name: '注册', exact: true }).last()
+          await registerButton.scrollIntoViewIfNeeded()
+          assert.ok(await registerButton.isVisible(), 'primary button remains reachable in keyboard-height viewport')
+
+          assert.equal(pageErrors.length, 0, '0 pageerror')
+          assert.equal(consoleErrors.length, 0, '0 console error excluding Cloudflare/beacon noise')
+          console.log(JSON.stringify({ overflow, pageErrors, consoleErrors }))
+          await browser.close()
+          EOF
+          node login-page-validation.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: login-page-390x844
+          path: |
+            login-view-390x844.png
+            register-view-390x844.png
+            forgot-view-390x844.png
+          if-no-files-found: error
