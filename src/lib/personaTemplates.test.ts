@@ -1,6 +1,6 @@
 // 人设模板数据自测（纯数据，Node 可直接跑）
 // 跑法：node src/lib/personaTemplates.test.ts
-import { ROLE_TEMPLATES } from './personaTemplates.ts'
+import { applyRoleTemplatePersonality, ROLE_TEMPLATES } from './personaTemplates.ts'
 import { stripEmoji } from './api.ts'
 
 let passed = 0
@@ -72,6 +72,30 @@ for (const t of ROLE_TEMPLATES) {
   for (const w of BASE_ONLY_WORDS) {
     ok(!t.persona.includes(w), `${t.id} 不重复 Companion Base 规则「${w}」`)
   }
+}
+
+console.log('\n[4] 应用模板只替换 personality')
+const original = {
+  avatar: 'data:image/mock',
+  nickname: '小七',
+  remark: '只叫这个称呼',
+  gender: 'female',
+  personality: '原来的性格',
+  background: '原来的关系背景',
+  opening: '原来的开场第一句',
+}
+const picked = ROLE_TEMPLATES.find((t) => t.id === 'slow-burn')
+ok(Boolean(picked), 'slow-burn 模板存在')
+if (picked) {
+  const applied = applyRoleTemplatePersonality(original, picked)
+  eq(applied.personality, picked.persona, '只替换 personality')
+  eq(applied.avatar, original.avatar, '头像不变')
+  eq(applied.nickname, original.nickname, '姓名不变')
+  eq(applied.remark, original.remark, '备注不变')
+  eq(applied.gender, original.gender, '性别不变')
+  eq(applied.background, original.background, '关系背景不变')
+  eq(applied.opening, original.opening, '开场白不变')
+  eq(original.personality, '原来的性格', '不修改原对象')
 }
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
