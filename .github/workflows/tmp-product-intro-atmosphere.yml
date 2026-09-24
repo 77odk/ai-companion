@@ -1,0 +1,100 @@
+name: temp product intro atmosphere
+on:
+  push:
+    branches:
+      - feat/welcome-product-intro-3d
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Verify atmosphere at 390x844
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/eluvin-preview.log 2>&1 &
+          cat > atmosphere.mjs <<'EOF'
+          import { chromium } from 'playwright'
+          import assert from 'node:assert/strict'
+
+          const browser = await chromium.launch({ headless: true })
+          const errors = []
+
+          const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 })
+          page.on('pageerror', e => errors.push(String(e)))
+          page.on('console', msg => {
+            if (msg.type() === 'error' && !/favicon|beacon|cloudflare/i.test(msg.text())) errors.push(msg.text())
+          })
+          await page.route('**/api/site-stats', async r => r.fulfill({status:200,contentType:'application/json',body:'{"uv":1,"pv":1}'}))
+          await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'})
+          await page.getByRole('button',{name:/先了解一下/}).click()
+          await page.locator('.product-intro-v1').waitFor({state:'visible'})
+
+          const canvas = page.locator('.intro-atmosphere')
+          await canvas.waitFor({state:'visible'})
+          const canvasInfo = await canvas.evaluate(el => ({
+            width: el.width,
+            height: el.height,
+            cssWidth: el.clientWidth,
+            cssHeight: el.clientHeight,
+            pointerEvents: getComputedStyle(el).pointerEvents,
+            opacity: getComputedStyle(el).opacity,
+          }))
+          assert.equal(canvasInfo.cssWidth,390)
+          assert.equal(canvasInfo.cssHeight,844)
+          assert.equal(canvasInfo.width,585,'DPR capped at 1.5')
+          assert.equal(canvasInfo.height,1266,'DPR capped at 1.5')
+          assert.equal(canvasInfo.pointerEvents,'none')
+
+          // Canvas must not break existing scroll narrative.
+          const main = page.locator('.product-intro-v1 main')
+          const hero = page.locator('.intro-scene-hero')
+          const heroHeight = await hero.evaluate(el=>el.getBoundingClientRect().height)
+          await main.evaluate((el,top)=>{el.scrollTop=top},heroHeight*.42)
+          await page.waitForTimeout(120)
+          const turnOpacity=Number(await hero.evaluate(el=>getComputedStyle(el).getPropertyValue('--intro-turn-opacity')))
+          assert.ok(turnOpacity>.5,'scroll narrative still active with atmosphere')
+          await page.screenshot({path:'atmosphere-hero-turn.png',fullPage:false})
+
+          await page.locator('.intro-scene-memory').scrollIntoViewIfNeeded()
+          await page.waitForTimeout(100)
+          await page.screenshot({path:'atmosphere-memory.png',fullPage:false})
+
+          const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)
+          assert.ok(overflow<=0)
+          assert.equal(errors.length,0,errors.join('\n'))
+
+          // reduced-motion keeps static canvas but disables motion narrative.
+          const reduced=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:3})
+          await reduced.emulateMedia({reducedMotion:'reduce'})
+          await reduced.route('**/api/site-stats', async r => r.fulfill({status:200,contentType:'application/json',body:'{"uv":1,"pv":1}'}))
+          await reduced.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'})
+          await reduced.getByRole('button',{name:/先了解一下/}).click()
+          await reduced.locator('.product-intro-v1').waitFor({state:'visible'})
+          assert.equal(await reduced.locator('.product-intro-v1').getAttribute('data-motion'),'reduced')
+          assert.equal(await reduced.locator('.intro-atmosphere').evaluate(el=>getComputedStyle(el).opacity),'0.44')
+          await reduced.screenshot({path:'atmosphere-reduced.png',fullPage:false})
+
+          console.log(JSON.stringify({canvasInfo,turnOpacity,overflow}))
+          await browser.close()
+          EOF
+          node atmosphere.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: product-intro-atmosphere-390x844
+          path: |
+            atmosphere-hero-turn.png
+            atmosphere-memory.png
+            atmosphere-reduced.png
+          if-no-files-found: error
