@@ -1460,17 +1460,17 @@
   height: 100%;
   display: block;
   object-fit: cover;
-  transform: scale(1.065);
+  transform: scale(1.11);
   transform-origin: center;
 }
 
 .welcome-reference-content h1 {
   margin: 16px 0 2px;
   color: #2f2a28;
-  font-family: "Kaiti SC", "STKaiti", "KaiTi", "Songti SC", "STSong", serif;
-  font-size: clamp(40px, 12vw, 52px);
+  font-family: "Kaiti SC", "STKaiti", "KaiTi", "FangSong", "Songti SC", "STSong", serif;
+  font-size: clamp(42px, 12.2vw, 52px);
   font-weight: 400;
-  letter-spacing: .11em;
+  letter-spacing: .065em;
   line-height: 1.02;
 }
 
