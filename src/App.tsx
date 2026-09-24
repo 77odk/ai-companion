@@ -34,10 +34,8 @@ import {
   clearVisitWelcome,
   getLastPrimaryView,
   isPrimaryView,
-  isVisitWelcome,
   markPrimaryView,
   markVisitWelcome,
-  shouldShowWelcomeOnEntry,
 } from './lib/visitState'
 import {
   decideLoginTarget,
@@ -63,11 +61,12 @@ const ChatSettings = lazy(() => import('./components/ChatSettings'))
 const AboutMe = lazy(() => import('./components/AboutMe'))
 const WeeklyPage = lazy(() => import('./components/WeeklyPage'))
 const GuideDetail = lazy(() => import('./components/Guide'))
+const ProductIntro = lazy(() => import('./components/ProductIntro'))
 const RolesPage = lazy(() => import('./components/RolesPage'))
 const SpaceLife = lazy(() => import('./components/SpaceLife'))
 const Memory = lazy(() => import('./components/Memory'))
 
-type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
+type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
 // 底部四 tab 的常显范围：主视图（TA/空间/记忆/我的）带底部导航；Chat 等全屏页不带。
 // UI2-02 NAV-03：Chat 是 Secondary 全屏 view，Bottom Nav 只属于 home/aispace/memory/settings。
@@ -132,13 +131,10 @@ function ChatHeaderPresence({ sessionId }: { sessionId: string | null }) {
 // 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
 type MigrationState = 'idle' | 'running' | 'failed'
 
-// ---- 开机页判定：交给 visitState（新会话 / 距上次活跃超过 6 小时算 fresh visit） ----
-// 模块加载时判一次，保证先读标记再渲染，也不会被 StrictMode 的二次初始化干扰。
-// 优先级：fresh visit / 本会话正停留在 Welcome / 游客 → 欢迎页；
-//         已登录用户异步拉会话分流（loading 过渡，不白屏）。
-// 已登录不再用 needsRolePick 判初始页：有没有会话由云端 sessions 决定，拉回结果后再恢复主视图/进聊天/选角色。
-const showWelcomeOnEntry = shouldShowWelcomeOnEntry()
-const initialView: View = showWelcomeOnEntry || isVisitWelcome() || !isLoggedIn() ? 'welcome' : 'loading'
+// ---- 开机页判定：认证态优先 ----
+// 已登录：永远跳过 Welcome / ProductIntro，先进入 loading 再按云端 sessions 分流。
+// 未登录：进入 Welcome；产品介绍不写本地 seen 标记，避免多设备状态漂移。
+const initialView: View = isLoggedIn() ? 'loading' : 'welcome'
 
 // 是否需要先选角色：没有专属人设且没有聊天记录 = 全新用户，进聊天前必须选一个 TA
 function needsRolePick(): boolean {
@@ -163,6 +159,7 @@ function useAuthState(): boolean {
 
 export default function App() {
   const [view, setView] = useState<View>(initialView)
+  const loggedIn = useAuthState()
 
   useEffect(() => {
     initCloudStateSync()
@@ -257,16 +254,16 @@ export default function App() {
     restoreScroll(view)
   }, [view, restoreScroll])
 
-  // UI2-02 NAV：主视图记 lastPrimaryView（只允许 home/aispace/memory/settings）；
-  // Welcome 记当前会话 visit marker（登录用户在 Welcome 刷新仍停留 Welcome），离开 Welcome 即清除。
+  // UI2-02 NAV：主视图记 lastPrimaryView（只允许 home/aispace/memory/settings）。
+  // Welcome marker 只服务未登录展示；一旦有登录态立即清掉，避免认证用户刷新又回营销页。
   useEffect(() => {
-    if (view === 'welcome') {
+    if (view === 'welcome' && !loggedIn) {
       markVisitWelcome()
-    } else if (view !== 'loading') {
+    } else if (view !== 'loading' || loggedIn) {
       clearVisitWelcome()
     }
     if (isPrimaryView(view)) markPrimaryView(view)
-  }, [view])
+  }, [view, loggedIn])
 
   // 二级页（资料卡/关于我/周记）的来源：从哪进返回哪（聊天/忆览/空间/我的）
   const [detailFrom, setDetailFrom] = useState<View>('chat')
@@ -305,7 +302,6 @@ export default function App() {
   // 已登录用户首次拉会话列表只做一次（StrictMode 双跑防重）
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
-  const loggedIn = useAuthState()
   // ConsentGate V1：首次使用先过「开始之前」安全说明（本机已同意当前版本则直接跳过）
   const [firstConsentDone, setFirstConsentDone] = useState<boolean>(() => !consentGateNeeded())
   // 老用户轻量补确认：初始化就按当前账号判断，避免首帧先误打统计再盖 light consent。
@@ -563,7 +559,8 @@ export default function App() {
     replaceView('chat')
   }
 
-  // 欢迎页「开始使用」：离开 Welcome（清会话级 visit marker）；登录用户按云端会话分流；游客维持原流程（选角色或直接聊天）
+  // 产品介绍最后一幕「开始遇见 TA」：游客看完介绍后进入现有首次使用流程。
+  // 已登录态通常不会进入 ProductIntro；若登录态变化发生在页面停留期间，仍按云端 sessions 分流。
   const handleWelcomeStart = () => {
     clearVisitWelcome()
     if (isLoggedIn()) {
@@ -571,6 +568,12 @@ export default function App() {
     } else {
       navigate(needsRolePick() ? 'role' : 'chat')
     }
+  }
+
+  // Welcome 老用户旁路：不要求重看产品介绍，直接进入现有登录墙。
+  const handleWelcomeLogin = () => {
+    setPendingTarget(null)
+    setGateTarget('chat')
   }
 
   // 登录墙返回：不登录，回欢迎页继续逛展示内容
@@ -614,7 +617,7 @@ export default function App() {
     goView('role')
   }
 
-  // 已登录用户首次挂载（initialView='loading'）时拉会话分流；开机欢迎页时等「开始使用」再分流。
+  // 已登录用户首次挂载直接从 loading 拉云端会话分流；登录成功后同样走这条会话恢复链。
   // redirectBySessions 内部已置位 redirectStarted，这里只需判重。
   useEffect(() => {
     if (!loggedIn || redirectStarted.current || view !== 'loading') return
@@ -657,12 +660,14 @@ export default function App() {
         ) : (
           <LoginGate onDone={handleGateDone} onGoGuide={() => openGuide('gate')} onBack={handleGateBack} />
         )
+      ) : view === 'productintro' ? (
+        <ProductIntro onBack={() => navigate('welcome')} onStart={handleWelcomeStart} />
       ) : view === 'guide' ? (
         <GuideDetail onBack={handleGuideBack} onGoProvider={() => openSettings('provider')} />
       ) : view === 'welcome' ? (
         <Welcome
-          onStart={handleWelcomeStart}
-          onGoGuide={() => openGuide('welcome')}
+          onGoGuide={() => navigate('productintro')}
+          onLogin={handleWelcomeLogin}
         />
       ) : view === 'role' ? (
         <RolePicker
