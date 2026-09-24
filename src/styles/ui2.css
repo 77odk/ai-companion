@@ -1460,17 +1460,17 @@
   height: 100%;
   display: block;
   object-fit: cover;
-  transform: scale(1.11);
+  transform: scale(1.20);
   transform-origin: center;
 }
 
 .welcome-reference-content h1 {
   margin: 16px 0 2px;
   color: #2f2a28;
-  font-family: "Kaiti SC", "STKaiti", "KaiTi", "FangSong", "Songti SC", "STSong", serif;
-  font-size: clamp(42px, 12.2vw, 52px);
-  font-weight: 400;
-  letter-spacing: .065em;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
+  font-size: clamp(42px, 12vw, 51px);
+  font-weight: 600;
+  letter-spacing: .055em;
   line-height: 1.02;
 }
 
@@ -1582,16 +1582,16 @@
 .welcome-reference-note {
   position: absolute;
   z-index: 3;
-  left: 20px;
-  bottom: max(24px, calc(env(safe-area-inset-bottom) + 10px));
+  left: 24px;
+  bottom: max(18px, calc(env(safe-area-inset-bottom) + 8px));
   margin: 0;
-  transform: rotate(-7deg);
-  color: rgba(187, 121, 111, .72);
+  transform: rotate(-5deg);
+  color: rgba(160, 101, 94, .68);
   font-family: "Kaiti SC", "STKaiti", "KaiTi", "Songti SC", "STSong", serif;
-  font-size: 11px;
+  font-size: 10.5px;
   font-style: italic;
-  letter-spacing: .07em;
-  line-height: 1.55;
+  letter-spacing: .06em;
+  line-height: 1.5;
   pointer-events: none;
 }
 
