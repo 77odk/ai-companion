@@ -25,7 +25,7 @@ jobs:
       - name: Capture six static scenes
         run: |
           npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/eluvin-preview.log 2>&1 &
-          cat > /tmp/capture.mjs <<'EOF'
+          cat > capture.mjs <<'EOF'
           import { chromium } from 'playwright'
           import assert from 'node:assert/strict'
 
@@ -80,7 +80,7 @@ jobs:
           console.log(JSON.stringify({ overflow, pageErrors, consoleErrors }))
           await browser.close()
           EOF
-          node /tmp/capture.mjs
+          node capture.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: product-intro-v1-static-390x844
