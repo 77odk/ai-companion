@@ -16,7 +16,7 @@ import {
   type AIGender,
 } from '../lib/storage'
 import { getToken, isLoggedIn } from '../lib/auth'
-import { createSession, patchSession } from '../lib/sessionApi'
+import { createSession } from '../lib/sessionApi'
 import { getActiveSessionId, setActiveSessionId } from '../lib/sessionStore'
 import { resolveSessionName, type RolePickMode } from '../lib/sessionFlow'
 import AvatarPicker from './AvatarPicker'
@@ -167,26 +167,12 @@ export default function RolePicker({
     try {
       let createdTitle: string | undefined
       if (isLoggedIn()) {
-        if (mode === 'current') {
-          const sid = getActiveSessionId()
-          if (sid) {
-            const res = await patchSession(getToken(), sid, { persona, title })
-            if (!res.ok) throw new Error(res.message)
-            saveProfileForSession(s, sid)
-          } else {
-            const res = await createSession(getToken(), { persona, title })
-            if (!res.ok) throw new Error(res.message)
-            setActiveSessionId(String(res.data.id))
-            createdTitle = res.data.title
-            saveProfileForSession(s, String(res.data.id))
-          }
-        } else {
-          const res = await createSession(getToken(), { persona, title })
-          if (!res.ok) throw new Error(res.message)
-          setActiveSessionId(String(res.data.id))
-          createdTitle = res.data.title
-          saveProfileForSession(s, String(res.data.id))
-        }
+        // current 已在组件顶部直接复用 AIDetail；走到这里的一定是 first/new，只负责新建 TA。
+        const res = await createSession(getToken(), { persona, title })
+        if (!res.ok) throw new Error(res.message)
+        setActiveSessionId(String(res.data.id))
+        createdTitle = res.data.title
+        saveProfileForSession(s, String(res.data.id))
       } else if (allowEmptyPersona) {
         // UI 允许 Natural 名字留空；游客登录链仍需要一个安全标题，内部用 TA 兜底，不把空串交给建会话。
         onNaturalLogin?.({
