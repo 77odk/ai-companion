@@ -1,0 +1,51 @@
+name: temp role picker screenshots
+on:
+  push:
+    branches:
+      - feat/role-picker-template-library
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Capture 390x844 role UI
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/eluvin-preview.log 2>&1 &
+          cat > /tmp/role-shots.mjs <<'EOF'
+          import { chromium } from 'playwright'
+          const browser = await chromium.launch({ headless: true })
+          const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
+          await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
+          const start = page.getByRole('button', { name: /登录 \/ 注册/ })
+          await start.waitFor({ state: 'visible', timeout: 15000 })
+          await start.click()
+          await page.getByRole('heading', { name: '想怎么认识 TA？' }).waitFor({ state: 'visible', timeout: 10000 })
+          await page.screenshot({ path: 'role-choice-390x844.png', fullPage: true })
+
+          await page.getByRole('button', { name: /自定义 TA/ }).click()
+          await page.getByRole('heading', { name: '自定义 TA' }).waitFor({ state: 'visible', timeout: 10000 })
+          await page.screenshot({ path: 'role-custom-390x844.png', fullPage: true })
+
+          await page.getByRole('button', { name: /看看模板/ }).click()
+          await page.getByRole('heading', { name: '人设模板' }).waitFor({ state: 'visible', timeout: 10000 })
+          await page.screenshot({ path: 'role-templates-390x844.png', fullPage: true })
+          await browser.close()
+          EOF
+          node /tmp/role-shots.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: role-picker-390x844
+          path: |
+            role-choice-390x844.png
+            role-custom-390x844.png
+            role-templates-390x844.png
+          if-no-files-found: error
