@@ -1127,3 +1127,523 @@
     animation: none;
   }
 }
+
+
+/* ---------- V1.1 · final icon palette + floating display type ---------- */
+.product-intro-v1 {
+  --intro-ink: #683844;
+  --intro-muted: #8d666c;
+  --intro-paper: #fff6ef;
+  --intro-paper-2: #ffe9de;
+  --intro-paper-3: #ffd6c6;
+  --intro-night: #ef8f91;
+  --intro-night-2: #f6aaa2;
+  --intro-amber: #f6ad91;
+  --intro-peach: #ef7f82;
+  --intro-coral: #e86f74;
+  --intro-coral-deep: #b94d5b;
+  --intro-cream: #fff9f4;
+  background: #f59aa0;
+}
+
+/* Display type: use Apple/Chinese calligraphic families first, never fall straight to PingFang.
+   No new font payload is added in this batch. */
+.intro-hero-copy h1,
+.intro-copy h2,
+.intro-engine-copy h2,
+.intro-final-copy h2,
+.intro-book-front-cover strong,
+.intro-final-book-cover strong {
+  font-family:
+    "Kaiti SC",
+    "STKaiti",
+    "KaiTi",
+    "Songti SC",
+    "STSong",
+    serif;
+}
+
+.intro-hero-copy h1,
+.intro-copy h2,
+.intro-engine-copy h2,
+.intro-final-copy h2 {
+  position: relative;
+  transform-origin: left center;
+  transform: perspective(900px) rotateX(2.4deg) rotateY(-1.4deg) translateZ(0);
+  font-weight: 600;
+  letter-spacing: -.025em;
+  -webkit-font-smoothing: antialiased;
+  will-change: transform;
+}
+
+.intro-copy h2 {
+  color: #9e4856;
+  -webkit-text-stroke: .25px rgba(124, 53, 65, .12);
+  text-shadow:
+    0 1px 0 #f7b1ad,
+    0 2px 0 #ed9495,
+    0 3px 0 #dd777d,
+    0 10px 22px rgba(156, 69, 82, .18);
+}
+
+.intro-hero-copy h1,
+.intro-engine-copy h2,
+.intro-final-copy h2 {
+  color: #fff9f4;
+  -webkit-text-stroke: .3px rgba(255, 255, 255, .28);
+  text-shadow:
+    0 1px 0 #f7bab0,
+    0 2px 0 #ee9794,
+    0 3px 0 #df777d,
+    0 4px 0 #c85a66,
+    0 14px 28px rgba(132, 54, 68, .24);
+}
+
+.intro-back {
+  border-color: rgba(255,255,255,.36);
+  background: rgba(255, 248, 242, .72);
+  color: #a74a58;
+  box-shadow:
+    0 10px 24px rgba(165, 67, 82, .14),
+    inset 0 1px 0 rgba(255,255,255,.72);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.intro-kicker {
+  color: #b95362;
+}
+
+.intro-kicker-light {
+  color: rgba(255, 249, 244, .78);
+}
+
+.intro-body {
+  color: #815c64;
+}
+
+.intro-body-secondary {
+  color: #a1767a;
+}
+
+.intro-body-on-dark {
+  color: rgba(255, 249, 244, .82);
+}
+
+.intro-brand-line {
+  color: rgba(255, 249, 244, .78);
+  text-shadow: 0 5px 18px rgba(154, 57, 73, .18);
+}
+
+/* 01 · opening: the final icon's coral / peach / ivory world, not black. */
+.intro-scene-hero {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(228, 92, 116, .54), transparent 34%),
+    radial-gradient(circle at 84% 16%, rgba(255, 235, 218, .94), transparent 34%),
+    radial-gradient(circle at 78% 70%, rgba(255, 207, 182, .88), transparent 36%),
+    radial-gradient(circle at 16% 80%, rgba(238, 111, 116, .72), transparent 38%),
+    linear-gradient(145deg, #ed8796 0%, #f6a0a0 34%, #ffd0ba 70%, #fff0e4 100%);
+  color: #fff9f4;
+}
+
+.intro-aurora {
+  filter: blur(38px);
+  opacity: .58;
+}
+
+.intro-aurora-a {
+  background: rgba(255, 228, 205, .72);
+}
+
+.intro-aurora-b {
+  background: rgba(216, 82, 103, .46);
+}
+
+.intro-grain {
+  opacity: .07;
+  background-image:
+    linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+}
+
+.intro-book-ground {
+  background: rgba(170, 70, 80, .28);
+  filter: blur(17px);
+}
+
+.intro-book-back-cover {
+  background:
+    linear-gradient(135deg, #dc626a 0%, #c94e5d 58%, #ac3f50 100%);
+  box-shadow:
+    0 28px 48px rgba(177, 66, 79, .28),
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 -7px 16px rgba(137,44,59,.12);
+}
+
+.intro-book-page-block {
+  background:
+    repeating-linear-gradient(
+      180deg,
+      #fff7f0 0,
+      #fff7f0 3px,
+      #f5d8cd 4px
+    );
+  box-shadow:
+    inset -8px 0 14px rgba(213, 105, 105, .11),
+    inset 8px 0 14px rgba(238, 151, 137, .08);
+}
+
+.intro-book-page-block span {
+  border-right-color: rgba(207, 110, 108, .22);
+  background: #fff0e7;
+}
+
+.intro-book-spine {
+  background: linear-gradient(90deg, #b94656, #e56f73 46%, #c44d5c);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.24),
+    inset 0 0 12px rgba(143,42,59,.12);
+}
+
+.intro-book-front-cover {
+  border-color: rgba(255,255,255,.72);
+  background:
+    radial-gradient(circle at 78% 12%, rgba(255,255,255,.86), transparent 30%),
+    radial-gradient(circle at 12% 74%, rgba(255, 194, 173, .34), transparent 34%),
+    linear-gradient(145deg, #fffaf6 0%, #fff0e8 50%, #ffe0d2 100%);
+  box-shadow:
+    0 26px 46px rgba(175, 67, 80, .22),
+    inset 12px 0 24px rgba(239, 132, 118, .08),
+    inset -12px -10px 26px rgba(231, 118, 108, .07);
+}
+
+.intro-book-front-cover::before {
+  border-color: rgba(225, 111, 114, .18);
+}
+
+.intro-book-front-cover::after {
+  background:
+    linear-gradient(90deg, rgba(205,82,94,.12), rgba(255,255,255,.42), transparent);
+}
+
+.intro-cover-rule {
+  background: linear-gradient(90deg, rgba(215, 89, 101, .12), rgba(215, 89, 101, .34), transparent);
+}
+
+.intro-book-front-cover img {
+  filter: drop-shadow(0 10px 14px rgba(210, 94, 100, .18));
+}
+
+.intro-book-front-cover strong {
+  color: #db686d;
+  font-size: 27px;
+  font-weight: 600;
+  text-shadow:
+    0 1px 0 #f7b1aa,
+    0 2px 0 #eb8b89,
+    0 7px 16px rgba(191, 72, 86, .16);
+}
+
+.intro-book-front-cover small {
+  color: rgba(168, 67, 82, .58);
+}
+
+.intro-book-front-cover em {
+  color: rgba(168, 67, 82, .62);
+}
+
+/* 02 · memory: warm ivory paper, with the same pink light as the icon. */
+.intro-scene-memory {
+  background:
+    radial-gradient(circle at 80% 10%, rgba(255, 207, 188, .8), transparent 31%),
+    radial-gradient(circle at 8% 74%, rgba(247, 166, 169, .28), transparent 34%),
+    linear-gradient(180deg, #fff0e8 0%, #fff7f1 44%, #ffefe6 100%);
+}
+
+.intro-paper-light {
+  background: rgba(255, 221, 205, .76);
+  filter: blur(36px);
+}
+
+.intro-memory-shadow {
+  background: rgba(180, 77, 88, .16);
+}
+
+.intro-memory-left-page,
+.intro-memory-right-page {
+  border-color: rgba(202, 99, 103, .14);
+  background:
+    linear-gradient(90deg, rgba(225, 111, 111, .055), transparent 18%),
+    #fff8f2;
+  color: #6b3e46;
+  box-shadow: 0 20px 36px rgba(177, 72, 84, .14);
+}
+
+.intro-memory-gutter {
+  background: linear-gradient(90deg, transparent, rgba(177, 77, 84, .19), transparent);
+}
+
+.intro-page-number,
+.intro-date-mark {
+  color: rgba(164, 70, 82, .48);
+}
+
+.intro-hand-line.faded,
+.intro-memory-right-page p {
+  color: rgba(105, 61, 69, .62);
+}
+
+.intro-writing-line {
+  background: rgba(205, 103, 108, .18);
+}
+
+.intro-page-curl {
+  background:
+    radial-gradient(circle at 100% 100%, rgba(182, 74, 86, .18), transparent 48%),
+    linear-gradient(135deg, transparent 49%, #f6b6aa 50%, #fff7f1 73%);
+  box-shadow: -12px -10px 22px rgba(181, 76, 86, .11);
+}
+
+/* 03 · time: brighter peach depth, like the stacked pages under the final icon. */
+.intro-scene-time {
+  background:
+    radial-gradient(circle at 86% 24%, rgba(244, 139, 139, .34), transparent 32%),
+    radial-gradient(circle at 14% 78%, rgba(255, 214, 192, .86), transparent 35%),
+    linear-gradient(180deg, #fff4ed 0%, #ffe1d3 48%, #f8b8af 100%);
+}
+
+.intro-time-haze {
+  background: rgba(235, 108, 115, .18);
+  filter: blur(36px);
+}
+
+.intro-time-page {
+  border-color: rgba(202, 95, 101, .14);
+  background:
+    linear-gradient(90deg, rgba(211, 92, 101, .07), transparent 16%),
+    #fff8f1;
+  box-shadow: 0 26px 46px rgba(170, 68, 82, .18);
+}
+
+.intro-time-page-edge {
+  background:
+    repeating-linear-gradient(180deg, #fff0e7 0 2px, #f0c1b8 3px);
+}
+
+.intro-time-kicker {
+  color: rgba(157, 64, 78, .48);
+}
+
+.intro-time-page strong {
+  color: #c75260;
+  text-shadow:
+    0 2px 0 #f6a8a5,
+    0 8px 18px rgba(172, 64, 80, .15);
+}
+
+.intro-time-page small,
+.intro-time-node {
+  color: rgba(111, 57, 68, .66);
+}
+
+.intro-time-axis {
+  background: linear-gradient(180deg, rgba(203, 89, 98, .44), rgba(203, 89, 98, .1));
+}
+
+.intro-time-node i {
+  border-color: rgba(194, 80, 91, .46);
+  background: #fff8f1;
+}
+
+.intro-time-photo {
+  border-color: rgba(255, 249, 244, .9);
+  background: linear-gradient(150deg, #e8848a, #f7b2a6 56%, #c75d68);
+  box-shadow: 0 13px 20px rgba(167, 62, 76, .16);
+}
+
+.intro-time-loose-page {
+  border-color: rgba(195, 83, 94, .12);
+  background: #fff0e8;
+  box-shadow: 0 18px 32px rgba(166, 64, 77, .11);
+}
+
+/* 04 · core: depth without switching to black. */
+.intro-scene-engine {
+  background:
+    radial-gradient(circle at 50% 52%, rgba(255, 224, 207, .62), transparent 29%),
+    radial-gradient(circle at 16% 15%, rgba(209, 76, 100, .38), transparent 31%),
+    radial-gradient(circle at 84% 78%, rgba(255, 190, 169, .52), transparent 30%),
+    linear-gradient(155deg, #d86b7a 0%, #eb8588 40%, #f4a195 72%, #f8c1ac 100%);
+  color: #fff9f4;
+}
+
+.intro-engine-glow {
+  background: rgba(255, 233, 218, .5);
+  filter: blur(36px);
+}
+
+.intro-engine-layer {
+  border-color: rgba(255,255,255,.38);
+  background:
+    linear-gradient(120deg, rgba(255,255,255,.4), transparent 30%),
+    linear-gradient(180deg, rgba(255, 239, 231, .76), rgba(249, 185, 178, .62));
+  box-shadow:
+    0 24px 42px rgba(153, 54, 72, .18),
+    inset 0 1px 0 rgba(255,255,255,.62);
+}
+
+.intro-engine-layer::after {
+  background: linear-gradient(90deg, rgba(184,70,84,.12), rgba(184,70,84,.34), transparent);
+}
+
+.intro-engine-layer small {
+  color: rgba(120, 55, 66, .56);
+}
+
+.intro-engine-layer strong {
+  color: #763d49;
+}
+
+.intro-engine-layer.layer-eluvin {
+  border-color: rgba(255,255,255,.54);
+  background:
+    radial-gradient(circle at 12% 50%, rgba(255,255,255,.7), transparent 24%),
+    linear-gradient(180deg, rgba(255, 247, 241, .92), rgba(255, 210, 198, .84));
+}
+
+.intro-engine-layer.layer-eluvin img {
+  filter: drop-shadow(0 8px 12px rgba(179, 66, 81, .16));
+}
+
+/* 05 · threshold: the calmest, cleanest sheet in the story. */
+.intro-scene-threshold {
+  background:
+    radial-gradient(circle at 90% 8%, rgba(255, 215, 197, .56), transparent 30%),
+    linear-gradient(180deg, #fff7f1 0%, #fffaf6 50%, #fff1e9 100%);
+}
+
+.intro-threshold-sheet {
+  border-color: rgba(197, 86, 96, .13);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.74), transparent 14%),
+    #fffaf6;
+  box-shadow:
+    0 24px 44px rgba(165, 66, 80, .1),
+    8px 10px 0 #ffd9ca,
+    14px 16px 0 #f6b1aa;
+}
+
+.intro-threshold-sheet::before,
+.intro-sheet-rule,
+.intro-sheet-row {
+  border-color: rgba(198, 85, 96, .12);
+}
+
+.intro-threshold-sheet::before {
+  background: rgba(205, 91, 101, .15);
+}
+
+.intro-sheet-label {
+  color: rgba(147, 58, 72, .48);
+}
+
+.intro-sheet-rule {
+  background: rgba(198, 85, 96, .13);
+}
+
+.intro-sheet-row b {
+  color: #cf5f69;
+}
+
+.intro-sheet-row span {
+  color: #673944;
+}
+
+.intro-sheet-signature {
+  color: rgba(147, 58, 72, .32);
+}
+
+.intro-threshold-copy p {
+  color: #805b63;
+}
+
+.intro-threshold-copy b,
+.intro-threshold-ending {
+  color: #633842;
+}
+
+.intro-threshold-ending {
+  border-top-color: rgba(194, 80, 92, .14);
+}
+
+/* 06 · ending: back to the icon world, closing the loop. */
+.intro-scene-final {
+  background:
+    radial-gradient(circle at 50% 26%, rgba(255, 237, 222, .82), transparent 29%),
+    radial-gradient(circle at 14% 76%, rgba(210, 74, 98, .46), transparent 34%),
+    radial-gradient(circle at 86% 78%, rgba(255, 201, 178, .58), transparent 31%),
+    linear-gradient(150deg, #df7886 0%, #ef8d91 42%, #f7aa9e 72%, #ffd2bb 100%);
+  color: #fff9f4;
+}
+
+.intro-aurora-final {
+  background: rgba(255, 232, 214, .7);
+}
+
+.intro-final-book-shadow {
+  background: rgba(164, 59, 75, .27);
+}
+
+.intro-final-book-pages {
+  background:
+    repeating-linear-gradient(180deg, #fff2e9 0 3px, #f2c9bd 4px);
+}
+
+.intro-final-book-cover {
+  border-color: rgba(255,255,255,.65);
+  background:
+    radial-gradient(circle at 74% 12%, rgba(255,255,255,.8), transparent 28%),
+    linear-gradient(145deg, #fffaf6 0%, #fff0e7 55%, #ffdccc 100%);
+  box-shadow:
+    0 26px 42px rgba(159, 56, 72, .22),
+    inset 10px 0 20px rgba(229, 105, 103, .07);
+}
+
+.intro-final-book-cover::before {
+  border-color: rgba(212, 91, 101, .17);
+}
+
+.intro-final-book-cover img {
+  filter: drop-shadow(0 9px 12px rgba(180, 66, 80, .17));
+}
+
+.intro-final-book-cover strong {
+  color: #d86269;
+  font-weight: 600;
+  text-shadow:
+    0 1px 0 #f5aaa6,
+    0 2px 0 #e98687,
+    0 7px 15px rgba(179, 64, 79, .15);
+}
+
+.intro-final-book-cover small {
+  color: rgba(155, 61, 75, .5);
+}
+
+.intro-start {
+  border-color: rgba(255,255,255,.52);
+  background: rgba(255, 250, 246, .9);
+  color: #a34655;
+  box-shadow:
+    0 18px 34px rgba(151, 54, 71, .18),
+    inset 0 1px 0 rgba(255,255,255,.88);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-hero-copy h1,
+  .intro-copy h2,
+  .intro-engine-copy h2,
+  .intro-final-copy h2 {
+    transform: none;
+  }
+}
