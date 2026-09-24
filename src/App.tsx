@@ -664,6 +664,7 @@ export default function App() {
         <GuideDetail onBack={handleGuideBack} onGoProvider={() => openSettings('provider')} />
       ) : view === 'welcome' ? (
         <Welcome
+          onStart={handleWelcomeStart}
           onGoGuide={() => navigate('productintro')}
         />
       ) : view === 'role' ? (
