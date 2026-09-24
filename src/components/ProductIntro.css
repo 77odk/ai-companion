@@ -2166,6 +2166,8 @@
   --intro-time-ry: -8deg;
   --intro-time-rz: 7deg;
   --intro-engine-spread: 0px;
+  --intro-engine-spread-neg: 0px;
+  --intro-ambient-y: 0px;
   --intro-final-rx: 61deg;
   --intro-final-ry: -10deg;
   --intro-final-rz: 4deg;
@@ -2194,8 +2196,8 @@
       rgba(207, 138, 131, .18) 100%
     );
   box-shadow:
-    24px 0 42px rgba(143, 86, 81, calc(var(--intro-turn-opacity) * .14)),
-    inset -18px 0 24px rgba(207, 138, 131, calc(var(--intro-turn-opacity) * .10));
+    24px 0 42px rgba(143, 86, 81, .14),
+    inset -18px 0 24px rgba(207, 138, 131, .10);
   will-change: transform, opacity;
 }
 
@@ -2291,7 +2293,7 @@
 .product-intro-v1[data-motion="on"] .intro-engine-layer.layer-ta {
   transform:
     translateX(-50%)
-    translateY(calc(var(--intro-engine-spread) * -1))
+    translateY(var(--intro-engine-spread-neg))
     rotateX(48deg)
     rotateZ(2deg)
     translateZ(42px);
@@ -2310,7 +2312,7 @@
 .product-intro-v1[data-motion="on"] .intro-paper-light,
 .product-intro-v1[data-motion="on"] .intro-time-haze,
 .product-intro-v1[data-motion="on"] .intro-engine-glow {
-  transform: translate3d(0, calc(var(--intro-visual-y) * -.22), 0);
+  transform: translate3d(0, var(--intro-ambient-y), 0);
 }
 
 @media (prefers-reduced-motion: reduce) {
