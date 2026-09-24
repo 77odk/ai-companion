@@ -170,13 +170,15 @@ export default function ProductIntro({ onBack, onStart }: Props) {
       if (suspended || reducedMotion.matches) return
 
       const viewportHeight = Math.max(1, scroller.clientHeight)
+      const scrollerTop = scroller.getBoundingClientRect().top
       const scenes = Array.from(scroller.querySelectorAll<HTMLElement>('.intro-scene'))
 
       scenes.forEach((scene, index) => {
         const rect = scene.getBoundingClientRect()
+        const localTop = rect.top - scrollerTop
         const sceneHeight = Math.max(viewportHeight, rect.height)
-        const enter = clamp01((viewportHeight - rect.top) / viewportHeight)
-        const exit = clamp01(-rect.top / sceneHeight)
+        const enter = clamp01((viewportHeight - localTop) / viewportHeight)
+        const exit = clamp01(-localTop / sceneHeight)
         const focus = clamp01(Math.min(enter, 1 - exit))
         const turnOpacity = 4 * exit * (1 - exit)
 
@@ -196,6 +198,7 @@ export default function ProductIntro({ onBack, onStart }: Props) {
         scene.style.setProperty('--intro-visual-y', `${visualY.toFixed(2)}px`)
         scene.style.setProperty('--intro-visual-scale', visualScale.toFixed(4))
         scene.style.setProperty('--intro-visual-roll', `${visualRoll.toFixed(2)}deg`)
+        scene.style.setProperty('--intro-ambient-y', `${(-visualY * 0.22).toFixed(2)}px`)
 
         if (index === 0) {
           scene.style.setProperty('--intro-book-rx', `${(64 - enter * 6 + exit * 8).toFixed(2)}deg`)
@@ -212,7 +215,9 @@ export default function ProductIntro({ onBack, onStart }: Props) {
           scene.style.setProperty('--intro-time-ry', `${(-16 + enter * 8 - exit * 14).toFixed(2)}deg`)
           scene.style.setProperty('--intro-time-rz', `${(11 - enter * 4 + exit * 3).toFixed(2)}deg`)
         } else if (index === 3) {
-          scene.style.setProperty('--intro-engine-spread', `${((1 - focus) * 12).toFixed(2)}px`)
+          const engineSpread = (1 - focus) * 12
+          scene.style.setProperty('--intro-engine-spread', `${engineSpread.toFixed(2)}px`)
+          scene.style.setProperty('--intro-engine-spread-neg', `${(-engineSpread).toFixed(2)}px`)
         } else if (index === 5) {
           scene.style.setProperty('--intro-final-rx', `${(68 - enter * 7 + exit * 7).toFixed(2)}deg`)
           scene.style.setProperty('--intro-final-ry', `${(-18 + enter * 8 - exit * 12).toFixed(2)}deg`)
