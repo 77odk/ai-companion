@@ -24,6 +24,9 @@ jobs:
           import { chromium } from 'playwright'
           const browser = await chromium.launch({ headless: true })
           const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
+          await page.addInitScript(() => {
+            localStorage.setItem('eluvin_consent', JSON.stringify({ version: 'v1', consentedAt: '2026-09-24T00:00:00.000Z' }))
+          })
           await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
           const start = page.getByRole('button', { name: /登录 \/ 注册/ })
           await start.waitFor({ state: 'visible', timeout: 15000 })
