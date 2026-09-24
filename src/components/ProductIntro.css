@@ -1649,91 +1649,135 @@
 }
 
 
-/* ---------- V1.2 · palette B with paper white ---------- */
+/* ---------- V1.4 · A composition mapped 1:1 to palette B ---------- */
 /*
-  B 方案：
-  纸面白（替换原 B 奶白纸） / 暖米杏 / 柔和粉橘 / 珊瑚粉点缀 / 柔玫瑰 / 玫瑰棕阴影
-  仅调整 ProductIntro 色彩，不改结构、文案与 3D 几何。
+  Keep A's exact color placement / gradient geometry / opacity hierarchy.
+  Replace only the palette:
+  paper white #FFF3EE
+  warm rice-apricot #FFE9D9
+  soft peach-orange #FFD1B7
+  coral accent #FFA588
+  soft rose #F78B8B
+  rose-brown shadow #D1746B
 */
 .product-intro-v1 {
+  --intro-ink: #6f4d4a;
+  --intro-muted: #987775;
   --intro-paper: #fff3ee;
   --intro-paper-2: #ffe9d9;
   --intro-paper-3: #ffd1b7;
+  --intro-night: #f78b8b;
+  --intro-night-2: #ffa588;
+  --intro-amber: #ffd1b7;
   --intro-peach: #ffa588;
   --intro-coral: #f78b8b;
   --intro-coral-deep: #d1746b;
-  --intro-ink: #6f4d4a;
-  --intro-muted: #987775;
   --intro-cream: #fff3ee;
-  --intro-night: #e5b7ae;
-  --intro-night-2: #d9938d;
-  --intro-amber: #ffd1b7;
-  background: #fff3ee;
+  background: #ffa588;
 }
 
-/* 01 · 序章：纸面白为主，只让粉橘像光一样进入，不铺满整屏。 */
-.intro-scene-hero {
-  background:
-    radial-gradient(circle at 86% 12%, rgba(255, 209, 183, .72), transparent 31%),
-    radial-gradient(circle at 8% 24%, rgba(247, 139, 139, .20), transparent 33%),
-    radial-gradient(circle at 74% 78%, rgba(255, 165, 136, .22), transparent 35%),
-    linear-gradient(180deg, #fff3ee 0%, #fff6f1 48%, #ffe9d9 100%);
-  color: #76514f;
-}
-
-.intro-aurora-a {
-  background: rgba(255, 209, 183, .62);
-}
-
-.intro-aurora-b {
-  background: rgba(247, 139, 139, .18);
-}
-
-.intro-grain {
-  opacity: .045;
-  background-image:
-    linear-gradient(rgba(116, 76, 73, .035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(116, 76, 73, .025) 1px, transparent 1px);
-}
-
-.intro-hero-copy h1 {
-  color: #855b59;
-  -webkit-text-stroke: .22px rgba(119, 77, 75, .08);
+.intro-copy h2 {
+  color: #9b5d59;
+  -webkit-text-stroke: .25px rgba(119, 76, 72, .10);
   text-shadow:
-    0 1px 0 #f7cbc4,
-    0 2px 0 #eeb4ad,
-    0 3px 0 #d99089,
-    0 12px 26px rgba(160, 102, 99, .16);
+    0 1px 0 #ffd1b7,
+    0 2px 0 #efa59c,
+    0 3px 0 #d9837a,
+    0 10px 22px rgba(156, 94, 88, .17);
 }
 
-.intro-body-on-dark {
-  color: rgba(112, 78, 76, .78);
+.intro-hero-copy h1,
+.intro-engine-copy h2,
+.intro-final-copy h2 {
+  color: #fff3ee;
+  -webkit-text-stroke: .3px rgba(255, 243, 238, .30);
+  text-shadow:
+    0 1px 0 #ffd1b7,
+    0 2px 0 #f0aba1,
+    0 3px 0 #df8f86,
+    0 4px 0 #d1746b,
+    0 14px 28px rgba(151, 82, 77, .22);
+}
+
+.intro-back {
+  border-color: rgba(255,243,238,.42);
+  background: rgba(255,243,238,.74);
+  color: #a4605c;
+  box-shadow:
+    0 10px 24px rgba(166, 96, 90, .13),
+    inset 0 1px 0 rgba(255,255,255,.76);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.intro-kicker {
+  color: #ad6862;
 }
 
 .intro-kicker-light {
-  color: rgba(129, 82, 80, .68);
+  color: rgba(255,243,238,.82);
+}
+
+.intro-body {
+  color: #815f5c;
+}
+
+.intro-body-secondary {
+  color: #9f7b77;
+}
+
+.intro-body-on-dark {
+  color: rgba(255,243,238,.84);
 }
 
 .intro-brand-line {
-  color: rgba(129, 82, 80, .56);
-  text-shadow: none;
+  color: rgba(255,243,238,.80);
+  text-shadow: 0 5px 18px rgba(151,82,77,.16);
+}
+
+/* 01 · same A distribution, B colors */
+.intro-scene-hero {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(247, 139, 139, .54), transparent 34%),
+    radial-gradient(circle at 84% 16%, rgba(255, 233, 217, .94), transparent 34%),
+    radial-gradient(circle at 78% 70%, rgba(255, 209, 183, .88), transparent 36%),
+    radial-gradient(circle at 16% 80%, rgba(255, 165, 136, .72), transparent 38%),
+    linear-gradient(145deg, #f78b8b 0%, #ffa588 34%, #ffd1b7 70%, #fff3ee 100%);
+  color: #fff3ee;
+}
+
+.intro-aurora {
+  filter: blur(38px);
+  opacity: .58;
+}
+
+.intro-aurora-a {
+  background: rgba(255, 233, 217, .72);
+}
+
+.intro-aurora-b {
+  background: rgba(209, 116, 107, .46);
+}
+
+.intro-grain {
+  opacity: .07;
+  background-image:
+    linear-gradient(rgba(255,243,238,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,243,238,.035) 1px, transparent 1px);
 }
 
 .intro-book-ground {
-  background: rgba(183, 116, 106, .16);
+  background: rgba(174, 96, 90, .28);
   filter: blur(17px);
 }
 
 .intro-book-back-cover {
-  background: linear-gradient(135deg, #f19a90 0%, #df827c 58%, #c86f6a 100%);
+  background:
+    linear-gradient(135deg, #f78b8b 0%, #e48079 58%, #d1746b 100%);
   box-shadow:
-    0 28px 48px rgba(181, 108, 101, .20),
-    inset 0 1px 0 rgba(255,255,255,.32),
-    inset 0 -7px 16px rgba(165, 88, 83, .10);
-}
-
-.intro-book-spine {
-  background: linear-gradient(90deg, #cf766f, #eda099 46%, #d77f78);
+    0 28px 48px rgba(177, 101, 94, .26),
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 -7px 16px rgba(151,82,77,.11);
 }
 
 .intro-book-page-block {
@@ -1742,231 +1786,249 @@
       180deg,
       #fff3ee 0,
       #fff3ee 3px,
-      #efd8cf 4px
+      #ead5cc 4px
     );
+  box-shadow:
+    inset -8px 0 14px rgba(209,116,107,.10),
+    inset 8px 0 14px rgba(255,165,136,.08);
 }
 
 .intro-book-page-block span {
+  border-right-color: rgba(209,116,107,.20);
   background: #ffe9d9;
-  border-right-color: rgba(209, 116, 107, .18);
+}
+
+.intro-book-spine {
+  background: linear-gradient(90deg, #d1746b, #f78b8b 46%, #dc8179);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.24),
+    inset 0 0 12px rgba(151,82,77,.11);
 }
 
 .intro-book-front-cover {
-  border-color: rgba(255,255,255,.82);
+  border-color: rgba(255,255,255,.72);
   background:
-    radial-gradient(circle at 78% 12%, rgba(255,255,255,.82), transparent 30%),
-    radial-gradient(circle at 12% 74%, rgba(255, 209, 183, .30), transparent 34%),
-    linear-gradient(145deg, #fff7f3 0%, #fff3ee 52%, #ffe9d9 100%);
+    radial-gradient(circle at 78% 12%, rgba(255,255,255,.86), transparent 30%),
+    radial-gradient(circle at 12% 74%, rgba(255,209,183,.34), transparent 34%),
+    linear-gradient(145deg, #fff3ee 0%, #ffe9d9 50%, #ffd1b7 100%);
   box-shadow:
-    0 26px 46px rgba(183, 108, 101, .17),
-    inset 12px 0 24px rgba(247, 139, 139, .055),
-    inset -12px -10px 26px rgba(209, 116, 107, .055);
+    0 26px 46px rgba(177,101,94,.20),
+    inset 12px 0 24px rgba(247,139,139,.075),
+    inset -12px -10px 26px rgba(209,116,107,.065);
 }
 
 .intro-book-front-cover::before {
-  border-color: rgba(209, 116, 107, .14);
+  border-color: rgba(209,116,107,.18);
 }
 
 .intro-book-front-cover::after {
-  background: linear-gradient(90deg, rgba(209,116,107,.08), rgba(255,255,255,.36), transparent);
+  background:
+    linear-gradient(90deg, rgba(209,116,107,.12), rgba(255,255,255,.42), transparent);
 }
 
 .intro-cover-rule {
-  background: linear-gradient(90deg, rgba(209,116,107,.10), rgba(209,116,107,.28), transparent);
+  background: linear-gradient(90deg, rgba(209,116,107,.12), rgba(209,116,107,.34), transparent);
+}
+
+.intro-book-front-cover img {
+  filter: drop-shadow(0 10px 14px rgba(209,116,107,.17));
 }
 
 .intro-book-front-cover strong {
   color: #d1746b;
+  font-size: 27px;
+  font-weight: 600;
   text-shadow:
-    0 1px 0 #f5c6bf,
-    0 2px 0 #e9aaa3,
-    0 7px 16px rgba(172, 104, 98, .13);
+    0 1px 0 #ffd1b7,
+    0 2px 0 #efa59c,
+    0 7px 16px rgba(177,101,94,.15);
 }
 
-.intro-book-front-cover small,
+.intro-book-front-cover small {
+  color: rgba(130,82,79,.56);
+}
+
 .intro-book-front-cover em {
-  color: rgba(128, 82, 79, .52);
+  color: rgba(130,82,79,.60);
 }
 
-/* 02 · 记得 */
+/* 02 · same A distribution, B colors */
 .intro-scene-memory {
   background:
-    radial-gradient(circle at 82% 12%, rgba(255, 209, 183, .56), transparent 31%),
-    radial-gradient(circle at 8% 76%, rgba(247, 139, 139, .12), transparent 34%),
-    linear-gradient(180deg, #fff3ee 0%, #fff8f4 46%, #ffe9d9 100%);
+    radial-gradient(circle at 80% 10%, rgba(255,209,183,.80), transparent 31%),
+    radial-gradient(circle at 8% 74%, rgba(247,139,139,.28), transparent 34%),
+    linear-gradient(180deg, #ffe9d9 0%, #fff3ee 44%, #ffe9d9 100%);
 }
 
 .intro-paper-light {
-  background: rgba(255, 209, 183, .48);
+  background: rgba(255,233,217,.76);
+  filter: blur(36px);
 }
 
 .intro-memory-shadow {
-  background: rgba(187, 115, 107, .12);
+  background: rgba(174,96,90,.16);
 }
 
 .intro-memory-left-page,
 .intro-memory-right-page {
-  border-color: rgba(209, 116, 107, .12);
+  border-color: rgba(209,116,107,.14);
   background:
-    linear-gradient(90deg, rgba(247, 139, 139, .035), transparent 18%),
+    linear-gradient(90deg, rgba(247,139,139,.055), transparent 18%),
     #fff3ee;
   color: #6f4d4a;
-  box-shadow: 0 20px 36px rgba(177, 105, 98, .11);
+  box-shadow: 0 20px 36px rgba(177,101,94,.13);
 }
 
 .intro-memory-gutter {
-  background: linear-gradient(90deg, transparent, rgba(176, 105, 99, .15), transparent);
+  background: linear-gradient(90deg, transparent, rgba(177,101,94,.19), transparent);
 }
 
 .intro-page-number,
 .intro-date-mark {
-  color: rgba(128, 82, 79, .42);
+  color: rgba(130,82,79,.48);
 }
 
 .intro-hand-line.faded,
 .intro-memory-right-page p {
-  color: rgba(111, 77, 74, .58);
+  color: rgba(111,77,74,.62);
 }
 
 .intro-writing-line {
-  background: rgba(209, 116, 107, .14);
+  background: rgba(209,116,107,.18);
 }
 
 .intro-page-curl {
   background:
-    radial-gradient(circle at 100% 100%, rgba(188, 116, 108, .12), transparent 48%),
+    radial-gradient(circle at 100% 100%, rgba(177,101,94,.18), transparent 48%),
     linear-gradient(135deg, transparent 49%, #ffd1b7 50%, #fff3ee 73%);
-  box-shadow: -12px -10px 22px rgba(181, 108, 101, .09);
+  box-shadow: -12px -10px 22px rgba(177,101,94,.10);
 }
 
-/* 03 · 经过 */
+/* 03 · same A distribution, B colors */
 .intro-scene-time {
   background:
-    radial-gradient(circle at 86% 24%, rgba(247, 139, 139, .16), transparent 32%),
-    radial-gradient(circle at 12% 80%, rgba(255, 209, 183, .54), transparent 35%),
-    linear-gradient(180deg, #fff6f1 0%, #ffe9d9 56%, #f6d8ce 100%);
+    radial-gradient(circle at 86% 24%, rgba(247,139,139,.34), transparent 32%),
+    radial-gradient(circle at 14% 78%, rgba(255,209,183,.86), transparent 35%),
+    linear-gradient(180deg, #fff3ee 0%, #ffe9d9 48%, #ffd1b7 100%);
 }
 
 .intro-time-haze {
-  background: rgba(247, 139, 139, .10);
+  background: rgba(247,139,139,.18);
+  filter: blur(36px);
 }
 
 .intro-time-page {
-  border-color: rgba(209, 116, 107, .12);
+  border-color: rgba(209,116,107,.14);
   background:
-    linear-gradient(90deg, rgba(209, 116, 107, .045), transparent 16%),
+    linear-gradient(90deg, rgba(209,116,107,.07), transparent 16%),
     #fff3ee;
-  box-shadow: 0 26px 46px rgba(177, 105, 98, .12);
+  box-shadow: 0 26px 46px rgba(177,101,94,.17);
 }
 
 .intro-time-page-edge {
-  background: repeating-linear-gradient(180deg, #ffe9d9 0 2px, #e8c6bd 3px);
+  background:
+    repeating-linear-gradient(180deg, #ffe9d9 0 2px, #e7c5bb 3px);
 }
 
 .intro-time-kicker {
-  color: rgba(128, 82, 79, .44);
+  color: rgba(130,82,79,.48);
 }
 
 .intro-time-page strong {
-  color: #b96461;
+  color: #b96561;
   text-shadow:
-    0 2px 0 #edb2ab,
-    0 8px 18px rgba(166, 96, 91, .12);
+    0 2px 0 #ffd1b7,
+    0 8px 18px rgba(177,101,94,.14);
 }
 
 .intro-time-page small,
 .intro-time-node {
-  color: rgba(111, 77, 74, .62);
+  color: rgba(111,77,74,.66);
 }
 
 .intro-time-axis {
-  background: linear-gradient(180deg, rgba(209,116,107,.34), rgba(209,116,107,.08));
+  background: linear-gradient(180deg, rgba(209,116,107,.44), rgba(209,116,107,.10));
 }
 
 .intro-time-node i {
-  border-color: rgba(209,116,107,.34);
+  border-color: rgba(209,116,107,.46);
   background: #fff3ee;
 }
 
 .intro-time-photo {
-  border-color: rgba(255, 243, 238, .94);
-  background: linear-gradient(150deg, #f3b6aa, #ffd1b7 56%, #d9938d);
-  box-shadow: 0 13px 20px rgba(177, 105, 98, .11);
+  border-color: rgba(255,243,238,.90);
+  background: linear-gradient(150deg, #f78b8b, #ffd1b7 56%, #d1746b);
+  box-shadow: 0 13px 20px rgba(177,101,94,.15);
 }
 
 .intro-time-loose-page {
-  border-color: rgba(209,116,107,.10);
+  border-color: rgba(209,116,107,.12);
   background: #ffe9d9;
-  box-shadow: 0 18px 32px rgba(177, 105, 98, .08);
+  box-shadow: 0 18px 32px rgba(177,101,94,.10);
 }
 
-/* 04 · 内核：不切深色场，保持 B 方案的柔和层次。 */
+/* 04 · same A distribution, B colors */
 .intro-scene-engine {
   background:
-    radial-gradient(circle at 50% 52%, rgba(255, 209, 183, .48), transparent 29%),
-    radial-gradient(circle at 12% 18%, rgba(247, 139, 139, .14), transparent 31%),
-    radial-gradient(circle at 88% 78%, rgba(255, 165, 136, .14), transparent 31%),
-    linear-gradient(180deg, #f8e4dc 0%, #f2d5cd 48%, #e5b7ae 100%);
-  color: #75514f;
-}
-
-.intro-engine-copy h2 {
-  color: #855b59;
-  -webkit-text-stroke: .22px rgba(119, 77, 75, .08);
-  text-shadow:
-    0 1px 0 #efc2bc,
-    0 2px 0 #e4aaa4,
-    0 3px 0 #cd8782,
-    0 12px 26px rgba(157, 96, 92, .14);
+    radial-gradient(circle at 50% 52%, rgba(255,233,217,.62), transparent 29%),
+    radial-gradient(circle at 16% 15%, rgba(209,116,107,.38), transparent 31%),
+    radial-gradient(circle at 84% 78%, rgba(255,209,183,.52), transparent 30%),
+    linear-gradient(155deg, #d1746b 0%, #f78b8b 40%, #ffa588 72%, #ffd1b7 100%);
+  color: #fff3ee;
 }
 
 .intro-engine-glow {
-  background: rgba(255, 209, 183, .38);
+  background: rgba(255,233,217,.50);
+  filter: blur(36px);
 }
 
 .intro-engine-layer {
-  border-color: rgba(255,255,255,.56);
+  border-color: rgba(255,255,255,.38);
   background:
-    linear-gradient(120deg, rgba(255,255,255,.46), transparent 30%),
-    linear-gradient(180deg, rgba(255, 243, 238, .90), rgba(255, 209, 183, .64));
+    linear-gradient(120deg, rgba(255,255,255,.40), transparent 30%),
+    linear-gradient(180deg, rgba(255,243,238,.76), rgba(255,209,183,.62));
   box-shadow:
-    0 24px 42px rgba(168, 99, 94, .12),
-    inset 0 1px 0 rgba(255,255,255,.72);
+    0 24px 42px rgba(151,82,77,.17),
+    inset 0 1px 0 rgba(255,255,255,.62);
 }
 
 .intro-engine-layer::after {
-  background: linear-gradient(90deg, rgba(209,116,107,.10), rgba(209,116,107,.26), transparent);
+  background: linear-gradient(90deg, rgba(209,116,107,.12), rgba(209,116,107,.34), transparent);
 }
 
 .intro-engine-layer small {
-  color: rgba(111, 77, 74, .48);
+  color: rgba(111,77,74,.56);
 }
 
 .intro-engine-layer strong {
-  color: #6f4d4a;
+  color: #724d49;
 }
 
 .intro-engine-layer.layer-eluvin {
-  border-color: rgba(255,255,255,.72);
+  border-color: rgba(255,255,255,.54);
   background:
-    radial-gradient(circle at 12% 50%, rgba(255,255,255,.72), transparent 24%),
-    linear-gradient(180deg, #fff3ee, #ffe9d9);
+    radial-gradient(circle at 12% 50%, rgba(255,255,255,.70), transparent 24%),
+    linear-gradient(180deg, rgba(255,243,238,.92), rgba(255,209,183,.84));
 }
 
-/* 05 · 门槛：最干净的纸面白。 */
+.intro-engine-layer.layer-eluvin img {
+  filter: drop-shadow(0 8px 12px rgba(177,101,94,.15));
+}
+
+/* 05 · same A distribution, B colors */
 .intro-scene-threshold {
   background:
-    radial-gradient(circle at 90% 8%, rgba(255, 209, 183, .32), transparent 30%),
-    linear-gradient(180deg, #fff3ee 0%, #fff8f4 50%, #fff3ee 100%);
+    radial-gradient(circle at 90% 8%, rgba(255,209,183,.56), transparent 30%),
+    linear-gradient(180deg, #fff3ee 0%, #fff3ee 50%, #ffe9d9 100%);
 }
 
 .intro-threshold-sheet {
-  border-color: rgba(209, 116, 107, .11);
+  border-color: rgba(209,116,107,.13);
   background:
-    linear-gradient(180deg, rgba(255,255,255,.70), transparent 14%),
+    linear-gradient(180deg, rgba(255,255,255,.74), transparent 14%),
     #fff3ee;
   box-shadow:
-    0 24px 44px rgba(168, 99, 94, .08),
+    0 24px 44px rgba(166,96,90,.10),
     8px 10px 0 #ffe9d9,
     14px 16px 0 #ffd1b7;
 }
@@ -1974,107 +2036,105 @@
 .intro-threshold-sheet::before,
 .intro-sheet-rule,
 .intro-sheet-row {
-  border-color: rgba(209, 116, 107, .10);
+  border-color: rgba(209,116,107,.12);
 }
 
-.intro-threshold-sheet::before,
-.intro-sheet-rule {
-  background: rgba(209, 116, 107, .11);
+.intro-threshold-sheet::before {
+  background: rgba(209,116,107,.15);
 }
 
 .intro-sheet-label {
-  color: rgba(111, 77, 74, .42);
+  color: rgba(130,82,79,.48);
+}
+
+.intro-sheet-rule {
+  background: rgba(209,116,107,.13);
 }
 
 .intro-sheet-row b {
   color: #d1746b;
 }
 
-.intro-sheet-row span,
+.intro-sheet-row span {
+  color: #6f4d4a;
+}
+
+.intro-sheet-signature {
+  color: rgba(130,82,79,.32);
+}
+
+.intro-threshold-copy p {
+  color: #815f5c;
+}
+
 .intro-threshold-copy b,
 .intro-threshold-ending {
   color: #6f4d4a;
 }
 
-.intro-sheet-signature {
-  color: rgba(111, 77, 74, .28);
-}
-
-.intro-threshold-copy p {
-  color: #8a6b68;
-}
-
 .intro-threshold-ending {
-  border-top-color: rgba(209, 116, 107, .11);
+  border-top-color: rgba(209,116,107,.14);
 }
 
-/* 06 · 终章：回到柔和粉橘光，不铺高饱和底色。 */
+/* 06 · same A distribution, B colors */
 .intro-scene-final {
   background:
-    radial-gradient(circle at 50% 24%, rgba(255, 209, 183, .62), transparent 29%),
-    radial-gradient(circle at 10% 78%, rgba(247, 139, 139, .16), transparent 34%),
-    radial-gradient(circle at 88% 80%, rgba(255, 165, 136, .14), transparent 31%),
-    linear-gradient(180deg, #fff3ee 0%, #f8e2da 56%, #e5b7ae 100%);
-  color: #75514f;
+    radial-gradient(circle at 50% 26%, rgba(255,233,217,.82), transparent 29%),
+    radial-gradient(circle at 14% 76%, rgba(209,116,107,.46), transparent 34%),
+    radial-gradient(circle at 86% 78%, rgba(255,209,183,.58), transparent 31%),
+    linear-gradient(150deg, #d1746b 0%, #f78b8b 42%, #ffa588 72%, #ffd1b7 100%);
+  color: #fff3ee;
 }
 
 .intro-aurora-final {
-  background: rgba(255, 209, 183, .48);
+  background: rgba(255,233,217,.70);
 }
 
 .intro-final-book-shadow {
-  background: rgba(171, 101, 95, .15);
+  background: rgba(151,82,77,.26);
 }
 
 .intro-final-book-pages {
-  background: repeating-linear-gradient(180deg, #fff3ee 0 3px, #e8cec5 4px);
+  background:
+    repeating-linear-gradient(180deg, #fff3ee 0 3px, #e7c5bb 4px);
 }
 
 .intro-final-book-cover {
-  border-color: rgba(255,255,255,.78);
+  border-color: rgba(255,255,255,.65);
   background:
     radial-gradient(circle at 74% 12%, rgba(255,255,255,.80), transparent 28%),
-    linear-gradient(145deg, #fff7f3 0%, #fff3ee 55%, #ffe9d9 100%);
+    linear-gradient(145deg, #fff3ee 0%, #ffe9d9 55%, #ffd1b7 100%);
   box-shadow:
-    0 26px 42px rgba(168, 99, 94, .14),
-    inset 10px 0 20px rgba(209, 116, 107, .055);
+    0 26px 42px rgba(151,82,77,.21),
+    inset 10px 0 20px rgba(209,116,107,.07);
 }
 
 .intro-final-book-cover::before {
-  border-color: rgba(209, 116, 107, .14);
+  border-color: rgba(209,116,107,.17);
+}
+
+.intro-final-book-cover img {
+  filter: drop-shadow(0 9px 12px rgba(177,101,94,.16));
 }
 
 .intro-final-book-cover strong {
   color: #d1746b;
+  font-weight: 600;
   text-shadow:
-    0 1px 0 #f5c6bf,
-    0 2px 0 #e9aaa3,
-    0 7px 15px rgba(172, 104, 98, .12);
+    0 1px 0 #ffd1b7,
+    0 2px 0 #efa59c,
+    0 7px 15px rgba(177,101,94,.14);
 }
 
 .intro-final-book-cover small {
-  color: rgba(128, 82, 79, .48);
-}
-
-.intro-final-copy h2 {
-  color: #855b59;
-  -webkit-text-stroke: .22px rgba(119, 77, 75, .08);
-  text-shadow:
-    0 1px 0 #efc2bc,
-    0 2px 0 #e4aaa4,
-    0 3px 0 #cd8782,
-    0 12px 26px rgba(157, 96, 92, .14);
-}
-
-.intro-final-copy .intro-body {
-  color: rgba(112, 78, 76, .76);
+  color: rgba(130,82,79,.50);
 }
 
 .intro-start {
-  border-color: rgba(209, 116, 107, .16);
-  background: rgba(255, 243, 238, .94);
-  color: #a75f5b;
+  border-color: rgba(255,255,255,.52);
+  background: rgba(255,243,238,.92);
+  color: #9f5e59;
   box-shadow:
-    0 18px 34px rgba(168, 99, 94, .12),
-    inset 0 1px 0 rgba(255,255,255,.90);
+    0 18px 34px rgba(151,82,77,.17),
+    inset 0 1px 0 rgba(255,255,255,.88);
 }
