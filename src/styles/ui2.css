@@ -1467,11 +1467,12 @@
 .welcome-reference-content h1 {
   margin: 16px 0 2px;
   color: #2f2a28;
-  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
-  font-size: clamp(42px, 12vw, 51px);
+  /* 参考图的「忆文」更接近楷体手写骨架，而不是宋体标题字。 */
+  font-family: "STKaiti", "Kaiti SC", "KaiTi", "DFKai-SB", "FangSong", "Songti SC", "STSong", serif;
+  font-size: clamp(42px, 11.8vw, 49px);
   font-weight: 400;
-  letter-spacing: .055em;
-  line-height: 1.02;
+  letter-spacing: .025em;
+  line-height: 1.04;
 }
 
 .welcome-reference-en {
