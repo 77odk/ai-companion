@@ -21,9 +21,11 @@ function accountHint(value: string): string | null {
 interface Props {
   /** 登录/注册成功后回调（登录墙据此回跳目标页；账号页据此刷新已登录态） */
   onSuccess?: (acct: Account) => void
+  /** 登录墙只切视觉层级；账号与同步页继续沿用原布局。 */
+  variant?: 'default' | 'gate'
 }
 
-export default function LoginForm({ onSuccess }: Props) {
+export default function LoginForm({ onSuccess, variant = 'default' }: Props) {
   const [view, setView] = useState<View>('login')
   const [accountInput, setAccountInput] = useState('')
   const [password, setPassword] = useState('')
@@ -147,12 +149,12 @@ export default function LoginForm({ onSuccess }: Props) {
       <>
         <p className="account-mode-label">找回密码</p>
         <div className="field">
-          <label htmlFor="forgot-account">账号</label>
+          <label htmlFor="forgot-account">邮箱</label>
           <input
             id="forgot-account"
             className="input"
-            type="text"
-            placeholder="邮箱"
+            type="email"
+            placeholder="你的邮箱"
             value={accountInput}
             onChange={(e) => setAccountInput(e.target.value)}
             autoComplete="username"
@@ -227,12 +229,12 @@ export default function LoginForm({ onSuccess }: Props) {
         </div>
 
       <div className="field">
-        <label htmlFor="account-email">账号</label>
+        <label htmlFor="account-email">邮箱</label>
         <input
           id="account-email"
           className="input"
-          type="text"
-          placeholder="邮箱"
+          type="email"
+          placeholder="你的邮箱"
           value={accountInput}
           onChange={(e) => setAccountInput(e.target.value)}
           autoComplete="username"
@@ -241,7 +243,18 @@ export default function LoginForm({ onSuccess }: Props) {
       </div>
 
       <div className="field">
-        <label htmlFor="account-password">密码</label>
+        {variant === 'gate' ? (
+          <div className="login-field-label-row">
+            <label htmlFor="account-password">密码</label>
+            {view === 'login' && (
+              <button type="button" className="login-inline-forgot" onClick={() => switchView('forgot')}>
+                忘记密码？
+              </button>
+            )}
+          </div>
+        ) : (
+          <label htmlFor="account-password">密码</label>
+        )}
         <input
           id="account-password"
           className="input"
@@ -308,7 +321,21 @@ export default function LoginForm({ onSuccess }: Props) {
         </button>
       </div>
 
-      {view === 'login' && (
+      {variant === 'gate' && view === 'login' && (
+        <p className="login-switch-hint">
+          还没有账号？
+          <button type="button" onClick={() => switchView('register')}>注册一个</button>
+        </p>
+      )}
+
+      {variant === 'gate' && view === 'register' && (
+        <p className="login-switch-hint">
+          已有账号？
+          <button type="button" onClick={() => switchView('login')}>去登录</button>
+        </p>
+      )}
+
+      {view === 'login' && variant !== 'gate' && (
         <button type="button" className="account-toggle" onClick={() => switchView('forgot')}>
           忘记密码？
         </button>
