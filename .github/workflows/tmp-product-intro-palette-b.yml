@@ -1,0 +1,63 @@
+name: temp product intro palette b
+on:
+  push:
+    branches:
+      - feat/welcome-product-intro-3d
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Capture palette B
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/eluvin-preview.log 2>&1 &
+          cat > palette-b.mjs <<'EOF'
+          import { chromium } from 'playwright'
+          import assert from 'node:assert/strict'
+          const browser = await chromium.launch({ headless: true })
+          const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
+          await page.route('**/api/site-stats', async (route) => route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({uv:1,pv:1})}))
+          await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'})
+          await page.getByRole('button',{name:/先了解一下/}).click()
+          await page.locator('.product-intro-v1').waitFor({state:'visible'})
+          const scenes=[
+            ['.intro-scene-hero','01-palette-b-hero.png'],
+            ['.intro-scene-memory','02-palette-b-memory.png'],
+            ['.intro-scene-time','03-palette-b-time.png'],
+            ['.intro-scene-engine','04-palette-b-engine.png'],
+            ['.intro-scene-threshold','05-palette-b-threshold.png'],
+            ['.intro-scene-final','06-palette-b-final.png'],
+          ]
+          for (const [sel,file] of scenes) {
+            await page.locator(sel).scrollIntoViewIfNeeded()
+            await page.waitForTimeout(100)
+            await page.screenshot({path:file,fullPage:false})
+          }
+          const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)
+          assert.ok(overflow<=0)
+          await browser.close()
+          EOF
+          node palette-b.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: product-intro-palette-b-390x844
+          path: |
+            01-palette-b-hero.png
+            02-palette-b-memory.png
+            03-palette-b-time.png
+            04-palette-b-engine.png
+            05-palette-b-threshold.png
+            06-palette-b-final.png
