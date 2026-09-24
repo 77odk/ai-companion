@@ -34,10 +34,8 @@ import {
   clearVisitWelcome,
   getLastPrimaryView,
   isPrimaryView,
-  isVisitWelcome,
   markPrimaryView,
   markVisitWelcome,
-  shouldShowWelcomeOnEntry,
 } from './lib/visitState'
 import {
   decideLoginTarget,
@@ -133,13 +131,10 @@ function ChatHeaderPresence({ sessionId }: { sessionId: string | null }) {
 // 老数据迁移状态：idle=无/结束；running=正在把本地旧数据搬成第一个云端会话；failed=失败（可重试/跳过）
 type MigrationState = 'idle' | 'running' | 'failed'
 
-// ---- 开机页判定：交给 visitState（新会话 / 距上次活跃超过 6 小时算 fresh visit） ----
-// 模块加载时判一次，保证先读标记再渲染，也不会被 StrictMode 的二次初始化干扰。
-// 优先级：fresh visit / 本会话正停留在 Welcome / 游客 → 欢迎页；
-//         已登录用户异步拉会话分流（loading 过渡，不白屏）。
-// 已登录不再用 needsRolePick 判初始页：有没有会话由云端 sessions 决定，拉回结果后再恢复主视图/进聊天/选角色。
-const showWelcomeOnEntry = shouldShowWelcomeOnEntry()
-const initialView: View = showWelcomeOnEntry || isVisitWelcome() || !isLoggedIn() ? 'welcome' : 'loading'
+// ---- 开机页判定：认证态优先 ----
+// 已登录：永远跳过 Welcome / ProductIntro，先进入 loading 再按云端 sessions 分流。
+// 未登录：进入 Welcome；产品介绍不写本地 seen 标记，避免多设备状态漂移。
+const initialView: View = isLoggedIn() ? 'loading' : 'welcome'
 
 // 是否需要先选角色：没有专属人设且没有聊天记录 = 全新用户，进聊天前必须选一个 TA
 function needsRolePick(): boolean {
@@ -564,7 +559,8 @@ export default function App() {
     replaceView('chat')
   }
 
-  // 欢迎页「开始使用」：离开 Welcome（清会话级 visit marker）；登录用户按云端会话分流；游客维持原流程（选角色或直接聊天）
+  // 产品介绍最后一幕「开始遇见 TA」：游客看完介绍后进入现有首次使用流程。
+  // 已登录态通常不会进入 ProductIntro；若登录态变化发生在页面停留期间，仍按云端 sessions 分流。
   const handleWelcomeStart = () => {
     clearVisitWelcome()
     if (isLoggedIn()) {
@@ -572,6 +568,12 @@ export default function App() {
     } else {
       navigate(needsRolePick() ? 'role' : 'chat')
     }
+  }
+
+  // Welcome 老用户旁路：不要求重看产品介绍，直接进入现有登录墙。
+  const handleWelcomeLogin = () => {
+    setPendingTarget(null)
+    setGateTarget('chat')
   }
 
   // 登录墙返回：不登录，回欢迎页继续逛展示内容
@@ -664,8 +666,8 @@ export default function App() {
         <GuideDetail onBack={handleGuideBack} onGoProvider={() => openSettings('provider')} />
       ) : view === 'welcome' ? (
         <Welcome
-          onStart={handleWelcomeStart}
           onGoGuide={() => navigate('productintro')}
+          onLogin={handleWelcomeLogin}
         />
       ) : view === 'role' ? (
         <RolePicker
