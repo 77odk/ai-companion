@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import './ProductIntro.css'
 
 interface Props {
@@ -150,11 +151,122 @@ function ThresholdSheet() {
 }
 
 export default function ProductIntro({ onBack, onStart }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const root = rootRef.current
+    const scroller = mainRef.current
+    if (!root || !scroller) return
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    let frame = 0
+    let suspended = document.hidden
+
+    const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
+
+    const renderProgress = () => {
+      frame = 0
+      if (suspended || reducedMotion.matches) return
+
+      const viewportHeight = Math.max(1, scroller.clientHeight)
+      const scenes = Array.from(scroller.querySelectorAll<HTMLElement>('.intro-scene'))
+
+      scenes.forEach((scene, index) => {
+        const rect = scene.getBoundingClientRect()
+        const sceneHeight = Math.max(viewportHeight, rect.height)
+        const enter = clamp01((viewportHeight - rect.top) / viewportHeight)
+        const exit = clamp01(-rect.top / sceneHeight)
+        const focus = clamp01(Math.min(enter, 1 - exit))
+        const turnOpacity = 4 * exit * (1 - exit)
+
+        const copyY = (1 - enter) * 24 - exit * 18
+        const visualY = (1 - enter) * 30 - exit * 20
+        const visualScale = 0.955 + focus * 0.045
+        const visualRoll = (1 - enter) * 2.4 - exit * 2.2
+        const copyOpacity = 0.58 + focus * 0.42
+
+        scene.style.setProperty('--intro-enter', enter.toFixed(4))
+        scene.style.setProperty('--intro-exit', exit.toFixed(4))
+        scene.style.setProperty('--intro-focus', focus.toFixed(4))
+        scene.style.setProperty('--intro-turn-angle', `${(-116 * exit).toFixed(2)}deg`)
+        scene.style.setProperty('--intro-turn-opacity', turnOpacity.toFixed(4))
+        scene.style.setProperty('--intro-copy-y', `${copyY.toFixed(2)}px`)
+        scene.style.setProperty('--intro-copy-opacity', copyOpacity.toFixed(4))
+        scene.style.setProperty('--intro-visual-y', `${visualY.toFixed(2)}px`)
+        scene.style.setProperty('--intro-visual-scale', visualScale.toFixed(4))
+        scene.style.setProperty('--intro-visual-roll', `${visualRoll.toFixed(2)}deg`)
+
+        if (index === 0) {
+          scene.style.setProperty('--intro-book-rx', `${(64 - enter * 6 + exit * 8).toFixed(2)}deg`)
+          scene.style.setProperty('--intro-book-ry', `${(-26 + enter * 10 - exit * 20).toFixed(2)}deg`)
+          scene.style.setProperty('--intro-book-rz', `${(-13 + enter * 3 + exit * 2).toFixed(2)}deg`)
+        } else if (index === 1) {
+          scene.style.setProperty('--intro-memory-rx', `${(62 - enter * 6 + exit * 6).toFixed(2)}deg`)
+          scene.style.setProperty('--intro-memory-rz', `${(-6 + enter * 3 + exit * 2).toFixed(2)}deg`)
+          scene.style.setProperty('--intro-memory-page-ry', `${(-18 + enter * 10 - exit * 48).toFixed(2)}deg`)
+          scene.style.setProperty('--intro-curl-scale', (1 + exit * 0.42).toFixed(4))
+          scene.style.setProperty('--intro-curl-rotate', `${(-12 * exit).toFixed(2)}deg`)
+        } else if (index === 2) {
+          scene.style.setProperty('--intro-time-rx', `${(59 - enter * 7 + exit * 7).toFixed(2)}deg`)
+          scene.style.setProperty('--intro-time-ry', `${(-16 + enter * 8 - exit * 14).toFixed(2)}deg`)
+          scene.style.setProperty('--intro-time-rz', `${(11 - enter * 4 + exit * 3).toFixed(2)}deg`)
+        } else if (index === 3) {
+          scene.style.setProperty('--intro-engine-spread', `${((1 - focus) * 12).toFixed(2)}px`)
+        } else if (index === 5) {
+          scene.style.setProperty('--intro-final-rx', `${(68 - enter * 7 + exit * 7).toFixed(2)}deg`)
+          scene.style.setProperty('--intro-final-ry', `${(-18 + enter * 8 - exit * 12).toFixed(2)}deg`)
+          scene.style.setProperty('--intro-final-rz', `${(7 - enter * 3 + exit * 2).toFixed(2)}deg`)
+        }
+      })
+    }
+
+    const schedule = () => {
+      if (frame || suspended || reducedMotion.matches) return
+      frame = window.requestAnimationFrame(renderProgress)
+    }
+
+    const syncMotionPreference = () => {
+      root.dataset.motion = reducedMotion.matches ? 'reduced' : 'on'
+      if (reducedMotion.matches) {
+        if (frame) window.cancelAnimationFrame(frame)
+        frame = 0
+      } else {
+        schedule()
+      }
+    }
+
+    const handleVisibility = () => {
+      suspended = document.hidden
+      if (suspended) {
+        if (frame) window.cancelAnimationFrame(frame)
+        frame = 0
+      } else {
+        schedule()
+      }
+    }
+
+    root.dataset.motion = reducedMotion.matches ? 'reduced' : 'on'
+    scroller.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    document.addEventListener('visibilitychange', handleVisibility)
+    reducedMotion.addEventListener('change', syncMotionPreference)
+    schedule()
+
+    return () => {
+      scroller.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+      document.removeEventListener('visibilitychange', handleVisibility)
+      reducedMotion.removeEventListener('change', syncMotionPreference)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
+  }, [])
+
   return (
-    <div className="product-intro-v1">
+    <div ref={rootRef} className="product-intro-v1">
       <BackButton onBack={onBack} />
 
-      <main>
+      <main ref={mainRef}>
         <section className="intro-scene intro-scene-hero" aria-labelledby="intro-hero-title">
           <div className="intro-aurora intro-aurora-a" aria-hidden="true" />
           <div className="intro-aurora intro-aurora-b" aria-hidden="true" />
