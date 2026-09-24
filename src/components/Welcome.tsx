@@ -54,6 +54,9 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
         </div>
       </main>
 
+      <p className="welcome-reference-note" aria-hidden="true">
+        记录时光，<br />也记录我们
+      </p>
     </div>
   )
 }
