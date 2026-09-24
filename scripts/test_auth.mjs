@@ -78,7 +78,7 @@ eq(getToken(), '', '清除账号 → token 空串')
 ok(!isLoggedIn(), '清除账号 → 未登录')
 
 console.log('\n[3] isPublicView：游客可看集合')
-for (const v of ['welcome', 'role', 'guide']) {
+for (const v of ['welcome', 'productintro', 'role', 'guide']) {
   ok(isPublicView(v), `${v} = true（游客可看）`)
 }
 for (const v of ['chat', 'memory', 'work', 'settings', 'aispace', 'anniversary']) {
