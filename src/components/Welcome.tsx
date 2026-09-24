@@ -19,17 +19,21 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
       </div>
 
       <main className="welcome-reference-content">
-        <img
-          className="welcome-reference-logo"
-          src="/brand/eluvin-book-icon.jpg"
-          alt="忆文"
-        />
+        <div className="welcome-reference-logo-frame">
+          <img
+            className="welcome-reference-logo"
+            src="/brand/eluvin-book-icon.jpg"
+            alt="忆文"
+          />
+        </div>
 
         <h1>忆文</h1>
         <p className="welcome-reference-en">ELUVIN</p>
         <p className="welcome-reference-slogan">忆过往，成文思</p>
 
-        <span className="welcome-reference-divider" aria-hidden="true" />
+        <p className="welcome-reference-note-inline" aria-hidden="true">
+          记录时光，也记录我们。 ♡
+        </p>
 
         <p className="welcome-reference-lead">
           不只是记忆，
@@ -52,11 +56,6 @@ export default function Welcome({ onStart, onGoGuide }: Props) {
         </div>
       </main>
 
-      <p className="welcome-reference-note" aria-hidden="true">
-        记录时光，
-        <br />
-        也记录我们。 ♡
-      </p>
     </div>
   )
 }
