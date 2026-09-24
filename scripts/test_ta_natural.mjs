@@ -61,7 +61,7 @@ const prompt = buildSystemPrompt('', '星光', new Date(2026, 8, 14, 12).getTime
 assert.ok(prompt.includes(DEFAULT_IDENTITY), 'Natural 使用 DEFAULT_IDENTITY')
 assert.ok(prompt.includes('你的名字叫「星光」'), 'nickname 注入 Chat system prompt')
 assert.ok(prompt.includes(CHAT_RULES.trim()), 'Natural 包含 CHAT_RULES')
-assert.ok(prompt.includes('记忆规则：'), 'Natural 包含 Memory rules')
+assert.ok(prompt.includes('【记忆规则】'), 'Natural 包含 Memory rules')
 assert.ok(!prompt.includes('【你的人生与记忆·最重要】'), 'Natural 不走 custom persona lifeHeader')
 
 const { saveAIProfile, loadAIProfile, saveAIRemark, loadAIRemark, saveAIGender, loadAIGender } = await import('../src/lib/storage.ts')
