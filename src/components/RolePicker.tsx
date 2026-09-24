@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ROLE_TEMPLATES, type RoleTemplate } from '../lib/personaTemplates'
+import { applyRoleTemplatePersonality, ROLE_TEMPLATES, type RoleTemplate } from '../lib/personaTemplates'
 import {
   buildCustomPersona,
   canSavePersonaLength,
@@ -351,7 +351,7 @@ function RoleSetupModal({
 
   const applyTemplate = (template: RoleTemplate) => {
     // 回归红线：模板只允许写 personality。其余 6 个字段完全不经过这里。
-    setForm((prev) => ({ ...prev, personality: template.persona }))
+    setForm((prev) => applyRoleTemplatePersonality(prev, template))
     setAppliedTemplateName(template.name)
     setPendingTemplate(null)
     setPreviewTemplate(null)
