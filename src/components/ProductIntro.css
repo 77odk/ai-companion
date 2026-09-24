@@ -2140,3 +2140,199 @@
     0 18px 34px rgba(151,82,77,.17),
     inset 0 1px 0 rgba(255,255,255,.88);
 }
+
+
+/* ---------- V2 · scroll-driven page narrative ---------- */
+.product-intro-v1[data-motion="on"] .intro-scene {
+  --intro-enter: 1;
+  --intro-exit: 0;
+  --intro-focus: 1;
+  --intro-turn-angle: 0deg;
+  --intro-turn-opacity: 0;
+  --intro-copy-y: 0px;
+  --intro-copy-opacity: 1;
+  --intro-visual-y: 0px;
+  --intro-visual-scale: 1;
+  --intro-visual-roll: 0deg;
+  --intro-book-rx: 58deg;
+  --intro-book-ry: -16deg;
+  --intro-book-rz: -10deg;
+  --intro-memory-rx: 56deg;
+  --intro-memory-rz: -3deg;
+  --intro-memory-page-ry: -8deg;
+  --intro-curl-scale: 1;
+  --intro-curl-rotate: 0deg;
+  --intro-time-rx: 52deg;
+  --intro-time-ry: -8deg;
+  --intro-time-rz: 7deg;
+  --intro-engine-spread: 0px;
+  --intro-final-rx: 61deg;
+  --intro-final-ry: -10deg;
+  --intro-final-rz: 4deg;
+  perspective: 1400px;
+  transform-style: preserve-3d;
+  isolation: isolate;
+}
+
+.product-intro-v1[data-motion="on"] .intro-scene:not(.intro-scene-final)::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 2;
+  pointer-events: none;
+  transform-origin: left center;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  opacity: var(--intro-turn-opacity);
+  transform: perspective(1300px) rotateY(var(--intro-turn-angle)) translateZ(1px);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 243, 238, .06) 0%,
+      rgba(255, 243, 238, .78) 38%,
+      rgba(255, 221, 204, .58) 68%,
+      rgba(207, 138, 131, .18) 100%
+    );
+  box-shadow:
+    24px 0 42px rgba(143, 86, 81, calc(var(--intro-turn-opacity) * .14)),
+    inset -18px 0 24px rgba(207, 138, 131, calc(var(--intro-turn-opacity) * .10));
+  will-change: transform, opacity;
+}
+
+.product-intro-v1[data-motion="on"] .intro-hero-copy,
+.product-intro-v1[data-motion="on"] .intro-copy,
+.product-intro-v1[data-motion="on"] .intro-engine-copy,
+.product-intro-v1[data-motion="on"] .intro-final-copy {
+  transform: translate3d(0, var(--intro-copy-y), 0);
+  opacity: var(--intro-copy-opacity);
+  will-change: transform, opacity;
+}
+
+.product-intro-v1[data-motion="on"] .intro-book-scene,
+.product-intro-v1[data-motion="on"] .intro-memory-spread,
+.product-intro-v1[data-motion="on"] .intro-time-visual,
+.product-intro-v1[data-motion="on"] .intro-engine-visual,
+.product-intro-v1[data-motion="on"] .intro-final-book {
+  transform:
+    translate3d(0, var(--intro-visual-y), 0)
+    scale(var(--intro-visual-scale))
+    rotateZ(var(--intro-visual-roll));
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.product-intro-v1[data-motion="on"] .intro-threshold-sheet {
+  transform:
+    translate3d(0, var(--intro-visual-y), 0)
+    scale(var(--intro-visual-scale))
+    rotate(-1.8deg);
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.product-intro-v1[data-motion="on"] .intro-book-volume {
+  transform:
+    translateX(-50%)
+    rotateX(var(--intro-book-rx))
+    rotateZ(var(--intro-book-rz))
+    rotateY(var(--intro-book-ry));
+  will-change: transform;
+}
+
+.product-intro-v1[data-motion="on"] .intro-memory-book {
+  transform:
+    translateX(-50%)
+    rotateX(var(--intro-memory-rx))
+    rotateZ(var(--intro-memory-rz));
+  will-change: transform;
+}
+
+.product-intro-v1[data-motion="on"] .intro-memory-right-page {
+  transform:
+    rotateY(var(--intro-memory-page-ry))
+    translateZ(3px);
+  will-change: transform;
+}
+
+.product-intro-v1[data-motion="on"] .intro-page-curl {
+  transform-origin: 100% 100%;
+  transform:
+    rotate(var(--intro-curl-rotate))
+    scale(var(--intro-curl-scale));
+  will-change: transform;
+}
+
+.product-intro-v1[data-motion="on"] .intro-time-book {
+  transform:
+    translateX(-50%)
+    rotateX(var(--intro-time-rx))
+    rotateZ(var(--intro-time-rz))
+    rotateY(var(--intro-time-ry));
+  will-change: transform;
+}
+
+.product-intro-v1[data-motion="on"] .intro-engine-layer.layer-model {
+  transform:
+    translateX(-50%)
+    translateY(var(--intro-engine-spread))
+    rotateX(66deg)
+    rotateZ(-7deg)
+    translateZ(-40px);
+}
+
+.product-intro-v1[data-motion="on"] .intro-engine-layer.layer-eluvin {
+  transform:
+    translateX(-50%)
+    rotateX(58deg)
+    rotateZ(-3deg)
+    translateZ(6px);
+}
+
+.product-intro-v1[data-motion="on"] .intro-engine-layer.layer-ta {
+  transform:
+    translateX(-50%)
+    translateY(calc(var(--intro-engine-spread) * -1))
+    rotateX(48deg)
+    rotateZ(2deg)
+    translateZ(42px);
+}
+
+.product-intro-v1[data-motion="on"] .intro-final-book-body {
+  transform:
+    translateX(-50%)
+    rotateX(var(--intro-final-rx))
+    rotateY(var(--intro-final-ry))
+    rotateZ(var(--intro-final-rz));
+  will-change: transform;
+}
+
+.product-intro-v1[data-motion="on"] .intro-aurora,
+.product-intro-v1[data-motion="on"] .intro-paper-light,
+.product-intro-v1[data-motion="on"] .intro-time-haze,
+.product-intro-v1[data-motion="on"] .intro-engine-glow {
+  transform: translate3d(0, calc(var(--intro-visual-y) * -.22), 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-intro-v1[data-motion="reduced"] .intro-scene::after {
+    display: none;
+  }
+
+  .product-intro-v1[data-motion="reduced"] .intro-hero-copy,
+  .product-intro-v1[data-motion="reduced"] .intro-copy,
+  .product-intro-v1[data-motion="reduced"] .intro-engine-copy,
+  .product-intro-v1[data-motion="reduced"] .intro-final-copy,
+  .product-intro-v1[data-motion="reduced"] .intro-book-scene,
+  .product-intro-v1[data-motion="reduced"] .intro-memory-spread,
+  .product-intro-v1[data-motion="reduced"] .intro-time-visual,
+  .product-intro-v1[data-motion="reduced"] .intro-engine-visual,
+  .product-intro-v1[data-motion="reduced"] .intro-final-book,
+  .product-intro-v1[data-motion="reduced"] .intro-threshold-sheet {
+    transform: none;
+    opacity: 1;
+  }
+
+  .product-intro-v1[data-motion="reduced"] .intro-threshold-sheet {
+    transform: rotate(-1.8deg);
+  }
+}
