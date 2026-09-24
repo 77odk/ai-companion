@@ -159,6 +159,7 @@ function useAuthState(): boolean {
 
 export default function App() {
   const [view, setView] = useState<View>(initialView)
+  const loggedIn = useAuthState()
 
   useEffect(() => {
     initCloudStateSync()
@@ -301,7 +302,6 @@ export default function App() {
   // 已登录用户首次拉会话列表只做一次（StrictMode 双跑防重）
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
-  const loggedIn = useAuthState()
   // ConsentGate V1：首次使用先过「开始之前」安全说明（本机已同意当前版本则直接跳过）
   const [firstConsentDone, setFirstConsentDone] = useState<boolean>(() => !consentGateNeeded())
   // 老用户轻量补确认：初始化就按当前账号判断，避免首帧先误打统计再盖 light consent。
