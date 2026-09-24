@@ -1469,7 +1469,7 @@
   color: #2f2a28;
   font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
   font-size: clamp(42px, 12vw, 51px);
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: .055em;
   line-height: 1.02;
 }
@@ -1583,7 +1583,7 @@
   position: absolute;
   z-index: 3;
   left: 24px;
-  bottom: max(18px, calc(env(safe-area-inset-bottom) + 8px));
+  bottom: max(70px, calc(env(safe-area-inset-bottom) + 58px));
   margin: 0;
   transform: rotate(-5deg);
   color: rgba(160, 101, 94, .68);
