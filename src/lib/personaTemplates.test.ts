@@ -57,6 +57,8 @@ for (const t of ROLE_TEMPLATES) {
   ok(t.name.trim() !== '', `${t.id}.name 非空`)
   ok(t.tagline.trim() !== '', `${t.id}.tagline 非空`)
   ok(t.persona.trim() !== '', `${t.id}.persona 非空`)
+  ok(t.category.trim() !== '', `${t.id}.category 非空`)
+  ok(t.tags.length >= 2, `${t.id}.tags 至少 2 个`)
 }
 
 console.log('\n[3] persona 红线与职责边界')
