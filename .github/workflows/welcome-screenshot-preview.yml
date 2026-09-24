@@ -1,0 +1,34 @@
+name: welcome screenshot preview
+on:
+  push:
+    branches:
+      - preview/welcome-brand-icon
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx -y playwright@1.55.0 install --with-deps chromium
+      - name: Start preview
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/eluvin-preview.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/eluvin-preview.log
+          exit 1
+      - name: Capture 390x844 Welcome
+        run: npx -y playwright@1.55.0 screenshot --viewport-size="390,844" --wait-for-timeout=1500 http://127.0.0.1:4173/ welcome-390x844.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: welcome-390x844
+          path: welcome-390x844.png
+          if-no-files-found: error

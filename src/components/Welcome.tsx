@@ -1,76 +1,62 @@
-import { useEffect, useState } from 'react'
-import { fetchSiteStats } from '../lib/siteStats'
-import { API_BASE } from '../lib/sync'
-
 interface Props {
   onStart: () => void
   onGoGuide: () => void
 }
 
-// UI2-02 返修：Web ↻ 语义 = 更新当前 Web 客户端，不是「确认已看过 Welcome」。
-// UI2-02 NAV：Welcome 刷新保持 Welcome 由 visitState 的会话级 visit marker 承担
-// （进入 Welcome 时写入 eluvin_visit_view，刷新后 App 读到仍停留 Welcome），
-// 这里不再手工删除任何 boot key；forceRefresh 只负责更新当前 Web 客户端。
-function handleRefresh(): void {
-  void import('../lib/forceRefresh').then((m) => m.forceRefresh())
-}
-
-// UI2-02：Welcome 是「进入 Eluvin 世界之前的一扇门」。
-// 移除 feature pills 展示（对应功能仍在，只是品牌入口不再陈列）；
-// 保留：忆文 / ELUVIN / 官方 slogan「忆过往，成文思」/ 既有 onStart / onGoGuide / 强刷入口（复用 forceRefresh）。
 export default function Welcome({ onStart, onGoGuide }: Props) {
-  // 站点访问数字走我们自己的后端（第一方），取不到就不显示，不填 0 也不编数字。
-  const [visitors, setVisitors] = useState<number | null>(null)
-  useEffect(() => {
-    let alive = true
-    void fetchSiteStats(API_BASE).then((stats) => {
-      if (alive && stats && stats.uv > 0) setVisitors(stats.uv)
-    })
-    return () => {
-      alive = false
-    }
-  }, [])
-
   return (
-    <div className="welcome-page">
-      <button
-        type="button"
-        className="welcome-refresh"
-        onClick={handleRefresh}
-      >
-        ↻ 检查更新
-      </button>
+    <div className="welcome-page welcome-reference-page">
+      <img
+        className="welcome-reference-scene"
+        src="/brand/welcome-scene.svg"
+        alt=""
+        aria-hidden="true"
+      />
 
-      <div className="welcome-inner">
-        <div className="welcome-logo" aria-hidden="true">
-          <span className="welcome-logo-mark">忆</span>
-        </div>
-
-        <p className="welcome-en">ELUVIN</p>
-        <h1 className="welcome-name">忆文</h1>
-        <p className="welcome-slogan">忆过往，成文思</p>
-
-        {/* 时间轨迹：两条逐渐靠近的线 + 微弱节点（Warm 品牌光） */}
-        <div className="welcome-track" aria-hidden="true">
-          <span className="welcome-track-line welcome-track-line-l" />
-          <span className="welcome-track-node" />
-          <span className="welcome-track-line welcome-track-line-r" />
-        </div>
-
-        <button className="welcome-start" onClick={onStart}>
-          开始遇见 TA
-        </button>
-
-        <button type="button" className="welcome-guide-link" onClick={onGoGuide}>
-          第一次来？先花 30 秒看看教程
-        </button>
-
-        <p className="welcome-foot">这里会有一个 TA，和你一起经过时间，并记得。</p>
-
-        {visitors !== null && (
-          <p className="welcome-count">已有 {visitors} 人访问</p>
-        )}
+      <div className="welcome-reference-topline">
+        <p>在时间里，和你一起。</p>
+        <span>ALWAYS WITH YOU.</span>
       </div>
+
+      <main className="welcome-reference-content">
+        <div className="welcome-reference-logo-frame">
+          <img
+            className="welcome-reference-logo"
+            src="/brand/eluvin-book-icon.jpg"
+            alt="忆文"
+          />
+        </div>
+
+        <h1>忆文</h1>
+        <p className="welcome-reference-en">ELUVIN</p>
+        <p className="welcome-reference-slogan">忆过往，成文思</p>
+
+        <span className="welcome-reference-divider" aria-hidden="true" />
+
+        <p className="welcome-reference-lead">
+          不只是记忆，
+          <br />
+          而是我们一起走过的每一天。
+        </p>
+
+        <p className="welcome-reference-keywords">记忆 · 陪伴 · 成长 · 更久的我们</p>
+
+        <div className="welcome-reference-actions">
+          <button type="button" className="welcome-reference-primary" onClick={onStart}>
+            <span>登录 / 注册</span>
+            <span aria-hidden="true">→</span>
+          </button>
+
+          <button type="button" className="welcome-reference-secondary" onClick={onGoGuide}>
+            <span>先了解一下</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </main>
+
+      <p className="welcome-reference-note" aria-hidden="true">
+        记录时光，<br />也记录我们
+      </p>
     </div>
   )
 }
