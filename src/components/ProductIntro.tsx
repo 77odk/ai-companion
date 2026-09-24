@@ -181,6 +181,11 @@ export default function ProductIntro({ onBack, onStart }: Props) {
         const exit = clamp01(-localTop / sceneHeight)
         const focus = clamp01(Math.min(enter, 1 - exit))
         const turnOpacity = 4 * exit * (1 - exit)
+        const foldX = viewportHeight > 0
+          ? scroller.clientWidth - 72 - exit * (scroller.clientWidth + 24)
+          : 0
+        const foldRotate = 28 - exit * 56
+        const foldSkew = 4 - exit * 8
 
         const copyY = (1 - enter) * 24 - exit * 18
         const visualY = (1 - enter) * 30 - exit * 20
@@ -193,6 +198,9 @@ export default function ProductIntro({ onBack, onStart }: Props) {
         scene.style.setProperty('--intro-focus', focus.toFixed(4))
         scene.style.setProperty('--intro-turn-angle', `${(-116 * exit).toFixed(2)}deg`)
         scene.style.setProperty('--intro-turn-opacity', turnOpacity.toFixed(4))
+        scene.style.setProperty('--intro-fold-x', `${foldX.toFixed(2)}px`)
+        scene.style.setProperty('--intro-fold-rotate', `${foldRotate.toFixed(2)}deg`)
+        scene.style.setProperty('--intro-fold-skew', `${foldSkew.toFixed(2)}deg`)
         scene.style.setProperty('--intro-copy-y', `${copyY.toFixed(2)}px`)
         scene.style.setProperty('--intro-copy-opacity', copyOpacity.toFixed(4))
         scene.style.setProperty('--intro-visual-y', `${visualY.toFixed(2)}px`)
