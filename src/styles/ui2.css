@@ -1409,6 +1409,9 @@
   z-index: 3;
   width: min(100%, 390px);
   min-height: 100%;
+  /* 外层 .welcome-page 是 column 方向的 flex：左右由 align-items(stretch) 管，
+     固定宽度的内容会贴左。auto 外边距让它在大屏外壳里也保持水平居中（手机端无变化）。 */
+  margin: 0 auto;
   padding:
     max(102px, calc(env(safe-area-inset-top) + 76px))
     24px
