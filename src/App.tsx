@@ -68,7 +68,7 @@ const RolesPage = lazy(() => import('./components/RolesPage'))
 const SpaceLife = lazy(() => import('./components/SpaceLife'))
 const Memory = lazy(() => import('./components/Memory'))
 
-type View = 'welcome' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
+type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
 // 底部四 tab 的常显范围：主视图（TA/空间/记忆/我的）带底部导航；Chat 等全屏页不带。
 // UI2-02 NAV-03：Chat 是 Secondary 全屏 view，Bottom Nav 只属于 home/aispace/memory/settings。
@@ -658,16 +658,14 @@ export default function App() {
         ) : (
           <LoginGate onDone={handleGateDone} onGoGuide={() => openGuide('gate')} onBack={handleGateBack} />
         )
+      ) : view === 'productintro' ? (
+        <ProductIntro onBack={() => navigate('welcome')} onStart={handleWelcomeStart} />
       ) : view === 'guide' ? (
-        guideBack === 'welcome' ? (
-          <ProductIntro onBack={handleGuideBack} onStart={handleWelcomeStart} />
-        ) : (
-          <GuideDetail onBack={handleGuideBack} onGoProvider={() => openSettings('provider')} />
-        )
+        <GuideDetail onBack={handleGuideBack} onGoProvider={() => openSettings('provider')} />
       ) : view === 'welcome' ? (
         <Welcome
           onStart={handleWelcomeStart}
-          onGoGuide={() => openGuide('welcome')}
+          onGoGuide={() => navigate('productintro')}
         />
       ) : view === 'role' ? (
         <RolePicker
