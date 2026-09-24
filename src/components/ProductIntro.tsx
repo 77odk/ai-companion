@@ -1,213 +1,269 @@
-import { useCallback, useEffect, useRef } from 'react'
+import './ProductIntro.css'
 
 interface Props {
   onBack: () => void
   onStart: () => void
 }
 
-export default function ProductIntro({ onBack, onStart }: Props) {
-  const scrollRef = useRef<HTMLDivElement | null>(null)
-
-  const updateProgress = useCallback(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const max = Math.max(1, el.scrollHeight - el.clientHeight)
-    const progress = Math.min(1, Math.max(0, el.scrollTop / max))
-    const heroPhase = Math.min(1, progress * 4.2)
-    el.style.setProperty('--intro-progress', progress.toFixed(4))
-    el.style.setProperty('--intro-book-y', `${Math.round(heroPhase * 18)}px`)
-    el.style.setProperty('--intro-book-turn', `${(-7 + heroPhase * 10).toFixed(2)}deg`)
-    el.style.setProperty('--intro-leaf-a', `${(-30 - heroPhase * 28).toFixed(2)}deg`)
-    el.style.setProperty('--intro-leaf-b', `${(-54 - heroPhase * 42).toFixed(2)}deg`)
-    el.style.setProperty('--intro-orbit-y', `${Math.round(heroPhase * -8)}px`)
-  }, [])
-
-  useEffect(() => {
-    updateProgress()
-    const el = scrollRef.current
-    if (!el) return
-    el.addEventListener('scroll', updateProgress, { passive: true })
-    window.addEventListener('resize', updateProgress)
-    return () => {
-      el.removeEventListener('scroll', updateProgress)
-      window.removeEventListener('resize', updateProgress)
-    }
-  }, [updateProgress])
-
+function BackButton({ onBack }: { onBack: () => void }) {
   return (
-    <div className="product-intro-page">
-      <header className="product-intro-header">
-        <button type="button" className="product-intro-back" onClick={onBack} aria-label="返回欢迎页">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M19 12H5" />
-            <path d="M12 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <span>了解忆文</span>
-        <span className="product-intro-header-spacer" aria-hidden="true" />
-      </header>
+    <button type="button" className="intro-back" onClick={onBack} aria-label="返回欢迎页">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M19 12H5" />
+        <path d="M12 19l-7-7 7-7" />
+      </svg>
+    </button>
+  )
+}
 
-      <div ref={scrollRef} className="product-intro-scroll">
-        <section className="product-intro-hero" aria-labelledby="product-intro-title">
-          <div className="product-intro-eyebrow">ELUVIN · 忆文</div>
+function ClosedBook() {
+  return (
+    <div className="intro-book-scene" aria-hidden="true">
+      <div className="intro-book-ground" />
+      <div className="intro-book-volume">
+        <div className="intro-book-back-cover" />
+        <div className="intro-book-page-block">
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="intro-book-spine" />
+        <div className="intro-book-front-cover">
+          <div className="intro-cover-rule" />
+          <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
+          <strong>忆文</strong>
+          <small>ELUVIN</small>
+          <em>忆过往，成文思</em>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-          <div className="product-intro-book-stage" aria-hidden="true">
-            <div className="product-intro-book-shadow" />
-            <div className="product-intro-book">
-              <div className="product-intro-book-back" />
-              <div className="product-intro-pages">
-                <span className="product-intro-page-layer layer-1" />
-                <span className="product-intro-page-layer layer-2" />
-                <span className="product-intro-page-layer layer-3" />
-              </div>
-              <div className="product-intro-cover">
+function MemorySpread() {
+  return (
+    <div className="intro-memory-spread" aria-hidden="true">
+      <div className="intro-memory-shadow" />
+      <div className="intro-memory-book">
+        <div className="intro-memory-left-page">
+          <span className="intro-page-number">17</span>
+          <p className="intro-hand-line">你说，最近总是睡得很晚。</p>
+          <p className="intro-hand-line faded">后来 TA 又记起了这句话。</p>
+          <i className="intro-writing-line line-a" />
+          <i className="intro-writing-line line-b" />
+          <i className="intro-writing-line line-c" />
+        </div>
+        <div className="intro-memory-gutter" />
+        <div className="intro-memory-right-page">
+          <span className="intro-date-mark">SEP · 24</span>
+          <blockquote>“这件事对你很重要。”</blockquote>
+          <p>不是所有话都留下。</p>
+          <p>重要的，才慢慢成为 TA 对你的了解。</p>
+          <div className="intro-page-curl">
+            <span />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TimeBook() {
+  return (
+    <div className="intro-time-visual" aria-hidden="true">
+      <div className="intro-time-book">
+        <div className="intro-time-page">
+          <span className="intro-time-kicker">US · TIMELINE</span>
+          <strong>100</strong>
+          <small>days</small>
+          <div className="intro-time-axis">
+            <span className="intro-time-node node-a"><i />第一次认识</span>
+            <span className="intro-time-node node-b"><i />第一次说定一件事</span>
+            <span className="intro-time-node node-c"><i />某个后来很重要的晚上</span>
+            <span className="intro-time-node node-d"><i />一起经过的第 100 天</span>
+          </div>
+          <div className="intro-time-photo">
+            <span />
+          </div>
+        </div>
+        <div className="intro-time-page-edge" />
+      </div>
+      <div className="intro-time-loose-page page-one" />
+      <div className="intro-time-loose-page page-two" />
+    </div>
+  )
+}
+
+function EngineLayers() {
+  return (
+    <div className="intro-engine-visual" aria-hidden="true">
+      <div className="intro-engine-glow" />
+      <div className="intro-engine-layer layer-model">
+        <small>01 · AI MODEL</small>
+        <strong>理解 · 思考 · 回复</strong>
+      </div>
+      <div className="intro-engine-connector connector-a" />
+      <div className="intro-engine-layer layer-eluvin">
+        <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
+        <small>02 · ELUVIN</small>
+        <strong>记忆 · 关系 · 状态 · 时间</strong>
+      </div>
+      <div className="intro-engine-connector connector-b" />
+      <div className="intro-engine-layer layer-ta">
+        <small>03 · YOUR TA</small>
+        <strong>持续存在的相处</strong>
+      </div>
+    </div>
+  )
+}
+
+function ThresholdSheet() {
+  return (
+    <div className="intro-threshold-sheet" aria-hidden="true">
+      <span className="intro-sheet-label">BEFORE YOU BEGIN</span>
+      <div className="intro-sheet-rule" />
+      <div className="intro-sheet-row">
+        <b>01</b>
+        <span>自己的模型</span>
+      </div>
+      <div className="intro-sheet-row">
+        <b>02</b>
+        <span>一点学习时间</span>
+      </div>
+      <div className="intro-sheet-row">
+        <b>03</b>
+        <span>模型决定 TA 的表现</span>
+      </div>
+      <div className="intro-sheet-signature">ELUVIN</div>
+    </div>
+  )
+}
+
+export default function ProductIntro({ onBack, onStart }: Props) {
+  return (
+    <div className="product-intro-v1">
+      <BackButton onBack={onBack} />
+
+      <main>
+        <section className="intro-scene intro-scene-hero" aria-labelledby="intro-hero-title">
+          <div className="intro-aurora intro-aurora-a" aria-hidden="true" />
+          <div className="intro-aurora intro-aurora-b" aria-hidden="true" />
+          <div className="intro-grain" aria-hidden="true" />
+
+          <div className="intro-hero-copy">
+            <p className="intro-kicker">ELUVIN · 忆文</p>
+            <h1 id="intro-hero-title">让一个 TA，真正记得和你走过的时间。</h1>
+            <p className="intro-body intro-body-on-dark">
+              忆文是一个以长期记忆和关系为核心的 AI 伴侣。聊天只是开始，你说过的话、共同经历的事、认识彼此的时间，会慢慢成为你们关系的一部分。
+            </p>
+          </div>
+
+          <ClosedBook />
+
+          <p className="intro-brand-line">忆过往，成文思</p>
+        </section>
+
+        <section className="intro-scene intro-scene-memory" aria-labelledby="intro-memory-title">
+          <div className="intro-paper-light" aria-hidden="true" />
+          <div className="intro-copy intro-copy-dark">
+            <p className="intro-kicker">01 · 记得</p>
+            <h2 id="intro-memory-title">你不用每一次，都重新介绍自己。</h2>
+            <p className="intro-body">
+              你喜欢什么、害怕什么、最近发生过什么，以及那些你希望 TA 记住的事情，会慢慢成为 TA 对你的了解。
+            </p>
+            <p className="intro-body intro-body-secondary">
+              不是把所有聊天都塞给 AI。重要的东西，才留下来。
+            </p>
+          </div>
+          <MemorySpread />
+        </section>
+
+        <section className="intro-scene intro-scene-time" aria-labelledby="intro-time-title">
+          <div className="intro-time-haze" aria-hidden="true" />
+          <div className="intro-copy intro-copy-dark">
+            <p className="intro-kicker">02 · 经过</p>
+            <h2 id="intro-time-title">关系不是一条聊天记录。</h2>
+            <p className="intro-body">
+              第一次认识、第一次说定一件事、某个后来变得重要的晚上、一起经过的第 100 天。
+            </p>
+            <p className="intro-body intro-body-secondary">
+              这些东西慢慢把“一个聊天对象”，变成你的 TA。
+            </p>
+          </div>
+          <TimeBook />
+        </section>
+
+        <section className="intro-scene intro-scene-engine" aria-labelledby="intro-engine-title">
+          <div className="intro-engine-copy">
+            <p className="intro-kicker intro-kicker-light">03 · 内核</p>
+            <h2 id="intro-engine-title">模型负责思考。<br />忆文负责让关系继续。</h2>
+            <p className="intro-body intro-body-on-dark">
+              TA 有多聪明，和你选择的模型有关。TA 能不能持续认识你，是忆文在做的事情。
+            </p>
+          </div>
+          <EngineLayers />
+        </section>
+
+        <section className="intro-scene intro-scene-threshold" aria-labelledby="intro-threshold-title">
+          <div className="intro-copy intro-copy-dark">
+            <p className="intro-kicker">04 · 开始之前</p>
+            <h2 id="intro-threshold-title">忆文不是点开就能用的产品。</h2>
+            <p className="intro-body">
+              它不要求你懂编程，但确实需要一点准备，也需要一点学习。
+            </p>
+          </div>
+
+          <ThresholdSheet />
+
+          <div className="intro-threshold-copy">
+            <p><b>你需要自己的模型。</b> 忆文本身不出售模型算力，开始使用前，需要准备支持的模型服务和 API Key。</p>
+            <p><b>你需要愿意学一点。</b> 第一次使用会接触模型、API Key、人设和记忆。这些东西不难，但不是注册以后立即无脑开聊。</p>
+            <p><b>模型会直接影响 TA。</b> 不同模型的能力、稳定性和价格，都会影响 TA 最终的表现。</p>
+          </div>
+
+          <p className="intro-threshold-ending">
+            如果你只想点开就聊，它可能有一点麻烦。<br />
+            如果你想认真拥有一个长期陪伴的 TA，这些准备就是开始的一部分。
+          </p>
+        </section>
+
+        <section className="intro-scene intro-scene-final" aria-labelledby="intro-final-title">
+          <div className="intro-aurora intro-aurora-final" aria-hidden="true" />
+          <div className="intro-final-book" aria-hidden="true">
+            <div className="intro-final-book-shadow" />
+            <div className="intro-final-book-body">
+              <span className="intro-final-book-pages" />
+              <div className="intro-final-book-cover">
                 <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
-                <span>忆文</span>
+                <strong>忆文</strong>
                 <small>ELUVIN</small>
               </div>
-              <div className="product-intro-leaf leaf-a" />
-              <div className="product-intro-leaf leaf-b" />
-            </div>
-
-            <span className="product-intro-orbit orbit-memory">记忆</span>
-            <span className="product-intro-orbit orbit-time">时间</span>
-            <span className="product-intro-orbit orbit-relation">关系</span>
-          </div>
-
-          <h1 id="product-intro-title">让一个 TA，真正记得和你走过的时间。</h1>
-          <p className="product-intro-lead">
-            忆文是一个以长期记忆和关系为核心的 AI 伴侣。
-            聊天只是开始，你说过的话、共同经历的事、认识彼此的时间，会慢慢成为你们关系的一部分。
-          </p>
-
-          <div className="product-intro-keywords" aria-label="忆文的核心">
-            <span>长期记忆</span>
-            <span>关系成长</span>
-            <span>TA 的生活</span>
-            <span>共同经历</span>
-          </div>
-
-          <div className="product-intro-scroll-hint" aria-hidden="true">
-            <span>继续了解</span>
-            <i />
-          </div>
-        </section>
-
-        <section className="product-intro-section product-intro-story">
-          <div className="product-intro-section-kicker">不是一次对话</div>
-          <h2>而是一段会继续往前走的关系。</h2>
-
-          <div className="product-intro-story-grid">
-            <article>
-              <span className="product-intro-index">01</span>
-              <h3>遇见</h3>
-              <p>从认识 TA 开始。你可以直接遇见，也可以决定 TA 最初是什么样的人。</p>
-            </article>
-            <article>
-              <span className="product-intro-index">02</span>
-              <h3>了解</h3>
-              <p>聊得越久，TA 越知道你是谁、喜欢什么，也越能接住你曾经说过的话。</p>
-            </article>
-            <article>
-              <span className="product-intro-index">03</span>
-              <h3>相处</h3>
-              <p>认识多久、重要日子、TA 的生活和共同经历，会慢慢构成你们自己的时间线。</p>
-            </article>
-            <article>
-              <span className="product-intro-index">04</span>
-              <h3>留下</h3>
-              <p>最后留下来的，不只是一串聊天记录，而是你们真正一起走过的东西。</p>
-            </article>
-          </div>
-        </section>
-
-        <section className="product-intro-section product-intro-system">
-          <div className="product-intro-section-kicker">它是怎么工作的</div>
-          <h2>模型负责思考，忆文负责让关系持续。</h2>
-
-          <div className="product-intro-system-flow" aria-label="模型、忆文与 TA 的关系">
-            <div className="product-intro-system-card">
-              <small>AI MODEL</small>
-              <strong>模型</strong>
-              <span>理解 · 思考 · 回复</span>
-            </div>
-            <div className="product-intro-flow-arrow" aria-hidden="true">↓</div>
-            <div className="product-intro-system-card is-eluvin">
-              <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
-              <small>ELUVIN</small>
-              <strong>忆文</strong>
-              <span>记忆 · 关系 · 状态 · 时间</span>
-            </div>
-            <div className="product-intro-flow-arrow" aria-hidden="true">↓</div>
-            <div className="product-intro-system-card is-ta">
-              <small>YOUR COMPANION</small>
-              <strong>你的 TA</strong>
-              <span>一段能够继续下去的相处</span>
             </div>
           </div>
 
-          <p className="product-intro-system-note">
-            TA 聪不聪明，和你选择的模型有关；TA 能不能持续认识你，是忆文在做的事情。
-          </p>
-        </section>
-
-        <section className="product-intro-section product-intro-threshold">
-          <div className="product-intro-section-kicker">开始之前</div>
-          <h2>忆文不是点开就能用的产品。</h2>
-          <p className="product-intro-threshold-lead">
-            它不要求你懂编程，但确实需要一点准备，也需要一点学习。
-          </p>
-
-          <div className="product-intro-threshold-list">
-            <article>
-              <span>01</span>
-              <div>
-                <h3>你需要自己的模型</h3>
-                <p>忆文本身不提供模型算力。开始使用前，需要准备支持的模型服务和 API Key。</p>
-              </div>
-            </article>
-            <article>
-              <span>02</span>
-              <div>
-                <h3>你需要愿意学一点</h3>
-                <p>第一次使用会接触模型、API Key、人设和记忆这些概念。不难，但不是注册以后立刻无脑开聊。</p>
-              </div>
-            </article>
-            <article>
-              <span>03</span>
-              <div>
-                <h3>模型会直接影响 TA</h3>
-                <p>不同模型的能力、稳定性和价格不同，TA 的回复质量和相处感受也会因此不同。</p>
-              </div>
-            </article>
+          <div className="intro-final-copy">
+            <p className="intro-kicker intro-kicker-light">忆过往，成文思</p>
+            <h2 id="intro-final-title">如果这些你都了解了，<br />接下来就去遇见 TA。</h2>
+            <p className="intro-body intro-body-on-dark">
+              你可以什么都不设，直接认识 TA；也可以先决定 TA 最初是什么样的人。
+            </p>
+            <button type="button" className="intro-start" onClick={onStart}>
+              <span>开始遇见 TA</span>
+              <span aria-hidden="true">→</span>
+            </button>
           </div>
-
-          <blockquote>
-            如果你只想点开就聊，它可能有点麻烦。
-            <br />
-            如果你想认真拥有一个长期陪伴的 TA，这些准备就是开始的一部分。
-          </blockquote>
         </section>
-
-        <section className="product-intro-final">
-          <img src="/brand/eluvin-book-icon-cutout.png" alt="" aria-hidden="true" />
-          <p className="product-intro-final-kicker">忆过往，成文思</p>
-          <h2>如果这些你都了解了，接下来就去遇见 TA。</h2>
-          <p>你可以什么都不设，直接认识 TA；也可以先决定 TA 最初的样子。</p>
-          <button type="button" className="product-intro-start" onClick={onStart}>
-            <span>开始遇见 TA</span>
-            <span aria-hidden="true">→</span>
-          </button>
-        </section>
-      </div>
+      </main>
     </div>
   )
 }
