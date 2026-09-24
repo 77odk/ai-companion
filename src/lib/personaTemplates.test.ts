@@ -1,4 +1,4 @@
-// 角色模板数据自测（纯数据，Node 可直接跑）
+// 人设模板数据自测（纯数据，Node 可直接跑）
 // 跑法：node src/lib/personaTemplates.test.ts
 import { ROLE_TEMPLATES } from './personaTemplates.ts'
 import { stripEmoji } from './api.ts'
@@ -23,17 +23,14 @@ function eq(actual: unknown, expected: unknown, name: string): void {
 }
 
 console.log('\n[1] ROLE_TEMPLATES 基础结构')
-eq(ROLE_TEMPLATES.length, 5, '恰好 5 套模板')
+ok(ROLE_TEMPLATES.length >= 8 && ROLE_TEMPLATES.length <= 15, '模板总数在 8–15 个之间')
+eq(ROLE_TEMPLATES.length, 12, '当前首发 12 套模板')
 const ids = ROLE_TEMPLATES.map((t) => t.id)
 ok(new Set(ids).size === ids.length, 'id 唯一')
 ok(ids.every((id) => id.trim() !== ''), 'id 非空')
+eq(ROLE_TEMPLATES.filter((t) => t.featured).map((t) => t.id), ['general'], '仅通用模板标记为推荐')
 
-console.log('\n[1b] charName（S1 角色默认名）唯一且非空')
-const charNames = ROLE_TEMPLATES.map((t) => t.charName)
-ok(new Set(charNames).size === charNames.length, 'charName 唯一')
-ok(charNames.every((n) => n.trim() !== ''), 'charName 非空')
-ok(charNames.every((n) => n.length <= 4), 'charName 是简短人名（≤4 字）')
-ok(charNames.every((n) => !/[AIai]/.test(n)), 'charName 不含「AI」字样')
+console.log('\n[1b] 旧 5 张兼容元数据仍保留，但新模板库不会应用它们')
 const expectedChars: Record<string, string> = {
   'gentle-boyfriend': '阿叙',
   bestie: '小满',
@@ -41,11 +38,6 @@ const expectedChars: Record<string, string> = {
   'tsundere-cat': '阿凛',
   'energetic-partner': '阳阳',
 }
-for (const t of ROLE_TEMPLATES) {
-  eq(t.charName, expectedChars[t.id], `${t.id}.charName = ${expectedChars[t.id]}`)
-}
-
-console.log('\n[1c] 性别默认值（TASK-UI1）：温叙相伴/逐光同行/外冷内热/活力伙伴=男，挚友同频=女')
 const expectedGenders: Record<string, string> = {
   'gentle-boyfriend': 'male',
   bestie: 'female',
@@ -53,26 +45,32 @@ const expectedGenders: Record<string, string> = {
   'tsundere-cat': 'male',
   'energetic-partner': 'male',
 }
-for (const t of ROLE_TEMPLATES) {
-  eq(t.gender, expectedGenders[t.id], `${t.id}.gender = ${expectedGenders[t.id]}`)
-  ok(t.gender === 'male' || t.gender === 'female', `${t.id}.gender 是合法值`)
+for (const [id, charName] of Object.entries(expectedChars)) {
+  const t = ROLE_TEMPLATES.find((item) => item.id === id)
+  ok(Boolean(t), `${id} 仍存在`)
+  eq(t?.charName, charName, `${id}.charName 兼容旧流程`)
+  eq(t?.gender, expectedGenders[id], `${id}.gender 兼容旧流程`)
 }
 
-console.log('\n[2] 每项字段非空')
+console.log('\n[2] 每项展示字段与 persona 非空')
 for (const t of ROLE_TEMPLATES) {
   ok(t.name.trim() !== '', `${t.id}.name 非空`)
-  ok(t.charName.trim() !== '', `${t.id}.charName 非空`)
   ok(t.tagline.trim() !== '', `${t.id}.tagline 非空`)
   ok(t.persona.trim() !== '', `${t.id}.persona 非空`)
 }
 
-console.log('\n[3] persona 不包含 emoji / 「演」 / 绝对指令词')
+console.log('\n[3] persona 红线与职责边界')
 const ABSOLUTE_WORDS = ['必须', '永远', '从不', '禁止', '绝不']
+const BASE_ONLY_WORDS = ['客服', '讨好', '鸡汤', '共同经历', '编造']
 for (const t of ROLE_TEMPLATES) {
   ok(stripEmoji(t.persona) === t.persona, `${t.id} 无 emoji`)
   ok(!t.persona.includes('演'), `${t.id} 无「演」`)
+  ok(!/^你是/m.test(t.persona), `${t.id} 不用「你是…」包装`)
   for (const w of ABSOLUTE_WORDS) {
     ok(!t.persona.includes(w), `${t.id} 无绝对词「${w}」`)
+  }
+  for (const w of BASE_ONLY_WORDS) {
+    ok(!t.persona.includes(w), `${t.id} 不重复 Companion Base 规则「${w}」`)
   }
 }
 
