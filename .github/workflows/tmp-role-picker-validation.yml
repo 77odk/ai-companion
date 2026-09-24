@@ -1,0 +1,19 @@
+name: temp role picker validation
+on:
+  push:
+    branches:
+      - feat/role-picker-template-library
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
