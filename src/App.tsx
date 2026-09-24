@@ -63,6 +63,7 @@ const ChatSettings = lazy(() => import('./components/ChatSettings'))
 const AboutMe = lazy(() => import('./components/AboutMe'))
 const WeeklyPage = lazy(() => import('./components/WeeklyPage'))
 const GuideDetail = lazy(() => import('./components/Guide'))
+const ProductIntro = lazy(() => import('./components/ProductIntro'))
 const RolesPage = lazy(() => import('./components/RolesPage'))
 const SpaceLife = lazy(() => import('./components/SpaceLife'))
 const Memory = lazy(() => import('./components/Memory'))
@@ -658,7 +659,11 @@ export default function App() {
           <LoginGate onDone={handleGateDone} onGoGuide={() => openGuide('gate')} onBack={handleGateBack} />
         )
       ) : view === 'guide' ? (
-        <GuideDetail onBack={handleGuideBack} onGoProvider={() => openSettings('provider')} />
+        guideBack === 'welcome' ? (
+          <ProductIntro onBack={handleGuideBack} onStart={handleWelcomeStart} />
+        ) : (
+          <GuideDetail onBack={handleGuideBack} onGoProvider={() => openSettings('provider')} />
+        )
       ) : view === 'welcome' ? (
         <Welcome
           onStart={handleWelcomeStart}
