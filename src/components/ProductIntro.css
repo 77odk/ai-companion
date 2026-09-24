@@ -561,8 +561,9 @@
 
 .intro-time-book {
   position: absolute;
+  z-index: 3;
   left: 50%;
-  top: 56px;
+  top: 42px;
   width: 258px;
   height: 330px;
   transform: translateX(-50%) rotateX(52deg) rotateZ(7deg) rotateY(-8deg);
@@ -613,7 +614,7 @@
 .intro-time-page strong {
   display: block;
   margin-top: 18px;
-  font-size: 72px;
+  font-size: 80px;
   line-height: .9;
   letter-spacing: -.08em;
   color: #5a3a2f;
@@ -682,8 +683,9 @@
 
 .intro-time-loose-page {
   position: absolute;
-  width: 164px;
-  height: 210px;
+  z-index: 1;
+  width: 148px;
+  height: 188px;
   border-radius: 7px 12px 12px 7px;
   border: 1px solid rgba(100,72,53,.12);
   background: #eee1d1;
@@ -691,15 +693,15 @@
 }
 
 .intro-time-loose-page.page-one {
-  left: 8px;
-  bottom: 24px;
-  transform: rotate(-13deg);
+  left: 16px;
+  bottom: 54px;
+  transform: rotate(-11deg);
 }
 
 .intro-time-loose-page.page-two {
-  right: 3px;
-  bottom: 6px;
-  transform: rotate(12deg);
+  right: 12px;
+  bottom: 32px;
+  transform: rotate(10deg);
 }
 
 /* ---------- Scene 04 · Engine ---------- */
