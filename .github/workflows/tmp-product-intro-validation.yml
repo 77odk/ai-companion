@@ -52,7 +52,7 @@ jobs:
           assert.equal(await page.locator('.product-intro-leaf').count(), 2)
           assert.equal(await page.locator('.product-intro-orbit').count(), 3)
 
-          const before = await page.locator('.product-intro-page').evaluate((el) =>
+          const before = await page.locator('.product-intro-scroll').evaluate((el) =>
             getComputedStyle(el).getPropertyValue('--intro-leaf-b').trim()
           )
           assert.ok(before.endsWith('deg'), '3D page-turn CSS variable initialized')
@@ -64,7 +64,7 @@ jobs:
           const scroll = page.locator('.product-intro-scroll')
           await scroll.evaluate((el) => { el.scrollTop = Math.round(el.scrollHeight * 0.31); el.dispatchEvent(new Event('scroll')) })
           await page.waitForTimeout(120)
-          const after = await page.locator('.product-intro-page').evaluate((el) =>
+          const after = await page.locator('.product-intro-scroll').evaluate((el) =>
             getComputedStyle(el).getPropertyValue('--intro-leaf-b').trim()
           )
           assert.notEqual(after, before, 'scroll changes 3D page-turn angle')
@@ -84,11 +84,24 @@ jobs:
           overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
           assert.ok(overflow <= 0, 'role handoff has no horizontal overflow')
 
-          // 回到欢迎页，确认登录墙里的教程入口仍然是旧 Guide，不是产品介绍页。
-          await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
-          await page.addInitScript(() => {
+          // 独立浏览器页确认：登录墙的「先看看教程」仍然进入旧 Guide。
+          const tutorial = await browser.newPage({ viewport: { width: 390, height: 844 } })
+          const tutorialErrors = []
+          tutorial.on('pageerror', (err) => tutorialErrors.push(String(err)))
+          await tutorial.addInitScript(() => {
             localStorage.setItem('eluvin_consent', JSON.stringify({ version: 'v1', consentedAt: '2026-09-24T00:00:00.000Z' }))
           })
+          await tutorial.route('**/api/site-stats', async (route) => {
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ uv: 1, pv: 1 }) })
+          })
+          await tutorial.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
+          await tutorial.getByRole('button', { name: /开始遇见 TA/ }).click()
+          await tutorial.getByRole('button', { name: '已有账号直接登录' }).click()
+          await tutorial.getByRole('button', { name: '先看看教程' }).click()
+          await tutorial.getByText('使用指南', { exact: true }).waitFor({ state: 'visible' })
+          assert.equal(await tutorial.locator('.product-intro-page').count(), 0, 'login tutorial remains the old Guide')
+          assert.equal(tutorialErrors.length, 0, 'tutorial route has 0 pageerror')
+          await tutorial.close()
 
           assert.equal(pageErrors.length, 0, '0 pageerror')
           assert.equal(consoleErrors.length, 0, '0 unexpected console error')
