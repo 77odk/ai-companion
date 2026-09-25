@@ -301,7 +301,7 @@ ok(saved8[0].art == null, '落盘动态不写 art')
 const ledger8 = readLedger(undefined, now)
 eq(ledger8[todayKey]?.event ?? 0, 1, '事件动态记入账本 event=1')
 eq(ledger8[todayKey]?.daily ?? 0, 0, '事件不占日常配额：daily 仍 0')
-// 模板降级路径也记账（fetch 抛错 → 降级模板，source 仍 event）
+// event 失败不允许用无关模板冒充事实：宁可不发，并释放 provisional slot 供未来重试
 resetStore()
 savePersona('你是小忆，爱喝咖啡')
 saveSettings({ provider: 'custom', apiKey: 'k-test', baseUrl: 'https://llm.test/v1', model: 'm-test' })
@@ -311,12 +311,17 @@ globalThis.fetch = async () => {
   throw new Error('network down')
 }
 const plan8b = refreshSpace('小忆', '阿明', now)
+const failedSlotId = plan8b.pending[0] ? generationSlotIdFor(plan8b.pending[0]) : null
 const res8b = await generatePendingPosts(plan8b, '小忆', '阿明', undefined, now)
-eq(res8b.created, 1, 'LLM 失败 → 模板降级仍生成 1 条')
-eq(res8b.usedFallback, true, 'usedFallback 标记')
+eq(res8b.created, 0, 'event LLM 失败 → 不拿模板冒充事实')
+eq(res8b.usedFallback, true, 'usedFallback 标记本次 LLM 未成功')
 const saved8b = loadCurrentPosts()
-eq(saved8b[0].source, 'event', '降级模板也带 source=event（配额账本两条路径都记账）')
-eq(readLedger(undefined, now)[todayKey]?.event ?? 0, 1, '降级生成的也记入账本 event=1')
+eq(saved8b.length, 0, '失败后不落任何假 event 动态')
+eq(readLedger(undefined, now)[todayKey]?.event ?? 0, 0, '未生成动态 → event 账本不记账')
+if (failedSlotId) {
+  const usedAfterFail = JSON.parse(store.get('ai_space_used_templates') ?? '{}')
+  eq(usedAfterFail[`__generation_slot__:${failedSlotId}`], undefined, '失败的 provisional slot 被释放，可未来重试')
+}
 
 console.log('\n[9] 端到端（模板路径）：refreshSpace 落盘 source + 记账 + 删动态不回升')
 resetStore()
