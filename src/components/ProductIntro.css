@@ -384,13 +384,13 @@
   background: var(--paper);
 }
 
-/* Core: one deep anchor field, no stack of glass cards. */
+/* Core: explain the actual relationship loop in one deep anchor field. */
 .intro-engine-paper {
   position: relative;
   z-index: 3;
   margin-top: 34px;
-  padding: 28px 24px;
-  background: rgba(68, 42, 39, .94);
+  padding: 26px 24px 24px;
+  background: rgba(68, 42, 39, .96);
   color: #fff3ec;
   box-shadow: 0 26px 54px rgba(68,42,39,.19);
   opacity: 0;
@@ -405,46 +405,80 @@
   transform: translateY(0);
 }
 
-.intro-engine-paper > div {
+.intro-engine-step {
   position: relative;
-  min-height: 72px;
-  padding: 10px 0;
+  padding: 14px 0 16px 18px;
 }
 
-.intro-engine-paper > div.is-brand {
-  padding-left: 64px;
+.intro-engine-step::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #f0b5ad;
+  box-shadow: 0 0 0 4px rgba(240,181,173,.08);
 }
 
 .intro-engine-paper > b {
   display: block;
   width: 100%;
   height: 1px;
-  margin: 8px 0;
-  background: rgba(255,243,236,.14);
+  margin: 2px 0;
+  background: rgba(255,243,236,.13);
 }
 
-.intro-engine-paper span {
-  color: rgba(255,243,236,.44);
-}
-
-.intro-engine-paper strong {
+.intro-engine-step > span {
   display: block;
-  margin-top: 10px;
-  color: #fff5ef;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: .02em;
+  color: rgba(255,243,236,.46);
+  font-size: 8px;
+  letter-spacing: .15em;
 }
 
-.intro-engine-paper img {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 46px;
-  height: 46px;
-  transform: translateY(-50%);
-  object-fit: contain;
-  filter: brightness(1.05) sepia(.12);
+.intro-engine-step > strong {
+  display: block;
+  margin-top: 9px;
+  color: #fff6f0;
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.55;
+  letter-spacing: .01em;
+}
+
+.intro-engine-step > p {
+  margin: 8px 0 0;
+  color: rgba(255,243,236,.66);
+  font-size: 11px;
+  line-height: 1.78;
+}
+
+.intro-engine-summary {
+  margin-top: 12px;
+  padding: 18px 18px 17px;
+  border: 1px solid rgba(255,243,236,.13);
+  background: rgba(255,243,236,.055);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.intro-engine-summary strong {
+  display: block;
+  color: #fff6f0;
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.intro-engine-summary span {
+  display: block;
+  margin-top: 7px;
+  color: rgba(255,243,236,.62);
+  font-size: 10.5px;
+  line-height: 1.72;
 }
 
 .intro-copy-on-dark .intro-kicker {
@@ -674,10 +708,6 @@
   animation: intro-soft-breathe 8.2s ease-in-out infinite;
 }
 
-.product-intro-v1[data-motion="on"] .intro-scene.is-visible .intro-engine-paper img {
-  animation: intro-logo-breathe 6.6s ease-in-out infinite;
-}
-
 .product-intro-v1[data-motion="on"] .intro-scene.is-visible .intro-threshold-paper {
   animation: intro-soft-breathe 8.8s ease-in-out infinite;
 }
@@ -703,11 +733,6 @@
 @keyframes intro-soft-breathe {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
-}
-
-@keyframes intro-logo-breathe {
-  0%, 100% { transform: translateY(-50%) scale(1); }
-  50% { transform: translateY(-50%) scale(1.04); }
 }
 
 @keyframes intro-envelope-breathe {
@@ -783,7 +808,6 @@
   .intro-hero-object img,
   .intro-memory-note,
   .intro-time-paper,
-  .intro-engine-paper img,
   .intro-threshold-paper,
   .intro-envelope-art {
     animation: none !important;
