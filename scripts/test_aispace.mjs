@@ -94,13 +94,16 @@ const w = pickWeatherWord(seeded(1))
 ok(['晴', '雨', '阴', '多云'].includes(w), `天气词合法（得 ${w}）`)
 
 console.log('\n[3] 回填计划·基础（2026-09-04 回填式时间轴）')
-// 首访：没有真实聊天证据就不为“页面不空”硬铺动态
+// 首访：铺最近 MAX_BACKFILL_DAYS 个自然日，每天 1 条（旧→新）
 const firstPlan = planBackfillTimestamps(null, now, [], new Set(), seeded(2))
-eq(firstPlan.length, 0, '首访无证据 → 0 条，不再铺 3 天')
-const firstEventKey = dayKeyOf(now - DAY)
-const firstEventPlan = planBackfillSlots(null, now, [], new Set([firstEventKey]), seeded(21))
-eq(firstEventPlan.length, 1, '首访有真实事件日 → 只生成 1 个 event 槽')
-eq(firstEventPlan[0]?.source, 'event', '首访证据槽来源必须是 event')
+eq(firstPlan.length, MAX_BACKFILL_DAYS, '首访铺 3 天')
+ok(firstPlan[0] < firstPlan[1] && firstPlan[1] < firstPlan[2], '升序（从旧到新）')
+const daysOfFirst = new Set(firstPlan.map((ts) => dayKeyOf(ts)))
+eq(daysOfFirst.size, MAX_BACKFILL_DAYS, '首访分布在 3 个不同自然日')
+for (const ts of firstPlan) {
+  const hh = new Date(ts).getHours()
+  ok(hh >= 7 && hh <= 23, `首访时间戳在 7-23 点之间（${hh} 点）`)
+}
 // 防抖：2 小时内不补
 eq(planBackfillTimestamps(now - 1 * HOUR, now, [], new Set(), seeded(3)).length, 0, '距上次 1 小时不补')
 // 昨天聊过（事件日）→ 必补
@@ -125,11 +128,13 @@ for (const ts of latePlan) {
 console.log('\n[3b] 新角色认识边界：过去只能从 firstSeen 当天开始')
 const firstSeenToday = new Date(2026, 7, 22, 9, 30).getTime()
 const boundedToday = planBackfillTimestamps(null, now, [], new Set(), seeded(201), firstSeenToday)
-eq(boundedToday.length, 0, '今天刚认识且无聊天证据 → 首访保持空')
+eq([...new Set(boundedToday.map((ts) => dayKeyOf(ts)))], ['2026-08-22'], '今天刚认识 → 首访不再伪造前两天动态')
+ok(boundedToday.every((ts) => dayKeyOf(ts) >= dayKeyOf(firstSeenToday)), '所有首访槽位都不早于认识日')
 
 const firstSeenYesterday = new Date(2026, 7, 21, 18, 0).getTime()
 const boundedYesterday = planBackfillTimestamps(null, now, [], new Set(), seeded(202), firstSeenYesterday)
-eq(boundedYesterday.length, 0, '昨天认识但无聊天证据 → 仍不补生活动态')
+ok(boundedYesterday.every((ts) => dayKeyOf(ts) >= '2026-08-21'), '昨天认识 → 最早只到昨天')
+ok(new Set(boundedYesterday.map((ts) => dayKeyOf(ts))).size <= 2, '昨天认识 → 最多铺昨天和今天')
 
 const beforeStartVisit = new Date(2026, 7, 19, 12, 0).getTime()
 const regularBounded = planBackfillSlots(beforeStartVisit, now, [], new Set(['2026-08-20', '2026-08-21']), seeded(203), undefined, firstSeenYesterday)
@@ -161,9 +166,13 @@ ok(!slots4b.some((s) => dayKeyOf(s.at) === yesterdayKey), '昨天已有事件动
 console.log('\n[5] advanceTimeline 回填生成')
 const vars = { taName: 'TA', yourName: '小七', season: '夏', timeWord: '中午', weatherWord: '晴' }
 const first = advanceTimeline({ posts: [], lastVisit: null, used: {} }, vars, now, new Set(), seeded(8))
-eq(first.created, 0, '首访无证据 → 不创建动态')
-eq(first.state.posts.length, 0, '首访保持空时间线')
-eq(first.state.lastVisit, now, 'lastVisit 仍更新为本次时间')
+eq(first.created, MAX_BACKFILL_DAYS, '首访创建 3 条')
+eq(first.state.posts.length, MAX_BACKFILL_DAYS, '首访后共 3 条')
+ok(first.state.posts[0].at > first.state.posts[1].at && first.state.posts[1].at > first.state.posts[2].at, '按时间倒序（最新在前）')
+eq(first.state.lastVisit, now, 'lastVisit 更新为本次时间')
+const firstDayCounts = {}
+for (const p of first.state.posts) firstDayCounts[dayKeyOf(p.at)] = (firstDayCounts[dayKeyOf(p.at)] ?? 0) + 1
+ok(Object.values(firstDayCounts).every((n) => n <= 2), '首访每天不超过 2 条')
 
 console.log('\n[6] 限频场景：2 小时内再来不补，事件日必补')
 const recent = advanceTimeline(
