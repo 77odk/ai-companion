@@ -16,6 +16,7 @@ import {
   pruneLedger,
   getLedgerEntry,
   formatNowAnchor,
+  generationSlotIdFor,
   MAX_POSTS_PER_DAY,
   MAX_TOTAL_PER_DAY,
   MAX_BACKFILL_DAYS,
