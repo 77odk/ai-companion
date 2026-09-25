@@ -8,7 +8,7 @@
 //     每天优先补 1 条「事件动态」（source='event'），不被日常 2 条配额吞掉，
 //     也不占日常配额；但全天动态总数（日常+事件）≤ MAX_TOTAL_PER_DAY 防刷屏
 //   非事件日 → TA 也有自己的生活：按概率补 1 条生活动态（BACKFILL_LIFE_CHANCE，防抖后）
-//   首访（无 lastVisit）→ 不为“页面不空”硬造日常；只有已有真实聊天事件的自然日才允许生成 event 动态
+//   首访（无 lastVisit）→ 预生成 3 条铺最近 3 天，空间不空
 //   日常每天最多 MAX_POSTS_PER_DAY 条（自然日）：planBackfillDays 按当天已有条数截断
 //   时间戳落在各自那天（不是 now 前几分钟）：文案时段由 at 决定，凌晨不穿帮
 //   总数上限 20 条，超出丢最旧
@@ -459,7 +459,7 @@ export interface SpaceSlot {
  * 回填式时间轴计划（2026-09-04 七七拍板 + 2026-09-09 v3 事件通道）：
  *  角色像真人一样过日子——不是每次打开都咔咔补，而是把「TA 该发动态的日子」按自然日回填：
  *  - 防抖：距上次访问 < MIN_INTERVAL_MS(2h) → 不补（避免反复开关疯狂生成）
- *  - 首访（lastVisit==null）：不补无证据日常；仅对已有真实聊天事件的自然日规划 event 动态
+ *  - 首访（lastVisit==null）：铺最近 MAX_BACKFILL_DAYS 个自然日，每天 1 条（空间不空、有生活感）
  *  - 窗口：lastVisit 之后到今天之间的自然日，最多回看 MAX_BACKFILL_DAYS 天
  *  - 事件日（那天聊过事/约过事，activeDays 命中）→ 大事趁热：当天还没发过事件动态就优先补 1 条
  *    source='event'（不被日常 2 条配额吞掉、不占日常配额；全天总数仍 ≤ MAX_TOTAL_PER_DAY 防刷屏）
@@ -522,19 +522,20 @@ export function planBackfillSlots(
   const anchorDay = h < 5 ? dayStartOf(now - DAY_INTERVAL_MS) : dayStartOf(now)
   const out: SpaceSlot[] = []
 
-  // 首访不为“空间不空”补日常。只有已经发生过真实聊天事件的自然日才允许有 event 槽。
+  // 首访：铺最近 MAX_BACKFILL_DAYS 个自然日，每天最多 1 条（旧→新）；事件日铺事件、其余铺日常
   if (lastVisit == null) {
     for (let i = MAX_BACKFILL_DAYS - 1; i >= 0; i--) {
       const day = anchorDay - i * DAY_INTERVAL_MS
       if (day < minDay) continue
       const dk = dayKeyOf(day)
-      if (!activeDays.has(dk)) continue
+      const isEvent = activeDays.has(dk)
       const u = dayUsage(posts, dk, ledger)
-      if (u.event >= 1 || u.total >= MAX_TOTAL_PER_DAY) continue
-      const evidenceAt = eventEvidenceAt?.get(dk)
+      if (isEvent ? u.event >= 1 : u.daily >= MAX_POSTS_PER_DAY) continue
+      if (u.total >= MAX_TOTAL_PER_DAY) continue
+      const evidenceAt = isEvent ? eventEvidenceAt?.get(dk) : undefined
       const at = pickPostTimeForDay(day, now, rand, evidenceAt)
-      if (at == null) continue
-      out.push({ at, source: 'event', ...(evidenceAt ? { evidenceAt } : {}) })
+      if (at == null) continue   // 今天还没到 7 点，或事件证据已经晚到没有可用区间
+      out.push({ at, source: isEvent ? 'event' : 'daily', ...(evidenceAt ? { evidenceAt } : {}) })
     }
     return out.sort((a, b) => a.at - b.at)
   }
