@@ -17,7 +17,6 @@ import {
   pruneLedger,
   getLedgerEntry,
   formatNowAnchor,
-  MAX_POSTS,
   MAX_POSTS_PER_DAY,
   MAX_TOTAL_PER_DAY,
   pickReplyFallback,
