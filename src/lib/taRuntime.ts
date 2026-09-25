@@ -1,6 +1,6 @@
-// TASK-TA-RUNTIME-V1 · Persistent TA Runtime
-// 同一个 TA 在一段合理时间内持续做同一件事：Home 与 Chat 读同一份持久状态；
-// 惰性推进（只在 getter 被调用且 now >= plannedUntil 时才换活动），零额外 LLM、无 timer / 后台轮询。
+// TA Runtime · truth-driven current state
+// Home 与 Chat 读同一份持久状态；只有 TA 最终回复里的明确当前自述能创建状态。
+// 无证据、旧随机状态或过期状态统一回 idle。零额外 LLM、无后台轮询。
 //
 // ★产品边界：Runtime ≠ Busy。Runtime 回答「TA 此刻正在做什么」；Busy 回答「TA 此刻是否暂时无法陪伴」。
 // 本文件绝不读写 Busy（不 import aiBusy / 不写 ai_companion_busy_*），普通生活活动绝不触发 Busy。
@@ -150,118 +150,7 @@ export function getSessionPersona(sessionId?: string): string {
   }
 }
 
-/** persona 锚点命中该活动？只用于概率加权，绝不影响 Busy */
-function personaHit(a: RuntimeActivity, persona: string): boolean {
-  return Boolean(a.persona && persona && a.persona.test(persona))
-}
-
-// “上课”不能作为所有成年角色的通用随机日常；只有人设明确带校园/授课语境时才进 routine 池。
-// 聊天里 TA 自己明确说“在上课”仍可通过 Chat override 写入，不受此过滤影响。
-const CLASS_PERSONA_RE = /学生|大学|学院|学校|校园|研究生|本科|高中|初中|课程|课表|上课|老师|教师|教授|讲师|助教/
-
-function activityAllowedForPersona(activity: RuntimeActivity, persona: string): boolean {
-  return activity.id !== 'class' || CLASS_PERSONA_RE.test(persona)
-}
-
-function seededRuntimeRand(seed: string): () => number {
-  let state = 2166136261
-  for (let i = 0; i < seed.length; i += 1) {
-    state ^= seed.charCodeAt(i)
-    state = Math.imul(state, 16777619)
-  }
-  return () => {
-    state += 0x6d2b79f5
-    let t = state
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-function defaultRuntimeRand(sessionKey: string, now: number, previousActivityId = ''): () => number {
-  const d = new Date(now)
-  const day = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
-  return seededRuntimeRand(`${sessionKey}|${day}|${runtimeSlot(d)}|${previousActivityId || 'start'}`)
-}
-
-function minuteOfDay(now: Date): number {
-  return now.getHours() * 60 + now.getMinutes()
-}
-
-function activityAllowedAt(activity: RuntimeActivity, now: Date): boolean {
-  const minute = minuteOfDay(now)
-  return activity.windows.some(([start, end]) => minute >= start && minute < end)
-}
-
-/** 当前命中时段的结束时间戳；用于把 plannedUntil 截到合理时段内，避免早餐一路挂到中午。 */
-function activityWindowEnd(activity: RuntimeActivity, now: Date): number | null {
-  const minute = minuteOfDay(now)
-  const hit = activity.windows.find(([start, end]) => minute >= start && minute < end)
-  if (!hit) return null
-  const [, end] = hit
-  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  return dayStart + end * 60000
-}
-
-function pickActivity(now: Date, persona: string, recentIds: readonly string[], rand: () => number, mode: IdentityMode = 'immersive'): RuntimeActivity {
-  const slot = runtimeSlot(now)
-  let pool = ACTIVITIES.filter((a) =>
-    activityAllowedForMode(a, mode) &&
-    activityAllowedForPersona(a, persona) &&
-    activityAllowedAt(a, now),
-  )
-  if (pool.length === 0) {
-    pool = ACTIVITIES.filter((a) =>
-      activityAllowedForMode(a, mode) &&
-      activityAllowedForPersona(a, persona) &&
-      a.slots.includes(slot),
-    )
-  }
-  if (pool.length === 0) return ACTIVITIES.find((activity) => activityAllowedForMode(activity, mode)) ?? ACTIVITIES[0]
-
-  // 最近 3 个活动能避则避：比只禁「连续重复」多一层，但候选过少时自动退化，不造死循环。
-  const blocked = new Set(recentIds.slice(0, 3))
-  const rest = pool.filter((a) => !blocked.has(a.id))
-  const candidates = rest.length > 0 ? rest : pool
-  const weights = candidates.map((a) => 1 + (personaHit(a, persona) ? 2 : 0))
-  const total = weights.reduce((s, w) => s + w, 0)
-  let r = rand() * total
-  for (let i = 0; i < candidates.length; i++) {
-    r -= weights[i]
-    if (r < 0) return candidates[i]
-  }
-  return candidates[candidates.length - 1]
-}
-
-function createState(
-  activity: RuntimeActivity,
-  now: number,
-  rand: () => number,
-  persona: string,
-  recentIds: readonly string[] = [],
-): TaRuntimeState {
-  const durMin = activity.minMin + Math.floor(rand() * (activity.maxMin - activity.minMin + 1))
-  const windowEnd = activityWindowEnd(activity, new Date(now))
-  const plannedUntil = Math.min(now + durMin * 60000, windowEnd ?? Number.POSITIVE_INFINITY)
-  const recentActivityIds = [activity.id, ...recentIds.filter((id) => id !== activity.id)].slice(0, 3)
-  return {
-    activityId: activity.id,
-    label: activity.label,
-    startedAt: now,
-    plannedUntil,
-    updatedAt: now,
-    source: personaHit(activity, persona) ? 'persona' : 'routine',
-    recentActivityIds,
-  }
-}
-
-/**
- * 核心 API（Lazy Runtime）：
- * 1) 无状态 → 按 当前时间 + persona 创建并保存；
- * 2) now < plannedUntil → 原样返回（刷新/重渲染/切 Tab 绝不重新随机）；
- * 3) now >= plannedUntil → 按 时间 + persona + 上一活动 选下一活动，写入并返回。
- * 幂等、零副作用除非推进；rand/now 可注入（测试稳定）。
- */
+/** idle 不是一条“活动事实”，只是展示层的无证据状态。 */
 function createIdleState(now: number, recentIds: readonly string[] = []): TaRuntimeState {
   return {
     activityId: TA_RUNTIME_IDLE_ID,
@@ -504,16 +393,16 @@ function createChatOverrideState(
 /**
  * TA 最终回复落库后调用：
  * - 明确说自己“正在/马上去做 X” → X 写回同一 Runtime；
- * - 明确说当前 X 已结束 → 立即结束该状态并回到日常调度；
- * - 最长 2 小时没有后续 → plannedUntil 到期后自然回到日常调度。
+ * - 明确说当前 X 已结束 → 立即回 idle；
+ * - 最长 2 小时没有后续 → plannedUntil 到期后回 idle。
  * 返回 null = 本轮没有可信动作，不写任何状态。
  */
 export function syncTaRuntimeFromAssistantText(
   sessionId: string | undefined,
   text: string,
   now: number = Date.now(),
-  persona: string = getSessionPersona(sessionId),
-  rand?: () => number,
+  _persona: string = getSessionPersona(sessionId),
+  _rand?: () => number,
 ): TaRuntimeState | null {
   const key = sessionId || GUEST_KEY
   const map = loadAll()
