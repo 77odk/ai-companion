@@ -26,20 +26,27 @@ function BackButton({ onBack }: { onBack: () => void }) {
   )
 }
 
-function OpeningPaperStack() {
+function ClosedBook() {
   return (
-    <div className="intro-letter-hero" aria-hidden="true">
-      <div className="intro-letter-hero-shadow" />
-      <div className="intro-letter-back-sheet" />
-      <div className="intro-letter-main-sheet">
-        <span className="intro-letter-fold" />
-        <span className="intro-letter-date">ELUVIN · LETTER 01</span>
-        <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
-        <strong>忆文</strong>
-        <em>忆过往，成文思</em>
-        <span className="intro-letter-line line-one" />
-        <span className="intro-letter-line line-two" />
-        <span className="intro-letter-sign">for the time we remember</span>
+    <div className="intro-book-scene" aria-hidden="true">
+      <div className="intro-book-ground" />
+      <div className="intro-book-volume">
+        <div className="intro-book-back-cover" />
+        <div className="intro-book-page-block">
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="intro-book-spine" />
+        <div className="intro-book-front-cover">
+          <div className="intro-cover-rule" />
+          <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
+          <strong>忆文</strong>
+          <small>ELUVIN</small>
+          <em>忆过往，成文思</em>
+        </div>
       </div>
     </div>
   )
@@ -234,7 +241,7 @@ export default function ProductIntro({ onBack, onStart }: Props) {
               </p>
             </div>
 
-            <OpeningPaperStack />
+            <ClosedBook />
 
             <p className="intro-brand-line">忆过往，成文思</p>
           </section>
