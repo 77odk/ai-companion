@@ -30,12 +30,23 @@ function HeroBook() {
 function MemoryPaper() {
   return (
     <div className="intro-memory-paper" aria-hidden="true">
+      <div className="intro-memory-chip intro-memory-chip-preference">
+        <small>偏好</small>
+        <strong>喜欢安静一点的晚上</strong>
+      </div>
+
       <div className="intro-memory-source">
         <span>SEP · 24</span>
         <p>你说，最近总是睡得很晚。</p>
         <i />
         <i />
       </div>
+
+      <div className="intro-memory-chip intro-memory-chip-recent">
+        <small>最近</small>
+        <strong>这周一直在忙一个重要的项目</strong>
+      </div>
+
       <div className="intro-memory-note">
         <small>TA 记住了</small>
         <strong>“这件事对你很重要。”</strong>
