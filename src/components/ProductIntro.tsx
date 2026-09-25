@@ -66,9 +66,12 @@ function TimePaper() {
       </div>
       <div className="intro-time-axis">
         <div><i />第一次认识</div>
+        <div><i />第一次认真聊很久</div>
         <div><i />第一次说定一件事</div>
-        <div><i />某个后来很重要的晚上</div>
+        <div><i />某个后来变得重要的晚上</div>
+        <div><i />第一次被记住你的习惯</div>
         <div><i />一起经过的第 100 天</div>
+        <div className="intro-time-more">……</div>
       </div>
     </div>
   )
@@ -119,9 +122,22 @@ function ThresholdPaper() {
   return (
     <div className="intro-threshold-paper" aria-hidden="true">
       <span className="intro-sheet-label">BEFORE YOU BEGIN</span>
-      <div><b>01</b><span>自己的模型</span></div>
-      <div><b>02</b><span>一点学习时间</span></div>
-      <div><b>03</b><span>模型决定 TA 的表现</span></div>
+
+      <div className="intro-threshold-item">
+        <b>01</b>
+        <p><mark>自己的模型和 API Key</mark><span>忆文本身不提供模型算力。</span></p>
+      </div>
+
+      <div className="intro-threshold-item">
+        <b>02</b>
+        <p><mark>一点学习和设置时间</mark><span>第一次使用会接触模型、人设和记忆。</span></p>
+      </div>
+
+      <div className="intro-threshold-item">
+        <b>03</b>
+        <p><mark>接受模型会影响 TA 的表现</mark><span>不同模型会影响聪明程度、稳定性和表达方式。</span></p>
+      </div>
+
       <small>ELUVIN</small>
     </div>
   )
@@ -166,9 +182,9 @@ function EnvelopeArtwork() {
       <path className="intro-envelope-pocket" d="M36 92 L170 174 L304 92 V202 H36 Z" fill="url(#envelopePaper)" filter="url(#envelopeTexture)" />
       <path className="intro-envelope-side left" d="M36 92 L170 174 L36 202 Z" fill="#f3d9cf" />
       <path className="intro-envelope-side right" d="M304 92 L170 174 L304 202 Z" fill="#edd0c5" />
-      <path className="intro-envelope-flap-shape" d="M36 54 H304 L170 142 Z" fill="url(#envelopeFold)" filter="url(#envelopeTexture)" />
-      <circle className="intro-envelope-mark" cx="170" cy="139" r="18" />
-      <text className="intro-envelope-mark-letter" x="170" y="145" textAnchor="middle">E</text>
+      <path className="intro-envelope-flap-shape" d="M36 54 H304 L170 174 Z" fill="url(#envelopeFold)" filter="url(#envelopeTexture)" />
+      <circle className="intro-envelope-mark" cx="170" cy="154" r="18" />
+      <text className="intro-envelope-mark-letter" x="170" y="160" textAnchor="middle">E</text>
     </svg>
   )
 }
@@ -303,9 +319,8 @@ export default function ProductIntro({ onBack, onStart }: Props) {
             <ThresholdPaper />
 
             <div className="intro-threshold-copy">
-              <p><b>你需要自己的模型。</b> 忆文本身不出售模型算力，开始使用前，需要准备支持的模型服务和 API Key。</p>
-              <p><b>你需要愿意学一点。</b> 第一次使用会接触模型、API Key、人设和记忆。这些东西不难，但不是注册以后立即无脑开聊。</p>
-              <p><b>模型会直接影响 TA。</b> 不同模型的能力、稳定性和价格，都会影响 TA 最终的表现。</p>
+              <p>开始使用前，你需要准备支持的模型服务和 API Key，也需要花一点时间了解模型、人设和记忆这些基础设置。这些内容并不难，但忆文确实不是注册以后立刻无脑开聊的产品。</p>
+              <p>同时，你选择的模型会直接影响 TA 的表现：模型越稳定、能力越强，TA 的理解、表达和相处体验通常也会更好。</p>
             </div>
 
             <p className="intro-threshold-ending">
