@@ -1,16 +1,17 @@
 import { useEffect, useRef } from 'react'
 
-const PARTICLE_COUNT = 22
-const TARGET_FPS = 30
+const PARTICLE_COUNT = 18
+const TARGET_FPS = 24
 const FRAME_INTERVAL = 1000 / TARGET_FPS
 
 type Particle = {
   x: number
   y: number
-  vx: number
-  vy: number
   r: number
   phase: number
+  speed: number
+  warmth: number
+  sparkle: boolean
 }
 
 function seeded(index: number, salt: number) {
@@ -43,10 +44,11 @@ export default function ProductIntroAtmosphere() {
       particles = Array.from({ length: PARTICLE_COUNT }, (_, index) => ({
         x: seeded(index, 1) * width,
         y: seeded(index, 2) * height,
-        vx: (seeded(index, 3) - 0.5) * 0.09,
-        vy: (seeded(index, 4) - 0.5) * 0.055,
-        r: 0.8 + seeded(index, 5) * 1.5,
-        phase: seeded(index, 6) * Math.PI * 2,
+        r: 0.65 + seeded(index, 3) * 1.15,
+        phase: seeded(index, 4) * Math.PI * 2,
+        speed: 0.00022 + seeded(index, 5) * 0.00026,
+        warmth: seeded(index, 6),
+        sparkle: index % 4 === 0,
       }))
     }
 
@@ -61,59 +63,43 @@ export default function ProductIntroAtmosphere() {
       canvas.style.height = `${height}px`
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       buildParticles()
-      draw(performance.now(), false)
+      draw(performance.now())
     }
 
-    const draw = (time: number, animate = true) => {
+    const draw = (time: number) => {
       ctx.clearRect(0, 0, width, height)
 
-      const reduce = reducedMotion.matches
-      const drift = reduce || !animate ? 0 : 1
-
       for (const particle of particles) {
-        if (drift) {
-          particle.x += particle.vx
-          particle.y += particle.vy
-          if (particle.x < -12) particle.x = width + 12
-          if (particle.x > width + 12) particle.x = -12
-          if (particle.y < -12) particle.y = height + 12
-          if (particle.y > height + 12) particle.y = -12
-        }
+        const wave = reducedMotion.matches
+          ? 0.42
+          : 0.5 + Math.sin(time * particle.speed + particle.phase) * 0.5
+        const pulse = Math.pow(Math.max(0, wave), 2.2)
+        const alpha = 0.08 + pulse * 0.34
+        const cream = particle.warmth > 0.48
 
-        const pulse = reduce ? 0.55 : 0.46 + Math.sin(time * 0.0008 + particle.phase) * 0.13
+        ctx.save()
+        ctx.translate(particle.x, particle.y)
+
         ctx.beginPath()
-        ctx.arc(particle.x, particle.y, particle.r, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(255, 243, 238, ${Math.max(0.08, pulse * 0.34)})`
+        ctx.arc(0, 0, particle.r + pulse * 0.5, 0, Math.PI * 2)
+        ctx.fillStyle = cream
+          ? `rgba(255, 248, 240, ${alpha})`
+          : `rgba(255, 218, 207, ${alpha * 0.88})`
         ctx.fill()
-      }
 
-      // Sparse "memory relation" lines: nearest neighbors only, deliberately faint.
-      for (let i = 0; i < particles.length; i += 1) {
-        const a = particles[i]
-        let closest = -1
-        let closestDistance = 116
-
-        for (let j = i + 1; j < particles.length; j += 1) {
-          const b = particles[j]
-          const dx = a.x - b.x
-          const dy = a.y - b.y
-          const distance = Math.hypot(dx, dy)
-          if (distance < closestDistance) {
-            closestDistance = distance
-            closest = j
-          }
-        }
-
-        if (closest >= 0 && i % 3 === 0) {
-          const b = particles[closest]
-          const alpha = (1 - closestDistance / 116) * 0.12
+        if (particle.sparkle && pulse > 0.56) {
+          const arm = 2.8 + pulse * 2.4
           ctx.beginPath()
-          ctx.moveTo(a.x, a.y)
-          ctx.lineTo(b.x, b.y)
-          ctx.strokeStyle = `rgba(207, 138, 131, ${alpha})`
-          ctx.lineWidth = 0.75
+          ctx.moveTo(-arm, 0)
+          ctx.lineTo(arm, 0)
+          ctx.moveTo(0, -arm)
+          ctx.lineTo(0, arm)
+          ctx.strokeStyle = `rgba(255, 248, 240, ${(pulse - 0.42) * 0.42})`
+          ctx.lineWidth = 0.55
           ctx.stroke()
         }
+
+        ctx.restore()
       }
     }
 
@@ -146,7 +132,7 @@ export default function ProductIntroAtmosphere() {
     const handleMotion = () => {
       if (reducedMotion.matches) {
         stop()
-        draw(performance.now(), false)
+        draw(performance.now())
       } else {
         start()
       }
@@ -169,7 +155,7 @@ export default function ProductIntroAtmosphere() {
     reducedMotion.addEventListener('change', handleMotion)
 
     resize()
-    if (reducedMotion.matches) draw(performance.now(), false)
+    if (reducedMotion.matches) draw(performance.now())
     else start()
 
     return () => {
