@@ -239,12 +239,13 @@
 }
 
 .intro-memory-paper {
-  height: 386px;
+  height: 438px;
   margin-top: 32px;
 }
 
 .intro-memory-source,
-.intro-memory-note {
+.intro-memory-note,
+.intro-memory-chip {
   position: absolute;
   border: 1px solid var(--line);
   background: rgba(255, 249, 245, .72);
@@ -255,7 +256,7 @@
 
 .intro-memory-source {
   left: 2%;
-  top: 54px;
+  top: 70px;
   width: 69%;
   min-height: 212px;
   padding: 28px 24px;
@@ -264,11 +265,52 @@
 
 .intro-memory-note {
   right: 0;
-  bottom: 28px;
+  bottom: 24px;
   width: 76%;
   min-height: 190px;
   padding: 26px 24px;
   transform: rotate(1.8deg);
+}
+
+.intro-memory-chip {
+  z-index: 2;
+  min-height: 72px;
+  padding: 15px 17px 14px;
+  background: rgba(255, 247, 242, .62);
+  box-shadow: 0 16px 34px rgba(95, 56, 52, .07);
+  backdrop-filter: blur(14px) saturate(.88);
+  -webkit-backdrop-filter: blur(14px) saturate(.88);
+}
+
+.intro-memory-chip-preference {
+  top: 8px;
+  right: 2%;
+  width: 51%;
+  transform: rotate(1.4deg);
+}
+
+.intro-memory-chip-recent {
+  left: 0;
+  bottom: 76px;
+  width: 54%;
+  transform: rotate(-1.2deg);
+}
+
+.intro-memory-chip small {
+  display: block;
+  color: rgba(75,48,45,.42);
+  font-size: 8px;
+  letter-spacing: .16em;
+}
+
+.intro-memory-chip strong {
+  display: block;
+  margin-top: 8px;
+  color: #654641;
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.55;
 }
 
 .intro-memory-source span,
@@ -704,6 +746,14 @@
   animation: intro-note-breathe 7.4s ease-in-out infinite;
 }
 
+.product-intro-v1[data-motion="on"] .intro-scene.is-visible .intro-memory-chip-preference {
+  animation: intro-memory-chip-a 8.6s ease-in-out infinite;
+}
+
+.product-intro-v1[data-motion="on"] .intro-scene.is-visible .intro-memory-chip-recent {
+  animation: intro-memory-chip-b 9.2s ease-in-out infinite;
+}
+
 .product-intro-v1[data-motion="on"] .intro-scene.is-visible .intro-time-paper {
   animation: intro-soft-breathe 8.2s ease-in-out infinite;
 }
@@ -728,6 +778,16 @@
 @keyframes intro-note-breathe {
   0%, 100% { transform: translateY(0) rotate(1.8deg); }
   50% { transform: translateY(-7px) rotate(.7deg); }
+}
+
+@keyframes intro-memory-chip-a {
+  0%, 100% { transform: translateY(0) rotate(1.4deg); }
+  50% { transform: translateY(-5px) rotate(.6deg); }
+}
+
+@keyframes intro-memory-chip-b {
+  0%, 100% { transform: translateY(0) rotate(-1.2deg); }
+  50% { transform: translateY(5px) rotate(-.3deg); }
 }
 
 @keyframes intro-soft-breathe {
@@ -807,6 +867,8 @@
 
   .intro-hero-object img,
   .intro-memory-note,
+  .intro-memory-chip-preference,
+  .intro-memory-chip-recent,
   .intro-time-paper,
   .intro-threshold-paper,
   .intro-envelope-art {
