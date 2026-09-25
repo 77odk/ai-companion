@@ -1,9 +1,9 @@
 // TA 的空间 · 动态引擎（localStorage 读写 + 对外入口）
 // 纯逻辑都在 aiSpaceCore.ts / aiSpaceLlm.ts（可被 Node 单测），本文件只负责存取与组装。
 // 生成路径分三态：
-//   llm      有人设 + 有 key：先推进 lastVisit 占位，新动态由 LLM 异步生成（失败降级模板）
-//   template 有人设但没 key：直接用现有模板同步生成
-//   no-persona 没人设：不调 LLM，模板兜底生成 1 条保证空间不空，其余交给引导
+//   llm      有可生成资格 + key：异步生成；Natural/AI 只消费真实 event 证据槽
+//   template Immersive 无 key 时可用本地生活模板；Natural/AI 不用模板造事实
+//   no-persona 空人设仍可浏览；无证据时允许空间为空
 
 import {
   planBackfillSlots,
@@ -413,7 +413,7 @@ export interface GenerateResult {
 }
 
 /**
- * 异步生成 llm 模式待补的动态（会话感知）：LLM 优先，失败/空内容降级模板；完成后合并落盘到该角色 key。
+ * 异步生成 llm 模式待补的动态（会话感知）：LLM 优先；仅 Immersive 的 daily 失败时可降级模板。
  * v3：pending 每条带来源通道（event 事件动态 / daily 日常）——事件动态不占日常配额、各按通道限量，
  * 生成后统一记入配额账本（模板路径与 LLM 路径都记账，删动态不回升）。
  */
