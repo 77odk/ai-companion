@@ -3567,3 +3567,70 @@
     width: 210px;
   }
 }
+
+
+/* ---------- V4.2 · opening rollback: keep the original book ---------- */
+.intro-scene-hero {
+  color: #fff8f3;
+}
+
+.intro-scene-hero .intro-kicker {
+  color: rgba(255,243,238,.82);
+}
+
+.intro-scene-hero .intro-body-on-dark,
+.intro-brand-line {
+  color: rgba(255,243,238,.84);
+}
+
+.intro-hero-copy h1 {
+  color: #fff3ee;
+  -webkit-text-stroke: .3px rgba(255,243,238,.30);
+  text-shadow:
+    0 1px 0 #ffddcc,
+    0 2px 0 #f0bab3,
+    0 3px 0 #dfa19a,
+    0 4px 0 #cf8a83,
+    0 14px 28px rgba(151,82,77,.22);
+}
+
+.intro-book-scene {
+  opacity: .06;
+  transition: opacity .9s ease .08s;
+}
+
+.intro-scene.is-visible .intro-book-scene {
+  opacity: 1;
+}
+
+.product-intro-v1[data-motion="on"] .intro-scene.is-visible .intro-book-volume {
+  animation: intro-opening-book-breathe 7.4s ease-in-out infinite;
+}
+
+@keyframes intro-opening-book-breathe {
+  0%, 100% {
+    transform:
+      translateX(-50%)
+      rotateX(58deg)
+      rotateZ(-10deg)
+      rotateY(-16deg);
+  }
+  50% {
+    transform:
+      translateX(-50%)
+      translateY(-8px)
+      rotateX(54deg)
+      rotateZ(-8deg)
+      rotateY(-7deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-book-scene {
+    opacity: 1;
+  }
+
+  .intro-book-volume {
+    animation: none !important;
+  }
+}
