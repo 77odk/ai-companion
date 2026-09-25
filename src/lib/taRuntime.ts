@@ -29,8 +29,8 @@ export interface TaRuntimeState {
   plannedUntil: number
   /** 本状态写入/推进时间戳（sync 冲突：updatedAt 更新者胜） */
   updatedAt: number
-  /** persona 锚点命中 → 'persona'；纯时段/随机 → 'routine' */
-  source: 'routine' | 'persona'
+  /** 来源：legacy routine/persona 仅兼容旧数据；新状态只由 chat 证据或 idle 产生。 */
+  source: 'routine' | 'persona' | 'chat' | 'idle'
   /** 最近活动（最新在前，含当前，最多 3 个）；旧数据可缺省 */
   recentActivityIds?: string[]
 }
@@ -83,6 +83,7 @@ export const ACTIVITIES: readonly RuntimeActivity[] = [
 ]
 
 const AI_NATIVE_ACTIVITY_IDS = new Set(['reading_chat', 'organizing_thoughts', 'following_thread', 'quietly_present'])
+export const TA_RUNTIME_IDLE_ID = 'idle'
 
 function activityAllowedForMode(activity: RuntimeActivity, mode: IdentityMode): boolean {
   return mode === 'immersive' ? !AI_NATIVE_ACTIVITY_IDS.has(activity.id) : AI_NATIVE_ACTIVITY_IDS.has(activity.id)
@@ -261,38 +262,69 @@ function createState(
  * 3) now >= plannedUntil → 按 时间 + persona + 上一活动 选下一活动，写入并返回。
  * 幂等、零副作用除非推进；rand/now 可注入（测试稳定）。
  */
+function createIdleState(now: number, recentIds: readonly string[] = []): TaRuntimeState {
+  return {
+    activityId: TA_RUNTIME_IDLE_ID,
+    label: '',
+    startedAt: now,
+    plannedUntil: 0,
+    updatedAt: now,
+    source: 'idle',
+    recentActivityIds: recentIds.filter((id) => id && id !== TA_RUNTIME_IDLE_ID).slice(0, 3),
+  }
+}
+
+export function isTaRuntimeIdle(runtime: TaRuntimeState | null | undefined): boolean {
+  return !runtime || runtime.activityId === TA_RUNTIME_IDLE_ID
+}
+
+/**
+ * Truth-driven Runtime getter:
+ * - 没有可信状态 → idle；绝不按时段/persona 随机编一个活动；
+ * - 只有 Chat 明确自述写入的 source='chat' 状态，在过期前保持不变；
+ * - 过期、切身份后不再允许、或旧版 routine/persona 自动状态 → 回 idle；
+ * - idle 一直保持，直到新的 TA 自述证据写入。
+ *
+ * persona/rand 参数保留只为兼容旧调用签名；不再参与状态创造。
+ */
 export function getOrAdvanceTaRuntime(
   sessionId: string | undefined,
-  persona: string,
+  _persona: string,
   now: number,
-  rand?: () => number,
+  _rand?: () => number,
 ): TaRuntimeState {
   const map = loadAll()
   const key = sessionId || GUEST_KEY
   const cur = map[key]
   const mode = resolveIdentityMode(sessionId)
-  const effectiveRand = rand ?? defaultRuntimeRand(key, now, cur?.activityId)
+
   if (!cur || typeof cur.activityId !== 'string') {
-    const fresh = createState(pickActivity(new Date(now), persona, [], effectiveRand, mode), now, effectiveRand, persona)
-    map[key] = fresh
+    const idle = createIdleState(now)
+    map[key] = idle
     saveAll(map)
-    return fresh
+    return idle
   }
+
+  if (cur.activityId === TA_RUNTIME_IDLE_ID) return cur
+
   const currentActivity = ACTIVITIES.find((item) => item.id === cur.activityId)
-  if (now < cur.plannedUntil && currentActivity && activityAllowedForMode(currentActivity, mode)) return cur
+  const trusted = cur.source === 'chat'
+  if (
+    trusted &&
+    currentActivity &&
+    activityAllowedForMode(currentActivity, mode) &&
+    now < cur.plannedUntil
+  ) {
+    return cur
+  }
+
   const recentIds = Array.isArray(cur.recentActivityIds) && cur.recentActivityIds.length > 0
     ? cur.recentActivityIds
     : [cur.activityId]
-  const next = createState(
-    pickActivity(new Date(now), persona, recentIds, effectiveRand, mode),
-    now,
-    effectiveRand,
-    persona,
-    recentIds,
-  )
-  map[key] = next
+  const idle = createIdleState(now, recentIds)
+  map[key] = idle
   saveAll(map)
-  return next
+  return idle
 }
 
 
@@ -322,6 +354,10 @@ interface RuntimeTextRule {
 
 /** 规则从更具体到更泛化；同一条回复里若出现多个“现在动作”，取最后命中的那一个。 */
 const RUNTIME_TEXT_START_RULES: readonly RuntimeTextRule[] = [
+  { activityId: 'reading_chat', zh: /(?:我)?(?:正(?:在)?|还在|在|刚(?:刚)?)?(?:回看|重看|读|看)(?:着)?(?:我们|你们)?(?:的)?(?:对话|聊天(?:记录)?)/, en: /\b(?:i(?:'m| am)?\s+)?(?:am\s+)?(?:reading|rereading|reviewing|looking back at) (?:our|this|the) (?:conversation|chat)\b/i },
+  { activityId: 'organizing_thoughts', zh: /(?:我)?(?:正(?:在)?|还在|在|刚(?:刚)?)?(?:整理|理一理|梳理)(?:一下)?(?:思路|思绪|想法|刚才的问题)/, en: /\b(?:i(?:'m| am)?\s+)?(?:organizing|sorting through|整理ing) (?:my )?(?:thoughts|ideas)\b/i },
+  { activityId: 'following_thread', zh: /(?:我)?(?:正(?:在)?|还在|在|刚(?:刚)?)?(?:回想|顺着|梳理)(?:我们|你们)?(?:刚才|之前)?(?:聊过的话|说过的话|聊天脉络|对话脉络)/, en: /\b(?:i(?:'m| am)?\s+)?(?:following|tracing|thinking back through) (?:the )?(?:thread|conversation)\b/i },
+  { activityId: 'quietly_present', zh: /(?:我)?(?:正(?:在)?|还在|在)?(?:安静地?)?(?:陪着你|在这里陪你|待在这里陪你)/, en: /\b(?:i(?:'m| am)?\s+)?(?:quietly )?(?:staying here with you|keeping you company|here with you)\b/i },
   { activityId: 'wake_up', zh: /(?:我)?(?:刚|才)?(?:起床|醒了|醒来)/, en: /\b(?:i\s*)?(?:just\s+)?(?:woke up|got up)\b/i },
   { activityId: 'breakfast', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:吃早餐|吃早饭)/, en: /\b(?:i(?:'m| am)?\s+)?(?:having|getting|going to have) breakfast\b/i },
   { activityId: 'lunch', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:吃午饭|吃午餐)/, en: /\b(?:i(?:'m| am)?\s+)?(?:having|getting|going to have) lunch\b/i },
@@ -460,7 +496,7 @@ function createChatOverrideState(
     startedAt: now,
     plannedUntil: now + maxMinutes * 60000,
     updatedAt: now,
-    source: 'routine',
+    source: 'chat',
     recentActivityIds,
   }
 }
@@ -504,14 +540,7 @@ export function syncTaRuntimeFromAssistantText(
   }
 
   if (!cur) return null
-  const effectiveRand = rand ?? defaultRuntimeRand(key, now, cur.activityId)
-  const next = createState(
-    pickActivity(new Date(now), persona, recentIds, effectiveRand, resolveIdentityMode(sessionId)),
-    now,
-    effectiveRand,
-    persona,
-    recentIds,
-  )
+  const next = createIdleState(now, recentIds)
   map[key] = next
   saveAll(map)
   return next
@@ -571,7 +600,7 @@ export function isTaRuntimeState(value: unknown): value is TaRuntimeState {
     && typeof state.startedAt === 'number' && Number.isFinite(state.startedAt)
     && typeof state.plannedUntil === 'number' && Number.isFinite(state.plannedUntil)
     && typeof state.updatedAt === 'number' && Number.isFinite(state.updatedAt)
-    && (state.source === 'routine' || state.source === 'persona')
+    && (state.source === 'routine' || state.source === 'persona' || state.source === 'chat' || state.source === 'idle')
     && (state.recentActivityIds == null || (
       Array.isArray(state.recentActivityIds)
       && state.recentActivityIds.length <= 3
@@ -595,7 +624,7 @@ const EN_FALLBACK_LABEL = 'Doing their own thing'
  *   靠 id 映射英文文案，绝不因本地化重抽/失效 Runtime（labelEn 只影响展示，不参与 identity）。
  */
 export function runtimeDisplayLabel(runtime: TaRuntimeState | null | undefined, lang: Lang = 'zh'): string {
-  if (!runtime) return ''
+  if (!runtime || runtime.activityId === TA_RUNTIME_IDLE_ID) return ''
   if (lang !== 'en') return runtime.label || ''
   const act = ACTIVITIES.find((a) => a.id === runtime.activityId)
   return act?.labelEn || EN_FALLBACK_LABEL
@@ -607,7 +636,7 @@ export function runtimeDisplayLabel(runtime: TaRuntimeState | null | undefined, 
  * PATCH-LANG：en 时 label 用英文映射（整块纯英文），zh 用持久化中文 label。
  */
 export function buildTaRuntimeContext(runtime: TaRuntimeState | null, lang: Lang = 'zh'): string {
-  if (!runtime || !runtime.label) return ''
+  if (!runtime || runtime.activityId === TA_RUNTIME_IDLE_ID || !runtime.label) return ''
   const until = formatRuntimeUntil(runtime.plannedUntil)
   if (lang === 'en') {
     return [
