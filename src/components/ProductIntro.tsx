@@ -65,21 +65,40 @@ function TimePaper() {
 
 function EnginePaper() {
   return (
-    <div className="intro-engine-paper" aria-hidden="true">
-      <div>
-        <span>01 · AI MODEL</span>
-        <strong>理解 · 思考 · 回复</strong>
+    <div className="intro-engine-paper" aria-label="忆文与模型如何一起工作">
+      <div className="intro-engine-step">
+        <span>01 · 你说一句话</span>
+        <strong>聊天从你此刻说的话开始。</strong>
+        <p>模型先看到你现在想说的内容，但它不会只靠这一句话来认识你。</p>
       </div>
+
       <b />
-      <div className="is-brand">
-        <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
-        <span>02 · ELUVIN</span>
+
+      <div className="intro-engine-step">
+        <span>02 · 忆文把相关的东西带过来</span>
         <strong>记忆 · 关系 · 状态 · 时间</strong>
+        <p>和这一刻有关的记忆、你们的关系进度、TA 此刻的状态，以及时间信息，会被整理到这次聊天里。</p>
       </div>
+
       <b />
-      <div>
-        <span>03 · YOUR TA</span>
-        <strong>持续存在的相处</strong>
+
+      <div className="intro-engine-step">
+        <span>03 · 模型负责思考和表达</span>
+        <strong>理解当下，也参考你们之前发生过的事。</strong>
+        <p>你选择的模型负责理解、推理和生成回复，所以模型能力会直接影响 TA 的聪明程度和表达方式。</p>
+      </div>
+
+      <b />
+
+      <div className="intro-engine-step">
+        <span>04 · 这次聊天会继续成为以后的一部分</span>
+        <strong>重要的新信息留下来，下一次继续往下走。</strong>
+        <p>不是每句话都会被记住。真正重要的内容会继续沉淀，让下一次相处不用从零开始。</p>
+      </div>
+
+      <div className="intro-engine-summary">
+        <strong>模型负责“怎么想、怎么说”。</strong>
+        <span>忆文负责“记得什么、你们走到哪里、下一次从哪里继续”。</span>
       </div>
     </div>
   )
