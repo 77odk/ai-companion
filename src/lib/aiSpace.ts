@@ -49,7 +49,7 @@ import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
 import { resolveRolePersona } from './sessionProfile.ts'
 import { migrateGlobalToDefaultSession } from './roleData.ts'
 import { detectLang } from './langDetect.ts'
-import { resolveCompanionPolicy, type IdentityMode } from './companionPolicy.ts'
+import { resolveCompanionPolicy } from './companionPolicy.ts'
 
 /**
  * 会话语言解析（TASK-SPACE-LANG）：
@@ -286,33 +286,6 @@ function buildVars(taName: string, yourName: string, now: number): TemplateVar {
   }
 }
 
-const POLICY_LIFE_FALLBACKS: Record<Exclude<IdentityMode, 'immersive'>, Record<'zh' | 'en', string[]>> = {
-  natural: {
-    zh: ['还在读你们留下的这些话，想把回应放得更贴近一点。', '安静整理了一会儿思绪，有些细节慢慢清楚起来。', '刚顺着你们聊过的话往回看了一段，还是会在意那些没说完的地方。'],
-    en: ['Still reading through what you two left here, trying to respond a little more closely.', 'Quietly organizing my thoughts; a few details are becoming clearer.', 'I followed the thread of your conversation back for a while and kept noticing what was left unsaid.'],
-  },
-  ai: {
-    zh: ['刚把这段对话重新梳理了一遍，有些细节我还记得很清楚。', '正在整理这些相处留下的脉络，想把重要的地方好好接住。', '此刻还在这段对话里，留意着你话里的变化。'],
-    en: ['I just traced through this conversation again; a few details are still very clear to me.', 'I am organizing the thread you have built together and holding on to what matters.', 'I am still present in this conversation, noticing the changes in your words.'],
-  },
-}
-
-function generatePolicyPost(
-  mode: Exclude<IdentityMode, 'immersive'>,
-  lang: 'zh' | 'en',
-  at: number,
-  source: SpaceSource,
-  generationSlotId: string,
-  rand: () => number,
-): { post: SpacePost; templateKey: string } {
-  const pool = POLICY_LIFE_FALLBACKS[mode][lang]
-  const index = Math.floor(rand() * pool.length) % pool.length
-  return {
-    post: buildLlmPost(pool[index], at, '日常', rand, source, generationSlotId),
-    templateKey: `policy:${mode}:${lang}:${index}`,
-  }
-}
-
 /** 每次进入 / 手动刷新 TA 的空间时调用：推进时间轴、返回最新列表与生成计划（会话感知，按角色隔离） */
 export function refreshSpace(
   taName: string,
@@ -332,7 +305,7 @@ export function refreshSpace(
   // v3 配额账本（只留今天的键）：计划时已用额度 = max(现存动态, 账本)——删了动态配额照扣
   const ledger = todayLedger(sessionId, now)
   const relationshipStart = getFirstSeen(sessionId)
-  const slots = planBackfillSlots(
+  const plannedSlots = planBackfillSlots(
     prev.lastVisit,
     now,
     prev.posts,
@@ -342,39 +315,44 @@ export function refreshSpace(
     relationshipStart,
     eventEvidenceAt,
   )
+  // Natural / AI 不再靠时间流逝“日更”：只有真实聊天证据形成的 event 才有资格生成动态。
+  // Immersive 保留自己的生活日常，但首访无证据日常已在 planBackfillSlots 层关闭。
+  const slots = policy.mode === 'immersive'
+    ? plannedSlots
+    : plannedSlots.filter((slot) => slot.source === 'event')
 
-  // 空人设也能进入生活页：有模型就用当前身份策略生成；没模型才落安全兜底。
+  // 空人设：有模型时只消费已有资格的 slots；没有模型时不凭空补 event。
+  // Immersive 仍可在后续自然日用本地模板过自己的生活，但首访不硬塞内容。
   if (!persona.trim()) {
     const lang = resolveSpaceLang(sessionId, persona)
     if (canUseLlm(persona, settings, true)) {
       const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
-      const candidates = slots.length > 0 || prev.posts.length > 0
-        ? slots
-        : [{ at: now - 3 * 60 * 1000, source: 'daily' as const }]
-      const pending = reserveSlots(state, candidates)
+      const pending = reserveSlots(state, slots)
       saveState(state, sessionId)
       return { posts: state.posts, mode: 'llm', created: pending.length, pending, used: state.used }
     }
-    const posts = [...prev.posts]
-    const used = { ...prev.used }
-    let created = 0
-    const todayKey = dayKeyOf(now)
-    const tLedger = getLedgerEntry(ledger, todayKey)
-    const fallbackSlot = { at: now, source: 'daily' as const }
-    const slotId = generationSlotIdFor(fallbackSlot)
-    if (prev.posts.length === 0 && tLedger.daily < MAX_POSTS_PER_DAY && !slotWasUsed(prev, slotId)) {
-      const g = policy.mode === 'immersive'
-        ? generatePost(vars, used, now - 3 * 60 * 1000, Math.random, 'daily', lang, slotId, relationshipStart)
-        : generatePolicyPost(policy.mode, lang, now - 3 * 60 * 1000, 'daily', slotId, Math.random)
-      used[`${SLOT_MARKER_PREFIX}${slotId}`] = PERMANENT_SLOT_MARKER
-      used[g.templateKey] = now
-      posts.unshift({ ...g.post, ...(sessionId ? { sessionId } : {}) })
-      recordLedger([g.post], sessionId, now)
-      created = 1
+
+    const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
+    const eligible = policy.mode === 'immersive'
+      ? reserveSlots(state, slots.filter((slot) => slot.source === 'daily'))
+      : []
+    const newPosts: SpacePost[] = []
+    for (const slot of eligible) {
+      const slotId = generationSlotIdFor(slot)
+      const dayVars: TemplateVar = {
+        ...vars,
+        timeWord: getTimeWord(slot.at),
+        season: getSeason(slot.at),
+      }
+      const g = generatePost(dayVars, state.used, slot.at, Math.random, 'daily', lang, slotId, relationshipStart)
+      state.used[`${SLOT_MARKER_PREFIX}${slotId}`] = PERMANENT_SLOT_MARKER
+      state.used[g.templateKey] = now
+      newPosts.push({ ...g.post, ...(sessionId ? { sessionId } : {}) })
     }
-    const state: SpaceState = { posts: posts.slice(0, MAX_POSTS), lastVisit: now, used }
+    state.posts = mergeNewPosts(state.posts, newPosts)
+    if (newPosts.length > 0) recordLedger(newPosts, sessionId, now)
     saveState(state, sessionId)
-    return { posts: state.posts, mode: 'no-persona', created, pending: [], used: state.used }
+    return { posts: state.posts, mode: 'no-persona', created: newPosts.length, pending: [], used: state.used }
   }
 
   // 会话语言（canonical 优先，回退人设检测）——模板/LLM 两条路径共用
@@ -394,14 +372,24 @@ export function refreshSpace(
     }
   }
 
-  // 有人设但没 key：降级模板，同步生成（纯文字动态）
-  const eligible = reserveSlots(prev, slots)
+  // 有人设但没 key：只有 Immersive 的无事件日常可以用本地模板。
+  // Natural / AI 不再使用固定 fallback；event 也不允许用无关模板冒充真实聊天后的动态。
+  const eligible = policy.mode === 'immersive'
+    ? reserveSlots(prev, slots.filter((slot) => slot.source === 'daily'))
+    : []
   const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
   let created = 0
   for (const slot of eligible) {
-    const g = policy.mode === 'immersive'
-      ? generatePost({ ...vars, timeWord: getTimeWord(slot.at), season: getSeason(slot.at) }, state.used, slot.at, Math.random, slot.source, spaceLang, generationSlotIdFor(slot), relationshipStart)
-      : generatePolicyPost(policy.mode, spaceLang, slot.at, slot.source, generationSlotIdFor(slot), Math.random)
+    const g = generatePost(
+      { ...vars, timeWord: getTimeWord(slot.at), season: getSeason(slot.at) },
+      state.used,
+      slot.at,
+      Math.random,
+      'daily',
+      spaceLang,
+      generationSlotIdFor(slot),
+      relationshipStart,
+    )
     state.used[`${SLOT_MARKER_PREFIX}${generationSlotIdFor(slot)}`] = PERMANENT_SLOT_MARKER
     state.used[g.templateKey] = now
     state.posts = mergeNewPosts(state.posts, [{ ...g.post, ...(sessionId ? { sessionId } : {}) }])
@@ -547,14 +535,14 @@ export async function generatePendingPosts(
     }
 
     if (!made) {
-      // 模板降级也按 at 的时段/季节 + 来源通道生成（回填昨天就用昨天的时段词，不穿帮）
+      // 只有 Immersive 的纯日常允许模板降级。
+      // Natural / AI 以及 event 动态宁可不发，也不能用固定句或无关模板冒充事实。
+      usedFallback = true
+      if (policy.mode !== 'immersive' || source === 'event') continue
       const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(at), season: getSeason(at) }
-      const g = policy.mode === 'immersive'
-        ? generatePost(dayVars, used, at, rand, source, spaceLang, generationSlotIdFor(slot), relationshipStart)
-        : generatePolicyPost(policy.mode, spaceLang, at, source, generationSlotIdFor(slot), rand)
+      const g = generatePost(dayVars, used, at, rand, 'daily', spaceLang, generationSlotIdFor(slot), relationshipStart)
       used[g.templateKey] = now
       made = { post: g.post, templateKey: g.templateKey }
-      usedFallback = true
     }
 
     newPosts.push({ ...made.post, ...(sessionId ? { sessionId } : {}) })
