@@ -239,7 +239,7 @@
 }
 
 .intro-memory-paper {
-  height: 438px;
+  height: 520px;
   margin-top: 32px;
 }
 
@@ -265,7 +265,7 @@
 
 .intro-memory-note {
   right: 0;
-  bottom: 24px;
+  bottom: 94px;
   width: 76%;
   min-height: 190px;
   padding: 26px 24px;
@@ -291,7 +291,7 @@
 
 .intro-memory-chip-recent {
   left: 0;
-  bottom: 76px;
+  bottom: 6px;
   width: 54%;
   transform: rotate(-1.2deg);
 }
@@ -363,7 +363,7 @@
 
 /* Timeline: one flat sheet with a strong dark number anchor. */
 .intro-time-paper {
-  min-height: 390px;
+  min-height: 500px;
   margin-top: 30px;
   padding: 30px 28px 34px;
   border: 1px solid var(--line);
@@ -409,10 +409,18 @@
 
 .intro-time-axis div {
   position: relative;
-  margin: 0 0 22px;
+  margin: 0 0 19px;
   color: #60433f;
   font-size: 11px;
   line-height: 1.5;
+}
+
+.intro-time-more {
+  margin-top: -2px !important;
+  color: rgba(75,48,45,.46) !important;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 22px !important;
+  letter-spacing: .14em;
 }
 
 .intro-time-axis i {
@@ -529,32 +537,76 @@
 
 /* Preparation: one large flat paper, no fake thickness. */
 .intro-threshold-paper {
+  position: relative;
   margin-top: 30px;
-  padding: 28px 24px 22px;
-  border: 1px solid var(--line);
-  background: rgba(255, 249, 245, .78);
-  box-shadow: 0 22px 46px rgba(95,56,52,.075);
-  backdrop-filter: blur(16px) saturate(.9);
-  -webkit-backdrop-filter: blur(16px) saturate(.9);
+  padding: 30px 24px 24px;
+  border: 0;
+  border-radius: 2px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.42), transparent 18%),
+    #f8e4d9;
+  box-shadow:
+    0 22px 44px rgba(95,56,52,.10),
+    8px 10px 0 rgba(231,186,172,.34);
+  transform: rotate(-1deg);
 }
 
-.intro-threshold-paper > div {
-  min-height: 58px;
+.intro-threshold-paper::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .07;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90' viewBox='0 0 90 90'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+
+.intro-threshold-item {
+  position: relative;
+  min-height: 84px;
   display: grid;
   grid-template-columns: 38px 1fr;
-  align-items: center;
+  align-items: start;
+  gap: 3px;
+  padding: 16px 0 14px;
   border-bottom: 1px solid rgba(75,48,45,.1);
 }
 
-.intro-threshold-paper b {
+.intro-threshold-item b {
+  padding-top: 4px;
   color: var(--rose-deep);
   font-size: 10px;
   letter-spacing: .12em;
 }
 
-.intro-threshold-paper div span {
+.intro-threshold-item p {
+  margin: 0;
+}
+
+.intro-threshold-item mark {
+  position: relative;
+  display: inline;
+  padding: 0 .08em;
   color: var(--ink);
-  font-size: 13px;
+  background:
+    linear-gradient(
+      180deg,
+      transparent 46%,
+      rgba(233,161,156,.34) 46%,
+      rgba(233,161,156,.34) 86%,
+      transparent 86%
+    );
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.intro-threshold-item span {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  line-height: 1.68;
 }
 
 .intro-threshold-paper > small {
@@ -570,15 +622,15 @@
   position: relative;
   z-index: 3;
   display: grid;
-  gap: 13px;
-  margin-top: 24px;
+  gap: 14px;
+  margin-top: 30px;
 }
 
 .intro-threshold-copy p {
   margin: 0;
   color: var(--ink-soft);
   font-size: 11.5px;
-  line-height: 1.78;
+  line-height: 1.86;
 }
 
 .intro-threshold-copy b {
