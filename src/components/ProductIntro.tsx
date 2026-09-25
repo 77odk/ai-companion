@@ -209,6 +209,11 @@ export default function ProductIntro({ onBack, onStart }: Props) {
 
   const handleStart = () => {
     if (isOpening) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      onStart()
+      return
+    }
+
     setIsOpening(true)
     startTimerRef.current = window.setTimeout(onStart, 1180)
   }
