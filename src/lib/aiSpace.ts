@@ -320,8 +320,8 @@ export function refreshSpace(
     ? plannedSlots
     : plannedSlots.filter((slot) => slot.source === 'event')
 
-  // 空人设：有模型时只消费已有资格的 slots；没有模型时不凭空补 event。
-  // Immersive 仍可在后续自然日用本地模板过自己的生活，但首访不硬塞内容。
+  // 空人设：Natural / AI 没有真实 event + 可用模型就保持空；绝不为了“页面不空”造内容。
+  // Immersive 保留原有兼容行为：有模型按生活时间线生成；没模型且空间为空时只落 1 条本地安全兜底。
   if (!persona.trim()) {
     const lang = resolveSpaceLang(sessionId, persona)
     if (canUseLlm(persona, settings, true)) {
@@ -332,26 +332,27 @@ export function refreshSpace(
     }
 
     const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
-    const eligible = policy.mode === 'immersive'
-      ? reserveSlots(state, slots.filter((slot) => slot.source === 'daily'))
-      : []
-    const newPosts: SpacePost[] = []
-    for (const slot of eligible) {
-      const slotId = generationSlotIdFor(slot)
-      const dayVars: TemplateVar = {
-        ...vars,
-        timeWord: getTimeWord(slot.at),
-        season: getSeason(slot.at),
-      }
-      const g = generatePost(dayVars, state.used, slot.at, Math.random, 'daily', lang, slotId, relationshipStart)
+    if (policy.mode !== 'immersive') {
+      saveState(state, sessionId)
+      return { posts: state.posts, mode: 'no-persona', created: 0, pending: [], used: state.used }
+    }
+
+    let created = 0
+    const todayKey = dayKeyOf(now)
+    const tLedger = getLedgerEntry(ledger, todayKey)
+    const fallbackSlot: SpaceSlot = { at: now, source: 'daily' }
+    const slotId = generationSlotIdFor(fallbackSlot)
+    if (prev.posts.length === 0 && tLedger.daily < MAX_POSTS_PER_DAY && !slotWasUsed(prev, slotId)) {
+      const g = generatePost(vars, state.used, now - 3 * 60 * 1000, Math.random, 'daily', lang, slotId, relationshipStart)
       state.used[`${SLOT_MARKER_PREFIX}${slotId}`] = PERMANENT_SLOT_MARKER
       state.used[g.templateKey] = now
-      newPosts.push({ ...g.post, ...(sessionId ? { sessionId } : {}) })
+      const post = { ...g.post, ...(sessionId ? { sessionId } : {}) }
+      state.posts = mergeNewPosts(state.posts, [post])
+      recordLedger([post], sessionId, now)
+      created = 1
     }
-    state.posts = mergeNewPosts(state.posts, newPosts)
-    if (newPosts.length > 0) recordLedger(newPosts, sessionId, now)
     saveState(state, sessionId)
-    return { posts: state.posts, mode: 'no-persona', created: newPosts.length, pending: [], used: state.used }
+    return { posts: state.posts, mode: 'no-persona', created, pending: [], used: state.used }
   }
 
   // 会话语言（canonical 优先，回退人设检测）——模板/LLM 两条路径共用
