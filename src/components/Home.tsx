@@ -167,7 +167,7 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   const idleText = hasModelKey
     ? (homeLang === 'en' ? 'Quietly here with you' : '正安静地陪着你')
     : (homeLang === 'en' ? 'Waiting for you' : '在等你')
-  const momentText = busyNow ?? runtimeText || idleText
+  const momentText = busyNow ?? (runtimeText || idleText)
 
   // FINAL-CLOSURE：我的时间 = 生日 + 生理期（personal 全局资料，所有角色共享）。
   // 废弃 Home 单一 bigDay 展示；数据源仍是 getAnniversaries（全局 personal + 当前角色 couple 并集），
