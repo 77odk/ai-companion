@@ -4,6 +4,7 @@
 
 import { useState } from 'react'
 import { login, register, syncNow, verifySend, resetPassword, type Account } from '../lib/sync'
+import ConsentGate from './ConsentGate'
 
 type View = 'login' | 'register' | 'forgot'
 
@@ -41,6 +42,8 @@ export default function LoginForm({ onSuccess, variant = 'default' }: Props) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  // ConsentGate 补强（2026-09-25）：注册新账号必须本人重新过一遍完整披露
+  const [registerConsentDone, setRegisterConsentDone] = useState(false)
 
   const switchView = (v: View) => {
     setView(v)
@@ -202,6 +205,19 @@ export default function LoginForm({ onSuccess, variant = 'default' }: Props) {
         {info && <p className="test-result success">{info}</p>}
       </>
     )
+  }
+
+  // ConsentGate 补强（2026-09-25 七七拍板）：注册新账号必须本人重新过一遍完整披露，
+  // 不能沿用本机旧账号留下的同意记录。本次进站已经勾过完整门（App 层写过 sessionStorage 标记）则不重复弹。
+  const sessionConsentDone = (() => {
+    try {
+      return sessionStorage.getItem('eluvin_consent_session') === '1'
+    } catch {
+      return false
+    }
+  })()
+  if (view === 'register' && !sessionConsentDone && !registerConsentDone) {
+    return <ConsentGate mode="full" onDone={() => setRegisterConsentDone(true)} />
   }
 
   return (

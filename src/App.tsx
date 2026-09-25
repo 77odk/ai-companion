@@ -296,7 +296,7 @@ export default function App() {
   const [pendingNatural, setPendingNatural] = useState<NaturalSetup | null>(null)
   const [pendingNaturalError, setPendingNaturalError] = useState<string | null>(null)
   // 使用指南独立 view：返回时回到来源（欢迎页 / 我的 / 登录墙）
-  const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate'>('welcome')
+  const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate' | 'chat'>('welcome')
   // 选角色页的用途：first=首次/游客新建；current=换个TA·当前会话换人设；new=换个TA·开新会话换TA
   const [roleMode, setRoleMode] = useState<RolePickMode>('first')
   // 选角色页的返回去向：首次/游客/无会话回欢迎页，「换个 TA」回「我的」，角色列表页新建回角色列表
@@ -503,7 +503,7 @@ export default function App() {
     navigate('memory')
   }
 
-  const openGuide = (from: 'welcome' | 'settings' | 'gate') => {
+  const openGuide = (from: 'welcome' | 'settings' | 'gate' | 'chat') => {
     if (from === 'gate') {
       // 登录墙 → 指南：把回跳目标收起来，返回时再放回登录墙
       setPendingTarget(gateTarget ?? (!isPublicRoute(view) ? view : null))
@@ -660,7 +660,19 @@ export default function App() {
       ) : gateShown ? (
         // ConsentGate V1：首次进入先过「开始之前」安全说明（双勾选+同意），过了才进登录/注册
         !firstConsentDone ? (
-          <ConsentGate mode="full" onDone={() => setFirstConsentDone(true)} />
+          <ConsentGate
+            mode="full"
+            onDone={() => {
+              // 记住「本次进站已经过完整披露」：注册新账号时要用它区分
+              // 「刚在本机勾过」和「复用旧账号留下的同意记录」（后者必须重新勾）
+              try {
+                sessionStorage.setItem('eluvin_consent_session', '1')
+              } catch {
+                // 隐私模式下不可用：不阻塞，注册那一步会再弹一次
+              }
+              setFirstConsentDone(true)
+            }}
+          />
         ) : (
           <LoginGate onDone={handleGateDone} onGoGuide={() => openGuide('gate')} onBack={handleGateBack} />
         )
@@ -863,8 +875,10 @@ export default function App() {
               <div className="chat-shell">
                 <Chat
                   key={headerSession ? String(headerSession.id) : 'no-session'}
-                  onGoSettings={() => openSettings('main')}
-                  onGoGuide={() => openGuide('settings')}
+                  // 空态「现在就去配置」直接进服务商配置页（原来落到「我的」主页，用户找不到配置在哪）
+                  onGoSettings={() => openSettings('provider')}
+                  // 「先看使用指南」从聊天页进入的，返回就回聊天页（原来返回落到「我的」）
+                  onGoGuide={() => openGuide('chat')}
                   onOpenProfile={() => {
                     setDetailFrom('chat')
                     goView('chatprofile')
