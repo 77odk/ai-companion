@@ -28,20 +28,18 @@ function BackButton({ onBack }: { onBack: () => void }) {
 
 function OpeningPaperStack() {
   return (
-    <div className="intro-paper-stack" aria-hidden="true">
-      <div className="intro-paper-stack-shadow" />
-      <div className="intro-paper-sheet intro-paper-sheet-back">
-        <span>MEMORY · 01</span>
-      </div>
-      <div className="intro-paper-sheet intro-paper-sheet-mid">
-        <span>RELATION · 02</span>
-      </div>
-      <div className="intro-paper-sheet intro-paper-sheet-front">
-        <div className="intro-paper-rule" />
+    <div className="intro-letter-hero" aria-hidden="true">
+      <div className="intro-letter-hero-shadow" />
+      <div className="intro-letter-back-sheet" />
+      <div className="intro-letter-main-sheet">
+        <span className="intro-letter-fold" />
+        <span className="intro-letter-date">ELUVIN · LETTER 01</span>
         <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
         <strong>忆文</strong>
-        <small>ELUVIN</small>
         <em>忆过往，成文思</em>
+        <span className="intro-letter-line line-one" />
+        <span className="intro-letter-line line-two" />
+        <span className="intro-letter-sign">for the time we remember</span>
       </div>
     </div>
   )
@@ -322,15 +320,14 @@ export default function ProductIntro({ onBack, onStart }: Props) {
               <span className="intro-envelope-shell" aria-hidden="true">
                 <span className="intro-envelope-back" />
                 <span className="intro-envelope-letter">
+                  <span className="intro-envelope-letter-mark">ELUVIN</span>
                   <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
                   <strong>开始遇见 TA</strong>
-                  <small>ELUVIN · TO YOU</small>
+                  <small>一封写给未来相处的信</small>
                 </span>
-                <span className="intro-envelope-fold intro-envelope-fold-left" />
-                <span className="intro-envelope-fold intro-envelope-fold-right" />
-                <span className="intro-envelope-fold intro-envelope-fold-bottom" />
+                <span className="intro-envelope-pocket" />
                 <span className="intro-envelope-flap" />
-                <span className="intro-envelope-seal">忆</span>
+                <span className="intro-envelope-mark">E</span>
               </span>
             </button>
 
