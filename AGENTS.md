@@ -129,7 +129,7 @@
    - 改记忆：`node scripts/test_memory_recall.mjs`、`test_memory_recency.mjs`、`test_memory_saved.mjs`、`test_memory_summary.mjs`、`test_memorywall.mjs`
    - 改人设/注入：`node scripts/test_persona_memory_fix.mjs`、`test_fabricated.mjs`、`test_your_moment.mjs`、`test_aiBusy.mjs`
    - 改纪念日：`node scripts/test_anniversary.mjs`
-   - 改会话/角色：src/lib/*.test.ts（npm test 覆盖）+ `scripts/test_session*.mjs`
+   - 改会话/角色：`node --test src/lib/*.test.ts`（npm test 只跑 scripts/test_*.mjs，不覆盖这一支）+ `scripts/test_session*.mjs`
 3. 涉及后端接口的，跑 backend 对应的既有测试脚本。
 
 测试不通过，不许提 PR。

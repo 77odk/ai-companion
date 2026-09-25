@@ -5,8 +5,8 @@
 import { getAccount, clearAccount } from './sync.ts'
 import { notifyAuthChanged } from './dataChange.ts'
 
-/** 游客可看的展示类 view：欢迎页 / 产品介绍页 / 选角色模板页 / 使用指南 */
-export const PUBLIC_VIEWS = ['welcome', 'productintro', 'role', 'guide'] as const
+/** 游客可看的展示类 view：欢迎页 / 选角色模板页 / 使用指南 */
+export const PUBLIC_VIEWS = ['welcome', 'role', 'guide'] as const
 
 /** 判断 view 是否游客可看（纯函数，可单测） */
 export function isPublicView(view: string): boolean {
