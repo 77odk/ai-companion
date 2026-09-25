@@ -4,6 +4,7 @@
 // 覆盖：getToken 空/非空 token / isLoggedIn 判定 / isPublicView 游客可看 view 集合 /
 //       logout 清 token 并广播登录状态变化
 
+import { readFileSync } from 'node:fs'
 import { ELUVIN_AUTH_CHANGE } from '../src/lib/dataChange.ts'
 import { getToken, isLoggedIn, isPublicView, logout } from '../src/lib/auth.ts'
 import { setAccount, clearAccount } from '../src/lib/sync.ts'
@@ -78,14 +79,22 @@ eq(getToken(), '', '清除账号 → token 空串')
 ok(!isLoggedIn(), '清除账号 → 未登录')
 
 console.log('\n[3] isPublicView：游客可看集合')
-for (const v of ['welcome', 'productintro', 'role', 'guide']) {
+for (const v of ['welcome', 'role', 'guide']) {
   ok(isPublicView(v), `${v} = true（游客可看）`)
 }
 for (const v of ['chat', 'memory', 'work', 'settings', 'aispace', 'anniversary']) {
   ok(!isPublicView(v), `${v} = false（需登录）`)
 }
+ok(!isPublicView('productintro'), 'productintro 不在 auth 白名单（由 App 层公开路由例外放行）')
 ok(!isPublicView('unknown'), '未知 view = false')
 ok(!isPublicView(''), '空串 = false')
+
+console.log('\n[3b] App 层公开路由例外：产品介绍页（不写进 auth 白名单）')
+const appSrc = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
+ok(/const isPublicRoute\s*=/.test(appSrc), 'App.tsx 定义 isPublicRoute')
+ok(/v === 'productintro'/.test(appSrc), 'productintro 在 App 层被放行')
+const routeCalls = appSrc.match(/isPublicRoute\(/g) || []
+ok(routeCalls.length >= 4, `门禁判定共用同一函数（isPublicRoute 调用 ${routeCalls.length} 处）`)
 
 console.log('\n[4] logout：清 token 并广播登录状态变化')
 resetStore()

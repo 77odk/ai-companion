@@ -68,6 +68,10 @@ const Memory = lazy(() => import('./components/Memory'))
 
 type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
+// 公开路由 = auth 的游客白名单 + App 层例外（产品介绍页）。
+// 「产品介绍页」的公开特例只留在 App 层，不写进 src/lib/auth.ts 的 PUBLIC_VIEWS。
+const isPublicRoute = (v: string) => v === 'productintro' || isPublicView(v)
+
 // 底部四 tab 的常显范围：主视图（TA/空间/记忆/我的）带底部导航；Chat 等全屏页不带。
 // UI2-02 NAV-03：Chat 是 Secondary 全屏 view，Bottom Nav 只属于 home/aispace/memory/settings。
 // 用函数判断避免 TS 对嵌套 view 比较做过度收窄（误报不可达比较）。
@@ -466,11 +470,11 @@ export default function App() {
 
   // 访问门禁：需登录 view 且未登录 → 记下目标交给登录墙；游客可看的直接进
   const navigate = (v: View) => {
-    if (!isPublicView(v) && !loggedIn) {
+    if (!isPublicRoute(v) && !loggedIn) {
       setGateTarget(v)
       return
     }
-    if (isPublicView(v)) {
+    if (isPublicRoute(v)) {
       setGateTarget(null) // 回到公开页 = 取消待登录的目标
       setPendingTarget(null)
     }
@@ -502,7 +506,7 @@ export default function App() {
   const openGuide = (from: 'welcome' | 'settings' | 'gate') => {
     if (from === 'gate') {
       // 登录墙 → 指南：把回跳目标收起来，返回时再放回登录墙
-      setPendingTarget(gateTarget ?? (!isPublicView(view) ? view : null))
+      setPendingTarget(gateTarget ?? (!isPublicRoute(view) ? view : null))
       setGateTarget(null)
     }
     setGuideBack(from)
@@ -625,7 +629,7 @@ export default function App() {
   }, [loggedIn, view, redirectBySessions])
 
   // 登录墙是否展示：正在请求需登录 view 且未登录；或已登录页退出后落在需登录 view
-  const gateShown = (gateTarget !== null || !isPublicView(view)) && !loggedIn
+  const gateShown = (gateTarget !== null || !isPublicRoute(view)) && !loggedIn
 
   return (
     <div className="app">
