@@ -40,9 +40,10 @@ import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELI
 import { commitPartialReply } from '../lib/partialReply'
 import { buildFutureAgendaBlock } from '../lib/futureAgenda'
 import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYourMoment } from '../lib/yourMoment'
-import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, syncTaRuntimeFromAssistantText } from '../lib/taRuntime'
+import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, shouldInjectTaRuntimeContext, syncTaRuntimeFromAssistantText } from '../lib/taRuntime'
 import { buildIdentityContext } from '../lib/identityContext'
 import { dropRepeatedReplies } from '../lib/replyDedupe'
+import { collapseAdjacentDuplicateAssistantReplies } from '../lib/chatDisplay'
 import { buildReplyLengthInstruction, getEffectiveReplyLength, splitDetailedAssistantReply } from '../lib/replyLength'
 import { allowsBusyState, allowsEmbodiedLifeContext, buildIdentityBoundaryRepair, resolveIdentityMode } from '../lib/companionPolicy'
 import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
@@ -150,6 +151,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [failedText, setFailedText] = useState<string | null>(null)
+  // 仅内存态：只允许重试当前会话、当前页面生命周期、当前这一轮；绝不进 storage / cloud。
+  const [failedReplyRetryAvailable, setFailedReplyRetryAvailable] = useState(false)
+  const failedReplyRetryRef = useRef<null | (() => void)>(null)
   const [hasKey] = useState(() => Boolean(loadSettings().apiKey))
   // 该模型不支持思考链：请求被服务商拒了以后由 modelChat 降级并通知，这里只负责显示一行灰字
   const [thinkingUnsupported, setThinkingUnsupported] = useState(() => isThinkingUnsupported(loadSettings()))
@@ -198,6 +202,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     () => filterSessionMessages(messages, sessionStart),
     [messages, sessionStart],
   )
+  // 只在展示层合并“同一生成批次内、相邻、内容完全相同”的 TA 气泡；底层历史/上传/上下文一律不改。
+  const displayMessages = useMemo(
+    () => collapseAdjacentDuplicateAssistantReplies(visibleMessages),
+    [visibleMessages],
+  )
 
   // 切角色 / 刷新上下文后，Compact 与 Bridge 只能沿用当前 segment 之后生成的状态。
   // 旧 segment 的摘要/bridge 仍可保存在存储与云端，但绝不能重新注入到“重新开始”的上下文。
@@ -208,6 +217,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }, [])
 
   useEffect(() => {
+    // 切会话 / 刷新当前上下文段：上一轮失败的“重试”立即失效。
+    failedReplyRetryRef.current = null
+    setFailedReplyRetryAvailable(false)
     if (!activeSessionId) {
       setCompactDone(false)
       setCompactSummary('')
@@ -847,6 +859,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     releaseJumpHold()
     const text = raw.trim()
     if (!text || streaming) return
+    // 新消息开始即废弃上一轮的失败重试；重试永远不能跨轮次存活。
+    failedReplyRetryRef.current = null
+    setFailedReplyRetryAvailable(false)
 
     // busy 已到期且 Return 尚未落地时，用户主动回来优先：取消旧 cycle，避免紧跟一条自动“回来”。
     if (activeSessionId && !isBusy) {
@@ -863,7 +878,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     if (isBusy) setIsBusy(false)
 
-    const runId = ++runIdRef.current
+    let runId = ++runIdRef.current
     retriedRef.current = false
     busyTriggeredRef.current = false
 
@@ -1110,16 +1125,18 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       })
     }
     // 最近 TA 原话已经完整存在 history + 相对时间标记里，不再重复塞一份 SelfTimeline system。
-    // TA Runtime（TASK-TA-RUNTIME-V1）：Home 与 Chat 读同一份持久状态、同一 lazy getter。
-    // 未到期取同一 activity；到期由 getter 推进，之后 Home 再读也是同一新状态。零额外 LLM。
-    const runtime = getOrAdvanceTaRuntime(
-      activeSessionId || undefined,
-      getSessionPersona(activeSessionId || undefined),
-      Date.now(),
-    )
-    const runtimeCtx = buildTaRuntimeContext(runtime, lang)
-    if (runtimeCtx) {
-      contextBlocks.push({ id: 'runtime', content: runtimeCtx, priority: 'runtime' })
+    // TA Runtime：只在用户这一轮明确询问 TA 的当前状态时注入。
+    // 平时不把 TA 上轮自述再喂回去，避免“自述 → Runtime → 再自述”越滚越具体；Home 展示仍独立读取同一 Runtime。
+    if (shouldInjectTaRuntimeContext(text, lang)) {
+      const runtime = getOrAdvanceTaRuntime(
+        activeSessionId || undefined,
+        getSessionPersona(activeSessionId || undefined),
+        Date.now(),
+      )
+      const runtimeCtx = buildTaRuntimeContext(runtime, lang)
+      if (runtimeCtx) {
+        contextBlocks.push({ id: 'runtime', content: runtimeCtx, priority: 'runtime' })
+      }
     }
     const identityCtx = buildIdentityContext(activeSessionId || undefined, lang)
     if (identityCtx) {
@@ -1361,6 +1378,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         cleaned && !liveAllowBusy && cleanedAvailability?.state === 'unavailable' && cleanedAvailability.owner === 'SELF',
       )
       const identityProblem = embodiedProblem || unavailableIdentityProblem
+      // 首版如果只是“客服腔”，repair 自己失败时优先保住已经清洗过的首版；
+      // 只要首版涉及归因泄漏 / 编造 / 身份越界，就绝不能因为 repair 失败而复活原文。
+      const canReuseFirstReplyOnRepairFailure = Boolean(
+        cleaned && roboticProblem && !attributionProblem && !fabricatedProblem && !identityProblem,
+      )
       // 用户主动 Stop 不再发第二次模型请求；若截停片段已经越过身份边界，直接不落这段 assistant 文本。
       if (cleaned && identityProblem && retriedRef.current) {
         commitFinal([...messages, userMsg])
@@ -1381,6 +1403,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         const safeFallback = lang === 'en'
           ? "That answer didn't come out reliably, so I won't pretend it did."
           : '刚才那句没答稳，我不拿不确定的话糊弄你。'
+        const repairFailureText = canReuseFirstReplyOnRepairFailure ? cleaned : safeFallback
         void chatCompletion(settings, [
           ...apiMessages,
           { role: 'assistant', content: cleaned },
@@ -1401,7 +1424,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               looksEmbodiedSelfClaim(retryCleaned, retryIdentityMode) ||
               (!retryAllowBusy && retryAvailability?.state === 'unavailable' && retryAvailability.owner === 'SELF')
             ) {
-              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: safeFallback, ts: assistantTs }]
+              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: repairFailureText, ts: assistantTs }]
               commitFinal(final)
             } else if (retryAllowBusy && retryAvailability?.state === 'unavailable' && retryAvailability.owner === 'SELF') {
               busyTriggeredRef.current = true
@@ -1414,8 +1437,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             }
           })
           .catch(() => {
-            // 已判定原回复存在问题时，repair 失败/超时也绝不把原违规文本重新放行。
-            const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: safeFallback, ts: assistantTs }]
+            // repair 失败/超时：只有“纯客服腔”首版可以退回；编造/身份/归因问题仍绝不放回。
+            const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: repairFailureText, ts: assistantTs }]
             commitFinal(final)
           })
         return
@@ -1450,6 +1473,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     finalizeRef.current = finalize
 
+    let retrySameRound: (() => void) | null = null
+
     const playTick = () => {
       if (runId !== runIdRef.current) return
       if (finishedRef.current) return
@@ -1481,10 +1506,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const finishStreaming = () => {
       if (finishedRef.current) return
       const err = streamErrorRef.current
+      const hadNoReply = Boolean(err) && assistantText.current.trim() === ''
       finalize()  // finalize 自己设置 finishedRef 防重入
       if (err && mountedRef.current) {
         setError(err.message)
         setFailedText(userMsg.content)
+        if (hadNoReply && retrySameRound) {
+          // 只给 0 正文失败提供显式手动重试；不自动烧 Key，也不重新走 send/user upload/Event/Memory 前置链路。
+          failedReplyRetryRef.current = retrySameRound
+          setFailedReplyRetryAvailable(true)
+        }
       }
     }
     tickPlayRef.current = playTick
@@ -1586,6 +1617,41 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       })
       controllerRef.current = controller
     }
+
+    retrySameRound = () => {
+      // 失败重试只属于发起它的会话与当前 segment；切会话/刷新对话后即使旧闭包还在也不能再跑。
+      const sameSession = (getActiveSessionId() || null) === (activeSessionId || null)
+      const sameSegment = !activeSessionId || getSessionStart(activeSessionId) === sessionStart
+      if (!sameSession || !sameSegment || streamingRef.current) {
+        failedReplyRetryRef.current = null
+        if (mountedRef.current) setFailedReplyRetryAvailable(false)
+        return
+      }
+      failedReplyRetryRef.current = null
+      if (mountedRef.current) {
+        setFailedReplyRetryAvailable(false)
+        setError(null)
+        setFailedText(null)
+        setMessages([...messages, userMsg, { role: 'assistant', content: '', ts: assistantTs }])
+        setStreaming(true)
+      }
+      runId = ++runIdRef.current
+      retriedRef.current = false
+      busyTriggeredRef.current = false
+      assistantText.current = ''
+      reasoningRef.current = ''
+      streamErrorRef.current = null
+      streamEndedRef.current = false
+      showLenRef.current = 0
+      pauseLeftRef.current = 0
+      displayCleanRef.current = ''
+      finishedRef.current = false
+      partialTsRef.current = assistantTs
+      streamingRef.current = true
+      // 保留正常聊天的思考节奏，但这仍是同一轮请求：不追加 user、不重复上传 user、不重跑 Event candidate。
+      thinkTimerRef.current = window.setTimeout(startStream, computeThinkDelayMs(text.length))
+    }
+
     const thinkMs = computeThinkDelayMs(text.length)
     thinkTimerRef.current = window.setTimeout(startStream, thinkMs)
   }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, isBusy, persistMessages, uploadMessage, bridgeInfo, compactDone, compactSummary, pendingMemoryCorrection])
@@ -1782,7 +1848,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     setMemoryCorrectionNotice('没有修改记忆。')
   }
 
-  const isEmpty = visibleMessages.length === 0
+  const isEmpty = displayMessages.length === 0
   const chatBg = useMemo(() => loadChatBg(activeSessionId ?? undefined), [activeSessionId])
 
   return (
@@ -1808,11 +1874,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           </div>
         ) : (
           <>
-            {visibleMessages.map((m, i) => (
+            {displayMessages.map((m, i) => (
               <MessageBubble
                 key={i}
                 message={m}
-                typing={streaming && i === visibleMessages.length - 1 && m.role === 'assistant' && m.content === ''}
+                typing={streaming && i === displayMessages.length - 1 && m.role === 'assistant' && m.content === ''}
                 onAvatarClick={onOpenProfile}
               />
             ))}
@@ -1826,7 +1892,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
       {error && (
         <div className="chat-error-wrap">
-          <div className="chat-error">{error}</div>
+          <div className="chat-error">{failedReplyRetryAvailable ? 'TA 刚才没回出来，可以重试这一条。' : error}</div>
+          {failedReplyRetryAvailable && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={streaming}
+              onClick={() => failedReplyRetryRef.current?.()}
+            >
+              重试
+            </button>
+          )}
           {isRateLimitError(error) && (
             <RateLimitFallback
               hasDoubao={Boolean(loadSettings().providers.volcengine?.apiKey)}
