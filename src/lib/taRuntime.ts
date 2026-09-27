@@ -1,6 +1,6 @@
-// TASK-TA-RUNTIME-V1 · Persistent TA Runtime
-// 同一个 TA 在一段合理时间内持续做同一件事：Home 与 Chat 读同一份持久状态；
-// 惰性推进（只在 getter 被调用且 now >= plannedUntil 时才换活动），零额外 LLM、无 timer / 后台轮询。
+// TA Runtime · truth-driven current state
+// Home 与 Chat 读同一份持久状态；只有 TA 最终回复里的明确当前自述能创建状态。
+// 无证据、旧随机状态或过期状态统一回 idle。零额外 LLM、无后台轮询。
 //
 // ★产品边界：Runtime ≠ Busy。Runtime 回答「TA 此刻正在做什么」；Busy 回答「TA 此刻是否暂时无法陪伴」。
 // 本文件绝不读写 Busy（不 import aiBusy / 不写 ai_companion_busy_*），普通生活活动绝不触发 Busy。
@@ -29,8 +29,8 @@ export interface TaRuntimeState {
   plannedUntil: number
   /** 本状态写入/推进时间戳（sync 冲突：updatedAt 更新者胜） */
   updatedAt: number
-  /** persona 锚点命中 → 'persona'；纯时段/随机 → 'routine' */
-  source: 'routine' | 'persona'
+  /** 来源：legacy routine/persona 仅兼容旧数据；新状态只由 chat 证据或 idle 产生。 */
+  source: 'routine' | 'persona' | 'chat' | 'idle'
   /** 最近活动（最新在前，含当前，最多 3 个）；旧数据可缺省 */
   recentActivityIds?: string[]
 }
@@ -83,6 +83,7 @@ export const ACTIVITIES: readonly RuntimeActivity[] = [
 ]
 
 const AI_NATIVE_ACTIVITY_IDS = new Set(['reading_chat', 'organizing_thoughts', 'following_thread', 'quietly_present'])
+export const TA_RUNTIME_IDLE_ID = 'idle'
 
 function activityAllowedForMode(activity: RuntimeActivity, mode: IdentityMode): boolean {
   return mode === 'immersive' ? !AI_NATIVE_ACTIVITY_IDS.has(activity.id) : AI_NATIVE_ACTIVITY_IDS.has(activity.id)
@@ -149,150 +150,70 @@ export function getSessionPersona(sessionId?: string): string {
   }
 }
 
-/** persona 锚点命中该活动？只用于概率加权，绝不影响 Busy */
-function personaHit(a: RuntimeActivity, persona: string): boolean {
-  return Boolean(a.persona && persona && a.persona.test(persona))
-}
-
-// “上课”不能作为所有成年角色的通用随机日常；只有人设明确带校园/授课语境时才进 routine 池。
-// 聊天里 TA 自己明确说“在上课”仍可通过 Chat override 写入，不受此过滤影响。
-const CLASS_PERSONA_RE = /学生|大学|学院|学校|校园|研究生|本科|高中|初中|课程|课表|上课|老师|教师|教授|讲师|助教/
-
-function activityAllowedForPersona(activity: RuntimeActivity, persona: string): boolean {
-  return activity.id !== 'class' || CLASS_PERSONA_RE.test(persona)
-}
-
-function seededRuntimeRand(seed: string): () => number {
-  let state = 2166136261
-  for (let i = 0; i < seed.length; i += 1) {
-    state ^= seed.charCodeAt(i)
-    state = Math.imul(state, 16777619)
-  }
-  return () => {
-    state += 0x6d2b79f5
-    let t = state
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-function defaultRuntimeRand(sessionKey: string, now: number, previousActivityId = ''): () => number {
-  const d = new Date(now)
-  const day = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
-  return seededRuntimeRand(`${sessionKey}|${day}|${runtimeSlot(d)}|${previousActivityId || 'start'}`)
-}
-
-function minuteOfDay(now: Date): number {
-  return now.getHours() * 60 + now.getMinutes()
-}
-
-function activityAllowedAt(activity: RuntimeActivity, now: Date): boolean {
-  const minute = minuteOfDay(now)
-  return activity.windows.some(([start, end]) => minute >= start && minute < end)
-}
-
-/** 当前命中时段的结束时间戳；用于把 plannedUntil 截到合理时段内，避免早餐一路挂到中午。 */
-function activityWindowEnd(activity: RuntimeActivity, now: Date): number | null {
-  const minute = minuteOfDay(now)
-  const hit = activity.windows.find(([start, end]) => minute >= start && minute < end)
-  if (!hit) return null
-  const [, end] = hit
-  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  return dayStart + end * 60000
-}
-
-function pickActivity(now: Date, persona: string, recentIds: readonly string[], rand: () => number, mode: IdentityMode = 'immersive'): RuntimeActivity {
-  const slot = runtimeSlot(now)
-  let pool = ACTIVITIES.filter((a) =>
-    activityAllowedForMode(a, mode) &&
-    activityAllowedForPersona(a, persona) &&
-    activityAllowedAt(a, now),
-  )
-  if (pool.length === 0) {
-    pool = ACTIVITIES.filter((a) =>
-      activityAllowedForMode(a, mode) &&
-      activityAllowedForPersona(a, persona) &&
-      a.slots.includes(slot),
-    )
-  }
-  if (pool.length === 0) return ACTIVITIES.find((activity) => activityAllowedForMode(activity, mode)) ?? ACTIVITIES[0]
-
-  // 最近 3 个活动能避则避：比只禁「连续重复」多一层，但候选过少时自动退化，不造死循环。
-  const blocked = new Set(recentIds.slice(0, 3))
-  const rest = pool.filter((a) => !blocked.has(a.id))
-  const candidates = rest.length > 0 ? rest : pool
-  const weights = candidates.map((a) => 1 + (personaHit(a, persona) ? 2 : 0))
-  const total = weights.reduce((s, w) => s + w, 0)
-  let r = rand() * total
-  for (let i = 0; i < candidates.length; i++) {
-    r -= weights[i]
-    if (r < 0) return candidates[i]
-  }
-  return candidates[candidates.length - 1]
-}
-
-function createState(
-  activity: RuntimeActivity,
-  now: number,
-  rand: () => number,
-  persona: string,
-  recentIds: readonly string[] = [],
-): TaRuntimeState {
-  const durMin = activity.minMin + Math.floor(rand() * (activity.maxMin - activity.minMin + 1))
-  const windowEnd = activityWindowEnd(activity, new Date(now))
-  const plannedUntil = Math.min(now + durMin * 60000, windowEnd ?? Number.POSITIVE_INFINITY)
-  const recentActivityIds = [activity.id, ...recentIds.filter((id) => id !== activity.id)].slice(0, 3)
+/** idle 不是一条“活动事实”，只是展示层的无证据状态。 */
+function createIdleState(now: number, recentIds: readonly string[] = []): TaRuntimeState {
   return {
-    activityId: activity.id,
-    label: activity.label,
+    activityId: TA_RUNTIME_IDLE_ID,
+    label: '',
     startedAt: now,
-    plannedUntil,
+    plannedUntil: 0,
     updatedAt: now,
-    source: personaHit(activity, persona) ? 'persona' : 'routine',
-    recentActivityIds,
+    source: 'idle',
+    recentActivityIds: recentIds.filter((id) => id && id !== TA_RUNTIME_IDLE_ID).slice(0, 3),
   }
+}
+
+export function isTaRuntimeIdle(runtime: TaRuntimeState | null | undefined): boolean {
+  return !runtime || runtime.activityId === TA_RUNTIME_IDLE_ID
 }
 
 /**
- * 核心 API（Lazy Runtime）：
- * 1) 无状态 → 按 当前时间 + persona 创建并保存；
- * 2) now < plannedUntil → 原样返回（刷新/重渲染/切 Tab 绝不重新随机）；
- * 3) now >= plannedUntil → 按 时间 + persona + 上一活动 选下一活动，写入并返回。
- * 幂等、零副作用除非推进；rand/now 可注入（测试稳定）。
+ * Truth-driven Runtime getter:
+ * - 没有可信状态 → idle；绝不按时段/persona 随机编一个活动；
+ * - 只有 Chat 明确自述写入的 source='chat' 状态，在过期前保持不变；
+ * - 过期、切身份后不再允许、或旧版 routine/persona 自动状态 → 回 idle；
+ * - idle 一直保持，直到新的 TA 自述证据写入。
+ *
+ * persona/rand 参数保留只为兼容旧调用签名；不再参与状态创造。
  */
 export function getOrAdvanceTaRuntime(
   sessionId: string | undefined,
-  persona: string,
+  _persona: string,
   now: number,
-  rand?: () => number,
+  _rand?: () => number,
 ): TaRuntimeState {
   const map = loadAll()
   const key = sessionId || GUEST_KEY
   const cur = map[key]
   const mode = resolveIdentityMode(sessionId)
-  const effectiveRand = rand ?? defaultRuntimeRand(key, now, cur?.activityId)
+
   if (!cur || typeof cur.activityId !== 'string') {
-    const fresh = createState(pickActivity(new Date(now), persona, [], effectiveRand, mode), now, effectiveRand, persona)
-    map[key] = fresh
+    const idle = createIdleState(now)
+    map[key] = idle
     saveAll(map)
-    return fresh
+    return idle
   }
+
+  if (cur.activityId === TA_RUNTIME_IDLE_ID) return cur
+
   const currentActivity = ACTIVITIES.find((item) => item.id === cur.activityId)
-  if (now < cur.plannedUntil && currentActivity && activityAllowedForMode(currentActivity, mode)) return cur
+  const trusted = cur.source === 'chat'
+  if (
+    trusted &&
+    currentActivity &&
+    activityAllowedForMode(currentActivity, mode) &&
+    now < cur.plannedUntil
+  ) {
+    return cur
+  }
+
   const recentIds = Array.isArray(cur.recentActivityIds) && cur.recentActivityIds.length > 0
     ? cur.recentActivityIds
     : [cur.activityId]
-  const next = createState(
-    pickActivity(new Date(now), persona, recentIds, effectiveRand, mode),
-    now,
-    effectiveRand,
-    persona,
-    recentIds,
-  )
-  map[key] = next
+  const idle = createIdleState(now, recentIds)
+  map[key] = idle
   saveAll(map)
-  return next
+  return idle
 }
 
 
@@ -322,6 +243,10 @@ interface RuntimeTextRule {
 
 /** 规则从更具体到更泛化；同一条回复里若出现多个“现在动作”，取最后命中的那一个。 */
 const RUNTIME_TEXT_START_RULES: readonly RuntimeTextRule[] = [
+  { activityId: 'reading_chat', zh: /(?:我)?(?:正(?:在)?|还在|在|刚(?:刚)?)?(?:回看|重看|读|看)(?:着)?(?:我们|你们)?(?:的)?(?:对话|聊天(?:记录)?)/, en: /\b(?:i(?:'m| am)?\s+)?(?:am\s+)?(?:reading|rereading|reviewing|looking back at) (?:our|this|the) (?:conversation|chat)\b/i },
+  { activityId: 'organizing_thoughts', zh: /(?:我)?(?:正(?:在)?|还在|在|刚(?:刚)?)?(?:整理|理一理|梳理)(?:一下)?(?:思路|思绪|想法|刚才的问题)/, en: /\b(?:i(?:'m| am)?\s+)?(?:organizing|sorting through|整理ing) (?:my )?(?:thoughts|ideas)\b/i },
+  { activityId: 'following_thread', zh: /(?:我)?(?:正(?:在)?|还在|在|刚(?:刚)?)?(?:回想|顺着|梳理)(?:我们|你们)?(?:刚才|之前)?(?:聊过的话|说过的话|聊天脉络|对话脉络)/, en: /\b(?:i(?:'m| am)?\s+)?(?:following|tracing|thinking back through) (?:the )?(?:thread|conversation)\b/i },
+  { activityId: 'quietly_present', zh: /(?:我)?(?:正(?:在)?|还在|在)?(?:安静地?)?(?:陪着你|在这里陪你|待在这里陪你)/, en: /\b(?:i(?:'m| am)?\s+)?(?:quietly )?(?:staying here with you|keeping you company|here with you)\b/i },
   { activityId: 'wake_up', zh: /(?:我)?(?:刚|才)?(?:起床|醒了|醒来)/, en: /\b(?:i\s*)?(?:just\s+)?(?:woke up|got up)\b/i },
   { activityId: 'breakfast', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:吃早餐|吃早饭)/, en: /\b(?:i(?:'m| am)?\s+)?(?:having|getting|going to have) breakfast\b/i },
   { activityId: 'lunch', zh: /(?:我)?(?:正(?:在)?|在|去|先去|准备)?(?:吃午饭|吃午餐)/, en: /\b(?:i(?:'m| am)?\s+)?(?:having|getting|going to have) lunch\b/i },
@@ -460,7 +385,7 @@ function createChatOverrideState(
     startedAt: now,
     plannedUntil: now + maxMinutes * 60000,
     updatedAt: now,
-    source: 'routine',
+    source: 'chat',
     recentActivityIds,
   }
 }
@@ -468,16 +393,16 @@ function createChatOverrideState(
 /**
  * TA 最终回复落库后调用：
  * - 明确说自己“正在/马上去做 X” → X 写回同一 Runtime；
- * - 明确说当前 X 已结束 → 立即结束该状态并回到日常调度；
- * - 最长 2 小时没有后续 → plannedUntil 到期后自然回到日常调度。
+ * - 明确说当前 X 已结束 → 立即回 idle；
+ * - 最长 2 小时没有后续 → plannedUntil 到期后回 idle。
  * 返回 null = 本轮没有可信动作，不写任何状态。
  */
 export function syncTaRuntimeFromAssistantText(
   sessionId: string | undefined,
   text: string,
   now: number = Date.now(),
-  persona: string = getSessionPersona(sessionId),
-  rand?: () => number,
+  _persona: string = getSessionPersona(sessionId),
+  _rand?: () => number,
 ): TaRuntimeState | null {
   const key = sessionId || GUEST_KEY
   const map = loadAll()
@@ -504,14 +429,7 @@ export function syncTaRuntimeFromAssistantText(
   }
 
   if (!cur) return null
-  const effectiveRand = rand ?? defaultRuntimeRand(key, now, cur.activityId)
-  const next = createState(
-    pickActivity(new Date(now), persona, recentIds, effectiveRand, resolveIdentityMode(sessionId)),
-    now,
-    effectiveRand,
-    persona,
-    recentIds,
-  )
+  const next = createIdleState(now, recentIds)
   map[key] = next
   saveAll(map)
   return next
@@ -571,7 +489,7 @@ export function isTaRuntimeState(value: unknown): value is TaRuntimeState {
     && typeof state.startedAt === 'number' && Number.isFinite(state.startedAt)
     && typeof state.plannedUntil === 'number' && Number.isFinite(state.plannedUntil)
     && typeof state.updatedAt === 'number' && Number.isFinite(state.updatedAt)
-    && (state.source === 'routine' || state.source === 'persona')
+    && (state.source === 'routine' || state.source === 'persona' || state.source === 'chat' || state.source === 'idle')
     && (state.recentActivityIds == null || (
       Array.isArray(state.recentActivityIds)
       && state.recentActivityIds.length <= 3
@@ -595,7 +513,7 @@ const EN_FALLBACK_LABEL = 'Doing their own thing'
  *   靠 id 映射英文文案，绝不因本地化重抽/失效 Runtime（labelEn 只影响展示，不参与 identity）。
  */
 export function runtimeDisplayLabel(runtime: TaRuntimeState | null | undefined, lang: Lang = 'zh'): string {
-  if (!runtime) return ''
+  if (!runtime || runtime.activityId === TA_RUNTIME_IDLE_ID) return ''
   if (lang !== 'en') return runtime.label || ''
   const act = ACTIVITIES.find((a) => a.id === runtime.activityId)
   return act?.labelEn || EN_FALLBACK_LABEL
@@ -607,7 +525,7 @@ export function runtimeDisplayLabel(runtime: TaRuntimeState | null | undefined, 
  * PATCH-LANG：en 时 label 用英文映射（整块纯英文），zh 用持久化中文 label。
  */
 export function buildTaRuntimeContext(runtime: TaRuntimeState | null, lang: Lang = 'zh'): string {
-  if (!runtime || !runtime.label) return ''
+  if (!runtime || runtime.activityId === TA_RUNTIME_IDLE_ID || !runtime.label) return ''
   const until = formatRuntimeUntil(runtime.plannedUntil)
   if (lang === 'en') {
     return [

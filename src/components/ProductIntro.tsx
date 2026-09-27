@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ProductIntroAtmosphere from './ProductIntroAtmosphere'
 import './ProductIntro.css'
 
@@ -10,15 +10,7 @@ interface Props {
 function BackButton({ onBack }: { onBack: () => void }) {
   return (
     <button type="button" className="intro-back" onClick={onBack} aria-label="返回欢迎页">
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
         <path d="M19 12H5" />
         <path d="M12 19l-7-7 7-7" />
       </svg>
@@ -26,134 +18,182 @@ function BackButton({ onBack }: { onBack: () => void }) {
   )
 }
 
-function ClosedBook() {
+function HeroBook() {
   return (
-    <div className="intro-book-scene" aria-hidden="true">
-      <div className="intro-book-ground" />
-      <div className="intro-book-volume">
-        <div className="intro-book-back-cover" />
-        <div className="intro-book-page-block">
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
-        </div>
-        <div className="intro-book-spine" />
-        <div className="intro-book-front-cover">
-          <div className="intro-cover-rule" />
-          <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
-          <strong>忆文</strong>
-          <small>ELUVIN</small>
-          <em>忆过往，成文思</em>
-        </div>
+    <div className="intro-hero-object" aria-hidden="true">
+      <div className="intro-object-shadow" />
+      <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
+    </div>
+  )
+}
+
+function MemoryPaper() {
+  return (
+    <div className="intro-memory-paper" aria-hidden="true">
+      <div className="intro-memory-chip intro-memory-chip-preference">
+        <small>偏好</small>
+        <strong>喜欢安静一点的晚上</strong>
+      </div>
+
+      <div className="intro-memory-source">
+        <span>SEP · 24</span>
+        <p>你说，最近总是睡得很晚。</p>
+        <i />
+        <i />
+      </div>
+
+      <div className="intro-memory-chip intro-memory-chip-recent">
+        <small>最近</small>
+        <strong>这周一直在忙一个重要的项目</strong>
+      </div>
+
+      <div className="intro-memory-note">
+        <small>TA 记住了</small>
+        <strong>“这件事对你很重要。”</strong>
+        <p>不是所有话都留下。重要的，才慢慢成为 TA 对你的了解。</p>
       </div>
     </div>
   )
 }
 
-function MemorySpread() {
+function TimePaper() {
   return (
-    <div className="intro-memory-spread" aria-hidden="true">
-      <div className="intro-memory-shadow" />
-      <div className="intro-memory-book">
-        <div className="intro-memory-left-page">
-          <span className="intro-page-number">17</span>
-          <p className="intro-hand-line">你说，最近总是睡得很晚。</p>
-          <p className="intro-hand-line faded">后来 TA 又记起了这句话。</p>
-          <i className="intro-writing-line line-a" />
-          <i className="intro-writing-line line-b" />
-          <i className="intro-writing-line line-c" />
-        </div>
-        <div className="intro-memory-gutter" />
-        <div className="intro-memory-right-page">
-          <span className="intro-date-mark">SEP · 24</span>
-          <blockquote>“这件事对你很重要。”</blockquote>
-          <p>不是所有话都留下。</p>
-          <p>重要的，才慢慢成为 TA 对你的了解。</p>
-          <div className="intro-page-curl">
-            <span />
-          </div>
-        </div>
+    <div className="intro-time-paper" aria-hidden="true">
+      <div className="intro-time-heading">
+        <span>US · TIMELINE</span>
+        <strong>100</strong>
+        <small>days</small>
+      </div>
+      <div className="intro-time-axis">
+        <div><i />第一次认识</div>
+        <div><i />第一次认真聊很久</div>
+        <div><i />第一次说定一件事</div>
+        <div><i />某个后来变得重要的晚上</div>
+        <div><i />第一次被记住你的习惯</div>
+        <div><i />一起经过的第 100 天</div>
+        <div className="intro-time-more">……</div>
       </div>
     </div>
   )
 }
 
-function TimeBook() {
+function EnginePaper() {
   return (
-    <div className="intro-time-visual" aria-hidden="true">
-      <div className="intro-time-book">
-        <div className="intro-time-page">
-          <span className="intro-time-kicker">US · TIMELINE</span>
-          <strong>100</strong>
-          <small>days</small>
-          <div className="intro-time-axis">
-            <span className="intro-time-node node-a"><i />第一次认识</span>
-            <span className="intro-time-node node-b"><i />第一次说定一件事</span>
-            <span className="intro-time-node node-c"><i />某个后来很重要的晚上</span>
-            <span className="intro-time-node node-d"><i />一起经过的第 100 天</span>
-          </div>
-          <div className="intro-time-photo">
-            <span />
-          </div>
-        </div>
-        <div className="intro-time-page-edge" />
+    <div className="intro-engine-paper" aria-label="忆文与模型如何一起工作">
+      <div className="intro-engine-step">
+        <span>01 · 你说一句话</span>
+        <strong>聊天从你此刻说的话开始。</strong>
+        <p>模型先看到你现在想说的内容，但它不会只靠这一句话来认识你。</p>
       </div>
-      <div className="intro-time-loose-page page-one" />
-      <div className="intro-time-loose-page page-two" />
-    </div>
-  )
-}
 
-function EngineLayers() {
-  return (
-    <div className="intro-engine-visual" aria-hidden="true">
-      <div className="intro-engine-glow" />
-      <div className="intro-engine-layer layer-model">
-        <small>01 · AI MODEL</small>
-        <strong>理解 · 思考 · 回复</strong>
-      </div>
-      <div className="intro-engine-connector connector-a" />
-      <div className="intro-engine-layer layer-eluvin">
-        <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
-        <small>02 · ELUVIN</small>
+      <b />
+
+      <div className="intro-engine-step">
+        <span>02 · 忆文把相关的东西带过来</span>
         <strong>记忆 · 关系 · 状态 · 时间</strong>
+        <p>和这一刻有关的记忆、你们的关系进度、TA 此刻的状态，以及时间信息，会被整理到这次聊天里。</p>
       </div>
-      <div className="intro-engine-connector connector-b" />
-      <div className="intro-engine-layer layer-ta">
-        <small>03 · YOUR TA</small>
-        <strong>持续存在的相处</strong>
+
+      <b />
+
+      <div className="intro-engine-step">
+        <span>03 · 模型负责思考和表达</span>
+        <strong>理解当下，也参考你们之前发生过的事。</strong>
+        <p>你选择的模型负责理解、推理和生成回复，所以模型能力会直接影响 TA 的聪明程度和表达方式。</p>
+      </div>
+
+      <b />
+
+      <div className="intro-engine-step">
+        <span>04 · 这次聊天会继续成为以后的一部分</span>
+        <strong>重要的新信息留下来，下一次继续往下走。</strong>
+        <p>不是每句话都会被记住。真正重要的内容会继续沉淀，让下一次相处不用从零开始。</p>
+      </div>
+
+      <div className="intro-engine-summary">
+        <strong>模型负责“怎么想、怎么说”。</strong>
+        <span>忆文负责“记得什么、你们走到哪里、下一次从哪里继续”。</span>
       </div>
     </div>
   )
 }
 
-function ThresholdSheet() {
+function ThresholdPaper() {
   return (
-    <div className="intro-threshold-sheet" aria-hidden="true">
+    <div className="intro-threshold-paper" aria-hidden="true">
       <span className="intro-sheet-label">BEFORE YOU BEGIN</span>
-      <div className="intro-sheet-rule" />
-      <div className="intro-sheet-row">
+
+      <div className="intro-threshold-item">
         <b>01</b>
-        <span>自己的模型</span>
+        <p><mark>自己的模型和 API Key</mark><span>忆文本身不提供模型算力。</span></p>
       </div>
-      <div className="intro-sheet-row">
+
+      <div className="intro-threshold-item">
         <b>02</b>
-        <span>一点学习时间</span>
+        <p><mark>一点学习和设置时间</mark><span>第一次使用会接触模型、人设和记忆。</span></p>
       </div>
-      <div className="intro-sheet-row">
+
+      <div className="intro-threshold-item">
         <b>03</b>
-        <span>模型决定 TA 的表现</span>
+        <p><mark>接受模型会影响 TA 的表现</mark><span>不同模型会影响聪明程度、稳定性和表达方式。</span></p>
       </div>
-      <div className="intro-sheet-signature">ELUVIN</div>
+
+      <small>ELUVIN</small>
     </div>
+  )
+}
+
+function EnvelopeArtwork() {
+  return (
+    <svg
+      className="intro-envelope-art"
+      viewBox="0 0 340 230"
+      role="img"
+      aria-label="一封等待打开的信"
+    >
+      <defs>
+        <linearGradient id="envelopePaper" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#fff9f5" />
+          <stop offset="55%" stopColor="#f6dfd4" />
+          <stop offset="100%" stopColor="#eec7bc" />
+        </linearGradient>
+        <linearGradient id="envelopeFold" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f7e2d8" />
+          <stop offset="100%" stopColor="#e6beb3" />
+        </linearGradient>
+        <filter id="envelopeTexture" x="-20%" y="-20%" width="140%" height="140%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="8" result="noise" />
+          <feColorMatrix in="noise" type="saturate" values="0" result="mono" />
+          <feComponentTransfer in="mono" result="softNoise">
+            <feFuncA type="table" tableValues="0 0.08" />
+          </feComponentTransfer>
+          <feBlend in="SourceGraphic" in2="softNoise" mode="multiply" />
+        </filter>
+      </defs>
+
+      <ellipse className="intro-envelope-shadow" cx="170" cy="206" rx="118" ry="13" />
+      <rect className="intro-envelope-back-shape" x="36" y="52" width="268" height="150" rx="12" />
+      <g className="intro-envelope-letter-shape">
+        <rect x="74" y="28" width="192" height="142" rx="6" fill="#fffaf6" filter="url(#envelopeTexture)" />
+        <text x="92" y="50">ELUVIN</text>
+        <text className="intro-envelope-letter-title" x="170" y="105" textAnchor="middle">开始遇见 TA</text>
+        <text className="intro-envelope-letter-sub" x="170" y="126" textAnchor="middle">一封写给未来相处的信</text>
+      </g>
+      <path className="intro-envelope-pocket" d="M36 92 L170 174 L304 92 V202 H36 Z" fill="url(#envelopePaper)" filter="url(#envelopeTexture)" />
+      <path className="intro-envelope-side left" d="M36 92 L170 174 L36 202 Z" fill="#f3d9cf" />
+      <path className="intro-envelope-side right" d="M304 92 L170 174 L304 202 Z" fill="#edd0c5" />
+      <path className="intro-envelope-flap-shape" d="M36 54 H304 L170 174 Z" fill="url(#envelopeFold)" filter="url(#envelopeTexture)" />
+      <circle className="intro-envelope-mark" cx="170" cy="154" r="18" />
+      <text className="intro-envelope-mark-letter" x="170" y="160" textAnchor="middle">E</text>
+    </svg>
   )
 }
 
 export default function ProductIntro({ onBack, onStart }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLElement>(null)
+  const startTimerRef = useRef<number | null>(null)
+  const [isOpening, setIsOpening] = useState(false)
 
   useEffect(() => {
     const root = rootRef.current
@@ -161,236 +201,154 @@ export default function ProductIntro({ onBack, onStart }: Props) {
     if (!root || !scroller) return
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
-    let frame = 0
-    let suspended = document.hidden
+    const scenes = Array.from(scroller.querySelectorAll<HTMLElement>('.intro-scene'))
+    let observer: IntersectionObserver | null = null
 
-    const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
-
-    const renderProgress = () => {
-      frame = 0
-      if (suspended || reducedMotion.matches) return
-
-      const viewportHeight = Math.max(1, scroller.clientHeight)
-      const scrollerTop = scroller.getBoundingClientRect().top
-      const scenes = Array.from(scroller.querySelectorAll<HTMLElement>('.intro-scene'))
-
-      scenes.forEach((scene, index) => {
-        const rect = scene.getBoundingClientRect()
-        const localTop = rect.top - scrollerTop
-        const sceneHeight = Math.max(viewportHeight, rect.height)
-        const enter = clamp01((viewportHeight - localTop) / viewportHeight)
-        const exit = clamp01(-localTop / sceneHeight)
-        const focus = clamp01(Math.min(enter, 1 - exit))
-        const turnOpacity = 4 * exit * (1 - exit)
-        const foldX = viewportHeight > 0
-          ? scroller.clientWidth - 72 - exit * (scroller.clientWidth + 24)
-          : 0
-        const foldRotate = 28 - exit * 56
-        const foldSkew = 4 - exit * 8
-
-        const copyY = (1 - enter) * 24 - exit * 18
-        const visualY = (1 - enter) * 30 - exit * 20
-        const visualScale = 0.955 + focus * 0.045
-        const visualRoll = (1 - enter) * 2.4 - exit * 2.2
-        const copyOpacity = 0.58 + focus * 0.42
-
-        scene.style.setProperty('--intro-enter', enter.toFixed(4))
-        scene.style.setProperty('--intro-exit', exit.toFixed(4))
-        scene.style.setProperty('--intro-focus', focus.toFixed(4))
-        scene.style.setProperty('--intro-turn-angle', `${(-116 * exit).toFixed(2)}deg`)
-        scene.style.setProperty('--intro-turn-opacity', turnOpacity.toFixed(4))
-        scene.style.setProperty('--intro-fold-opacity', (turnOpacity * 0.82).toFixed(4))
-        scene.style.setProperty('--intro-fold-x', `${foldX.toFixed(2)}px`)
-        scene.style.setProperty('--intro-fold-rotate', `${foldRotate.toFixed(2)}deg`)
-        scene.style.setProperty('--intro-fold-skew', `${foldSkew.toFixed(2)}deg`)
-        scene.style.setProperty('--intro-copy-y', `${copyY.toFixed(2)}px`)
-        scene.style.setProperty('--intro-copy-opacity', copyOpacity.toFixed(4))
-        scene.style.setProperty('--intro-visual-y', `${visualY.toFixed(2)}px`)
-        scene.style.setProperty('--intro-visual-scale', visualScale.toFixed(4))
-        scene.style.setProperty('--intro-visual-roll', `${visualRoll.toFixed(2)}deg`)
-        scene.style.setProperty('--intro-ambient-y', `${(-visualY * 0.22).toFixed(2)}px`)
-
-        if (index === 0) {
-          scene.style.setProperty('--intro-book-rx', `${(64 - enter * 6 + exit * 8).toFixed(2)}deg`)
-          scene.style.setProperty('--intro-book-ry', `${(-26 + enter * 10 - exit * 20).toFixed(2)}deg`)
-          scene.style.setProperty('--intro-book-rz', `${(-13 + enter * 3 + exit * 2).toFixed(2)}deg`)
-        } else if (index === 1) {
-          scene.style.setProperty('--intro-memory-rx', `${(62 - enter * 6 + exit * 6).toFixed(2)}deg`)
-          scene.style.setProperty('--intro-memory-rz', `${(-6 + enter * 3 + exit * 2).toFixed(2)}deg`)
-          scene.style.setProperty('--intro-memory-page-ry', `${(-18 + enter * 10 - exit * 48).toFixed(2)}deg`)
-          scene.style.setProperty('--intro-curl-scale', (1 + exit * 0.42).toFixed(4))
-          scene.style.setProperty('--intro-curl-rotate', `${(-12 * exit).toFixed(2)}deg`)
-        } else if (index === 2) {
-          scene.style.setProperty('--intro-time-rx', `${(59 - enter * 7 + exit * 7).toFixed(2)}deg`)
-          scene.style.setProperty('--intro-time-ry', `${(-16 + enter * 8 - exit * 14).toFixed(2)}deg`)
-          scene.style.setProperty('--intro-time-rz', `${(11 - enter * 4 + exit * 3).toFixed(2)}deg`)
-        } else if (index === 3) {
-          const engineSpread = (1 - focus) * 12
-          scene.style.setProperty('--intro-engine-spread', `${engineSpread.toFixed(2)}px`)
-          scene.style.setProperty('--intro-engine-spread-neg', `${(-engineSpread).toFixed(2)}px`)
-        } else if (index === 5) {
-          scene.style.setProperty('--intro-final-rx', `${(68 - enter * 7 + exit * 7).toFixed(2)}deg`)
-          scene.style.setProperty('--intro-final-ry', `${(-18 + enter * 8 - exit * 12).toFixed(2)}deg`)
-          scene.style.setProperty('--intro-final-rz', `${(7 - enter * 3 + exit * 2).toFixed(2)}deg`)
-        }
-      })
-    }
-
-    const schedule = () => {
-      if (frame || suspended || reducedMotion.matches) return
-      frame = window.requestAnimationFrame(renderProgress)
-    }
-
-    const syncMotionPreference = () => {
+    const sync = () => {
       root.dataset.motion = reducedMotion.matches ? 'reduced' : 'on'
+      observer?.disconnect()
+
       if (reducedMotion.matches) {
-        if (frame) window.cancelAnimationFrame(frame)
-        frame = 0
-      } else {
-        schedule()
+        scenes.forEach(scene => scene.classList.add('is-visible'))
+        return
       }
+
+      observer = new IntersectionObserver(
+        entries => {
+          entries.forEach(entry => {
+            entry.target.classList.toggle('is-visible', entry.isIntersecting)
+          })
+        },
+        { root: scroller, rootMargin: '-8% 0px -8% 0px', threshold: 0.16 },
+      )
+
+      scenes.forEach(scene => observer?.observe(scene))
+      scenes[0]?.classList.add('is-visible')
     }
 
-    const handleVisibility = () => {
-      suspended = document.hidden
-      if (suspended) {
-        if (frame) window.cancelAnimationFrame(frame)
-        frame = 0
-      } else {
-        schedule()
-      }
-    }
-
-    root.dataset.motion = reducedMotion.matches ? 'reduced' : 'on'
-    scroller.addEventListener('scroll', schedule, { passive: true })
-    window.addEventListener('resize', schedule)
-    document.addEventListener('visibilitychange', handleVisibility)
-    reducedMotion.addEventListener('change', syncMotionPreference)
-    schedule()
+    sync()
+    reducedMotion.addEventListener('change', sync)
 
     return () => {
-      scroller.removeEventListener('scroll', schedule)
-      window.removeEventListener('resize', schedule)
-      document.removeEventListener('visibilitychange', handleVisibility)
-      reducedMotion.removeEventListener('change', syncMotionPreference)
-      if (frame) window.cancelAnimationFrame(frame)
+      observer?.disconnect()
+      reducedMotion.removeEventListener('change', sync)
     }
   }, [])
 
+  useEffect(() => () => {
+    if (startTimerRef.current !== null) window.clearTimeout(startTimerRef.current)
+  }, [])
+
+  const handleStart = () => {
+    if (isOpening) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      onStart()
+      return
+    }
+
+    setIsOpening(true)
+    startTimerRef.current = window.setTimeout(onStart, 980)
+  }
+
   return (
-    <div ref={rootRef} className="product-intro-v1">
+    <div ref={rootRef} className={`product-intro-v1${isOpening ? ' is-opening' : ''}`}>
       <BackButton onBack={onBack} />
       <ProductIntroAtmosphere />
 
       <main ref={mainRef}>
-        <section className="intro-scene intro-scene-hero" aria-labelledby="intro-hero-title">
-          <div className="intro-aurora intro-aurora-a" aria-hidden="true" />
-          <div className="intro-aurora intro-aurora-b" aria-hidden="true" />
-          <div className="intro-grain" aria-hidden="true" />
-
-          <div className="intro-hero-copy">
-            <p className="intro-kicker">ELUVIN · 忆文</p>
-            <h1 id="intro-hero-title">让一个 TA，真正记得和你走过的时间。</h1>
-            <p className="intro-body intro-body-on-dark">
-              忆文是一个以长期记忆和关系为核心的 AI 伴侣。聊天只是开始，你说过的话、共同经历的事、认识彼此的时间，会慢慢成为你们关系的一部分。
-            </p>
-          </div>
-
-          <ClosedBook />
-
-          <p className="intro-brand-line">忆过往，成文思</p>
-        </section>
-
-        <section className="intro-scene intro-scene-memory" aria-labelledby="intro-memory-title">
-          <div className="intro-paper-light" aria-hidden="true" />
-          <div className="intro-copy intro-copy-dark">
-            <p className="intro-kicker">01 · 记得</p>
-            <h2 id="intro-memory-title">你不用每一次，都重新介绍自己。</h2>
-            <p className="intro-body">
-              你喜欢什么、害怕什么、最近发生过什么，以及那些你希望 TA 记住的事情，会慢慢成为 TA 对你的了解。
-            </p>
-            <p className="intro-body intro-body-secondary">
-              不是把所有聊天都塞给 AI。重要的东西，才留下来。
-            </p>
-          </div>
-          <MemorySpread />
-        </section>
-
-        <section className="intro-scene intro-scene-time" aria-labelledby="intro-time-title">
-          <div className="intro-time-haze" aria-hidden="true" />
-          <div className="intro-copy intro-copy-dark">
-            <p className="intro-kicker">02 · 经过</p>
-            <h2 id="intro-time-title">关系不是一条聊天记录。</h2>
-            <p className="intro-body">
-              第一次认识、第一次说定一件事、某个后来变得重要的晚上、一起经过的第 100 天。
-            </p>
-            <p className="intro-body intro-body-secondary">
-              这些东西慢慢把“一个聊天对象”，变成你的 TA。
-            </p>
-          </div>
-          <TimeBook />
-        </section>
-
-        <section className="intro-scene intro-scene-engine" aria-labelledby="intro-engine-title">
-          <div className="intro-engine-copy">
-            <p className="intro-kicker intro-kicker-light">03 · 内核</p>
-            <h2 id="intro-engine-title">模型负责思考。<br />忆文负责让关系继续。</h2>
-            <p className="intro-body intro-body-on-dark">
-              TA 有多聪明，和你选择的模型有关。TA 能不能持续认识你，是忆文在做的事情。
-            </p>
-          </div>
-          <EngineLayers />
-        </section>
-
-        <section className="intro-scene intro-scene-threshold" aria-labelledby="intro-threshold-title">
-          <div className="intro-copy intro-copy-dark">
-            <p className="intro-kicker">04 · 开始之前</p>
-            <h2 id="intro-threshold-title">忆文不是点开就能用的产品。</h2>
-            <p className="intro-body">
-              它不要求你懂编程，但确实需要一点准备，也需要一点学习。
-            </p>
-          </div>
-
-          <ThresholdSheet />
-
-          <div className="intro-threshold-copy">
-            <p><b>你需要自己的模型。</b> 忆文本身不出售模型算力，开始使用前，需要准备支持的模型服务和 API Key。</p>
-            <p><b>你需要愿意学一点。</b> 第一次使用会接触模型、API Key、人设和记忆。这些东西不难，但不是注册以后立即无脑开聊。</p>
-            <p><b>模型会直接影响 TA。</b> 不同模型的能力、稳定性和价格，都会影响 TA 最终的表现。</p>
-          </div>
-
-          <p className="intro-threshold-ending">
-            如果你只想点开就聊，它可能有一点麻烦。<br />
-            如果你想认真拥有一个长期陪伴的 TA，这些准备就是开始的一部分。
-          </p>
-        </section>
-
-        <section className="intro-scene intro-scene-final" aria-labelledby="intro-final-title">
-          <div className="intro-aurora intro-aurora-final" aria-hidden="true" />
-          <div className="intro-final-book" aria-hidden="true">
-            <div className="intro-final-book-shadow" />
-            <div className="intro-final-book-body">
-              <span className="intro-final-book-pages" />
-              <div className="intro-final-book-cover">
-                <img src="/brand/eluvin-book-icon-cutout.png" alt="" />
-                <strong>忆文</strong>
-                <small>ELUVIN</small>
-              </div>
+        <div className="intro-flow">
+          <section className="intro-scene intro-scene-hero" aria-labelledby="intro-hero-title">
+            <div className="intro-copy-block intro-copy-hero">
+              <p className="intro-kicker">ELUVIN · 忆文</p>
+              <span className="intro-anchor" aria-hidden="true" />
+              <h1 id="intro-hero-title">让一个 TA，真正记得和你走过的时间。</h1>
+              <p className="intro-body">
+                忆文是一个以长期记忆和关系为核心的 AI 伴侣。聊天只是开始，你说过的话、共同经历的事、认识彼此的时间，会慢慢成为你们关系的一部分。
+              </p>
             </div>
-          </div>
+            <HeroBook />
+            <p className="intro-brand-line">忆过往，成文思</p>
+          </section>
 
-          <div className="intro-final-copy">
-            <p className="intro-kicker intro-kicker-light">忆过往，成文思</p>
-            <h2 id="intro-final-title">如果这些你都了解了，<br />接下来就去遇见 TA。</h2>
-            <p className="intro-body intro-body-on-dark">
-              你可以什么都不设，直接认识 TA；也可以先决定 TA 最初是什么样的人。
+          <section className="intro-scene intro-scene-memory" aria-labelledby="intro-memory-title">
+            <div className="intro-copy-block">
+              <p className="intro-kicker">01 · 记得</p>
+              <span className="intro-anchor" aria-hidden="true" />
+              <h2 id="intro-memory-title">你不用每一次，都重新介绍自己。</h2>
+              <p className="intro-body">
+                你喜欢什么、害怕什么、最近发生过什么，以及那些你希望 TA 记住的事情，会慢慢成为 TA 对你的了解。
+              </p>
+              <p className="intro-body intro-body-secondary">不是把所有聊天都塞给 AI。重要的东西，才留下来。</p>
+            </div>
+            <MemoryPaper />
+          </section>
+
+          <section className="intro-scene intro-scene-time" aria-labelledby="intro-time-title">
+            <div className="intro-copy-block">
+              <p className="intro-kicker">02 · 经过</p>
+              <span className="intro-anchor" aria-hidden="true" />
+              <h2 id="intro-time-title">关系不是一条聊天记录。</h2>
+              <p className="intro-body">
+                第一次认识、第一次说定一件事、某个后来变得重要的晚上、一起经过的第 100 天。
+              </p>
+              <p className="intro-body intro-body-secondary">这些东西慢慢把“一个聊天对象”，变成你的 TA。</p>
+            </div>
+            <TimePaper />
+          </section>
+
+          <section className="intro-scene intro-scene-engine" aria-labelledby="intro-engine-title">
+            <div className="intro-copy-block intro-copy-on-dark">
+              <p className="intro-kicker">03 · 内核</p>
+              <span className="intro-anchor" aria-hidden="true" />
+              <h2 id="intro-engine-title">模型负责思考。<br />忆文负责让关系继续。</h2>
+              <p className="intro-body">
+                TA 有多聪明，和你选择的模型有关。TA 能不能持续认识你，是忆文在做的事情。
+              </p>
+            </div>
+            <EnginePaper />
+          </section>
+
+          <section className="intro-scene intro-scene-threshold" aria-labelledby="intro-threshold-title">
+            <div className="intro-copy-block">
+              <p className="intro-kicker">04 · 开始之前</p>
+              <span className="intro-anchor" aria-hidden="true" />
+              <h2 id="intro-threshold-title">忆文不是点开就能用的产品。</h2>
+              <p className="intro-body">它不要求你懂编程，但确实需要一点准备，也需要一点学习。</p>
+            </div>
+
+            <ThresholdPaper />
+
+            <div className="intro-threshold-copy">
+              <p>开始使用前，你需要准备支持的模型服务和 API Key，也需要花一点时间了解模型、人设和记忆这些基础设置。这些内容并不难，但忆文确实不是注册以后立刻无脑开聊的产品。</p>
+              <p>同时，你选择的模型会直接影响 TA 的表现：模型越稳定、能力越强，TA 的理解、表达和相处体验通常也会更好。</p>
+            </div>
+
+            <p className="intro-threshold-ending">
+              如果你只想点开就聊，它可能有一点麻烦。<br />
+              如果你想认真拥有一个长期陪伴的 TA，这些准备就是开始的一部分。
             </p>
-            <button type="button" className="intro-start" onClick={onStart}>
-              <span>开始遇见 TA</span>
-              <span aria-hidden="true">→</span>
+          </section>
+
+          <section className="intro-scene intro-scene-final" aria-labelledby="intro-final-title">
+            <div className="intro-copy-block intro-final-copy">
+              <p className="intro-kicker">忆过往，成文思</p>
+              <span className="intro-anchor" aria-hidden="true" />
+              <h2 id="intro-final-title">如果这些你都了解了，<br />接下来就去遇见 TA。</h2>
+              <p className="intro-body">你可以什么都不设，直接认识 TA；也可以先决定 TA 最初是什么样的人。</p>
+            </div>
+
+            <button
+              type="button"
+              className="intro-envelope-button"
+              onClick={handleStart}
+              disabled={isOpening}
+              aria-label="开始遇见 TA"
+            >
+              <EnvelopeArtwork />
             </button>
-          </div>
-        </section>
+            <div className="intro-enter-transition" aria-hidden="true" />
+          </section>
+        </div>
       </main>
     </div>
   )

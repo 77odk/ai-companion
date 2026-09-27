@@ -1,5 +1,5 @@
-// TASK-TA-RUNTIME-V1 单测：Persistent TA Runtime（生命周期 / 隔离 / persona 加权 / 防重复 / 时间 / sync / Busy 红线 / 一致性）
-// 运行：node scripts/test_ta_runtime.mjs
+// TA Runtime · truth-driven contract
+// 目标：TA 此刻只来自可信的 TA 自述；无证据/过期/旧随机状态 → idle。零额外 LLM。
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import {
@@ -8,13 +8,13 @@ import {
   buildTaRuntimeContext,
   collectAllTaRuntime,
   detectTaRuntimeDecision,
-  formatRuntimeUntil,
   getOrAdvanceTaRuntime,
-  getSessionPersona,
   getTaRuntime,
+  isTaRuntimeIdle,
+  isTaRuntimeState,
   runtimeDisplayLabel,
-  runtimeSlot,
   syncTaRuntimeFromAssistantText,
+  TA_RUNTIME_IDLE_ID,
 } from '../src/lib/taRuntime.ts'
 
 let pass = 0
@@ -22,9 +22,8 @@ let fail = 0
 function eq(actual, expected, msg) {
   const a = JSON.stringify(actual)
   const e = JSON.stringify(expected)
-  if (a === e) {
-    pass++
-  } else {
+  if (a === e) pass++
+  else {
     fail++
     console.log(`  ✗ ${msg}\n    期望 ${e}\n    实际 ${a}`)
   }
@@ -36,515 +35,173 @@ function ok(cond, msg) {
     console.log(`  ✗ ${msg}`)
   }
 }
-function group(name) {
-  console.log(`\n== ${name} ==`)
-}
+function group(name) { console.log(`\n== ${name} ==`) }
 
-// ---- 简易 localStorage mock（Node 无 localStorage；沿用项目测试惯例） ----
 function makeLS() {
   const m = new Map()
   return {
     getItem: (k) => (m.has(k) ? m.get(k) : null),
-    setItem: (k, v) => {
-      m.set(k, String(v))
-    },
-    removeItem: (k) => {
-      m.delete(k)
-    },
+    setItem: (k, v) => m.set(k, String(v)),
+    removeItem: (k) => m.delete(k),
     clear: () => m.clear(),
     key: (i) => [...m.keys()][i] ?? null,
-    get length() {
-      return m.size
-    },
+    get length() { return m.size },
     _map: m,
   }
 }
 globalThis.localStorage = makeLS()
-
-const SESSIONS_KEY = 'ai_companion_sessions_cache'
-const PERSONA_KEY = 'ai_companion_persona'
-function seedSession(id, persona) {
-  const list = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]')
-  list.push({ id, title: `role-${id}`, persona, created_at: '2026-08-01T00:00:00Z', updatedAt: '2026-08-01T00:00:00Z' })
-  localStorage.setItem(SESSIONS_KEY, JSON.stringify(list))
-}
-function clearLS() {
-  localStorage.clear()
-}
-// 固定 now：2026-09-15 10:00 本地（白天）
-const NOW_MORNING = new Date(2026, 8, 15, 10, 0, 0).getTime()
-const NOW_EVENING = new Date(2026, 8, 15, 18, 0, 0).getTime()
-const RAND_HALF = () => 0.5
-const RAND_ZERO = () => 0
+const clearLS = () => localStorage.clear()
 
 const taSrc = readFileSync(fileURLToPath(new URL('../src/lib/taRuntime.ts', import.meta.url)), 'utf8')
 const homeSrc = readFileSync(fileURLToPath(new URL('../src/components/Home.tsx', import.meta.url)), 'utf8')
 const chatSrc = readFileSync(fileURLToPath(new URL('../src/components/Chat.tsx', import.meta.url)), 'utf8')
 const syncSrc = readFileSync(fileURLToPath(new URL('../src/lib/sync.ts', import.meta.url)), 'utf8')
 
-// ============ A. 生命周期 ============
-group('A. 生命周期')
-{
-  clearLS()
-  const s1 = getOrAdvanceTaRuntime('s1', '', NOW_MORNING, RAND_HALF)
-  ok(s1 && typeof s1.activityId === 'string' && s1.activityId.length > 0, 'A1 首次创建返回合法 state')
-  ok(ACTIVITIES.some((a) => a.id === s1.activityId), 'A1 activityId 在活动池内')
-  ok(typeof s1.label === 'string' && s1.label.length > 0, 'A1 label 非空')
-  eq(s1.startedAt, NOW_MORNING, 'A1 startedAt = now')
-  ok(s1.plannedUntil > s1.startedAt, 'A1 plannedUntil > startedAt')
-  eq(s1.updatedAt, NOW_MORNING, 'A1 updatedAt = now')
-  ok(s1.source === 'routine' || s1.source === 'persona', 'A1 source 合法')
-
-  const s1b = getOrAdvanceTaRuntime('s1', '', NOW_MORNING + 60000, RAND_HALF)
-  eq(s1b, s1, 'A2 未到 plannedUntil 重读完全不变（含刷新等价）')
-  const s1c = getOrAdvanceTaRuntime('s1', '', NOW_MORNING + 120000, () => 0.99)
-  eq(s1c, s1, 'A3 刷新/重读不重新随机（rand 不同也不变）')
-
-  const s1d = getOrAdvanceTaRuntime('s1', '', s1.plannedUntil, RAND_HALF)
-  ok(s1d.updatedAt === s1.plannedUntil, 'A4 now == plannedUntil 时推进（updatedAt 更新）')
-  ok(s1d.startedAt === s1.plannedUntil, 'A4 推进后 startedAt = 推进时刻')
-
-  const s1e = getOrAdvanceTaRuntime('s1', '', s1d.plannedUntil + 99999, RAND_HALF)
-  ok(s1e.updatedAt === s1d.plannedUntil + 99999, 'A5 now > plannedUntil 时推进')
-  const act = ACTIVITIES.find((a) => a.id === s1e.activityId)
-  ok(act != null, 'A7 新状态 activityId 合法')
-  const durMin = (s1e.plannedUntil - s1e.startedAt) / 60000
-  ok(durMin >= act.minMin && durMin <= act.maxMin, `A7 新状态时长在活动范围内（${durMin}min ∈ ${act.minMin}-${act.maxMin}）`)
+const T0 = new Date(2026, 8, 25, 18, 0, 0).getTime()
+const profileKey = (sid) => `ai_companion_ai_profile_${sid}`
+const setMode = (sid, mode) => {
+  localStorage.setItem(profileKey(sid), JSON.stringify({ identityMode: mode, nickname: sid, avatar: '' }))
 }
 
-// ============ B. session 隔离 ============
-group('B. session 隔离')
+group('A. 无证据 = idle，不再自动抽状态')
 {
   clearLS()
-  const a1 = getOrAdvanceTaRuntime('sA', '', NOW_MORNING, RAND_HALF)
-  const b1 = getOrAdvanceTaRuntime('sB', '', NOW_MORNING, RAND_HALF)
-  eq(getTaRuntime('sB'), b1, 'B8 sA/sB 状态独立（互不覆盖）')
-  // A 推进
-  getOrAdvanceTaRuntime('sA', '', a1.plannedUntil + 1, RAND_HALF)
-  eq(getTaRuntime('sB'), b1, 'B9 A 推进不影响 B')
-  const b2 = getOrAdvanceTaRuntime('sB', '', NOW_MORNING + 5000, RAND_HALF)
-  eq(b2, b1, 'B10 切角色后不读取另一角色 Runtime（B 用自己状态）')
-  ok(getTaRuntime('sA').activityId !== getTaRuntime('sB').activityId || getTaRuntime('sA').startedAt !== getTaRuntime('sB').startedAt, 'B10 A/B 状态对象不同')
+  const first = getOrAdvanceTaRuntime('s1', '很爱喝咖啡', T0, () => 0.99)
+  eq(first.activityId, TA_RUNTIME_IDLE_ID, 'A1 首次读取直接 idle')
+  eq(first.source, 'idle', 'A1 idle source 正确')
+  eq(first.label, '', 'A1 idle 不伪造活动文案')
+  ok(isTaRuntimeIdle(first), 'A1 isTaRuntimeIdle = true')
+
+  const second = getOrAdvanceTaRuntime('s1', '完全不同的人设', T0 + 60_000, () => 0)
+  eq(second, first, 'A2 刷新/换 rand/persona 都不创造新事实')
+  ok(!/chatCompletion|streamChat/.test(taSrc), 'A3 Runtime 仍然零 LLM')
 }
 
-// ============ C. Persona ============
-group('C. Persona')
+group('B. 旧随机状态自动退役；可信 chat 状态才可持续')
 {
   clearLS()
-  seedSession(11, '很爱看书，喜欢安静')
-  seedSession(12, '')
-  localStorage.setItem(PERSONA_KEY, '')
-  const p = getSessionPersona('11')
-  ok(p.includes('看书'), 'C11 getSessionPersona 从会话 cache 取 persona')
-  localStorage.setItem(PERSONA_KEY, '全局兜底人设')
-  eq(getSessionPersona('12'), '', 'C11 Natural 空 persona 不受全局旧人设影响')
-  eq(getSessionPersona('11'), '很爱看书，喜欢安静', 'C11 非空会话 persona 优先于全局旧人设')
-  eq(getSessionPersona(), '全局兜底人设', 'C11 无会话时 fallback loadPersona')
-  eq(getSessionPersona('999'), '全局兜底人设', 'C11 找不到会话时 fallback loadPersona')
-  // C12 reading persona 提高 reading 候选概率：夜晚时段统计分布（1000 次抽样，非单次随机）
-  const EVENING = new Date(2026, 8, 15, 21, 0, 0).getTime()
-  const countReading = (persona) => {
-    let n = 0
-    for (let i = 0; i < 1000; i++) {
-      const r = getOrAdvanceTaRuntime(`probe-${persona ? 'r' : 'n'}-${i}`, persona, EVENING, () => i / 1000)
-      if (r.activityId === 'reading') n++
-    }
-    return n
-  }
-  const withAnchor = countReading('很爱看书')
-  const withoutAnchor = countReading('')
-  ok(withAnchor > withoutAnchor, `C12 reading persona 提高 reading 候选概率（${withAnchor} > ${withoutAnchor}）`)
-  ok(withAnchor > 0, 'C12 有 anchor 时 reading 至少出现')
-  const syncRet = getOrAdvanceTaRuntime('sync-check', '', NOW_MORNING, RAND_HALF)
-  ok(!(syncRet instanceof Promise), 'C13 纯本地同步返回，不产生异步/LLM 调用')
-  ok(!/from\s+['"]\.\.?\/[^'"]*api[^'"]*['"]/.test(taSrc), 'C13 taRuntime 不 import api 层（零 LLM）')
-  ok(!/chatCompletion|streamChat/.test(taSrc), 'C13 taRuntime 源码无模型调用函数')
-  clearLS()
-  const fb = getOrAdvanceTaRuntime('s14', '', NOW_MORNING, RAND_ZERO)
-  ok(fb && fb.activityId.length > 0, 'C14 persona 空时稳定 fallback（正常创建）')
-}
-
-// ============ D. 重复防护 ============
-group('D. 重复防护')
-{
-  clearLS()
-  const d1 = getOrAdvanceTaRuntime('sD', '', NOW_MORNING, RAND_HALF)
-  const d2 = getOrAdvanceTaRuntime('sD', '', d1.plannedUntil + 1, RAND_HALF)
-  ok(d2.activityId !== d1.activityId, 'D15 下一活动避免与 previous activityId 相同')
-  ok(Array.isArray(d2.recentActivityIds) && d2.recentActivityIds[0] === d2.activityId, 'D15 recentActivityIds 最新活动在前')
-  ok(d2.recentActivityIds.length <= 3, 'D15 recentActivityIds 最多保留 3 个')
-
-  // 最近 3 个活动能避则避：验证不会出现 A → B → A 的短周期重复
-  clearLS()
-  let dRecent = getOrAdvanceTaRuntime('sD3', '喜欢看书、电影、散步', new Date(2026, 8, 15, 20, 0, 0).getTime(), RAND_HALF)
-  const shortSeq = [dRecent.activityId]
-  for (let i = 0; i < 2; i++) {
-    dRecent = getOrAdvanceTaRuntime('sD3', '喜欢看书、电影、散步', dRecent.plannedUntil + 1, RAND_HALF)
-    shortSeq.push(dRecent.activityId)
-  }
-  ok(shortSeq[0] !== shortSeq[1] && shortSeq[1] !== shortSeq[2] && shortSeq[0] !== shortSeq[2], `D15b 最近三段不形成短周期重复（${shortSeq.join(' → ')}）`)
-
-  // 极端候选池：反复推进 50 次不死循环、每次返回有效 state
-  let cur = getOrAdvanceTaRuntime('sD2', '', new Date(2026, 8, 15, 2, 0, 0).getTime(), RAND_HALF) // 凌晨
-  let okLoop = true
-  for (let i = 0; i < 50; i++) {
-    const next = getOrAdvanceTaRuntime('sD2', '', cur.plannedUntil + 1, () => 0.999)
-    if (!next || !next.activityId || !(next.plannedUntil > next.startedAt)) {
-      okLoop = false
-      break
-    }
-    cur = next
-  }
-  ok(okLoop, 'D16 极端候选池反复推进不死循环、状态合法')
-}
-
-// ============ E. 时间 ============
-group('E. 时间')
-{
-  const slotAt = (h, m = 0) => runtimeSlot(new Date(2026, 8, 15, h, m))
-  eq(slotAt(4, 59), '凌晨', 'E17 4:59 → 凌晨')
-  eq(slotAt(5), '早晨', 'E17 5:00 → 早晨')
-  eq(slotAt(10, 59), '早晨', 'E17 10:59 → 早晨')
-  eq(slotAt(11), '白天', 'E17 11:00 → 白天')
-  eq(slotAt(16, 59), '白天', 'E17 16:59 → 白天')
-  eq(slotAt(17), '傍晚', 'E17 17:00 → 傍晚')
-  eq(slotAt(18, 59), '傍晚', 'E17 18:59 → 傍晚')
-  eq(slotAt(19), '夜晚', 'E17 19:00 → 夜晚')
-  eq(slotAt(22, 59), '夜晚', 'E17 22:59 → 夜晚')
-  eq(slotAt(23), '凌晨', 'E17 23:00 → 凌晨')
-  clearLS()
-  const e1 = getOrAdvanceTaRuntime('sE', '', NOW_MORNING, RAND_HALF)
-  const e2 = getOrAdvanceTaRuntime('sE', '', NOW_MORNING + 1000, RAND_HALF)
-  eq(e2.plannedUntil, e1.plannedUntil, 'E18 plannedUntil 稳定（不重抽）')
-  const spans = new Set(ACTIVITIES.map((a) => `${a.minMin}-${a.maxMin}`))
-  ok(spans.size >= 4, 'E19 活动持续时间不是全局固定值（时长范围多样）')
-  const act = ACTIVITIES.find((a) => a.id === e1.activityId)
-  const durMin = (e1.plannedUntil - e1.startedAt) / 60000
-  ok(durMin > 0 && durMin <= act.maxMin, 'E19 时长为正且不超过活动自身上限（靠近时段边界时允许被截短）')
-  // E20 本地时间边界可测：各边界时刻创建均合法
-  const b1 = getOrAdvanceTaRuntime('e20a', '', new Date(2026, 8, 15, 4, 59).getTime(), RAND_HALF)
-  const b2 = getOrAdvanceTaRuntime('e20b', '', new Date(2026, 8, 15, 17, 0).getTime(), RAND_HALF)
-  const b3 = getOrAdvanceTaRuntime('e20c', '', new Date(2026, 8, 15, 23, 0).getTime(), RAND_HALF)
-  ok(b1.activityId && b2.activityId && b3.activityId, 'E20 边界时刻创建均合法')
-
-  // E21 精确时段：10:50 不应再出现起床/早餐/早高峰通勤；16:30 不应出现早餐/午饭
-  const probe = (prefix, ts, forbidden) => {
-    let allGood = true
-    for (let i = 0; i < 80; i++) {
-      const s = getOrAdvanceTaRuntime(`${prefix}-${i}`, '', ts, () => i / 80)
-      if (forbidden.includes(s.activityId)) {
-        allGood = false
-        break
-      }
-    }
-    return allGood
-  }
-  clearLS()
-  ok(
-    probe('e21-morning', new Date(2026, 8, 15, 10, 50).getTime(), ['wake_up', 'breakfast', 'commute']),
-    'E21 10:50 不出现起床/早餐/早高峰通勤',
-  )
-  clearLS()
-  ok(
-    probe('e21-afternoon', new Date(2026, 8, 15, 16, 30).getTime(), ['wake_up', 'breakfast', 'lunch']),
-    'E21 16:30 不出现起床/早餐/午饭',
-  )
-
-  // E22 plannedUntil 不越过当前活动允许时段的结束点
-  const withinWindow = (state) => {
-    const a = ACTIVITIES.find((x) => x.id === state.activityId)
-    if (!a) return false
-    const d = new Date(state.startedAt)
-    const minute = d.getHours() * 60 + d.getMinutes()
-    const hit = a.windows.find(([start, end]) => minute >= start && minute < end)
-    if (!hit) return false
-    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() + hit[1] * 60000
-    return state.plannedUntil <= end
-  }
-  clearLS()
-  let cappedOk = true
-  for (let i = 0; i < 80; i++) {
-    const s = getOrAdvanceTaRuntime(`e22-${i}`, '', new Date(2026, 8, 15, 10, 20).getTime(), () => i / 80)
-    if (!withinWindow(s)) {
-      cappedOk = false
-      break
-    }
-  }
-  ok(cappedOk, 'E22 plannedUntil 不拖过活动时段边界')
-}
-
-// ============ F. sync ============
-group('F. sync')
-{
-  clearLS()
-  const f1 = getOrAdvanceTaRuntime('s1', '', NOW_MORNING, RAND_HALF)
-  const f2 = getOrAdvanceTaRuntime('s2', '', NOW_MORNING, RAND_HALF)
-  const all = collectAllTaRuntime()
-  ok('s1' in all && 's2' in all, 'F21 collectAllTaRuntime 保留 sid 归属')
-  eq(all.s1, f1, 'F21 状态对象保真')
-  // F22 cloud-only 恢复
-  clearLS()
-  const cloudState = { activityId: 'reading', label: '正在看书', startedAt: 1, plannedUntil: 9999999999999, updatedAt: 500, source: 'routine' }
-  applyCloudTaRuntime({ s1: cloudState })
-  eq(getTaRuntime('s1'), cloudState, 'F22 cloud-only Runtime 可恢复')
-  // F23 local-only 不被 undefined/空 cloud 清掉
-  applyCloudTaRuntime(undefined)
-  eq(getTaRuntime('s1'), cloudState, 'F23 undefined cloud 不清本地')
-  applyCloudTaRuntime({})
-  eq(getTaRuntime('s1'), cloudState, 'F23 空对象 cloud 不清本地')
-  // F24 cloud updatedAt 新 → cloud 胜
-  const cloudNew = { ...cloudState, label: '正在喝咖啡', updatedAt: 900 }
-  applyCloudTaRuntime({ s1: cloudNew })
-  eq(getTaRuntime('s1').label, '正在喝咖啡', 'F24 cloud updatedAt 新 → cloud 胜')
-  // F25 local updatedAt 新 → local 胜
-  const localNew = { ...cloudState, label: '正在看电影', updatedAt: 1200 }
-  localStorage.setItem('ai_companion_ta_runtime', JSON.stringify({ s1: localNew }))
-  applyCloudTaRuntime({ s1: cloudNew })
-  eq(getTaRuntime('s1').label, '正在看电影', 'F25 local updatedAt 新 → local 胜')
-  // F26 旧 blob 无 taRuntime → 不报错（undefined/null 都吞掉）
-  let noErr = true
-  try {
-    applyCloudTaRuntime(undefined)
-    applyCloudTaRuntime(null)
-    applyCloudTaRuntime({})
-  } catch {
-    noErr = false
-  }
-  ok(noErr, 'F26 旧 blob 无 taRuntime 不报错')
-  ok(getTaRuntime('s1').label === '正在看电影', 'F26 且不清本地')
-  // F27 同步回来的过期 state 下一次 getter 推进
-  const expired = { activityId: 'sleep', label: '正在睡觉', startedAt: 1, plannedUntil: 2, updatedAt: 1, source: 'routine' }
-  applyCloudTaRuntime({ sExp: expired })
-  const advanced = getOrAdvanceTaRuntime('sExp', '', NOW_EVENING, RAND_HALF)
-  ok(advanced.activityId !== 'sleep' || advanced.updatedAt > 1, 'F27 同步回的过期 state 下次 getter 自然推进')
-  // F28 多角色 Record 不丢归属
-  clearLS()
-  const g1 = getOrAdvanceTaRuntime('g1', '', NOW_MORNING, RAND_HALF)
-  const g2 = getOrAdvanceTaRuntime('g2', '', NOW_MORNING, () => 0.99)
-  const rec = collectAllTaRuntime()
-  ok(rec.g1.activityId === g1.activityId && rec.g2.activityId === g2.activityId, 'F28 多角色 Record 不丢归属')
-}
-
-// ============ G. Busy 红线 ============
-group('G. Busy 红线')
-{
-  clearLS()
-  const g = getOrAdvanceTaRuntime('sBusy', '很爱看书，喜欢工作', NOW_MORNING, RAND_HALF)
-  const keys = Object.keys(g)
-  ok(!keys.includes('status') && !keys.includes('busy') && !keys.includes('busyUntil') && !keys.includes('isBusy') && !keys.includes('canReply'), 'G29 Runtime state 无 busy 字段')
-  ok(!localStorage._map.has('ai_companion_busy_sBusy'), 'G30 reading/work persona 不触发 Busy 写入')
-  ok(!/from\s+['"].*aiBusy['"]/.test(taSrc), 'G31 taRuntime.ts 不 import aiBusy（零依赖）')
-  ok(!/setItem\(['"][^'"]*busy/i.test(taSrc), 'G31 taRuntime 无 busy 存储写（key 写）')
-}
-
-// ============ H. Chat / Home 一致性 ============
-group('H. Chat / Home 一致性')
-{
-  ok(homeSrc.includes('getOrAdvanceTaRuntime'), 'H32 Home 使用同一 Runtime getter')
-  ok(homeSrc.includes('runtime.plannedUntil - Date.now() + 50'), 'H32 Home 按 plannedUntil 安排到点刷新')
-  ok(homeSrc.includes('setRuntimeNow(Date.now())'), 'H32 Home 到期后重新读取 Runtime，不轮询整页')
-  ok(chatSrc.includes('getOrAdvanceTaRuntime'), 'H32 Chat 使用同一 Runtime getter')
-  const chatCalls = (chatSrc.match(/getOrAdvanceTaRuntime\(/g) || []).length
-  eq(chatCalls, 1, 'H33 Chat 不创建第二套随机 Runtime（仅 1 处调用）')
-  ok(chatSrc.includes('buildTaRuntimeContext'), 'H33 Chat 用 buildTaRuntimeContext 注入同一状态')
-  const zhCtx = buildTaRuntimeContext({ activityId: 'reading', label: '正在看书', startedAt: 1, plannedUntil: new Date(2026, 8, 15, 22, 30).getTime(), updatedAt: 1, source: 'routine' }, 'zh')
-  ok(zhCtx.includes('【你自己此刻在做什么】') && zhCtx.includes('你自己当前的生活状态') && zhCtx.includes('[source=SELF] 正在看书') && zhCtx.includes('绝不要把这件事写成对方在做') && zhCtx.includes('预计会持续到 22:30 左右'), 'H34 zh context 明确属于 TA 自己、禁止说成对方的事')
-  ok(!/我们之前|你刚才陪|我们俩一起/.test(zhCtx), 'H34 zh context 无伪造共同经历句式')
-  ok(zhCtx.includes('不是你们共同的经历'), 'H34 zh context 以否定形式声明非共同经历')
-  const enCtx = buildTaRuntimeContext({ activityId: 'reading', label: 'Reading a book', startedAt: 1, plannedUntil: new Date(2026, 8, 15, 22, 30).getTime(), updatedAt: 1, source: 'routine' }, 'en')
-  ok(enCtx.includes('What you are doing right now') && enCtx.includes('not the other person') && enCtx.includes('activity') && enCtx.includes('until around 22:30'), 'H34 en context 属于 TA 自己、禁止说成对方的事')
-  ok(zhCtx !== '' && enCtx !== '', 'H34 context 非空')
-  eq(buildTaRuntimeContext(null, 'zh'), '', 'H34 null runtime → 空串（调用方跳过）')
-  ok(!/ai_companion_memory|ai_companion_anniversaries|ai_companion_events|_events/.test(taSrc), 'H35 源码无 Memory/Event/Anniversary 存储 key 写（仅注释提到）')
-  // 行为：创建 Runtime 后 Memory/Event/Anniversary key 不被写入
-  clearLS()
-  getOrAdvanceTaRuntime('sH', '', NOW_MORNING, RAND_HALF)
-  const keys2 = [...localStorage._map.keys()]
-  ok(!keys2.some((k) => /memory|annivers|event/.test(k)), 'H35 创建 Runtime 不写 Memory/Event/Anniversary')
-  // formatRuntimeUntil
-  eq(formatRuntimeUntil(new Date(2026, 8, 15, 9, 5).getTime()), '09:05', 'H34 formatRuntimeUntil 补零')
-  // sync.ts 接入确认
-  ok(syncSrc.includes('taRuntime: collectAllTaRuntime()'), 'H-sync collectData 接 Runtime')
-  ok(syncSrc.includes('applyCloudTaRuntime(d.taRuntime)'), 'H-sync applyData 接 Runtime')
-  ok(/taRuntime\?: Record<string, TaRuntimeState>/.test(syncSrc), 'H-sync SyncData 可选字段（向后兼容）')
-}
-
-// ============ I. PATCH-LANG：zh/en 展示语言一致性 ============
-group('I. PATCH-LANG：zh/en 展示语言一致性')
-{
-  const zhState = {
-    activityId: 'reading',
-    label: '正在看书',
-    startedAt: 1,
-    plannedUntil: new Date(2026, 8, 15, 22, 30).getTime(),
-    updatedAt: 1,
-    source: 'routine',
-  }
-  // I1 活动池每条都有英文文案，且不含中文（en 上下文绝不出现中文 label）
-  for (const a of ACTIVITIES) {
-    ok(typeof a.labelEn === 'string' && a.labelEn.trim().length > 0, `I1 ${a.id} labelEn 非空`)
-    ok(!/[\u4e00-\u9fa5]/.test(a.labelEn), `I1 ${a.id} labelEn 无中文`)
-  }
-  // I2 中文 context：用持久化中文 label（zh 行为不变）
-  const zhCtx = buildTaRuntimeContext(zhState, 'zh')
-  ok(zhCtx.includes('正在看书') && zhCtx.includes('【你自己此刻在做什么】') && zhCtx.includes('22:30'), 'I2 zh context 用中文 label')
-  // I3 英文 context：老数据 label 是中文，按 activityId 映射英文；整块必须纯英文
-  const enCtx = buildTaRuntimeContext(zhState, 'en')
-  ok(enCtx.includes('Reading a book') && enCtx.includes('until around 22:30'), 'I3 en context 映射英文 label')
-  ok(!/[\u4e00-\u9fa5]/.test(enCtx), 'I3 en context 整块纯英文（无任何中文字符）')
-  // I4 runtimeDisplayLabel：zh→持久化中文；en→英文映射；null→空串
-  eq(runtimeDisplayLabel(zhState, 'zh'), '正在看书', 'I4 displayLabel zh = 持久化中文 label')
-  eq(runtimeDisplayLabel(zhState, 'en'), 'Reading a book', 'I4 displayLabel en = activityId 映射英文')
-  eq(runtimeDisplayLabel(null, 'en'), '', 'I4 displayLabel null → 空串')
-  // I5 同一 activityId 只改变展示、不改变 Runtime 生命周期：调用展示函数后状态原样、不推进
-  clearLS()
-  const created = getOrAdvanceTaRuntime('sL', '', NOW_MORNING, RAND_HALF)
-  const before = { ...created }
-  runtimeDisplayLabel(created, 'zh')
-  runtimeDisplayLabel(created, 'en')
-  const after = getTaRuntime('sL')
-  eq(after.activityId, before.activityId, 'I5 展示调用后 activityId 不变（不重抽）')
-  eq(after.startedAt, before.startedAt, 'I5 展示调用后 startedAt 不变（不失效）')
-  eq(after.plannedUntil, before.plannedUntil, 'I5 展示调用后 plannedUntil 不变（不失效）')
-  eq(after.updatedAt, before.updatedAt, 'I5 展示调用后 updatedAt 不变（不推进）')
-  // I6 zh 行为不变：创建出的 label 仍是中文（表驱动），en 映射仅展示层
-  eq(runtimeDisplayLabel(created, 'zh'), created.label, 'I6 displayLabel zh 与持久化 label 一致')
-  ok(!/[\u4e00-\u9fa5]/.test(runtimeDisplayLabel(created, 'en')), 'I6 displayLabel en 无中文')
-  // I7 Home 用现有语言来源 getSessionLang 决定 Runtime 显示文案
-  ok(homeSrc.includes('getSessionLang'), 'I7 Home 用项目现有语言来源 getSessionLang')
-  ok(homeSrc.includes('runtimeDisplayLabel(runtime, homeLang)'), 'I7 Home 用 runtimeDisplayLabel 按会话语言显示')
-  // I8 Chat en context 不依赖 label 字段是否已是英文（老数据也能出纯英文）
-  const enCtxOld = buildTaRuntimeContext(
-    { activityId: 'movie', label: '正在看电影', startedAt: 1, plannedUntil: new Date(2026, 8, 15, 21, 0).getTime(), updatedAt: 1, source: 'routine' },
-    'en',
-  )
-  ok(enCtxOld.includes('Watching a movie') && !/[\u4e00-\u9fa5]/.test(enCtxOld), 'I8 老数据中文 label → en context 仍纯英文')
-}
-
-// ============ J. v7 #7：聊天动作 → Runtime ============
-group('J. 聊天动作 → Runtime')
-{
-  eq(detectTaRuntimeDecision('好，我先去洗澡了，等会聊。'), { type: 'start', activityId: 'shower' }, 'J1 明确“我先去洗澡” → shower')
-  eq(detectTaRuntimeDecision('我现在在看书，晚点找你。'), { type: 'start', activityId: 'reading' }, 'J1 明确“我现在在看书” → reading')
-  eq(detectTaRuntimeDecision('我晚点去洗澡。'), null, 'J2 “晚点去”是未来计划 → 不改此刻')
-  eq(detectTaRuntimeDecision('你去洗澡吧。'), null, 'J2 对方动作 → 不改 TA 此刻')
-  eq(detectTaRuntimeDecision('我没在看书。'), null, 'J2 否定动作 → 不改此刻')
-  eq(detectTaRuntimeDecision('看书这件事我一直挺挑的。'), null, 'J2 泛泛提及生活词 → 不当当前动作')
-  eq(detectTaRuntimeDecision('我刚洗完澡，准备看书。', 'shower'), { type: 'start', activityId: 'reading' }, 'J3 同句先结束旧动作再开始新动作 → 以新动作 reading 为准')
-  eq(detectTaRuntimeDecision('洗完了。', 'shower'), { type: 'finish' }, 'J3 当前 shower + “洗完了” → finish')
-  eq(detectTaRuntimeDecision('洗完了吗？', 'shower'), null, 'J3 问句“洗完了吗”不误判完成')
-  eq(detectTaRuntimeDecision("I'm going to take a shower."), { type: 'start', activityId: 'shower' }, 'J4 English 当前动作 → shower')
-  eq(detectTaRuntimeDecision("I'll shower later."), null, 'J4 English later → 不改此刻')
-  eq(detectTaRuntimeDecision('I finished showering.', 'shower'), { type: 'finish' }, 'J4 English finish → 结束当前动作')
-
-  clearLS()
-  const t0 = new Date(2026, 8, 18, 20, 0, 0).getTime()
-  const shower = syncTaRuntimeFromAssistantText('chat-1', '好，我先去洗澡了。', t0, '', RAND_HALF)
-  eq(shower.activityId, 'shower', 'J5 最终回复落库后写回 shower')
-  eq(getTaRuntime('chat-1').activityId, 'shower', 'J5 Home/Chat 下一次读取同一 Runtime 都是 shower')
-  ok(shower.plannedUntil > t0 && shower.plannedUntil - t0 <= 2 * 60 * 60 * 1000, 'J5 chat override 最长不超过 2 小时')
-
-  const unchanged = syncTaRuntimeFromAssistantText('chat-1', '我还在洗澡。', t0 + 60_000, '', RAND_ZERO)
-  eq(unchanged.updatedAt, shower.updatedAt, 'J6 同一活动未过期 → 不反复重写/续命')
-
-  const afterShower = syncTaRuntimeFromAssistantText('chat-1', '洗完了。', t0 + 10 * 60_000, '', RAND_ZERO)
-  ok(afterShower && afterShower.activityId !== 'shower', 'J7 说“洗完了”后立即退出 shower')
-  eq(getTaRuntime('chat-1').activityId, afterShower.activityId, 'J7 结束后保存新的日常 Runtime')
-
-  clearLS()
-  const workStart = new Date(2026, 8, 18, 14, 0, 0).getTime()
-  const work = syncTaRuntimeFromAssistantText('chat-2', '我现在在加班。', workStart, '', RAND_HALF)
-  eq(work.activityId, 'work', 'J8 工作动作可写回')
-  eq(work.plannedUntil - workStart, 2 * 60 * 60 * 1000, 'J8 长活动也最多 2 小时后回日常调度')
-
-  clearLS()
-  getOrAdvanceTaRuntime('chat-3', '', t0, RAND_HALF)
-  const beforeNoop = getTaRuntime('chat-3')
-  const noop = syncTaRuntimeFromAssistantText('chat-3', '这个我也不知道诶。', t0 + 30_000, '', RAND_ZERO)
-  eq(noop, null, 'J9 无可信动作 → 返回 null')
-  eq(getTaRuntime('chat-3'), beforeNoop, 'J9 无可信动作 → Runtime 完全不写')
-
-  ok(chatSrc.includes('syncTaRuntimeFromAssistantText'), 'J10 Chat 接入动作写回函数')
-  ok(chatSrc.includes("m.role === 'assistant' && m.ts === assistantTs"), 'J10 只取本轮最终 assistant 文本')
-  ok(chatSrc.includes('syncTaRuntimeFromAssistantText(activeSessionId || undefined'), 'J10 写回固定到发起本轮回复的角色，切角色不串 Runtime')
-  ok(chatSrc.lastIndexOf('syncTaRuntimeFromAssistantText(') > chatSrc.indexOf('const commitFinal ='), 'J10 写回挂在最终 commit 出口，不碰流式半截文本')
-}
-
-
-
-group('K. P0-B：事实优先 + routine 收紧 + 跨设备确定性')
-{
-  eq(
-    detectTaRuntimeDecision('我到公司了。', 'commute'),
-    { type: 'start', activityId: 'work' },
-    'K1 “到公司了”直接落 work，不再先 finish commute 后重抽',
-  )
-
-  eq(
-    detectTaRuntimeDecision('我还在课上，十一点二十下课，先陪你笑两句。', 'coffee'),
-    { type: 'start', activityId: 'class' },
-    'K1b “我还在课上”是明确当前事实 → class，压过旧 coffee',
-  )
-  eq(
-    detectTaRuntimeDecision('在课上，刚结束一节课间，咖啡快喝完了。', 'coffee'),
-    { type: 'start', activityId: 'class' },
-    'K1c “在课上”仍优先识别 class，不被咖啡措辞带偏',
-  )
-  eq(
-    detectTaRuntimeDecision('咖啡快喝完了。', 'coffee'),
-    null,
-    'K1d “快喝完了”仍在进行中，不能误判 finish 后重抽',
-  )
-  eq(
-    detectTaRuntimeDecision('咖啡喝完了。', 'coffee'),
-    { type: 'finish' },
-    'K1e 明确“咖啡喝完了”才允许 finish',
-  )
-
-  clearLS()
-  const commuteAt = new Date(2026, 8, 23, 9, 0, 0).getTime()
   localStorage.setItem('ai_companion_ta_runtime', JSON.stringify({
-    office: {
-      activityId: 'commute',
-      label: '正在通勤路上',
-      startedAt: commuteAt - 30 * 60_000,
-      plannedUntil: commuteAt + 30 * 60_000,
-      updatedAt: commuteAt - 30 * 60_000,
-      source: 'routine',
-      recentActivityIds: ['commute'],
+    legacy: {
+      activityId: 'coffee', label: '正在喝咖啡', startedAt: T0 - 60_000,
+      plannedUntil: T0 + 60 * 60_000, updatedAt: T0 - 60_000, source: 'routine',
     },
   }))
-  const arrived = syncTaRuntimeFromAssistantText('office', '我到公司了。', commuteAt, '', RAND_HALF)
-  eq(arrived.activityId, 'work', 'K2 commute 中明确到公司 → 当前状态立即 work')
+  const migrated = getOrAdvanceTaRuntime('legacy', '', T0)
+  eq(migrated.activityId, 'idle', 'B1 legacy routine 首次读取回 idle')
+
+  const shower = syncTaRuntimeFromAssistantText('trusted', '好，我现在去洗澡。', T0, '')
+  eq(shower?.activityId, 'shower', 'B2 明确当前自述 → shower')
+  eq(shower?.source, 'chat', 'B2 新状态来源必须是 chat')
+  const stable = getOrAdvanceTaRuntime('trusted', '', T0 + 5 * 60_000)
+  eq(stable.activityId, 'shower', 'B3 未过期且身份允许 → 保持原状态')
+  const expired = getOrAdvanceTaRuntime('trusted', '', (shower?.plannedUntil ?? T0) + 1)
+  eq(expired.activityId, 'idle', 'B4 到期只回 idle，不随机续一个活动')
+}
+
+group('C. 角色隔离')
+{
+  clearLS()
+  syncTaRuntimeFromAssistantText('A', '我现在在看书。', T0, '')
+  getOrAdvanceTaRuntime('B', '', T0)
+  eq(getTaRuntime('A')?.activityId, 'reading', 'C1 A 保持自己的 chat 状态')
+  eq(getTaRuntime('B')?.activityId, 'idle', 'C2 B 独立 idle')
+}
+
+group('D. 提取只认明确的“我此刻”')
+{
+  eq(detectTaRuntimeDecision('好，我先去洗澡了，等会聊。'), { type: 'start', activityId: 'shower' }, 'D1 明确自我当前动作')
+  eq(detectTaRuntimeDecision('我现在在看书。'), { type: 'start', activityId: 'reading' }, 'D2 当前看书')
+  eq(detectTaRuntimeDecision('我正在回看我们的对话。'), { type: 'start', activityId: 'reading_chat' }, 'D3 AI-native 当前状态')
+  eq(detectTaRuntimeDecision('我正在整理思绪。'), { type: 'start', activityId: 'organizing_thoughts' }, 'D4 AI-native 整理思绪')
+  eq(detectTaRuntimeDecision('我晚点去洗澡。'), null, 'D5 未来计划不算此刻')
+  eq(detectTaRuntimeDecision('你去洗澡吧。'), null, 'D6 对方动作不算 TA')
+  eq(detectTaRuntimeDecision('我没在看书。'), null, 'D7 否定不写')
+  eq(detectTaRuntimeDecision('看书这件事我一直挺挑的。'), null, 'D8 泛泛提及不写')
+  eq(detectTaRuntimeDecision('洗完了。', 'shower'), { type: 'finish' }, 'D9 明确完成 → finish')
+  eq(detectTaRuntimeDecision('洗完了吗？', 'shower'), null, 'D10 问句不误判完成')
+}
+
+group('E. finish 回 idle；无新证据完全不写')
+{
+  clearLS()
+  const start = syncTaRuntimeFromAssistantText('chat', '我现在在看书。', T0, '')
+  const same = syncTaRuntimeFromAssistantText('chat', '我还在看书。', T0 + 30_000, '')
+  eq(same?.updatedAt, start?.updatedAt, 'E1 同一活动不反复续命')
+  const finish = syncTaRuntimeFromAssistantText('chat', '看完了。', T0 + 5 * 60_000, '')
+  eq(finish?.activityId, 'idle', 'E2 明确结束后直接 idle')
+  eq(buildTaRuntimeContext(finish, 'zh'), '', 'E3 idle 不注入 Chat 事实')
+
+  const before = getTaRuntime('chat')
+  const noop = syncTaRuntimeFromAssistantText('chat', '这个我也不知道诶。', T0 + 6 * 60_000, '')
+  eq(noop, null, 'E4 无可信动作 → null')
+  eq(getTaRuntime('chat'), before, 'E4 无可信动作 → 存储不变')
+}
+
+group('F. 身份边界仍生效')
+{
+  clearLS()
+  setMode('natural', 'natural')
+  const physical = syncTaRuntimeFromAssistantText('natural', '我现在去洗澡。', T0, '')
+  eq(physical, null, 'F1 Natural 不接受实体生活状态')
+  const native = syncTaRuntimeFromAssistantText('natural', '我正在回看我们的对话。', T0, '')
+  eq(native?.activityId, 'reading_chat', 'F2 Natural 可接受非身体化、且有自述证据的状态')
+
+  setMode('ai', 'ai')
+  const aiNative = syncTaRuntimeFromAssistantText('ai', '我正在整理思绪。', T0, '')
+  eq(aiNative?.activityId, 'organizing_thoughts', 'F3 AI 可接受 AI-native 证据状态')
 
   clearLS()
-  const classProbeAt = new Date(2026, 8, 23, 14, 0, 0).getTime()
-  let inventedClass = false
-  for (let i = 0; i < 120; i++) {
-    const state = getOrAdvanceTaRuntime(`adult-${i}`, '28岁，在公司做产品经理', classProbeAt, () => i / 120)
-    if (state.activityId === 'class') inventedClass = true
+  const immersive = syncTaRuntimeFromAssistantText('switch', '我现在在看书。', T0, '')
+  eq(immersive?.activityId, 'reading', 'F4 沉浸档实体状态可由自述写入')
+  setMode('switch', 'natural')
+  eq(getOrAdvanceTaRuntime('switch', '', T0 + 1)?.activityId, 'idle', 'F5 切到 Natural 后不沿用不允许的实体状态')
+}
+
+group('G. 展示 / 注入')
+{
+  clearLS()
+  const idle = getOrAdvanceTaRuntime('idle-display', '', T0)
+  eq(runtimeDisplayLabel(idle, 'zh'), '', 'G1 idle 无活动 label')
+  eq(runtimeDisplayLabel(idle, 'en'), '', 'G1 idle 英文也不伪造 label')
+
+  const active = syncTaRuntimeFromAssistantText('active-display', '我现在在看书。', T0, '')
+  eq(runtimeDisplayLabel(active, 'zh'), '正在看书', 'G2 zh 活动文案')
+  eq(runtimeDisplayLabel(active, 'en'), 'Reading a book', 'G2 en 活动映射')
+  const zh = buildTaRuntimeContext(active, 'zh')
+  const en = buildTaRuntimeContext(active, 'en')
+  ok(zh.includes('[source=SELF] 正在看书'), 'G3 zh context 保留 SELF 归因')
+  ok(en.includes('Reading a book') && !/[\u4e00-\u9fa5]/.test(en), 'G4 en context 纯英文')
+  ok(homeSrc.includes('正安静地陪着你') && homeSrc.includes('在等你'), 'G5 Home idle 文案按有无模型区分')
+  ok(homeSrc.includes('isTaRuntimeIdle(runtime)'), 'G5 Home 显式识别 idle')
+}
+
+group('H. Cloud / 数据边界')
+{
+  clearLS()
+  const cloud = {
+    activityId: 'reading', label: '正在看书', startedAt: T0,
+    plannedUntil: T0 + 60 * 60_000, updatedAt: T0, source: 'chat',
   }
-  ok(!inventedClass, 'K3 非学生/教师人设的 routine 不再随机“正在上课”')
+  applyCloudTaRuntime({ cloud })
+  eq(getTaRuntime('cloud')?.activityId, 'reading', 'H1 chat 来源云状态可恢复')
+  ok(isTaRuntimeState(cloud), 'H2 chat state 通过 schema')
+  ok(isTaRuntimeState({ ...cloud, activityId: 'idle', label: '', plannedUntil: 0, source: 'idle' }), 'H3 idle state 通过 schema')
+  const all = collectAllTaRuntime()
+  ok('cloud' in all, 'H4 collectAllTaRuntime 保留角色归属')
+  applyCloudTaRuntime(undefined)
+  eq(getTaRuntime('cloud')?.activityId, 'reading', 'H5 旧 blob 缺字段不清本地')
+}
 
-  clearLS()
-  let studentClassSeen = false
-  for (let i = 0; i < 240; i++) {
-    const state = getOrAdvanceTaRuntime(`student-${i}`, '大学生，平时有课表', classProbeAt, () => i / 240)
-    if (state.activityId === 'class') studentClassSeen = true
-  }
-  ok(studentClassSeen, 'K4 明确学生人设仍保留 class 活动')
-
-  clearLS()
-  const deterministicAt = new Date(2026, 8, 23, 14, 20, 0).getTime()
-  const d1 = getOrAdvanceTaRuntime('same-device-input', '在公司工作', deterministicAt)
-  clearLS()
-  const d2 = getOrAdvanceTaRuntime('same-device-input', '在公司工作', deterministicAt)
-  eq(d2.activityId, d1.activityId, 'K5 同 session + 时段 + 前态输入，默认 routine 活动确定一致')
-  eq(
-    d2.plannedUntil - d2.startedAt,
-    d1.plannedUntil - d1.startedAt,
-    'K5 同输入的默认 routine 时长也确定一致',
-  )
+group('I. Home / Chat / Sync 接线保持')
+{
+  ok(chatSrc.includes('syncTaRuntimeFromAssistantText'), 'I1 Chat 仍在最终回复后写 Runtime')
+  ok(chatSrc.includes('buildTaRuntimeContext'), 'I2 Chat 仍从同一 Runtime 注入')
+  ok(homeSrc.includes('getOrAdvanceTaRuntime'), 'I3 Home 仍读同一 Runtime getter')
+  ok(syncSrc.includes('taRuntime: collectAllTaRuntime()'), 'I4 sync collectData 仍含 taRuntime')
+  ok(syncSrc.includes('applyCloudTaRuntime(d.taRuntime)'), 'I5 sync applyData 仍含 taRuntime')
+  ok(!/from\s+['"].*aiBusy['"]/.test(taSrc), 'I6 Runtime 不依赖 Busy')
+  ok(!/ai_companion_memory|ai_companion_anniversaries|_events/.test(taSrc), 'I7 Runtime 不写 Memory/Event/Anniversary')
+  ok(ACTIVITIES.every((a) => typeof a.labelEn === 'string' && a.labelEn.length > 0), 'I8 活动映射仍保留英文展示')
 }
 
 console.log(`\n结果：${pass} 通过，${fail} 失败`)
