@@ -208,6 +208,7 @@ assert.ok(chatSource.includes('const canReuseFirstReplyOnRepairFailure'), 'repai
 assert.ok(chatSource.includes('looksRecoverableServiceStyle(cleaned) && !attributionProblem && !fabricatedProblem && !identityProblem'), '只有纯客服腔首版允许在 repair 失败时回退')
 assert.equal(looksRecoverableServiceStyle('有什么可以帮你的吗'), true, '纯客服腔可作为 repair 失败回退')
 assert.equal(looksRecoverableServiceStyle('我是一个 AI。'), false, '身份披露不能被误当成可回退客服腔')
+assert.equal(looksRecoverableServiceStyle('作为你的 AI 伴侣，我可以帮助你'), true, '混合句会命中可回退客服腔，因此必须同时检查身份披露')
 assert.equal(looksIdentityDisclosure('作为你的 AI 伴侣，我可以帮助你'), true, '所有权式身份表达也必须命中身份边界')
 assert.equal(looksIdentityDisclosure('As your AI assistant, I can help.'), true, '英文所有权式身份表达也必须命中身份边界')
 assert.equal(looksRecoverableServiceStyle('作为你的 AI 伴侣，我可以帮你。'), false, '身份元话术不能被误当成可回退客服腔')
