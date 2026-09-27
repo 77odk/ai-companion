@@ -10,6 +10,7 @@ import LoginForm from './LoginForm'
 import { hasLocalLegacyData, nextMigrationTitle, runLocalMigration, setLocalMigratedFlag } from '../lib/migrateLocal'
 import { listSessions } from '../lib/sessionApi'
 import { setActiveSessionId, setSessionsCache } from '../lib/sessionStore'
+import { deleteMyAccount, exportMyData, clearLocalCompanionData, DELETE_CONFIRM_WORD } from '../lib/accountData'
 
 export default function AccountPage({ onBack }: { onBack: () => void }) {
   const [account, setAccount] = useState<Account | null>(() => getAccount())
@@ -17,6 +18,10 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteWord, setDeleteWord] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const [identities, setIdentities] = useState<Identity[]>([])
   const [bindValue, setBindValue] = useState('')
   const [bindCode, setBindCode] = useState('')
@@ -161,6 +166,38 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
     }
   }
 
+  const handleExport = async () => {
+    setError(null)
+    setInfo(null)
+    setExporting(true)
+    try {
+      await exportMyData()
+      setInfo('已经导出，去看下浏览器的下载')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '导出失败了')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    setError(null)
+    setDeleting(true)
+    try {
+      await deleteMyAccount(deleteWord.trim())
+      clearLocalCompanionData()
+      logout()
+      setAccount(null)
+      setDeleteOpen(false)
+      setDeleteWord('')
+      setInfo('账号已经注销，本机缓存也清掉了')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '注销失败了')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const handleLogout = () => {
     logout()
     setAccount(null)
@@ -276,6 +313,46 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
             <button type="button" className="btn btn-ghost" onClick={handleLogout}>
               退出登录
             </button>
+            <button type="button" className="btn btn-ghost" onClick={handleExport} disabled={exporting}>
+              {exporting ? '正在导出…' : '导出我的数据'}
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => setDeleteOpen(true)}>
+              注销账号
+            </button>
+            {deleteOpen && (
+              <div className="settings-card">
+                <p className="hint">
+                  注销会永久删掉你的账号、聊天记录、记忆和 TA 的资料，删了找不回来。想留个底就先导出数据。
+                </p>
+                <p className="hint">确认的话，在下面输入「{DELETE_CONFIRM_WORD}」两个字：</p>
+                <input
+                  value={deleteWord}
+                  onChange={(e) => setDeleteWord(e.target.value)}
+                  placeholder={DELETE_CONFIRM_WORD}
+                  aria-label="注销确认词"
+                />
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setDeleteOpen(false)
+                      setDeleteWord('')
+                    }}
+                  >
+                    再想想
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={deleting || deleteWord.trim() !== DELETE_CONFIRM_WORD}
+                    onClick={handleConfirmDelete}
+                  >
+                    {deleting ? '正在注销…' : '确认注销'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <button

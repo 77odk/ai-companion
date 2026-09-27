@@ -80,9 +80,12 @@ export default function Welcome({ onGoGuide, onLogin }: Props) {
         记录时光，<br />也记录我们
       </p>
 
-      {/* 页尾：关键词行 + 第一方访问人数（访问人数在最下） */}
-      <div className="welcome-reference-footer" aria-hidden="true">
+      {/* 页尾：关键词行 + 隐私政策入口 + 第一方访问人数（访问人数在最下） */}
+      <div className="welcome-reference-footer">
         <p className="welcome-reference-keywords">记忆 · 陪伴 · 成长 · 更久的我们</p>
+        <p className="welcome-reference-count">
+          <a href="/privacy.html" target="_blank" rel="noreferrer">隐私政策</a>
+        </p>
         {visitors !== null && (
           <p className="welcome-reference-count">已有 {visitors} 人访问</p>
         )}

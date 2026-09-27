@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#FF8A5C" />
+    <title>隐私政策 · 忆文 Eluvin</title>
+    <style>
+      :root { --accent: #ff8a5c; --ink: #3a2e2a; --muted: #8a7b74; --line: #f0e6e0; --bg: #fffaf6; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: var(--bg); color: var(--ink);
+        font: 16px/1.75 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+        padding: 32px 20px 64px;
+      }
+      main { max-width: 680px; margin: 0 auto; }
+      .brand { font-size: 13px; letter-spacing: .16em; color: var(--accent); margin-bottom: 10px; }
+      h1 { font-size: 26px; line-height: 1.35; margin: 0 0 8px; }
+      .meta { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+      h2 { font-size: 17px; margin: 32px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+      p, li { margin: 8px 0; }
+      ul { padding-left: 20px; }
+      strong { font-weight: 600; }
+      a { color: var(--accent); }
+      .back { display: inline-block; margin-top: 36px; font-size: 14px; }
+      footer { margin-top: 40px; color: var(--muted); font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="brand">ELUVIN · 忆文</p>
+      <h1>隐私政策</h1>
+      <p class="meta">生效日期：2026 年 9 月 27 日</p>
+
+      <p>
+        忆文是一个「记得住你」的陪伴产品。要做到记得住，就必须存下一些属于你的东西。
+        这份说明只讲一件事：我们存什么、不存什么、你可以怎么处置它们。都是大白话，没有花招。
+      </p>
+
+      <h2>一、我们会存下什么</h2>
+      <ul>
+        <li><strong>邮箱</strong>：用来登录、找回密码。</li>
+        <li><strong>出生日期</strong>：只用来做年龄判断，不对外展示、不做任何画像。</li>
+        <li><strong>你写的 TA</strong>：昵称、头像、人设文字。</li>
+        <li><strong>你们的聊天记录与记忆</strong>：你说过的话、TA 回过的话、TA 记住的事。存下来的唯一目的是换设备时不丢。</li>
+        <li><strong>访问次数</strong>：只统计「今天有多少人来过」，用于了解产品有没有人在用。</li>
+        <li><strong>出错信息</strong>：页面崩了的时候，记录错误内容、出错位置和你的浏览器型号，用于修问题。</li>
+      </ul>
+
+      <h2>二、我们不会存什么</h2>
+      <ul>
+        <li><strong>你的模型 Key 不会上传。</strong>你填的服务商密钥只留在你自己浏览器的本地存储里，我们的服务器碰不到，也不会转发它。</li>
+        <li><strong>不存访问者 IP。</strong>访问统计里没有 IP，也不存浏览器型号（出错上报除外，见下）。</li>
+        <li><strong>不卖、不换、不共享你的聊天内容。</strong>不用于训练模型，不给广告商，不给任何第三方做分析。</li>
+      </ul>
+
+      <h2>三、你的消息会经过哪里</h2>
+      <p>
+        忆文本身不生成回复。你在「我的 AI」里选的服务商（例如 DeepSeek、智谱等）才是真正生成回答的那一方：
+        你的消息会由你的浏览器直接发给你自己选择的那个服务商，按他们自己的隐私条款处理。
+        我们不代收、不转存这些请求。选哪家、填什么 Key，都是你自己决定的。
+      </p>
+
+      <h2>四、出错上报里有什么</h2>
+      <p>
+        当页面发生崩溃时，我们会记录：错误信息、组件位置、页面路径、浏览器型号、发生时间。
+        里面<strong>没有</strong>你的聊天内容、记忆、模型 Key，也没有 IP。同一个错误十分钟内只上报一次。
+      </p>
+
+      <h2>五、数据存在哪、怎么保护</h2>
+      <ul>
+        <li>聊天记录与记忆在服务器上以加密形式存储（AES-256-GCM），密钥不写在代码里。</li>
+        <li>服务器在我们自己维护的机器上，数据库每天自动备份一次，保留最近 14 份。</li>
+        <li>登录凭证是随机令牌，可多设备登录，退出登录会作废当次令牌。</li>
+      </ul>
+
+      <h2>六、你可以随时做的事</h2>
+      <ul>
+        <li><strong>导出全部数据</strong>：「我的 → 账号与同步 → 导出我的数据」，会下载一个文件，里面是你的聊天记录、记忆和 TA 的资料，能直接读。</li>
+        <li><strong>注销账号</strong>：「我的 → 账号与同步 → 注销账号」，输入确认词之后，服务器会删掉你的账号、聊天记录、记忆、TA 的资料。删掉不可恢复。</li>
+      </ul>
+
+      <h2>七、年龄</h2>
+      <p>忆文面向 18 周岁及以上用户。注册时会确认年龄，未满 18 周岁不能使用。</p>
+
+      <h2>八、关于 TA 的身份</h2>
+      <p>
+        陪伴你的是一个由大模型驱动的 AI 角色，不是真人。TA 说的话由模型生成，可能有偏差，请不要把 TA 的话当作事实依据或专业意见。
+      </p>
+
+      <h2>九、政策变更与联系方式</h2>
+      <p>
+        这份政策如果改动，我们会在站内通知；继续使用即视为接受更新后的版本。
+        任何关于数据的疑问、导出请求或投诉，都可以发到：<a href="mailto:yw_eluvin@163.com">yw_eluvin@163.com</a>。
+      </p>
+
+      <a class="back" href="/">← 回到忆文</a>
+      <footer>忆文 Eluvin · 忆过往，成文思</footer>
+    </main>
+  </body>
+</html>
