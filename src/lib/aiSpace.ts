@@ -39,15 +39,13 @@ import {
   buildLlmPost,
   buildReplyMessages,
   extractImageCaption,
-  isSpaceSkipResponse,
+  parseSpaceGenerationDecision,
 } from './aiSpaceLlm.ts'
 import {
   loadChatTopics,
   collectConversationDays,
   collectConversationEvidenceAt,
   collectPlannedDays,
-  collectConfirmedEventDays,
-  collectConfirmedEventEvidenceAt,
   conversationPairsForDay,
 } from './chatTopics.ts'
 import { chatCompletion } from './api.ts'
@@ -309,9 +307,9 @@ export function refreshSpace(
   const policy = resolveCompanionPolicy(sessionId)
   const topics = loadChatTopics(sessionId)
   const todayKey = dayKeyOf(now)
-  // event 只认“已确认发生”；普通真实对话和到了日期的约定走 conversation。
-  const activeDays = collectConfirmedEventDays(topics, todayKey)
-  const eventEvidenceAt = collectConfirmedEventEvidenceAt(topics, todayKey)
+  // 本地只规划“有完整真实对话素材的日子”。是否属于已发生共同事件，不再本地猜；
+  // conversation 槽在唯一一次 Space LLM 生成里返回 CONVERSATION / EVENT / SKIP。
+  const activeDays = new Set<string>()
   const conversationDays = collectConversationDays(topics, todayKey)
   const conversationEvidenceAt = collectConversationEvidenceAt(topics, todayKey)
   const plannedDays = collectPlannedDays(topics, todayKey)
@@ -326,13 +324,13 @@ export function refreshSpace(
     Math.random,
     ledger,
     relationshipStart,
-    eventEvidenceAt,
+    undefined,
     conversationDays,
     conversationEvidenceAt,
     plannedDays,
   )
-  // Natural / AI 不靠时间流逝日更：只消费真实 conversation / confirmed event。
-  // Immersive 额外允许 daily；首访也不再为了填满页面强制铺日常。
+  // Natural / AI 不靠时间流逝日更：只消费真实 conversation 候选；
+  // 是否最终成为 event 由这条 conversation 的单次生成结果决定。Immersive 额外允许 daily。
   const slots = policy.mode === 'immersive'
     ? plannedSlots
     : plannedSlots.filter((slot) => {
@@ -509,13 +507,27 @@ export async function generatePendingPosts(
       )
       try {
         const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })
-        // SKIP 是正常结果：不落动态、不占额度、也不拿模板补。
-        if (isSpaceSkipResponse(raw)) continue
+        const decision = parseSpaceGenerationDecision(raw, source)
+        // SKIP 是正式结果：不落动态、不占额度、也不拿模板补。
+        if (decision.kind === 'skip') continue
+
+        const resolvedSource = decision.source
+        // conversation 的来源由本次模型语义判断后才确定；落盘前再按真实 source 校验额度。
+        if (resolvedSource === 'event' && usage.event >= 1) continue
+        if (resolvedSource === 'conversation' && usage.conversation >= 1) continue
+
         // 先解析动态自己的 [配图] 协议，再做统一归因净化，避免净化层碰协议正文。
-        const { text: protocolText } = extractImageCaption(raw)
+        const { text: protocolText } = extractImageCaption(decision.text)
         const cleaned = cleanLlmText(protocolText)
-        if (cleaned && !isSpaceSkipResponse(cleaned)) {
-          const post = buildLlmPost(cleaned, at, guessKind(cleaned), rand, source, generationSlotIdFor(slot))
+        if (cleaned) {
+          const post = buildLlmPost(
+            cleaned,
+            at,
+            guessKind(cleaned),
+            rand,
+            resolvedSource,
+            generationSlotIdFor(slot),
+          )
           made = { post }
         }
       } catch {
@@ -545,7 +557,7 @@ export async function generatePendingPosts(
     }
 
     newPosts.push({ ...made.post, ...(sessionId ? { sessionId } : {}) })
-    bump(dk, source)
+    bump(dk, made.post.source)
     // 把刚生成的动态纳入「最近动态」，避免同批下一条雷同（v3 克制：最多留 2 条）
     recent.unshift(made.post.text)
     if (recent.length > 2) recent.pop()
