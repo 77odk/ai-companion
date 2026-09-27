@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { reportCrash } from '../lib/crashReport'
 
 interface Props {
   children: ReactNode
@@ -24,8 +25,9 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // 这里可以接错误上报（Sentry / 自建日志），现阶段先打 console 方便排查
     console.error('[ErrorBoundary] 捕获到崩溃:', error, info.componentStack)
+    // 第一方崩溃上报：只带错误信息与组件栈，不带聊天内容/记忆/模型 key（见 src/lib/crashReport.ts）
+    reportCrash(error, info.componentStack || '')
   }
 
   handleReload = (): void => {
