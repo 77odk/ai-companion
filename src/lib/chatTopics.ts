@@ -270,7 +270,11 @@ export function collectConfirmedEventEvidenceAt(topics: ChatTopic[], todayKey: s
   for (const topic of topics) {
     if (!isConversationMaterialCandidate(topic) || topic.ts <= 0) continue
     const day = dayKeyOfTs(topic.ts)
-    if (!confirmed.has(day) || !hasCompletionEvidence(topic.t)) continue
+    if (
+      !confirmed.has(day) ||
+      !hasCompletionEvidence(topic.t) ||
+      !hasSharedCompletionSubject(topic.t)
+    ) continue
     out.set(day, Math.max(out.get(day) ?? 0, topic.taTs ?? topic.ts))
   }
   return out
