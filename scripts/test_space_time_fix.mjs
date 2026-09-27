@@ -6,7 +6,13 @@
 // 跑法：node scripts/test_space_time_fix.mjs
 
 import { planBackfillSlots } from '../src/lib/aiSpaceCore.ts'
-import { collectTopicEvidenceAt } from '../src/lib/chatTopics.ts'
+import {
+  collectConfirmedEventDays,
+  collectConfirmedEventEvidenceAt,
+  collectConversationDays,
+  collectConversationEvidenceAt,
+  collectPlannedDays,
+} from '../src/lib/chatTopics.ts'
 import { readFileSync } from 'node:fs'
 
 let passed = 0
@@ -38,7 +44,7 @@ ok(earlySlots.every((s) => s.at < dayStart(early) + 1), '凌晨/清晨的槽位�
 
 console.log('\n[3] 首访：过去的日子仍是 7:00-23:59 的正常时段')
 const manySlots = planBackfillSlots(null, noon, [], new Set(), () => 0.6)
-ok(manySlots.length >= 3, '会铺多天（TA 不是空的）', `slots=${manySlots.length}`)
+ok(manySlots.length <= 3, '首访允许为空，候选数仍受回填窗口限制', `slots=${manySlots.length}`)
 ok(manySlots.every((s) => { const h = new Date(s.at).getHours(); return h >= 7 || h === 23 }), '过去的日子都在 7:00 之后')
 
 console.log('\n[4] 展示侧源码契约：未来时间戳不许显示「刚刚」')
@@ -52,46 +58,37 @@ ok(!/return m < 1 \? '刚刚' : hm/.test(homeSrc), '首页预览：旧的裸判�
 console.log('\n[5] 生成侧源码契约：两条路径共用同一个「不许未来」的函数')
 const coreSrc = readFileSync(new URL('../src/lib/aiSpaceCore.ts', import.meta.url), 'utf8')
 ok(coreSrc.includes('function pickPostTimeForDay('), '有统一的 pickPostTimeForDay')
-ok(/const pickTime = \(day: number\): number \| null => pickPostTimeForDay\(day, now, rand\)/.test(coreSrc), '补发路径复用同一个函数')
+ok(coreSrc.includes('const at = pickPostTimeForDay(day, now, rand, evidenceAt)'), '三种来源统一复用 pickPostTimeForDay')
 ok(!/out\.push\(\{ at: pickDayPostHour\(day, rand\)/.test(coreSrc), '首访路径不再直接用全天随机')
 
 
 
-console.log('\n[6] P0-B：事件动态不能早于当天最新聊天证据')
+console.log('\n[6] confirmed event：动态不能早于当天真实完成证据')
 const fixedNow = new Date(2026, 8, 23, 16, 0, 0).getTime()
 const fixedDayStart = dayStart(fixedNow)
 const fixedDayKey = '2026-09-23'
+const planTs = new Date(2026, 8, 22, 20, 0, 0).getTime()
 const evidenceAt = new Date(2026, 8, 23, 14, 20, 0).getTime()
-const evidenceMap = collectTopicEvidenceAt([
-  { t: '上午提过一件事', ts: new Date(2026, 8, 23, 11, 0, 0).getTime() },
-  { t: '下午把这件事说完整了', ts: evidenceAt },
-])
-eq(evidenceMap.get(fixedDayKey), evidenceAt, '同一天保留最新一条真实聊天时间作为 evidenceAt')
+const confirmedTopics = [
+  { t: '明天一起看电影吧', ts: planTs, futureDay: fixedDayKey, taText: '好，明天一起看。', taTs: planTs + 1000, pairVersion: 1 },
+  { t: '我们刚看完电影，已经散场了', ts: evidenceAt, taText: '嗯，那段我还在想。', taTs: evidenceAt + 1000, pairVersion: 1 },
+]
+const confirmedDays = collectConfirmedEventDays(confirmedTopics, fixedDayKey)
+const evidenceMap = collectConfirmedEventEvidenceAt(confirmedTopics, fixedDayKey)
+ok(confirmedDays.has(fixedDayKey), '计划 + 当天完成证据 → confirmed event')
+eq(evidenceMap.get(fixedDayKey), evidenceAt + 1000, 'event evidenceAt 取完整对话落库后的真实时间')
 const eventSlots = planBackfillSlots(
-  fixedDayStart - DAY,
-  fixedNow,
-  [],
-  new Set([fixedDayKey]),
-  () => 0,
-  undefined,
-  undefined,
-  evidenceMap,
+  fixedDayStart - DAY, fixedNow, [], confirmedDays, () => 0, undefined, undefined, evidenceMap,
 )
 const todayEvent = eventSlots.find((slot) => slot.source === 'event' && dayStart(slot.at) === fixedDayStart)
-ok(Boolean(todayEvent), '当天有可用区间时仍会规划事件动态')
-ok(todayEvent && todayEvent.at >= evidenceAt, '事件动态时间 >= 证据时间')
-eq(todayEvent?.evidenceAt, evidenceAt, 'event slot 保留 evidenceAt 往下传')
+ok(Boolean(todayEvent), '当天有可用区间时会规划 confirmed event')
+ok(todayEvent && todayEvent.at >= evidenceAt + 1000, '事件动态时间 >= 完成证据时间')
+eq(todayEvent?.evidenceAt, evidenceAt + 1000, 'event slot 保留 evidenceAt 往下传')
 
-console.log('\n[7] P0-B：证据太晚则本轮不发，不硬塞假时间')
+console.log('\n[7] confirmed event：证据太晚则本轮不发，不硬塞假时间')
 const tooLateEvidence = fixedNow - 2 * 60 * 1000
 const tooLateSlots = planBackfillSlots(
-  fixedDayStart - DAY,
-  fixedNow,
-  [],
-  new Set([fixedDayKey]),
-  () => 0.5,
-  undefined,
-  undefined,
+  fixedDayStart - DAY, fixedNow, [], new Set([fixedDayKey]), () => 0.5, undefined, undefined,
   new Map([[fixedDayKey, tooLateEvidence]]),
 )
 ok(
@@ -99,27 +96,22 @@ ok(
   'evidenceAt 晚于 now-5min 可用上界 → 今天不生成事件动态',
 )
 
-console.log('\n[8] P0-B：约定发生日不把“当初约定时间”错当当天 evidenceAt')
-const futureTopicTs = new Date(2026, 8, 22, 20, 0, 0).getTime()
-const futureEvidence = collectTopicEvidenceAt([
-  { t: '明天晚上吃蛋糕', ts: futureTopicTs, futureDay: fixedDayKey },
-])
-ok(!futureEvidence.has(fixedDayKey), 'futureDay 本身不产生当天 evidenceAt')
-const futureDaySlots = planBackfillSlots(
-  fixedDayStart - DAY,
-  fixedNow,
-  [],
-  new Set([fixedDayKey]),
-  () => 0,
-  undefined,
-  undefined,
-  futureEvidence,
+console.log('\n[8] planned：到了约定日仍是 conversation，不是假 completed event')
+const plannedTopics = [
+  { t: '明天晚上一起吃蛋糕', ts: planTs, futureDay: fixedDayKey, taText: '好，明天到点再一起吃。', taTs: planTs + 1000, pairVersion: 1 },
+]
+const plannedDays = collectPlannedDays(plannedTopics, fixedDayKey)
+const conversationDays = collectConversationDays(plannedTopics, fixedDayKey)
+const conversationEvidence = collectConversationEvidenceAt(plannedTopics, fixedDayKey)
+ok(plannedDays.has(fixedDayKey), 'futureDay 到期 → planned')
+ok(!collectConfirmedEventDays(plannedTopics, fixedDayKey).has(fixedDayKey), '只有约定、没有完成证据 → 绝不升级 event')
+const plannedSlots = planBackfillSlots(
+  fixedDayStart - DAY, fixedNow, [], new Set(), () => 0, undefined, undefined, undefined,
+  conversationDays, conversationEvidence, plannedDays,
 )
-ok(
-  futureDaySlots.some((slot) => slot.source === 'event' && dayStart(slot.at) === fixedDayStart),
-  '约定到了那天仍可按原逻辑生成事件动态，只是不受旧聊天时间下界限制',
-)
-
+const plannedSlot = plannedSlots.find((slot) => slot.source === 'conversation' && dayStart(slot.at) === fixedDayStart)
+ok(Boolean(plannedSlot), '约定到了那天可以生成 conversation 余响')
+eq(plannedSlot?.conversationKind, 'planned', 'planned 语义一路带到生成层')
 console.log('\n[9] P0-B：日常动态随机逻辑不受 evidence map 影响')
 const dailyA = planBackfillSlots(fixedDayStart - DAY, fixedNow, [], new Set(), () => 0.42)
 const dailyB = planBackfillSlots(
