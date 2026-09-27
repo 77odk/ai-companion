@@ -40,13 +40,22 @@ export interface LlmContext {
   weatherWord: string
   /** 最近聊天里对方提到的事情/话题（带「今天/8-20」时间标签，事件触发：TA 挑当天相关的呼应） */
   chatTopics?: string[]
+  /** 新格式真实对话对：USER 原话 + TA 当时真实落库回复。 */
+  conversationPairs?: Array<{
+    userText: string
+    taText: string
+    plannedForDay?: boolean
+    confirmedCompletion?: boolean
+  }>
+  /** conversation 内部语义：普通余响 / 到了此前约定的日期。 */
+  conversationKind?: 'trace' | 'planned'
   /** TA 最近发过的动态原文，用于防止重复/雷同（取最近 1-2 条，宁缺毋滥） */
   recent: string[]
   /** 这条动态的日期字符串（如「8月26日」），已按该条 at 对齐（回填昨天就是昨天的日期） */
   atDateStr: string
   /** 当前真实时刻锚文本（如「2026年9月9日 星期三」），与 at 对齐语境共存：防止补发/跨天把今天说成昨天 */
   nowAnchor?: string
-  /** 这条动态的来源通道：event=为那天共同经历/约好的事发的（大事趁热），daily=日常生活 */
+  /** 这条动态的来源通道：daily=自己的生活 / conversation=对话余响 / event=已确认发生。 */
   postSource?: SpaceSource
   /** 与对方认识的第一天（本地日历 YYYY-MM-DD）；用于禁止编造认识前的共同过去 */
   relationshipStartDate?: string
@@ -79,6 +88,8 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
         ? false
         : /[\u4e00-\u9fff]/.test(ctx.persona ?? '') === false && /[a-zA-Z]/.test(ctx.persona ?? '')
   const isEvent = ctx.postSource === 'event'
+  const isConversation = ctx.postSource === 'conversation'
+  const conversationPairs = Array.isArray(ctx.conversationPairs) ? ctx.conversationPairs.slice(-3) : []
   const policy = resolveCompanionPolicy(ctx.sessionId)
   const companionCore = buildCompanionCore(en ? 'en' : 'zh')
   const identitySoul = buildIdentitySoul(policy, en ? 'en' : 'zh')
