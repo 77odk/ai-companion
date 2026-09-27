@@ -176,7 +176,7 @@ group('G. 展示 / 注入')
   ok(homeSrc.includes('isTaRuntimeIdle(runtime)'), 'G5 Home 显式识别 idle')
 }
 
-group('G2. Runtime 只在明确询问当前状态时注入')
+group('G2. Runtime 只做当前态句式门，活动语义交给模型')
 {
   const zhQueries = [
     '你在干嘛？',
@@ -187,11 +187,12 @@ group('G2. Runtime 只在明确询问当前状态时注入')
     '到家了吗',
     '回来了吗',
     '你现在在做什么',
-    '还在看书吗',
-    '还在吃饭吗',
-    '还在路上吗',
-    '你现在在家吗',
-    '出差回来了吗',
+    '还在喝咖啡吗？',
+    '还在喝咖啡吗',
+    '还在遛狗吗？',
+    '还在弄那个方案吗？',
+    '你还在画画吗',
+    '喝咖啡吗',
     '你现在在哪儿',
     '你到哪了',
     '你现在怎么样',
@@ -201,71 +202,48 @@ group('G2. Runtime 只在明确询问当前状态时注入')
     '吃饭了吗',
   ]
   for (const text of zhQueries) {
-    ok(shouldInjectTaRuntimeContext(text, 'zh'), `G2 命中：${text}`)
+    ok(shouldInjectTaRuntimeContext(text, 'zh'), `G2 当前态候选命中：${text}`)
   }
 
-  const activityQueryById = {
-    wake_up: '还在洗漱吗？',
-    breakfast: '还在吃早餐吗？',
-    coffee: '还在喝咖啡吗？',
-    commute: '还在通勤吗？',
-    work: '还在工作吗？',
-    class: '还在上课吗？',
-    reading: '还在看书吗？',
-    lunch: '还在吃午饭吗？',
-    errand: '还在办事吗？',
-    home: '还在收拾吗？',
-    cooking: '还在做饭吗？',
-    dinner: '还在吃晚饭吗？',
-    walk: '还在散步吗？',
-    exercise: '还在运动吗？',
-    movie: '还在看电影吗？',
-    gaming: '还在打游戏吗？',
-    shower: '还在洗漱吗？',
-    rest: '还在休息吗？',
-    sleep_prep: '还在准备睡吗？',
-    sleep: '还在睡觉吗？',
-    reading_chat: '还在读对话吗？',
-    organizing_thoughts: '还在整理思绪吗？',
-    following_thread: '还在回想聊天吗？',
-    quietly_present: '还在陪着你吗？',
+  // 本地门只看句式，不承担语义理解；这些句子也可进入候选上下文，
+  // 由本轮原本就会调用的模型判断“是不是在问 TA 自己”，无额外 LLM。
+  for (const text of [
+    '还在下雨吗？',
+    '还在营业吗？',
+    '你喜欢喝咖啡吗',
+  ]) {
+    ok(shouldInjectTaRuntimeContext(text, 'zh'), `G2 语义交给模型：${text}`)
   }
-  eq(
-    Object.keys(activityQueryById).sort(),
-    ACTIVITIES.map((activity) => activity.id).sort(),
-    'G2 每个可存 Runtime activity 都有明确问句覆盖',
-  )
-  for (const [activityId, text] of Object.entries(activityQueryById)) {
-    ok(shouldInjectTaRuntimeContext(text, 'zh'), `G2 activity ${activityId}：${text}`)
-  }
+
   const enQueries = [
     'What are you doing right now?',
     'Are you still busy?',
+    'Are you still sketching?',
     'Did you get home?',
-    'Are you back from your business trip?',
     'Where are you now?',
   ]
   for (const text of enQueries) {
-    ok(shouldInjectTaRuntimeContext(text, 'en'), `G2 EN 命中：${text}`)
+    ok(shouldInjectTaRuntimeContext(text, 'en'), `G2 EN 候选命中：${text}`)
   }
+
   for (const text of [
     '我今天吃了饺子',
     '到家了',
     '我还在忙呢',
     '我现在在干嘛？',
     '他还在忙吗？',
-    '还在下雨吗？',
-    '还在营业吗？',
     '你觉得我现在怎么样？',
     '你觉得这件事怎么样',
     '我们继续刚才的话题',
     'Tell me what you think about this',
   ]) {
-    ok(!shouldInjectTaRuntimeContext(text, 'zh'), `G2 非状态询问不注入：${text}`)
+    ok(!shouldInjectTaRuntimeContext(text, 'zh'), `G2 明显非当前态候选不注入：${text}`)
   }
+
   const active = syncTaRuntimeFromAssistantText('runtime-query', '我现在在看书。', T0, '')
   const ctx = buildTaRuntimeContext(active, 'zh')
-  ok(ctx.includes('不得补写地点、人物、食物、原因、前后经过或其他生活细节'), 'G2 注入块禁止从状态扩写生活细节')
+  ok(ctx.includes('如果不是，就完全忽略下面这条状态'), 'G2 模型负责判断候选 Runtime 是否与用户问题相关')
+  ok(ctx.includes('不得补写地点、人物、食物、原因、前后经过或其他生活细节'), 'G2 相关时也不得从状态扩写生活细节')
 }
 
 group('H. Cloud / 数据边界')
