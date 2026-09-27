@@ -523,8 +523,26 @@ export async function generatePendingPosts(
       }
     }
 
-    // LLM 失败、空内容、无可用模型都允许本轮 0 条；不再用模板制造“空间不能空”。
-    if (!made) continue
+    // SKIP 已在上面直接 continue：它表示“这次不值得发”，绝不补位。
+    // 只有 Immersive 的 daily 在网络失败 / 无 key / 非法返回时保留既有安全模板降级；
+    // Natural / AI、conversation、event 都宁可 0 条，也不能用模板冒充事实。
+    if (!made) {
+      if (policy.mode !== 'immersive' || source !== 'daily') continue
+      usedFallback = true
+      const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(at), season: getSeason(at) }
+      const g = generatePost(
+        dayVars,
+        used,
+        at,
+        rand,
+        'daily',
+        spaceLang,
+        generationSlotIdFor(slot),
+        relationshipStart,
+      )
+      used[g.templateKey] = now
+      made = { post: g.post, templateKey: g.templateKey }
+    }
 
     newPosts.push({ ...made.post, ...(sessionId ? { sessionId } : {}) })
     bump(dk, source)
