@@ -75,6 +75,7 @@ console.log('\n[3] 粗筛只做机械信息密度，不做中英文事件词表'
 assert.equal(hasConcreteTopicInfo('哈哈哈哈哈哈哈哈'), false)
 assert.equal(hasConcreteTopicInfo('好的好的好的'), false)
 assert.equal(hasConcreteTopicInfo('在吗，我跟你说个事'), true)
+assert.equal(hasConcreteTopicInfo('今天好累'), true)
 assert.equal(hasConcreteTopicInfo('I had a rough meeting at work today'), true)
 
 console.log('\n[4] 对话对严格按 session 隔离')
