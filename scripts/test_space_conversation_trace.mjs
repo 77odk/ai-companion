@@ -329,4 +329,29 @@ assert.equal(immersiveSkipped.created, 0)
 assert.equal(immersiveSkipped.usedFallback, false)
 assert.equal(loadCurrentPosts().length, 0)
 
+console.log('\n[18] 问句和不确定语气不能 confirmed')
+assert.equal(hasCompletionEvidence('我们做完了吗？'), false)
+assert.equal(hasCompletionEvidence('我们可能已经做完了吧'), false)
+assert.equal(hasCompletionEvidence('Did we finish it?'), false)
+assert.equal(hasCompletionEvidence('We maybe already finished it'), false)
+
+console.log('\n[19] legacy collectTopicDays 合同保持，Space grounded Event 走新函数')
+const legacyDays = collectTopicDays([
+  { t: '普通话题', ts: now - DAY },
+  { t: '约定', ts: now - 2 * DAY, futureDay: todayKey },
+], todayKey)
+assert.equal(legacyDays.has(dayKeyOf(now - DAY)), true)
+assert.equal(legacyDays.has(todayKey), true)
+
+console.log('\n[20] 最多 3 条素材时也必须保留 confirmed 证据')
+const confirmedTs = now - 50 * 60 * 1000
+const rows = conversationPairsForDay([
+  { t: '我们终于看完电影了', ts: confirmedTs, taText: '看完了。', taTs: confirmedTs + 1000, pairVersion: 1 },
+  { t: '今天工作有点累', ts: now - 40 * 60 * 1000, taText: '我知道。', taTs: now - 39 * 60 * 1000, pairVersion: 1 },
+  { t: '今天中午吃了面', ts: now - 30 * 60 * 1000, taText: '听起来还行。', taTs: now - 29 * 60 * 1000, pairVersion: 1 },
+  { t: '今晚有点困', ts: now - 20 * 60 * 1000, taText: '那就早点休息。', taTs: now - 19 * 60 * 1000, pairVersion: 1 },
+], todayKey, 3)
+assert.equal(rows.length, 3)
+assert.equal(rows.some((row) => row.confirmedCompletion), true)
+
 console.log('\nSpace-N1：全部通过')
