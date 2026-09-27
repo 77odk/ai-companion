@@ -84,6 +84,10 @@ export default function ConsentGate({ mode = 'full', onDone }: Props) {
             <p style={secBody}>你告诉 TA 的话，会和你的账号关联，用来让 TA 记住你。你可以在忆文里随时查看、管理或删除这些记录。</p>
             <p style={{ margin: '4px 0 0' }}>
               <span style={privacyLink} onClick={() => setShowPrivacy((v) => !v)}>了解更多：隐私政策</span>
+              <span style={{ color: '#c9c4bf', margin: '0 6px' }}>·</span>
+              <a style={privacyLink} href="/privacy.html" target="_blank" rel="noreferrer">
+                查看完整政策
+              </a>
             </p>
             {showPrivacy && <p style={{ ...secBody, fontSize: 13, color: '#777', background: '#f4f2ef', borderRadius: 8, padding: '10px 12px', marginTop: 8 }}>{PRIVACY_TEXT}</p>}
           </>
