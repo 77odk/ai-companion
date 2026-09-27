@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
+import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, looksServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, getContextUsage, setContextUsage, type ContextUsageState, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
@@ -1381,7 +1381,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 首版如果只是“客服腔”，repair 自己失败时优先保住已经清洗过的首版；
       // 只要首版涉及归因泄漏 / 编造 / 身份越界，就绝不能因为 repair 失败而复活原文。
       const canReuseFirstReplyOnRepairFailure = Boolean(
-        cleaned && roboticProblem && !attributionProblem && !fabricatedProblem && !identityProblem,
+        cleaned && looksServiceStyle(cleaned) && !attributionProblem && !fabricatedProblem && !identityProblem,
       )
       // 用户主动 Stop 不再发第二次模型请求；若截停片段已经越过身份边界，直接不落这段 assistant 文本。
       if (cleaned && identityProblem && retriedRef.current) {
