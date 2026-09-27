@@ -22,7 +22,7 @@ function GuideHeader({ title, onBack }: { title: string; onBack: () => void }) {
           <path d="M12 19l-7-7 7-7" />
         </svg>
       </button>
-      <h2 className="detail-title">{title}</h2>
+      <h1 className="detail-title">{title}</h1>
       <span className="detail-spacer" aria-hidden="true" />
     </div>
   )
@@ -69,7 +69,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
       <div className="guide-scroll">
         <section className="guide-hero" aria-labelledby="guide-hero-title">
           <p className="guide-eyebrow">ELUVIN · GUIDE</p>
-          <h1 id="guide-hero-title" className="guide-hero-title">先从一句话开始</h1>
+          <h2 id="guide-hero-title" className="guide-hero-title">先从一句话开始</h2>
           <p className="guide-hero-copy">
             忆文，是一个让 TA 能够留下记忆、延续关系的地方。
           </p>
