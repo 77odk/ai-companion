@@ -502,12 +502,128 @@ export function isTaRuntimeState(value: unknown): value is TaRuntimeState {
  * 业务规则是“用户明确在问 TA 此刻/刚刚是否仍处于某状态”，不是“每轮都带当前状态”。
  * 漏判的代价只是少一个辅助块（TA 自己的话仍在聊天历史里）；因此宁可保守，不做泛语义推断。
  */
-const ZH_RUNTIME_QUERY_PATTERNS: readonly RegExp[] = [
+const ZH_RUNTIME_ACTIVITY_QUERY_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  wake_up: ['起床', '洗漱'],
+  breakfast: ['吃早餐', '吃早饭'],
+  coffee: ['喝咖啡'],
+  commute: ['通勤', '通勤路上', '在路上'],
+  work: ['工作', '忙工作', '上班'],
+  class: ['上课'],
+  reading: ['看书', '读书'],
+  lunch: ['吃午饭'],
+  errand: ['办事', '外面办事', '外面办点事'],
+  home: ['收拾', '在家'],
+  cooking: ['做饭'],
+  dinner: ['吃晚饭'],
+  walk: ['散步'],
+  exercise: ['运动', '健身', '跑步', '游泳', '打球', '瑜伽'],
+  movie: ['看电影', '看剧'],
+  gaming: ['打游戏'],
+  shower: ['洗漱'],
+  rest: ['休息'],
+  sleep_prep: ['准备睡', '准备睡觉'],
+  sleep: ['睡觉'],
+  reading_chat: ['读对话', '看对话', '读你们的对话'],
+  organizing_thoughts: ['整理思绪'],
+  following_thread: ['回想你们聊过的话', '回想我们聊过的话', '回想聊天'],
+  quietly_present: ['安静陪着你', '陪着你'],
+}
+
+function escapeRuntimeQueryTerm(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\const ZH_RUNTIME_QUERY_PATTERNS: readonly RegExp[] = [
   /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?(?:在)?(?:干嘛|干什么|做什么|忙什么|忙啥)(?:呢|呀|啊|嘛|么|？|\?)?$/i,
   /^(?:你|TA)?(?:现在)?(?:还)?在忙(?:吗|嘛|么|？|\?)$/i,
   /^(?:你|TA)?忙完(?:了)?(?:吗|嘛|么|没|没有|？|\?)$/i,
   /^(?:你|TA)?(?:现在)?(?:到家|回家|回来|回来了|出差回来|出差结束)(?:了)?(?:吗|嘛|么|没|没有|？|\?)$/i,
   /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?(?:还)?在(?:家|外面|路上|公司|学校|上班|工作|开会|看书|吃饭|睡觉|洗澡|洗漱|休息|散步|运动|看电影|打游戏|出差)(?:吗|嘛|么|？|\?)$/i,
+  /^(?:你|TA)?到哪(?:儿)?了(?:呢|呀|啊|？|\?)?$/i,
+  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?在(?:哪|哪里|哪儿)(?:呢|呀|啊|？|\?)?$/i,
+  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)怎么样(?:了|呢|呀|啊|？|\?)?$/i,
+  /^(?:你|TA)?(?:睡了|睡着了|醒了|起床了|吃饭了)(?:吗|嘛|么|没|没有|？|\?)$/i,
+]')
+}
+
+const ZH_RUNTIME_ACTIVITY_QUERY_PATTERN = new RegExp(
+  '^(?:你|TA)?(?:现在|这会儿|这会|此刻)?(?:还)?(?:在)?(?:' +
+    Object.values(ZH_RUNTIME_ACTIVITY_QUERY_ALIASES).flat().map(escapeRuntimeQueryTerm).join('|') +
+    ')(?:吗|嘛|么|呢|？|\\?)?
+
+const EN_RUNTIME_QUERY_PATTERNS: readonly RegExp[] = [
+  /\bwhat (?:are|r) you (?:doing|up to)(?: right now| now)?\b/i,
+  /\bare you still (?:busy|working|reading|eating|sleeping|on the way|out)\b/i,
+  /\b(?:are you|you(?:'re| are)) (?:home|back)(?: yet| now)?\b/i,
+  /\bdid you (?:get|make it) home\b/i,
+  /\b(?:are you )?back from (?:your )?(?:trip|business trip|work trip)\b/i,
+  /\bwhere are you (?:now|right now)\b/i,
+  /\bhow are you (?:now|right now)\b/i,
+  /\b(?:are you )?(?:done|finished)(?: yet)?\b/i,
+  /\bare you (?:awake|asleep|up)\b/i,
+]
+
+export function shouldInjectTaRuntimeContext(userText: string, lang: Lang = 'zh'): boolean {
+  const text = String(userText ?? '').trim()
+  if (!text) return false
+  const primary = lang === 'en' ? EN_RUNTIME_QUERY_PATTERNS : ZH_RUNTIME_QUERY_PATTERNS
+  const secondary = lang === 'en' ? ZH_RUNTIME_QUERY_PATTERNS : EN_RUNTIME_QUERY_PATTERNS
+  return primary.some((pattern) => pattern.test(text)) || secondary.some((pattern) => pattern.test(text))
+}
+
+/** HH:mm（24 小时制） */
+export function formatRuntimeUntil(ts: number): string {
+  const d = new Date(ts)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** 英文兜底文案：activityId 不在活动池时防御用（绝不能 fallback 成中文，保证 en 上下文无中文） */
+const EN_FALLBACK_LABEL = 'Doing their own thing'
+
+/**
+ * 展示层按语言取 label（PATCH-LANG）：
+ * - zh：返回持久化的中文 label（行为不变）；
+ * - en：按 activityId 映射活动池的 labelEn——已持久化的老数据 label 是中文，
+ *   靠 id 映射英文文案，绝不因本地化重抽/失效 Runtime（labelEn 只影响展示，不参与 identity）。
+ */
+export function runtimeDisplayLabel(runtime: TaRuntimeState | null | undefined, lang: Lang = 'zh'): string {
+  if (!runtime || runtime.activityId === TA_RUNTIME_IDLE_ID) return ''
+  if (lang !== 'en') return runtime.label || ''
+  const act = ACTIVITIES.find((a) => a.id === runtime.activityId)
+  return act?.labelEn || EN_FALLBACK_LABEL
+}
+
+/**
+ * Chat 注入文案：明确告诉模型这是 TA 自己当前的生活状态，
+ * 不是对方告诉的事实、不是 Memory/Event/Anniversary/共同经历，禁止据此编「我们之前一起…」。
+ * PATCH-LANG：en 时 label 用英文映射（整块纯英文），zh 用持久化中文 label。
+ */
+export function buildTaRuntimeContext(runtime: TaRuntimeState | null, lang: Lang = 'zh'): string {
+  if (!runtime || runtime.activityId === TA_RUNTIME_IDLE_ID || !runtime.label) return ''
+  const until = formatRuntimeUntil(runtime.plannedUntil)
+  if (lang === 'en') {
+    return [
+      '[What you are doing right now]',
+      "This is your own current life state — not something the other person told you, not a shared memory or event, and not the other person\u2019s activity.",
+      'Use only the state itself. Unless the chat history explicitly supports it, do not add a location, people, food, reason, sequence of events, or any other life detail.',
+      'Never restate it as what the other person is doing:',
+      `${formatAttributedLine(runtimeDisplayLabel(runtime, 'en'), 'SELF', 'en')}, probably until around ${until}.`,
+    ].join('\n')
+  }
+  return [
+    '【你自己此刻在做什么】',
+    '下面是你自己当前的生活状态，不是对方告诉你的，也不是你们共同的经历——更不是在说对方，绝不要把这件事写成对方在做：',
+    '只能使用下面这条状态本身；除非聊天历史另有明确依据，不得补写地点、人物、食物、原因、前后经过或其他生活细节。',
+    `${formatAttributedLine(runtime.label, 'SELF', 'zh')}，预计会持续到 ${until} 左右。`,
+  ].join('\n')
+}
+,
+  'i',
+)
+
+const ZH_RUNTIME_QUERY_PATTERNS: readonly RegExp[] = [
+  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?(?:在)?(?:干嘛|干什么|做什么|忙什么|忙啥)(?:呢|呀|啊|嘛|么|？|\?)?$/i,
+  /^(?:你|TA)?(?:现在)?(?:还)?在忙(?:吗|嘛|么|？|\?)$/i,
+  /^(?:你|TA)?忙完(?:了)?(?:吗|嘛|么|没|没有|？|\?)$/i,
+  /^(?:你|TA)?(?:现在)?(?:到家|回家|回来|回来了|出差回来|出差结束)(?:了)?(?:吗|嘛|么|没|没有|？|\?)$/i,
+  ZH_RUNTIME_ACTIVITY_QUERY_PATTERN,
   /^(?:你|TA)?到哪(?:儿)?了(?:呢|呀|啊|？|\?)?$/i,
   /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?在(?:哪|哪里|哪儿)(?:呢|呀|啊|？|\?)?$/i,
   /^(?:你|TA)?(?:现在|这会儿|这会|此刻)怎么样(?:了|呢|呀|啊|？|\?)?$/i,
