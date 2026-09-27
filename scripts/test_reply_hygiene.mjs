@@ -77,11 +77,11 @@ const sameBatch = collapseAdjacentDuplicateAssistantReplies([
 ])
 eq('同一轮次相邻完全重复 → 展示一条', sameBatch.length, 1)
 
-const differentRound = collapseAdjacentDuplicateAssistantReplies([
+const serverRetimestamped = collapseAdjacentDuplicateAssistantReplies([
   { role: 'assistant', content: '我在。', ts: 100 },
   { role: 'assistant', content: '我在。', ts: 101 },
 ])
-eq('不同轮次相同内容 → 不合并', differentRound.length, 2)
+eq('相邻重复即使云端分别改写 ts → 仍只展示一条', serverRetimestamped.length, 1)
 
 const userBetween = collapseAdjacentDuplicateAssistantReplies([
   { role: 'assistant', content: '我在。', ts: 100 },
