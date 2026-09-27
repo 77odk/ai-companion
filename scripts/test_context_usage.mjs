@@ -1,72 +1,95 @@
+// 上下文总量口径自测：会话累计 + provider usage 校准
+// 跑法：npm test（node --test scripts/test_*.mjs）
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { calibrateContextFactor, contentTokensOf, loadContextFactor } from '../src/lib/contextUsage.ts'
 
-const store = new Map()
-globalThis.localStorage = {
-  getItem: (key) => store.has(key) ? store.get(key) : null,
-  setItem: (key, value) => store.set(key, String(value)),
-  removeItem: (key) => store.delete(key),
-  clear: () => store.clear(),
-  key: (index) => [...store.keys()][index] ?? null,
-  get length() { return store.size },
-}
-globalThis.window = {
-  dispatchEvent: () => true,
-  addEventListener: () => {},
-  removeEventListener: () => {},
-}
-
-const {
-  getContextUsage,
-  setContextUsage,
-  clearContextUsage,
-  collectAllContextUsages,
-  applyCloudContextUsages,
-  setSessionStart,
-  getSessionStart,
-} = await import('../src/lib/storage.ts')
-
-const base = {
-  sessionStart: 100,
-  used: 13000,
-  budget: 64000,
-  source: 'actual',
-  inputTokens: 12900,
-  outputTokens: 100,
-  cachedTokens: 9000,
-  updatedAt: 1000,
+let passed = 0
+let failed = 0
+const check = (name, fn) => {
+  try {
+    fn()
+    passed += 1
+    console.log('  ✔', name)
+  } catch (err) {
+    failed += 1
+    console.log('  ✗', name, '→', err.message)
+  }
 }
 
-setContextUsage(base, 'S1')
-assert.deepEqual(getContextUsage('S1'), base, 'session usage persists locally')
-assert.equal(getContextUsage('S2'), null, 'usage is isolated by session')
+const msg = (role, content, ts = 1) => ({ role, content, ts })
 
-setSessionStart(100, 'S1')
-assert.deepEqual(getContextUsage('S1'), base, 'same sessionStart does not clear usage')
+console.log('上下文总量口径')
 
-const packed = collectAllContextUsages()
-assert.deepEqual(packed.S1, base, 'usage is included in full sync payload')
-
-applyCloudContextUsages({
-  S1: { ...base, used: 12000, updatedAt: 900 },
+check('空会话总量为 0', () => {
+  assert.equal(contentTokensOf([], 0.24), 0)
 })
-assert.equal(getContextUsage('S1').used, 13000, 'older cloud state cannot overwrite newer local state')
 
-applyCloudContextUsages({
-  S1: { ...base, used: 14000, updatedAt: 1100 },
+check('总量 = 本地估算 × 校准系数', () => {
+  const messages = [msg('user', '你好呀'), msg('assistant', '在的，怎么了？')]
+  const raw = contentTokensOf(messages, 1)
+  const scaled = contentTokensOf(messages, 0.24)
+  assert.ok(raw > scaled, '小系数应得到更小的总量')
+  assert.ok(scaled >= 1)
 })
-assert.equal(getContextUsage('S1').used, 14000, 'newer state in same context segment wins')
 
-applyCloudContextUsages({
-  S1: { ...base, sessionStart: 200, used: 3000, updatedAt: 800 },
+check('脏数据（缺 content / null）不影响总量', () => {
+  const dirty = [{ role: 'user', ts: 1 }, null, msg('assistant', '好')]
+  assert.equal(contentTokensOf(dirty, 0.5), contentTokensOf([msg('assistant', '好')], 0.5))
 })
-assert.equal(getContextUsage('S1').sessionStart, 200, 'newer context segment wins even with older updatedAt')
-assert.equal(getContextUsage('S1').used, 3000, 'newer context segment replaces previous usage')
 
-setSessionStart(300, 'S1')
-assert.equal(getSessionStart('S1'), 300, 'session start advances')
-assert.equal(getContextUsage('S1'), null, 'advancing sessionStart clears stale context usage')
+check('总量只随消息增长，重复统计同一批结果不变', () => {
+  const base = [msg('user', '第一句'), msg('assistant', '第二句')]
+  const once = contentTokensOf(base, 0.24)
+  assert.equal(contentTokensOf(base, 0.24), once, '同一批内容重复计算必须相等')
+  assert.ok(contentTokensOf([...base, msg('user', '第三句')], 0.24) > once, '新增消息后应变大')
+})
 
-clearContextUsage('S1')
-assert.equal(getContextUsage('S1'), null, 'explicit clear is safe')
+check('校准系数按 7:3 平滑', () => {
+  const next = calibrateContextFactor(0.2, 1000, 300)
+  assert.ok(Math.abs(next - (0.2 * 0.7 + 0.3 * 0.3)) < 1e-9)
+})
 
-console.log('context usage lifecycle: PASS')
+check('估算为 0 / usage 非法时保持原系数', () => {
+  assert.equal(calibrateContextFactor(0.24, 0, 100), 0.24)
+  assert.equal(calibrateContextFactor(0.24, 1000, 0), 0.24)
+  assert.equal(calibrateContextFactor(0.24, Number.NaN, 100), 0.24)
+})
+
+check('观测值越界时拒绝采纳（脏 usage 不带偏）', () => {
+  assert.equal(calibrateContextFactor(0.24, 1000, 999999), 0.24)
+  assert.equal(calibrateContextFactor(0.24, 1000, 1), 0.24)
+})
+
+check('系数始终夹在安全区间 [0.1, 1.5]', () => {
+  const lo = calibrateContextFactor(0.1, 1000, 100)
+  const hi = calibrateContextFactor(1.5, 1000, 1400)
+  assert.ok(lo >= 0.1 && lo <= 1.5)
+  assert.ok(hi >= 0.1 && hi <= 1.5)
+})
+
+check('无 localStorage 环境取默认系数，不抛错', () => {
+  const f = loadContextFactor()
+  assert.ok(Number.isFinite(f) && f > 0)
+})
+
+// —— 接线断言：Chat 里两处写入都必须走新口径，别退回「一轮的量」 ——
+const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+
+check('发送前写入：总量 = 会话累计估算', () => {
+  assert.match(chatSource, /used: sessionContentTokens,/, '发送前总量必须用会话累计')
+})
+
+check('provider usage 返回后：总量仍按会话累计写入，并反推校准系数', () => {
+  assert.match(chatSource, /calibrateContextFactor\(loadContextFactor\(\), composed\.totalTokens, usage\.promptTokens\)/, '必须用真实 usage 反推系数')
+  assert.match(chatSource, /used: contentTokensOf\(messages, nextFactor\)/, '最终总量必须按会话累计 + 校准系数')
+  assert.doesNotMatch(chatSource, /used: usage\.promptTokens \+ \(outputTokens \?\? 0\)/, '不得再退回「本轮 prompt + 输出」当总量')
+})
+
+check('明细字段仍是 usage 原始数据', () => {
+  assert.match(chatSource, /inputTokens: usage\.promptTokens,/, '本轮输入保持 usage 原始值')
+  assert.match(chatSource, /source: 'actual',/, '有 usage 时标记为真实来源')
+})
+
+console.log(`\n结果：${passed} passed, ${failed} failed`)
+if (failed > 0) process.exit(1)
