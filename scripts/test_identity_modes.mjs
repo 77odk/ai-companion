@@ -212,6 +212,7 @@ assert.equal(looksRecoverableServiceStyle('作为你的 AI 伴侣，我可以帮
 assert.equal(looksRecoverableServiceStyle('按照我的人设，我应该这样回答。'), false, '设定元话术不能被误当成可回退客服腔')
 assert.ok(chatSource.includes('const resolveRepairFailureText = () =>'), 'repair 失败提交前重新计算 fallback')
 assert.ok(chatSource.includes('const fallbackIdentityMode = resolveIdentityMode(activeSessionId || undefined)'), 'fallback 按提交时身份模式复验')
+assert.ok(chatSource.includes("fallbackIdentityMode === 'immersive' && looksIdentityDisclosure(cleaned)"), '沉浸档 fallback 继续执行身份边界检查')
 assert.ok(chatSource.includes('return fallbackIdentityProblem ? safeFallback : cleaned'), '切模式后越界首版不能复活')
 assert.ok(chatSource.includes("liveIdentityMode === 'ai'"), 'AI 档 repair 单独分流，不继承真人化客服腔压力')
 assert.ok(chatSource.includes('不要因为表达像 AI 或助手就改写'), 'AI repair 明确不因 AI-native 表达二次重写')
