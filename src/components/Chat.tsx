@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
+import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
 import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, getContextUsage, setContextUsage, type ContextUsageState, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
@@ -1431,6 +1431,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           const fallbackAllowBusy = allowsBusyState(fallbackIdentityMode)
           const fallbackAvailability = classifyAvailability(cleaned)
           const fallbackIdentityProblem =
+            (fallbackIdentityMode === 'immersive' && looksIdentityDisclosure(cleaned)) ||
             looksEmbodiedSelfClaim(cleaned, fallbackIdentityMode) ||
             (!fallbackAllowBusy && fallbackAvailability?.state === 'unavailable' && fallbackAvailability.owner === 'SELF')
           return fallbackIdentityProblem ? safeFallback : cleaned
