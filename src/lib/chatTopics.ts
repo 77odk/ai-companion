@@ -181,7 +181,9 @@ export function hasCompletionEvidence(text: string): boolean {
   // 这是硬安全门，不追求全语言理解；拿不准就不升级 confirmed。
   const negatedOrConditional =
     /(?:差点|险些|还没|尚未|没有|没能|如果|假如|要是|准备|打算|计划|想要|想|等会|待会).{0,24}(?:看完|做完|完成|结束|散场|到家|回来)|(?:看完|做完|完成|结束|散场|到家|回来).{0,12}(?:再|才).{0,12}(?:说|聊|做)|\b(?:almost|nearly|haven't|have\s+not|hasn't|has\s+not|didn't|did\s+not|not\s+(?:finished|completed|done)|if|unless|when|once|plan(?:ned)?\s+to|going\s+to|will|would)\b/i
-  if (negatedOrConditional.test(t)) return false
+  const interrogativeOrUncertain =
+    /[？?]|(?:吗|么|是不是|是否|有没有|可能|也许|大概|好像|似乎).{0,18}(?:看完|做完|完成|结束|散场|到家|回来)|(?:看完|做完|完成|结束|散场|到家|回来).{0,12}(?:吗|么|吧|可能|也许|大概)|\b(?:did|have|has|could|might|maybe|perhaps|probably|possibly)\b.{0,24}\b(?:finish(?:ed)?|complete(?:d)?|end(?:ed)?|done|return(?:ed)?)\b/i
+  if (negatedOrConditional.test(t) || interrogativeOrUncertain.test(t)) return false
 
   const zhCompleted =
     /(?:刚(?:刚|才)?|已经|终于).{0,18}(?:看完|做完|完成|结束|散场|到家|回来)|(?:看完|做完|完成|结束|散场|到家|回来).{0,12}(?:了|啦)/
@@ -307,17 +309,46 @@ export function conversationPairsForDay(
         hasSharedCompletionSubject(topic.t),
     })
   }
-  return rows
+  const sorted = rows
     .sort((a, b) => Math.max(a.taTs, a.ts) - Math.max(b.taTs, b.ts))
-    .slice(-Math.max(1, limit))
+  const maxRows = Math.max(1, limit)
+  const selected = sorted.slice(-maxRows)
+  const latestConfirmed = [...sorted].reverse().find((row) => row.confirmedCompletion)
+  if (
+    latestConfirmed &&
+    !selected.some((row) => row.ts === latestConfirmed.ts && row.taTs === latestConfirmed.taTs)
+  ) {
+    selected[0] = latestConfirmed
+    selected.sort((a, b) => Math.max(a.taTs, a.ts) - Math.max(b.taTs, b.ts))
+  }
+  return selected
 }
 
-/** 兼容旧调用名：现在只返回“已确认发生”的 event 日，不再把普通聊天/未来约定冒充 event。 */
+/**
+ * 兼容旧调用名：保留原合同“话题日 + 已到期约定日”。
+ * Space-N1 的 grounded Event 不再使用它，而是显式调用 collectConfirmedEventDays。
+ */
 export function collectTopicDays(topics: ChatTopic[], todayKey: string): Set<string> {
-  return collectConfirmedEventDays(topics, todayKey)
+  const out = new Set<string>()
+  for (const topic of topics) {
+    if (!topic || typeof topic !== 'object') continue
+    if (typeof topic.ts === 'number' && Number.isFinite(topic.ts) && topic.ts > 0) {
+      out.add(dayKeyOfTs(topic.ts))
+    }
+    if (typeof topic.futureDay === 'string' && topic.futureDay <= todayKey) {
+      out.add(topic.futureDay)
+    }
+  }
+  return out
 }
 
-/** 兼容旧调用名：event evidence 只来自当天完成证据。 */
+/** 兼容旧调用名：保留原合同，只按真实聊天时间给话题日下界。 */
 export function collectTopicEvidenceAt(topics: ChatTopic[]): Map<string, number> {
-  return collectConfirmedEventEvidenceAt(topics, '9999-12-31')
+  const out = new Map<string, number>()
+  for (const topic of topics) {
+    if (!topic || typeof topic !== 'object' || !Number.isFinite(topic.ts) || topic.ts <= 0) continue
+    const day = dayKeyOfTs(topic.ts)
+    out.set(day, Math.max(out.get(day) ?? 0, topic.ts))
+  }
+  return out
 }
