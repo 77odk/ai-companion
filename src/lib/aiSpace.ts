@@ -442,7 +442,7 @@ export async function generatePendingPosts(
   const rawTopics = loadChatTopics(sessionId)
   const used = { ...plan.used }
   const newPosts: SpacePost[] = []
-  const usedFallback = false // 保留返回字段兼容；本批起 LLM 失败/SKIP 不再模板兜底。
+  let usedFallback = false // Immersive daily 的非-SKIP失败可安全模板降级；SKIP 本身不补位。
   // v3 真实时刻锚：JS Date 现在（CST），防止补发/跨天时把今天说成昨天（与 at 对齐语境共存）
   const nowAnchor = formatNowAnchor(now)
   // 配额账本（已跨天滚动只留今天键）
