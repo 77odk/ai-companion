@@ -265,6 +265,8 @@ console.log('\n[14] 共同事件不能把“跟你说”误当共同动作')
 assert.equal(hasSharedCompletionSubject('跟你说，我终于做完作业了'), false)
 assert.equal(hasSharedCompletionSubject('我们终于看完电影了'), true)
 assert.equal(hasSharedCompletionSubject('我和你终于做完这件事了'), true)
+assert.equal(hasSharedCompletionSubject('我们聊了会儿，我终于做完作业了'), false)
+assert.equal(hasSharedCompletionSubject('We talked for a bit, I finally finished my homework'), false)
 
 console.log('\n[15] 同日 planned 不能给无关完成事项背书')
 reset()
