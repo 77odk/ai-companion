@@ -232,7 +232,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
             有些话，当下说过就过去了。忆文会把这一周值得留下的片段，收进一封一周情书里。
           </p>
           <p>
-            它不是冷冰冰的聊天总结，更像 TA 回头看了一眼这一周，然后写给你的几句话。
+            这不是冷冰冰的聊天总结，更像 TA 回头看了一眼这一周，然后写给你的几句话。
           </p>
           <p className="guide-letter-signoff">日子往前走，信会一封一封留下。</p>
         </section>
