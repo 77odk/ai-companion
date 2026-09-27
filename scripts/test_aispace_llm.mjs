@@ -11,6 +11,7 @@ import {
   buildLlmMessages,
   buildLlmPost,
   extractImageCaption,
+  isSpaceSkipResponse,
   buildReplyMessages,
 } from '../src/lib/aiSpaceLlm.ts'
 import { mergeNewPosts, MAX_POSTS } from '../src/lib/aiSpaceCore.ts'
@@ -117,9 +118,9 @@ const msgsWithTopics = buildLlmMessages({
 eq(msgsWithTopics.length, 2, '有话题时仍是两段消息')
 ok(msgsWithTopics[1].content.includes('火锅'), 'user 含话题 1')
 ok(msgsWithTopics[1].content.includes('周末爬山'), 'user 含话题 2')
-ok(msgsWithTopics[1].content.includes('同一天说的'), 'user 说明「今天」=这条动态那天说的')
-ok(msgsWithTopics[1].content.includes('大多数动态写你自己的日子就好'), '素材换血：九成写自己的生活')
-ok(msgsWithTopics[1].content.includes('别整条都写对方'), '素材换血：禁止整条复读对方')
+ok(msgsWithTopics[1].content.includes('旧版 USER 单句只作背景'), '旧 USER-only topic 明确降级为背景')
+ok(msgsWithTopics[1].content.includes('不能当作完整对话或已完成事件的证据'), '旧 topic 不能冒充完整对话/完成事件')
+ok(msgsWithTopics[0].content.includes('SKIP'), '没有真正值得留下的内容允许 SKIP')
 
 console.log('\n[4c] buildLlmMessages 认识边界：不编造认识前共同过去')
 const boundaryCtx = {
@@ -180,6 +181,10 @@ eq(post.source, 'daily', 'source 默认 daily（老数据无 source 视同 daily
 ok(post.art == null, 'v3 起不再写 art 色卡字段')
 const evtPost = buildLlmPost('一起去看展了', 1700000000000, '日常', seeded(2), 'event')
 eq(evtPost.source, 'event', '可显式指定 source=event（事件动态）')
+const conversationPost = buildLlmPost('还记着你刚才那句话', 1700000000000, '心情', seeded(3), 'conversation')
+eq(conversationPost.source, 'conversation', '可显式指定 source=conversation（对话余响）')
+eq(isSpaceSkipResponse('SKIP'), true, 'SKIP 是正式结果')
+eq(isSpaceSkipResponse('SKIP 因为没内容'), false, '带解释的 SKIP 不算协议结果')
 
 console.log('\n[6] buildReplyMessages 评论回复提示词（TASK_UI_BATCH2）')
 const replyMsgs = buildReplyMessages({
