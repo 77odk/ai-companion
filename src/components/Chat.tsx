@@ -77,7 +77,7 @@ import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
 import { ensureMilestoneEvent, getMilestoneStatus, latestReachedMilestoneDay, markMilestoneShown } from '../lib/milestone'
 import { getWeeklyReviews } from '../lib/weeklyReview'
-import { recordChatTopic, loadChatTopics } from '../lib/chatTopics'
+import { completeChatTopicPair, recordChatTopic, loadChatTopics } from '../lib/chatTopics'
 import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
 import { processEventCandidate } from '../lib/eventDetector'
 import MilestoneCard from './MilestoneCard'
@@ -978,7 +978,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       return created
     }
 
-    recordChatTopic(text, getActiveSessionId() || undefined)
+    recordChatTopic(userMsg.content, activeSessionId || undefined, userMsg.ts)
     // TASK-MEM-DISTILL：本地显式检测先收集候选、不抢先写——等模型回复的【记忆】marker 到达后统一归并
     // （有 marker 对应 → 只写一条提炼版 explicit；无对应 marker → fallback 写本地候选；只有 marker → 保持 inferred）
     // 候选的 explicit 身份来自用户证据（用户明确说过），text 若被 marker 匹配则采用模型提炼 wording。
@@ -1318,6 +1318,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         .trim()
       if (committedAssistantText) {
         syncTaRuntimeFromAssistantText(activeSessionId || undefined, committedAssistantText, Date.now())
+        // Space-N1：只有 TA 最终可见回复真实落库后，才把本轮 USER + SELF 补成完整对话素材。
+        completeChatTopicPair(
+          userMsg.content,
+          committedAssistantText,
+          activeSessionId || undefined,
+          userMsg.ts,
+          assistantTs,
+        )
       }
       const token = getToken()
       if (sid && token) {
