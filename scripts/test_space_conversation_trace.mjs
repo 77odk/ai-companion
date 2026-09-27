@@ -8,6 +8,8 @@ import {
   collectConfirmedEventDays,
   collectPlannedDays,
   completeChatTopicPair,
+  hasCompletionEvidence,
+  hasConcreteTopicInfo,
   conversationPairsForDay,
   isConversationMaterialCandidate,
   loadChatTopics,
@@ -242,5 +244,14 @@ assert.match(chatSource, /const handleStop = \(\) => \{[\s\S]{0,900}spacePairEli
 assert.match(chatSource, /onError: \(err\) => \{[\s\S]{0,500}spacePairEligibleRef\.current = false/)
 assert.match(chatSource, /onModelSettingsChanged = \(\) => \{[\s\S]{0,700}spacePairEligibleRef\.current = false/)
 assert.equal((chatSource.match(/spacePairEligibleRef\.current = true/g) ?? []).length >= 2, true)
+
+console.log('\n[11] planned 句里的裸完成动词不能冒充已完成')
+assert.equal(hasCompletionEvidence('今晚一起看完这部电影吧'), false)
+assert.equal(hasCompletionEvidence('我们看完这部电影了'), true)
+assert.equal(hasCompletionEvidence('我们刚看完电影，已经到家了'), true)
+
+console.log('\n[12] 英文完整对话能通过同一层机械粗筛')
+assert.equal(hasConcreteTopicInfo('I had a rough meeting at work today'), true)
+assert.equal(hasConcreteTopicInfo('I felt worried after the interview'), true)
 
 console.log('\nSpace-N1：全部通过')
