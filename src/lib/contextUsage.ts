@@ -55,6 +55,16 @@ export function contentTokensOf(messages: StoredMessage[], factor: number): numb
   return Math.round(sum * factor)
 }
 
+/**
+ * 统计用的消息列表：把本轮消息并入当前上下文段，按 ts + content 去重
+ * （流式期间本轮可能已经写进列表，避免重复计入）。
+ */
+export function usageMessages(base: StoredMessage[], extra?: StoredMessage | null): StoredMessage[] {
+  if (!extra) return base
+  const duplicated = base.some((m) => m && m.ts === extra.ts && m.content === extra.content)
+  return duplicated ? base : [...base, extra]
+}
+
 /** 用一轮真实 usage 反推系数（realPromptTokens ÷ 同段本地估算），并做平滑。 */
 export function calibrateContextFactor(
   current: number,

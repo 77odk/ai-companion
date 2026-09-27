@@ -51,7 +51,7 @@ import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
 import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
 import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
 import { estimateToken } from '../lib/token'
-import { calibrateContextFactor, contentTokensOf, loadContextFactor, saveContextFactor } from '../lib/contextUsage'
+import { calibrateContextFactor, contentTokensOf, loadContextFactor, saveContextFactor, usageMessages } from '../lib/contextUsage'
 import { clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, savePendingMemoryCorrection, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 
 /**
@@ -1258,9 +1258,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         ? buildCompactedHistory(compactSummary, history, COMPACT_KEEP_RECENT)
         : history
     const composed = composeContext(apiMessages, historyForModel, [...contextBlocks, ...bridgeBlocks])
-    // 上下文总量 = 当前会话全部内容的 provider 口径估算（对齐后台的 content 统计）；
+    // 上下文总量 = 刷新之后这一段（sessionStart 起）所有内容的 provider 口径估算；
     // 「本轮输入」仍是本轮 payload 的估算，两者分开显示。
-    const sessionContentTokens = contentTokensOf([...messages, userMsg], loadContextFactor())
+    const sessionContentTokens = contentTokensOf(usageMessages(visibleMessages, userMsg), loadContextFactor())
     const estimatedContextState: ContextUsageState = {
       sessionStart,
       used: sessionContentTokens,
@@ -1598,8 +1598,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               saveContextFactor(nextFactor)
               const actualContextState: ContextUsageState = {
                 sessionStart,
-                // 上下文总量 = 当前会话全部内容的 provider 口径估算；只随会话增长，不因单轮用量波动而回落。
-                used: contentTokensOf(messages, nextFactor),
+                // 上下文总量 = 刷新之后这一段（sessionStart 起）所有内容的 provider 口径估算；只随这一段增长。
+                used: contentTokensOf(usageMessages(visibleMessages, userMsg), nextFactor),
                 budget: composed.hardBudget,
                 source: 'actual',
                 inputTokens: usage.promptTokens,
@@ -2076,8 +2076,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                   )}
                   {contextMeter && (
                     <p>{contextMeter.source === 'actual'
-                      ? '上下文总量 = 当前会话累计的内容量（已用服务商 usage 校准）；本轮输入 / 输出 / Cache 来自最近一轮的服务商 usage。'
-                      : '上下文总量 = 当前会话累计的内容量（本地估算）；服务商没返回 usage，本轮明细按本地估算。'}</p>
+                      ? '上下文总量 = 刷新之后这一段的内容量（已用服务商 usage 校准）；本轮输入 / 输出 / Cache 来自最近一轮的服务商 usage。'
+                      : '上下文总量 = 刷新之后这一段的内容量（本地估算）；服务商没返回 usage，本轮明细按本地估算。'}</p>
                   )}
                   <div className="context-meter-actions">
                     {!compactDone && (
