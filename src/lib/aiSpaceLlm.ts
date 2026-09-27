@@ -230,7 +230,7 @@ export type SpaceGenerationDecision =
 /**
  * conversation 槽的一次生成同时完成“要不要发 + 属于余响还是已发生共同事件”的语义判断。
  * 本地只做证据编号校验，不理解动作词：EVENT[n] 必须引用当天、非 planned 的完整对话对；
- * 编号缺失/越界/指向 planned 时一律降级为 conversation，绝不自动升级 event。
+ * 编号缺失/越界/指向 planned 时一律 SKIP；协议不合规也不写入，绝不靠本地猜。
  */
 export function parseSpaceGenerationDecision(
   text: string,
@@ -254,15 +254,12 @@ export function parseSpaceGenerationDecision(
       if (!body) return { kind: 'skip' }
       const evidence = conversationPairs[index]
       const validEvidence = Boolean(evidence && evidence.sameDay && !evidence.plannedForDay)
-      return {
-        kind: 'post',
-        source: validEvidence ? 'event' : 'conversation',
-        text: body,
-      }
+      if (!validEvidence) return { kind: 'skip' }
+      return { kind: 'post', source: 'event', text: body }
     }
 
-    // 协议没遵守时 fail-safe 为 conversation；不能靠本地猜成 event。
-    return raw ? { kind: 'post', source: 'conversation', text: raw } : { kind: 'skip' }
+    // conversation 槽不按协议就不写：不能把可能含“已发生”事实的违规正文换个 source 留下来。
+    return { kind: 'skip' }
   }
 
   return raw ? { kind: 'post', source: requestedSource, text: raw } : { kind: 'skip' }
