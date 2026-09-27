@@ -264,7 +264,7 @@ resetStore()
 // 有人设 + 有 key（走 LLM）
 savePersona('你是小忆，爱喝咖啡，最近在学画画')
 saveSettings({ provider: 'custom', apiKey: 'k-test', baseUrl: 'https://llm.test/v1', model: 'm-test' })
-// 先有真实完整的计划对话，再有当天“已经完成”的真实完整对话，才升级 confirmed event。
+// 计划对话 + 当天真实对话只形成 conversation 候选；是否为 event 由同一次 LLM 生成按证据编号判定。
 const planTs8 = now - 2 * DAY
 recordChatTopic('后天晚上一起去看电影吧', undefined, planTs8)
 completeChatTopicPair('后天晚上一起去看电影吧', '好，到那天我们一起看。', undefined, planTs8, planTs8 + MINUTE)
@@ -284,19 +284,19 @@ globalThis.fetch = async (_url, init) => {
     ok: true,
     status: 200,
     json: async () => ({
-      choices: [{ message: { content: '散场出来，风挺凉，电影里的那句台词还在脑子里转。\n[配图]路灯下的长影' } }],
+      choices: [{ message: { content: 'EVENT[2]: 散场出来，风挺凉，电影里的那句台词还在脑子里转。\n[配图]路灯下的长影' } }],
     }),
   }
 }
 const plan8 = refreshSpace('小忆', '阿明', now)
 eq(plan8.mode, 'llm', '有人设+key → llm 模式')
-eq(plan8.pending.length, 1, '今天的事件日 → 1 条待生成（事件）')
-eq(plan8.pending[0].source, 'event', 'pending 带来源通道 = event')
+eq(plan8.pending.length, 1, '今天有真实完整对话 → 1 条 conversation 候选')
+eq(plan8.pending[0].source, 'conversation', '预规划只到 conversation，不在本地猜 event')
 const res8 = await generatePendingPosts(plan8, '小忆', '阿明', undefined, now)
 eq(res8.created, 1, '生成 1 条')
 eq(res8.usedFallback, false, 'LLM 成功，无模板降级')
 ok(lastUserMsg.includes('【当前时刻】现在是 2026年9月9日 星期三'), '发给模型的 user 含当前时刻锚')
-ok(lastUserMsg.includes('CONFIRMED') && lastUserMsg.includes('[source=SELF]'), '事件提示词只使用真实完整对话，并明确完成证据')
+ok(lastUserMsg.includes('EVENT[n]') && lastUserMsg.includes('[source=SELF]') && lastUserMsg.includes('PLANNED'), '提示词让同一次模型基于真实对话编号判 conversation/event')
 ok(userMsgCount >= 1, '真实发起过 LLM 请求')
 const saved8 = loadCurrentPosts()
 eq(saved8.length, 1, '落盘 1 条')
@@ -307,7 +307,7 @@ ok(saved8[0].art == null, '落盘动态不写 art')
 const ledger8 = readLedger(undefined, now)
 eq(ledger8[todayKey]?.event ?? 0, 1, '事件动态记入账本 event=1')
 eq(ledger8[todayKey]?.daily ?? 0, 0, '事件不占日常配额：daily 仍 0')
-// event 失败不允许用无关模板冒充事实：宁可不发，并释放 provisional slot 供未来重试
+// conversation/event 语义生成失败不允许用模板冒充事实：宁可不发，并释放 provisional slot 供未来重试
 resetStore()
 savePersona('你是小忆，爱喝咖啡')
 saveSettings({ provider: 'custom', apiKey: 'k-test', baseUrl: 'https://llm.test/v1', model: 'm-test' })
@@ -324,7 +324,7 @@ globalThis.fetch = async () => {
 const plan8b = refreshSpace('小忆', '阿明', now)
 const failedSlotId = plan8b.pending[0] ? generationSlotIdFor(plan8b.pending[0]) : null
 const res8b = await generatePendingPosts(plan8b, '小忆', '阿明', undefined, now)
-eq(res8b.created, 0, 'event LLM 失败 → 不拿模板冒充事实')
+eq(res8b.created, 0, 'conversation 候选 LLM 失败 → 不拿模板冒充事实')
 eq(res8b.usedFallback, false, 'LLM 失败不再走模板 fallback；字段保留兼容但为 false')
 const saved8b = loadCurrentPosts()
 eq(saved8b.length, 0, '失败后不落任何假 event 动态')
