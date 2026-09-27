@@ -21,7 +21,7 @@ const {
   allowsBusyState,
   buildIdentityBoundaryRepair,
 } = await import('../src/lib/companionPolicy.ts')
-const { buildSystemPrompt, CHAT_RULES, CHAT_RULES_EN, looksEmbodiedSelfClaim, looksRobotic, looksServiceStyle } = await import('../src/lib/chatPrompts.ts')
+const { buildSystemPrompt, CHAT_RULES, CHAT_RULES_EN, looksEmbodiedSelfClaim, looksRobotic, looksRecoverableServiceStyle } = await import('../src/lib/chatPrompts.ts')
 const { buildLlmMessages, canUseLlm } = await import('../src/lib/aiSpaceLlm.ts')
 const { clearAIProfile, collectAllAIProfiles, loadAIProfile, saveAIProfile } = await import('../src/lib/storage.ts')
 const { setSessionsCache } = await import('../src/lib/sessionStore.ts')
@@ -205,9 +205,11 @@ assert.match(chatSource, /if \(identityProblem\) return\s*const partialReplyLeng
 assert.match(chatSource, /else if \(retryAllowBusy && retryAvailability\?\.state === 'unavailable' && retryAvailability\.owner === 'SELF'\)/, 'repair 期间切回沉浸后，SELF 离开话术必须真正进入 Busy')
 assert.match(chatSource, /enterBusyRef\.current\(busyText, retryAvailability\)/, '沉浸 repair 的 unavailable 回复必须建立 Busy/Return 周期')
 assert.ok(chatSource.includes('const canReuseFirstReplyOnRepairFailure'), 'repair 失败前区分纯客服腔与安全边界问题')
-assert.ok(chatSource.includes('looksServiceStyle(cleaned) && !attributionProblem && !fabricatedProblem && !identityProblem'), '只有纯客服腔首版允许在 repair 失败时回退')
-assert.equal(looksServiceStyle('有什么可以帮你的吗'), true, '客服腔能单独识别')
-assert.equal(looksServiceStyle('我是一个 AI。'), false, '身份披露不能被误当成可回退的纯客服腔')
+assert.ok(chatSource.includes('looksRecoverableServiceStyle(cleaned) && !attributionProblem && !fabricatedProblem && !identityProblem'), '只有纯客服腔首版允许在 repair 失败时回退')
+assert.equal(looksRecoverableServiceStyle('有什么可以帮你的吗'), true, '纯客服腔可作为 repair 失败回退')
+assert.equal(looksRecoverableServiceStyle('我是一个 AI。'), false, '身份披露不能被误当成可回退客服腔')
+assert.equal(looksRecoverableServiceStyle('作为你的 AI 伴侣，我可以帮你。'), false, '身份元话术不能被误当成可回退客服腔')
+assert.equal(looksRecoverableServiceStyle('按照我的人设，我应该这样回答。'), false, '设定元话术不能被误当成可回退客服腔')
 assert.ok(chatSource.includes('const repairFailureText = canReuseFirstReplyOnRepairFailure ? cleaned : safeFallback'), 'repair 失败优先保纯客服腔首版，越界仍走诚实 fallback')
 assert.ok(chatSource.includes("liveIdentityMode === 'ai'"), 'AI 档 repair 单独分流，不继承真人化客服腔压力')
 assert.ok(chatSource.includes('不要因为表达像 AI 或助手就改写'), 'AI repair 明确不因 AI-native 表达二次重写')
@@ -223,5 +225,6 @@ assert.match(chatSource, /const sameSession = \(getActiveSessionId\(\) \|\| null
 assert.match(chatSource, /const sameSegment = !activeSessionId \|\| getSessionStart\(activeSessionId\) === sessionStart/, '刷新对话后旧重试失效')
 assert.ok(!chatSource.includes('send(failedText)'), '失败重试不能把旧文本重新塞回 send')
 assert.ok(chatSource.includes('新消息开始即废弃上一轮的失败重试'), '发新消息后旧重试失效')
+assert.match(chatSource, /setFailedReplyRetryAvailable\(false\)\s*setError\(null\)\s*setFailedText\(null\)/, '切会话/刷新上下文同时清掉旧失败提示')
 
 console.log('\n身份模式 #13：全部通过')
