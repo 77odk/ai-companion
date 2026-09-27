@@ -213,7 +213,22 @@ assert.equal(generated.created, 1)
 assert.equal(generated.posts[0].source, 'conversation')
 assert.equal(readLedger(undefined, now)[todayKey]?.conversation ?? 0, 1)
 
-console.log('\n[9] Natural 无素材：进入 Space 也不日更')
+console.log('\n[9] Natural / AI 当天总量上限=1：已有 conversation 后 confirmed event 也不能再发第二条')
+let extraCalls = 0
+globalThis.fetch = async () => {
+  extraCalls++
+  return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '第二条不该生成' } }] }) }
+}
+const eventSlot = { at: now - 2 * 60 * 1000, source: 'event' }
+const eventId = generationSlotIdFor(eventSlot)
+const capped = await generatePendingPosts({
+  posts: generated.posts, mode: 'llm', created: 1, pending: [eventSlot], used: { [`__generation_slot__:${eventId}`]: -1 },
+}, '小忆', '你', undefined, now, () => 0.1)
+assert.equal(capped.created, 0)
+assert.equal(capped.posts.length, 1)
+assert.equal(extraCalls, 0)
+
+console.log('\n[10] Natural 无素材：进入 Space 也不日更')
 reset()
 const emptyPlan = refreshSpace('小忆', '你', now)
 assert.equal(emptyPlan.pending.length, 0)
