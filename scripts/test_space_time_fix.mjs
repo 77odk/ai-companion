@@ -7,8 +7,6 @@
 
 import { planBackfillSlots } from '../src/lib/aiSpaceCore.ts'
 import {
-  collectConfirmedEventDays,
-  collectConfirmedEventEvidenceAt,
   collectConversationDays,
   collectConversationEvidenceAt,
   collectPlannedDays,
@@ -63,37 +61,55 @@ ok(!/out\.push\(\{ at: pickDayPostHour\(day, rand\)/.test(coreSrc), '首访路�
 
 
 
-console.log('\n[6] confirmed event：动态不能早于当天真实完成证据')
+console.log('\n[6] conversation：动态不能早于当天完整对话证据')
 const fixedNow = new Date(2026, 8, 23, 16, 0, 0).getTime()
 const fixedDayStart = dayStart(fixedNow)
 const fixedDayKey = '2026-09-23'
 const planTs = new Date(2026, 8, 22, 20, 0, 0).getTime()
 const evidenceAt = new Date(2026, 8, 23, 14, 20, 0).getTime()
-const confirmedTopics = [
+const pairedTopics = [
   { t: '明天一起看电影吧', ts: planTs, futureDay: fixedDayKey, taText: '好，明天一起看。', taTs: planTs + 1000, pairVersion: 1 },
   { t: '我们刚看完电影，已经散场了', ts: evidenceAt, taText: '嗯，那段我还在想。', taTs: evidenceAt + 1000, pairVersion: 1 },
 ]
-const confirmedDays = collectConfirmedEventDays(confirmedTopics, fixedDayKey)
-const evidenceMap = collectConfirmedEventEvidenceAt(confirmedTopics, fixedDayKey)
-ok(confirmedDays.has(fixedDayKey), '计划 + 当天完成证据 → confirmed event')
-eq(evidenceMap.get(fixedDayKey), evidenceAt + 1000, 'event evidenceAt 取完整对话落库后的真实时间')
-const eventSlots = planBackfillSlots(
-  fixedDayStart - DAY, fixedNow, [], confirmedDays, () => 0, undefined, undefined, evidenceMap,
+const conversationDays6 = collectConversationDays(pairedTopics, fixedDayKey)
+const conversationEvidence6 = collectConversationEvidenceAt(pairedTopics, fixedDayKey)
+ok(conversationDays6.has(fixedDayKey), '当天完整对话 → conversation candidate')
+eq(conversationEvidence6.get(fixedDayKey), evidenceAt + 1000, 'conversation evidenceAt 取完整对话落库后的真实时间')
+const conversationSlots6 = planBackfillSlots(
+  fixedDayStart - DAY,
+  fixedNow,
+  [],
+  new Set(),
+  () => 0,
+  undefined,
+  undefined,
+  undefined,
+  conversationDays6,
+  conversationEvidence6,
+  collectPlannedDays(pairedTopics, fixedDayKey),
 )
-const todayEvent = eventSlots.find((slot) => slot.source === 'event' && dayStart(slot.at) === fixedDayStart)
-ok(Boolean(todayEvent), '当天有可用区间时会规划 confirmed event')
-ok(todayEvent && todayEvent.at >= evidenceAt + 1000, '事件动态时间 >= 完成证据时间')
-eq(todayEvent?.evidenceAt, evidenceAt + 1000, 'event slot 保留 evidenceAt 往下传')
+const todayConversation = conversationSlots6.find((slot) => slot.source === 'conversation' && dayStart(slot.at) === fixedDayStart)
+ok(Boolean(todayConversation), '当天有可用区间时会规划 conversation candidate')
+ok(todayConversation && todayConversation.at >= evidenceAt + 1000, '动态时间 >= 完整对话证据时间')
+eq(todayConversation?.evidenceAt, evidenceAt + 1000, 'conversation slot 保留 evidenceAt 往下传')
 
-console.log('\n[7] confirmed event：证据太晚则本轮不发，不硬塞假时间')
+console.log('\n[7] conversation：证据太晚则本轮不发，不硬塞假时间')
 const tooLateEvidence = fixedNow - 2 * 60 * 1000
 const tooLateSlots = planBackfillSlots(
-  fixedDayStart - DAY, fixedNow, [], new Set([fixedDayKey]), () => 0.5, undefined, undefined,
+  fixedDayStart - DAY,
+  fixedNow,
+  [],
+  new Set(),
+  () => 0.5,
+  undefined,
+  undefined,
+  undefined,
+  new Set([fixedDayKey]),
   new Map([[fixedDayKey, tooLateEvidence]]),
 )
 ok(
-  !tooLateSlots.some((slot) => slot.source === 'event' && dayStart(slot.at) === fixedDayStart),
-  'evidenceAt 晚于 now-5min 可用上界 → 今天不生成事件动态',
+  !tooLateSlots.some((slot) => slot.source === 'conversation' && dayStart(slot.at) === fixedDayStart),
+  'evidenceAt 晚于 now-5min 可用上界 → 今天不生成 conversation candidate',
 )
 
 console.log('\n[8] planned：到了约定日仍是 conversation，不是假 completed event')
@@ -104,7 +120,7 @@ const plannedDays = collectPlannedDays(plannedTopics, fixedDayKey)
 const conversationDays = collectConversationDays(plannedTopics, fixedDayKey)
 const conversationEvidence = collectConversationEvidenceAt(plannedTopics, fixedDayKey)
 ok(plannedDays.has(fixedDayKey), 'futureDay 到期 → planned')
-ok(!collectConfirmedEventDays(plannedTopics, fixedDayKey).has(fixedDayKey), '只有约定、没有完成证据 → 绝不升级 event')
+ok(plannedDays.has(fixedDayKey), '只有约定也只保持 planned；本地不预判 event')
 const plannedSlots = planBackfillSlots(
   fixedDayStart - DAY, fixedNow, [], new Set(), () => 0, undefined, undefined, undefined,
   conversationDays, conversationEvidence, plannedDays,
