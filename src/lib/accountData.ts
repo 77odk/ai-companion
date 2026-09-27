@@ -3,8 +3,8 @@
 // 隐私口径：导出走用户自己的 token，只返回他自己的数据（后端 /api/export 已解密成可读文字）；
 // 注销是真删（后端事务内清干净），前端在成功后清掉本机缓存，避免「重新注册又把旧记录同步回去」。
 
-import { API_BASE } from './sync'
-import { getToken } from './auth'
+import { API_BASE } from './sync.ts'
+import { getToken } from './auth.ts'
 
 export const DELETE_CONFIRM_WORD = '注销'
 
@@ -50,21 +50,34 @@ export async function deleteMyAccount(confirmWord: string): Promise<void> {
   if (!res.ok) throw new Error(humanError(res.status, '注销失败了，稍后再试试'))
 }
 
-/** 清掉本机所有忆文缓存（注销后调用，避免重新注册时旧数据又被同步上去）。 */
-export function clearLocalCompanionData(): number {
+/** 注销要清干净的本地前缀：会话/记忆/设置为 ai_companion_，TA 空间动态与照片为 ai_space_，
+ *  登录态与同意记录为 eluvin_（注意 eluvin_vid 是 HttpOnly Cookie，本来就不在 localStorage 里）。 */
+export const LOCAL_DATA_PREFIXES = ['ai_companion_', 'ai_space_', 'eluvin_'] as const
+
+function clearByPrefix(storage: Storage, prefixes: readonly string[]): number {
   let removed = 0
   try {
     const keys: string[] = []
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const k = localStorage.key(i)
-      if (k && k.startsWith('ai_companion_')) keys.push(k)
+    for (let i = 0; i < storage.length; i += 1) {
+      const k = storage.key(i)
+      if (k && prefixes.some((p) => k.startsWith(p))) keys.push(k)
     }
     for (const k of keys) {
-      localStorage.removeItem(k)
+      storage.removeItem(k)
       removed += 1
     }
   } catch {
     /* 读不到 storage 就算了 */
   }
+  return removed
+}
+
+/** 清掉本机所有忆文痕迹（注销后调用，避免重新注册时旧数据又被同步上去）。
+ *  两处都清：localStorage（会话/记忆/设置/空间动态与照片/登录态/同意记录）
+ *  与 sessionStorage（本次进站的同意标记）。 */
+export function clearLocalCompanionData(): number {
+  let removed = 0
+  try { removed += clearByPrefix(localStorage, LOCAL_DATA_PREFIXES) } catch { /* ignore */ }
+  try { removed += clearByPrefix(sessionStorage, LOCAL_DATA_PREFIXES) } catch { /* ignore */ }
   return removed
 }
