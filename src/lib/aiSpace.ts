@@ -39,8 +39,17 @@ import {
   buildLlmPost,
   buildReplyMessages,
   extractImageCaption,
+  isSpaceSkipResponse,
 } from './aiSpaceLlm.ts'
-import { loadChatTopics, collectTopicDays, collectTopicEvidenceAt } from './chatTopics.ts'
+import {
+  loadChatTopics,
+  collectConversationDays,
+  collectConversationEvidenceAt,
+  collectPlannedDays,
+  collectConfirmedEventDays,
+  collectConfirmedEventEvidenceAt,
+  conversationPairsForDay,
+} from './chatTopics.ts'
 import { chatCompletion } from './api.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { getFirstSeen, loadPersona, loadSettings } from './storage.ts'
@@ -138,7 +147,7 @@ function isSpacePost(p: unknown): p is SpacePost {
     // art 色卡字段 v3 起不再写入；老数据有 art 也能读（可选）
     (o.art == null || typeof o.art === 'number') &&
     // source 通道 v3 起写入；老数据无 source 视同 daily
-    (o.source == null || o.source === 'daily' || o.source === 'event') &&
+    (o.source == null || o.source === 'daily' || o.source === 'conversation' || o.source === 'event') &&
     (o.liked == null || typeof o.liked === 'boolean') &&
     (o.comments == null || (Array.isArray(o.comments) && o.comments.every(isSpaceComment)))
   )
@@ -201,11 +210,12 @@ export function readLedger(sessionId?: string, now: number = Date.now()): SpaceL
     if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
     const ledger: SpaceLedger = {}
     for (const k of Object.keys(parsed as Record<string, unknown>)) {
-      const v = (parsed as Record<string, unknown>)[k] as { daily?: unknown; event?: unknown } | undefined
+      const v = (parsed as Record<string, unknown>)[k] as { daily?: unknown; conversation?: unknown; event?: unknown } | undefined
       if (v && typeof v === 'object') {
         const daily = typeof v.daily === 'number' && Number.isFinite(v.daily) ? v.daily : 0
+        const conversation = typeof v.conversation === 'number' && Number.isFinite(v.conversation) ? v.conversation : 0
         const event = typeof v.event === 'number' && Number.isFinite(v.event) ? v.event : 0
-        ledger[k] = { daily, event }
+        ledger[k] = { daily, conversation, event }
       }
     }
     return pruneLedger(ledger, dayKeyOf(now))
@@ -228,7 +238,7 @@ function recordLedger(created: SpacePost[], sessionId?: string, now: number = Da
   let ledger = readLedger(sessionId, now) // 已跨天滚动：只留今天的键
   for (const p of created) {
     const dk = dayKeyOf(p.at)
-    ledger = addLedgerEntry(ledger, dk, p.source === 'event' ? 'event' : 'daily')
+    ledger = addLedgerEntry(ledger, dk, p.source === 'event' ? 'event' : p.source === 'conversation' ? 'conversation' : 'daily')
   }
   writeLedger(ledger, sessionId, now) // 写前再滚一次：只留今天（过去日子的历史记录不占今天额度）
 }
