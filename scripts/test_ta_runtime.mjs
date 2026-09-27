@@ -6,6 +6,7 @@ import {
   ACTIVITIES,
   applyCloudTaRuntime,
   buildTaRuntimeContext,
+  shouldInjectTaRuntimeContext,
   collectAllTaRuntime,
   detectTaRuntimeDecision,
   getOrAdvanceTaRuntime,
@@ -175,6 +176,61 @@ group('G. 展示 / 注入')
   ok(homeSrc.includes('isTaRuntimeIdle(runtime)'), 'G5 Home 显式识别 idle')
 }
 
+group('G2. Runtime 只在明确询问当前状态时注入')
+{
+  const zhQueries = [
+    '你在干嘛？',
+    '在做什么',
+    '你这会儿干什么呢',
+    '还在忙吗',
+    '忙完没',
+    '到家了吗',
+    '回来了吗',
+    '你现在在做什么',
+    '还在看书吗',
+    '还在吃饭吗',
+    '还在路上吗',
+    '你现在在家吗',
+    '出差回来了吗',
+    '你现在在哪儿',
+    '你到哪了',
+    '你现在怎么样',
+    '睡了吗',
+    '醒了吗',
+    '起床了吗',
+    '吃饭了吗',
+  ]
+  for (const text of zhQueries) {
+    ok(shouldInjectTaRuntimeContext(text, 'zh'), `G2 命中：${text}`)
+  }
+  const enQueries = [
+    'What are you doing right now?',
+    'Are you still busy?',
+    'Did you get home?',
+    'Are you back from your business trip?',
+    'Where are you now?',
+  ]
+  for (const text of enQueries) {
+    ok(shouldInjectTaRuntimeContext(text, 'en'), `G2 EN 命中：${text}`)
+  }
+  for (const text of [
+    '我今天吃了饺子',
+    '到家了',
+    '我还在忙呢',
+    '我现在在干嘛？',
+    '他还在忙吗？',
+    '你觉得我现在怎么样？',
+    '你觉得这件事怎么样',
+    '我们继续刚才的话题',
+    'Tell me what you think about this',
+  ]) {
+    ok(!shouldInjectTaRuntimeContext(text, 'zh'), `G2 非状态询问不注入：${text}`)
+  }
+  const active = syncTaRuntimeFromAssistantText('runtime-query', '我现在在看书。', T0, '')
+  const ctx = buildTaRuntimeContext(active, 'zh')
+  ok(ctx.includes('不得补写地点、人物、食物、原因、前后经过或其他生活细节'), 'G2 注入块禁止从状态扩写生活细节')
+}
+
 group('H. Cloud / 数据边界')
 {
   clearLS()
@@ -196,6 +252,7 @@ group('I. Home / Chat / Sync 接线保持')
 {
   ok(chatSrc.includes('syncTaRuntimeFromAssistantText'), 'I1 Chat 仍在最终回复后写 Runtime')
   ok(chatSrc.includes('buildTaRuntimeContext'), 'I2 Chat 仍从同一 Runtime 注入')
+  ok(chatSrc.includes('if (shouldInjectTaRuntimeContext(text, lang))'), 'I2 Chat 仅在明确询问当前状态时注入 Runtime')
   ok(homeSrc.includes('getOrAdvanceTaRuntime'), 'I3 Home 仍读同一 Runtime getter')
   ok(syncSrc.includes('taRuntime: collectAllTaRuntime()'), 'I4 sync collectData 仍含 taRuntime')
   ok(syncSrc.includes('applyCloudTaRuntime(d.taRuntime)'), 'I5 sync applyData 仍含 taRuntime')

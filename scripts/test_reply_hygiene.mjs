@@ -5,6 +5,7 @@
 //   · 「我正在吃早餐呢，等下还得去图书馆把论文改完，下午可能去湖边坐坐。」09:45/09:46/09:47 原样三连。
 import { stripActionMarkers, stripTimeLabels } from '../src/lib/chatPrompts.ts'
 import { dropRepeatedReplies, MIN_DUP_LEN } from '../src/lib/replyDedupe.ts'
+import { collapseAdjacentDuplicateAssistantReplies } from '../src/lib/chatDisplay.ts'
 
 let pass = 0
 let fail = 0
@@ -69,6 +70,31 @@ const out7 = dropRepeatedReplies([{ content: ' ' + dupLine + ' ' }], hist)
 eq('空白差异也算重复', out7.length, 1)
 
 ok('MIN_DUP_LEN 是正数', MIN_DUP_LEN > 0)
+
+const sameBatch = collapseAdjacentDuplicateAssistantReplies([
+  { role: 'assistant', content: '我在。', ts: 100 },
+  { role: 'assistant', content: '我在。', ts: 100 },
+])
+eq('同一轮次相邻完全重复 → 展示一条', sameBatch.length, 1)
+
+const serverRetimestamped = collapseAdjacentDuplicateAssistantReplies([
+  { role: 'assistant', content: '我在。', ts: 100 },
+  { role: 'assistant', content: '我在。', ts: 101 },
+])
+eq('相邻重复即使云端分别改写 ts → 仍只展示一条', serverRetimestamped.length, 1)
+
+const userBetween = collapseAdjacentDuplicateAssistantReplies([
+  { role: 'assistant', content: '我在。', ts: 100 },
+  { role: 'user', content: '嗯', ts: 101 },
+  { role: 'assistant', content: '我在。', ts: 100 },
+])
+eq('中间夹用户消息 → 不跨消息合并', userBetween.length, 3)
+
+const sameBatchDifferent = collapseAdjacentDuplicateAssistantReplies([
+  { role: 'assistant', content: '第一句', ts: 100 },
+  { role: 'assistant', content: '第二句', ts: 100 },
+])
+eq('同一轮次但内容不同 → 不合并', sameBatchDifferent.length, 2)
 
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} ${pass}/${pass + fail}`)
 process.exit(fail === 0 ? 0 : 1)

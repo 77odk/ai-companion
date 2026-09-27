@@ -497,6 +497,44 @@ export function isTaRuntimeState(value: unknown): value is TaRuntimeState {
     ))
 }
 
+/**
+ * Chat 是否需要把 Runtime 注入这一轮上下文。
+ * 业务规则是“用户明确在问 TA 此刻/刚刚是否仍处于某状态”，不是“每轮都带当前状态”。
+ * 漏判的代价只是少一个辅助块（TA 自己的话仍在聊天历史里）；因此宁可保守，不做泛语义推断。
+ */
+const ZH_RUNTIME_QUERY_PATTERNS: readonly RegExp[] = [
+  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?(?:在)?(?:干嘛|干什么|做什么|忙什么|忙啥)(?:呢|呀|啊|嘛|么|？|\?)?$/i,
+  /^(?:你|TA)?(?:现在)?(?:还)?在忙(?:吗|嘛|么|？|\?)$/i,
+  /^(?:你|TA)?忙完(?:了)?(?:吗|嘛|么|没|没有|？|\?)$/i,
+  /^(?:你|TA)?(?:现在)?(?:到家|回家|回来|回来了|出差回来|出差结束)(?:了)?(?:吗|嘛|么|没|没有|？|\?)$/i,
+  /^(?:你|TA)?还在.{1,16}(?:吗|嘛|么|？|\?)$/i,
+  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?在(?:家|外面|路上|公司|学校|上班|工作|开会|看书|吃饭|睡觉|洗澡|洗漱|休息|散步|运动|看电影|打游戏)(?:吗|嘛|么|？|\?)$/i,
+  /^(?:你|TA)?到哪(?:儿)?了(?:呢|呀|啊|？|\?)?$/i,
+  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?在(?:哪|哪里|哪儿)(?:呢|呀|啊|？|\?)?$/i,
+  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)怎么样(?:了|呢|呀|啊|？|\?)?$/i,
+  /^(?:你|TA)?(?:睡了|睡着了|醒了|起床了|吃饭了)(?:吗|嘛|么|没|没有|？|\?)$/i,
+]
+
+const EN_RUNTIME_QUERY_PATTERNS: readonly RegExp[] = [
+  /\bwhat (?:are|r) you (?:doing|up to)(?: right now| now)?\b/i,
+  /\bare you still (?:busy|working|reading|eating|sleeping|on the way|out)\b/i,
+  /\b(?:are you|you(?:'re| are)) (?:home|back)(?: yet| now)?\b/i,
+  /\bdid you (?:get|make it) home\b/i,
+  /\b(?:are you )?back from (?:your )?(?:trip|business trip|work trip)\b/i,
+  /\bwhere are you (?:now|right now)\b/i,
+  /\bhow are you (?:now|right now)\b/i,
+  /\b(?:are you )?(?:done|finished)(?: yet)?\b/i,
+  /\bare you (?:awake|asleep|up)\b/i,
+]
+
+export function shouldInjectTaRuntimeContext(userText: string, lang: Lang = 'zh'): boolean {
+  const text = String(userText ?? '').trim()
+  if (!text) return false
+  const primary = lang === 'en' ? EN_RUNTIME_QUERY_PATTERNS : ZH_RUNTIME_QUERY_PATTERNS
+  const secondary = lang === 'en' ? ZH_RUNTIME_QUERY_PATTERNS : EN_RUNTIME_QUERY_PATTERNS
+  return primary.some((pattern) => pattern.test(text)) || secondary.some((pattern) => pattern.test(text))
+}
+
 /** HH:mm（24 小时制） */
 export function formatRuntimeUntil(ts: number): string {
   const d = new Date(ts)
@@ -531,6 +569,7 @@ export function buildTaRuntimeContext(runtime: TaRuntimeState | null, lang: Lang
     return [
       '[What you are doing right now]',
       "This is your own current life state — not something the other person told you, not a shared memory or event, and not the other person\u2019s activity.",
+      'Use only the state itself. Unless the chat history explicitly supports it, do not add a location, people, food, reason, sequence of events, or any other life detail.',
       'Never restate it as what the other person is doing:',
       `${formatAttributedLine(runtimeDisplayLabel(runtime, 'en'), 'SELF', 'en')}, probably until around ${until}.`,
     ].join('\n')
@@ -538,6 +577,7 @@ export function buildTaRuntimeContext(runtime: TaRuntimeState | null, lang: Lang
   return [
     '【你自己此刻在做什么】',
     '下面是你自己当前的生活状态，不是对方告诉你的，也不是你们共同的经历——更不是在说对方，绝不要把这件事写成对方在做：',
+    '只能使用下面这条状态本身；除非聊天历史另有明确依据，不得补写地点、人物、食物、原因、前后经过或其他生活细节。',
     `${formatAttributedLine(runtime.label, 'SELF', 'zh')}，预计会持续到 ${until} 左右。`,
   ].join('\n')
 }
