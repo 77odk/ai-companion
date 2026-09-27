@@ -44,7 +44,6 @@ export interface LlmContext {
   conversationPairs?: Array<{
     userText: string
     taText: string
-    sameDay?: boolean
     plannedForDay?: boolean
   }>
   /** conversation 内部语义：普通余响 / 到了此前约定的日期。 */
@@ -120,10 +119,10 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     }
     if (conversationPairs.length > 0) {
       user += `\n\n[REAL DIALOGUE EVIDENCE]\n`
-      for (const [index, pair] of conversationPairs.entries()) {
+      for (const pair of conversationPairs) {
         const status = pair.plannedForDay
-          ? `[${index + 1}] PLANNED: a real exchange scheduled something for this date; this line is never completion evidence`
-          : `[${index + 1}] DIALOGUE: a real USER/SELF exchange from this date`
+          ? 'PLANNED: an earlier real exchange scheduled something for this date; this is NOT proof it happened'
+          : 'DIALOGUE: a real USER/SELF exchange from this date'
         user += `- ${status}\n  ${formatAttributedLine(pair.userText, 'USER', 'en')}\n  ${formatAttributedLine(pair.taText, 'SELF', 'en')}\n`
       }
       if (isConversation) {
@@ -132,9 +131,9 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
           : policy.mode === 'natural'
             ? `\nWrite a light relationship afterthought: what you noticed, understood, or still care about after the exchange. Do not invent a human experience.`
             : `\nWrite the aftertaste of this real exchange in your own voice; stay grounded in what was actually said.`
-        user += `\nClassify the source while writing. Use EVENT[n] only when dialogue item [n] itself clearly establishes that USER and SELF actually shared an activity/event and it already happened. [n] must point to a same-date DIALOGUE item, never a PLANNED item. A plan, question, hypothetical, uncertain wording, or USER's solo experience is never EVENT. Otherwise use CONVERSATION.`
+        user += `\nThis Space post is always a conversation afterthought in this batch. Do not classify it as an Event. You may mention something as already happened only when today's supplied DIALOGUE explicitly says it happened; a PLANNED item alone never proves completion.`
         if (ctx.conversationKind === 'planned') {
-          user += `\nThis date comes from an earlier plan. The plan alone is never completion evidence. Compare it with the real dialogue from this date; if the dialogue does not clearly establish that the shared plan actually happened, stay CONVERSATION or SKIP.`
+          user += `\nThis date comes from an earlier plan. The plan alone is never completion evidence. If today's DIALOGUE does not explicitly establish what happened, do not write the plan as completed.`
         }
       } else if (isEvent) {
         user += `\nLegacy event slot: stay strictly grounded in the supplied real dialogue and never invent completion.`
@@ -147,7 +146,7 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
       user += `\nDon't repeat the same content — life moves on, write something new.`
     }
     user += isConversation
-      ? `\n\nReturn exactly one of these formats:\nSKIP\nCONVERSATION: <post text>\nEVENT[n]: <post text>  (n must reference one same-date DIALOGUE item above; never PLANNED)`
+      ? `\n\nReturn exactly one of these formats:\nSKIP\nCONVERSATION: <post text>`
       : `\n\nReturn either the post text only, or exactly SKIP.`
     return [
       { role: 'system', content: system },
@@ -182,10 +181,10 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
   }
   if (conversationPairs.length > 0) {
     user += `\n\n【真实对话证据】\n`
-    for (const [index, pair] of conversationPairs.entries()) {
+    for (const pair of conversationPairs) {
       const status = pair.plannedForDay
-        ? `[${index + 1}]【PLANNED·真实对话约在今天，但这一组永远不能单独证明已经发生】`
-        : `[${index + 1}]【DIALOGUE·今天的真实 USER/SELF 对话】`
+        ? '【PLANNED·此前真实对话约在今天，但这不证明已经发生】'
+        : '【DIALOGUE·今天的真实 USER/SELF 对话】'
       user += `- ${status}\n  ${formatAttributedLine(pair.userText, 'USER', 'zh')}\n  ${formatAttributedLine(pair.taText, 'SELF', 'zh')}\n`
     }
     if (isConversation) {
@@ -194,9 +193,9 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
         : policy.mode === 'natural'
           ? `\n写关系里的“对话余响”：聊完以后仍在意、理解或想到的东西；身体化表达要轻，不得编造人的现实经历。`
           : `\n写这轮真实对话留下的余味，可以和沉浸生活并存，但只从真实说过的话往后长。`
-      user += `\n同时判断来源：只有某一组当天【DIALOGUE】本身已经清楚表明 USER 和 SELF 确实共同经历了某件事，而且事情已经发生，才可以返回 EVENT[n]，其中 n 必须是那组当天 DIALOGUE 的编号；【PLANNED】编号永远不能作为 EVENT 证据。约定、疑问、假设、不确定表达、USER 自己单独发生的事，都不能算 EVENT；其余值得留下的内容返回 CONVERSATION。`
+      user += `\n这一批 Space 只写“对话余响”，不负责识别 Event。只有今天提供的真实【DIALOGUE】明确说某件事已经发生时，正文才可以按已经发生来写；【PLANNED】本身永远不能证明完成。`
       if (ctx.conversationKind === 'planned') {
-        user += `\n今天来自此前的约定。约定本身永远不是完成证据；请把它和今天的真实对话一起理解。今天的对话没有明确证明共同计划真的发生，就只能 CONVERSATION 或 SKIP。`
+        user += `\n今天来自此前的约定。约定本身永远不是完成证据；今天的真实对话没有明确说明发生了什么，就不要把约定写成已经完成。`
       }
     } else if (isEvent) {
       user += `\n这是兼容旧路径的事件槽，仍只能依据真实对话，不得补写没有依据的完成事实。`
@@ -209,7 +208,7 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     user += `别重复同样的内容，生活继续往前——写点新鲜的。`
   }
   user += isConversation
-    ? `\n\n严格只返回以下三种格式之一：\nSKIP\nCONVERSATION: <动态正文>\nEVENT[n]: <动态正文>（n 必须引用上面某一组当天 DIALOGUE，不能引用 PLANNED）`
+    ? `\n\n严格只返回以下两种格式之一：\nSKIP\nCONVERSATION: <动态正文>`
     : `\n\n只返回动态正文，或者只返回 SKIP。`
 
   return [
@@ -228,38 +227,21 @@ export type SpaceGenerationDecision =
   | { kind: 'post'; source: SpaceSource; text: string }
 
 /**
- * conversation 槽的一次生成同时完成“要不要发 + 属于余响还是已发生共同事件”的语义判断。
- * 本地只做证据编号校验，不理解动作词：EVENT[n] 必须引用当天、非 planned 的完整对话对；
- * 编号缺失/越界/指向 planned 时一律 SKIP；协议不合规也不写入，绝不靠本地猜。
+ * Space-N1 只生成 conversation 余响；Event 识别属于独立 Event 体系。
+ * conversation 槽只接受明确的 CONVERSATION 协议，否则 fail-closed 为 SKIP。
  */
 export function parseSpaceGenerationDecision(
   text: string,
   requestedSource: SpaceSource,
-  conversationPairs: Array<{ sameDay?: boolean; plannedForDay?: boolean }> = [],
 ): SpaceGenerationDecision {
   const raw = String(text ?? '').trim()
   if (isSpaceSkipResponse(raw)) return { kind: 'skip' }
 
   if (requestedSource === 'conversation') {
-    const conversation = raw.match(/^\s*CONVERSATION\s*[:：]\s*([\s\S]+?)\s*$/i)
-    if (conversation) {
-      const body = String(conversation[1] ?? '').trim()
-      return body ? { kind: 'post', source: 'conversation', text: body } : { kind: 'skip' }
-    }
-
-    const event = raw.match(/^\s*EVENT\s*\[\s*(\d+)\s*\]\s*[:：]\s*([\s\S]+?)\s*$/i)
-    if (event) {
-      const index = Number(event[1]) - 1
-      const body = String(event[2] ?? '').trim()
-      if (!body) return { kind: 'skip' }
-      const evidence = conversationPairs[index]
-      const validEvidence = Boolean(evidence && evidence.sameDay && !evidence.plannedForDay)
-      if (!validEvidence) return { kind: 'skip' }
-      return { kind: 'post', source: 'event', text: body }
-    }
-
-    // conversation 槽不按协议就不写：不能把可能含“已发生”事实的违规正文换个 source 留下来。
-    return { kind: 'skip' }
+    const match = raw.match(/^\s*CONVERSATION\s*[:：]\s*([\s\S]+?)\s*$/i)
+    if (!match) return { kind: 'skip' }
+    const body = String(match[1] ?? '').trim()
+    return body ? { kind: 'post', source: 'conversation', text: body } : { kind: 'skip' }
   }
 
   return raw ? { kind: 'post', source: requestedSource, text: raw } : { kind: 'skip' }
