@@ -1436,7 +1436,7 @@ function AboutDetail({ onBack }: { onBack: () => void }) {
           <a href="mailto:yw_eluvin@163.com">yw_eluvin@163.com</a>
         </p>
         <p className="about-contact">
-          <a href="/privacy.html" target="_blank" rel="noreferrer">隐私政策</a>
+          <a href="/privacy.html">隐私政策</a>
         </p>
         <p className="about-version">忆文 Eluvin v1.2.3 · 内测版</p>
       </div>
