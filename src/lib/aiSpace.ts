@@ -422,7 +422,6 @@ export async function generatePendingPosts(
 ): Promise<GenerateResult> {
   const persona = sessionPersona(sessionId)
   const settings = loadSettings()
-  const policy = resolveCompanionPolicy(sessionId)
   const vars = buildVars(taName, yourName, now)
   const relationshipStart = getFirstSeen(sessionId)
   const relationshipStartDate = dayKeyOf(relationshipStart)
@@ -434,7 +433,7 @@ export async function generatePendingPosts(
   const rawTopics = loadChatTopics(sessionId)
   const used = { ...plan.used }
   const newPosts: SpacePost[] = []
-  let usedFallback = false
+  const usedFallback = false // 保留返回字段兼容；本批起 LLM 失败/SKIP 不再模板兜底。
   // v3 真实时刻锚：JS Date 现在（CST），防止补发/跨天时把今天说成昨天（与 at 对齐语境共存）
   const nowAnchor = formatNowAnchor(now)
   // 配额账本（已跨天滚动只留今天键）
@@ -500,29 +499,22 @@ export async function generatePendingPosts(
       )
       try {
         const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })
+        // SKIP 是正常结果：不落动态、不占额度、也不拿模板补。
+        if (isSpaceSkipResponse(raw)) continue
         // 先解析动态自己的 [配图] 协议，再做统一归因净化，避免净化层碰协议正文。
         const { text: protocolText } = extractImageCaption(raw)
         const cleaned = cleanLlmText(protocolText)
-        if (cleaned) {
-          // 纯文字动态（色卡已删）：[配图] 协议只剥离，不再生成配图。
+        if (cleaned && !isSpaceSkipResponse(cleaned)) {
           const post = buildLlmPost(cleaned, at, guessKind(cleaned), rand, source, generationSlotIdFor(slot))
           made = { post }
         }
       } catch {
-        made = null // 超时/报错/返回不可用 → 降级模板
+        made = null
       }
     }
 
-    if (!made) {
-      // 只有 Immersive 的纯日常允许模板降级。
-      // Natural / AI 以及 event 动态宁可不发，也不能用固定句或无关模板冒充事实。
-      usedFallback = true
-      if (policy.mode !== 'immersive' || source === 'event') continue
-      const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(at), season: getSeason(at) }
-      const g = generatePost(dayVars, used, at, rand, 'daily', spaceLang, generationSlotIdFor(slot), relationshipStart)
-      used[g.templateKey] = now
-      made = { post: g.post, templateKey: g.templateKey }
-    }
+    // LLM 失败、空内容、无可用模型都允许本轮 0 条；不再用模板制造“空间不能空”。
+    if (!made) continue
 
     newPosts.push({ ...made.post, ...(sessionId ? { sessionId } : {}) })
     bump(dk, source)
