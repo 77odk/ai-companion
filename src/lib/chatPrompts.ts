@@ -168,11 +168,19 @@ export function stripActionMarkers(text: string, lang?: Lang): string {
 // - AI：不因为“像 AI / 像客服”而重写；事实、归因、物理现实边界由其它 guard 单独负责。
 const IDENTITY_DISCLOSURE_PATTERNS = [
   /(作为\s*(?:一个\s*)?(?:AI|人工智能|程序|助手|模型|机器人))/,
+  /(作为\s*(?:你的\s*)?(?:AI|人工智能|虚拟|智能)\s*(?:助手|伴侣|伙伴))/,
   /(我是\s*(?:一个\s*)?(?:AI|人工智能|程序|助手|模型|机器人|语言模型))/,
-  /(我(?:是|叫|就是)?\s*(?:你的\s*)?(?:TA|AI\s*助手))/,
+  /(我(?:是|叫|就是)?\s*(?:你的\s*)?(?:TA|AI\s*(?:助手|伴侣|伙伴)))/,
   /\b(as an? (AI|artificial intelligence|language model|assistant|bot|robot))\b/i,
+  /\b(as your (AI|artificial intelligence) (assistant|companion|partner))\b/i,
   /\b(I'?m (just? )?an? (AI|assistant|language model|bot|robot))\b/i,
+  /\b(I'?m your (AI|artificial intelligence) (assistant|companion|partner))\b/i,
 ]
+
+export function looksIdentityDisclosure(text: string): boolean {
+  const t = stripEmoji(text ?? '')
+  return IDENTITY_DISCLOSURE_PATTERNS.some((re) => re.test(t))
+}
 
 const SERVICE_STYLE_PATTERNS = [
   /(有什么可以帮你的吗|有什么我可以帮你的吗)/,
@@ -230,7 +238,7 @@ export function looksRobotic(text: string, identityMode: IdentityMode = 'immersi
   // AI 档明确允许 AI-native / 服务型表达；这里只退出风格审查，不退出 grounding / fabricated / embodied / attribution guards。
   if (identityMode === 'ai') return false
   // 自然档允许承认自己是 AI；沉浸档仍禁止身份披露。
-  if (identityMode === 'immersive' && IDENTITY_DISCLOSURE_PATTERNS.some((re) => re.test(t))) return true
+  if (identityMode === 'immersive' && looksIdentityDisclosure(t)) return true
   // “指的是 / 是指 / 的意思”是正常解释句，不再作为任何身份模式的客服腔证据。
   return looksServiceStyle(t)
 }

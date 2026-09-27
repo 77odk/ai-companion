@@ -21,7 +21,7 @@ const {
   allowsBusyState,
   buildIdentityBoundaryRepair,
 } = await import('../src/lib/companionPolicy.ts')
-const { buildSystemPrompt, CHAT_RULES, CHAT_RULES_EN, looksEmbodiedSelfClaim, looksRobotic, looksRecoverableServiceStyle } = await import('../src/lib/chatPrompts.ts')
+const { buildSystemPrompt, CHAT_RULES, CHAT_RULES_EN, looksEmbodiedSelfClaim, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle } = await import('../src/lib/chatPrompts.ts')
 const { buildLlmMessages, canUseLlm } = await import('../src/lib/aiSpaceLlm.ts')
 const { clearAIProfile, collectAllAIProfiles, loadAIProfile, saveAIProfile } = await import('../src/lib/storage.ts')
 const { setSessionsCache } = await import('../src/lib/sessionStore.ts')
@@ -208,10 +208,14 @@ assert.ok(chatSource.includes('const canReuseFirstReplyOnRepairFailure'), 'repai
 assert.ok(chatSource.includes('looksRecoverableServiceStyle(cleaned) && !attributionProblem && !fabricatedProblem && !identityProblem'), '只有纯客服腔首版允许在 repair 失败时回退')
 assert.equal(looksRecoverableServiceStyle('有什么可以帮你的吗'), true, '纯客服腔可作为 repair 失败回退')
 assert.equal(looksRecoverableServiceStyle('我是一个 AI。'), false, '身份披露不能被误当成可回退客服腔')
+assert.equal(looksRecoverableServiceStyle('作为你的 AI 伴侣，我可以帮助你'), true, '混合句会命中可回退客服腔，因此必须同时检查身份披露')
+assert.equal(looksIdentityDisclosure('作为你的 AI 伴侣，我可以帮助你'), true, '所有权式身份表达也必须命中身份边界')
+assert.equal(looksIdentityDisclosure('As your AI assistant, I can help.'), true, '英文所有权式身份表达也必须命中身份边界')
 assert.equal(looksRecoverableServiceStyle('作为你的 AI 伴侣，我可以帮你。'), false, '身份元话术不能被误当成可回退客服腔')
 assert.equal(looksRecoverableServiceStyle('按照我的人设，我应该这样回答。'), false, '设定元话术不能被误当成可回退客服腔')
 assert.ok(chatSource.includes('const resolveRepairFailureText = () =>'), 'repair 失败提交前重新计算 fallback')
 assert.ok(chatSource.includes('const fallbackIdentityMode = resolveIdentityMode(activeSessionId || undefined)'), 'fallback 按提交时身份模式复验')
+assert.ok(chatSource.includes("fallbackIdentityMode === 'immersive' && looksIdentityDisclosure(cleaned)"), '沉浸档 fallback 继续执行身份边界检查')
 assert.ok(chatSource.includes('return fallbackIdentityProblem ? safeFallback : cleaned'), '切模式后越界首版不能复活')
 assert.ok(chatSource.includes("liveIdentityMode === 'ai'"), 'AI 档 repair 单独分流，不继承真人化客服腔压力')
 assert.ok(chatSource.includes('不要因为表达像 AI 或助手就改写'), 'AI repair 明确不因 AI-native 表达二次重写')

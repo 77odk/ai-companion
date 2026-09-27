@@ -498,38 +498,33 @@ export function isTaRuntimeState(value: unknown): value is TaRuntimeState {
 }
 
 /**
- * Chat 是否需要把 Runtime 注入这一轮上下文。
- * 业务规则是“用户明确在问 TA 此刻/刚刚是否仍处于某状态”，不是“每轮都带当前状态”。
- * 漏判的代价只是少一个辅助块（TA 自己的话仍在聊天历史里）；因此宁可保守，不做泛语义推断。
+ * Chat 是否需要把 Runtime 作为“候选上下文”带进这一轮。
+ * 本地只识别当前态/问询句式，不维护“喝咖啡/做饭/遛狗……”这类活动词义表。
+ * 具体是不是在问 TA 自己，由本轮原本就会调用的模型结合整句理解；不增加额外 LLM。
  */
 const ZH_RUNTIME_QUERY_PATTERNS: readonly RegExp[] = [
-  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?(?:在)?(?:干嘛|干什么|做什么|忙什么|忙啥)(?:呢|呀|啊|嘛|么|？|\?)?$/i,
-  /^(?:你|TA)?(?:现在)?(?:还)?在忙(?:吗|嘛|么|？|\?)$/i,
-  /^(?:你|TA)?忙完(?:了)?(?:吗|嘛|么|没|没有|？|\?)$/i,
-  /^(?:你|TA)?(?:现在)?(?:到家|回家|回来|回来了|出差回来|出差结束)(?:了)?(?:吗|嘛|么|没|没有|？|\?)$/i,
-  /^(?:你|TA)?还在.{1,16}(?:吗|嘛|么|？|\?)$/i,
-  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?在(?:家|外面|路上|公司|学校|上班|工作|开会|看书|吃饭|睡觉|洗澡|洗漱|休息|散步|运动|看电影|打游戏)(?:吗|嘛|么|？|\?)$/i,
-  /^(?:你|TA)?到哪(?:儿)?了(?:呢|呀|啊|？|\?)?$/i,
-  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?在(?:哪|哪里|哪儿)(?:呢|呀|啊|？|\?)?$/i,
-  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)怎么样(?:了|呢|呀|啊|？|\?)?$/i,
-  /^(?:你|TA)?(?:睡了|睡着了|醒了|起床了|吃饭了)(?:吗|嘛|么|没|没有|？|\?)$/i,
+  // 短 yes/no 问句只看语法，不看“喝咖啡 / 遛狗 / 弄方案”等具体词义。
+  /^.{1,24}(?:吗|嘛|么)(?:？|\?)?$/i,
+  // 没有语气词时，只保留明显的“当前正在……”结构。
+  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?(?:还)?在.{1,24}(?:？|\?)$/i,
+  // 少量通用疑问结构；这些是问法，不是活动词典。
+  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?(?:在)?(?:干嘛|干什么|做什么|忙什么|忙啥)(?:呢|呀|啊|嘛|么)?(?:？|\?)?$/i,
+  /^(?:你|TA)?忙完(?:了)?(?:吗|嘛|么|没|没有)?(?:？|\?)?$/i,
+  /^(?:你|TA)?到哪(?:儿)?了(?:呢|呀|啊)?(?:？|\?)?$/i,
+  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)?在(?:哪|哪里|哪儿)(?:呢|呀|啊)?(?:？|\?)?$/i,
+  /^(?:你|TA)?(?:现在|这会儿|这会|此刻)怎么样(?:了)?(?:呢|呀|啊)?(?:？|\?)?$/i,
 ]
-
 const EN_RUNTIME_QUERY_PATTERNS: readonly RegExp[] = [
-  /\bwhat (?:are|r) you (?:doing|up to)(?: right now| now)?\b/i,
-  /\bare you still (?:busy|working|reading|eating|sleeping|on the way|out)\b/i,
-  /\b(?:are you|you(?:'re| are)) (?:home|back)(?: yet| now)?\b/i,
-  /\bdid you (?:get|make it) home\b/i,
-  /\b(?:are you )?back from (?:your )?(?:trip|business trip|work trip)\b/i,
-  /\bwhere are you (?:now|right now)\b/i,
-  /\bhow are you (?:now|right now)\b/i,
-  /\b(?:are you )?(?:done|finished)(?: yet)?\b/i,
-  /\bare you (?:awake|asleep|up)\b/i,
+  /^(?:are|were) you (?:still )?.{1,60}\??$/i,
+  /^(?:what|where|how) are you .{0,60}\??$/i,
+  /^(?:did|have) you .{1,60}\??$/i,
+  /^still .{1,60}\?$/i,
 ]
-
 export function shouldInjectTaRuntimeContext(userText: string, lang: Lang = 'zh'): boolean {
   const text = String(userText ?? '').trim()
   if (!text) return false
+  // 明确是 USER / 第三人的主语时，本地直接排除；这里只做稳定的主语边界，不理解活动词义。
+  if (/^(?:我|我们|咱们|他|她|它|他们|她们|它们)/.test(text)) return false
   const primary = lang === 'en' ? EN_RUNTIME_QUERY_PATTERNS : ZH_RUNTIME_QUERY_PATTERNS
   const secondary = lang === 'en' ? ZH_RUNTIME_QUERY_PATTERNS : EN_RUNTIME_QUERY_PATTERNS
   return primary.some((pattern) => pattern.test(text)) || secondary.some((pattern) => pattern.test(text))
@@ -569,7 +564,8 @@ export function buildTaRuntimeContext(runtime: TaRuntimeState | null, lang: Lang
     return [
       '[What you are doing right now]',
       "This is your own current life state — not something the other person told you, not a shared memory or event, and not the other person\u2019s activity.",
-      'Use only the state itself. Unless the chat history explicitly supports it, do not add a location, people, food, reason, sequence of events, or any other life detail.',
+      'Treat this as candidate context: first decide whether the user is actually asking about your own current or recent state. If not, ignore this state completely and do not bring it up.',
+      'If it is relevant, use only the state itself. Unless the chat history explicitly supports it, do not add a location, people, food, reason, sequence of events, or any other life detail.',
       'Never restate it as what the other person is doing:',
       `${formatAttributedLine(runtimeDisplayLabel(runtime, 'en'), 'SELF', 'en')}, probably until around ${until}.`,
     ].join('\n')
@@ -577,7 +573,8 @@ export function buildTaRuntimeContext(runtime: TaRuntimeState | null, lang: Lang
   return [
     '【你自己此刻在做什么】',
     '下面是你自己当前的生活状态，不是对方告诉你的，也不是你们共同的经历——更不是在说对方，绝不要把这件事写成对方在做：',
-    '只能使用下面这条状态本身；除非聊天历史另有明确依据，不得补写地点、人物、食物、原因、前后经过或其他生活细节。',
+    '这是一条候选上下文：先理解用户这一句到底是不是在问你自己的当前/刚刚状态；如果不是，就完全忽略下面这条状态，不要主动提起。',
+    '如果相关，只能使用下面这条状态本身；除非聊天历史另有明确依据，不得补写地点、人物、食物、原因、前后经过或其他生活细节。',
     `${formatAttributedLine(runtime.label, 'SELF', 'zh')}，预计会持续到 ${until} 左右。`,
   ].join('\n')
 }
