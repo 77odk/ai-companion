@@ -335,7 +335,15 @@ export function refreshSpace(
   // Immersive 额外允许 daily；首访也不再为了填满页面强制铺日常。
   const slots = policy.mode === 'immersive'
     ? plannedSlots
-    : plannedSlots.filter((slot) => slot.source !== 'daily')
+    : plannedSlots.filter((slot) => {
+        if (slot.source === 'daily') return false
+        const dk = dayKeyOf(slot.at)
+        const existing = prev.posts.filter((post) => dayKeyOf(post.at) === dk).length
+        const booked = getLedgerEntry(ledger, dk)
+        const ledgerTotal = booked.daily + booked.conversation + booked.event
+        // Natural / AI 每天最多一条；删掉当天动态也不能靠刷新重新刷出第二条。
+        return Math.max(existing, ledgerTotal) < 1
+      })
 
   // 空人设也可在配置好模型后消费真实 conversation / event；没有模型时保持空。
   // Immersive 同样不再为了“页面不能空”强塞本地兜底。
@@ -422,6 +430,7 @@ export async function generatePendingPosts(
 ): Promise<GenerateResult> {
   const persona = sessionPersona(sessionId)
   const settings = loadSettings()
+  const policy = resolveCompanionPolicy(sessionId)
   const vars = buildVars(taName, yourName, now)
   const relationshipStart = getFirstSeen(sessionId)
   const relationshipStartDate = dayKeyOf(relationshipStart)
@@ -462,6 +471,7 @@ export async function generatePendingPosts(
     const source: SpaceSource = slot.source
     const dk = dayKeyOf(at)
     const usage = usageOf(dk)
+    if (policy.mode !== 'immersive' && usage.total >= 1) continue
     if (usage.total >= MAX_TOTAL_PER_DAY) continue
     if (source === 'event' && usage.event >= 1) continue
     if (source === 'conversation' && usage.conversation >= 1) continue
