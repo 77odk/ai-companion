@@ -208,6 +208,23 @@ export function looksServiceStyle(text: string): boolean {
   return SERVICE_STYLE_PATTERNS.some((re) => re.test(t))
 }
 
+// repair 失败时允许回退的“纯客服腔”子集。
+// 明确排除身份披露 / “按设定、人设”这类元话术，避免把沉浸档不该放行的首版重新交给用户。
+const RECOVERABLE_SERVICE_STYLE_PATTERNS = [
+  /(有什么可以帮你的吗|有什么我可以帮你的吗)/,
+  /(很高兴(能)?为你服务|随时为你服务)/,
+  /(我可以帮助你|我能帮助你|需要我帮你)/,
+  /\b(how can I (help|assist) you|what can I do for you|is there anything I can help)\b/i,
+  /\b(I'?m (happy|glad) to (help|assist)|I'?m here to help)\b/i,
+  /\b(feel free to (ask|reach out)|let me know if you (need|have) any (questions?|help))\b/i,
+  /\b(I hope this (helps?|information helps))\b/i,
+]
+
+export function looksRecoverableServiceStyle(text: string): boolean {
+  const t = stripEmoji(text ?? '')
+  return RECOVERABLE_SERVICE_STYLE_PATTERNS.some((re) => re.test(t))
+}
+
 export function looksRobotic(text: string, identityMode: IdentityMode = 'immersive'): boolean {
   const t = stripEmoji(text ?? '')
   // AI 档明确允许 AI-native / 服务型表达；这里只退出风格审查，不退出 grounding / fabricated / embodied / attribution guards。
