@@ -149,7 +149,7 @@ console.log('\n[7] EVENT 必须引用当天非 planned 对话编号；否则机�
 const plannedOnly = [{ sameDay: false, plannedForDay: true }]
 assert.deepEqual(
   parseSpaceGenerationDecision('EVENT[1]: 今天终于做了', 'conversation', plannedOnly),
-  { kind: 'post', source: 'conversation', text: '今天终于做了' },
+  { kind: 'skip' },
 )
 const sameDayDialogue = [{ sameDay: true, plannedForDay: false }]
 assert.deepEqual(
@@ -158,11 +158,11 @@ assert.deepEqual(
 )
 assert.deepEqual(
   parseSpaceGenerationDecision('EVENT[9]: 越界编号', 'conversation', sameDayDialogue),
-  { kind: 'post', source: 'conversation', text: '越界编号' },
+  { kind: 'skip' },
 )
 assert.deepEqual(
   parseSpaceGenerationDecision('没有遵守协议的普通正文', 'conversation', sameDayDialogue),
-  { kind: 'post', source: 'conversation', text: '没有遵守协议的普通正文' },
+  { kind: 'skip' },
 )
 
 console.log('\n[8] 运行模块不再存在本地“完成/共同”语义判定 API')
