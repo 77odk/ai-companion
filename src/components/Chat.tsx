@@ -1323,14 +1323,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         .trim()
       if (committedAssistantText) {
         syncTaRuntimeFromAssistantText(activeSessionId || undefined, committedAssistantText, Date.now())
-        // Space-N1：只有“正常完整结束”的最终回复才补成完整对话素材；partial 只留在聊天历史。
+        // Space-N1 唯一 Chat 例外（产品已冻结“完整 USER+TA 对话对”为硬要求）：
+        // 只在正常最终可见回复真实落库后补 pair；Stop / 切模型 / stream error 已把 eligible 置 false。
+        // 不改消息、不改上传/合并/去重，也不新增模型调用。taTs 必须是真正 commit 时刻，不能用请求开始的 assistantTs。
         if (spacePairEligibleRef.current) {
+          const pairCommittedAt = Date.now()
           completeChatTopicPair(
             userMsg.content,
             committedAssistantText,
             activeSessionId || undefined,
             userMsg.ts,
-            assistantTs,
+            pairCommittedAt,
           )
           spacePairEligibleRef.current = false
         }
