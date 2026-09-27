@@ -277,6 +277,9 @@ assert.match(chatSource, /if \(spacePairEligibleRef\.current\) \{[\s\S]{0,500}co
 assert.match(chatSource, /const handleStop = \(\) => \{[\s\S]{0,900}spacePairEligibleRef\.current = false/)
 assert.match(chatSource, /onError: \(err\) => \{[\s\S]{0,500}spacePairEligibleRef\.current = false/)
 assert.match(chatSource, /onModelSettingsChanged = \(\) => \{[\s\S]{0,700}spacePairEligibleRef\.current = false/)
+assert.match(chatSource, /const pairCommittedAt = Date\.now\(\)/)
+assert.match(chatSource, /userMsg\.ts,[\s\S]{0,120}pairCommittedAt/)
+assert.doesNotMatch(chatSource, /completeChatTopicPair\([\s\S]{0,240}assistantTs,[\s\S]{0,20}\)/)
 
 console.log('\n[15] planned 对话在最多 3 组素材里必须保留，防止把约定当成当天事实')
 const manyTopics = [
