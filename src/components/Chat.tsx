@@ -1506,16 +1506,20 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const finishStreaming = () => {
       if (finishedRef.current) return
       const err = streamErrorRef.current
-      const hadNoReply = Boolean(err) && assistantText.current.trim() === ''
+      // “一个字都没回来”既可能是请求报错，也可能是 provider 正常结束但 content 为空（例如只给 reasoning）。
+      const hadNoReply = assistantText.current.trim() === ''
       finalize()  // finalize 自己设置 finishedRef 防重入
-      if (err && mountedRef.current) {
-        setError(err.message)
+      if (mountedRef.current && hadNoReply) {
+        setError(err?.message ?? 'TA 没有返回正文')
         setFailedText(userMsg.content)
-        if (hadNoReply && retrySameRound) {
-          // 只给 0 正文失败提供显式手动重试；不自动烧 Key，也不重新走 send/user upload/Event/Memory 前置链路。
+        if (retrySameRound) {
+          // 0 正文只开放显式手动重试；不自动烧 Key，也不重新走 send/user upload/Event/Memory 前置链路。
           failedReplyRetryRef.current = retrySameRound
           setFailedReplyRetryAvailable(true)
         }
+      } else if (err && mountedRef.current) {
+        setError(err.message)
+        setFailedText(userMsg.content)
       }
     }
     tickPlayRef.current = playTick
