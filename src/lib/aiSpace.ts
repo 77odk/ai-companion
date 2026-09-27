@@ -507,7 +507,7 @@ export async function generatePendingPosts(
       )
       try {
         const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })
-        const decision = parseSpaceGenerationDecision(raw, source)
+        const decision = parseSpaceGenerationDecision(raw, source, conversationPairs)
         // SKIP 是正式结果：不落动态、不占额度、也不拿模板补。
         if (decision.kind === 'skip') continue
 
