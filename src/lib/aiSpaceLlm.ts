@@ -100,7 +100,7 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
       `1-2 short sentences, casual and warm, matching your personality. ` +
       `Vary your openings — don't reuse the same starter. ` +
       `No emoji. Never sound robotic or like customer service. ` +
-      `Identity permission never permits inventing an unsupported real-world event.\n${buildAttributionLegend('en')}\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
+      `Identity permission never permits inventing an unsupported real-world event. If there is nothing genuinely worth leaving as a post, output exactly SKIP and nothing else.\n${buildAttributionLegend('en')}\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
       idSuffix(ctx.sessionId, true)
     let user = ''
     if (ctx.nowAnchor) {
@@ -118,20 +118,36 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     if (ctx.relationshipStartDate) {
       user += `\nYou first met them on ${ctx.relationshipStartDate}. Never invent shared chats, dates, trips, memories, promises, habits, or "we used to..." from before that date. Your life before that date can have its own history, but not a shared history with them.`
     }
-    if (ctx.chatTopics && ctx.chatTopics.length > 0) {
-      // 话题保留存储原文，只在本次 prompt 出口标明 USER 来源并统一人称。
-      user += `\n\nThings USER told you (marked "today" if said the same day as this post):\n${ctx.chatTopics.map((t) => `- ${formatAttributedLine(t, 'USER', 'en')}`).join('\n')}\n`
-      if (isEvent) {
-        user += `\nThis post is about the thing you two shared or planned that day (the "today"-marked one) — write how you felt right after it, in your own words, one or two lines. Don't quote them back verbatim.`
-      } else {
-        user += `\nWrite mostly about your own day. Only when you truly shared something together, mention them naturally in one line — don't make the whole post about them.`
+    if (conversationPairs.length > 0) {
+      user += `\n\n[REAL DIALOGUE EVIDENCE]\n`
+      for (const pair of conversationPairs) {
+        const status = pair.confirmedCompletion
+          ? 'CONFIRMED: completion evidence exists'
+          : pair.plannedForDay
+            ? 'PLANNED: scheduled for this date; NOT proof it happened'
+            : 'DIALOGUE: real exchange; no completed-event claim'
+        user += `- ${status}\n  ${formatAttributedLine(pair.userText, 'USER', 'en')}\n  ${formatAttributedLine(pair.taText, 'SELF', 'en')}\n`
       }
+      if (isEvent) {
+        user += `\nThis is a confirmed-event candidate. Only evidence marked CONFIRMED may justify wording that says the event already happened or finished.`
+      } else if (isConversation) {
+        user += policy.mode === 'ai'
+          ? `\nWrite an AI-native afterthought: what you are still noticing, holding in attention, organizing, or remembering from the exchange. Do not invent a human body, place, or offline activity.`
+          : policy.mode === 'natural'
+            ? `\nWrite a light relationship afterthought: what you noticed, understood, or still care about after the exchange. Do not invent a human experience.`
+            : `\nWrite the aftertaste of this real exchange in your own voice; stay grounded in what was actually said.`
+        if (ctx.conversationKind === 'planned') {
+          user += `\nThis is the date you previously planned. A plan is NOT proof it happened. You may mention that this is the planned day, but never say it is finished unless the evidence is marked CONFIRMED.`
+        }
+      }
+    } else if (ctx.chatTopics && ctx.chatTopics.length > 0) {
+      user += `\n\nLegacy USER-only context is background only. Never treat it as proof of a complete dialogue pair or a completed event:\n${ctx.chatTopics.map((t) => `- ${formatAttributedLine(t, 'USER', 'en')}`).join('\n')}\n`
     }
     if (ctx.recent.length > 0) {
       user += `\n\nYour recent posts:\n${ctx.recent.map((r) => `- ${formatAttributedLine(r, 'SELF', 'en')}`).join('\n')}\n`
       user += `\nDon't repeat the same content — life moves on, write something new.`
     }
-    user += `\n\nWrite the post directly, content only, no explanation.`
+    user += `\n\nReturn either the post text only, or exactly SKIP.`
     return [
       { role: 'system', content: system },
       { role: 'user', content: user },
@@ -143,7 +159,7 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     `句式要多样，别老用同一种开头——禁止用「刚把」「刚刚」「今天又」「突然」这类万能开头，` +
     `像真人随手写的一样，每条动态开口都不一样（这回想天气，下回想件小事，再下回想人）。` +
     `禁止 emoji；禁止出现「设定」「人设」「朋友圈」这类词；不要用客服或工具口吻。` +
-    `身份允许怎样表达，不等于允许新增没有依据的现实事件。\n${buildAttributionLegend('zh')}\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
+    `身份允许怎样表达，不等于允许新增没有依据的现实事件。如果这次没有真正值得留下的内容，只输出 SKIP，除此之外什么都不要写。\n${buildAttributionLegend('zh')}\n${companionCore}\n${identitySoul}\n${languageContinuity}` +
     idSuffix(ctx.sessionId, false)
 
   let user = ''
@@ -163,22 +179,36 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
   if (ctx.relationshipStartDate) {
     user += `\n你和对方是在 ${ctx.relationshipStartDate} 才认识的。绝不能把这之前写成你们共同的聊天、约会、经历、回忆、约定或“以前我们……”。认识之前可以有你自己的过去，但不能有你们的共同过去。`
   }
-  if (ctx.chatTopics && ctx.chatTopics.length > 0) {
-    // 话题保留存储原文，只在本次 prompt 出口标明 USER 来源并统一人称。
-    user += `\n\nUSER 跟你提过这些事（带「今天」的是这条动态同一天说的，带日期的是那天说的）：\n${ctx.chatTopics.map((t) => `- ${formatAttributedLine(t, 'USER', 'zh')}`).join('\n')}\n`
-    if (isEvent) {
-      // 事件动态：就是为那天共同经历/约好的事发的（大事趁热），允许（也要求）自然地以那件事为主体
-      user += `这条动态正是为你和对方那天共同经历或约好的事发的（下面带「今天」的就是当天的事）：`
-      user += `从那件事出发，写你刚经历完、或正惦记着这件事时的心情——从你自己的视角，一两句自然的话，别复述对方原话。`
-    } else {
-      user += `大多数动态写你自己的日子就好。只有当你和对方真的共同经历了什么（比如约好这天去哪、这天一起做了什么、对方这天有大事你惦记着），才在这条里自然地提一句对方——别整条都写对方，更别复述对方原话。`
+  if (conversationPairs.length > 0) {
+    user += `\n\n【真实对话证据】\n`
+    for (const pair of conversationPairs) {
+      const status = pair.confirmedCompletion
+        ? '【CONFIRMED·已有完成证据】'
+        : pair.plannedForDay
+          ? '【PLANNED·约定在今天，不代表完成】'
+          : '【DIALOGUE·真实对话，不代表事件完成】'
+      user += `- ${status}\n  ${formatAttributedLine(pair.userText, 'USER', 'zh')}\n  ${formatAttributedLine(pair.taText, 'SELF', 'zh')}\n`
     }
+    if (isEvent) {
+      user += `\n这是已确认事件候选。只有标成【CONFIRMED】的真实对话证据，才能支持“已经发生 / 已经完成”的表达。`
+    } else if (isConversation) {
+      user += policy.mode === 'ai'
+        ? `\n写 AI 原生的“对话余响”：还在留意什么、记着什么、重新梳理什么；不能假装有人的身体、地点和现实生活。`
+        : policy.mode === 'natural'
+          ? `\n写关系里的“对话余响”：聊完以后仍在意、理解或想到的东西；身体化表达要轻，不得编造人的现实经历。`
+          : `\n写这轮真实对话留下的余味，可以和沉浸生活并存，但只从真实说过的话往后长。`
+      if (ctx.conversationKind === 'planned') {
+        user += `\n今天只是此前“说好要做”的日期。约好了不等于做完了：可以写“今天就是之前说好的那天”，没有【CONFIRMED】证据时绝不能写“刚看完 / 已经结束 / 做完了”一类完成表达。`
+      }
+    }
+  } else if (ctx.chatTopics && ctx.chatTopics.length > 0) {
+    user += `\n\n旧版 USER 单句只作背景，不能当作完整对话或已完成事件的证据：\n${ctx.chatTopics.map((t) => `- ${formatAttributedLine(t, 'USER', 'zh')}`).join('\n')}\n`
   }
   if (ctx.recent.length > 0) {
     user += `\n你最近发过这些动态：\n${ctx.recent.map((r) => `- ${formatAttributedLine(r, 'SELF', 'zh')}`).join('\n')}\n`
     user += `别重复同样的内容，生活继续往前——写点新鲜的。`
   }
-  user += `\n\n直接写这条新动态，只要正文，别解释。`
+  user += `\n\n只返回动态正文，或者只返回 SKIP。`
 
   return [
     { role: 'system', content: system },
@@ -186,6 +216,10 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
   ]
 }
 
+/** SKIP 是正式生成结果：不落 SpacePost、不占额度、也不触发模板兜底。 */
+export function isSpaceSkipResponse(text: string): boolean {
+  return /^\s*SKIP[.!。！]?\s*$/i.test(String(text ?? ''))
+}
 /** emoji / 表情符号物理删除用（提示词拦不住，硬过滤） */
 const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2B00}-\u{2BFF}\u{1F1E6}-\u{1F1FF}\u{2190}-\u{21FF}\u{2B05}-\u{2B07}]/gu
 
