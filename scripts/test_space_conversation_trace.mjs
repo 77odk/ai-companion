@@ -6,12 +6,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
   collectConversationDays,
-  collectConfirmedEventDays,
   collectPlannedDays,
   completeChatTopicPair,
-  hasCompletionEvidence,
   hasConcreteTopicInfo,
-  hasSharedCompletionSubject,
   conversationPairsForDay,
   isConversationMaterialCandidate,
   loadChatTopics,
@@ -102,7 +99,6 @@ localStorage.setItem('ai_space_recent_topic', JSON.stringify([
 ]))
 topics = loadChatTopics()
 assert.deepEqual([...collectPlannedDays(topics, todayKey)], [todayKey])
-assert.equal(collectConfirmedEventDays(topics, todayKey).size, 0)
 assert.equal(collectConversationDays(topics, todayKey).has(todayKey), true)
 let pairs = conversationPairsForDay(topics, todayKey)
 assert.equal(pairs.length, 1)
@@ -169,10 +165,11 @@ assert.deepEqual(
   { kind: 'post', source: 'conversation', text: '没有遵守协议的普通正文' },
 )
 
-console.log('\n[8] 本地旧的“完成/共同”语义函数 fail-closed，不再补词判断')
-assert.equal(hasCompletionEvidence('我们终于看完电影了'), false)
-assert.equal(hasSharedCompletionSubject('我们终于看完电影了'), false)
-assert.equal(collectConfirmedEventDays([], todayKey).size, 0)
+console.log('\n[8] 运行模块不再存在本地“完成/共同”语义判定 API')
+const topicSource = readFileSync(new URL('../src/lib/chatTopics.ts', import.meta.url), 'utf8')
+assert.equal(topicSource.includes('hasCompletionEvidence'), false)
+assert.equal(topicSource.includes('hasSharedCompletionSubject'), false)
+assert.equal(topicSource.includes('collectConfirmedEventDays'), false)
 
 console.log('\n[9] SKIP 是正式结果：不落盘、不记账、provisional 可释放')
 reset()
