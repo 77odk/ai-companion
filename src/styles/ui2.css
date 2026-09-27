@@ -1532,6 +1532,13 @@
   color: rgba(103, 80, 74, .55);
 }
 
+/* footer 容器 pointer-events:none（避免挡内容区），
+   隐私政策链接单独恢复可点：层级已在场景层之上 */
+.welcome-reference-footer a {
+  pointer-events: auto;
+  color: rgba(103, 80, 74, .62);
+}
+
 .welcome-reference-actions {
   width: min(100%, 288px);
   margin-top: 40px;

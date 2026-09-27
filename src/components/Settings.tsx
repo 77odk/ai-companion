@@ -109,7 +109,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
     return <ReplyLengthDetail onBack={() => setPage('main')} />
   }
   if (page === 'about') {
-    return <AboutDetail onBack={() => setPage('main')} onGoWelcome={onGoWelcome} />
+    return <AboutDetail onBack={() => setPage('main')} />
   }
   if (page === 'account') {
     return <Account onBack={() => setPage('main')} />
@@ -278,6 +278,7 @@ function MainCenter({
         <EntryRow icon={<PrivacyIcon />} label="隐私" onClick={onOpenPrivacy} />
         <EntryRow icon={<PaletteIcon />} label="外观" onClick={onOpenAppearance} />
         <EntryRow icon={<InfoIcon />} label="关于忆文" onClick={onOpenAbout} />
+        <EntryRow icon={<HomeIcon />} label="回到欢迎页" onClick={onGoWelcome} />
         <UpdateControls />
       </ProfileGroup>
 
@@ -560,6 +561,14 @@ const AboutMeIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="12" cy="8" r="3.8" />
     <path d="M5 20a7 7 0 0 1 14 0" />
+  </svg>
+)
+
+/* 回到欢迎页：小房子 */
+const HomeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5" />
+    <path d="M5.5 9.8V20h13V9.8" />
   </svg>
 )
 
@@ -1409,22 +1418,7 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
 
 /* ---------------- 详情页：关于忆文 ---------------- */
 
-function AboutDetail({ onBack, onGoWelcome }: { onBack: () => void; onGoWelcome?: () => void }) {
-  const clicks = useRef<number[]>([])
-
-  // 彩蛋：版本号连点 5 下回到欢迎页
-  const handleVersionClick = () => {
-    if (!onGoWelcome) return
-    const now = Date.now()
-    const recent = clicks.current.filter((t) => now - t < 2000)
-    recent.push(now)
-    clicks.current = recent
-    if (recent.length >= 5) {
-      clicks.current = []
-      onGoWelcome()
-    }
-  }
-
+function AboutDetail({ onBack }: { onBack: () => void }) {
   return (
     <div className="page settings-page">
       <DetailHeader title="关于忆文" onBack={onBack} />
@@ -1444,9 +1438,7 @@ function AboutDetail({ onBack, onGoWelcome }: { onBack: () => void; onGoWelcome?
         <p className="about-contact">
           <a href="/privacy.html" target="_blank" rel="noreferrer">隐私政策</a>
         </p>
-        <button type="button" className="about-version" onClick={handleVersionClick}>
-          忆文 Eluvin v1.2.3 · 内测版
-        </button>
+        <p className="about-version">忆文 Eluvin v1.2.3 · 内测版</p>
       </div>
       <UpdateControls standalone />
     </div>
