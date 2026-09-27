@@ -306,4 +306,25 @@ assert.equal(hasCompletionEvidence('We finally finished the movie together'), tr
 assert.equal(hasSharedCompletionSubject('We finally finished the movie together'), true)
 assert.equal(collectConfirmedEventDays(topics, todayKey).has(todayKey), true)
 
+console.log('\n[17] Immersive 明确 SKIP 也不能模板补位')
+reset()
+localStorage.setItem('ai_companion_ai_profile', JSON.stringify({ identityMode: 'immersive' }))
+globalThis.fetch = async () => ({
+  ok: true,
+  status: 200,
+  json: async () => ({ choices: [{ message: { content: 'SKIP' } }] }),
+})
+const immersiveDailySlot = { at: now - 5 * 60 * 1000, source: 'daily' }
+const immersiveDailyId = generationSlotIdFor(immersiveDailySlot)
+const immersiveSkipped = await generatePendingPosts({
+  posts: [],
+  mode: 'llm',
+  created: 1,
+  pending: [immersiveDailySlot],
+  used: { [`__generation_slot__:${immersiveDailyId}`]: -1 },
+}, '小忆', '你', undefined, now, () => 0.1)
+assert.equal(immersiveSkipped.created, 0)
+assert.equal(immersiveSkipped.usedFallback, false)
+assert.equal(loadCurrentPosts().length, 0)
+
 console.log('\nSpace-N1：全部通过')
