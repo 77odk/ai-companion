@@ -197,10 +197,12 @@ export function hasCompletionEvidence(text: string): boolean {
 export function hasSharedCompletionSubject(text: string): boolean {
   const t = cleanTopicText(text)
   if (!t) return false
+  // 共同主语必须直接绑定到“完成谓词”本身；中间再出现新的单数主语就不认。
+  // 例如“我们聊了会儿，我终于做完作业了”不能借前半句的“我们”升级成共同 Event。
   const zhShared =
-    /(?:我们|咱们|我和你|你和我|我俩|咱俩).{0,24}(?:刚(?:刚|才)?|已经|终于|看完|做完|完成|结束|散场|到家|回来)|(?:我们|咱们|我和你|你和我|我俩|咱俩).{0,16}(?:一起|一块儿|一块).{0,20}(?:看完|做完|完成|结束|散场|到家|回来)|(?:和你|跟你|陪你).{0,8}(?:一起|一块儿|一块).{0,20}(?:看完|做完|完成|结束|散场|到家|回来)/
+    /(?:我们|咱们|我和你|你和我|我俩|咱俩)(?:(?!我(?:刚|已经|终于|才)?).){0,24}(?:看完|做完|完成|结束|散场|到家|回来)|(?:和你|跟你|陪你).{0,8}(?:一起|一块儿|一块).{0,16}(?:看完|做完|完成|结束|散场|到家|回来)/
   const enShared =
-    /\b(?:we|you\s+and\s+i|i\s+and\s+you)\b.{0,36}\b(?:finished|completed|ended|got\s+home|came\s+back|returned)\b|\bwe\b.{0,24}\btogether\b|\btogether\b.{0,24}\bwe\b/i
+    /\b(?:we|you\s+and\s+i|i\s+and\s+you)\b(?:(?!\b(?:i|he|she|they)\b).){0,32}\b(?:finished|completed|ended|got\s+home|came\s+back|returned)\b/i
   return zhShared.test(t) || enShared.test(t)
 }
 
