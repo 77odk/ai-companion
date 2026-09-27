@@ -153,13 +153,12 @@ eq(getWeeklyReviews('200').length, 0, '迁移只落到默认角色')
 console.log('\n[9] TA 的生活 会话读写 + 角色隔离')
 resetStore()
 seedTwoSessions()
-localStorage.setItem('ai_companion_persona', '') // 空人设 → 模板兜底生成，不走 LLM
+localStorage.setItem('ai_companion_persona', '') // 空人设 + 无真实素材 → 允许 Space 为空，不强制模板补位
 const plan100 = refreshSpace('阿叙', '你', new Date(2026, 7, 23, 12).getTime(), '100')
-eq(plan100.posts.length > 0, true, '会话 100 刷新生成动态')
-ok(store.has('ai_space_posts_100'), '动态写进会话 key')
-eq(loadCurrentPosts('100').length, plan100.posts.length, '会话 100 能读回自己的动态')
-eq(loadCurrentPosts('200').length, 0, '会话 200 读不到会话 100 的动态')
-localStorage.setItem('ai_space_posts', JSON.stringify([{ ...plan100.posts[0], id: 'g-post', at: 1 }]))
+eq(plan100.posts.length, 0, '会话 100 无真实素材时允许为空')
+eq(loadCurrentPosts('100').length, 0, '会话 100 读回空 Space')
+eq(loadCurrentPosts('200').length, 0, '会话 200 同样为空且不串会话')
+localStorage.setItem('ai_space_posts', JSON.stringify([{ id: 'g-post', at: 1, kind: '日常', text: '全局旧动态', source: 'daily' }]))
 eq(loadCurrentPosts().length, 1, '无会话 loadCurrentPosts 读全局')
 
 console.log('\n[10] TA 的生活 老全局迁移：posts + lastVisit + used 迁到第一个会话')
