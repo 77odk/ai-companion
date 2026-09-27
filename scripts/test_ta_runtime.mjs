@@ -6,6 +6,7 @@ import {
   ACTIVITIES,
   applyCloudTaRuntime,
   buildTaRuntimeContext,
+  shouldInjectTaRuntimeContext,
   collectAllTaRuntime,
   detectTaRuntimeDecision,
   getOrAdvanceTaRuntime,
@@ -173,6 +174,40 @@ group('G. 展示 / 注入')
   ok(en.includes('Reading a book') && !/[\u4e00-\u9fa5]/.test(en), 'G4 en context 纯英文')
   ok(homeSrc.includes('正安静地陪着你') && homeSrc.includes('在等你'), 'G5 Home idle 文案按有无模型区分')
   ok(homeSrc.includes('isTaRuntimeIdle(runtime)'), 'G5 Home 显式识别 idle')
+}
+
+group('G2. Runtime 只在明确询问当前状态时注入')
+{
+  const zhQueries = [
+    '你在干嘛？',
+    '还在忙吗',
+    '到家了吗',
+    '你现在在做什么',
+    '还在看书吗',
+    '出差回来了吗',
+    '你现在在哪儿',
+    '你现在怎么样',
+    '睡了吗',
+  ]
+  for (const text of zhQueries) {
+    ok(shouldInjectTaRuntimeContext(text, 'zh'), `G2 命中：${text}`)
+  }
+  const enQueries = [
+    'What are you doing right now?',
+    'Are you still busy?',
+    'Did you get home?',
+    'Are you back from your business trip?',
+    'Where are you now?',
+  ]
+  for (const text of enQueries) {
+    ok(shouldInjectTaRuntimeContext(text, 'en'), `G2 EN 命中：${text}`)
+  }
+  for (const text of ['我今天吃了饺子', '你觉得这件事怎么样', '我们继续刚才的话题', 'Tell me what you think about this']) {
+    ok(!shouldInjectTaRuntimeContext(text, 'zh'), `G2 非状态询问不注入：${text}`)
+  }
+  const active = syncTaRuntimeFromAssistantText('runtime-query', '我现在在看书。', T0, '')
+  const ctx = buildTaRuntimeContext(active, 'zh')
+  ok(ctx.includes('不得补写地点、人物、食物、原因、前后经过或其他生活细节'), 'G2 注入块禁止从状态扩写生活细节')
 }
 
 group('H. Cloud / 数据边界')
