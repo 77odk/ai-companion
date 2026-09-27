@@ -153,10 +153,10 @@ export function completeChatTopicPair(
 export function hasConcreteTopicInfo(text: string): boolean {
   const t = cleanTopicText(text)
   if (t.length < CONVERSATION_MIN_LEN) return false
-  const time = /(?:今天|昨天|明天|今晚|今早|早上|上午|中午|下午|晚上|凌晨|周[一二三四五六日天]|星期[一二三四五六日天]|\d{1,2}[点时:：月日号])/i
-  const place = /(?:在|去|到|回|从).{0,10}(?:家|公司|学校|医院|店|路|站|机场|车站|办公室|宿舍|城市|现场)/
-  const personAction = /(?:我|你|他|她|TA|朋友|同事|家人|妈妈|爸爸|老板|老师).{0,14}(?:说|告诉|问|去|来|到|回|做|看|吃|喝|睡|工作|上班|下班|开会|考试|面试|生病|住院|难受|开心|生气|委屈|害怕|担心|焦虑|累|哭|笑|决定|发生|遇到|喜欢|想)/
-  const eventState = /(?:说个事|跟你说|告诉你|发生|结束|完成|看完|做完|到了|到家|回来|散场|开会|考试|面试|住院|生病|吵架|和好|生日|手术|比赛|被夸|被批评|收到|拿到|丢了|不舒服|失眠)/
+  const time = /(?:今天|昨天|明天|今晚|今早|早上|上午|中午|下午|晚上|凌晨|周[一二三四五六日天]|星期[一二三四五六日天]|\d{1,2}[点时:：月日号]|\b(?:today|yesterday|tomorrow|tonight|this\s+(?:morning|afternoon|evening)|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b)/i
+  const place = /(?:在|去|到|回|从).{0,10}(?:家|公司|学校|医院|店|路|站|机场|车站|办公室|宿舍|城市|现场)|\b(?:at|in|to|from)\s+(?:home|work|the\s+office|office|school|hospital|the\s+store|store|station|airport)\b/i
+  const personAction = /(?:我|你|他|她|TA|朋友|同事|家人|妈妈|爸爸|老板|老师).{0,14}(?:说|告诉|问|去|来|到|回|做|看|吃|喝|睡|工作|上班|下班|开会|考试|面试|生病|住院|难受|开心|生气|委屈|害怕|担心|焦虑|累|哭|笑|决定|发生|遇到|喜欢|想)|\b(?:i|you|he|she|we|they|my\s+(?:friend|coworker|colleague|mom|mother|dad|father|boss|teacher))\b.{0,24}\b(?:said|told|asked|went|came|got|did|made|saw|ate|drank|slept|worked|met|felt|feel|am|was|had|have|decided|happened|liked|wanted|worried|cried|laughed)\b/i
+  const eventState = /(?:说个事|跟你说|告诉你|发生|结束|完成|看完|做完|到了|到家|回来|散场|开会|考试|面试|住院|生病|吵架|和好|生日|手术|比赛|被夸|被批评|收到|拿到|丢了|不舒服|失眠)|\b(?:meeting|exam|interview|birthday|surgery|game|argument|hospital|sick|finished|ended|arrived|received|lost|insomnia)\b/i
   return time.test(t) || place.test(t) || personAction.test(t) || eventState.test(t)
 }
 
@@ -175,7 +175,8 @@ export function isConversationMaterialCandidate(topic: ChatTopic): boolean {
 /** 完成证据只做保守候选识别；宁可漏掉，不能把“约好了”升级成“做完了”。 */
 export function hasCompletionEvidence(text: string): boolean {
   const t = cleanTopicText(text)
-  return /(?:刚(?:刚|才)?|已经|终于).{0,18}(?:看完|做完|完成|结束|散场|到家|回来)|(?:看完|做完|完成|结束|散场|到家|回来了)[了啦]?/.test(t)
+  // 必须有“已经完成”的体标记：裸「看完/做完」可能仍是计划句（如“今晚一起看完吧”），不能升级 confirmed。
+  return /(?:刚(?:刚|才)?|已经|终于).{0,18}(?:看完|做完|完成|结束|散场|到家|回来)|(?:看完|做完|完成|结束|散场|到家|回来).{0,12}(?:了|啦)/.test(t)
 }
 
 function hasSharedSubject(text: string): boolean {
