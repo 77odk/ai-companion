@@ -307,6 +307,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const mountedRef = useRef(true)
   const finalizeRef = useRef<() => void>(() => {})
   const retriedRef = useRef(false)
+  // Space-N1：只有正常完整结束（或同轮显式重试后正常结束）的回复，才可补成 USER+SELF 对话对。
+  // Stop / 切模型中断 / 流式失败留下的 partial 仍可按既有规则落聊天历史，但绝不能冒充完整 Space 素材。
+  const spacePairEligibleRef = useRef(false)
   const assistantText = useRef('')
   // 第27条：模型独立思考字段 reasoning_content 累积（DeepSeek/Qwen/Kimi/豆包等），finalize 时合并到 thinking
   const reasoningRef = useRef('')
@@ -817,6 +820,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       controllerRef.current?.abort()
       if (displayCleanRef.current) assistantText.current = displayCleanRef.current
+      spacePairEligibleRef.current = false
       // 已收到的半截话落库不丢
       finalizeRef.current()
     }
@@ -898,6 +902,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
     let runId = ++runIdRef.current
     retriedRef.current = false
+    spacePairEligibleRef.current = true
     busyTriggeredRef.current = false
 
     const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
@@ -1318,14 +1323,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         .trim()
       if (committedAssistantText) {
         syncTaRuntimeFromAssistantText(activeSessionId || undefined, committedAssistantText, Date.now())
-        // Space-N1：只有 TA 最终可见回复真实落库后，才把本轮 USER + SELF 补成完整对话素材。
-        completeChatTopicPair(
-          userMsg.content,
-          committedAssistantText,
-          activeSessionId || undefined,
-          userMsg.ts,
-          assistantTs,
-        )
+        // Space-N1：只有“正常完整结束”的最终回复才补成完整对话素材；partial 只留在聊天历史。
+        if (spacePairEligibleRef.current) {
+          completeChatTopicPair(
+            userMsg.content,
+            committedAssistantText,
+            activeSessionId || undefined,
+            userMsg.ts,
+            assistantTs,
+          )
+          spacePairEligibleRef.current = false
+        }
       }
       const token = getToken()
       if (sid && token) {
@@ -1658,6 +1666,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         },
         onError: (err) => {
           if (runId !== runIdRef.current) return
+          // 请求失败时即使已有半截可见文本，也不把它当作完整 Space 对话对。
+          spacePairEligibleRef.current = false
           streamErrorRef.current = err
           streamEndedRef.current = true
           // onError 同样：挂载时走 playTick 流程，卸载时直接 finalize
@@ -1688,6 +1698,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       runId = ++runIdRef.current
       retriedRef.current = false
+      spacePairEligibleRef.current = true
       busyTriggeredRef.current = false
       assistantText.current = ''
       reasoningRef.current = ''
@@ -1855,6 +1866,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     controllerRef.current?.abort()
     if (displayCleanRef.current) assistantText.current = displayCleanRef.current
+    spacePairEligibleRef.current = false
     // 注意：不在这里设 finishedRef，让 finalize 自己设防重入守卫
     // runId++ 已经能阻止 playTick 继续跑
     retriedRef.current = true
