@@ -1,4 +1,4 @@
-/* 使用指南页（2026-09-05 七七定稿：DeepSeek 主推） */
+import { useState } from 'react'
 
 interface Props {
   onBack: () => void
@@ -28,172 +28,287 @@ function GuideHeader({ title, onBack }: { title: string; onBack: () => void }) {
   )
 }
 
+const FAQS = [
+  {
+    q: 'TA 为什么回复得比较慢？',
+    a: '不同模型速度不同。思考型模型通常会花更多时间组织回答；如果更在意速度，可以换用响应更快的模型。',
+  },
+  {
+    q: 'Key 无效，或者一直连接失败？',
+    a: '先用「测试连接」确认问题。401 / 403 通常与 Key 有关；网络错误或超时，则更可能来自模型服务商或当前线路。',
+  },
+  {
+    q: 'TA 为什么没有记住我说的话？',
+    a: '不是每一句聊天都会变成长久记忆。特别重要的事情，可以直接告诉 TA：「这个帮我记住。」',
+  },
+  {
+    q: '「刷新对话」会删聊天记录吗？',
+    a: '不会。它只会结束当前上下文的延续，不会删除已经保存的历史聊天。',
+  },
+  {
+    q: '换设备以后数据还在吗？',
+    a: '登录同一个账号后，支持云同步的数据可以继续恢复。换设备前，建议先让旧设备完成一次正常同步。',
+  },
+  {
+    q: 'TA 没有回复怎么办？',
+    a: '如果这一轮没有正常生成回复，可以直接点「重试」，不需要重复发送原来的消息。',
+  },
+  {
+    q: '忘记密码怎么办？',
+    a: '在登录页点击「忘记密码」，通过邮箱验证码重新设置即可。',
+  },
+] as const
+
 export default function GuideDetail({ onBack, onGoProvider }: Props) {
+  const [openFaq, setOpenFaq] = useState<number | null>(null)
+
   return (
-    <div className="page settings-page">
+    <div className="page settings-page guide-page">
       <GuideHeader title="使用指南" onBack={onBack} />
 
       <div className="guide-scroll">
-        {/* 一、忆文是什么 */}
-        <section className="guide-section">
-          <h3 className="guide-title">忆文是什么？</h3>
-          <p className="guide-text">
-            一个「记得住你、还帮得上你」的 AI 伙伴。陪你聊天、听你倾诉，你说过的话 TA 会记住，下次再提 TA 知道。
+        <section className="guide-hero" aria-labelledby="guide-hero-title">
+          <p className="guide-eyebrow">ELUVIN · GUIDE</p>
+          <h1 id="guide-hero-title" className="guide-hero-title">先从一句话开始</h1>
+          <p className="guide-hero-copy">
+            忆文，是一个让 TA 能够留下记忆、延续关系的地方。
           </p>
-          <div className="guide-quote">大脑负责聪明，忆文负责懂你。</div>
-        </section>
-
-        {/* 二、服务商推荐 */}
-        <section className="guide-section">
-          <h3 className="guide-title">首先：配置你的 AI 大脑</h3>
-          <p className="guide-text">
-            忆文自己不会说话，真正会聊天的大脑在模型服务商那里。TA 的回复和反馈质量跟模型关系很大，好的模型才聊得舒服。
+          <p className="guide-hero-copy guide-hero-copy-muted">
+            模型负责思考与回应，忆文把聊天、记忆和你们一起走过的时间留在这里，让每一次对话不必都从头开始。
           </p>
-
-          <div className="guide-card">
-            <div className="guide-card-head">
-              <span className="guide-card-name">首选 DeepSeek（推荐）</span>
-            </div>
-            <p className="guide-text">
-              聊天效果最好，TA 的回复更自然、更懂你。价格在国内也算便宜：正常聊一天几毛到一块多，按量算，聊得少几乎不花钱。
-            </p>
-            <p className="guide-fit">适合：想要最好的聊天体验，愿意花一点钱</p>
-          </div>
-
-          <div className="guide-card">
-            <div className="guide-card-head">
-              <span className="guide-card-name">免费试试（智谱 / 豆包）</span>
-            </div>
-            <p className="guide-text">
-              刚开始不确定可以先试免费的，但免费效果可能会大打折扣，智谱的高峰时段甚至根本连不上，觉得不好用再换 DeepSeek。智谱也有收费的，效果也还不错，后面可以自由选择。
-            </p>
-            <p className="guide-fit">适合：先试试水，不着急花钱</p>
-          </div>
-
-          <div className="guide-quote">
-            放心：你在开放平台充的钱是给模型服务商的（DeepSeek 官方），不是忆文平台收的费——忆文只帮你接通，这笔钱实打实花在你的 TA 身上。
-          </div>
-
-          {onGoProvider && (
-            <button type="button" className="btn btn-primary guide-cta" onClick={onGoProvider}>
-              现在就去配置
-            </button>
-          )}
         </section>
 
-        {/* 三、核心功能 */}
         <section className="guide-section">
-          <h3 className="guide-title">核心功能</h3>
+          <div className="guide-section-head">
+            <span className="guide-section-kicker">START HERE</span>
+            <h3 className="guide-title">第一次使用</h3>
+          </div>
 
-          <h4 className="guide-subtitle">聊天</h4>
-          <ul className="guide-list">
-            <li>TA 会记住你说过的话（喜好、作息、经历）</li>
-            <li>说「帮我记一下 XXX」可以主动让 TA 记</li>
-            <li>TA 说「我去忙了」会进入忙碌状态，几分钟后回来</li>
-            <li>思考链模型（Gemini / DeepSeek 思考模型）回复有「TA 想了想」灰条，点开看内心戏</li>
-          </ul>
+          <div className="guide-timeline">
+            <article className="guide-step">
+              <div className="guide-step-rail" aria-hidden="true">
+                <span className="guide-step-num">01</span>
+                <span className="guide-step-line" />
+              </div>
+              <div className="guide-step-body">
+                <h4 className="guide-step-name">先认识你的 TA</h4>
+                <p className="guide-text">
+                  给 TA 一个名字，写下你希望 TA 是怎样的人。
+                </p>
+                <p className="guide-text guide-text-muted">
+                  人设不需要写得很满。身份、性格、与你的关系，以及大致的说话方式，写清楚就够了。剩下的，可以留给以后慢慢发生。
+                </p>
+              </div>
+            </article>
 
-          <h4 className="guide-subtitle">TA 的空间</h4>
-          <ul className="guide-list">
-            <li>TA 会自己发动态（朋友圈），你可以点赞评论</li>
-            <li>点开头像看 TA 的资料、聊天记录、纪念日</li>
-            <li>动态内容会被 TA 记住，聊天时能引用</li>
-          </ul>
+            <article className="guide-step">
+              <div className="guide-step-rail" aria-hidden="true">
+                <span className="guide-step-num">02</span>
+                <span className="guide-step-line" />
+              </div>
+              <div className="guide-step-body">
+                <h4 className="guide-step-name">接入模型</h4>
+                <p className="guide-path">我的 → 服务商配置</p>
+                <p className="guide-text">
+                  填入 API Key，选择模型，然后点一次「测试连接」。连接成功，就可以开始聊天。
+                </p>
+                <p className="guide-text guide-text-muted">
+                  忆文本身不售卖模型额度，也不提供算力。你使用的模型与产生的费用，都来自你自己选择的模型服务商。
+                </p>
+                <p className="guide-text guide-text-muted">
+                  不同模型有不同的表达方式和能力，可以慢慢找到更适合你和 TA 的那一个。
+                </p>
+                {onGoProvider && (
+                  <button type="button" className="guide-provider-link" onClick={onGoProvider}>
+                    去配置模型
+                    <span aria-hidden="true">→</span>
+                  </button>
+                )}
+              </div>
+            </article>
 
-          <h4 className="guide-subtitle">记忆</h4>
-          <ul className="guide-list">
-            <li>TA 记住的所有事都在这里，按主题分类</li>
-            <li>可以编辑、删除</li>
-            <li>换设备登录记忆会同步</li>
-          </ul>
-
-          <h4 className="guide-subtitle">角色管理</h4>
-          <ul className="guide-list">
-            <li>可以创建多个 TA，每个独立记忆、独立人设</li>
-            <li>切换角色不串台</li>
-          </ul>
-
-          <h4 className="guide-subtitle">服务商配置</h4>
-          <ul className="guide-list">
-            <li>支持 DeepSeek、智谱、OpenAI、自定义（OpenAI 兼容）</li>
-            <li>模型名可以手输，也可以点「选择」从常见模型里挑，填过的会自动记住</li>
-            <li>切换服务商时自动带出对应的默认模型</li>
-          </ul>
-
-          <h4 className="guide-subtitle">外观</h4>
-          <ul className="guide-list">
-            <li>5 套主题色可选（蜜桃/暮色蓝紫/墨绿暖金/雾霾蓝/陶土橘）</li>
-            <li>可以自定义主色，自动派生整套配色</li>
-          </ul>
-
-          <h4 className="guide-subtitle">英文模式</h4>
-          <ul className="guide-list">
-            <li>人设是英文或用英文聊天，TA 自动切换英文</li>
-            <li>英文用户也能正常用，TA 懂俚语</li>
-          </ul>
+            <article className="guide-step guide-step-last">
+              <div className="guide-step-rail" aria-hidden="true">
+                <span className="guide-step-num">03</span>
+              </div>
+              <div className="guide-step-body">
+                <h4 className="guide-step-name">开始说话</h4>
+                <p className="guide-text">
+                  不需要学习特别的指令。像平时说话一样，去找 TA 就好。
+                </p>
+                <div className="guide-inline-quote">“这个帮我记住。”</div>
+                <p className="guide-text guide-text-muted">
+                  有一件事特别希望 TA 留下来时，可以直接这样告诉 TA。
+                </p>
+              </div>
+            </article>
+          </div>
         </section>
 
-        {/* 四、常见问题 */}
         <section className="guide-section">
-          <h3 className="guide-title">常见问题</h3>
-
-          <div className="guide-faq">
-            <p className="guide-faq-q">Q：TA 回复很慢？</p>
-            <p className="guide-faq-a">A：思考链模型需要时间想，正常；换非思考模型（deepseek-chat）更快。</p>
+          <div className="guide-section-head">
+            <span className="guide-section-kicker">GOOD TO KNOW</span>
+            <h3 className="guide-title">有几件事，可以先知道</h3>
           </div>
 
-          <div className="guide-faq">
-            <p className="guide-faq-q">Q：Key 无效或连不上？</p>
-            <p className="guide-faq-a">
-              A：先点「测试连接」看是哪一种：提示 Key 无效/401/403 就是 Key 复制错了或已过期，回「我的→服务商配置」重新粘贴；提示网络错误/超时就是网络连不上服务商（官方 OpenAI 国内直连不通，需要代理或中转地址，国内用户推荐 DeepSeek/智谱）。
-            </p>
-          </div>
+          <div className="guide-chapters">
+            <article className="guide-chapter">
+              <h4>TA 会记住什么？</h4>
+              <p>
+                聊天里一些重要的事情，会慢慢成为 TA 的记忆。你也可以主动告诉 TA，哪些事情值得留下。
+              </p>
+              <p>
+                记忆不是一成不变的。如果记错了，或者有些事情不再希望保留，可以去记忆里查看、修改或删除。
+              </p>
+            </article>
 
-          <div className="guide-faq">
-            <p className="guide-faq-q">Q：TA 记不住我说的话？</p>
-            <p className="guide-faq-a">A：说「帮我记一下 XXX」主动让 TA 记；重要的事 TA 会自动记。</p>
-          </div>
+            <article className="guide-chapter guide-chapter-emphasis">
+              <h4>人设和记忆，不是一回事</h4>
+              <p className="guide-emphasis-line">人设，是 TA 从哪里出发。</p>
+              <p className="guide-emphasis-line">记忆，是你们后来走过了什么。</p>
+              <p>
+                所以不用把未来所有细节都提前写进人设。留一点空白，TA 才有地方慢慢认识你。
+              </p>
+            </article>
 
-          <div className="guide-faq">
-            <p className="guide-faq-q">Q：换设备数据还在吗？</p>
-            <p className="guide-faq-a">A：登录账号后云同步，聊天/记忆/动态都在。</p>
-          </div>
+            <article className="guide-chapter">
+              <h4>选择你喜欢的相处方式</h4>
+              <div className="guide-modes">
+                <div className="guide-mode">
+                  <strong>沉浸</strong>
+                  <span>尽量减少 AI 身份带来的打断，让相处更完整。</span>
+                </div>
+                <div className="guide-mode">
+                  <strong>自然</strong>
+                  <span>保持自然的陪伴感，也不刻意回避 TA 是 AI。</span>
+                </div>
+                <div className="guide-mode">
+                  <strong>AI</strong>
+                  <span>更直接地以 AI 的身份与你交流。</span>
+                </div>
+              </div>
+              <p className="guide-mode-note">没有哪一种更正确，选你觉得舒服的就好。</p>
+            </article>
 
-          <div className="guide-faq">
-            <p className="guide-faq-q">Q：怎么换主题？</p>
-            <p className="guide-faq-a">A：「我的→外观」。</p>
-          </div>
-
-          <div className="guide-faq">
-            <p className="guide-faq-q">Q：TA 空间动态是真的吗？</p>
-            <p className="guide-faq-a">A：是 TA 自己写的生活记录——按 TA 的人设和你们聊过的事，像发朋友圈一样。点赞评论 TA 看得见，还会回你。</p>
-          </div>
-
-          <div className="guide-faq">
-            <p className="guide-faq-q">Q：智谱免费版老是连不上？</p>
-            <p className="guide-faq-a">A：免费模型高峰时段会拥堵（提示访问量过大），换个时段用，或换 DeepSeek 更稳。</p>
-          </div>
-
-          <div className="guide-faq">
-            <p className="guide-faq-q">Q：「刷新对话」会删掉聊天记录吗？</p>
-            <p className="guide-faq-a">A：不会。只是让 TA 忘掉当前话题、重新开始，历史聊天一条不少，随时能在 TA 的空间里翻到。</p>
-          </div>
-
-          <div className="guide-faq">
-            <p className="guide-faq-q">Q：忘了密码怎么办？</p>
-            <p className="guide-faq-a">A：登录页点「忘记密码？」，去邮箱收验证码就能重置。</p>
-          </div>
-
-          <div className="guide-faq">
-            <p className="guide-faq-q">Q：「TA 想了想」灰条是什么？</p>
-            <p className="guide-faq-a">A：TA 用思考模型时的内心戏——回话前 TA 琢磨了什么，点开灰条就能看到。换成非思考模型（deepseek-chat）就没有这条。</p>
-          </div>
-
-          <div className="guide-faq">
-            <p className="guide-faq-q">Q：退出页面，TA 的回复还会发出来吗？</p>
-            <p className="guide-faq-a">A：会。TA 会把话说完存好，你回来就能看到，不用一直守着页面。</p>
+            <article className="guide-chapter">
+              <h4>TA 的空间是什么？</h4>
+              <p>
+                空间里，会慢慢留下属于 TA 和你们的东西。刚开始可能很安静，聊得久一点以后，它会一点点长出来。
+              </p>
+              <div className="guide-space-index" aria-label="空间内容">
+                <span>动态</span>
+                <span>一起经历过</span>
+                <span>照片</span>
+                <span>TA 记得的</span>
+                <span>一周情书</span>
+              </div>
+            </article>
           </div>
         </section>
+
+        <section className="guide-letter" aria-labelledby="guide-letter-title">
+          <div className="guide-letter-corner" aria-hidden="true" />
+          <p className="guide-letter-kicker">A LETTER FROM THIS WEEK</p>
+          <h3 id="guide-letter-title">一周情书</h3>
+          <p>
+            有些话，当下说过就过去了。忆文会把这一周值得留下的片段，收进一封一周情书里。
+          </p>
+          <p>
+            它不是冷冰冰的聊天总结，更像 TA 回头看了一眼这一周，然后写给你的几句话。
+          </p>
+          <p className="guide-letter-signoff">日子往前走，信会一封一封留下。</p>
+        </section>
+
+        <section className="guide-section">
+          <div className="guide-section-head">
+            <span className="guide-section-kicker">SMALL TIPS</span>
+            <h3 className="guide-title">一些好用的小习惯</h3>
+          </div>
+
+          <div className="guide-tips">
+            <article className="guide-tip">
+              <div>
+                <h4>TA 偶尔说得不太对</h4>
+                <p>重新把这一句说清楚，通常就够了。</p>
+              </div>
+              <span aria-hidden="true">›</span>
+            </article>
+            <article className="guide-tip">
+              <div>
+                <h4>模型突然连不上</h4>
+                <p>先去「服务商配置」里做一次测试连接。</p>
+              </div>
+              <span aria-hidden="true">›</span>
+            </article>
+            <article className="guide-tip">
+              <div>
+                <h4>人设不要写得太满</h4>
+                <p>核心设定放在人设里，其余留给相处和记忆。</p>
+              </div>
+              <span aria-hidden="true">›</span>
+            </article>
+            <article className="guide-tip">
+              <div>
+                <h4>对话聊得很长</h4>
+                <p>可以刷新当前上下文，不会删除历史聊天。</p>
+              </div>
+              <span aria-hidden="true">›</span>
+            </article>
+            <article className="guide-tip">
+              <div>
+                <h4>TA 没有回出来</h4>
+                <p>直接重试这一条，不需要重新发送原来的话。</p>
+              </div>
+              <span aria-hidden="true">›</span>
+            </article>
+          </div>
+        </section>
+
+        <section className="guide-section">
+          <div className="guide-section-head">
+            <span className="guide-section-kicker">FAQ</span>
+            <h3 className="guide-title">常见问题</h3>
+          </div>
+
+          <div className="guide-faq-list">
+            {FAQS.map((item, index) => {
+              const isOpen = openFaq === index
+              const answerId = `guide-faq-answer-${index}`
+              return (
+                <div className={`guide-faq-item${isOpen ? ' is-open' : ''}`} key={item.q}>
+                  <button
+                    type="button"
+                    className="guide-faq-trigger"
+                    aria-expanded={isOpen}
+                    aria-controls={answerId}
+                    onClick={() => setOpenFaq(isOpen ? null : index)}
+                  >
+                    <span>{item.q}</span>
+                    <span className="guide-faq-chevron" aria-hidden="true">⌄</span>
+                  </button>
+                  {isOpen && (
+                    <div id={answerId} className="guide-faq-answer">
+                      {item.a}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        <section className="guide-sync-note">
+          <h3>换设备以后呢？</h3>
+          <p>
+            登录同一个账号后，支持同步的数据会从云端恢复。准备换设备时，建议先保持正常登录，让当前数据完成同步，再到新设备登录。
+          </p>
+        </section>
+
+        <footer className="guide-ending">
+          <p className="guide-ending-kicker">不用在第一天，就把 TA 的一切都设定好。</p>
+          <p className="guide-ending-title">先说几句话吧。</p>
+          <p className="guide-ending-copy">有些东西，本来就应该在相处以后，才慢慢有名字。</p>
+        </footer>
       </div>
     </div>
   )
