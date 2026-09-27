@@ -440,32 +440,33 @@ export async function generatePendingPosts(
   // 配额账本（已跨天滚动只留今天键）
   const ledger = readLedger(sessionId, now)
 
-  // 兜底额度：按「现存动态 + 本次已生成」逐天逐通道计数（老数据无 source 视同 daily）
-  const dayCounts = new Map<string, { daily: number; event: number }>()
+  // 兜底额度：按「现存动态 + 本次已生成」逐天逐通道计数（老数据无 source 视同 daily）。
+  const dayCounts = new Map<string, { daily: number; conversation: number; event: number }>()
   const bump = (dk: string, source: SpaceSource) => {
-    const cur = dayCounts.get(dk) ?? { daily: 0, event: 0 }
-    dayCounts.set(dk, source === 'event' ? { ...cur, event: cur.event + 1 } : { ...cur, daily: cur.daily + 1 })
+    const cur = dayCounts.get(dk) ?? { daily: 0, conversation: 0, event: 0 }
+    if (source === 'event') dayCounts.set(dk, { ...cur, event: cur.event + 1 })
+    else if (source === 'conversation') dayCounts.set(dk, { ...cur, conversation: cur.conversation + 1 })
+    else dayCounts.set(dk, { ...cur, daily: cur.daily + 1 })
   }
-  for (const p of plan.posts) bump(dayKeyOf(p.at), p.source === 'event' ? 'event' : 'daily')
+  for (const p of plan.posts) bump(dayKeyOf(p.at), p.source === 'event' ? 'event' : p.source === 'conversation' ? 'conversation' : 'daily')
   const usageOf = (dk: string) => {
-    const fromPosts = dayCounts.get(dk) ?? { daily: 0, event: 0 }
+    const fromPosts = dayCounts.get(dk) ?? { daily: 0, conversation: 0, event: 0 }
     const fromLedger = getLedgerEntry(ledger, dk)
     const daily = Math.max(fromPosts.daily, fromLedger.daily)
+    const conversation = Math.max(fromPosts.conversation, fromLedger.conversation)
     const event = Math.max(fromPosts.event, fromLedger.event)
-    return { daily, event, total: daily + event }
+    return { daily, conversation, event, total: daily + conversation + event }
   }
 
   for (const slot of plan.pending) {
     const at = slot.at
-    const source: SpaceSource = slot.source === 'event' ? 'event' : 'daily'
+    const source: SpaceSource = slot.source
     const dk = dayKeyOf(at)
     const usage = usageOf(dk)
-    // v3 按通道配额兜底：日常 ≤MAX_POSTS_PER_DAY、事件 ≤1/天、全天 ≤MAX_TOTAL_PER_DAY
-    if (source === 'event') {
-      if (usage.event >= 1 || usage.total >= MAX_TOTAL_PER_DAY) continue
-    } else {
-      if (usage.daily >= MAX_POSTS_PER_DAY || usage.total >= MAX_TOTAL_PER_DAY) continue
-    }
+    if (usage.total >= MAX_TOTAL_PER_DAY) continue
+    if (source === 'event' && usage.event >= 1) continue
+    if (source === 'conversation' && usage.conversation >= 1) continue
+    if (source === 'daily' && usage.daily >= MAX_POSTS_PER_DAY) continue
     let made: { post: SpacePost; templateKey?: string } | null = null
 
     if (canUseLlm(persona, settings, true)) {
