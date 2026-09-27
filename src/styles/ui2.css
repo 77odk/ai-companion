@@ -3699,6 +3699,44 @@
   margin-top: 8px;
 }
 
+/* 右下角「详情」：展开说明上下文总量 / 承接 / 整理分别是什么 */
+.chat-page .context-meter-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.chat-page .context-meter-detail-toggle {
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: var(--ui2-text-secondary, #817773);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.chat-page .context-meter-detail {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+}
+
+.chat-page .context-meter-detail p {
+  margin: 0;
+  color: var(--ui2-text-secondary, #817773);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.chat-page .context-meter-detail strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
 .chat-page .context-meter-actions button {
   min-height: 28px;
   padding: 5px 9px;
