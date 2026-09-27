@@ -5,6 +5,9 @@ import { API_BASE } from '../lib/sync'
 interface Props {
   onGoGuide: () => void
   onLogin: () => void
+  /** 已登录：欢迎页按钮显示「回到我的 TA」，点击直接进主界面 */
+  loggedIn?: boolean
+  onGoHome?: () => void
 }
 
 // UI2-02 返修：Web ↻ 语义 = 更新当前 Web 客户端，不是「确认已看过 Welcome」。
@@ -13,7 +16,7 @@ function handleRefresh(): void {
   void import('../lib/forceRefresh').then((m) => m.forceRefresh())
 }
 
-export default function Welcome({ onGoGuide, onLogin }: Props) {
+export default function Welcome({ onGoGuide, onLogin, loggedIn = false, onGoHome }: Props) {
   // 站点访问数字走我们自己的后端（第一方），取不到就不显示，不填 0 也不编数字。
   const [visitors, setVisitors] = useState<number | null>(null)
   useEffect(() => {
@@ -70,8 +73,12 @@ export default function Welcome({ onGoGuide, onLogin }: Props) {
             <span aria-hidden="true">→</span>
           </button>
 
-          <button type="button" className="welcome-reference-login" onClick={onLogin}>
-            已有账号，登录
+          <button
+            type="button"
+            className="welcome-reference-login"
+            onClick={loggedIn ? onGoHome : onLogin}
+          >
+            {loggedIn ? '回到我的 TA' : '已有账号，登录'}
           </button>
         </div>
       </main>
@@ -84,7 +91,7 @@ export default function Welcome({ onGoGuide, onLogin }: Props) {
       <div className="welcome-reference-footer">
         <p className="welcome-reference-keywords">记忆 · 陪伴 · 成长 · 更久的我们</p>
         <p className="welcome-reference-count">
-          <a href="/privacy.html" target="_blank" rel="noreferrer">隐私政策</a>
+          <a href="/privacy.html">隐私政策</a>
         </p>
         {visitors !== null && (
           <p className="welcome-reference-count">已有 {visitors} 人访问</p>

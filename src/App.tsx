@@ -684,6 +684,8 @@ export default function App() {
         <Welcome
           onGoGuide={() => navigate('productintro')}
           onLogin={handleWelcomeLogin}
+          loggedIn={loggedIn}
+          onGoHome={() => navigate('home')}
         />
       ) : view === 'role' ? (
         <RolePicker
