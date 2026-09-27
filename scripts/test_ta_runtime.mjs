@@ -213,7 +213,17 @@ group('G2. Runtime 只在明确询问当前状态时注入')
   for (const text of enQueries) {
     ok(shouldInjectTaRuntimeContext(text, 'en'), `G2 EN 命中：${text}`)
   }
-  for (const text of ['我今天吃了饺子', '到家了', '我还在忙呢', '你觉得这件事怎么样', '我们继续刚才的话题', 'Tell me what you think about this']) {
+  for (const text of [
+    '我今天吃了饺子',
+    '到家了',
+    '我还在忙呢',
+    '我现在在干嘛？',
+    '他还在忙吗？',
+    '你觉得我现在怎么样？',
+    '你觉得这件事怎么样',
+    '我们继续刚才的话题',
+    'Tell me what you think about this',
+  ]) {
     ok(!shouldInjectTaRuntimeContext(text, 'zh'), `G2 非状态询问不注入：${text}`)
   }
   const active = syncTaRuntimeFromAssistantText('runtime-query', '我现在在看书。', T0, '')
