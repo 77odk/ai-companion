@@ -4045,7 +4045,7 @@ textarea.persona-input {
 }
 
 .guide-text-muted {
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .guide-timeline {
@@ -4129,10 +4129,12 @@ textarea.persona-input {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  min-height: 44px;
   margin-top: 5px;
-  padding: 0;
+  padding: 10px 12px;
   border: 0;
-  background: transparent;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
   color: var(--color-primary-deep);
   font: inherit;
   font-size: 13px;
@@ -4181,7 +4183,7 @@ textarea.persona-input {
   margin: 0 0 8px;
   font-size: 14px;
   line-height: 1.76;
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .guide-chapter p:last-child {
@@ -4231,7 +4233,7 @@ textarea.persona-input {
   display: block;
   font-size: 11px;
   line-height: 1.55;
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .guide-mode-note {
@@ -4293,7 +4295,7 @@ textarea.persona-input {
   margin: 0 0 10px;
   font-size: 14px;
   line-height: 1.82;
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .guide-letter .guide-letter-signoff {
@@ -4328,7 +4330,7 @@ textarea.persona-input {
   margin: 0;
   font-size: 12px;
   line-height: 1.55;
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .guide-tip > span {
@@ -4380,7 +4382,7 @@ textarea.persona-input {
   padding: 0 24px 16px 2px;
   font-size: 13px;
   line-height: 1.72;
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .guide-sync-note {
@@ -4395,7 +4397,7 @@ textarea.persona-input {
   margin: 0;
   font-size: 13px;
   line-height: 1.72;
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .guide-ending {
@@ -4407,7 +4409,7 @@ textarea.persona-input {
   margin: 0 0 9px;
   font-size: 12px;
   line-height: 1.6;
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .guide-ending-title {
@@ -4424,7 +4426,7 @@ textarea.persona-input {
   margin: 0 auto;
   font-size: 12px;
   line-height: 1.7;
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 @media (max-width: 360px) {
