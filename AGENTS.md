@@ -63,7 +63,7 @@
    - `ai_companion_msgs_<sessionId>`（会话消息）
    - `ai_companion_settings` / `ai_companion_persona` / `ai_companion_user_profile` / `ai_companion_ai_profile` / `ai_companion_theme` / `ai_companion_events` / `ai_companion_anniversaries_<sessionId>` / `ai_companion_photos`
 3. 不许改后端 API 路径、请求体字段名、响应结构；不许新增后端表；不许开第二套同步接口。
-4. 同步只走现有 `/api/sync` 全量 blob；新数据要同步就并进这个 blob。
+4. 同步只走现有同步通道（当前主路径是 Cloud State 的 `/api/state/pull|push` 增量；老的 `/api/sync` 全量 blob 仍在兼容）；新数据要同步就注册成现有 kind，不许开第二套同步接口。
 5. 不许删减、裁剪、清空任何用户聊天记录。「刷新对话」只清当前上下文，历史一条不少。
 6. 不许把用户模型 key 上传服务器；所有 AI 调用在用户浏览器里用用户自己的 key。
 7. 不许加游客直进聊天（登录墙必须在前），不许绕过 ConsentGate 的同意与年龄门。
@@ -123,7 +123,7 @@
 
 ## 九、推 main 前必须跑的测试
 
-1. `npm test`，必须全绿（当前基线：49 通过、0 失败）。
+1. `npm test`，必须全绿（当前基线：202 通过、0 失败）。
 2. 按改动模块额外跑对应脚本：
    - 改 Event：`node scripts/test_event_detector.mjs`、`test_event_store.mjs`、`test_event_e3.mjs`
    - 改记忆：`node scripts/test_memory_recall.mjs`、`test_memory_recency.mjs`、`test_memory_saved.mjs`、`test_memory_summary.mjs`、`test_memorywall.mjs`

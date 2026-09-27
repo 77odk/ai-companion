@@ -40,7 +40,7 @@
 npm install
 npm run dev      # 开发
 npm test         # 单测（scripts/test_*.mjs，node 原生跑 TS）
-npm run build    # tsc + vite + PWA + 混淆
+npm run build    # tsc + vite + PWA + 构建指纹（不做代码混淆）
 ```
 
 ## 仓库导航
