@@ -13,7 +13,7 @@ const TOPICS_KEY = 'ai_space_recent_topic'
 const MAX_TOPICS = 8
 const TOPIC_MAX_LEN = 80
 const REPLY_MAX_LEN = 240
-const CONVERSATION_MIN_LEN = 4
+const CONVERSATION_MIN_LEN = 2
 
 /** 一条聊天素材。pairVersion=1 + taText 表示这是本批之后真实完成的一轮对话。 */
 export interface ChatTopic {
@@ -107,7 +107,7 @@ export function loadChatTopics(sessionId?: string): ChatTopic[] {
 /** USER 消息先记下来；此时还不是 conversation 素材，必须等 TA 回复真实落库。 */
 export function recordChatTopic(text: string, sessionId?: string, ts: number = Date.now()): void {
   const clean = cleanTopicText(text)
-  if (clean.length < 4) return
+  if (clean.length < CONVERSATION_MIN_LEN) return
   const topics = loadChatTopics(sessionId)
   const intent = parseFutureIntent(String(text ?? ''), new Date(ts))
   const topic: ChatTopic = { t: clean, ts }
@@ -144,8 +144,8 @@ export function completeChatTopicPair(
 
 /**
  * 只做机械粗筛，不做“事件有没有发生”的语义判断。
- * - 字数下限；
- * - 去掉空白/标点后有足够字符多样性，过滤纯“哈哈哈哈 / 好的好的 / 在吗在吗”一类低信息重复。
+ * - 只保留极低的字数下限；
+ * - 去掉空白/标点后至少有 2 个不同字符，挡住纯重复；是否值得发由现有 Space LLM 决定。
  * 拿不准的完整对话对全部留下，最终是否值得发、属于 conversation 还是 event，
  * 交给进入 Space 时本来就会发生的那一次模型调用。
  */
@@ -154,7 +154,7 @@ export function hasConcreteTopicInfo(text: string): boolean {
   if (t.length < CONVERSATION_MIN_LEN) return false
   const dense = Array.from(t.toLowerCase()).filter((ch) => /[\p{L}\p{N}]/u.test(ch))
   if (dense.length < CONVERSATION_MIN_LEN) return false
-  return new Set(dense).size >= 3
+  return new Set(dense).size >= 2
 }
 
 export function isConversationMaterialCandidate(topic: ChatTopic): boolean {
