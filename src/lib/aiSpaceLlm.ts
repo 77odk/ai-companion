@@ -45,7 +45,6 @@ export interface LlmContext {
     userText: string
     taText: string
     plannedForDay?: boolean
-    confirmedCompletion?: boolean
   }>
   /** conversation 内部语义：普通余响 / 到了此前约定的日期。 */
   conversationKind?: 'trace' | 'planned'
@@ -121,24 +120,23 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     if (conversationPairs.length > 0) {
       user += `\n\n[REAL DIALOGUE EVIDENCE]\n`
       for (const pair of conversationPairs) {
-        const status = pair.confirmedCompletion
-          ? 'CONFIRMED: completion evidence exists'
-          : pair.plannedForDay
-            ? 'PLANNED: scheduled for this date; NOT proof it happened'
-            : 'DIALOGUE: real exchange; no completed-event claim'
+        const status = pair.plannedForDay
+          ? 'PLANNED: an earlier real exchange scheduled something for this date; this is NOT proof it happened'
+          : 'DIALOGUE: a real USER/SELF exchange from this date'
         user += `- ${status}\n  ${formatAttributedLine(pair.userText, 'USER', 'en')}\n  ${formatAttributedLine(pair.taText, 'SELF', 'en')}\n`
       }
-      if (isEvent) {
-        user += `\nThis is a confirmed-event candidate. Only evidence marked CONFIRMED may justify wording that says the event already happened or finished.`
-      } else if (isConversation) {
+      if (isConversation) {
         user += policy.mode === 'ai'
           ? `\nWrite an AI-native afterthought: what you are still noticing, holding in attention, organizing, or remembering from the exchange. Do not invent a human body, place, or offline activity.`
           : policy.mode === 'natural'
             ? `\nWrite a light relationship afterthought: what you noticed, understood, or still care about after the exchange. Do not invent a human experience.`
             : `\nWrite the aftertaste of this real exchange in your own voice; stay grounded in what was actually said.`
+        user += `\nClassify the source while writing. Use EVENT only when the supplied real dialogue itself clearly establishes that USER and SELF actually shared an activity/event and it already happened. A plan, question, hypothetical, uncertain wording, or USER's solo experience is never EVENT. Otherwise use CONVERSATION.`
         if (ctx.conversationKind === 'planned') {
-          user += `\nThis is the date you previously planned. A plan is NOT proof it happened. You may mention that this is the planned day, but never say it is finished unless the evidence is marked CONFIRMED.`
+          user += `\nThis date comes from an earlier plan. The plan alone is never completion evidence. Compare it with the real dialogue from this date; if the dialogue does not clearly establish that the shared plan actually happened, stay CONVERSATION or SKIP.`
         }
+      } else if (isEvent) {
+        user += `\nLegacy event slot: stay strictly grounded in the supplied real dialogue and never invent completion.`
       }
     } else if (ctx.chatTopics && ctx.chatTopics.length > 0) {
       user += `\n\nLegacy USER-only context is background only. Never treat it as proof of a complete dialogue pair or a completed event:\n${ctx.chatTopics.map((t) => `- ${formatAttributedLine(t, 'USER', 'en')}`).join('\n')}\n`
@@ -147,7 +145,9 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
       user += `\n\nYour recent posts:\n${ctx.recent.map((r) => `- ${formatAttributedLine(r, 'SELF', 'en')}`).join('\n')}\n`
       user += `\nDon't repeat the same content — life moves on, write something new.`
     }
-    user += `\n\nReturn either the post text only, or exactly SKIP.`
+    user += isConversation
+      ? `\n\nReturn exactly one of these formats:\nSKIP\nCONVERSATION: <post text>\nEVENT: <post text>`
+      : `\n\nReturn either the post text only, or exactly SKIP.`
     return [
       { role: 'system', content: system },
       { role: 'user', content: user },
@@ -182,24 +182,23 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
   if (conversationPairs.length > 0) {
     user += `\n\n【真实对话证据】\n`
     for (const pair of conversationPairs) {
-      const status = pair.confirmedCompletion
-        ? '【CONFIRMED·已有完成证据】'
-        : pair.plannedForDay
-          ? '【PLANNED·约定在今天，不代表完成】'
-          : '【DIALOGUE·真实对话，不代表事件完成】'
+      const status = pair.plannedForDay
+        ? '【PLANNED·此前真实对话约在今天，但这不证明已经发生】'
+        : '【DIALOGUE·今天的真实 USER/SELF 对话】'
       user += `- ${status}\n  ${formatAttributedLine(pair.userText, 'USER', 'zh')}\n  ${formatAttributedLine(pair.taText, 'SELF', 'zh')}\n`
     }
-    if (isEvent) {
-      user += `\n这是已确认事件候选。只有标成【CONFIRMED】的真实对话证据，才能支持“已经发生 / 已经完成”的表达。`
-    } else if (isConversation) {
+    if (isConversation) {
       user += policy.mode === 'ai'
         ? `\n写 AI 原生的“对话余响”：还在留意什么、记着什么、重新梳理什么；不能假装有人的身体、地点和现实生活。`
         : policy.mode === 'natural'
           ? `\n写关系里的“对话余响”：聊完以后仍在意、理解或想到的东西；身体化表达要轻，不得编造人的现实经历。`
           : `\n写这轮真实对话留下的余味，可以和沉浸生活并存，但只从真实说过的话往后长。`
+      user += `\n同时判断来源：只有这些真实对话本身已经清楚表明 USER 和 SELF 确实共同经历了某件事，而且事情已经发生，才可以返回 EVENT。约定、疑问、假设、不确定表达、USER 自己单独发生的事，都不能算 EVENT；其余值得留下的内容返回 CONVERSATION。`
       if (ctx.conversationKind === 'planned') {
-        user += `\n今天只是此前“说好要做”的日期。约好了不等于做完了：可以写“今天就是之前说好的那天”，没有【CONFIRMED】证据时绝不能写“刚看完 / 已经结束 / 做完了”一类完成表达。`
+        user += `\n今天来自此前的约定。约定本身永远不是完成证据；请把它和今天的真实对话一起理解。今天的对话没有明确证明共同计划真的发生，就只能 CONVERSATION 或 SKIP。`
       }
+    } else if (isEvent) {
+      user += `\n这是兼容旧路径的事件槽，仍只能依据真实对话，不得补写没有依据的完成事实。`
     }
   } else if (ctx.chatTopics && ctx.chatTopics.length > 0) {
     user += `\n\n旧版 USER 单句只作背景，不能当作完整对话或已完成事件的证据：\n${ctx.chatTopics.map((t) => `- ${formatAttributedLine(t, 'USER', 'zh')}`).join('\n')}\n`
@@ -208,7 +207,9 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
     user += `\n你最近发过这些动态：\n${ctx.recent.map((r) => `- ${formatAttributedLine(r, 'SELF', 'zh')}`).join('\n')}\n`
     user += `别重复同样的内容，生活继续往前——写点新鲜的。`
   }
-  user += `\n\n只返回动态正文，或者只返回 SKIP。`
+  user += isConversation
+    ? `\n\n严格只返回以下三种格式之一：\nSKIP\nCONVERSATION: <动态正文>\nEVENT: <动态正文>`
+    : `\n\n只返回动态正文，或者只返回 SKIP。`
 
   return [
     { role: 'system', content: system },
@@ -220,6 +221,37 @@ export function buildLlmMessages(ctx: LlmContext, lang?: 'zh' | 'en'): ApiMessag
 export function isSpaceSkipResponse(text: string): boolean {
   return /^\s*SKIP[.!。！]?\s*$/i.test(String(text ?? ''))
 }
+
+export type SpaceGenerationDecision =
+  | { kind: 'skip' }
+  | { kind: 'post'; source: SpaceSource; text: string }
+
+/**
+ * conversation 槽的一次生成同时完成“要不要发 + 属于余响还是已发生共同事件”的语义判断。
+ * 本地不再用动作词/完成词正则判事实；模型不按协议时 fail-safe 为 conversation，绝不自动升级 event。
+ */
+export function parseSpaceGenerationDecision(
+  text: string,
+  requestedSource: SpaceSource,
+): SpaceGenerationDecision {
+  const raw = String(text ?? '').trim()
+  if (isSpaceSkipResponse(raw)) return { kind: 'skip' }
+
+  if (requestedSource === 'conversation') {
+    const match = raw.match(/^\s*(CONVERSATION|EVENT)\s*[:：]\s*([\s\S]+?)\s*$/i)
+    if (!match) return raw ? { kind: 'post', source: 'conversation', text: raw } : { kind: 'skip' }
+    const body = String(match[2] ?? '').trim()
+    if (!body) return { kind: 'skip' }
+    return {
+      kind: 'post',
+      source: match[1].toUpperCase() === 'EVENT' ? 'event' : 'conversation',
+      text: body,
+    }
+  }
+
+  return raw ? { kind: 'post', source: requestedSource, text: raw } : { kind: 'skip' }
+}
+
 /** emoji / 表情符号物理删除用（提示词拦不住，硬过滤） */
 const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2B00}-\u{2BFF}\u{1F1E6}-\u{1F1FF}\u{2190}-\u{21FF}\u{2B05}-\u{2B07}]/gu
 
