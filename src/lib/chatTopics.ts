@@ -171,18 +171,6 @@ export function isConversationMaterialCandidate(topic: ChatTopic): boolean {
   )
 }
 
-/**
- * 旧版语义判定导出保留为兼容壳，但 Space-N1 不再使用本地正则判“完成/共同”。
- * 返回 false 是刻意的 fail-closed：任何调用方都不能再凭本地词法把计划/问句/个人事件升级成 confirmed。
- */
-export function hasCompletionEvidence(_text: string): boolean {
-  return false
-}
-
-export function hasSharedCompletionSubject(_text: string): boolean {
-  return false
-}
-
 /** 新格式里已经完整成对的 planned FutureIntent。旧 futureDay 因没有 pairVersion，不会进入。 */
 export function collectPlannedDays(topics: ChatTopic[], todayKey: string): Set<string> {
   const out = new Set<string>()
@@ -225,18 +213,6 @@ export function collectConversationEvidenceAt(topics: ChatTopic[], todayKey: str
     }
   }
   return out
-}
-
-/**
- * 兼容导出：confirmed event 不再由本地规则预判，因此预规划阶段永远为空。
- * 真正的 event source 由单次 Space LLM 生成结果决定。
- */
-export function collectConfirmedEventDays(_topics: ChatTopic[], _todayKey: string): Set<string> {
-  return new Set()
-}
-
-export function collectConfirmedEventEvidenceAt(_topics: ChatTopic[], _todayKey: string): Map<string, number> {
-  return new Map()
 }
 
 /**
