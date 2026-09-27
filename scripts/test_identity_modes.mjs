@@ -214,7 +214,8 @@ assert.ok(chatSource.includes('刚才那句没答稳，我不拿不确定的话�
 assert.ok(chatSource.includes('content: repairFailureText, ts: assistantTs'), 'repair 无效或报错都统一走分级 fallback')
 
 console.log('\n[9] 0 正文失败：只允许当前轮次显式重试')
-assert.match(chatSource, /const hadNoReply = Boolean\(err\) && assistantText\.current\.trim\(\) === ''/, '只有 0 正文错误开放重试')
+assert.match(chatSource, /const hadNoReply = assistantText\.current\.trim\(\) === ''/, '请求报错或正常结束但 0 正文都开放手动重试')
+assert.ok(chatSource.includes("err?.message ?? 'TA 没有返回正文'"), '正常结束但正文为空也给人话失败态')
 assert.match(chatSource, /failedReplyRetryRef\.current = retrySameRound/, '0 正文失败登记当前轮次重试')
 assert.match(chatSource, /const sameSession = \(getActiveSessionId\(\) \|\| null\) === \(activeSessionId \|\| null\)/, '重试不得跨会话')
 assert.match(chatSource, /const sameSegment = !activeSessionId \|\| getSessionStart\(activeSessionId\) === sessionStart/, '刷新对话后旧重试失效')
