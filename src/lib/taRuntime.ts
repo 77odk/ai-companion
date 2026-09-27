@@ -523,6 +523,8 @@ const EN_RUNTIME_QUERY_PATTERNS: readonly RegExp[] = [
 export function shouldInjectTaRuntimeContext(userText: string, lang: Lang = 'zh'): boolean {
   const text = String(userText ?? '').trim()
   if (!text) return false
+  // 明确是 USER / 第三人的主语时，本地直接排除；这里只做稳定的主语边界，不理解活动词义。
+  if (/^(?:我|我们|咱们|他|她|它|他们|她们|它们)/.test(text)) return false
   const primary = lang === 'en' ? EN_RUNTIME_QUERY_PATTERNS : ZH_RUNTIME_QUERY_PATTERNS
   const secondary = lang === 'en' ? ZH_RUNTIME_QUERY_PATTERNS : EN_RUNTIME_QUERY_PATTERNS
   return primary.some((pattern) => pattern.test(text)) || secondary.some((pattern) => pattern.test(text))
