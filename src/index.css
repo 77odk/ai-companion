@@ -4154,7 +4154,7 @@ textarea.persona-input {
 
 .guide-provider-link:focus-visible,
 .guide-faq-trigger:focus-visible {
-  outline: 2px solid var(--color-primary-deep);
+  outline: 2px solid var(--color-text);
   outline-offset: 2px;
 }
 
