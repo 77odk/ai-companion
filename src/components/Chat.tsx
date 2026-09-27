@@ -193,6 +193,21 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [contextBusy, setContextBusy] = useState<'compact' | 'bridge' | null>(null)
   const [contextNotice, setContextNotice] = useState<string | null>(null)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
+  const [contextDetailOpen, setContextDetailOpen] = useState(false)
+  const contextMeterRef = useRef<HTMLDivElement>(null)
+
+  // 点外部关闭用量浮层：与身份 / 模型胶囊同一套逻辑（原先只有 onBlur，点空白关不掉）
+  useEffect(() => {
+    if (!contextMenuOpen) return
+    const closeOutside = (event: PointerEvent) => {
+      if (!contextMeterRef.current?.contains(event.target as Node)) {
+        setContextMenuOpen(false)
+        setContextDetailOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    return () => document.removeEventListener('pointerdown', closeOutside)
+  }, [contextMenuOpen])
   const [pendingMemoryCorrection, setPendingMemoryCorrection] = useState<{ target: MemoryCorrectionTarget; value: string } | null>(() =>
     activeSessionId ? loadPendingMemoryCorrection(activeSessionId, sessionStart, getToken() ?? '') : null,
   )
@@ -2018,6 +2033,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             <ChatCompanionControls sessionId={activeSessionId} />
             <div
               className="context-meter-slot"
+              ref={contextMeterRef}
               onBlur={(event) => {
                 if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setContextMenuOpen(false)
               }}
@@ -2105,6 +2121,32 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                       </button>
                     )}
                   </div>
+                  <div className="context-meter-footer">
+                    <button
+                      type="button"
+                      className="context-meter-detail-toggle"
+                      aria-expanded={contextDetailOpen}
+                      onClick={() => setContextDetailOpen((value) => !value)}
+                    >
+                      详情
+                    </button>
+                  </div>
+                  {contextDetailOpen && (
+                    <div className="context-meter-detail">
+                      <p>
+                        <strong>上下文总量</strong>
+                        ：刷新对话之后这一段的内容量，聊一句涨一点，只增不减；刷新或整理之后重新起算。本轮输入 / 输出 / Cache 是服务商返回的这一次用量。
+                      </p>
+                      <p>
+                        <strong>承接</strong>
+                        ：刷新之后想让 TA 还记得上一段，就点它。TA 会读一遍上一段最后约 30 条里的重点，临时挂在对话里，大约 8 轮后自动退场；上一段的记录不会被搬进来，也不会被删。
+                      </p>
+                      <p>
+                        <strong>整理</strong>
+                        ：这一段聊得太长时点它，较早的对话会被压成一段话，最近 12 条保留原文。聊天记录一条不少，只是发给 TA 的形式变了。
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
