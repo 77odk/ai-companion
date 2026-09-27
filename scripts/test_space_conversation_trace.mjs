@@ -79,6 +79,13 @@ assert.equal(hasConcreteTopicInfo('今天好累'), true)
 assert.equal(hasConcreteTopicInfo('失恋了'), true)
 assert.equal(hasConcreteTopicInfo('好难过'), true)
 assert.equal(hasConcreteTopicInfo('哈哈哈'), false)
+
+reset()
+const shortTs = now - 2 * HOUR
+recordChatTopic('失恋了', undefined, shortTs)
+assert.equal(loadChatTopics().length, 1)
+assert.equal(completeChatTopicPair('失恋了', '我在，慢慢说。', undefined, shortTs, shortTs + 10_000), true)
+assert.equal(isConversationMaterialCandidate(loadChatTopics()[0]), true)
 assert.equal(hasConcreteTopicInfo('I had a rough meeting at work today'), true)
 
 console.log('\n[4] 对话对严格按 session 隔离')
