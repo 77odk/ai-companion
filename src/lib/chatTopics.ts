@@ -4,7 +4,7 @@
 // 老数据没有 pairVersion/taText，保留可读但绝不自动升级成 conversation 素材。
 //
 // FutureIntent 只证明“约好了”：到 futureDay 只能作为 planned 素材。
-// 只有当天新对话里出现保守的完成证据，才升级成 confirmed event；宁可漏掉，也不能把约定写成已经发生。
+// “是否真的共同发生/完成”不在本地做语义正则判断；交给 Space 本来就会执行的那一次 LLM 生成判定。
 
 import { stripMemoryMarkers } from './memory.ts'
 import { parseFutureIntent, futureDayKey } from './futureIntent.ts'
@@ -36,8 +36,6 @@ export interface SpaceConversationPair {
   taTs: number
   /** 这组素材来自此前“约好今天做”的 FutureIntent。 */
   plannedForDay: boolean
-  /** 当天聊天出现了保守的“已经完成”证据。 */
-  confirmedCompletion: boolean
 }
 
 const topicsKey = (sessionId?: string) => (sessionId ? `${TOPICS_KEY}_${sessionId}` : TOPICS_KEY)
@@ -145,19 +143,18 @@ export function completeChatTopicPair(
 }
 
 /**
- * 只做“粗筛”，不替模型理解语义：
- * 1) USER 原话达到最低长度；
- * 2) 至少带一个机械的具体信息信号（时间 / 场景地点 / 人与动作 / 明确状态或事情）。
- * 拿不准的留下，生成动态的那一次模型仍可返回 SKIP。
+ * 只做机械粗筛，不做“事件有没有发生”的语义判断。
+ * - 字数下限；
+ * - 去掉空白/标点后有足够字符多样性，过滤纯“哈哈哈哈 / 好的好的 / 在吗在吗”一类低信息重复。
+ * 拿不准的完整对话对全部留下，最终是否值得发、属于 conversation 还是 event，
+ * 交给进入 Space 时本来就会发生的那一次模型调用。
  */
 export function hasConcreteTopicInfo(text: string): boolean {
   const t = cleanTopicText(text)
   if (t.length < CONVERSATION_MIN_LEN) return false
-  const time = /(?:今天|昨天|明天|今晚|今早|早上|上午|中午|下午|晚上|凌晨|周[一二三四五六日天]|星期[一二三四五六日天]|\d{1,2}[点时:：月日号]|\b(?:today|yesterday|tomorrow|tonight|this\s+(?:morning|afternoon|evening)|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b)/i
-  const place = /(?:在|去|到|回|从).{0,10}(?:家|公司|学校|医院|店|路|站|机场|车站|办公室|宿舍|城市|现场)|\b(?:at|in|to|from)\s+(?:home|work|the\s+office|office|school|hospital|the\s+store|store|station|airport)\b/i
-  const personAction = /(?:我|你|他|她|TA|朋友|同事|家人|妈妈|爸爸|老板|老师).{0,14}(?:说|告诉|问|去|来|到|回|做|看|吃|喝|睡|工作|上班|下班|开会|考试|面试|生病|住院|难受|开心|生气|委屈|害怕|担心|焦虑|累|哭|笑|决定|发生|遇到|喜欢|想)|\b(?:i|you|he|she|we|they|my\s+(?:friend|coworker|colleague|mom|mother|dad|father|boss|teacher))\b.{0,24}\b(?:said|told|asked|went|came|got|did|made|saw|ate|drank|slept|worked|met|felt|feel|am|was|had|have|decided|happened|liked|wanted|worried|cried|laughed)\b/i
-  const eventState = /(?:说个事|跟你说|告诉你|发生|结束|完成|看完|做完|到了|到家|回来|散场|开会|考试|面试|住院|生病|吵架|和好|生日|手术|比赛|被夸|被批评|收到|拿到|丢了|不舒服|失眠)|\b(?:meeting|exam|interview|birthday|surgery|game|argument|hospital|sick|finished|ended|arrived|received|lost|insomnia)\b/i
-  return time.test(t) || place.test(t) || personAction.test(t) || eventState.test(t)
+  const dense = Array.from(t.toLowerCase()).filter((ch) => /[\p{L}\p{N}]/u.test(ch))
+  if (dense.length < CONVERSATION_MIN_LEN) return false
+  return new Set(dense).size >= 4
 }
 
 export function isConversationMaterialCandidate(topic: ChatTopic): boolean {
@@ -172,40 +169,16 @@ export function isConversationMaterialCandidate(topic: ChatTopic): boolean {
   )
 }
 
-/** 完成证据只做保守候选识别；宁可漏掉，不能把计划、否定或假设升级成“做完了”。 */
-export function hasCompletionEvidence(text: string): boolean {
-  const t = cleanTopicText(text)
-  if (!t) return false
-
-  // 先排除“差点 / 还没 / 如果 / 打算”等明显未完成或假设语气。
-  // 这是硬安全门，不追求全语言理解；拿不准就不升级 confirmed。
-  const negatedOrConditional =
-    /(?:差点|险些|还没|尚未|没有|没能|如果|假如|要是|准备|打算|计划|想要|想|等会|待会).{0,24}(?:看完|做完|完成|结束|散场|到家|回来)|(?:看完|做完|完成|结束|散场|到家|回来).{0,12}(?:再|才).{0,12}(?:说|聊|做)|\b(?:almost|nearly|haven't|have\s+not|hasn't|has\s+not|didn't|did\s+not|not\s+(?:finished|completed|done)|if|unless|when|once|plan(?:ned)?\s+to|going\s+to|will|would)\b/i
-  const interrogativeOrUncertain =
-    /[？?]|(?:吗|么|是不是|是否|有没有|可能|也许|大概|好像|似乎).{0,18}(?:看完|做完|完成|结束|散场|到家|回来)|(?:看完|做完|完成|结束|散场|到家|回来).{0,12}(?:吗|么|吧|可能|也许|大概)|\b(?:did|have|has|could|might|maybe|perhaps|probably|possibly)\b.{0,24}\b(?:finish(?:ed)?|complete(?:d)?|end(?:ed)?|done|return(?:ed)?)\b/i
-  if (negatedOrConditional.test(t) || interrogativeOrUncertain.test(t)) return false
-
-  const zhCompleted =
-    /(?:刚(?:刚|才)?|已经|终于).{0,18}(?:看完|做完|完成|结束|散场|到家|回来)|(?:看完|做完|完成|结束|散场|到家|回来).{0,12}(?:了|啦)/
-  const enCompleted =
-    /\b(?:just|already|finally)\b.{0,30}\b(?:finished|completed|ended|got\s+home|came\s+back|returned)\b|\b(?:finished|completed|ended|got\s+home|came\s+back|returned)\b.{0,18}\b(?:already|finally|today|tonight)\b/i
-  return zhCompleted.test(t) || enCompleted.test(t)
+/**
+ * 旧版语义判定导出保留为兼容壳，但 Space-N1 不再使用本地正则判“完成/共同”。
+ * 返回 false 是刻意的 fail-closed：任何调用方都不能再凭本地词法把计划/问句/个人事件升级成 confirmed。
+ */
+export function hasCompletionEvidence(_text: string): boolean {
+  return false
 }
 
-/**
- * confirmed event 必须由“这句话本身”证明是共同动作。
- * 不再用“同一天存在 planned”给无关完成事项背书，也不把“跟你说”这类称呼当共同经历。
- */
-export function hasSharedCompletionSubject(text: string): boolean {
-  const t = cleanTopicText(text)
-  if (!t) return false
-  // 共同主语必须直接绑定到“完成谓词”本身；中间再出现新的单数主语就不认。
-  // 例如“我们聊了会儿，我终于做完作业了”不能借前半句的“我们”升级成共同 Event。
-  const zhShared =
-    /(?:我们|咱们|我和你|你和我|我俩|咱俩)(?:(?!我(?:刚|已经|终于|才)?).){0,24}(?:看完|做完|完成|结束|散场|到家|回来)|(?:和你|跟你|陪你).{0,8}(?:一起|一块儿|一块).{0,16}(?:看完|做完|完成|结束|散场|到家|回来)/
-  const enShared =
-    /\b(?:we|you\s+and\s+i|i\s+and\s+you)\b(?:(?!\b(?:i|he|she|they)\b).){0,32}\b(?:finished|completed|ended|got\s+home|came\s+back|returned)\b/i
-  return zhShared.test(t) || enShared.test(t)
+export function hasSharedCompletionSubject(_text: string): boolean {
+  return false
 }
 
 /** 新格式里已经完整成对的 planned FutureIntent。旧 futureDay 因没有 pairVersion，不会进入。 */
@@ -252,34 +225,16 @@ export function collectConversationEvidenceAt(topics: ChatTopic[], todayKey: str
   return out
 }
 
-/** 哪些日期有足够依据升级为 confirmed event。 */
-export function collectConfirmedEventDays(topics: ChatTopic[], todayKey: string): Set<string> {
-  const out = new Set<string>()
-  for (const topic of topics) {
-    if (!isConversationMaterialCandidate(topic) || topic.ts <= 0) continue
-    const day = dayKeyOfTs(topic.ts)
-    if (day > todayKey) continue
-    // confirmed 只认“这一条真实对话自身就能证明：共同动作已经完成”。
-    // planned 仍可进入 conversation，但绝不能仅凭同日计划把别的完成事项升级成共同 Event。
-    if (hasCompletionEvidence(topic.t) && hasSharedCompletionSubject(topic.t)) out.add(day)
-  }
-  return out
+/**
+ * 兼容导出：confirmed event 不再由本地规则预判，因此预规划阶段永远为空。
+ * 真正的 event source 由单次 Space LLM 生成结果决定。
+ */
+export function collectConfirmedEventDays(_topics: ChatTopic[], _todayKey: string): Set<string> {
+  return new Set()
 }
 
-export function collectConfirmedEventEvidenceAt(topics: ChatTopic[], todayKey: string): Map<string, number> {
-  const confirmed = collectConfirmedEventDays(topics, todayKey)
-  const out = new Map<string, number>()
-  for (const topic of topics) {
-    if (!isConversationMaterialCandidate(topic) || topic.ts <= 0) continue
-    const day = dayKeyOfTs(topic.ts)
-    if (
-      !confirmed.has(day) ||
-      !hasCompletionEvidence(topic.t) ||
-      !hasSharedCompletionSubject(topic.t)
-    ) continue
-    out.set(day, Math.max(out.get(day) ?? 0, topic.taTs ?? topic.ts))
-  }
-  return out
+export function collectConfirmedEventEvidenceAt(_topics: ChatTopic[], _todayKey: string): Map<string, number> {
+  return new Map()
 }
 
 /**
@@ -303,22 +258,21 @@ export function conversationPairsForDay(
       ts: topic.ts,
       taTs: topic.taTs as number,
       plannedForDay,
-      confirmedCompletion:
-        sameDay &&
-        hasCompletionEvidence(topic.t) &&
-        hasSharedCompletionSubject(topic.t),
     })
   }
-  const sorted = rows
-    .sort((a, b) => Math.max(a.taTs, a.ts) - Math.max(b.taTs, b.ts))
+
+  const sorted = rows.sort((a, b) => Math.max(a.taTs, a.ts) - Math.max(b.taTs, b.ts))
   const maxRows = Math.max(1, limit)
   const selected = sorted.slice(-maxRows)
-  const latestConfirmed = [...sorted].reverse().find((row) => row.confirmedCompletion)
+
+  // 如果这天来自旧约定，至少保留一组 planned 原始对话，让模型能把“当天发生了什么”
+  // 与“之前约好了什么”放在一起理解；不在本地做动作词匹配。
+  const latestPlanned = [...sorted].reverse().find((row) => row.plannedForDay)
   if (
-    latestConfirmed &&
-    !selected.some((row) => row.ts === latestConfirmed.ts && row.taTs === latestConfirmed.taTs)
+    latestPlanned &&
+    !selected.some((row) => row.ts === latestPlanned.ts && row.taTs === latestPlanned.taTs)
   ) {
-    selected[0] = latestConfirmed
+    selected[0] = latestPlanned
     selected.sort((a, b) => Math.max(a.taTs, a.ts) - Math.max(b.taTs, b.ts))
   }
   return selected
