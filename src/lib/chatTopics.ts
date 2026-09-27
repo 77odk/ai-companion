@@ -1,29 +1,55 @@
-// 最近聊天话题（事件触发：TA 的动态呼应用户提到的事）
-// 聊天页用户每次发消息时 recordChatTopic 记一条（带时间戳），动态生成时 loadChatTopics 读出来注入 LLM。
-// 按会话分 key（ai_space_recent_topic_<sid>），无会话回落全局 key，最多保留最近 5 条。
-// ★带时间戳：TA 生成动态时能识别「这件事是哪天说的/提到哪天」，只在事件当天（或当天相关）呼应，
-//   不是当天聊完当天硬发（2026-08-26 七七拍板：当天的事当天发，特定日期事件到那天再发）。
-// ★futureDay（因果链第一步 2026-09-09）：约定类话题（"周五去看电影"）额外记「事发生那天」——
-//   到那天（futureDay ≤ 今天）才作为事件日触发 TA 的动态呼应（"刚看完那部片"），不是说话当天就发。
+// 最近聊天素材：给 TA 的 Space 提供“对话余响”与已确认事件证据。
+// 继续沿用现有 ai_space_recent_topic_<sid> key，不新增 storage key。
+// 新聊天先记 USER 原话；只有 TA 最终可见回复真实落库后，才补成 pairVersion=1 的“对话对”。
+// 老数据没有 pairVersion/taText，保留可读但绝不自动升级成 conversation 素材。
+//
+// FutureIntent 只证明“约好了”：到 futureDay 只能作为 planned 素材。
+// 只有当天新对话里出现保守的完成证据，才升级成 confirmed event；宁可漏掉，也不能把约定写成已经发生。
 
 import { stripMemoryMarkers } from './memory.ts'
 import { parseFutureIntent, futureDayKey } from './futureIntent.ts'
 
 const TOPICS_KEY = 'ai_space_recent_topic'
-const MAX_TOPICS = 5
-const TOPIC_MAX_LEN = 50
+const MAX_TOPICS = 8
+const TOPIC_MAX_LEN = 80
+const REPLY_MAX_LEN = 240
+const CONVERSATION_MIN_LEN = 6
 
-/** 一条话题：内容 + 记录时的时间戳（用于判断隔了多久、关联日期） */
+/** 一条聊天素材。pairVersion=1 + taText 表示这是本批之后真实完成的一轮对话。 */
 export interface ChatTopic {
   t: string
   ts: number
-  /** 因果链第一步：约定发生那天的自然日 key（YYYY-MM-DD），仅约定类话题有 */
+  /** 约定发生日（YYYY-MM-DD）；只代表 planned，不代表发生。 */
   futureDay?: string
+  /** TA 当轮最终真实可见回复；旧数据没有。 */
+  taText?: string
+  /** TA 回复真实落库时间。 */
+  taTs?: number
+  /** 只有新格式完整对话对才写 1；旧数据不迁移。 */
+  pairVersion?: 1
+}
+
+export interface SpaceConversationPair {
+  userText: string
+  taText: string
+  ts: number
+  taTs: number
+  /** 这组素材来自此前“约好今天做”的 FutureIntent。 */
+  plannedForDay: boolean
+  /** 当天聊天出现了保守的“已经完成”证据。 */
+  confirmedCompletion: boolean
 }
 
 const topicsKey = (sessionId?: string) => (sessionId ? `${TOPICS_KEY}_${sessionId}` : TOPICS_KEY)
 
-/** 把一条用户消息清成「可当话题的摘要」：去记忆标记、压空白、截断 */
+function dayKeyOfTs(ts: number): string {
+  const d = new Date(ts)
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
+/** USER 原话只做轻清洗，不做语义摘要。 */
 export function cleanTopicText(text: string): string {
   const t = stripMemoryMarkers(String(text ?? ''))
     .replace(/\s+/g, ' ')
@@ -32,7 +58,16 @@ export function cleanTopicText(text: string): string {
   return t.length > TOPIC_MAX_LEN ? `${t.slice(0, TOPIC_MAX_LEN)}…` : t
 }
 
-/** 读最近话题（最多 MAX_TOPICS 条，坏数据兜底空）。兼容旧版纯字符串数组（当 ts=0）与缺 futureDay 的老对象 */
+/** TA 回复同样只压空白/截长，保留 TA 当时真实理解，不二次调用模型。 */
+export function cleanTopicReply(text: string): string {
+  const t = stripMemoryMarkers(String(text ?? ''))
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!t) return ''
+  return t.length > REPLY_MAX_LEN ? `${t.slice(0, REPLY_MAX_LEN)}…` : t
+}
+
+/** 读素材。老字符串/老对象继续兼容读取，但不会被伪装成新对话对。 */
 export function loadChatTopics(sessionId?: string): ChatTopic[] {
   try {
     const raw = localStorage.getItem(topicsKey(sessionId))
@@ -42,11 +77,27 @@ export function loadChatTopics(sessionId?: string): ChatTopic[] {
     return arr
       .map((x): ChatTopic | null => {
         if (typeof x === 'string' && x.trim().length > 0) return { t: x.trim(), ts: 0 }
-        if (x && typeof x === 'object' && typeof x.t === 'string' && x.t.trim().length > 0) {
-          const futureDay = typeof x.futureDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.futureDay) ? x.futureDay : undefined
-          return { t: x.t.trim(), ts: typeof x.ts === 'number' ? x.ts : 0, ...(futureDay ? { futureDay } : {}) }
+        if (!x || typeof x !== 'object' || typeof x.t !== 'string' || x.t.trim().length === 0) return null
+        const futureDay = typeof x.futureDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.futureDay)
+          ? x.futureDay
+          : undefined
+        const topic: ChatTopic = {
+          t: x.t.trim(),
+          ts: typeof x.ts === 'number' && Number.isFinite(x.ts) ? x.ts : 0,
+          ...(futureDay ? { futureDay } : {}),
         }
-        return null
+        if (
+          x.pairVersion === 1 &&
+          typeof x.taText === 'string' &&
+          x.taText.trim().length > 0 &&
+          typeof x.taTs === 'number' &&
+          Number.isFinite(x.taTs)
+        ) {
+          topic.pairVersion = 1
+          topic.taText = x.taText.trim()
+          topic.taTs = x.taTs
+        }
+        return topic
       })
       .filter((x): x is ChatTopic => x !== null)
       .slice(-MAX_TOPICS)
@@ -55,12 +106,11 @@ export function loadChatTopics(sessionId?: string): ChatTopic[] {
   }
 }
 
-/** 记一条用户消息进最近话题（太短/没内容的跳过，凑满 5 条滚旧）。ts 默认 now */
+/** USER 消息先记下来；此时还不是 conversation 素材，必须等 TA 回复真实落库。 */
 export function recordChatTopic(text: string, sessionId?: string, ts: number = Date.now()): void {
   const clean = cleanTopicText(text)
   if (clean.length < 4) return
   const topics = loadChatTopics(sessionId)
-  // 因果链第一步：约定类消息（带未来时间）额外记「约定发生那天」
   const intent = parseFutureIntent(String(text ?? ''), new Date(ts))
   const topic: ChatTopic = { t: clean, ts }
   if (intent) topic.futureDay = futureDayKey(intent, new Date(ts))
@@ -69,45 +119,174 @@ export function recordChatTopic(text: string, sessionId?: string, ts: number = D
 }
 
 /**
- * 因果链第一步：把话题列表转成「事件日」集合（纯函数，可单测）。
- * 规则：
- * - 话题本身那天（ts 的自然日）是事件日（v3 原有：当天聊的事当天可发）
- * - 约定类话题的 futureDay（约定发生那天）也是事件日，但只到「今天」为止——
- *   还没到的约定不算事件日（不能预生成未来的动态），过期太久的（> 回填窗口）由计划器自然不扫。
- * @param topics 话题列表
- * @param todayKey 今天自然日 key（YYYY-MM-DD）
+ * TA 最终可见回复已经真实落库后，把同一轮 USER 素材补成“对话对”。
+ * 精确锁 userTs + 清洗后 USER 文本，避免并发/切角色时串轮；找不到就不猜。
  */
-export function collectTopicDays(topics: ChatTopic[], todayKey: string): Set<string> {
+export function completeChatTopicPair(
+  userText: string,
+  taText: string,
+  sessionId?: string,
+  userTs: number = 0,
+  taTs: number = Date.now(),
+): boolean {
+  if (!Number.isFinite(userTs) || userTs <= 0) return false
+  const user = cleanTopicText(userText)
+  const reply = cleanTopicReply(taText)
+  if (!user || !reply) return false
+  const topics = loadChatTopics(sessionId)
+  for (let i = topics.length - 1; i >= 0; i--) {
+    const topic = topics[i]
+    if (topic.ts !== userTs || topic.t !== user || topic.pairVersion === 1) continue
+    topics[i] = { ...topic, taText: reply, taTs, pairVersion: 1 }
+    localStorage.setItem(topicsKey(sessionId), JSON.stringify(topics.slice(-MAX_TOPICS)))
+    return true
+  }
+  return false
+}
+
+/**
+ * 只做“粗筛”，不替模型理解语义：
+ * 1) USER 原话达到最低长度；
+ * 2) 至少带一个机械的具体信息信号（时间 / 场景地点 / 人与动作 / 明确状态或事情）。
+ * 拿不准的留下，生成动态的那一次模型仍可返回 SKIP。
+ */
+export function hasConcreteTopicInfo(text: string): boolean {
+  const t = cleanTopicText(text)
+  if (t.length < CONVERSATION_MIN_LEN) return false
+  const time = /(?:今天|昨天|明天|今晚|今早|早上|上午|中午|下午|晚上|凌晨|周[一二三四五六日天]|星期[一二三四五六日天]|\d{1,2}[点时:：月日号])/i
+  const place = /(?:在|去|到|回|从).{0,10}(?:家|公司|学校|医院|店|路|站|机场|车站|办公室|宿舍|城市|现场)/
+  const personAction = /(?:我|你|他|她|TA|朋友|同事|家人|妈妈|爸爸|老板|老师).{0,14}(?:说|告诉|问|去|来|到|回|做|看|吃|喝|睡|工作|上班|下班|开会|考试|面试|生病|住院|难受|开心|生气|委屈|害怕|担心|焦虑|累|哭|笑|决定|发生|遇到|喜欢|想)/
+  const eventState = /(?:说个事|跟你说|告诉你|发生|结束|完成|看完|做完|到了|到家|回来|散场|开会|考试|面试|住院|生病|吵架|和好|生日|手术|比赛|被夸|被批评|收到|拿到|丢了|不舒服|失眠)/
+  return time.test(t) || place.test(t) || personAction.test(t) || eventState.test(t)
+}
+
+export function isConversationMaterialCandidate(topic: ChatTopic): boolean {
+  return (
+    topic.pairVersion === 1 &&
+    typeof topic.taText === 'string' &&
+    topic.taText.trim().length > 0 &&
+    typeof topic.taTs === 'number' &&
+    Number.isFinite(topic.taTs) &&
+    topic.taTs > 0 &&
+    hasConcreteTopicInfo(topic.t)
+  )
+}
+
+/** 完成证据只做保守候选识别；宁可漏掉，不能把“约好了”升级成“做完了”。 */
+export function hasCompletionEvidence(text: string): boolean {
+  const t = cleanTopicText(text)
+  return /(?:刚(?:刚|才)?|已经|终于).{0,18}(?:看完|做完|完成|结束|散场|到家|回来)|(?:看完|做完|完成|结束|散场|到家|回来了)[了啦]?/.test(t)
+}
+
+function hasSharedSubject(text: string): boolean {
+  return /(?:我们|咱们|一起|跟你|和你|陪你|你和我)/.test(cleanTopicText(text))
+}
+
+/** 新格式里已经完整成对的 planned FutureIntent。旧 futureDay 因没有 pairVersion，不会进入。 */
+export function collectPlannedDays(topics: ChatTopic[], todayKey: string): Set<string> {
   const out = new Set<string>()
-  for (const t of topics) {
-    if (!t || typeof t !== 'object') continue
-    if (typeof t.ts === 'number' && Number.isFinite(t.ts) && t.ts > 0) {
-      const d = new Date(t.ts)
-      const m = String(d.getMonth() + 1).padStart(2, '0')
-      const day = String(d.getDate()).padStart(2, '0')
-      out.add(`${d.getFullYear()}-${m}-${day}`)
-    }
-    // 约定发生那天：已到（≤今天）才算事件日，没到不算（未来动态不预生成）
-    if (typeof t.futureDay === 'string' && t.futureDay <= todayKey) {
-      out.add(t.futureDay)
-    }
+  for (const topic of topics) {
+    if (!isConversationMaterialCandidate(topic)) continue
+    if (topic.futureDay && topic.futureDay <= todayKey) out.add(topic.futureDay)
   }
   return out
 }
 
 /**
- * 事件动态的因果时间下界：只取“那一天实际聊到这件事”的最新时间。
- * futureDay 只是约定发生日，不是当天已经发生的聊天证据，所以绝不拿它当 evidenceAt。
+ * conversation 有两种来源：
+ * - 当天真实完整对话对；
+ * - 到了约定日的 planned 对话对。
+ * confirmed event 日由事件通道优先，aiSpace planner 会避免同天再发 conversation。
  */
-export function collectTopicEvidenceAt(topics: ChatTopic[]): Map<string, number> {
-  const out = new Map<string, number>()
-  for (const t of topics) {
-    if (!t || typeof t !== 'object' || !Number.isFinite(t.ts) || t.ts <= 0) continue
-    const d = new Date(t.ts)
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const key = `${d.getFullYear()}-${m}-${day}`
-    out.set(key, Math.max(out.get(key) ?? 0, t.ts))
+export function collectConversationDays(topics: ChatTopic[], todayKey: string): Set<string> {
+  const out = collectPlannedDays(topics, todayKey)
+  for (const topic of topics) {
+    if (!isConversationMaterialCandidate(topic) || topic.ts <= 0) continue
+    const day = dayKeyOfTs(topic.ts)
+    if (day <= todayKey) out.add(day)
   }
   return out
+}
+
+/** conversation 的因果时间下界：普通余响晚于 TA 回复；planned 日则至少不能早于 7:00（旧证据不会推到未来）。 */
+export function collectConversationEvidenceAt(topics: ChatTopic[], todayKey: string): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const topic of topics) {
+    if (!isConversationMaterialCandidate(topic)) continue
+    if (topic.ts > 0) {
+      const day = dayKeyOfTs(topic.ts)
+      if (day <= todayKey) out.set(day, Math.max(out.get(day) ?? 0, topic.taTs ?? topic.ts))
+    }
+    if (topic.futureDay && topic.futureDay <= todayKey) {
+      const previous = out.get(topic.futureDay)
+      // 约定是过去说的：不用旧时间戳把约定日动态推成“刚发生”；没有当天证据时保持 undefined。
+      if (previous == null) out.set(topic.futureDay, 0)
+    }
+  }
+  return out
+}
+
+/** 哪些日期有足够依据升级为 confirmed event。 */
+export function collectConfirmedEventDays(topics: ChatTopic[], todayKey: string): Set<string> {
+  const out = new Set<string>()
+  const planned = collectPlannedDays(topics, todayKey)
+  for (const topic of topics) {
+    if (!isConversationMaterialCandidate(topic) || topic.ts <= 0) continue
+    const day = dayKeyOfTs(topic.ts)
+    if (day > todayKey || !hasCompletionEvidence(topic.t)) continue
+    if (planned.has(day) || hasSharedSubject(topic.t)) out.add(day)
+  }
+  return out
+}
+
+export function collectConfirmedEventEvidenceAt(topics: ChatTopic[], todayKey: string): Map<string, number> {
+  const confirmed = collectConfirmedEventDays(topics, todayKey)
+  const out = new Map<string, number>()
+  for (const topic of topics) {
+    if (!isConversationMaterialCandidate(topic) || topic.ts <= 0) continue
+    const day = dayKeyOfTs(topic.ts)
+    if (!confirmed.has(day) || !hasCompletionEvidence(topic.t)) continue
+    out.set(day, Math.max(out.get(day) ?? 0, topic.taTs ?? topic.ts))
+  }
+  return out
+}
+
+/**
+ * 只给某条 Space 动态它对应自然日的真实素材，最多 3 组；不再塞“最近 5 条不相干话题”。
+ * plannedForDay 只代表“今天是说好的那天”；confirmedCompletion 才代表已完成。
+ */
+export function conversationPairsForDay(
+  topics: ChatTopic[],
+  dayKey: string,
+  limit: number = 3,
+): SpaceConversationPair[] {
+  const plannedExists = topics.some((t) => isConversationMaterialCandidate(t) && t.futureDay === dayKey)
+  const rows: SpaceConversationPair[] = []
+  for (const topic of topics) {
+    if (!isConversationMaterialCandidate(topic)) continue
+    const sameDay = topic.ts > 0 && dayKeyOfTs(topic.ts) === dayKey
+    const plannedForDay = topic.futureDay === dayKey
+    if (!sameDay && !plannedForDay) continue
+    rows.push({
+      userText: topic.t,
+      taText: topic.taText as string,
+      ts: topic.ts,
+      taTs: topic.taTs as number,
+      plannedForDay,
+      confirmedCompletion: sameDay && hasCompletionEvidence(topic.t) && (plannedExists || hasSharedSubject(topic.t)),
+    })
+  }
+  return rows
+    .sort((a, b) => Math.max(a.taTs, a.ts) - Math.max(b.taTs, b.ts))
+    .slice(-Math.max(1, limit))
+}
+
+/** 兼容旧调用名：现在只返回“已确认发生”的 event 日，不再把普通聊天/未来约定冒充 event。 */
+export function collectTopicDays(topics: ChatTopic[], todayKey: string): Set<string> {
+  return collectConfirmedEventDays(topics, todayKey)
+}
+
+/** 兼容旧调用名：event evidence 只来自当天完成证据。 */
+export function collectTopicEvidenceAt(topics: ChatTopic[]): Map<string, number> {
+  return collectConfirmedEventEvidenceAt(topics, '9999-12-31')
 }
