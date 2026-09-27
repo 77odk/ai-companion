@@ -470,26 +470,9 @@ export async function generatePendingPosts(
     let made: { post: SpacePost; templateKey?: string } | null = null
 
     if (canUseLlm(persona, settings, true)) {
-      // ★每条动态按它自己的时间戳(at)构建上下文——回填昨天就按昨天的日期/时段写，
-      //   话题标签也以 at 那天为基准（at 当天聊的标「今天」，其余标日期），凌晨回填不穿帮
+      // 每条动态只取它自己那一天真正相关的完整对话对；旧 USER-only topic 不进入新素材链。
       const atBase = new Date(at)
-      const sameDay = (ts: number): boolean => {
-        if (!ts) return false
-        const d = new Date(ts)
-        return (
-          d.getFullYear() === atBase.getFullYear() &&
-          d.getMonth() === atBase.getMonth() &&
-          d.getDate() === atBase.getDate()
-        )
-      }
-      const chatTopics = rawTopics.map((x) => {
-        // 因果链第一步：这条动态的日子 = 某条约定「发生那天」→ 特别标出，TA 才会写"刚看完那部片"而不是干提旧事
-        if (x.futureDay && x.futureDay === dayKeyOf(at)) return `今天(说好要做的) ${x.t}`
-        if (sameDay(x.ts)) return `今天 ${x.t}`
-        const d = new Date(x.ts)
-        if (Number.isFinite(x.ts) && x.ts > 0) return `${d.getMonth() + 1}-${d.getDate()} ${x.t}`
-        return x.t
-      })
+      const conversationPairs = conversationPairsForDay(rawTopics, dk, 3)
       const atDateStr = `${atBase.getMonth() + 1}月${atBase.getDate()}日`
       const atVars: TemplateVar = {
         ...vars,
@@ -506,11 +489,11 @@ export async function generatePendingPosts(
           timeWord: atVars.timeWord,
           weatherWord: atVars.weatherWord,
           recent,
-          chatTopics,
+          conversationPairs,
           atDateStr,
-          // v3 时刻锚 + 事件通道标记（事件动态提示词按「那天共同的事」写，日常仍写自己的生活）
           nowAnchor,
           postSource: source,
+          conversationKind: slot.conversationKind,
           relationshipStartDate,
         },
         spaceLang,
