@@ -3993,8 +3993,7 @@ textarea.persona-input {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.18em;
-  color: var(--color-primary-deep);
-  opacity: 0.76;
+  color: var(--color-text);
 }
 
 .guide-hero-title {
@@ -4017,7 +4016,7 @@ textarea.persona-input {
 
 .guide-hero-copy-muted {
   margin-bottom: 0;
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .guide-section {
@@ -4082,7 +4081,7 @@ textarea.persona-input {
   border-radius: 50%;
   background: color-mix(in srgb, var(--color-primary) 13%, var(--color-card));
   border: 1px solid color-mix(in srgb, var(--color-primary) 25%, var(--color-border));
-  color: var(--color-primary-deep);
+  color: var(--color-text);
   font-size: 10px;
   font-weight: 760;
   letter-spacing: 0.04em;
@@ -4120,7 +4119,7 @@ textarea.persona-input {
   padding: 5px 9px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  color: var(--color-primary-deep);
+  color: var(--color-text);
   font-size: 12px;
   font-weight: 650;
 }
@@ -4135,19 +4134,28 @@ textarea.persona-input {
   border: 0;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--color-primary) 7%, transparent);
-  color: var(--color-primary-deep);
+  color: var(--color-text);
   font: inherit;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
 }
 
-.guide-provider-link span {
+.guide-action-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
   transition: transform 160ms ease;
 }
 
-.guide-provider-link:active span {
+.guide-provider-link:active .guide-action-icon {
   transform: translateX(2px);
+}
+
+.guide-provider-link:focus-visible,
+.guide-faq-trigger:focus-visible {
+  outline: 2px solid var(--color-primary-deep);
+  outline-offset: 2px;
 }
 
 .guide-inline-quote {
@@ -4171,8 +4179,8 @@ textarea.persona-input {
   border-bottom: 1px solid var(--guide-hairline);
 }
 
-.guide-chapter h4,
-.guide-sync-note h3 {
+.guide-chapter h3,
+.guide-sync-note h2 {
   margin: 0 0 9px;
   font-size: 15px;
   font-weight: 700;
@@ -4252,7 +4260,7 @@ textarea.persona-input {
   padding: 5px 9px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-primary) 7%, transparent);
-  color: var(--color-text-muted);
+  color: var(--color-text);
   font-size: 11px;
   line-height: 1;
 }
@@ -4284,7 +4292,7 @@ textarea.persona-input {
   );
 }
 
-.guide-letter h3 {
+.guide-letter h2 {
   margin: 0 0 13px;
   font-size: 21px;
   font-weight: 730;
@@ -4319,7 +4327,7 @@ textarea.persona-input {
   border-bottom: 1px solid var(--guide-hairline);
 }
 
-.guide-tip h4 {
+.guide-tip h3 {
   margin: 0 0 4px;
   font-size: 14px;
   font-weight: 680;
@@ -4331,14 +4339,6 @@ textarea.persona-input {
   font-size: 12px;
   line-height: 1.55;
   color: var(--color-text);
-}
-
-.guide-tip > span {
-  flex: none;
-  color: var(--color-text-muted);
-  font-size: 20px;
-  font-weight: 300;
-  opacity: 0.55;
 }
 
 .guide-faq-list {
@@ -4367,10 +4367,10 @@ textarea.persona-input {
 }
 
 .guide-faq-chevron {
+  width: 18px;
+  height: 18px;
   flex: none;
   color: var(--color-text-muted);
-  font-size: 18px;
-  line-height: 1;
   transition: transform 160ms ease;
 }
 
