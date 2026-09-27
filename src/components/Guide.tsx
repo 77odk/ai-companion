@@ -125,7 +125,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
                 <span className="guide-step-line" />
               </div>
               <div className="guide-step-body">
-                <h3 className="guide-step-name">接入模型</h4>
+                <h3 className="guide-step-name">接入模型</h3>
                 <p className="guide-path">我的 / 服务商配置</p>
                 <p className="guide-text">
                   填入 API Key，选择模型，然后点一次「测试连接」。连接成功，就可以开始聊天。
