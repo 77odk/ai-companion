@@ -1,7 +1,7 @@
 // TA 的空间 · 动态引擎（localStorage 读写 + 对外入口）
 // 纯逻辑都在 aiSpaceCore.ts / aiSpaceLlm.ts（可被 Node 单测），本文件只负责存取与组装。
 // 生成路径分三态：
-//   llm      有可生成资格 + key：异步生成；Natural/AI 只消费真实 event 证据槽
+//   llm      有可生成资格 + key：异步生成；Natural/AI 只消费真实完整对话候选
 //   template Immersive 无 key 时可用本地生活模板；Natural/AI 不用模板造事实
 //   no-persona 空人设仍可浏览；无证据时允许空间为空
 
@@ -275,7 +275,7 @@ export interface RefreshPlan {
   mode: SpaceMode
   /** 本次新生成/待生成的数量（llm 模式为 pending 长度） */
   created: number
-  /** llm 模式下待异步生成的时间戳与来源通道（从旧到新；event=事件动态，不占日常配额） */
+  /** llm 模式下待异步生成的时间戳与候选来源（从旧到新；conversation 可在单次生成后落成 event） */
   pending: SpaceSlot[]
   /** used 快照，供 llm 降级模板时去重 */
   used: UsedTemplates
@@ -343,7 +343,7 @@ export function refreshSpace(
         return Math.max(existing, ledgerTotal) < 1
       })
 
-  // 空人设也可在配置好模型后消费真实 conversation / event；没有模型时保持空。
+  // 空人设也可在配置好模型后消费真实 conversation 候选；没有模型时保持空。
   // Immersive 同样不再为了“页面不能空”强塞本地兜底。
   if (!persona.trim()) {
     if (canUseLlm(persona, settings, true)) {
