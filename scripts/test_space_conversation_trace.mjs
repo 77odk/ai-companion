@@ -2,6 +2,7 @@
 // 覆盖：新对话对 / 旧数据不迁移 / conversation 第三来源 / planned≠completed / SKIP 真正不落盘。
 
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   collectConversationDays,
   collectConfirmedEventDays,
@@ -217,5 +218,14 @@ reset()
 const emptyPlan = refreshSpace('小忆', '你', now)
 assert.equal(emptyPlan.pending.length, 0)
 assert.equal(emptyPlan.created, 0)
+
+console.log('\n[10] partial 回复不能补成完整对话对')
+const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+assert.match(chatSource, /const spacePairEligibleRef = useRef\(false\)/)
+assert.match(chatSource, /if \(spacePairEligibleRef\.current\) \{[\s\S]{0,500}completeChatTopicPair/)
+assert.match(chatSource, /const handleStop = \(\) => \{[\s\S]{0,900}spacePairEligibleRef\.current = false/)
+assert.match(chatSource, /onError: \(err\) => \{[\s\S]{0,500}spacePairEligibleRef\.current = false/)
+assert.match(chatSource, /onModelSettingsChanged = \(\) => \{[\s\S]{0,700}spacePairEligibleRef\.current = false/)
+assert.equal((chatSource.match(/spacePairEligibleRef\.current = true/g) ?? []).length >= 2, true)
 
 console.log('\nSpace-N1：全部通过')
