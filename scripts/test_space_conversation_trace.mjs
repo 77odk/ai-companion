@@ -103,7 +103,6 @@ assert.equal(collectConversationDays(topics, todayKey).has(todayKey), true)
 let pairs = conversationPairsForDay(topics, todayKey)
 assert.equal(pairs.length, 1)
 assert.equal(pairs[0].plannedForDay, true)
-assert.equal(pairs[0].sameDay, false)
 const plannedSlots = planBackfillSlots(
   now - DAY,
   now,
@@ -135,7 +134,6 @@ const prompt = buildLlmMessages({
   conversationPairs: [{
     userText: '周一一起看电影吧',
     taText: '好，到那天我们再一起看。',
-    sameDay: false,
     plannedForDay: true,
   }],
 }, 'zh')[1].content
