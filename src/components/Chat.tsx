@@ -1405,7 +1405,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         const safeFallback = lang === 'en'
           ? "That answer didn't come out reliably, so I won't pretend it did."
           : '刚才那句没答稳，我不拿不确定的话糊弄你。'
-        const repairFailureText = canReuseFirstReplyOnRepairFailure ? cleaned : safeFallback
+        const resolveRepairFailureText = () => {
+          if (!canReuseFirstReplyOnRepairFailure) return safeFallback
+          // repair 等待期间身份模式可能切换；真正提交首版前按“此刻”模式重新验身份边界。
+          const fallbackIdentityMode = resolveIdentityMode(activeSessionId || undefined)
+          const fallbackAllowBusy = allowsBusyState(fallbackIdentityMode)
+          const fallbackAvailability = classifyAvailability(cleaned)
+          const fallbackIdentityProblem =
+            looksEmbodiedSelfClaim(cleaned, fallbackIdentityMode) ||
+            (!fallbackAllowBusy && fallbackAvailability?.state === 'unavailable' && fallbackAvailability.owner === 'SELF')
+          return fallbackIdentityProblem ? safeFallback : cleaned
+        }
         void chatCompletion(settings, [
           ...apiMessages,
           { role: 'assistant', content: cleaned },
@@ -1426,7 +1436,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               looksEmbodiedSelfClaim(retryCleaned, retryIdentityMode) ||
               (!retryAllowBusy && retryAvailability?.state === 'unavailable' && retryAvailability.owner === 'SELF')
             ) {
-              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: repairFailureText, ts: assistantTs }]
+              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: resolveRepairFailureText(), ts: assistantTs }]
               commitFinal(final)
             } else if (retryAllowBusy && retryAvailability?.state === 'unavailable' && retryAvailability.owner === 'SELF') {
               busyTriggeredRef.current = true
@@ -1440,7 +1450,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           })
           .catch(() => {
             // repair 失败/超时：只有“纯客服腔”首版可以退回；编造/身份/归因问题仍绝不放回。
-            const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: repairFailureText, ts: assistantTs }]
+            const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: resolveRepairFailureText(), ts: assistantTs }]
             commitFinal(final)
           })
         return
@@ -1508,8 +1518,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const finishStreaming = () => {
       if (finishedRef.current) return
       const err = streamErrorRef.current
-      // “一个字都没回来”既可能是请求报错，也可能是 provider 正常结束但 content 为空（例如只给 reasoning）。
-      const hadNoReply = assistantText.current.trim() === ''
+      // “一个字都没回来”看最终可见正文，不看 raw：只有 think / Memory / correction / action marker 也算 0 正文。
+      const visibleReplyBody = stripActionMarkers(
+        stripEmoji(stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(assistantText.current)), lang)),
+        lang,
+      ).trim()
+      const hadNoReply = visibleReplyBody === ''
       finalize()  // finalize 自己设置 finishedRef 防重入
       if (mountedRef.current && hadNoReply) {
         setError(err?.message ?? 'TA 没有返回正文')
