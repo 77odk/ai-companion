@@ -28,6 +28,24 @@ function GuideHeader({ title, onBack }: { title: string; onBack: () => void }) {
   )
 }
 
+
+function ArrowRightIcon() {
+  return (
+    <svg className="guide-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 12h14" />
+      <path d="m13 6 6 6-6 6" />
+    </svg>
+  )
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg className="guide-faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  )
+}
+
 const FAQS = [
   {
     q: 'TA 为什么回复得比较慢？',
@@ -81,7 +99,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
         <section className="guide-section">
           <div className="guide-section-head">
             <span className="guide-section-kicker">START HERE</span>
-            <h3 className="guide-title">第一次使用</h3>
+            <h2 className="guide-title">第一次使用</h2>
           </div>
 
           <div className="guide-timeline">
@@ -91,7 +109,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
                 <span className="guide-step-line" />
               </div>
               <div className="guide-step-body">
-                <h4 className="guide-step-name">先认识你的 TA</h4>
+                <h3 className="guide-step-name">先认识你的 TA</h3>
                 <p className="guide-text">
                   给 TA 一个名字，写下你希望 TA 是怎样的人。
                 </p>
@@ -107,8 +125,8 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
                 <span className="guide-step-line" />
               </div>
               <div className="guide-step-body">
-                <h4 className="guide-step-name">接入模型</h4>
-                <p className="guide-path">我的 → 服务商配置</p>
+                <h3 className="guide-step-name">接入模型</h4>
+                <p className="guide-path">我的 / 服务商配置</p>
                 <p className="guide-text">
                   填入 API Key，选择模型，然后点一次「测试连接」。连接成功，就可以开始聊天。
                 </p>
@@ -121,7 +139,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
                 {onGoProvider && (
                   <button type="button" className="guide-provider-link" onClick={onGoProvider}>
                     去配置模型
-                    <span aria-hidden="true">→</span>
+                    <ArrowRightIcon />
                   </button>
                 )}
               </div>
@@ -132,7 +150,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
                 <span className="guide-step-num">03</span>
               </div>
               <div className="guide-step-body">
-                <h4 className="guide-step-name">开始说话</h4>
+                <h3 className="guide-step-name">开始说话</h3>
                 <p className="guide-text">
                   不需要学习特别的指令。像平时说话一样，去找 TA 就好。
                 </p>
@@ -148,12 +166,12 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
         <section className="guide-section">
           <div className="guide-section-head">
             <span className="guide-section-kicker">GOOD TO KNOW</span>
-            <h3 className="guide-title">有几件事，可以先知道</h3>
+            <h2 className="guide-title">有几件事，可以先知道</h2>
           </div>
 
           <div className="guide-chapters">
             <article className="guide-chapter">
-              <h4>TA 会记住什么？</h4>
+              <h3>TA 会记住什么？</h3>
               <p>
                 聊天里一些重要的事情，会慢慢成为 TA 的记忆。你也可以主动告诉 TA，哪些事情值得留下。
               </p>
@@ -163,7 +181,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
             </article>
 
             <article className="guide-chapter guide-chapter-emphasis">
-              <h4>人设和记忆，不是一回事</h4>
+              <h3>人设和记忆，不是一回事</h3>
               <p className="guide-emphasis-line">人设，是 TA 从哪里出发。</p>
               <p className="guide-emphasis-line">记忆，是你们后来走过了什么。</p>
               <p>
@@ -172,7 +190,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
             </article>
 
             <article className="guide-chapter">
-              <h4>选择你喜欢的相处方式</h4>
+              <h3>选择你喜欢的相处方式</h3>
               <div className="guide-modes">
                 <div className="guide-mode">
                   <strong>沉浸</strong>
@@ -191,7 +209,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
             </article>
 
             <article className="guide-chapter">
-              <h4>TA 的空间是什么？</h4>
+              <h3>TA 的空间是什么？</h3>
               <p>
                 空间里，会慢慢留下属于 TA 和你们的东西。刚开始可能很安静，聊得久一点以后，它会一点点长出来。
               </p>
@@ -209,7 +227,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
         <section className="guide-letter" aria-labelledby="guide-letter-title">
           <div className="guide-letter-corner" aria-hidden="true" />
           <p className="guide-letter-kicker">A LETTER FROM THIS WEEK</p>
-          <h3 id="guide-letter-title">一周情书</h3>
+          <h2 id="guide-letter-title">一周情书</h2>
           <p>
             有些话，当下说过就过去了。忆文会把这一周值得留下的片段，收进一封一周情书里。
           </p>
@@ -222,44 +240,39 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
         <section className="guide-section">
           <div className="guide-section-head">
             <span className="guide-section-kicker">SMALL TIPS</span>
-            <h3 className="guide-title">一些好用的小习惯</h3>
+            <h2 className="guide-title">一些好用的小习惯</h2>
           </div>
 
           <div className="guide-tips">
             <article className="guide-tip">
               <div>
-                <h4>TA 偶尔说得不太对</h4>
+                <h3>TA 偶尔说得不太对</h3>
                 <p>重新把这一句说清楚，通常就够了。</p>
               </div>
-              <span aria-hidden="true">›</span>
             </article>
             <article className="guide-tip">
               <div>
-                <h4>模型突然连不上</h4>
+                <h3>模型突然连不上</h3>
                 <p>先去「服务商配置」里做一次测试连接。</p>
               </div>
-              <span aria-hidden="true">›</span>
             </article>
             <article className="guide-tip">
               <div>
-                <h4>人设不要写得太满</h4>
+                <h3>人设不要写得太满</h3>
                 <p>核心设定放在人设里，其余留给相处和记忆。</p>
               </div>
-              <span aria-hidden="true">›</span>
             </article>
             <article className="guide-tip">
               <div>
-                <h4>对话聊得很长</h4>
+                <h3>对话聊得很长</h3>
                 <p>可以刷新当前上下文，不会删除历史聊天。</p>
               </div>
-              <span aria-hidden="true">›</span>
             </article>
             <article className="guide-tip">
               <div>
-                <h4>TA 没有回出来</h4>
+                <h3>TA 没有回出来</h3>
                 <p>直接重试这一条，不需要重新发送原来的话。</p>
               </div>
-              <span aria-hidden="true">›</span>
             </article>
           </div>
         </section>
@@ -267,7 +280,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
         <section className="guide-section">
           <div className="guide-section-head">
             <span className="guide-section-kicker">FAQ</span>
-            <h3 className="guide-title">常见问题</h3>
+            <h2 className="guide-title">常见问题</h2>
           </div>
 
           <div className="guide-faq-list">
@@ -279,15 +292,21 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
                   <button
                     type="button"
                     className="guide-faq-trigger"
+                    id={`guide-faq-trigger-${index}`}
                     aria-expanded={isOpen}
                     aria-controls={answerId}
                     onClick={() => setOpenFaq(isOpen ? null : index)}
                   >
                     <span>{item.q}</span>
-                    <span className="guide-faq-chevron" aria-hidden="true">⌄</span>
+                    <ChevronDownIcon />
                   </button>
                   {isOpen && (
-                    <div id={answerId} className="guide-faq-answer">
+                    <div
+                      id={answerId}
+                      className="guide-faq-answer"
+                      role="region"
+                      aria-labelledby={`guide-faq-trigger-${index}`}
+                    >
                       {item.a}
                     </div>
                   )}
@@ -298,7 +317,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
         </section>
 
         <section className="guide-sync-note">
-          <h3>换设备以后呢？</h3>
+          <h2>换设备以后呢？</h2>
           <p>
             登录同一个账号后，支持同步的数据会从云端恢复。准备换设备时，建议先保持正常登录，让当前数据完成同步，再到新设备登录。
           </p>
