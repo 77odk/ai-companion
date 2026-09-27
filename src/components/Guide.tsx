@@ -128,7 +128,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
                 <h3 className="guide-step-name">接入模型</h3>
                 <p className="guide-path">我的 / 服务商配置</p>
                 <p className="guide-text">
-                  填入 API Key，选择模型，然后点一次「测试连接」。连接成功，就可以开始聊天。
+                  填入 API Key，选择模型，先点一次「测试连接」。连接成功后，再点「保存设置」，就可以开始聊天。
                 </p>
                 <p className="guide-text guide-text-muted">
                   忆文本身不售卖模型额度，也不提供算力。你使用的模型与产生的费用，都来自你自己选择的模型服务商。
