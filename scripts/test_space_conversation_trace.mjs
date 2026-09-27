@@ -1,6 +1,6 @@
 // Space-N1｜TA 的余响专项回归
-// 核心原则：本地只做机械候选/证据编号校验；conversation vs event 的语义由同一次 Space LLM 生成决定。
-// 覆盖：新对话对 / 旧数据不迁移 / planned≠completed / SKIP / EVENT[n] 证据绑定 / partial 不配对 / 配额。
+// 核心原则：本地只做机械候选；Space-N1 只生成 conversation 余响，Event 识别归独立 Event 体系。
+// 覆盖：新对话对 / 旧数据不迁移 / planned≠completed / SKIP / conversation 协议 / partial 不配对 / 配额。
 
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -120,7 +120,7 @@ const plannedSlots = planBackfillSlots(
 assert.equal(plannedSlots.some((s) => s.source === 'event'), false)
 assert.equal(plannedSlots.some((s) => s.source === 'conversation' && s.conversationKind === 'planned'), true)
 
-console.log('\n[6] prompt 让同一次生成决定 SKIP / CONVERSATION / EVENT[n]')
+console.log('\n[6] prompt 只允许 SKIP / CONVERSATION；Space-N1 不识别 Event')
 const prompt = buildLlmMessages({
   taName: '小忆',
   yourName: '你',
@@ -141,27 +141,20 @@ const prompt = buildLlmMessages({
 }, 'zh')[1].content
 assert.match(prompt, /\[source=USER\]/)
 assert.match(prompt, /\[source=SELF\]/)
-assert.match(prompt, /EVENT\[n\]/)
 assert.match(prompt, /PLANNED/)
 assert.match(prompt, /SKIP/)
 
-console.log('\n[7] EVENT 必须引用当天非 planned 对话编号；否则机械降级 conversation')
-const plannedOnly = [{ sameDay: false, plannedForDay: true }]
+console.log('\n[7] conversation 槽只接受 CONVERSATION 协议，不能自行升级 Event')
 assert.deepEqual(
-  parseSpaceGenerationDecision('EVENT[1]: 今天终于做了', 'conversation', plannedOnly),
-  { kind: 'skip' },
-)
-const sameDayDialogue = [{ sameDay: true, plannedForDay: false }]
-assert.deepEqual(
-  parseSpaceGenerationDecision('EVENT[1]: 这件事真的发生了', 'conversation', sameDayDialogue),
-  { kind: 'post', source: 'event', text: '这件事真的发生了' },
+  parseSpaceGenerationDecision('CONVERSATION: 今天这句话我还记着', 'conversation'),
+  { kind: 'post', source: 'conversation', text: '今天这句话我还记着' },
 )
 assert.deepEqual(
-  parseSpaceGenerationDecision('EVENT[9]: 越界编号', 'conversation', sameDayDialogue),
+  parseSpaceGenerationDecision('EVENT[1]: 这件事真的发生了', 'conversation'),
   { kind: 'skip' },
 )
 assert.deepEqual(
-  parseSpaceGenerationDecision('没有遵守协议的普通正文', 'conversation', sameDayDialogue),
+  parseSpaceGenerationDecision('没有遵守协议的普通正文', 'conversation'),
   { kind: 'skip' },
 )
 
@@ -227,7 +220,7 @@ assert.equal(conv.created, 1)
 assert.equal(conv.posts[0].source, 'conversation')
 assert.equal(readLedger(undefined, now)[todayKey]?.conversation ?? 0, 1)
 
-console.log('\n[11] 同一次生成可把 conversation 候选升级为 event，不增加第二次模型调用')
+console.log('\n[11] 即使真实对话写了已完成，Space-N1 仍只落 conversation，不越权创建 Event')
 reset()
 const oldPlanTs = now - 2 * DAY
 recordChatTopic('周日一起看电影吧', undefined, oldPlanTs)
@@ -236,27 +229,24 @@ const doneTs = now - HOUR
 recordChatTopic('我们刚看完电影，已经到家了', undefined, doneTs)
 completeChatTopicPair('我们刚看完电影，已经到家了', '嗯，散场后那股劲还在。', undefined, doneTs, doneTs + 10_000)
 localStorage.setItem('ai_space_last_visit', String(now - DAY))
-const eventPlan = refreshSpace('小忆', '你', now)
-assert.equal(eventPlan.pending.length, 1)
-assert.equal(eventPlan.pending[0].source, 'conversation')
-pairs = conversationPairsForDay(loadChatTopics(), todayKey)
-const eventEvidenceIndex = pairs.findIndex((p) => p.sameDay && !p.plannedForDay)
-assert.ok(eventEvidenceIndex >= 0)
+const afterPlan = refreshSpace('小忆', '你', now)
+assert.equal(afterPlan.pending.length, 1)
+assert.equal(afterPlan.pending[0].source, 'conversation')
 calls = 0
 globalThis.fetch = async () => {
   calls++
   return {
     ok: true,
     status: 200,
-    json: async () => ({ choices: [{ message: { content: `EVENT[${eventEvidenceIndex + 1}]: 散场以后，那段电影还在脑子里转。` } }] }),
+    json: async () => ({ choices: [{ message: { content: 'CONVERSATION: 散场以后，那段电影还在脑子里转。' } }] }),
   }
 }
-const eventResult = await generatePendingPosts(eventPlan, '小忆', '你', undefined, now, () => 0.1)
+const afterPlanResult = await generatePendingPosts(afterPlan, '小忆', '你', undefined, now, () => 0.1)
 assert.equal(calls, 1)
-assert.equal(eventResult.created, 1)
-assert.equal(eventResult.posts[0].source, 'event')
-assert.equal(readLedger(undefined, now)[todayKey]?.event ?? 0, 1)
-assert.equal(readLedger(undefined, now)[todayKey]?.conversation ?? 0, 0)
+assert.equal(afterPlanResult.created, 1)
+assert.equal(afterPlanResult.posts[0].source, 'conversation')
+assert.equal(readLedger(undefined, now)[todayKey]?.conversation ?? 0, 1)
+assert.equal(readLedger(undefined, now)[todayKey]?.event ?? 0, 0)
 
 console.log('\n[12] Natural / AI 一天总量上限仍为 1')
 let extraCalls = 0
@@ -267,7 +257,7 @@ globalThis.fetch = async () => {
 const extraSlot = { at: now - 2 * 60 * 1000, source: 'conversation', conversationKind: 'trace' }
 const extraId = generationSlotIdFor(extraSlot)
 const capped = await generatePendingPosts({
-  posts: eventResult.posts,
+  posts: afterPlanResult.posts,
   mode: 'llm',
   created: 1,
   pending: [extraSlot],
@@ -290,7 +280,7 @@ assert.match(chatSource, /const handleStop = \(\) => \{[\s\S]{0,900}spacePairEli
 assert.match(chatSource, /onError: \(err\) => \{[\s\S]{0,500}spacePairEligibleRef\.current = false/)
 assert.match(chatSource, /onModelSettingsChanged = \(\) => \{[\s\S]{0,700}spacePairEligibleRef\.current = false/)
 
-console.log('\n[15] planned 对话在最多 3 组素材里必须保留，供模型做语义关联')
+console.log('\n[15] planned 对话在最多 3 组素材里必须保留，防止把约定当成当天事实')
 const manyTopics = [
   { t: '周日一起看电影吧', ts: oldPlanTs, futureDay: todayKey, taText: '好，到那天一起看。', taTs: oldPlanTs + 1000, pairVersion: 1 },
   { t: '今天工作有点累', ts: now - 40 * 60 * 1000, taText: '我知道。', taTs: now - 39 * 60 * 1000, pairVersion: 1 },
