@@ -13,7 +13,7 @@ const TOPICS_KEY = 'ai_space_recent_topic'
 const MAX_TOPICS = 8
 const TOPIC_MAX_LEN = 80
 const REPLY_MAX_LEN = 240
-const CONVERSATION_MIN_LEN = 6
+const CONVERSATION_MIN_LEN = 4
 
 /** 一条聊天素材。pairVersion=1 + taText 表示这是本批之后真实完成的一轮对话。 */
 export interface ChatTopic {
@@ -154,7 +154,7 @@ export function hasConcreteTopicInfo(text: string): boolean {
   if (t.length < CONVERSATION_MIN_LEN) return false
   const dense = Array.from(t.toLowerCase()).filter((ch) => /[\p{L}\p{N}]/u.test(ch))
   if (dense.length < CONVERSATION_MIN_LEN) return false
-  return new Set(dense).size >= 4
+  return new Set(dense).size >= 3
 }
 
 export function isConversationMaterialCandidate(topic: ChatTopic): boolean {
