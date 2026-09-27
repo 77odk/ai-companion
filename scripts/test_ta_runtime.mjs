@@ -203,6 +203,41 @@ group('G2. Runtime 只在明确询问当前状态时注入')
   for (const text of zhQueries) {
     ok(shouldInjectTaRuntimeContext(text, 'zh'), `G2 命中：${text}`)
   }
+
+  const activityQueryById = {
+    wake_up: '还在洗漱吗？',
+    breakfast: '还在吃早餐吗？',
+    coffee: '还在喝咖啡吗？',
+    commute: '还在通勤吗？',
+    work: '还在工作吗？',
+    class: '还在上课吗？',
+    reading: '还在看书吗？',
+    lunch: '还在吃午饭吗？',
+    errand: '还在办事吗？',
+    home: '还在收拾吗？',
+    cooking: '还在做饭吗？',
+    dinner: '还在吃晚饭吗？',
+    walk: '还在散步吗？',
+    exercise: '还在运动吗？',
+    movie: '还在看电影吗？',
+    gaming: '还在打游戏吗？',
+    shower: '还在洗漱吗？',
+    rest: '还在休息吗？',
+    sleep_prep: '还在准备睡吗？',
+    sleep: '还在睡觉吗？',
+    reading_chat: '还在读对话吗？',
+    organizing_thoughts: '还在整理思绪吗？',
+    following_thread: '还在回想聊天吗？',
+    quietly_present: '还在陪着你吗？',
+  }
+  eq(
+    Object.keys(activityQueryById).sort(),
+    ACTIVITIES.map((activity) => activity.id).sort(),
+    'G2 每个可存 Runtime activity 都有明确问句覆盖',
+  )
+  for (const [activityId, text] of Object.entries(activityQueryById)) {
+    ok(shouldInjectTaRuntimeContext(text, 'zh'), `G2 activity ${activityId}：${text}`)
+  }
   const enQueries = [
     'What are you doing right now?',
     'Are you still busy?',
