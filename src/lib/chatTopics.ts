@@ -172,15 +172,36 @@ export function isConversationMaterialCandidate(topic: ChatTopic): boolean {
   )
 }
 
-/** 完成证据只做保守候选识别；宁可漏掉，不能把“约好了”升级成“做完了”。 */
+/** 完成证据只做保守候选识别；宁可漏掉，不能把计划、否定或假设升级成“做完了”。 */
 export function hasCompletionEvidence(text: string): boolean {
   const t = cleanTopicText(text)
-  // 必须有“已经完成”的体标记：裸「看完/做完」可能仍是计划句（如“今晚一起看完吧”），不能升级 confirmed。
-  return /(?:刚(?:刚|才)?|已经|终于).{0,18}(?:看完|做完|完成|结束|散场|到家|回来)|(?:看完|做完|完成|结束|散场|到家|回来).{0,12}(?:了|啦)/.test(t)
+  if (!t) return false
+
+  // 先排除“差点 / 还没 / 如果 / 打算”等明显未完成或假设语气。
+  // 这是硬安全门，不追求全语言理解；拿不准就不升级 confirmed。
+  const negatedOrConditional =
+    /(?:差点|险些|还没|尚未|没有|没能|如果|假如|要是|准备|打算|计划|想要|想|等会|待会).{0,24}(?:看完|做完|完成|结束|散场|到家|回来)|(?:看完|做完|完成|结束|散场|到家|回来).{0,12}(?:再|才).{0,12}(?:说|聊|做)|\b(?:almost|nearly|haven't|have\s+not|hasn't|has\s+not|didn't|did\s+not|not\s+(?:finished|completed|done)|if|unless|when|once|plan(?:ned)?\s+to|going\s+to|will|would)\b/i
+  if (negatedOrConditional.test(t)) return false
+
+  const zhCompleted =
+    /(?:刚(?:刚|才)?|已经|终于).{0,18}(?:看完|做完|完成|结束|散场|到家|回来)|(?:看完|做完|完成|结束|散场|到家|回来).{0,12}(?:了|啦)/
+  const enCompleted =
+    /\b(?:just|already|finally)\b.{0,30}\b(?:finished|completed|ended|got\s+home|came\s+back|returned)\b|\b(?:finished|completed|ended|got\s+home|came\s+back|returned)\b.{0,18}\b(?:already|finally|today|tonight)\b/i
+  return zhCompleted.test(t) || enCompleted.test(t)
 }
 
-function hasSharedSubject(text: string): boolean {
-  return /(?:我们|咱们|一起|跟你|和你|陪你|你和我)/.test(cleanTopicText(text))
+/**
+ * confirmed event 必须由“这句话本身”证明是共同动作。
+ * 不再用“同一天存在 planned”给无关完成事项背书，也不把“跟你说”这类称呼当共同经历。
+ */
+export function hasSharedCompletionSubject(text: string): boolean {
+  const t = cleanTopicText(text)
+  if (!t) return false
+  const zhShared =
+    /(?:我们|咱们|我和你|你和我|我俩|咱俩).{0,24}(?:刚(?:刚|才)?|已经|终于|看完|做完|完成|结束|散场|到家|回来)|(?:我们|咱们|我和你|你和我|我俩|咱俩).{0,16}(?:一起|一块儿|一块).{0,20}(?:看完|做完|完成|结束|散场|到家|回来)|(?:和你|跟你|陪你).{0,8}(?:一起|一块儿|一块).{0,20}(?:看完|做完|完成|结束|散场|到家|回来)/
+  const enShared =
+    /\b(?:we|you\s+and\s+i|i\s+and\s+you)\b.{0,36}\b(?:finished|completed|ended|got\s+home|came\s+back|returned)\b|\bwe\b.{0,24}\btogether\b|\btogether\b.{0,24}\bwe\b/i
+  return zhShared.test(t) || enShared.test(t)
 }
 
 /** 新格式里已经完整成对的 planned FutureIntent。旧 futureDay 因没有 pairVersion，不会进入。 */
@@ -230,12 +251,13 @@ export function collectConversationEvidenceAt(topics: ChatTopic[], todayKey: str
 /** 哪些日期有足够依据升级为 confirmed event。 */
 export function collectConfirmedEventDays(topics: ChatTopic[], todayKey: string): Set<string> {
   const out = new Set<string>()
-  const planned = collectPlannedDays(topics, todayKey)
   for (const topic of topics) {
     if (!isConversationMaterialCandidate(topic) || topic.ts <= 0) continue
     const day = dayKeyOfTs(topic.ts)
-    if (day > todayKey || !hasCompletionEvidence(topic.t)) continue
-    if (planned.has(day) || hasSharedSubject(topic.t)) out.add(day)
+    if (day > todayKey) continue
+    // confirmed 只认“这一条真实对话自身就能证明：共同动作已经完成”。
+    // planned 仍可进入 conversation，但绝不能仅凭同日计划把别的完成事项升级成共同 Event。
+    if (hasCompletionEvidence(topic.t) && hasSharedCompletionSubject(topic.t)) out.add(day)
   }
   return out
 }
@@ -261,7 +283,6 @@ export function conversationPairsForDay(
   dayKey: string,
   limit: number = 3,
 ): SpaceConversationPair[] {
-  const plannedExists = topics.some((t) => isConversationMaterialCandidate(t) && t.futureDay === dayKey)
   const rows: SpaceConversationPair[] = []
   for (const topic of topics) {
     if (!isConversationMaterialCandidate(topic)) continue
@@ -274,7 +295,10 @@ export function conversationPairsForDay(
       ts: topic.ts,
       taTs: topic.taTs as number,
       plannedForDay,
-      confirmedCompletion: sameDay && hasCompletionEvidence(topic.t) && (plannedExists || hasSharedSubject(topic.t)),
+      confirmedCompletion:
+        sameDay &&
+        hasCompletionEvidence(topic.t) &&
+        hasSharedCompletionSubject(topic.t),
     })
   }
   return rows
