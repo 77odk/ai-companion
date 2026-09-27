@@ -307,10 +307,14 @@ export function refreshSpace(
   const persona = sessionPersona(sessionId)
   const settings = loadSettings()
   const policy = resolveCompanionPolicy(sessionId)
-  // 事件日 = 话题日 + 约定发生日（因果链第一步：collectTopicDays 只收 ≤今天 的 futureDay，未来约定不预生成）
   const topics = loadChatTopics(sessionId)
-  const activeDays = collectTopicDays(topics, dayKeyOf(now))
-  const eventEvidenceAt = collectTopicEvidenceAt(topics)
+  const todayKey = dayKeyOf(now)
+  // event 只认“已确认发生”；普通真实对话和到了日期的约定走 conversation。
+  const activeDays = collectConfirmedEventDays(topics, todayKey)
+  const eventEvidenceAt = collectConfirmedEventEvidenceAt(topics, todayKey)
+  const conversationDays = collectConversationDays(topics, todayKey)
+  const conversationEvidenceAt = collectConversationEvidenceAt(topics, todayKey)
+  const plannedDays = collectPlannedDays(topics, todayKey)
   // v3 配额账本（只留今天的键）：计划时已用额度 = max(现存动态, 账本)——删了动态配额照扣
   const ledger = todayLedger(sessionId, now)
   const relationshipStart = getFirstSeen(sessionId)
@@ -323,48 +327,29 @@ export function refreshSpace(
     ledger,
     relationshipStart,
     eventEvidenceAt,
+    conversationDays,
+    conversationEvidenceAt,
+    plannedDays,
   )
-  // Natural / AI 不再靠时间流逝“日更”：只有真实聊天证据形成的 event 才有资格生成动态。
-  // Immersive 保留自己的生活日常，但首访无证据日常已在 planBackfillSlots 层关闭。
+  // Natural / AI 不靠时间流逝日更：只消费真实 conversation / confirmed event。
+  // Immersive 额外允许 daily；首访也不再为了填满页面强制铺日常。
   const slots = policy.mode === 'immersive'
     ? plannedSlots
-    : plannedSlots.filter((slot) => slot.source === 'event')
+    : plannedSlots.filter((slot) => slot.source !== 'daily')
 
-  // 空人设：Natural / AI 没有真实 event + 可用模型就保持空；绝不为了“页面不空”造内容。
-  // Immersive 保留原有兼容行为：有模型按生活时间线生成；没模型且空间为空时只落 1 条本地安全兜底。
+  // 空人设也可在配置好模型后消费真实 conversation / event；没有模型时保持空。
+  // Immersive 同样不再为了“页面不能空”强塞本地兜底。
   if (!persona.trim()) {
-    const lang = resolveSpaceLang(sessionId, persona)
     if (canUseLlm(persona, settings, true)) {
       const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
       const pending = reserveSlots(state, slots)
       saveState(state, sessionId)
       return { posts: state.posts, mode: 'llm', created: pending.length, pending, used: state.used }
     }
-
     const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
-    if (policy.mode !== 'immersive') {
-      saveState(state, sessionId)
-      return { posts: state.posts, mode: 'no-persona', created: 0, pending: [], used: state.used }
-    }
-
-    let created = 0
-    const todayKey = dayKeyOf(now)
-    const tLedger = getLedgerEntry(ledger, todayKey)
-    const fallbackSlot: SpaceSlot = { at: now, source: 'daily' }
-    const slotId = generationSlotIdFor(fallbackSlot)
-    if (prev.posts.length === 0 && tLedger.daily < MAX_POSTS_PER_DAY && !slotWasUsed(prev, slotId)) {
-      const g = generatePost(vars, state.used, now - 3 * 60 * 1000, Math.random, 'daily', lang, slotId, relationshipStart)
-      state.used[`${SLOT_MARKER_PREFIX}${slotId}`] = PERMANENT_SLOT_MARKER
-      state.used[g.templateKey] = now
-      const post = { ...g.post, ...(sessionId ? { sessionId } : {}) }
-      state.posts = mergeNewPosts(state.posts, [post])
-      recordLedger([post], sessionId, now)
-      created = 1
-    }
     saveState(state, sessionId)
-    return { posts: state.posts, mode: 'no-persona', created, pending: [], used: state.used }
+    return { posts: state.posts, mode: 'no-persona', created: 0, pending: [], used: state.used }
   }
-
   // 会话语言（canonical 优先，回退人设检测）——模板/LLM 两条路径共用
   const spaceLang = resolveSpaceLang(sessionId, persona)
 
