@@ -34,9 +34,7 @@ export interface SpaceConversationPair {
   taText: string
   ts: number
   taTs: number
-  /** 这组素材是否真实发生在目标自然日。 */
-  sameDay: boolean
-  /** 这组素材来自此前“约好今天做”的 FutureIntent；planned 本身永远不能作为 EVENT 完成证据。 */
+  /** 这组素材来自此前“约好今天做”的 FutureIntent；planned 本身不代表已经发生。 */
   plannedForDay: boolean
 }
 
@@ -235,7 +233,6 @@ export function conversationPairsForDay(
       taText: topic.taText as string,
       ts: topic.ts,
       taTs: topic.taTs as number,
-      sameDay,
       plannedForDay,
     })
   }
