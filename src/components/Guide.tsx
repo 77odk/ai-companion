@@ -61,7 +61,7 @@ const FAQS = [
   },
   {
     q: '「刷新对话」会删聊天记录吗？',
-    a: '不会。它只会结束当前上下文的延续，不会删除已经保存的历史聊天。',
+    a: '不会。刷新只会结束当前上下文的延续，不会删除已经保存的历史聊天。',
   },
   {
     q: '换设备以后数据还在吗？',
@@ -211,7 +211,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
             <article className="guide-chapter">
               <h3>TA 的空间是什么？</h3>
               <p>
-                空间里，会慢慢留下属于 TA 和你们的东西。刚开始可能很安静，聊得久一点以后，它会一点点长出来。
+                空间里，会慢慢留下属于 TA 和你们的东西。刚开始可能很安静，聊得久一点以后，这里会一点点长出来。
               </p>
               <div className="guide-space-index" aria-label="空间内容">
                 <span>动态</span>
