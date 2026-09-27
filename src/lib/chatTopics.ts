@@ -197,7 +197,7 @@ export function collectPlannedDays(topics: ChatTopic[], todayKey: string): Set<s
  * conversation 有两种来源：
  * - 当天真实完整对话对；
  * - 到了约定日的 planned 对话对。
- * confirmed event 日由事件通道优先，aiSpace planner 会避免同天再发 conversation。
+ * 最终 source 在单次 Space LLM 生成后决定；本层只负责候选日期。
  */
 export function collectConversationDays(topics: ChatTopic[], todayKey: string): Set<string> {
   const out = collectPlannedDays(topics, todayKey)
@@ -241,7 +241,7 @@ export function collectConfirmedEventEvidenceAt(_topics: ChatTopic[], _todayKey:
 
 /**
  * 只给某条 Space 动态它对应自然日的真实素材，最多 3 组；不再塞“最近 5 条不相干话题”。
- * plannedForDay 只代表“今天是说好的那天”；confirmedCompletion 才代表已完成。
+ * plannedForDay 只代表“今天是说好的那天”；是否真的发生不在本层判断。
  */
 export function conversationPairsForDay(
   topics: ChatTopic[],
@@ -283,7 +283,7 @@ export function conversationPairsForDay(
 
 /**
  * 兼容旧调用名：保留原合同“话题日 + 已到期约定日”。
- * Space-N1 的 grounded Event 不再使用它，而是显式调用 collectConfirmedEventDays。
+ * Space-N1 的运行链不再用它判 Event；保留只为旧调用/旧测试合同兼容。
  */
 export function collectTopicDays(topics: ChatTopic[], todayKey: string): Set<string> {
   const out = new Set<string>()
