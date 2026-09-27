@@ -507,14 +507,14 @@ export async function generatePendingPosts(
       )
       try {
         const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })
-        const decision = parseSpaceGenerationDecision(raw, source, conversationPairs)
+        const decision = parseSpaceGenerationDecision(raw, source)
         // SKIP 是正式结果：不落动态、不占额度、也不拿模板补。
         if (decision.kind === 'skip') continue
 
         const resolvedSource = decision.source
-        // conversation 的来源由本次模型语义判断后才确定；落盘前再按真实 source 校验额度。
-        if (resolvedSource === 'event' && usage.event >= 1) continue
+        // Space-N1 的 conversation 候选只能落成 conversation；event 仍只由独立 Event 体系进入。
         if (resolvedSource === 'conversation' && usage.conversation >= 1) continue
+        if (resolvedSource === 'event' && usage.event >= 1) continue
 
         // 先解析动态自己的 [配图] 协议，再做统一归因净化，避免净化层碰协议正文。
         const { text: protocolText } = extractImageCaption(decision.text)
