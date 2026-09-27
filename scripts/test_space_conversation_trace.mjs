@@ -10,6 +10,7 @@ import {
   completeChatTopicPair,
   hasCompletionEvidence,
   hasConcreteTopicInfo,
+  hasSharedCompletionSubject,
   conversationPairsForDay,
   isConversationMaterialCandidate,
   loadChatTopics,
@@ -253,5 +254,56 @@ assert.equal(hasCompletionEvidence('我们刚看完电影，已经到家了'), t
 console.log('\n[12] 英文完整对话能通过同一层机械粗筛')
 assert.equal(hasConcreteTopicInfo('I had a rough meeting at work today'), true)
 assert.equal(hasConcreteTopicInfo('I felt worried after the interview'), true)
+
+console.log('\n[13] confirmed 必须排除否定和假设')
+assert.equal(hasCompletionEvidence('我们差点看完了'), false)
+assert.equal(hasCompletionEvidence('我们如果看完了再聊'), false)
+assert.equal(hasCompletionEvidence('我们还没做完，太晚了'), false)
+assert.equal(hasCompletionEvidence('我们终于看完了'), true)
+
+console.log('\n[14] 共同事件不能把“跟你说”误当共同动作')
+assert.equal(hasSharedCompletionSubject('跟你说，我终于做完作业了'), false)
+assert.equal(hasSharedCompletionSubject('我们终于看完电影了'), true)
+assert.equal(hasSharedCompletionSubject('我和你终于做完这件事了'), true)
+
+console.log('\n[15] 同日 planned 不能给无关完成事项背书')
+reset()
+const planBaseTs = now - 2 * DAY
+localStorage.setItem('ai_space_recent_topic', JSON.stringify([
+  {
+    t: '周日一起看电影吧',
+    ts: planBaseTs,
+    futureDay: todayKey,
+    taText: '好，到那天一起看。',
+    taTs: planBaseTs + 10_000,
+    pairVersion: 1,
+  },
+  {
+    t: '我终于做完作业了',
+    ts: now - 20 * 60 * 1000,
+    taText: '辛苦了，终于收尾了。',
+    taTs: now - 19 * 60 * 1000,
+    pairVersion: 1,
+  },
+]))
+topics = loadChatTopics()
+assert.equal(collectPlannedDays(topics, todayKey).has(todayKey), true)
+assert.equal(collectConfirmedEventDays(topics, todayKey).has(todayKey), false)
+
+console.log('\n[16] 英文共同完成事件可以 confirmed')
+reset()
+localStorage.setItem('ai_space_recent_topic', JSON.stringify([
+  {
+    t: 'We finally finished the movie together',
+    ts: now - 15 * 60 * 1000,
+    taText: 'That one really stayed with us.',
+    taTs: now - 14 * 60 * 1000,
+    pairVersion: 1,
+  },
+]))
+topics = loadChatTopics()
+assert.equal(hasCompletionEvidence('We finally finished the movie together'), true)
+assert.equal(hasSharedCompletionSubject('We finally finished the movie together'), true)
+assert.equal(collectConfirmedEventDays(topics, todayKey).has(todayKey), true)
 
 console.log('\nSpace-N1：全部通过')
