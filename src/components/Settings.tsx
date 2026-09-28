@@ -297,7 +297,7 @@ function MainCenter({
         <EntryRow icon={<WorkIcon />} label="AI 工作台" status="即将开放" disabled />
       </ProfileGroup>
 
-      <ProfileGroup title="账号与同步">
+      <ProfileGroup title="账号与隐私">
         <EntryRow
           icon={<CloudSyncIcon />}
           label="账号与同步"
