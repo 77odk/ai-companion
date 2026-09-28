@@ -372,6 +372,45 @@ function compactRuntimeDisplayText(clause: string, lang: Lang): string {
   return t.length > 64 ? `${t.slice(0, 64).trimEnd()}…` : t
 }
 
+interface RuntimeClauseStartMatch {
+  activityId: string
+  lang: Lang
+  index: number
+  ruleIndex: number
+}
+
+/**
+ * 在单个 clause 内统一选择“活动 + 语言”：
+ * - 先比较所有活动规则真正命中的起始位置，主句语法通常最靠前；
+ * - 同位置时沿用规则表“更具体在前”的优先级；
+ * - 书名/歌名/对象里的另一种语言即使命中，也不会盖过主句动作。
+ */
+function pickRuntimeStartMatchForClause(clause: string): RuntimeClauseStartMatch | null {
+  let best: RuntimeClauseStartMatch | null = null
+  RUNTIME_TEXT_START_RULES.forEach((rule, ruleIndex) => {
+    const candidates: Array<{ lang: Lang; index: number }> = [
+      { lang: 'zh', index: clause.search(rule.zh) },
+      { lang: 'en', index: clause.search(rule.en) },
+    ]
+    for (const item of candidates) {
+      if (item.index < 0) continue
+      if (
+        best == null
+        || item.index < best.index
+        || (item.index === best.index && ruleIndex < best.ruleIndex)
+      ) {
+        best = {
+          activityId: rule.activityId,
+          lang: item.lang,
+          index: item.index,
+          ruleIndex,
+        }
+      }
+    }
+  })
+  return best
+}
+
 function findRuntimeDisplayCandidate(
   text: string,
   activityId: string,
@@ -379,25 +418,10 @@ function findRuntimeDisplayCandidate(
   let candidate: { text: string; lang: Lang } | null = null
   for (const clause of textClauses(text)) {
     if (isClearlyOtherPersonClause(clause) || blockedAsFutureOrNegative(clause) || !explicitSelfCurrentClause(clause)) continue
-    for (const rule of RUNTIME_TEXT_START_RULES) {
-      if (rule.activityId !== activityId) continue
-      const zhMatch = rule.zh.test(clause)
-      const enMatch = rule.en.test(clause)
-      if (!zhMatch && !enMatch) continue
-
-      let lang: Lang
-      if (zhMatch && enMatch) {
-        // 双命中时看哪个语法规则更早进入主句；另一种语言可能只是书名/歌名/对象内容。
-        const zhIndex = clause.search(rule.zh)
-        const enIndex = clause.search(rule.en)
-        lang = enIndex >= 0 && (zhIndex < 0 || enIndex < zhIndex) ? 'en' : 'zh'
-      } else {
-        lang = zhMatch ? 'zh' : 'en'
-      }
-
-      const display = compactRuntimeDisplayText(clause, lang)
-      if (display) candidate = { text: display, lang }
-    }
+    const match = pickRuntimeStartMatchForClause(clause)
+    if (!match || match.activityId !== activityId) continue
+    const display = compactRuntimeDisplayText(clause, match.lang)
+    if (display) candidate = { text: display, lang: match.lang }
   }
   return candidate
 }
@@ -409,11 +433,8 @@ export function detectTaRuntimeDecision(text: string, currentActivityId?: string
 
   for (const clause of clauses) {
     if (isClearlyOtherPersonClause(clause) || blockedAsFutureOrNegative(clause) || !explicitSelfCurrentClause(clause)) continue
-    for (const rule of RUNTIME_TEXT_START_RULES) {
-      if (rule.zh.test(clause) || rule.en.test(clause)) {
-        startDecision = { type: 'start', activityId: rule.activityId }
-      }
-    }
+    const match = pickRuntimeStartMatchForClause(clause)
+    if (match) startDecision = { type: 'start', activityId: match.activityId }
   }
   if (startDecision) return startDecision
 
