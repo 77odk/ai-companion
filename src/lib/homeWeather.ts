@@ -19,6 +19,7 @@ export interface HomeWeather {
 
 const CACHE_KEY = 'eluvin_home_weather_v1'
 const CONSENT_KEY = 'eluvin_home_weather_consent_v1'
+const CHAT_CONSENT_KEY = 'eluvin_user_weather_chat_consent_v1'
 const CACHE_MS = 30 * 60 * 1000
 const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search'
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast'
@@ -76,6 +77,19 @@ export function setHomeWeatherEnabled(enabled: boolean): void {
   }
 }
 
+export function isUserWeatherChatEnabled(): boolean {
+  try { return localStorage.getItem(CHAT_CONSENT_KEY) === 'yes' } catch { return false }
+}
+
+export function setUserWeatherChatEnabled(enabled: boolean): void {
+  try {
+    if (enabled) localStorage.setItem(CHAT_CONSENT_KEY, 'yes')
+    else localStorage.removeItem(CHAT_CONSENT_KEY)
+  } catch {
+    // Consent persistence failure keeps weather out of model context.
+  }
+}
+
 export function weatherVisualForCode(code: number): WeatherVisual {
   return weatherMeta(code).visual
 }
@@ -87,8 +101,10 @@ export function weatherVisualForCode(code: number): WeatherVisual {
  */
 export function readUserWeatherContext(cityInput: string): HomeWeather | null {
   const city = cityInput.trim()
-  if (!city || !isHomeWeatherEnabled()) return null
-  return readCache(city)
+  if (!city || !isHomeWeatherEnabled() || !isUserWeatherChatEnabled()) return null
+  const cached = readCache(city)
+  if (!cached || Date.now() - cached.fetchedAt >= CACHE_MS) return null
+  return cached
 }
 
 export function buildUserWeatherContext(weather: HomeWeather, lang: 'zh' | 'en' = 'zh'): string {
