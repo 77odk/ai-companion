@@ -63,7 +63,7 @@ import {
 type TestState = 'idle' | 'testing' | 'success' | 'error'
 
 /** 设置页子页：使用指南已抽成 App 独立 view（guide），不再嵌在这里 */
-export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary' | 'profile' | 'privacy' | 'reply'
+export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary' | 'profile' | 'privacy' | 'reply' | 'notifications'
 
 interface Props {
   onGoWelcome?: () => void
@@ -108,6 +108,9 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
   if (page === 'reply') {
     return <ReplyLengthDetail onBack={() => setPage('main')} />
   }
+  if (page === 'notifications') {
+    return <NotificationsDetail onBack={() => setPage('main')} />
+  }
   if (page === 'about') {
     return <AboutDetail onBack={() => setPage('main')} />
   }
@@ -139,6 +142,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenAppearance={() => setPage('appearance')}
       onOpenAnniversary={() => setPage('anniversary')}
       onOpenReply={() => setPage('reply')}
+      onOpenNotifications={() => setPage('notifications')}
       onGoRoles={() => onGoRoles?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
       onGoProfile={() => onGoProfile?.()}
@@ -185,6 +189,7 @@ function MainCenter({
   onOpenAppearance,
   onOpenAnniversary,
   onOpenReply,
+  onOpenNotifications,
   onGoRoles,
   onGoAboutMe,
   onGoProfile,
@@ -199,6 +204,7 @@ function MainCenter({
   onOpenAppearance: () => void
   onOpenAnniversary: () => void
   onOpenReply: () => void
+  onOpenNotifications: () => void
   onGoRoles?: () => void
   onGoAboutMe?: () => void
   onGoProfile?: () => void
@@ -275,6 +281,7 @@ function MainCenter({
           onClick={onOpenAccount}
           status={accountLabel ? '已登录' : '未登录'}
         />
+        <EntryRow icon={<NotificationIcon />} label="消息与通知" onClick={onOpenNotifications} />
         <EntryRow icon={<PrivacyIcon />} label="隐私" onClick={onOpenPrivacy} />
         <EntryRow icon={<PaletteIcon />} label="外观" onClick={onOpenAppearance} />
         <EntryRow icon={<InfoIcon />} label="关于忆文" onClick={onOpenAbout} />
@@ -287,6 +294,18 @@ function MainCenter({
           退出登录
         </button>
       )}
+    </div>
+  )
+}
+
+function NotificationsDetail({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="page settings-page">
+      <DetailHeader title="消息与通知" onBack={onBack} />
+      <div className="settings-card notification-empty-card">
+        <strong>暂时没有新消息</strong>
+        <p className="hint">版本更新、系统公告和重要账号提醒会集中在这里。TA 想对你说的话仍然只在聊天里。</p>
+      </div>
     </div>
   )
 }
@@ -486,6 +505,13 @@ const InfoIcon = () => (
     <circle cx="12" cy="12" r="9" />
     <path d="M12 8h.01" />
     <path d="M11 12h1v4h1" />
+  </svg>
+)
+
+const NotificationIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+    <path d="M10 21h4" />
   </svg>
 )
 
