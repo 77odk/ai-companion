@@ -10,7 +10,6 @@ import {
   planBackfillTimestamps,
   advanceTimeline,
   dayKeyOf,
-  dayStartOf,
   dayUsage,
   addLedgerEntry,
   pruneLedger,
@@ -19,9 +18,8 @@ import {
   generationSlotIdFor,
   MAX_POSTS_PER_DAY,
   MAX_TOTAL_PER_DAY,
-  MAX_BACKFILL_DAYS,
 } from '../src/lib/aiSpaceCore.ts'
-import { buildLlmMessages, buildLlmPost } from '../src/lib/aiSpaceLlm.ts'
+import { buildLlmMessages } from '../src/lib/aiSpaceLlm.ts'
 import { refreshSpace, generatePendingPosts, loadCurrentPosts, readLedger } from '../src/lib/aiSpace.ts'
 import { completeChatTopicPair, recordChatTopic } from '../src/lib/chatTopics.ts'
 import { savePersona, saveSettings } from '../src/lib/storage.ts'

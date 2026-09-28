@@ -2,7 +2,7 @@
 // 跑法：node --test scripts/test_aiBusy_en.mjs
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { matchBusyIntent, containsBusyKeyword, findBusyCutoff } from '../src/lib/aiBusy.ts'
+import { containsBusyKeyword, findBusyCutoff } from '../src/lib/aiBusy.ts'
 
 // 应该触发的英文离开意图
 const SHOULD_HIT = [

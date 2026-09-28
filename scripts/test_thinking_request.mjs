@@ -21,8 +21,6 @@ function check(name, cond, detail = '') {
 }
 
 const s = (baseUrl, model) => ({ baseUrl, model, apiKey: 'test-key' })
-const ASK_FIELDS = ['reasoning_effort', 'extra_body']
-
 console.log('[1] thinkingRequestOpts：默认全部带上')
 const ds = thinkingRequestOpts(s('https://api.deepseek.com/v1', 'deepseek-v4-flash'))
 check('DeepSeek 也带（不再按家判断）', ds && ds.reasoning_effort === 'high', JSON.stringify(ds))

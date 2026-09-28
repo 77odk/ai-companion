@@ -24,7 +24,6 @@ import {
   MAX_POSTS,
   MIN_INTERVAL_MS,
   DAY_INTERVAL_MS,
-  THIRTY_DAYS,
   MAX_BACKFILL_DAYS,
   BACKFILL_LIFE_CHANCE,
 } from '../src/lib/aiSpaceCore.ts'
@@ -234,14 +233,6 @@ const usedAll = {}
 for (let i = 0; i < TEMPLATES[kind].length; i++) usedAll[`${kind}:${i}`] = now - 1 * DAY
 const fallback = pickTemplateIndex(kind, usedAll, now, seeded(4))
 ok(fallback >= 0 && fallback < TEMPLATES[kind].length, '全部近 30 天用过时兜底仍能选到索引')
-
-function findTemplateIndex(kindName, text, vars2) {
-  const list = TEMPLATES[kindName] || []
-  for (let i = 0; i < list.length; i++) {
-    if (buildPostText(kindName, i, vars2) === text) return i
-  }
-  return -1
-}
 
 const batch1 = advanceTimeline(
   { posts: [], lastVisit: now - 2 * DAY, used: {} },

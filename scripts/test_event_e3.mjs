@@ -9,7 +9,7 @@ import {
 import { getSharedExperiences } from '../src/lib/sharedExperiences.ts'
 import { buildWeeklyPrompt } from '../src/lib/weeklyReview.ts'
 import { collectData, applyData } from '../src/lib/sync.ts'
-import { setSessionsCache, getActiveSessionId } from '../src/lib/sessionStore.ts'
+import { setSessionsCache } from '../src/lib/sessionStore.ts'
 import { saveSettings, savePersona, saveUserProfile, saveAIProfile } from '../src/lib/storage.ts'
 
 let passed = 0
