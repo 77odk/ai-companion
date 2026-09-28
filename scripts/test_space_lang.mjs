@@ -150,7 +150,7 @@ savePersona(EN_PERSONA)
 saveSettings({ provider: 'deepseek', apiKey: '', baseUrl: '', model: '' })
 let plan = refreshSpace('Sam', 'You', now)
 eq(plan.mode, 'template', '英文人设无 key → 模板模式')
-ok(plan.posts.length >= 0, '首次进入允许为空；若有模板动态则继续校验语言')
+// 首次进入允许为空；如果 planner 产生了模板动态，语言仍必须正确。
 for (const p of plan.posts) ok(!hasZh(p.text), `英文模板动态无中文：${p.text.slice(0, 40)}…`)
 resetStore()
 savePersona(ZH_PERSONA)
