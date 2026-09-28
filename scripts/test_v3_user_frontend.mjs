@@ -59,9 +59,7 @@ assert.match(app, /onRead=\{markNotificationsRead\}/)
 assert.match(app, /hasUnreadNotifications=\{hasUnreadNotifications\}/)
 // 较早发出的 GET 不能在 read 之后用 stale unread=true 把红点重新点亮；更高 revision 的新消息仍可正常点亮。
 assert.match(app, /notificationReadGuardRef = useRef\(\{ epoch: 0, revision: 0 \}\)/)
-assert.match(app, /const readEpochAtStart = notificationReadGuardRef\.current\.epoch/)
-assert.match(app, /readEpochAtStart !== readGuard\.epoch/)
-assert.match(app, /revision <= readGuard\.revision/)
+assert.match(app, /const staleUnread = unread && revision <= readGuard\.revision/)
 assert.match(app, /epoch: readGuard\.epoch \+ 1/)
 assert.match(app, /revision: Math\.max\(readGuard\.revision, revision\)/)
 // 并发 refresh 必须按请求顺序收敛：旧 GET 晚到不能覆盖新 GET。
@@ -114,7 +112,17 @@ assert.match(feedback, /aria-checked=\{selected\}[\s\S]*disabled=\{submitting\}/
 assert.match(feedback, /value=\{content\}[\s\S]*disabled=\{submitting\}/)
 assert.match(feedback, /multiple[\s\S]*disabled=\{submitting\}/)
 assert.match(feedback, /disabled=\{submitting \|\| images\.length >= MAX_IMAGES\}/)
-assert.match(feedback, /onClick=\{\(\) => removeImage\(index\)\}[\s\S]*disabled=\{submitting\}/)
+assert.match(feedback, /onClick=\{\(\) => removeImage\(index\)\}[\s\S]*disabled=\{submitting \|\| readingImages\}/)
+// 截图读取串行化：读取完成前不能再次选图或提交，合并使用 functional update 避免 stale closure 覆盖。
+assert.match(feedback, /imageReadInFlightRef = useRef\(false\)/)
+assert.match(feedback, /setReadingImages\(true\)/)
+assert.match(feedback, /setImages\(\(current\) => \[\.\.\.current, \.\.\.loaded\]\.slice\(0, MAX_IMAGES\)\)/)
+assert.match(feedback, /if \(submitting \|\| readingImages \|\| imageReadInFlightRef\.current\) return/)
+assert.match(feedback, /disabled=\{submitting \|\| readingImages\}/)
+assert.match(feedback, /正在读取截图…/)
+// 长文件名必须有专用 class，CSS 可做 min-width:0 + ellipsis，避免 390px 横向溢出。
+assert.match(feedback, /feedback-image-row/)
+assert.match(feedback, /feedback-image-name/)
 
 // 视觉：与通知页同一套（settings-page + detail-header + 返回走历史栈）
 assert.match(feedback, /className="page settings-page feedback-page"/)
