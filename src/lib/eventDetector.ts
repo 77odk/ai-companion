@@ -261,14 +261,25 @@ export function shouldJudgeCandidateWindow(state: EventCandidateState, currentTe
   return state.evidence.length >= 2 && SOFT_CLOSURE_RE.test(t)
 }
 
+export function formatEventEvidenceTime(ts: number): string {
+  const d = new Date(ts)
+  if (!Number.isFinite(d.getTime())) return ''
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd} ${hh}:${min}`
+}
+
 export function buildEventWindowPrompt(state: EventCandidateState): string {
   const lines = state.evidence.map((item) => {
-    const when = new Date(item.ts).toISOString()
+    const when = formatEventEvidenceTime(item.ts)
     return `[${item.id}] ${when} 用户原话：${item.text}`
   })
   return (
     '【Candidate Window｜仅用户原话证据】\n' +
     lines.join('\n') +
+    '\n【时间口径】上面的时间都是用户设备本地时间；occurredAt 必须按这个本地日期返回 YYYY-MM-DD。' +
     '\n【要求】只判断这些证据是否共同描述同一段值得留下的关系时刻。不同事情不能拼接。任何判断为 true 的维度和每条 safeFact 都必须引用上面的 evidence id。'
   )
 }
@@ -458,7 +469,28 @@ export function parseJudgeJson(raw: string): EventJudgeResult | null {
 
 export function parseOccurredAt(str: string | undefined, _now?: number): number | null {
   if (!str || typeof str !== 'string') return null
-  const t = new Date(str).getTime()
+  const value = str.trim()
+  if (!value) return null
+
+  // Event 协议的 YYYY-MM-DD 表示“用户设备本地日”，不能交给 Date(string) 按 UTC 午夜解析，
+  // 否则负时区设备会显示成前一天。严格校验年月日，避免 2026-02-30 被自动滚到 3 月。
+  const localDay = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (localDay) {
+    const year = Number(localDay[1])
+    const month = Number(localDay[2])
+    const day = Number(localDay[3])
+    const d = new Date(year, month - 1, day, 0, 0, 0, 0)
+    if (
+      d.getFullYear() !== year
+      || d.getMonth() !== month - 1
+      || d.getDate() !== day
+    ) return null
+    const t = d.getTime()
+    return Number.isFinite(t) && t > 0 ? t : null
+  }
+
+  // 兼容旧测试/旧模型偶尔返回的完整 ISO 时间；生产 prompt 仍只要求 YYYY-MM-DD。
+  const t = new Date(value).getTime()
   if (!Number.isFinite(t) || t <= 0) return null
   return t
 }
