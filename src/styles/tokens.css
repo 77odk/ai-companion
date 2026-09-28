@@ -103,8 +103,12 @@
 
   /* Feedback */
   --el-danger: #b3261e;
+  --el-danger-surface: #fdecea;
   --el-success: #2f7d4d;
   --el-warning: #9a6418;
+
+  /* Fixed contrast colors — intentionally do not follow the TA theme. */
+  --el-static-white: #ffffff;
 
   /* Shadow: only two supported elevation tiers. */
   --el-shadow-float: 0 8px 24px rgba(38, 31, 28, 0.08);
