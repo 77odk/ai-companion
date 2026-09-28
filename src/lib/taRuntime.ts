@@ -336,17 +336,23 @@ function looksNotFinishedYet(clause: string): boolean {
     || /\b(?:almost|about to|not yet|haven't|hasn't|still not)\b/i.test(t)
 }
 
+const ZH_SELF_CURRENT_GRAMMAR_RE = /^我(?:现在|正(?:在)?|还在|在|去|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/
+const ZH_OMITTED_CURRENT_GRAMMAR_RE = /^(?:现在|正(?:在)?|还在|在|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/
+const EN_SELF_CURRENT_GRAMMAR_RE = /\b(?:i'm|i am|i’ll|i'll|i will|i'm going to|i am going to|let me|i just|i've just|i have just)\b/i
+
+function currentActionGrammarIndex(clause: string): number {
+  const t = clause.trim()
+  if (!t) return -1
+  if (ZH_SELF_CURRENT_GRAMMAR_RE.test(t) || ZH_OMITTED_CURRENT_GRAMMAR_RE.test(t)) return 0
+  return t.search(EN_SELF_CURRENT_GRAMMAR_RE)
+}
+
 function explicitSelfCurrentClause(clause: string): boolean {
   const t = clause.trim()
   if (!t) return false
-  // “好，我去…” / “我正在…” / “我刚…” 等明确自我当前动作。
-  if (/(?:^|[，,；;]\s*)我(?:现在|正(?:在)?|还在|在|去|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/.test(t)) return true
-  // 省主语但带强当前标记：“先去洗澡”“正在看书”“刚到家”。
-  if (/^(?:现在|正(?:在)?|还在|在|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/.test(t)) return true
+  if (currentActionGrammarIndex(t) >= 0) return true
   // 很短的口语自述：“洗澡去了”“看书呢”，避免把“看书这件事…”之类泛提及当当前状态。
-  if (t.length <= 16 && /(?:去了|中|呢|着呢|一会儿?|一下|了)$/.test(t)) return true
-  // English: only explicit first-person/current constructions.
-  return /\b(?:i'm|i am|i’ll|i'll|i will|i'm going to|i am going to|let me|i just|i've just|i have just)\b/i.test(t)
+  return t.length <= 16 && /(?:去了|中|呢|着呢|一会儿?|一下|了)$/.test(t)
 }
 
 function compactRuntimeDisplayText(clause: string, lang: Lang): string {
@@ -386,23 +392,28 @@ interface RuntimeClauseStartMatch {
  * - 书名/歌名/对象里的另一种语言即使命中，也不会盖过主句动作。
  */
 function pickRuntimeStartMatchForClause(clause: string): RuntimeClauseStartMatch | null {
+  const grammarIndex = currentActionGrammarIndex(clause)
+  const searchFrom = grammarIndex >= 0 ? grammarIndex : 0
+  const actionText = clause.slice(searchFrom)
+
   let best: RuntimeClauseStartMatch | null = null
   RUNTIME_TEXT_START_RULES.forEach((rule, ruleIndex) => {
     const candidates: Array<{ lang: Lang; index: number }> = [
-      { lang: 'zh', index: clause.search(rule.zh) },
-      { lang: 'en', index: clause.search(rule.en) },
+      { lang: 'zh', index: actionText.search(rule.zh) },
+      { lang: 'en', index: actionText.search(rule.en) },
     ]
     for (const item of candidates) {
       if (item.index < 0) continue
+      const absoluteIndex = searchFrom + item.index
       if (
         best == null
-        || item.index < best.index
-        || (item.index === best.index && ruleIndex < best.ruleIndex)
+        || absoluteIndex < best.index
+        || (absoluteIndex === best.index && ruleIndex < best.ruleIndex)
       ) {
         best = {
           activityId: rule.activityId,
           lang: item.lang,
-          index: item.index,
+          index: absoluteIndex,
           ruleIndex,
         }
       }
@@ -420,7 +431,9 @@ function findRuntimeDisplayCandidate(
     if (isClearlyOtherPersonClause(clause) || blockedAsFutureOrNegative(clause) || !explicitSelfCurrentClause(clause)) continue
     const match = pickRuntimeStartMatchForClause(clause)
     if (!match || match.activityId !== activityId) continue
-    const display = compactRuntimeDisplayText(clause, match.lang)
+    const grammarIndex = currentActionGrammarIndex(clause)
+    const displaySource = grammarIndex >= 0 ? clause.slice(grammarIndex) : clause
+    const display = compactRuntimeDisplayText(displaySource, match.lang)
     if (display) candidate = { text: display, lang: match.lang }
   }
   return candidate
