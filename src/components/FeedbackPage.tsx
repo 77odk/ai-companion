@@ -193,6 +193,7 @@ export default function FeedbackPage({ onBack }: Props) {
                 className="entry-row"
                 role="radio"
                 aria-checked={selected}
+                disabled={submitting}
                 onClick={() => {
                   setType(option.value)
                   setDone(false)
@@ -216,6 +217,7 @@ export default function FeedbackPage({ onBack }: Props) {
             maxLength={MAX_CONTENT_LENGTH}
             placeholder="遇到的情况、想要的功能，或者哪里用起来别扭，都可以写在这里。"
             value={content}
+            disabled={submitting}
             onChange={(e) => {
               setContent(e.target.value)
               setDone(false)
@@ -232,6 +234,7 @@ export default function FeedbackPage({ onBack }: Props) {
             type="file"
             accept="image/jpeg,image/png,image/webp"
             multiple
+            disabled={submitting}
             onChange={(e) => void pickImages(e)}
             aria-label="选择截图"
           />
@@ -239,7 +242,7 @@ export default function FeedbackPage({ onBack }: Props) {
             type="button"
             className="btn btn-ghost"
             onClick={() => fileInputRef.current?.click()}
-            disabled={images.length >= MAX_IMAGES}
+            disabled={submitting || images.length >= MAX_IMAGES}
           >
             添加截图
           </button>
@@ -258,6 +261,7 @@ export default function FeedbackPage({ onBack }: Props) {
                     type="button"
                     className="btn btn-ghost"
                     onClick={() => removeImage(index)}
+                    disabled={submitting}
                     aria-label={`移除 ${image.name}`}
                   >
                     移除
