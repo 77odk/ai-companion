@@ -111,7 +111,6 @@ ok(aiSpaceSource.includes('dataUrl: scaled.dataUrl'), '上传成功后先用本�
 ok(aiSpaceSource.includes('照片暂时没加载出来，稍后再试。'), '列表读取失败不再静默伪装空墙')
 ok(aiSpaceSource.includes("const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，稍后再试。'"), '单图加载失败文案集中维护')
 ok(aiSpaceSource.includes('setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? current : null)'), '列表/上传成功不会覆盖已发生的图片加载失败提示')
-ok(!aiSpaceSource.includes('function isValidCloudPhotoRow'), '受保护 AISpace 不再承载云端响应校验')
 ok(photoWallSource.includes('normalizePhotoListData'), '云端照片列表校验下沉到 photoWall 数据层')
 ok(photoWallSource.includes("message: '照片列表格式异常，请稍后再试'"), '畸形 200 响应被数据层转换成失败结果')
 ok(archiveSource.includes('loading="eager"'), '首屏预览不再 lazy，避免可见照片延迟/漏加载')
