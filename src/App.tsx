@@ -44,7 +44,7 @@ import {
   type RolePickMode,
 } from './lib/sessionFlow'
 import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
-import { forceRefresh } from './lib/forceRefresh'
+import { forceRefresh, refreshToLatest } from './lib/forceRefresh'
 import { checkDeployedBuild, getCurrentBuildVersion, subscribeDeployedBuild } from './lib/appVersion'
 import Home from './components/Home'
 import { initCloudStateSync, syncCloudState } from './lib/cloudState'
@@ -637,7 +637,7 @@ export default function App() {
         <div className="version-update-notice" role="status" aria-live="polite">
           <span className="version-update-notice-copy">发现新版本，刷新后即可使用</span>
           <div className="version-update-notice-actions">
-            <button type="button" className="version-update-now" onClick={() => void forceRefresh()}>
+            <button type="button" className="version-update-now" onClick={() => void refreshToLatest()}>
               立即刷新
             </button>
             <button
