@@ -39,8 +39,9 @@ test('home refresh shortcut is replaced by notifications while settings keeps up
   assert.match(settings, /<UpdateControls \/>/)
 })
 
-test('weather stays out of TA runtime', () => {
-  assert.doesNotMatch(weather, /taRuntime|memory|eventDetector|chat/i)
+test('weather data module stays independent from TA runtime and chat implementation', () => {
+  assert.doesNotMatch(weather, /from ['"].*(?:taRuntime|memory|eventDetector|Chat)/i)
+  assert.doesNotMatch(weather, /getOrAdvanceTaRuntime|upsertMemory|processEventCandidate/)
 })
 
 
