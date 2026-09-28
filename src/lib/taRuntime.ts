@@ -340,14 +340,27 @@ const ZH_SELF_CURRENT_GRAMMAR_RE = /^我(?:现在|正(?:在)?|还在|在|去|先
 const ZH_OMITTED_CURRENT_GRAMMAR_RE = /^(?:现在|正(?:在)?|还在|在|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/
 const EN_SELF_CURRENT_GRAMMAR_RE = /\b(?:i'm|i am|i’ll|i'll|i will|i'm going to|i am going to|let me|i just|i've just|i have just)\b/i
 
-function currentActionGrammar(clause: string): { index: number; lang: Lang } | null {
+function currentActionGrammar(clause: string): { index: number; actionIndex: number; lang: Lang } | null {
   const t = clause.trim()
   if (!t) return null
-  if (ZH_SELF_CURRENT_GRAMMAR_RE.test(t) || ZH_OMITTED_CURRENT_GRAMMAR_RE.test(t)) {
-    return { index: 0, lang: 'zh' }
+
+  const zhSelf = ZH_SELF_CURRENT_GRAMMAR_RE.exec(t)
+  if (zhSelf) {
+    return { index: 0, actionIndex: zhSelf[0].length, lang: 'zh' }
   }
-  const enIndex = t.search(EN_SELF_CURRENT_GRAMMAR_RE)
-  return enIndex >= 0 ? { index: enIndex, lang: 'en' } : null
+
+  const zhOmitted = ZH_OMITTED_CURRENT_GRAMMAR_RE.exec(t)
+  if (zhOmitted) {
+    return { index: 0, actionIndex: zhOmitted[0].length, lang: 'zh' }
+  }
+
+  const en = EN_SELF_CURRENT_GRAMMAR_RE.exec(t)
+  if (!en || en.index < 0) return null
+  return {
+    index: en.index,
+    actionIndex: en.index + en[0].length,
+    lang: 'en',
+  }
 }
 
 function currentActionGrammarIndex(clause: string): number {
@@ -401,7 +414,10 @@ interface RuntimeClauseStartMatch {
 function pickRuntimeStartMatchForClause(clause: string): RuntimeClauseStartMatch | null {
   const grammar = currentActionGrammar(clause)
   if (grammar) {
-    const actionText = clause.slice(grammar.index)
+    const rawActionText = clause.slice(grammar.actionIndex)
+    const leadingSpace = rawActionText.length - rawActionText.trimStart().length
+    const actionText = rawActionText.trimStart()
+
     for (let ruleIndex = 0; ruleIndex < RUNTIME_TEXT_START_RULES.length; ruleIndex += 1) {
       const rule = RUNTIME_TEXT_START_RULES[ruleIndex]
       const pattern = grammar.lang === 'zh' ? rule.zh : rule.en
@@ -410,7 +426,7 @@ function pickRuntimeStartMatchForClause(clause: string): RuntimeClauseStartMatch
       return {
         activityId: rule.activityId,
         lang: grammar.lang,
-        index: grammar.index,
+        index: grammar.actionIndex + leadingSpace,
         ruleIndex,
       }
     }
