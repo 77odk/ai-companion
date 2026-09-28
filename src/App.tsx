@@ -313,6 +313,8 @@ export default function App() {
   // 防止“较早发出的未读探测”在用户刚读完消息后晚到，又把红点点亮。
   // 只记录本次 App 生命周期里真实执行过的 read，不拿历史本地 revision 压服务端事实。
   const notificationReadGuardRef = useRef({ epoch: 0, revision: 0 })
+  // visibility / online 可能同时发起多个 GET；只允许较新的请求结果覆盖状态。
+  const notificationRefreshGuardRef = useRef({ next: 0, applied: 0 })
   const hasUnreadNotifications = loggedIn && (notificationServerUnread || notificationRevision > notificationReadRevision)
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
@@ -412,6 +414,8 @@ export default function App() {
     const refresh = () => {
       const token = getToken()
       if (!token) return
+      const requestId = notificationRefreshGuardRef.current.next + 1
+      notificationRefreshGuardRef.current.next = requestId
       const readEpochAtStart = notificationReadGuardRef.current.epoch
       // V3：消息与通知的事实来源是后端 GET /api/notifications（不再依赖 public 下的静态 feed 文件）。
       void fetch(`${API_BASE}/api/notifications`, {
@@ -426,6 +430,9 @@ export default function App() {
           if (typeof revision !== 'number' || !Number.isInteger(revision) || revision < 0) {
             return
           }
+          const refreshGuard = notificationRefreshGuardRef.current
+          if (requestId < refreshGuard.applied) return
+          refreshGuard.applied = requestId
           setNotificationRevision(revision)
           const unread = payload.unread === true
           const readGuard = notificationReadGuardRef.current
@@ -449,6 +456,7 @@ export default function App() {
 
     if (!loggedIn) {
       notificationReadGuardRef.current = { epoch: 0, revision: 0 }
+      notificationRefreshGuardRef.current = { next: 0, applied: 0 }
       setNotificationRevision(0)
       setNotificationServerUnread(false)
       return () => { active = false }
