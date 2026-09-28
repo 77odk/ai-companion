@@ -181,6 +181,7 @@ function saveState(state: SpaceState, sessionId?: string, silent = false): void 
 }
 
 const SLOT_MARKER_PREFIX = '__generation_slot__:'
+const RETRY_SLOT_PREFIX = '__generation_retry__:'
 const PROVISIONAL_SLOT_MARKER = -1
 const PERMANENT_SLOT_MARKER = 1
 function slotWasUsed(state: SpaceState, slotId: string): boolean {
@@ -195,6 +196,34 @@ function reserveSlots(state: SpaceState, slots: SpaceSlot[]): SpaceSlot[] {
     pending.push(slot)
   }
   return pending
+}
+
+function retryableConversationSlots(
+  used: UsedTemplates,
+  conversationDays: ReadonlySet<string>,
+  plannedDays: ReadonlySet<string>,
+): SpaceSlot[] {
+  const out: SpaceSlot[] = []
+  for (const [key, value] of Object.entries(used)) {
+    if (!key.startsWith(RETRY_SLOT_PREFIX) || !Number.isFinite(value) || value <= 0) continue
+    const slotId = key.slice(RETRY_SLOT_PREFIX.length)
+    const suffix = ':conversation'
+    if (!slotId.endsWith(suffix)) continue
+    const day = slotId.slice(0, -suffix.length)
+    if (!conversationDays.has(day)) continue
+    out.push({
+      at: value,
+      source: 'conversation',
+      conversationKind: plannedDays.has(day) ? 'planned' : 'trace',
+    })
+  }
+  return out
+}
+
+function mergeRetryableSlots(planned: SpaceSlot[], retryable: SpaceSlot[]): SpaceSlot[] {
+  const byId = new Map<string, SpaceSlot>()
+  for (const slot of [...planned, ...retryable]) byId.set(generationSlotIdFor(slot), slot)
+  return [...byId.values()].sort((a, b) => a.at - b.at)
 }
 
 /* ---- v3 配额账本（持久层）：只记当天，读时自动过滤非今天键（跨天滚动） ---- */
@@ -329,11 +358,14 @@ export function refreshSpace(
     conversationEvidenceAt,
     plannedDays,
   )
+  // 瞬时生成失败不能被 lastVisit 永久跨过去；retry marker 只由真实生成失败写入。
+  const retrySlots = retryableConversationSlots(prev.used, conversationDays, plannedDays)
+  const candidateSlots = mergeRetryableSlots(plannedSlots, retrySlots)
   // Natural / AI 不靠时间流逝日更：只消费真实 conversation 候选；
   // 是否最终成为 event 由这条 conversation 的单次生成结果决定。Immersive 额外允许 daily。
   const slots = policy.mode === 'immersive'
-    ? plannedSlots
-    : plannedSlots.filter((slot) => {
+    ? candidateSlots
+    : candidateSlots.filter((slot) => {
         if (slot.source === 'daily') return false
         const dk = dayKeyOf(slot.at)
         const existing = prev.posts.filter((post) => dayKeyOf(post.at) === dk).length
@@ -441,6 +473,7 @@ export async function generatePendingPosts(
   const used = { ...plan.used }
   const newPosts: SpacePost[] = []
   let usedFallback = false // Immersive daily 的非-SKIP失败可安全模板降级；SKIP 本身不补位。
+  const retryableFailures = new Map<string, number>()
   // v3 真实时刻锚：JS Date 现在（CST），防止补发/跨天时把今天说成昨天（与 at 对齐语境共存）
   const nowAnchor = formatNowAnchor(now)
   // 配额账本（已跨天滚动只留今天键）
@@ -467,6 +500,7 @@ export async function generatePendingPosts(
   for (const slot of plan.pending) {
     const at = slot.at
     const source: SpaceSource = slot.source
+    const slotId = generationSlotIdFor(slot)
     const dk = dayKeyOf(at)
     const usage = usageOf(dk)
     if (policy.mode !== 'immersive' && usage.total >= 1) continue
@@ -526,13 +560,19 @@ export async function generatePendingPosts(
             guessKind(cleaned),
             rand,
             resolvedSource,
-            generationSlotIdFor(slot),
+            slotId,
           )
           made = { post }
+        } else if (source === 'conversation') {
+          retryableFailures.set(slotId, at)
         }
       } catch {
         made = null
+        if (source === 'conversation') retryableFailures.set(slotId, at)
       }
+    } else if (source === 'conversation') {
+      // refresh 后若 key/模型设置被清空，不是正式 SKIP；保留到下次进入再试。
+      retryableFailures.set(slotId, at)
     }
 
     // SKIP 已在上面直接 continue：它表示“这次不值得发”，绝不补位。
@@ -570,10 +610,19 @@ export async function generatePendingPosts(
   for (const slot of plan.pending) {
     const slotId = generationSlotIdFor(slot)
     const marker = `${SLOT_MARKER_PREFIX}${slotId}`
+    const retryMarker = `${RETRY_SLOT_PREFIX}${slotId}`
     const generated = newPosts.some(post => post.generationSlotId === slotId)
     const permanentlyKnown = current.posts.some(post => post.generationSlotId === slotId) || current.used[marker] === PERMANENT_SLOT_MARKER
-    if (generated || permanentlyKnown) finalUsed[marker] = PERMANENT_SLOT_MARKER
-    else if (finalUsed[marker] === PROVISIONAL_SLOT_MARKER) delete finalUsed[marker]
+    if (generated || permanentlyKnown) {
+      finalUsed[marker] = PERMANENT_SLOT_MARKER
+      delete finalUsed[retryMarker]
+    } else if (retryableFailures.has(slotId)) {
+      if (finalUsed[marker] === PROVISIONAL_SLOT_MARKER) delete finalUsed[marker]
+      finalUsed[retryMarker] = retryableFailures.get(slotId) as number
+    } else {
+      if (finalUsed[marker] === PROVISIONAL_SLOT_MARKER) delete finalUsed[marker]
+      delete finalUsed[retryMarker]
+    }
   }
   const state: SpaceState = { posts, lastVisit: current.lastVisit ?? now, used: finalUsed }
   if (newPosts.length > 0) recordLedger(newPosts, sessionId, now)
