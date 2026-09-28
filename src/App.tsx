@@ -54,8 +54,12 @@ import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from '.
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
 const RolePicker = lazy(() => import('./components/RolePicker'))
-const Settings = lazy(() => import('./components/Settings'))
-const AISpace = lazy(() => import('./components/AISpace'))
+const loadSettingsView = () => import('./components/Settings')
+const loadAISpaceView = () => import('./components/AISpace')
+const loadMemoryView = () => import('./components/Memory')
+
+const Settings = lazy(loadSettingsView)
+const AISpace = lazy(loadAISpaceView)
 const ChatProfile = lazy(() => import('./components/ChatProfile'))
 const ChatSettings = lazy(() => import('./components/ChatSettings'))
 const AboutMe = lazy(() => import('./components/AboutMe'))
@@ -64,7 +68,7 @@ const GuideDetail = lazy(() => import('./components/Guide'))
 const ProductIntro = lazy(() => import('./components/ProductIntro'))
 const RolesPage = lazy(() => import('./components/RolesPage'))
 const SpaceLife = lazy(() => import('./components/SpaceLife'))
-const Memory = lazy(() => import('./components/Memory'))
+const Memory = lazy(loadMemoryView)
 
 type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
 
@@ -169,6 +173,23 @@ export default function App() {
     initCloudStateSync()
   }, [])
 
+  useEffect(() => {
+    if (!loggedIn) return
+    const preloadPrimaryViews = () => {
+      void Promise.allSettled([loadAISpaceView(), loadMemoryView(), loadSettingsView()])
+    }
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    if (typeof idleWindow.requestIdleCallback === 'function') {
+      const id = idleWindow.requestIdleCallback(preloadPrimaryViews, { timeout: 1200 })
+      return () => idleWindow.cancelIdleCallback?.(id)
+    }
+    const timer = globalThis.setTimeout(preloadPrimaryViews, 500)
+    return () => globalThis.clearTimeout(timer)
+  }, [loggedIn])
+
   // ---- 导航历史 + 滚动位置（修正批第 2/3 条）----
   // 浏览器后退/侧滑返回不白屏：goView 入栈 + pushState，popstate 时弹出上一页，栈空回首页。
   // 所有页面统一恢复离开时的滚动位置（切 view 时捕获，回来时还原）。
@@ -180,17 +201,15 @@ export default function App() {
     if (!v) return
     const container = document.querySelector('.app-main')
     if (!container) return
-    const els = Array.from(container.querySelectorAll<HTMLElement>('*'))
+    const els = container.querySelectorAll<HTMLElement>('*')
     const items: { cls: string; idx: number; top: number }[] = []
-    els.forEach((el, i) => {
-      if (el.scrollTop > 0) {
-        const cls = typeof el.className === 'string' && el.className ? el.className : el.tagName
-        const same = els.filter(
-          (x, xi) => ((typeof x.className === 'string' && x.className) || x.tagName) === cls && xi <= i,
-        )
-        items.push({ cls, idx: same.length - 1, top: el.scrollTop })
-      }
-    })
+    const counts = new Map<string, number>()
+    for (const el of els) {
+      const cls = typeof el.className === 'string' && el.className ? el.className : el.tagName
+      const idx = counts.get(cls) ?? 0
+      counts.set(cls, idx + 1)
+      if (el.scrollTop > 0) items.push({ cls, idx, top: el.scrollTop })
+    }
     scrollPosRef.current.set(v, items)
   }, [])
 
@@ -200,18 +219,19 @@ export default function App() {
     window.setTimeout(() => {
       const container = document.querySelector('.app-main')
       if (!container) return
-      const els = Array.from(container.querySelectorAll<HTMLElement>('*'))
+      const wanted = new Map<string, Map<number, number>>()
       for (const { cls, idx, top } of items) {
-        let n = 0
-        for (const el of els) {
-          if (((typeof el.className === 'string' && el.className) || el.tagName) === cls) {
-            if (n === idx) {
-              if (el.scrollTop === 0) el.scrollTop = top
-              break
-            }
-            n++
-          }
-        }
+        const byIndex = wanted.get(cls) ?? new Map<number, number>()
+        byIndex.set(idx, top)
+        wanted.set(cls, byIndex)
+      }
+      const counts = new Map<string, number>()
+      for (const el of container.querySelectorAll<HTMLElement>('*')) {
+        const cls = typeof el.className === 'string' && el.className ? el.className : el.tagName
+        const idx = counts.get(cls) ?? 0
+        counts.set(cls, idx + 1)
+        const top = wanted.get(cls)?.get(idx)
+        if (top !== undefined && el.scrollTop === 0) el.scrollTop = top
       }
     }, 0)
   }, [])
