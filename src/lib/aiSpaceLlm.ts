@@ -224,6 +224,7 @@ export function isSpaceSkipResponse(text: string): boolean {
 
 export type SpaceGenerationDecision =
   | { kind: 'skip' }
+  | { kind: 'invalid' }
   | { kind: 'post'; source: SpaceSource; text: string }
 
 /**
@@ -239,12 +240,12 @@ export function parseSpaceGenerationDecision(
 
   if (requestedSource === 'conversation') {
     const match = raw.match(/^\s*CONVERSATION\s*[:：]\s*([\s\S]+?)\s*$/i)
-    if (!match) return { kind: 'skip' }
+    if (!match) return { kind: 'invalid' }
     const body = String(match[1] ?? '').trim()
-    return body ? { kind: 'post', source: 'conversation', text: body } : { kind: 'skip' }
+    return body ? { kind: 'post', source: 'conversation', text: body } : { kind: 'invalid' }
   }
 
-  return raw ? { kind: 'post', source: requestedSource, text: raw } : { kind: 'skip' }
+  return raw ? { kind: 'post', source: requestedSource, text: raw } : { kind: 'invalid' }
 }
 
 /** emoji / 表情符号物理删除用（提示词拦不住，硬过滤） */
