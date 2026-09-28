@@ -95,8 +95,8 @@ export default function NotificationsPage({ onBack, onRead }: Props) {
           </svg>
           返回
         </button>
-        <h2>消息与通知</h2>
-        <span className="detail-header-spacer" aria-hidden="true" />
+        <h2 className="detail-title">消息与通知</h2>
+        <span className="detail-spacer" aria-hidden="true" />
       </div>
 
       {loadState === 'loading' ? (
