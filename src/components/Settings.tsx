@@ -81,7 +81,9 @@ interface Props {
   onGoProfile?: () => void
   /** 进入设置页时打开的子页 */
   initialPage?: SettingsPage
-  /** App 级来源（例如 TA 首页）进入纪念日时，由来源负责返回。 */
+  /** 从其他页面直接进入某个设置子页时，返回应回到真实来源，而不是固定落到「我的」。 */
+  onInitialPageBack?: () => void
+  /** 兼容旧调用：App 级来源进入纪念日时可显式指定返回。 */
   onAnniversaryBack?: () => void
   /** 隐私详情页是全屏二级页：通知 App 隐藏底部导航。 */
   onPrivacyOpenChange?: (open: boolean) => void
@@ -89,8 +91,20 @@ interface Props {
   hasUnreadNotifications?: boolean
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onAnniversaryBack, onPrivacyOpenChange, onGoNotifications, hasUnreadNotifications = false }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onInitialPageBack, onAnniversaryBack, onPrivacyOpenChange, onGoNotifications, hasUnreadNotifications = false }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
+
+  const backFrom = (current: SettingsPage) => {
+    if (current === 'anniversary' && onAnniversaryBack) {
+      onAnniversaryBack()
+      return
+    }
+    if (initialPage && initialPage !== 'main' && initialPage === current && onInitialPageBack) {
+      onInitialPageBack()
+      return
+    }
+    setPage('main')
+  }
 
   useEffect(() => {
     onPrivacyOpenChange?.(page === 'privacy')
@@ -99,36 +113,36 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
   useEffect(() => () => onPrivacyOpenChange?.(false), [onPrivacyOpenChange])
 
   if (page === 'provider') {
-    return <ProviderDetail onBack={() => setPage('main')} onGoGuide={onGoGuide} />
+    return <ProviderDetail onBack={() => backFrom('provider')} onGoGuide={onGoGuide} />
   }
   if (page === 'profile') {
-    return <MyProfileDetail onBack={() => setPage('main')} />
+    return <MyProfileDetail onBack={() => backFrom('profile')} />
   }
   if (page === 'privacy') {
-    return <PrivacyDetail onBack={() => setPage('main')} />
+    return <PrivacyDetail onBack={() => backFrom('privacy')} />
   }
   if (page === 'reply') {
-    return <ReplyLengthDetail onBack={() => setPage('main')} />
+    return <ReplyLengthDetail onBack={() => backFrom('reply')} />
   }
   if (page === 'about') {
-    return <AboutDetail onBack={() => setPage('main')} />
+    return <AboutDetail onBack={() => backFrom('about')} />
   }
   if (page === 'account') {
-    return <Account onBack={() => setPage('main')} />
+    return <Account onBack={() => backFrom('account')} />
   }
   if (page === 'work') {
     return (
       <div className="page settings-page work-subpage">
-        <DetailHeader title="工作台" onBack={() => setPage('main')} />
+        <DetailHeader title="工作台" onBack={() => backFrom('work')} />
         <Work onGoChat={onGoWorkChat} />
       </div>
     )
   }
   if (page === 'appearance') {
-    return <Appearance onBack={() => setPage('main')} />
+    return <Appearance onBack={() => backFrom('appearance')} />
   }
   if (page === 'anniversary') {
-    return <AnniversaryManager onBack={onAnniversaryBack ?? (() => setPage('main'))} />
+    return <AnniversaryManager onBack={() => backFrom('anniversary')} />
   }
   return (
     <MainCenter
