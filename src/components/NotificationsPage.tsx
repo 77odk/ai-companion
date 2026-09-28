@@ -31,13 +31,19 @@ function publishedAtDate(value: string): Date | null {
 function normalizeNotification(value: unknown): OfficialNotification | null {
   if (!value || typeof value !== 'object') return null
   const item = value as Record<string, unknown>
-  if (typeof item.id !== 'string' || !item.id.trim()) return null
+  let id: string | null = null
+  if (typeof item.id === 'string' && item.id.trim()) {
+    id = item.id.trim()
+  } else if (typeof item.id === 'number' && Number.isSafeInteger(item.id) && item.id >= 0) {
+    id = String(item.id)
+  }
+  if (!id) return null
   if (item.kind !== 'update' && item.kind !== 'announcement' && item.kind !== 'account') return null
   if (typeof item.title !== 'string' || !item.title.trim()) return null
   if (typeof item.body !== 'string' || !item.body.trim()) return null
   if (typeof item.publishedAt !== 'string' || !publishedAtDate(item.publishedAt)) return null
   return {
-    id: item.id.trim(),
+    id,
     kind: item.kind,
     title: item.title.trim(),
     body: item.body.trim(),
@@ -52,7 +58,12 @@ function kindLabel(kind: OfficialNotificationKind): string {
 }
 
 function dateLabel(value: string): string {
-  const date = publishedAtDate(value)
+  const trimmed = value.trim()
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
+  if (dateOnly) {
+    return `${dateOnly[1]}年${dateOnly[2]}月${dateOnly[3]}日`
+  }
+  const date = publishedAtDate(trimmed)
   if (!date) return value
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
