@@ -51,6 +51,7 @@ interface Props {
   onGoLife: () => void
   onGoAnniversary: () => void
   onGoNotifications: () => void
+  hasUnreadNotifications?: boolean
 }
 
 function pad2(n: number): string {
@@ -125,7 +126,7 @@ function periodSub(a: Anniversary, now: number): string {
 type TimeKind = 'birthday' | 'period'
 type TimeSheet = { kind: TimeKind; mode: 'add' | 'edit'; id?: string } | null
 
-export default function Home({ onGoChat, onGoLife, onGoAnniversary, onGoNotifications }: Props) {
+export default function Home({ onGoChat, onGoLife, onGoAnniversary, onGoNotifications, hasUnreadNotifications = false }: Props) {
   const sid = getActiveSessionId() || undefined
   const now = useMemo(() => new Date(), [])
   const scene = getHomeScene(now)
@@ -423,9 +424,10 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary, onGoNotifica
         type="button"
         className="home-inbox-button"
         onClick={onGoNotifications}
-        aria-label="消息与通知"
+        aria-label={hasUnreadNotifications ? '消息与通知，有新消息' : '消息与通知'}
         title="消息与通知"
       >
+        {hasUnreadNotifications ? <span className="home-inbox-unread-dot" aria-hidden="true" /> : null}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <rect x="3.25" y="5.5" width="17.5" height="13" rx="2.2" />
           <path d="m4.2 7 6.3 5.15a2.35 2.35 0 0 0 3 0L19.8 7" />
