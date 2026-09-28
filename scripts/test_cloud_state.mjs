@@ -1125,29 +1125,28 @@ test('SPACE-2: historical live/tombstone replay is silent and generated slots st
   assert.ok(JSON.parse(localStorage.getItem('ai_space_used_templates_B'))[`__generation_slot__:${slot}`])
 })
 
-test('SPACE-3: generated slot dedupes repeated initialization, scopes by session, and ignores manual posts', () => {
+test('SPACE-3: empty initialization is stable/scoped and manual posts stay manual', () => {
   clearState('space-slots')
   window.dispatchEvent(new Event('eluvin-auth-change'))
   const now = new Date(2026, 8, 16, 12, 0, 0).getTime()
   const firstA = aiSpace.refreshSpace('', '', now, 'A')
   const secondA = aiSpace.refreshSpace('', '', now, 'A')
   const firstB = aiSpace.refreshSpace('', '', now, 'B')
-  assert.equal(firstA.created, 1)
+  assert.equal(firstA.created, 0)
   assert.equal(secondA.created, 0)
-  assert.equal(firstB.created, 1)
-  assert.equal(firstA.posts[0].generationSlotId, firstB.posts[0].generationSlotId)
-  assert.equal(firstA.posts[0].sessionId, 'A')
-  assert.equal(firstB.posts[0].sessionId, 'B')
+  assert.equal(firstB.created, 0)
+  assert.deepEqual(firstA.posts, [])
+  assert.deepEqual(firstB.posts, [])
 
   localStorage.setItem('ai_space_posts_A', JSON.stringify([
-    ...JSON.parse(localStorage.getItem('ai_space_posts_A')),
     { id: 'manual', sessionId: 'A', at: now + 1, kind: '日常', text: 'manual post' },
   ]))
   window.dispatchEvent(new Event('eluvin-data-change'))
   const posts = aiSpace.loadCurrentPosts('A')
   assert.equal(posts.filter(post => post.id === 'manual').length, 1)
   assert.equal(posts.find(post => post.id === 'manual').generationSlotId, undefined)
-  assert.equal(cloudOps('space_post').filter(op => op.sessionId === 'A' && !op.deleted).length >= 2, true)
+  assert.equal(aiSpace.loadCurrentPosts('B').length, 0)
+  assert.equal(cloudOps('space_post').filter(op => op.sessionId === 'A' && !op.deleted).length >= 1, true)
 })
 
 test('SPACE-4: two-device slot collision converges loser to canonical owner and stops retrying', async () => {
@@ -1255,8 +1254,9 @@ test('SPACE-5: a generation attempt that creates no post releases only its provi
   assert.equal(used[`__generation_slot__:${slot}`], undefined)
   localStorage.removeItem(`ai_space_ledger_${sessionId}`)
   const retry = aiSpace.refreshSpace('', '', now, sessionId)
-  assert.equal(retry.created, 1)
-  assert.equal(retry.posts[0].generationSlotId, slot)
+  assert.equal(retry.created, 0)
+  assert.deepEqual(retry.posts, [])
+  assert.equal(JSON.parse(localStorage.getItem(`ai_space_used_templates_${sessionId}`) ?? '{}')[`__generation_slot__:${slot}`], undefined)
 })
 
 test('SPACE-6: identical slots in different sessions are accepted independently', async () => {

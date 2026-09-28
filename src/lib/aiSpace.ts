@@ -1,7 +1,7 @@
 // TA 的空间 · 动态引擎（localStorage 读写 + 对外入口）
 // 纯逻辑都在 aiSpaceCore.ts / aiSpaceLlm.ts（可被 Node 单测），本文件只负责存取与组装。
 // 生成路径分三态：
-//   llm      有可生成资格 + key：异步生成；Natural/AI 只消费真实 event 证据槽
+//   llm      有可生成资格 + key：异步生成；Natural/AI 只消费真实完整对话候选
 //   template Immersive 无 key 时可用本地生活模板；Natural/AI 不用模板造事实
 //   no-persona 空人设仍可浏览；无证据时允许空间为空
 
@@ -39,8 +39,15 @@ import {
   buildLlmPost,
   buildReplyMessages,
   extractImageCaption,
+  parseSpaceGenerationDecision,
 } from './aiSpaceLlm.ts'
-import { loadChatTopics, collectTopicDays, collectTopicEvidenceAt } from './chatTopics.ts'
+import {
+  loadChatTopics,
+  collectConversationDays,
+  collectConversationEvidenceAt,
+  collectPlannedDays,
+  conversationPairsForDay,
+} from './chatTopics.ts'
 import { chatCompletion } from './api.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { getFirstSeen, loadPersona, loadSettings } from './storage.ts'
@@ -138,7 +145,7 @@ function isSpacePost(p: unknown): p is SpacePost {
     // art 色卡字段 v3 起不再写入；老数据有 art 也能读（可选）
     (o.art == null || typeof o.art === 'number') &&
     // source 通道 v3 起写入；老数据无 source 视同 daily
-    (o.source == null || o.source === 'daily' || o.source === 'event') &&
+    (o.source == null || o.source === 'daily' || o.source === 'conversation' || o.source === 'event') &&
     (o.liked == null || typeof o.liked === 'boolean') &&
     (o.comments == null || (Array.isArray(o.comments) && o.comments.every(isSpaceComment)))
   )
@@ -174,6 +181,7 @@ function saveState(state: SpaceState, sessionId?: string, silent = false): void 
 }
 
 const SLOT_MARKER_PREFIX = '__generation_slot__:'
+const RETRY_SLOT_PREFIX = '__generation_retry__:'
 const PROVISIONAL_SLOT_MARKER = -1
 const PERMANENT_SLOT_MARKER = 1
 function slotWasUsed(state: SpaceState, slotId: string): boolean {
@@ -190,6 +198,34 @@ function reserveSlots(state: SpaceState, slots: SpaceSlot[]): SpaceSlot[] {
   return pending
 }
 
+function retryableConversationSlots(
+  used: UsedTemplates,
+  conversationDays: ReadonlySet<string>,
+  plannedDays: ReadonlySet<string>,
+): SpaceSlot[] {
+  const out: SpaceSlot[] = []
+  for (const [key, value] of Object.entries(used)) {
+    if (!key.startsWith(RETRY_SLOT_PREFIX) || !Number.isFinite(value) || value <= 0) continue
+    const slotId = key.slice(RETRY_SLOT_PREFIX.length)
+    const suffix = ':conversation'
+    if (!slotId.endsWith(suffix)) continue
+    const day = slotId.slice(0, -suffix.length)
+    if (!conversationDays.has(day)) continue
+    out.push({
+      at: value,
+      source: 'conversation',
+      conversationKind: plannedDays.has(day) ? 'planned' : 'trace',
+    })
+  }
+  return out
+}
+
+function mergeRetryableSlots(planned: SpaceSlot[], retryable: SpaceSlot[]): SpaceSlot[] {
+  const byId = new Map<string, SpaceSlot>()
+  for (const slot of [...planned, ...retryable]) byId.set(generationSlotIdFor(slot), slot)
+  return [...byId.values()].sort((a, b) => a.at - b.at)
+}
+
 /* ---- v3 配额账本（持久层）：只记当天，读时自动过滤非今天键（跨天滚动） ---- */
 
 /** 读账本：解析 + 丢弃非今天的历史键（账本只管当天防刷屏；过去日子的额度由存量动态计数兜底） */
@@ -201,11 +237,12 @@ export function readLedger(sessionId?: string, now: number = Date.now()): SpaceL
     if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
     const ledger: SpaceLedger = {}
     for (const k of Object.keys(parsed as Record<string, unknown>)) {
-      const v = (parsed as Record<string, unknown>)[k] as { daily?: unknown; event?: unknown } | undefined
+      const v = (parsed as Record<string, unknown>)[k] as { daily?: unknown; conversation?: unknown; event?: unknown } | undefined
       if (v && typeof v === 'object') {
         const daily = typeof v.daily === 'number' && Number.isFinite(v.daily) ? v.daily : 0
+        const conversation = typeof v.conversation === 'number' && Number.isFinite(v.conversation) ? v.conversation : 0
         const event = typeof v.event === 'number' && Number.isFinite(v.event) ? v.event : 0
-        ledger[k] = { daily, event }
+        ledger[k] = { daily, conversation, event }
       }
     }
     return pruneLedger(ledger, dayKeyOf(now))
@@ -228,7 +265,7 @@ function recordLedger(created: SpacePost[], sessionId?: string, now: number = Da
   let ledger = readLedger(sessionId, now) // 已跨天滚动：只留今天的键
   for (const p of created) {
     const dk = dayKeyOf(p.at)
-    ledger = addLedgerEntry(ledger, dk, p.source === 'event' ? 'event' : 'daily')
+    ledger = addLedgerEntry(ledger, dk, p.source === 'event' ? 'event' : p.source === 'conversation' ? 'conversation' : 'daily')
   }
   writeLedger(ledger, sessionId, now) // 写前再滚一次：只留今天（过去日子的历史记录不占今天额度）
 }
@@ -267,7 +304,7 @@ export interface RefreshPlan {
   mode: SpaceMode
   /** 本次新生成/待生成的数量（llm 模式为 pending 长度） */
   created: number
-  /** llm 模式下待异步生成的时间戳与来源通道（从旧到新；event=事件动态，不占日常配额） */
+  /** llm 模式下待异步生成的时间戳与候选来源（从旧到新；conversation 可在单次生成后落成 event） */
   pending: SpaceSlot[]
   /** used 快照，供 llm 降级模板时去重 */
   used: UsedTemplates
@@ -297,10 +334,14 @@ export function refreshSpace(
   const persona = sessionPersona(sessionId)
   const settings = loadSettings()
   const policy = resolveCompanionPolicy(sessionId)
-  // 事件日 = 话题日 + 约定发生日（因果链第一步：collectTopicDays 只收 ≤今天 的 futureDay，未来约定不预生成）
   const topics = loadChatTopics(sessionId)
-  const activeDays = collectTopicDays(topics, dayKeyOf(now))
-  const eventEvidenceAt = collectTopicEvidenceAt(topics)
+  const todayKey = dayKeyOf(now)
+  // 本地只规划“有完整真实对话素材的日子”。是否属于已发生共同事件，不再本地猜；
+  // conversation 槽在唯一一次 Space LLM 生成里返回 CONVERSATION / EVENT / SKIP。
+  const activeDays = new Set<string>()
+  const conversationDays = collectConversationDays(topics, todayKey)
+  const conversationEvidenceAt = collectConversationEvidenceAt(topics, todayKey)
+  const plannedDays = collectPlannedDays(topics, todayKey)
   // v3 配额账本（只留今天的键）：计划时已用额度 = max(现存动态, 账本)——删了动态配额照扣
   const ledger = todayLedger(sessionId, now)
   const relationshipStart = getFirstSeen(sessionId)
@@ -312,49 +353,41 @@ export function refreshSpace(
     Math.random,
     ledger,
     relationshipStart,
-    eventEvidenceAt,
+    undefined,
+    conversationDays,
+    conversationEvidenceAt,
+    plannedDays,
   )
-  // Natural / AI 不再靠时间流逝“日更”：只有真实聊天证据形成的 event 才有资格生成动态。
-  // Immersive 保留自己的生活日常，但首访无证据日常已在 planBackfillSlots 层关闭。
+  // 瞬时生成失败不能被 lastVisit 永久跨过去；retry marker 只由真实生成失败写入。
+  const retrySlots = retryableConversationSlots(prev.used, conversationDays, plannedDays)
+  const candidateSlots = mergeRetryableSlots(plannedSlots, retrySlots)
+  // Natural / AI 不靠时间流逝日更：只消费真实 conversation 候选；
+  // 是否最终成为 event 由这条 conversation 的单次生成结果决定。Immersive 额外允许 daily。
   const slots = policy.mode === 'immersive'
-    ? plannedSlots
-    : plannedSlots.filter((slot) => slot.source === 'event')
+    ? candidateSlots
+    : candidateSlots.filter((slot) => {
+        if (slot.source === 'daily') return false
+        const dk = dayKeyOf(slot.at)
+        const existing = prev.posts.filter((post) => dayKeyOf(post.at) === dk).length
+        const booked = getLedgerEntry(ledger, dk)
+        const ledgerTotal = booked.daily + booked.conversation + booked.event
+        // Natural / AI 每天最多一条；删掉当天动态也不能靠刷新重新刷出第二条。
+        return Math.max(existing, ledgerTotal) < 1
+      })
 
-  // 空人设：Natural / AI 没有真实 event + 可用模型就保持空；绝不为了“页面不空”造内容。
-  // Immersive 保留原有兼容行为：有模型按生活时间线生成；没模型且空间为空时只落 1 条本地安全兜底。
+  // 空人设也可在配置好模型后消费真实 conversation 候选；没有模型时保持空。
+  // Immersive 同样不再为了“页面不能空”强塞本地兜底。
   if (!persona.trim()) {
-    const lang = resolveSpaceLang(sessionId, persona)
     if (canUseLlm(persona, settings, true)) {
       const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
       const pending = reserveSlots(state, slots)
       saveState(state, sessionId)
       return { posts: state.posts, mode: 'llm', created: pending.length, pending, used: state.used }
     }
-
     const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
-    if (policy.mode !== 'immersive') {
-      saveState(state, sessionId)
-      return { posts: state.posts, mode: 'no-persona', created: 0, pending: [], used: state.used }
-    }
-
-    let created = 0
-    const todayKey = dayKeyOf(now)
-    const tLedger = getLedgerEntry(ledger, todayKey)
-    const fallbackSlot: SpaceSlot = { at: now, source: 'daily' }
-    const slotId = generationSlotIdFor(fallbackSlot)
-    if (prev.posts.length === 0 && tLedger.daily < MAX_POSTS_PER_DAY && !slotWasUsed(prev, slotId)) {
-      const g = generatePost(vars, state.used, now - 3 * 60 * 1000, Math.random, 'daily', lang, slotId, relationshipStart)
-      state.used[`${SLOT_MARKER_PREFIX}${slotId}`] = PERMANENT_SLOT_MARKER
-      state.used[g.templateKey] = now
-      const post = { ...g.post, ...(sessionId ? { sessionId } : {}) }
-      state.posts = mergeNewPosts(state.posts, [post])
-      recordLedger([post], sessionId, now)
-      created = 1
-    }
     saveState(state, sessionId)
-    return { posts: state.posts, mode: 'no-persona', created, pending: [], used: state.used }
+    return { posts: state.posts, mode: 'no-persona', created: 0, pending: [], used: state.used }
   }
-
   // 会话语言（canonical 优先，回退人设检测）——模板/LLM 两条路径共用
   const spaceLang = resolveSpaceLang(sessionId, persona)
 
@@ -439,61 +472,48 @@ export async function generatePendingPosts(
   const rawTopics = loadChatTopics(sessionId)
   const used = { ...plan.used }
   const newPosts: SpacePost[] = []
-  let usedFallback = false
+  let usedFallback = false // Immersive daily 的非-SKIP失败可安全模板降级；SKIP 本身不补位。
+  const retryableFailures = new Map<string, number>()
   // v3 真实时刻锚：JS Date 现在（CST），防止补发/跨天时把今天说成昨天（与 at 对齐语境共存）
   const nowAnchor = formatNowAnchor(now)
   // 配额账本（已跨天滚动只留今天键）
   const ledger = readLedger(sessionId, now)
 
-  // 兜底额度：按「现存动态 + 本次已生成」逐天逐通道计数（老数据无 source 视同 daily）
-  const dayCounts = new Map<string, { daily: number; event: number }>()
+  // 兜底额度：按「现存动态 + 本次已生成」逐天逐通道计数（老数据无 source 视同 daily）。
+  const dayCounts = new Map<string, { daily: number; conversation: number; event: number }>()
   const bump = (dk: string, source: SpaceSource) => {
-    const cur = dayCounts.get(dk) ?? { daily: 0, event: 0 }
-    dayCounts.set(dk, source === 'event' ? { ...cur, event: cur.event + 1 } : { ...cur, daily: cur.daily + 1 })
+    const cur = dayCounts.get(dk) ?? { daily: 0, conversation: 0, event: 0 }
+    if (source === 'event') dayCounts.set(dk, { ...cur, event: cur.event + 1 })
+    else if (source === 'conversation') dayCounts.set(dk, { ...cur, conversation: cur.conversation + 1 })
+    else dayCounts.set(dk, { ...cur, daily: cur.daily + 1 })
   }
-  for (const p of plan.posts) bump(dayKeyOf(p.at), p.source === 'event' ? 'event' : 'daily')
+  for (const p of plan.posts) bump(dayKeyOf(p.at), p.source === 'event' ? 'event' : p.source === 'conversation' ? 'conversation' : 'daily')
   const usageOf = (dk: string) => {
-    const fromPosts = dayCounts.get(dk) ?? { daily: 0, event: 0 }
+    const fromPosts = dayCounts.get(dk) ?? { daily: 0, conversation: 0, event: 0 }
     const fromLedger = getLedgerEntry(ledger, dk)
     const daily = Math.max(fromPosts.daily, fromLedger.daily)
+    const conversation = Math.max(fromPosts.conversation, fromLedger.conversation)
     const event = Math.max(fromPosts.event, fromLedger.event)
-    return { daily, event, total: daily + event }
+    return { daily, conversation, event, total: daily + conversation + event }
   }
 
   for (const slot of plan.pending) {
     const at = slot.at
-    const source: SpaceSource = slot.source === 'event' ? 'event' : 'daily'
+    const source: SpaceSource = slot.source
+    const slotId = generationSlotIdFor(slot)
     const dk = dayKeyOf(at)
     const usage = usageOf(dk)
-    // v3 按通道配额兜底：日常 ≤MAX_POSTS_PER_DAY、事件 ≤1/天、全天 ≤MAX_TOTAL_PER_DAY
-    if (source === 'event') {
-      if (usage.event >= 1 || usage.total >= MAX_TOTAL_PER_DAY) continue
-    } else {
-      if (usage.daily >= MAX_POSTS_PER_DAY || usage.total >= MAX_TOTAL_PER_DAY) continue
-    }
+    if (policy.mode !== 'immersive' && usage.total >= 1) continue
+    if (usage.total >= MAX_TOTAL_PER_DAY) continue
+    if (source === 'event' && usage.event >= 1) continue
+    if (source === 'conversation' && usage.conversation >= 1) continue
+    if (source === 'daily' && usage.daily >= MAX_POSTS_PER_DAY) continue
     let made: { post: SpacePost; templateKey?: string } | null = null
 
     if (canUseLlm(persona, settings, true)) {
-      // ★每条动态按它自己的时间戳(at)构建上下文——回填昨天就按昨天的日期/时段写，
-      //   话题标签也以 at 那天为基准（at 当天聊的标「今天」，其余标日期），凌晨回填不穿帮
+      // 每条动态只取它自己那一天真正相关的完整对话对；旧 USER-only topic 不进入新素材链。
       const atBase = new Date(at)
-      const sameDay = (ts: number): boolean => {
-        if (!ts) return false
-        const d = new Date(ts)
-        return (
-          d.getFullYear() === atBase.getFullYear() &&
-          d.getMonth() === atBase.getMonth() &&
-          d.getDate() === atBase.getDate()
-        )
-      }
-      const chatTopics = rawTopics.map((x) => {
-        // 因果链第一步：这条动态的日子 = 某条约定「发生那天」→ 特别标出，TA 才会写"刚看完那部片"而不是干提旧事
-        if (x.futureDay && x.futureDay === dayKeyOf(at)) return `今天(说好要做的) ${x.t}`
-        if (sameDay(x.ts)) return `今天 ${x.t}`
-        const d = new Date(x.ts)
-        if (Number.isFinite(x.ts) && x.ts > 0) return `${d.getMonth() + 1}-${d.getDate()} ${x.t}`
-        return x.t
-      })
+      const conversationPairs = conversationPairsForDay(rawTopics, dk, 3)
       const atDateStr = `${atBase.getMonth() + 1}月${atBase.getDate()}日`
       const atVars: TemplateVar = {
         ...vars,
@@ -510,43 +530,78 @@ export async function generatePendingPosts(
           timeWord: atVars.timeWord,
           weatherWord: atVars.weatherWord,
           recent,
-          chatTopics,
+          conversationPairs,
           atDateStr,
-          // v3 时刻锚 + 事件通道标记（事件动态提示词按「那天共同的事」写，日常仍写自己的生活）
           nowAnchor,
           postSource: source,
+          conversationKind: slot.conversationKind,
           relationshipStartDate,
         },
         spaceLang,
       )
       try {
         const raw = await chatCompletion(settings, messages, { timeoutMs: 30000 })
-        // 先解析动态自己的 [配图] 协议，再做统一归因净化，避免净化层碰协议正文。
-        const { text: protocolText } = extractImageCaption(raw)
-        const cleaned = cleanLlmText(protocolText)
-        if (cleaned) {
-          // 纯文字动态（色卡已删）：[配图] 协议只剥离，不再生成配图。
-          const post = buildLlmPost(cleaned, at, guessKind(cleaned), rand, source, generationSlotIdFor(slot))
-          made = { post }
+        const decision = parseSpaceGenerationDecision(raw, source)
+        // 只有模型明确返回 SKIP 才是正式跳过；格式坏/空返回属于生成失败。
+        if (decision.kind === 'skip') continue
+
+        if (decision.kind === 'invalid') {
+          if (source === 'conversation') retryableFailures.set(slotId, at)
+        } else {
+          const resolvedSource = decision.source
+          // Space-N1 的 conversation 候选只能落成 conversation；event 仍只由独立 Event 体系进入。
+          if (resolvedSource === 'conversation' && usage.conversation >= 1) continue
+          if (resolvedSource === 'event' && usage.event >= 1) continue
+
+          // 先解析动态自己的 [配图] 协议，再做统一归因净化，避免净化层碰协议正文。
+          const { text: protocolText } = extractImageCaption(decision.text)
+          const cleaned = cleanLlmText(protocolText)
+          if (cleaned) {
+            const post = buildLlmPost(
+              cleaned,
+              at,
+              guessKind(cleaned),
+              rand,
+              resolvedSource,
+              slotId,
+            )
+            made = { post }
+          } else if (source === 'conversation') {
+            retryableFailures.set(slotId, at)
+          }
         }
       } catch {
-        made = null // 超时/报错/返回不可用 → 降级模板
+        made = null
+        if (source === 'conversation') retryableFailures.set(slotId, at)
       }
+    } else if (source === 'conversation') {
+      // refresh 后若 key/模型设置被清空，不是正式 SKIP；保留到下次进入再试。
+      retryableFailures.set(slotId, at)
     }
 
+    // SKIP 已在上面直接 continue：它表示“这次不值得发”，绝不补位。
+    // 只有 Immersive 的 daily 在网络失败 / 无 key / 非法返回时保留既有安全模板降级；
+    // Natural / AI、conversation、event 都宁可 0 条，也不能用模板冒充事实。
     if (!made) {
-      // 只有 Immersive 的纯日常允许模板降级。
-      // Natural / AI 以及 event 动态宁可不发，也不能用固定句或无关模板冒充事实。
+      if (policy.mode !== 'immersive' || source !== 'daily') continue
       usedFallback = true
-      if (policy.mode !== 'immersive' || source === 'event') continue
       const dayVars: TemplateVar = { ...vars, timeWord: getTimeWord(at), season: getSeason(at) }
-      const g = generatePost(dayVars, used, at, rand, 'daily', spaceLang, generationSlotIdFor(slot), relationshipStart)
+      const g = generatePost(
+        dayVars,
+        used,
+        at,
+        rand,
+        'daily',
+        spaceLang,
+        generationSlotIdFor(slot),
+        relationshipStart,
+      )
       used[g.templateKey] = now
       made = { post: g.post, templateKey: g.templateKey }
     }
 
     newPosts.push({ ...made.post, ...(sessionId ? { sessionId } : {}) })
-    bump(dk, source)
+    bump(dk, made.post.source === 'event' ? 'event' : made.post.source === 'conversation' ? 'conversation' : 'daily')
     // 把刚生成的动态纳入「最近动态」，避免同批下一条雷同（v3 克制：最多留 2 条）
     recent.unshift(made.post.text)
     if (recent.length > 2) recent.pop()
@@ -559,10 +614,19 @@ export async function generatePendingPosts(
   for (const slot of plan.pending) {
     const slotId = generationSlotIdFor(slot)
     const marker = `${SLOT_MARKER_PREFIX}${slotId}`
+    const retryMarker = `${RETRY_SLOT_PREFIX}${slotId}`
     const generated = newPosts.some(post => post.generationSlotId === slotId)
     const permanentlyKnown = current.posts.some(post => post.generationSlotId === slotId) || current.used[marker] === PERMANENT_SLOT_MARKER
-    if (generated || permanentlyKnown) finalUsed[marker] = PERMANENT_SLOT_MARKER
-    else if (finalUsed[marker] === PROVISIONAL_SLOT_MARKER) delete finalUsed[marker]
+    if (generated || permanentlyKnown) {
+      finalUsed[marker] = PERMANENT_SLOT_MARKER
+      delete finalUsed[retryMarker]
+    } else if (retryableFailures.has(slotId)) {
+      if (finalUsed[marker] === PROVISIONAL_SLOT_MARKER) delete finalUsed[marker]
+      finalUsed[retryMarker] = retryableFailures.get(slotId) as number
+    } else {
+      if (finalUsed[marker] === PROVISIONAL_SLOT_MARKER) delete finalUsed[marker]
+      delete finalUsed[retryMarker]
+    }
   }
   const state: SpaceState = { posts, lastVisit: current.lastVisit ?? now, used: finalUsed }
   if (newPosts.length > 0) recordLedger(newPosts, sessionId, now)

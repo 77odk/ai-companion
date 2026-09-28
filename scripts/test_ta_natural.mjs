@@ -97,8 +97,9 @@ assert.equal(resolveActiveSession(sessions, '101')?.persona, '', 'Natural reload
 
 const { refreshSpace, loadCurrentPosts } = await import('../src/lib/aiSpace.ts')
 const space = refreshSpace('星光', '你', new Date(2026, 8, 14, 12).getTime(), '101')
-assert.equal(space.mode, 'no-persona', 'Natural AI Space 不调用额外 LLM')
-assert.ok(loadCurrentPosts('101').length > 0, 'Natural AI Space 可正常读取兜底内容')
+assert.equal(space.mode, 'no-persona', 'Natural AI Space 无真实素材时不调用额外 LLM')
+assert.equal(space.created, 0, 'Natural 无真实素材允许为空，不为填满 Space 强制发动态')
+assert.equal(loadCurrentPosts('101').length, 0, 'Natural 无真实素材不写模板兜底')
 assert.equal(loadCurrentPosts('102').length, 0, 'Natural AI Space 不串到 Template session')
 
 // ---- 游客 Natural 真实状态链（TA-NATURAL-01 blocker：游客草稿不能在 LoginGate 被清掉）----

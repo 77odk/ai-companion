@@ -77,7 +77,7 @@ import { takeChatMessage } from '../lib/chatInject'
 import { extractOpeningLine } from '../lib/customPersona'
 import { ensureMilestoneEvent, getMilestoneStatus, latestReachedMilestoneDay, markMilestoneShown } from '../lib/milestone'
 import { getWeeklyReviews } from '../lib/weeklyReview'
-import { recordChatTopic, loadChatTopics } from '../lib/chatTopics'
+import { completeChatTopicPair, recordChatTopic, loadChatTopics } from '../lib/chatTopics'
 import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
 import { processEventCandidate } from '../lib/eventDetector'
 import MilestoneCard from './MilestoneCard'
@@ -307,6 +307,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const mountedRef = useRef(true)
   const finalizeRef = useRef<() => void>(() => {})
   const retriedRef = useRef(false)
+  // Space-N1：只有正常完整结束（或同轮显式重试后正常结束）的回复，才可补成 USER+SELF 对话对。
+  // Stop / 切模型中断 / 流式失败留下的 partial 仍可按既有规则落聊天历史，但绝不能冒充完整 Space 素材。
+  const spacePairEligibleRef = useRef(false)
   const assistantText = useRef('')
   // 第27条：模型独立思考字段 reasoning_content 累积（DeepSeek/Qwen/Kimi/豆包等），finalize 时合并到 thinking
   const reasoningRef = useRef('')
@@ -817,6 +820,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       controllerRef.current?.abort()
       if (displayCleanRef.current) assistantText.current = displayCleanRef.current
+      spacePairEligibleRef.current = false
       // 已收到的半截话落库不丢
       finalizeRef.current()
     }
@@ -898,6 +902,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
     let runId = ++runIdRef.current
     retriedRef.current = false
+    spacePairEligibleRef.current = true
     busyTriggeredRef.current = false
 
     const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
@@ -978,7 +983,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       return created
     }
 
-    recordChatTopic(text, getActiveSessionId() || undefined)
+    recordChatTopic(userMsg.content, activeSessionId || undefined, userMsg.ts)
     // TASK-MEM-DISTILL：本地显式检测先收集候选、不抢先写——等模型回复的【记忆】marker 到达后统一归并
     // （有 marker 对应 → 只写一条提炼版 explicit；无对应 marker → fallback 写本地候选；只有 marker → 保持 inferred）
     // 候选的 explicit 身份来自用户证据（用户明确说过），text 若被 marker 匹配则采用模型提炼 wording。
@@ -1318,6 +1323,20 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         .trim()
       if (committedAssistantText) {
         syncTaRuntimeFromAssistantText(activeSessionId || undefined, committedAssistantText, Date.now())
+        // Space-N1 唯一 Chat 例外（产品已冻结“完整 USER+TA 对话对”为硬要求）：
+        // 只在正常最终可见回复真实落库后补 pair；Stop / 切模型 / stream error 已把 eligible 置 false。
+        // 不改消息、不改上传/合并/去重，也不新增模型调用。taTs 必须是真正 commit 时刻，不能用请求开始的 assistantTs。
+        if (spacePairEligibleRef.current) {
+          const pairCommittedAt = Date.now()
+          completeChatTopicPair(
+            userMsg.content,
+            committedAssistantText,
+            activeSessionId || undefined,
+            userMsg.ts,
+            pairCommittedAt,
+          )
+          spacePairEligibleRef.current = false
+        }
       }
       const token = getToken()
       if (sid && token) {
@@ -1650,6 +1669,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         },
         onError: (err) => {
           if (runId !== runIdRef.current) return
+          // 请求失败时即使已有半截可见文本，也不把它当作完整 Space 对话对。
+          spacePairEligibleRef.current = false
           streamErrorRef.current = err
           streamEndedRef.current = true
           // onError 同样：挂载时走 playTick 流程，卸载时直接 finalize
@@ -1680,6 +1701,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       runId = ++runIdRef.current
       retriedRef.current = false
+      spacePairEligibleRef.current = true
       busyTriggeredRef.current = false
       assistantText.current = ''
       reasoningRef.current = ''
@@ -1847,6 +1869,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     controllerRef.current?.abort()
     if (displayCleanRef.current) assistantText.current = displayCleanRef.current
+    spacePairEligibleRef.current = false
     // 注意：不在这里设 finishedRef，让 finalize 自己设防重入守卫
     // runId++ 已经能阻止 playTick 继续跑
     retriedRef.current = true

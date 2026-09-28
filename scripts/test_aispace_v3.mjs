@@ -23,7 +23,7 @@ import {
 } from '../src/lib/aiSpaceCore.ts'
 import { buildLlmMessages, buildLlmPost } from '../src/lib/aiSpaceLlm.ts'
 import { refreshSpace, generatePendingPosts, loadCurrentPosts, readLedger } from '../src/lib/aiSpace.ts'
-import { recordChatTopic } from '../src/lib/chatTopics.ts'
+import { completeChatTopicPair, recordChatTopic } from '../src/lib/chatTopics.ts'
 import { savePersona, saveSettings } from '../src/lib/storage.ts'
 
 let passed = 0
@@ -78,17 +78,17 @@ let ledger = {}
 ledger = addLedgerEntry(ledger, todayKey, 'daily')
 ledger = addLedgerEntry(ledger, todayKey, 'daily')
 ledger = addLedgerEntry(ledger, todayKey, 'event')
-eq(ledger[todayKey], { daily: 2, event: 1 }, '记账：同天两条日常 + 一条事件分开累计')
+eq(ledger[todayKey], { daily: 2, conversation: 0, event: 1 }, '记账：三通道独立，未发 conversation=0')
 ledger = addLedgerEntry(ledger, '2026-09-08', 'event')
 eq(Object.keys(ledger).length, 2, '历史键先记着')
 const rolled = pruneLedger(ledger, todayKey)
 eq(Object.keys(rolled), [todayKey], '跨天滚动：只保留今天的键')
-eq(rolled[todayKey], { daily: 2, event: 1 }, '滚动后今天的计数原样保留')
-eq(getLedgerEntry(undefined, todayKey), { daily: 0, event: 0 }, '无账本 → 全 0')
-eq(getLedgerEntry({}, 'x'), { daily: 0, event: 0 }, '空账本 → 全 0')
-eq(dayUsage([], todayKey, { [todayKey]: { daily: 2, event: 1 } }), { daily: 2, event: 1, total: 3 }, 'dayUsage 账本优先')
+eq(rolled[todayKey], { daily: 2, conversation: 0, event: 1 }, '滚动后今天的计数原样保留')
+eq(getLedgerEntry(undefined, todayKey), { daily: 0, conversation: 0, event: 0 }, '无账本 → 三通道全 0')
+eq(getLedgerEntry({}, 'x'), { daily: 0, conversation: 0, event: 0 }, '空账本 → 三通道全 0')
+eq(dayUsage([], todayKey, { [todayKey]: { daily: 2, event: 1 } }), { daily: 2, conversation: 0, event: 1, total: 3 }, 'dayUsage 兼容旧两字段账本并补 conversation=0')
 const withPosts = [{ id: 'x', at: now - 2 * HOUR, kind: '日常', text: 'x' }]
-eq(dayUsage(withPosts, todayKey), { daily: 1, event: 0, total: 1 }, 'dayUsage 按现存动态数（老数据无 source=日常）')
+eq(dayUsage(withPosts, todayKey), { daily: 1, conversation: 0, event: 0, total: 1 }, 'dayUsage 按现存动态数（老数据无 source=日常）')
 eq(dayUsage(withPosts, todayKey, { [todayKey]: { daily: 2, event: 0 } }).daily, 2, 'dayUsage = max(现存, 账本)：删了动态配额照扣')
 eq(formatNowAnchor(now), '2026年9月9日 星期三', 'formatNowAnchor 生成中文日期锚（含星期）')
 
@@ -152,7 +152,7 @@ ok(today3b.every((p) => p.source !== 'event'), '非事件日不产事件动态')
 ok(today3b.length <= 2, '非事件日日常 ≤2 条')
 // 生成的动态都带 source 通道、不再写 art
 for (const p of res3b.state.posts) {
-  ok(p.source === 'daily' || p.source === 'event', `动态带合法 source（得 ${p.source}）`)
+  ok(p.source === 'daily' || p.source === 'conversation' || p.source === 'event', `动态带合法 source（得 ${p.source}）`)
   ok(p.art == null, `v3 动态不写 art 色卡字段（id=${p.id.slice(0, 6)}）`)
 }
 
@@ -204,7 +204,7 @@ eq(readLedger(undefined, now), {}, '读时自动过滤非今天键：全历史�
 store.set('ai_space_ledger', JSON.stringify({ [todayKey]: { daily: 2, event: 1 }, '2026-09-08': { daily: 2, event: 1 } }))
 const kept = readLedger(undefined, now)
 eq(Object.keys(kept), [todayKey], '今天的键保留，昨天的键被过滤（跨天滚动）')
-eq(kept[todayKey], { daily: 2, event: 1 }, '今天计数原样')
+eq(kept[todayKey], { daily: 2, conversation: 0, event: 1 }, '旧账本读取时补 conversation=0')
 store.set('ai_space_ledger_7', JSON.stringify({ [todayKey]: { daily: 1, event: 0 } }))
 eq(readLedger('7', now)[todayKey].daily, 1, '有会话：账本按会话分 key 读写')
 eq(readLedger(undefined, now)[todayKey].daily, 2, '无会话回落全局 key，互不串')
@@ -241,7 +241,7 @@ const evtMsgs = buildLlmMessages({
   nowAnchor: '2026年9月9日 星期三',
   postSource: 'event',
 })
-ok(evtMsgs[1].content.includes('这条动态正是为你和对方那天共同经历或约好的事发的'), '事件动态：以当天共同的事为主体写')
+ok(evtMsgs[1].content.includes('旧版 USER 单句只作背景'), '旧 USER-only topic 不能再作为 completed event 证据')
 // 日常动态仍是素材换血（九成写自己）
 const dailyMsgs = buildLlmMessages({
   taName: '小忆',
@@ -256,7 +256,7 @@ const dailyMsgs = buildLlmMessages({
   nowAnchor: '2026年9月9日 星期三',
   postSource: 'daily',
 })
-ok(dailyMsgs[1].content.includes('大多数动态写你自己的日子就好'), '日常动态：素材换血（写自己的日子）')
+ok(dailyMsgs[0].content.includes('SKIP'), 'daily 也允许正式 SKIP，不为填空强发')
 ok(dailyMsgs[1].content.includes('不是你的全部生活'), '素材换血：TA 不是对方生活的复读机')
 
 console.log('\n[8] 端到端（LLM 路径）：refreshSpace → generatePendingPosts 事件落盘 + 记账 + [配图]剥除')
@@ -264,8 +264,13 @@ resetStore()
 // 有人设 + 有 key（走 LLM）
 savePersona('你是小忆，爱喝咖啡，最近在学画画')
 saveSettings({ provider: 'custom', apiKey: 'k-test', baseUrl: 'https://llm.test/v1', model: 'm-test' })
-// 今天聊过的大事（带 ts → 事件日）
-recordChatTopic('晚上约好一起去看电影', undefined, now - 1 * HOUR)
+// 计划对话 + 当天真实对话只形成 conversation 候选；Event 识别归独立 Event 体系。
+const planTs8 = now - 2 * DAY
+recordChatTopic('后天晚上一起去看电影吧', undefined, planTs8)
+completeChatTopicPair('后天晚上一起去看电影吧', '好，到那天我们一起看。', undefined, planTs8, planTs8 + MINUTE)
+const doneTs8 = now - 1 * HOUR
+recordChatTopic('我们刚看完电影，已经散场了', undefined, doneTs8)
+completeChatTopicPair('我们刚看完电影，已经散场了', '嗯，刚才那段我也还在想。', undefined, doneTs8, doneTs8 + MINUTE)
 // 上次访问在昨天：窗口含今天
 store.set('ai_space_last_visit', String(new Date(2026, 8, 8, 10, 0).getTime()))
 let lastUserMsg = ''
@@ -279,34 +284,39 @@ globalThis.fetch = async (_url, init) => {
     ok: true,
     status: 200,
     json: async () => ({
-      choices: [{ message: { content: '散场出来，风挺凉，电影里的那句台词还在脑子里转。\n[配图]路灯下的长影' } }],
+      choices: [{ message: { content: 'CONVERSATION: 散场出来，风挺凉，电影里的那句台词还在脑子里转。\n[配图]路灯下的长影' } }],
     }),
   }
 }
 const plan8 = refreshSpace('小忆', '阿明', now)
 eq(plan8.mode, 'llm', '有人设+key → llm 模式')
-eq(plan8.pending.length, 1, '今天的事件日 → 1 条待生成（事件）')
-eq(plan8.pending[0].source, 'event', 'pending 带来源通道 = event')
+eq(plan8.pending.length, 1, '今天有真实完整对话 → 1 条 conversation 候选')
+eq(plan8.pending[0].source, 'conversation', '预规划只到 conversation，不在本地猜 event')
 const res8 = await generatePendingPosts(plan8, '小忆', '阿明', undefined, now)
 eq(res8.created, 1, '生成 1 条')
 eq(res8.usedFallback, false, 'LLM 成功，无模板降级')
 ok(lastUserMsg.includes('【当前时刻】现在是 2026年9月9日 星期三'), '发给模型的 user 含当前时刻锚')
-ok(lastUserMsg.includes('这条动态正是为你和对方那天共同经历或约好的事发的'), '发给模型的是事件动态提示词')
+ok(lastUserMsg.includes('CONVERSATION:') && lastUserMsg.includes('[source=SELF]') && lastUserMsg.includes('PLANNED'), '提示词只生成对话余响，并保留 planned 边界')
 ok(userMsgCount >= 1, '真实发起过 LLM 请求')
 const saved8 = loadCurrentPosts()
 eq(saved8.length, 1, '落盘 1 条')
-eq(saved8[0].source, 'event', '落盘动态 source=event')
+eq(saved8[0].source, 'conversation', '落盘动态 source=conversation')
 ok(!saved8[0].text.includes('[配图]'), '[配图] 标记被剥除（纯文字清洗保留）')
 ok(saved8[0].text.includes('散场出来'), '正文保留')
 ok(saved8[0].art == null, '落盘动态不写 art')
 const ledger8 = readLedger(undefined, now)
-eq(ledger8[todayKey]?.event ?? 0, 1, '事件动态记入账本 event=1')
-eq(ledger8[todayKey]?.daily ?? 0, 0, '事件不占日常配额：daily 仍 0')
-// event 失败不允许用无关模板冒充事实：宁可不发，并释放 provisional slot 供未来重试
+eq(ledger8[todayKey]?.conversation ?? 0, 1, '对话余响记入账本 conversation=1')
+eq(ledger8[todayKey]?.daily ?? 0, 0, 'conversation 不占日常配额：daily 仍 0')
+// conversation 生成失败不允许用模板冒充事实：宁可不发，并释放 provisional slot 供未来重试
 resetStore()
 savePersona('你是小忆，爱喝咖啡')
 saveSettings({ provider: 'custom', apiKey: 'k-test', baseUrl: 'https://llm.test/v1', model: 'm-test' })
-recordChatTopic('约好明天一起去爬山', undefined, now - 1 * HOUR)
+const failPlanTs = now - 2 * DAY
+recordChatTopic('后天一起去爬山吧', undefined, failPlanTs)
+completeChatTopicPair('后天一起去爬山吧', '好，到那天一起去。', undefined, failPlanTs, failPlanTs + MINUTE)
+const failDoneTs = now - HOUR
+recordChatTopic('我们刚爬完山，已经到家了', undefined, failDoneTs)
+completeChatTopicPair('我们刚爬完山，已经到家了', '嗯，今天确实走了很久。', undefined, failDoneTs, failDoneTs + MINUTE)
 store.set('ai_space_last_visit', String(new Date(2026, 8, 8, 10, 0).getTime()))
 globalThis.fetch = async () => {
   throw new Error('network down')
@@ -314,11 +324,11 @@ globalThis.fetch = async () => {
 const plan8b = refreshSpace('小忆', '阿明', now)
 const failedSlotId = plan8b.pending[0] ? generationSlotIdFor(plan8b.pending[0]) : null
 const res8b = await generatePendingPosts(plan8b, '小忆', '阿明', undefined, now)
-eq(res8b.created, 0, 'event LLM 失败 → 不拿模板冒充事实')
-eq(res8b.usedFallback, true, 'usedFallback 标记本次 LLM 未成功')
+eq(res8b.created, 0, 'conversation 候选 LLM 失败 → 不拿模板冒充事实')
+eq(res8b.usedFallback, false, 'LLM 失败不再走模板 fallback；字段保留兼容但为 false')
 const saved8b = loadCurrentPosts()
 eq(saved8b.length, 0, '失败后不落任何假 event 动态')
-eq(readLedger(undefined, now)[todayKey]?.event ?? 0, 0, '未生成动态 → event 账本不记账')
+eq(readLedger(undefined, now)[todayKey]?.conversation ?? 0, 0, '未生成动态 → conversation 账本不记账')
 if (failedSlotId) {
   const usedAfterFail = JSON.parse(store.get('ai_space_used_templates') ?? '{}')
   eq(usedAfterFail[`__generation_slot__:${failedSlotId}`], undefined, '失败的 provisional slot 被释放，可未来重试')
@@ -330,12 +340,13 @@ savePersona('你是小忆，爱喝咖啡') // 有人设但没 key → 模板路�
 saveSettings({ provider: 'custom', apiKey: '', baseUrl: '', model: '' })
 const plan9 = refreshSpace('小忆', '阿明', now)
 eq(plan9.mode, 'template', '有人设没 key → 模板路径同步生成')
-ok(plan9.created >= 1, `本次生成 ${plan9.created} 条`)
+ok(plan9.created >= 0, `沉浸首访允许为空，本次生成 ${plan9.created} 条`)
 const saved9 = loadCurrentPosts()
 ok(saved9.length === plan9.posts.length, '落盘与返回一致')
-ok(saved9.every((p) => p.source === 'daily' || p.source === 'event'), '模板路径落盘动态都带合法 source')
+ok(saved9.every((p) => p.source === 'daily'), '无模型模板路径只允许 Immersive daily')
 ok(saved9.every((p) => p.art == null), '模板路径不再写 art 色卡字段')
-eq(readLedger(undefined, now)[todayKey]?.daily ?? 0, 1, '首访今天 1 条日常已记账（daily=1）')
+const todayGenerated9 = saved9.filter((p) => dayKeyOf(p.at) === todayKey).length
+eq(readLedger(undefined, now)[todayKey]?.daily ?? 0, todayGenerated9, '首访允许为空；实际生成多少就记多少 daily')
 // 手动删掉今天动态 + 账本不删 → 同一天再来（>2h）不会重生成刷屏
 const later = new Date(2026, 8, 9, 18, 0).getTime()
 const todayPosts9 = saved9.filter((p) => dayKeyOf(p.at) === todayKey)

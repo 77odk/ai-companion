@@ -94,12 +94,12 @@ const w = pickWeatherWord(seeded(1))
 ok(['晴', '雨', '阴', '多云'].includes(w), `天气词合法（得 ${w}）`)
 
 console.log('\n[3] 回填计划·基础（2026-09-04 回填式时间轴）')
-// 首访：铺最近 MAX_BACKFILL_DAYS 个自然日，每天 1 条（旧→新）
+// 首访：允许空着；若生成候选，仍保持回填窗口和时间顺序。
 const firstPlan = planBackfillTimestamps(null, now, [], new Set(), seeded(2))
-eq(firstPlan.length, MAX_BACKFILL_DAYS, '首访铺 3 天')
-ok(firstPlan[0] < firstPlan[1] && firstPlan[1] < firstPlan[2], '升序（从旧到新）')
+ok(firstPlan.length <= MAX_BACKFILL_DAYS, '首访不强填，候选数不超过回填窗口')
+ok(firstPlan.every((ts, i) => i === 0 || firstPlan[i - 1] < ts), '候选按旧→新升序')
 const daysOfFirst = new Set(firstPlan.map((ts) => dayKeyOf(ts)))
-eq(daysOfFirst.size, MAX_BACKFILL_DAYS, '首访分布在 3 个不同自然日')
+eq(daysOfFirst.size, firstPlan.length, '首访每个自然日最多一个 daily 候选')
 for (const ts of firstPlan) {
   const hh = new Date(ts).getHours()
   ok(hh >= 7 && hh <= 23, `首访时间戳在 7-23 点之间（${hh} 点）`)
@@ -128,7 +128,7 @@ for (const ts of latePlan) {
 console.log('\n[3b] 新角色认识边界：过去只能从 firstSeen 当天开始')
 const firstSeenToday = new Date(2026, 7, 22, 9, 30).getTime()
 const boundedToday = planBackfillTimestamps(null, now, [], new Set(), seeded(201), firstSeenToday)
-eq([...new Set(boundedToday.map((ts) => dayKeyOf(ts)))], ['2026-08-22'], '今天刚认识 → 首访不再伪造前两天动态')
+ok(boundedToday.every((ts) => dayKeyOf(ts) === '2026-08-22'), '今天刚认识 → 即使首访为空，也绝不伪造前两天动态')
 ok(boundedToday.every((ts) => dayKeyOf(ts) >= dayKeyOf(firstSeenToday)), '所有首访槽位都不早于认识日')
 
 const firstSeenYesterday = new Date(2026, 7, 21, 18, 0).getTime()
@@ -158,7 +158,7 @@ const slots4 = planBackfillSlots(lastVisit, now, yPosts, new Set([yesterdayKey])
 const yEvt = slots4.filter((s) => dayKeyOf(s.at) === yesterdayKey && s.source === 'event')
 eq(yEvt.length, 1, '昨天日常已满 2 条 → 事件通道仍补 1 条（大事不被日常配额吞掉）')
 ok(!slots4.some((s) => s.source === 'daily' && dayKeyOf(s.at) === yesterdayKey), '昨天不再补日常（日常配额 2 已满）')
-ok(slots4.every((s) => s.source === 'daily' || s.source === 'event'), '计划里每条都有合法来源通道（daily/event）')
+ok(slots4.every((s) => s.source === 'daily' || s.source === 'conversation' || s.source === 'event'), '计划里每条都有合法来源通道')
 const yPosts3 = [...yPosts, { id: 'c', at: now - DAY + 11 * HOUR, kind: '日常', text: 'C', source: 'event' }]
 const slots4b = planBackfillSlots(lastVisit, now, yPosts3, new Set([yesterdayKey]), seeded(7))
 ok(!slots4b.some((s) => dayKeyOf(s.at) === yesterdayKey), '昨天已有事件动态 → 当天不再补事件（一天一件事）')
@@ -166,9 +166,9 @@ ok(!slots4b.some((s) => dayKeyOf(s.at) === yesterdayKey), '昨天已有事件动
 console.log('\n[5] advanceTimeline 回填生成')
 const vars = { taName: 'TA', yourName: '小七', season: '夏', timeWord: '中午', weatherWord: '晴' }
 const first = advanceTimeline({ posts: [], lastVisit: null, used: {} }, vars, now, new Set(), seeded(8))
-eq(first.created, MAX_BACKFILL_DAYS, '首访创建 3 条')
-eq(first.state.posts.length, MAX_BACKFILL_DAYS, '首访后共 3 条')
-ok(first.state.posts[0].at > first.state.posts[1].at && first.state.posts[1].at > first.state.posts[2].at, '按时间倒序（最新在前）')
+ok(first.created <= MAX_BACKFILL_DAYS, '首访允许 0 条，不超过回填窗口')
+eq(first.state.posts.length, first.created, '首访落盘数与 created 一致')
+ok(first.state.posts.every((p, i) => i === 0 || first.state.posts[i - 1].at > p.at), '有内容时按时间倒序（最新在前）')
 eq(first.state.lastVisit, now, 'lastVisit 更新为本次时间')
 const firstDayCounts = {}
 for (const p of first.state.posts) firstDayCounts[dayKeyOf(p.at)] = (firstDayCounts[dayKeyOf(p.at)] ?? 0) + 1

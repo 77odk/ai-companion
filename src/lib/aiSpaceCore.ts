@@ -39,8 +39,8 @@ export interface SpaceComment {
   replyTo?: string
 }
 
-/** 动态来源通道：daily=日常配额动态 / event=事件动态（大事趁热，不占日常配额，两通道各自每天限量） */
-export type SpaceSource = 'daily' | 'event'
+/** 动态来源通道：daily=TA 自己的生活 / conversation=真实聊天余响 / event=已确认发生的共同事件。 */
+export type SpaceSource = 'daily' | 'conversation' | 'event'
 
 export interface SpacePost {
   id: string
@@ -209,49 +209,58 @@ export function dayKeyOf(ts: number): string {
 /** 某一天已有的动态条数（限频用；老数据无 source 视同 daily） */
 export function countPostsOnDay(posts: SpacePost[], day: string): number {
   const u = countPostsBySource(posts, day)
-  return u.daily + u.event
+  return u.daily + u.conversation + u.event
 }
 
-/** 按来源通道统计某一天的动态条数：{ daily, event }（老数据无 source 视为 daily） */
-export function countPostsBySource(posts: SpacePost[], day: string): { daily: number; event: number } {
+/** 按来源通道统计某一天的动态条数（老数据无 source 视为 daily）。 */
+export function countPostsBySource(
+  posts: SpacePost[],
+  day: string,
+): { daily: number; conversation: number; event: number } {
   let daily = 0
+  let conversation = 0
   let event = 0
   for (const p of posts) {
-    if (p && typeof p.at === 'number' && dayKeyOf(p.at) === day) {
-      if (p.source === 'event') event++
-      else daily++
-    }
+    if (!p || typeof p.at !== 'number' || dayKeyOf(p.at) !== day) continue
+    if (p.source === 'event') event++
+    else if (p.source === 'conversation') conversation++
+    else daily++
   }
-  return { daily, event }
+  return { daily, conversation, event }
 }
 
-/* ---- v3 配额账本（纯函数部分；持久层在 aiSpace.ts） ---- */
+/* ---- 配额账本（纯函数部分；持久层在 aiSpace.ts） ---- */
 
-/** 某天某通道的账本记录 */
 export interface LedgerEntry {
   daily: number
+  conversation: number
   event: number
 }
 
-/** 账本：自然日 key → 当日两通道已发条数 */
 export type SpaceLedger = Record<string, LedgerEntry>
 
-/** 账本某天某通道计数 +1（不可变，返回新对象） */
 export function addLedgerEntry(ledger: SpaceLedger, day: string, source: SpaceSource): SpaceLedger {
   const next: SpaceLedger = { ...ledger }
-  const cur = next[day] ?? { daily: 0, event: 0 }
-  next[day] = source === 'event' ? { ...cur, event: cur.event + 1 } : { ...cur, daily: cur.daily + 1 }
+  const cur = next[day] ?? { daily: 0, conversation: 0, event: 0 }
+  if (source === 'event') next[day] = { ...cur, event: cur.event + 1 }
+  else if (source === 'conversation') next[day] = { ...cur, conversation: cur.conversation + 1 }
+  else next[day] = { ...cur, daily: cur.daily + 1 }
   return next
 }
 
-/** 账本某天的计数（无记录返回 { daily: 0, event: 0 }） */
 export function getLedgerEntry(ledger: SpaceLedger | undefined, day: string): LedgerEntry {
-  if (!ledger) return { daily: 0, event: 0 }
+  if (!ledger) return { daily: 0, conversation: 0, event: 0 }
   const e = ledger[day]
-  return e ? { daily: e.daily || 0, event: e.event || 0 } : { daily: 0, event: 0 }
+  return e
+    ? {
+        daily: e.daily || 0,
+        conversation: e.conversation || 0,
+        event: e.event || 0,
+      }
+    : { daily: 0, conversation: 0, event: 0 }
 }
 
-/** 跨天滚动：只保留 keepDay 那天的记录（账本只管当天防刷屏，历史键丢弃） */
+/** 跨天滚动：只保留 keepDay 那天的记录（账本只管当天防刷屏，历史键丢弃）。 */
 export function pruneLedger(ledger: SpaceLedger | undefined, keepDay: string): SpaceLedger {
   if (!ledger) return {}
   const out: SpaceLedger = {}
@@ -261,22 +270,18 @@ export function pruneLedger(ledger: SpaceLedger | undefined, keepDay: string): S
   return out
 }
 
-/**
- * 某自然日的「已用额度」= max(现存动态计数, 账本计数)：
- * 账本在生成时逐条记一笔，用户手动删动态后现存计数会掉、账本不掉——
- * 取二者较大值保证「删了配额照扣」，防删了重生成刷屏（v3）。
- * @param ledger 账本（通常已 prune 到当天；跨天滚动后仅当天有记录）
- */
+/** 某自然日“已用额度”= max(现存动态计数, 账本计数)，三通道分开、全天总数合并。 */
 export function dayUsage(
   posts: SpacePost[],
   day: string,
   ledger?: SpaceLedger,
-): { daily: number; event: number; total: number } {
+): { daily: number; conversation: number; event: number; total: number } {
   const fromPosts = countPostsBySource(posts, day)
   const fromLedger = getLedgerEntry(ledger, day)
   const daily = Math.max(fromPosts.daily, fromLedger.daily)
+  const conversation = Math.max(fromPosts.conversation, fromLedger.conversation)
   const event = Math.max(fromPosts.event, fromLedger.event)
-  return { daily, event, total: daily + event }
+  return { daily, conversation, event, total: daily + conversation + event }
 }
 
 /** 按月份算季节：3-5 春，6-8 夏，9-11 秋，12-2 冬 */
@@ -430,7 +435,7 @@ export function generatePost(
 
 /** Stable across devices: session isolation is carried by Cloud State scope, never encoded here. */
 export function generationSlotIdFor(slot: SpaceSlot): string {
-  return `${dayKeyOf(slot.at)}:${slot.source === 'event' ? 'event' : 'daily'}`
+  return `${dayKeyOf(slot.at)}:${slot.source}`
 }
 
 /** 生成当前真实时刻的中文日期锚文本：如「2026年9月9日 星期三」（CST，补发/跨天防穿帮用） */
@@ -447,12 +452,14 @@ export function dayStartOf(ts: number): number {
   return d.getTime()
 }
 
-/** 回填计划里的一条待生成动态：时间戳 + 来源通道（daily 日常 / event 事件） */
+/** 回填计划里的一条待生成动态。 */
 export interface SpaceSlot {
   at: number
   source: SpaceSource
-  /** 仅 event 槽可带：聊天证据真实发生时间；约定 futureDay 不带。 */
+  /** conversation / event 可带：真实对话或完成证据时间，动态不得早于证据。 */
   evidenceAt?: number
+  /** conversation 内部语义：普通对话余响 or 到了此前约定的日期。用户侧不展示。 */
+  conversationKind?: 'trace' | 'planned'
 }
 
 /**
@@ -514,36 +521,63 @@ export function planBackfillSlots(
   ledger?: SpaceLedger,
   notBefore?: number,
   eventEvidenceAt?: ReadonlyMap<string, number>,
+  conversationDays: ReadonlySet<string> = new Set(),
+  conversationEvidenceAt?: ReadonlyMap<string, number>,
+  plannedDays: ReadonlySet<string> = new Set(),
 ): SpaceSlot[] {
   const h = new Date(now).getHours()
-  // 认识边界按本地自然日：新角色只能从认识 TA 的那一天开始铺动态，绝不回填更早日期。
   const minDay = Number.isFinite(notBefore) ? dayStartOf(notBefore as number) : Number.NEGATIVE_INFINITY
-  // 凌晨 0-4 点访问：今天的「白天发圈时刻」还没到来，把锚点日让给昨天
   const anchorDay = h < 5 ? dayStartOf(now - DAY_INTERVAL_MS) : dayStartOf(now)
   const out: SpaceSlot[] = []
 
-  // 首访：铺最近 MAX_BACKFILL_DAYS 个自然日，每天最多 1 条（旧→新）；事件日铺事件、其余铺日常
+  const sourceForDay = (dk: string): SpaceSource =>
+    activeDays.has(dk) ? 'event' : conversationDays.has(dk) ? 'conversation' : 'daily'
+
+  const canAdd = (source: SpaceSource, usage: ReturnType<typeof dayUsage>): boolean => {
+    if (usage.total >= MAX_TOTAL_PER_DAY) return false
+    if (source === 'event') return usage.event < 1
+    if (source === 'conversation') return usage.conversation < 1
+    return usage.daily < MAX_POSTS_PER_DAY
+  }
+
+  const evidenceFor = (source: SpaceSource, dk: string): number | undefined => {
+    const value = source === 'event' ? eventEvidenceAt?.get(dk) : source === 'conversation' ? conversationEvidenceAt?.get(dk) : undefined
+    return Number.isFinite(value) && (value as number) > 0 ? value : undefined
+  }
+
+  const buildSlot = (day: number, source: SpaceSource): SpaceSlot | null => {
+    const dk = dayKeyOf(day)
+    const evidenceAt = evidenceFor(source, dk)
+    const at = pickPostTimeForDay(day, now, rand, evidenceAt)
+    if (at == null) return null
+    return {
+      at,
+      source,
+      ...(evidenceAt ? { evidenceAt } : {}),
+      ...(source === 'conversation'
+        ? { conversationKind: plannedDays.has(dk) ? 'planned' as const : 'trace' as const }
+        : {}),
+    }
+  }
+
+  // 首访也允许为空：confirmed event / conversation 优先；普通沉浸日常只按原概率出现，不再为了“铺满页面”强塞。
   if (lastVisit == null) {
     for (let i = MAX_BACKFILL_DAYS - 1; i >= 0; i--) {
       const day = anchorDay - i * DAY_INTERVAL_MS
       if (day < minDay) continue
       const dk = dayKeyOf(day)
-      const isEvent = activeDays.has(dk)
-      const u = dayUsage(posts, dk, ledger)
-      if (isEvent ? u.event >= 1 : u.daily >= MAX_POSTS_PER_DAY) continue
-      if (u.total >= MAX_TOTAL_PER_DAY) continue
-      const evidenceAt = isEvent ? eventEvidenceAt?.get(dk) : undefined
-      const at = pickPostTimeForDay(day, now, rand, evidenceAt)
-      if (at == null) continue   // 今天还没到 7 点，或事件证据已经晚到没有可用区间
-      out.push({ at, source: isEvent ? 'event' : 'daily', ...(evidenceAt ? { evidenceAt } : {}) })
+      const source = sourceForDay(dk)
+      const usage = dayUsage(posts, dk, ledger)
+      if (!canAdd(source, usage)) continue
+      if (source === 'daily' && rand() >= BACKFILL_LIFE_CHANCE) continue
+      const slot = buildSlot(day, source)
+      if (slot) out.push(slot)
     }
     return out.sort((a, b) => a.at - b.at)
   }
 
-  // 防抖：距上次访问不足 2 小时不补（防止用户反复开关空间疯狂生成）
   if (now - lastVisit < MIN_INTERVAL_MS) return []
 
-  // 窗口内候选自然日：lastVisit 所在日之后（不含当天，那天已结算）→ anchorDay（含），最多 MAX_BACKFILL_DAYS 天
   const lastDay = dayStartOf(lastVisit)
   const todayStart = dayStartOf(now)
   const todayKey = dayKeyOf(todayStart)
@@ -554,48 +588,35 @@ export function planBackfillSlots(
   }
   days.sort((a, b) => a - b)
 
-  // 生成某天动态的时间戳：今天只在「今天已过去的时段」里挑（最晚 now-5 分钟，最早 7:00），
-  // 过去的日子（昨天/前天）用 7:00-23:59 全时段随机——绝不让时间戳落在未来，也绝不被拖到凌晨。
-  const pickTime = (day: number): number | null => pickPostTimeForDay(day, now, rand)
-  const pickEventTime = (day: number, evidenceAt?: number): number | null =>
-    pickPostTimeForDay(day, now, rand, evidenceAt)
-
-  // 当天是否已被窗口覆盖（lastVisit 是今天之前的日子 → 今天在窗口里，事件当天在窗口内规划）
   const todayCovered = todayStart > lastDay && days.includes(todayStart)
 
   for (const day of days) {
     const dk = dayKeyOf(day)
-    const u = dayUsage(posts, dk, ledger)
-    const isEvent = activeDays.has(dk)
-    if (isEvent) {
-      // 事件日：优先 1 条事件动态（趁热发，不吞日常配额、不被日常 2 条吞掉）；已发过事件则当天不再补
-      if (u.event >= 1 || u.total >= MAX_TOTAL_PER_DAY) continue
-      const evidenceAt = eventEvidenceAt?.get(dk)
-      const t = pickEventTime(day, evidenceAt)
-      if (t != null) out.push({ at: t, source: 'event', ...(evidenceAt ? { evidenceAt } : {}) })
-    } else {
-      // 非事件日：TA 也有自己的生活——按概率发 1 条，不是天天刷屏
-      if (u.daily < MAX_POSTS_PER_DAY && u.total < MAX_TOTAL_PER_DAY && rand() < BACKFILL_LIFE_CHANCE) {
-        const t = pickTime(day)
-        if (t != null) out.push({ at: t, source: 'daily' })
+    const source = sourceForDay(dk)
+    const usage = dayUsage(posts, dk, ledger)
+    if (!canAdd(source, usage)) continue
+    if (source === 'daily' && rand() >= BACKFILL_LIFE_CHANCE) continue
+    const slot = buildSlot(day, source)
+    if (slot) out.push(slot)
+  }
+
+  // 同日再次进入：若今天在上次访问后新增了 confirmed event / conversation，仍给一次补发机会。
+  // confirmed event 优先，避免同一天既发 conversation 又发 event。
+  if (h >= 5 && todayStart >= minDay && !todayCovered) {
+    const source = activeDays.has(todayKey)
+      ? 'event'
+      : conversationDays.has(todayKey)
+        ? 'conversation'
+        : null
+    if (source) {
+      const usage = dayUsage(posts, todayKey, ledger)
+      if (canAdd(source, usage)) {
+        const slot = buildSlot(todayStart, source)
+        if (slot) out.push(slot)
       }
     }
   }
 
-  // 当天补发通道：窗口不含今天（上次访问就是今天）但今天新聊出了大事、且今天还没发过事件动态 →
-  // 白天时段进空间仍趁热补 1 条今天的事件动态（防抖已过才可能走到这）
-  if (
-    h >= 5 &&
-    todayStart >= minDay &&
-    !todayCovered &&
-    activeDays.has(todayKey) &&
-    dayUsage(posts, todayKey, ledger).event < 1 &&
-    dayUsage(posts, todayKey, ledger).total < MAX_TOTAL_PER_DAY
-  ) {
-    const evidenceAt = eventEvidenceAt?.get(todayKey)
-    const t = pickEventTime(todayStart, evidenceAt)
-    if (t != null) out.push({ at: t, source: 'event', ...(evidenceAt ? { evidenceAt } : {}) })
-  }
   return out.sort((a, b) => a.at - b.at)
 }
 
