@@ -17,7 +17,7 @@ export interface SiteStats {
   todayUv: number
 }
 
-const OFFICIAL_FRONTEND_HOSTS = new Set(['eluvin.space'])
+const OFFICIAL_FRONTEND_HOSTS = new Set(['eluvin.space', 'www.eluvin.space'])
 let siteHitSent = false
 
 export function isOfficialFrontendHost(hostname?: string): boolean {
