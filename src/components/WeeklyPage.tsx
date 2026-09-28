@@ -25,6 +25,8 @@ import { loadMemory } from '../lib/memory'
 import { getEventsForWeek } from '../lib/eventStore'
 import { buildAttributionLegend, cleanAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
 import { buildAttributedWeeklyPrompt, formatAttributedWeeklyMessage } from '../lib/weeklyPromptAttribution'
+import { syncCloudState } from '../lib/cloudState'
+import { getAccount } from '../lib/sync'
 
 const REPLY_PLACEHOLDER = '把此刻的心情写下来…'
 const SUCCESS_IMMEDIATE = '你的回信已经寄出。TA 的回信到了以后，会先等你亲手拆开。'
@@ -130,6 +132,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const [showTooltip, setShowTooltip] = useState(false)
   const [justReplied, setJustReplied] = useState(false)
   const slowAttemptedRef = useRef<Set<string>>(new Set())
+  const generateInFlightRef = useRef(false)
 
   const settings = loadSettings()
   const hasKey = Boolean(settings.apiKey?.trim() && settings.baseUrl?.trim() && settings.model?.trim())
@@ -182,9 +185,22 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
 
       for (const item of due) {
         if (!alive) return
-        attempted.add(item.pending.id)
+
+        // Batch 2：真正烧 Key 前先拉一次最新 Cloud State，再重读本地 canonical。
+        // 另一设备若已经回过这封慢信，这里直接跳过，不再重复调用模型。
+        if (getAccount()) {
+          await syncCloudState()
+          if (!alive) return
+          working = getWeeklyReviews(sid) as LetterReview[]
+          if (alive) setReviews(working)
+        }
+
         const current = working.find((r) => r.id === item.reviewId)
-        if (!current) continue
+        const latestPending = current?.replies?.find((p) => p.id === item.pending.id)
+        if (!current || !latestPending || latestPending.replied === true || !isSlowLetterDue(latestPending, Date.now())) continue
+        if (attempted.has(latestPending.id)) continue
+        attempted.add(latestPending.id)
+
         const s = loadSettings()
         if (!s.apiKey?.trim() || !s.baseUrl?.trim() || !s.model?.trim()) return
 
@@ -199,7 +215,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
                 role: 'user',
                 content:
                   buildAttributionLegend('zh') + '\n' + reviewContext + '\n\n' +
-                  formatAttributedLine(item.pending.content, 'USER', 'zh') + personaContext,
+                  formatAttributedLine(latestPending.content, 'USER', 'zh') + personaContext,
               },
             ],
             { maxTokens: 300, timeoutMs: 30000 },
@@ -212,7 +228,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
               ? {
                   ...r,
                   replies: r.replies?.map((p) =>
-                    p.id === item.pending.id && p.replied !== true
+                    p.id === latestPending.id && p.replied !== true
                       ? { ...p, replied: true, reply: clean, replyAt }
                       : p,
                   ),
@@ -250,20 +266,32 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   }
 
   const handleGenerate = async () => {
-    if (generating) return
+    if (generateInFlightRef.current || generating) return
     if (!cooldownInfo(Date.now(), sid).canGenerate) return
     const s = loadSettings()
     if (!s.apiKey?.trim() || !s.baseUrl?.trim() || !s.model?.trim()) {
       setGenError('还没接上大脑，去「我的」页填一下 API Key 就能写信了')
       return
     }
+
+    // 同一页面内同步上锁，挡住 React state 刷新前的快速重复触发。
+    generateInFlightRef.current = true
     setGenerating(true)
     setGenError(null)
     setJustReplied(false)
     try {
+      const currentSid = getActiveSessionId() || undefined
+
+      // Batch 2：真正烧 Key 前先同步并重读。若别的设备刚生成过，本地 cooldown 会立刻变为不可生成。
+      if (getAccount()) {
+        await syncCloudState()
+        const latest = getWeeklyReviews(currentSid) as LetterReview[]
+        setReviews(latest)
+        if (!cooldownInfo(Date.now(), currentSid).canGenerate) return
+      }
+
       const ts = Date.now()
-      const week = getWeekRange(ts, getFirstSeen(getActiveSessionId() || undefined))
-      const currentSid = getActiveSessionId()
+      const week = getWeekRange(ts, getFirstSeen(currentSid))
       const weekMsgs = (currentSid ? getMessagesCache(currentSid) : loadMessages())
         .filter((m) => m.ts >= week.startTs && m.ts <= week.endTs)
         .sort((a, b) => a.ts - b.ts)
@@ -337,6 +365,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     } catch (e) {
       setGenError(e instanceof Error ? e.message : '生成失败了，稍后再试试')
     } finally {
+      generateInFlightRef.current = false
       setGenerating(false)
     }
   }
