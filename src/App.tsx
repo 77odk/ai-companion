@@ -604,7 +604,7 @@ export default function App() {
       }
       return
     }
-    navigate(guideBack)
+    window.history.back()
   }
 
   // 登录墙登录成功：按云端会话分流（有会话进聊天，无会话进选角色新建），
@@ -756,7 +756,7 @@ export default function App() {
           <LoginGate onDone={handleGateDone} onGoGuide={() => openGuide('gate')} onBack={handleGateBack} />
         )
       ) : view === 'productintro' ? (
-        <ProductIntro onBack={() => navigate('welcome')} onStart={handleWelcomeStart} />
+        <ProductIntro onBack={() => window.history.back()} onStart={handleWelcomeStart} />
       ) : view === 'guide' ? (
         <GuideDetail onBack={handleGuideBack} onGoProvider={() => openSettings('provider')} />
       ) : view === 'welcome' ? (
@@ -792,8 +792,8 @@ export default function App() {
         />
       ) : view === 'chatsettings' ? (
         <ChatSettings
-          onBack={() => navigate('chat')}
-          onRefreshed={() => navigate('chat')}
+          onBack={() => window.history.back()}
+          onRefreshed={() => window.history.back()}
         />
       ) : view === 'chatprofile' ? (
         <ChatProfile
@@ -802,11 +802,7 @@ export default function App() {
           chatLogTarget={pendingChatLogJump}
           onClose={() => {
             setProfileTarget(null)
-            if (pendingChatLogJump) {
-              window.history.back()
-              return
-            }
-            navigate(detailFrom === 'settings' ? 'settings' : detailFrom === 'roles' ? 'roles' : 'chat')
+            window.history.back()
           }}
           onGoMine={() => navigate('settings')}
           fromRoles={detailFrom === 'roles'}
@@ -820,9 +816,9 @@ export default function App() {
           }}
         />
       ) : view === 'aboutme' ? (
-        <AboutMe onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'aispace')} />
+        <AboutMe onBack={() => window.history.back()} />
       ) : view === 'weekly' ? (
-        <WeeklyPage onBack={() => navigate(detailFrom === 'settings' ? 'settings' : 'aispace')} onGoSettings={() => openSettings('provider')} />
+        <WeeklyPage onBack={() => window.history.back()} onGoSettings={() => openSettings('provider')} />
       ) : view === 'spacelife' ? (
         <SpaceLife
           aiNickname={loadAIProfile(getActiveSessionId() || undefined).nickname}
@@ -830,7 +826,7 @@ export default function App() {
           sessionId={getActiveSessionId() || undefined}
           hasPersona={Boolean(getActiveSessionId()) || Boolean(loadPersona().trim())}
           onGoMine={() => openSettings('main')}
-          onBack={() => goView('home')}
+          onBack={() => window.history.back()}
         />
       ) : view === 'loading' ? (
         <div className="session-loading">
@@ -942,7 +938,7 @@ export default function App() {
             )}
             {view === 'roles' && (
               <RolesPage
-                onBack={() => navigate('settings')}
+                onBack={() => window.history.back()}
                 onNew={handleRolesNew}
                 onSwitch={() => navigate('home')}
                 onOpenProfile={(sid) => {
@@ -973,7 +969,7 @@ export default function App() {
               <Settings
                 key={`${settingsTarget}-${settingsRootKey}`}
                 initialPage={settingsTarget}
-                onAnniversaryBack={settingsTarget === 'anniversary' ? () => navigate('home') : undefined}
+                onInitialPageBack={() => window.history.back()}
                 onPrivacyOpenChange={setSettingsPrivacyOpen}
                 onGoNotifications={() => openNotifications('settings')}
                 hasUnreadNotifications={hasUnreadNotifications}
