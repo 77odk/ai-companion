@@ -943,7 +943,7 @@ export default function App() {
               />
             )}
             {view === 'notifications' && (
-              <NotificationsPage onBack={() => navigate(notificationFrom)} />
+              <NotificationsPage onBack={() => window.history.back()} />
             )}
             {view === 'aispace' && (
               <AISpace
