@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 // 周记（W1）纯逻辑自测
 // 直接导入纯逻辑 TS（Node 22+ 原生类型剥离），不依赖任何构建工具。
 // 覆盖：getWeeklyReviews 空/损坏/排序 / saveWeeklyReviews 往返 /
@@ -54,6 +56,27 @@ globalThis.localStorage = {
 }
 function resetStore() {
   store.clear()
+}
+
+const weeklyPageSource = readFileSync(new URL('../src/components/WeeklyPage.tsx', import.meta.url), 'utf8')
+
+console.log('\n[0a] Batch 2：模型调用前同步 / 重读，省重复 Key')
+{
+  const generateStart = weeklyPageSource.indexOf('const handleGenerate = async () => {')
+  const generateSync = weeklyPageSource.indexOf('await syncCloudState()', generateStart)
+  const generateCall = weeklyPageSource.indexOf('const raw = await chatCompletion(', generateStart)
+  ok(generateStart >= 0 && generateSync > generateStart && generateCall > generateSync, '新周记：syncCloudState 在模型调用前')
+  ok(weeklyPageSource.includes('const latest = getWeeklyReviews(currentSid) as LetterReview[]'), '新周记：同步后重读最新 reviews')
+  ok(weeklyPageSource.includes('if (!cooldownInfo(Date.now(), currentSid).canGenerate) return'), '新周记：发现 canonical/cooldown 后直接跳过模型调用')
+  ok(weeklyPageSource.includes('const generateInFlightRef = useRef(false)'), '同页快速重复触发有同步 ref 锁')
+  ok(weeklyPageSource.includes('if (generateInFlightRef.current || generating) return'), '生成入口先检查 ref 锁再继续')
+
+  const slowStart = weeklyPageSource.indexOf('for (const item of due) {')
+  const slowSync = weeklyPageSource.indexOf('await syncCloudState()', slowStart)
+  const slowReread = weeklyPageSource.indexOf('working = getWeeklyReviews(sid) as LetterReview[]', slowSync)
+  const slowCall = weeklyPageSource.indexOf('const raw = await chatCompletion(', slowReread)
+  ok(slowStart >= 0 && slowSync > slowStart && slowReread > slowSync && slowCall > slowReread, '慢信：每次模型调用前先同步并重读')
+  ok(weeklyPageSource.includes('latestPending.replied === true'), '慢信：重读后若已回信直接跳过')
 }
 
 console.log('\n[0] Cloud State merge 确定性')
