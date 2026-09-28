@@ -425,9 +425,10 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
         aria-label="消息与通知"
         title="消息与通知"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-          <path d="M10 21h4" />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3.25" y="5.5" width="17.5" height="13" rx="2.2" />
+          <path d="m4.2 7 6.3 5.15a2.35 2.35 0 0 0 3 0L19.8 7" />
+          <path d="m4.4 17 5.1-4.4M19.6 17l-5.1-4.4" />
         </svg>
       </button>
       <div className="home-inner">
