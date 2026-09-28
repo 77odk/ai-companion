@@ -248,7 +248,7 @@
 }
 
 .chat-control-capsule:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, var(--el-static-white));
   outline-offset: 2px;
 }
 
@@ -347,7 +347,7 @@
 }
 
 .chat-control-menu .chat-control-help-button:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, var(--el-static-white));
   outline-offset: 1px;
 }
 
@@ -1071,7 +1071,7 @@
   border: none;
   border-radius: 999px;
   background: var(--ta-accent);
-  color: #fff;
+  color: var(--el-static-white);
   font: inherit;
   font-size: 15px;
   font-weight: 600;
@@ -1256,7 +1256,7 @@
   font-size: 28px;
   font-weight: 700;
   letter-spacing: 0.18em;
-  color: #332b28;
+  color: var(--ui2-text);
 }
 
 .welcome-slogan {
@@ -1375,7 +1375,7 @@
   display: flex;
   align-items: stretch;
   justify-content: center;
-  color: #332b28;
+  color: var(--ui2-text);
   background: #fff8f4;
   text-align: center;
 }
@@ -1578,7 +1578,7 @@
 .welcome-reference-primary {
   border: 0;
   background: linear-gradient(90deg, #e68186, #d87174);
-  color: #fff;
+  color: var(--el-static-white);
   box-shadow: 0 10px 28px rgba(194, 100, 105, .18);
 }
 
@@ -3164,7 +3164,7 @@
   padding: 8px 15px;
   border-radius: 999px;
   background: rgba(20, 20, 24, 0.86);
-  color: #fff;
+  color: var(--el-static-white);
   font-size: 13px;
   line-height: 1.4;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
@@ -3320,7 +3320,7 @@
   background:
     radial-gradient(circle at 14% 8%, color-mix(in srgb, var(--color-primary) 7%, transparent), transparent 34%),
     radial-gradient(circle at 88% 72%, color-mix(in srgb, var(--color-primary-soft) 12%, transparent), transparent 30%),
-    linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 96%, #fff), var(--color-bg));
+    linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 96%, var(--el-static-white)), var(--color-bg));
 }
 
 .chat-page .message-list {
@@ -3581,7 +3581,7 @@
 }
 
 .chat-page .context-meter-circle:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, var(--el-static-white));
   outline-offset: 2px;
 }
 
@@ -3797,7 +3797,7 @@
   justify-content: center;
   border-radius: 50%;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--el-static-white);
   box-shadow: none;
   touch-action: manipulation;
   transition:
@@ -3830,7 +3830,7 @@
 }
 
 .chat-page .btn-send:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, var(--el-static-white));
   outline-offset: 2px;
 }
 
