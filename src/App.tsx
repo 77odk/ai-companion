@@ -72,8 +72,9 @@ const RolesPage = lazy(() => import('./components/RolesPage'))
 const SpaceLife = lazy(() => import('./components/SpaceLife'))
 const Memory = lazy(loadMemoryView)
 const NotificationsPage = lazy(() => import('./components/NotificationsPage'))
+const FeedbackPage = lazy(() => import('./components/FeedbackPage'))
 
-type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'notifications' | 'loading'
+type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'notifications' | 'feedback' | 'loading'
 
 // 公开路由 = auth 的游客白名单 + App 层例外（产品介绍页）。
 // 「产品介绍页」的公开特例只留在 App 层，不写进 src/lib/auth.ts 的 PUBLIC_VIEWS。
@@ -307,7 +308,9 @@ export default function App() {
   const [, setNotificationFrom] = useState<'home' | 'settings'>('home')
   const [notificationRevision, setNotificationRevision] = useState(0)
   const [notificationReadRevision, setNotificationReadRevisionState] = useState(() => getNotificationReadRevision())
-  const hasUnreadNotifications = notificationRevision > notificationReadRevision
+  // V3：未读以服务端 GET /api/notifications 的 unread 为准；本地 read revision 只作离线首帧镜像。
+  const [notificationServerUnread, setNotificationServerUnread] = useState(false)
+  const hasUnreadNotifications = loggedIn && (notificationServerUnread || notificationRevision > notificationReadRevision)
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
@@ -404,18 +407,28 @@ export default function App() {
   useEffect(() => {
     let active = true
     const refresh = () => {
-      void fetch(`${import.meta.env.BASE_URL}notifications.json`, { cache: 'no-store' })
+      const token = getToken()
+      if (!token) return
+      // V3：消息与通知的事实来源是后端 GET /api/notifications（不再依赖 public 下的静态 feed 文件）。
+      void fetch(`${API_BASE}/api/notifications`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${token}` },
+      })
         .then(async (response) => {
           if (!response.ok) return
-          const payload = await response.json() as { schemaVersion?: unknown; revision?: unknown }
-          if (
-            active &&
-            payload.schemaVersion === 1 &&
-            typeof payload.revision === 'number' &&
-            Number.isInteger(payload.revision) &&
-            payload.revision >= 0
-          ) {
-            setNotificationRevision(payload.revision)
+          const payload = await response.json() as { revision?: unknown; unread?: unknown }
+          if (!active) return
+          const revision = payload.revision
+          if (typeof revision !== 'number' || !Number.isInteger(revision) || revision < 0) {
+            return
+          }
+          setNotificationRevision(revision)
+          const unread = payload.unread === true
+          setNotificationServerUnread(unread)
+          if (!unread) {
+            // 服务端已读：本地镜像对齐，离线首帧也不再冒红点
+            persistNotificationReadRevision(revision)
+            setNotificationReadRevisionState((current) => Math.max(current, revision))
           }
         })
         .catch(() => {
@@ -425,6 +438,7 @@ export default function App() {
 
     if (!loggedIn) {
       setNotificationRevision(0)
+      setNotificationServerUnread(false)
       return () => { active = false }
     }
 
@@ -443,9 +457,23 @@ export default function App() {
     }
   }, [loggedIn])
 
+  // 已读回写：本地镜像立即生效（红点立刻消失）+ POST /api/notifications/read 落到服务端（只增不减）。
   const markNotificationsRead = useCallback((revision: number) => {
     persistNotificationReadRevision(revision)
     setNotificationReadRevisionState((current) => Math.max(current, revision))
+    setNotificationServerUnread(false)
+    const token = getToken()
+    if (!token) return
+    void fetch(`${API_BASE}/api/notifications/read`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ revision }),
+    }).catch(() => {
+      // 回写失败不影响本次浏览：下次进页会再回写一次。
+    })
   }, [])
 
   // 聊天页头部：返回箭头 + 小星球资料卡入口；顶栏标题 = 当前角色名（微信式）
@@ -563,6 +591,11 @@ export default function App() {
   const openNotifications = (from: 'home' | 'settings') => {
     setNotificationFrom(from)
     navigate('notifications')
+  }
+
+  // 反馈与建议：独立全屏页，返回走历史栈（与通知页一致）
+  const openFeedback = () => {
+    navigate('feedback')
   }
 
   const openSettingsRoot = () => {
@@ -832,6 +865,8 @@ export default function App() {
           onGoMine={() => openSettings('main')}
           onBack={() => window.history.back()}
         />
+      ) : view === 'feedback' ? (
+        <FeedbackPage onBack={() => window.history.back()} />
       ) : view === 'loading' ? (
         <div className="session-loading">
           {migration === 'failed' ? (
@@ -976,6 +1011,7 @@ export default function App() {
                 onInitialPageBack={() => window.history.back()}
                 onPrivacyOpenChange={setSettingsPrivacyOpen}
                 onGoNotifications={() => openNotifications('settings')}
+                onGoFeedback={openFeedback}
                 hasUnreadNotifications={hasUnreadNotifications}
                 onGoWelcome={() => navigate('welcome')}
                 onGoGuide={() => openGuide('settings')}

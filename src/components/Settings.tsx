@@ -88,10 +88,12 @@ interface Props {
   /** 隐私详情页是全屏二级页：通知 App 隐藏底部导航。 */
   onPrivacyOpenChange?: (open: boolean) => void
   onGoNotifications?: () => void
+  /** 「反馈与建议」入口：由 App 切到独立 feedback view（与通知页同一套全屏页） */
+  onGoFeedback?: () => void
   hasUnreadNotifications?: boolean
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onInitialPageBack, onAnniversaryBack, onPrivacyOpenChange, onGoNotifications, hasUnreadNotifications = false }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onInitialPageBack, onAnniversaryBack, onPrivacyOpenChange, onGoNotifications, onGoFeedback, hasUnreadNotifications = false }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
 
   const backFrom = (current: SettingsPage) => {
@@ -156,6 +158,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenAnniversary={() => setPage('anniversary')}
       onOpenReply={() => setPage('reply')}
       onOpenNotifications={() => onGoNotifications?.()}
+      onOpenFeedback={() => onGoFeedback?.()}
       hasUnreadNotifications={hasUnreadNotifications}
       onGoRoles={() => onGoRoles?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
@@ -204,6 +207,7 @@ function MainCenter({
   onOpenAnniversary,
   onOpenReply,
   onOpenNotifications,
+  onOpenFeedback,
   hasUnreadNotifications,
   onGoRoles,
   onGoAboutMe,
@@ -220,6 +224,7 @@ function MainCenter({
   onOpenAnniversary: () => void
   onOpenReply: () => void
   onOpenNotifications: () => void
+  onOpenFeedback: () => void
   hasUnreadNotifications: boolean
   onGoRoles?: () => void
   onGoAboutMe?: () => void
@@ -262,9 +267,11 @@ function MainCenter({
         </svg>
       </button>
 
-      <ProfileGroup title="开始使用">
+      <ProfileGroup title="使用与支持">
         <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
         <EntryRow icon={<KeyIcon />} label="API 设置" status={`${providerLabel} · ${modelLabel}`} onClick={onOpenProvider} />
+        <EntryRow icon={<NotificationIcon />} label="消息与通知" onClick={onOpenNotifications} unread={hasUnreadNotifications} />
+        <EntryRow icon={<FeedbackIcon />} label="反馈与建议" onClick={onOpenFeedback} />
       </ProfileGroup>
 
       <ProfileGroup title="关于 TA">
@@ -290,14 +297,13 @@ function MainCenter({
         <EntryRow icon={<WorkIcon />} label="AI 工作台" status="即将开放" disabled />
       </ProfileGroup>
 
-      <ProfileGroup title="账号与隐私">
+      <ProfileGroup title="账号与同步">
         <EntryRow
           icon={<CloudSyncIcon />}
           label="账号与同步"
           onClick={onOpenAccount}
           status={accountLabel ? '已登录' : '未登录'}
         />
-        <EntryRow icon={<NotificationIcon />} label="消息与通知" onClick={onOpenNotifications} unread={hasUnreadNotifications} />
         <EntryRow icon={<PrivacyIcon />} label="隐私" onClick={onOpenPrivacy} />
         <EntryRow icon={<PaletteIcon />} label="外观" onClick={onOpenAppearance} />
         <EntryRow icon={<InfoIcon />} label="关于忆文" onClick={onOpenAbout} />
@@ -525,6 +531,14 @@ const NotificationIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
     <path d="M10 21h4" />
+  </svg>
+)
+
+/* 反馈与建议：对话气泡 */
+const FeedbackIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 12.5c0 3.6-3.6 6.5-8 6.5-1 0-2-.2-2.9-.5L5 20l1.2-3.2A6.6 6.6 0 0 1 4 12.5C4 8.9 7.6 6 12 6s8 2.9 8 6.5z" />
+    <path d="M9.5 12.5h5" />
   </svg>
 )
 

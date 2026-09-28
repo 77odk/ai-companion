@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
+import { API_BASE } from '../lib/sync'
+import { getToken } from '../lib/auth'
 
 interface Props {
   onBack: () => void
   onRead?: (revision: number) => void
 }
 
-type OfficialNotificationKind = 'update' | 'announcement'
+type OfficialNotificationKind = 'update' | 'announcement' | 'account'
 
 interface OfficialNotification {
   id: string
@@ -15,58 +17,85 @@ interface OfficialNotification {
   publishedAt: string
 }
 
-type LoadState = 'loading' | 'ready' | 'error'
+type LoadState = 'loading' | 'ready' | 'error' | 'signedout'
+
+/** publishedAt 兼容 ISO 时间与 YYYY-MM-DD 两种写法；解析不出来返回 null */
+function publishedAtDate(value: string): Date | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T00:00:00Z` : trimmed
+  const time = Date.parse(iso)
+  return Number.isNaN(time) ? null : new Date(time)
+}
 
 function normalizeNotification(value: unknown): OfficialNotification | null {
   if (!value || typeof value !== 'object') return null
   const item = value as Record<string, unknown>
   if (typeof item.id !== 'string' || !item.id.trim()) return null
-  if (item.kind !== 'update' && item.kind !== 'announcement') return null
+  if (item.kind !== 'update' && item.kind !== 'announcement' && item.kind !== 'account') return null
   if (typeof item.title !== 'string' || !item.title.trim()) return null
   if (typeof item.body !== 'string' || !item.body.trim()) return null
-  if (typeof item.publishedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(item.publishedAt)) return null
+  if (typeof item.publishedAt !== 'string' || !publishedAtDate(item.publishedAt)) return null
   return {
     id: item.id.trim(),
     kind: item.kind,
     title: item.title.trim(),
     body: item.body.trim(),
-    publishedAt: item.publishedAt,
+    publishedAt: item.publishedAt.trim(),
   }
 }
 
 function kindLabel(kind: OfficialNotificationKind): string {
-  return kind === 'update' ? '版本更新' : '系统公告'
+  if (kind === 'update') return '版本更新'
+  if (kind === 'announcement') return '系统公告'
+  return '账号提醒'
 }
 
 function dateLabel(value: string): string {
-  const [year, month, day] = value.split('-')
-  return `${year}年${month}月${day}日`
+  const date = publishedAtDate(value)
+  if (!date) return value
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}年${month}月${day}日`
 }
 
+/**
+ * 消息与通知：数据来自后端 GET /api/notifications（未登录不请求、不发红点）。
+ * 拉到数据即视为已读，回执上抛给 App 统一 POST /api/notifications/read。
+ */
 export default function NotificationsPage({ onBack, onRead }: Props) {
   const [items, setItems] = useState<OfficialNotification[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
+    const token = getToken()
+    if (!token) {
+      // 未登录：不请求后端、不发红点（红点由 App 按登录态决定）
+      setItems([])
+      setLoadState('signedout')
+      return
+    }
+
     const controller = new AbortController()
     setLoadState('loading')
 
-    void fetch(`${import.meta.env.BASE_URL}notifications.json`, {
+    void fetch(`${API_BASE}/api/notifications`, {
       cache: 'no-store',
+      headers: { Authorization: `Bearer ${token}` },
       signal: controller.signal,
     })
       .then(async (response) => {
-        if (!response.ok) throw new Error(`notification feed ${response.status}`)
-        const payload = await response.json() as { schemaVersion?: unknown; revision?: unknown; items?: unknown }
+        if (!response.ok) throw new Error(`notifications ${response.status}`)
+        const payload = await response.json() as { revision?: unknown; items?: unknown }
+        const revision = payload.revision
         if (
-          payload.schemaVersion !== 1 ||
-          typeof payload.revision !== 'number' ||
-          !Number.isInteger(payload.revision) ||
-          payload.revision < 0 ||
+          typeof revision !== 'number' ||
+          !Number.isInteger(revision) ||
+          revision < 0 ||
           !Array.isArray(payload.items)
         ) {
-          throw new Error('invalid notification feed')
+          throw new Error('invalid notifications payload')
         }
         const next = payload.items
           .map(normalizeNotification)
@@ -74,7 +103,7 @@ export default function NotificationsPage({ onBack, onRead }: Props) {
           .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
         setItems(next)
         setLoadState('ready')
-        onRead?.(payload.revision)
+        onRead?.(revision)
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return
@@ -99,7 +128,11 @@ export default function NotificationsPage({ onBack, onRead }: Props) {
         <span className="detail-spacer" aria-hidden="true" />
       </div>
 
-      {loadState === 'loading' ? (
+      {loadState === 'signedout' ? (
+        <div className="settings-card notification-status-card" role="status">
+          登录之后，这里会显示忆文给你的消息。
+        </div>
+      ) : loadState === 'loading' ? (
         <div className="settings-card notification-status-card" role="status">
           正在加载消息…
         </div>

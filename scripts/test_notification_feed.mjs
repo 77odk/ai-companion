@@ -1,4 +1,5 @@
-// Official notification feed V1: static first-party feed, safe plain-text rendering, no new backend/API.
+// Official notification feed V1（保留的静态资产）：格式校验 + 通知页纯文本安全渲染。
+// V3 起通知页的事实来源是后端 GET /api/notifications，public/notifications.json 不再是数据源，只作为兜底文件保留。
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
@@ -23,9 +24,7 @@ for (const item of feed.items) {
   assert.match(item.publishedAt, /^\d{4}-\d{2}-\d{2}$/)
 }
 
-assert.match(page, /notifications\.json/)
-assert.match(page, /cache:\s*'no-store'/)
-assert.match(page, /schemaVersion !== 1/)
+assert.doesNotMatch(page, /notifications\.json/)
 assert.match(page, /Array\.isArray\(payload\.items\)/)
 assert.doesNotMatch(page, /dangerouslySetInnerHTML/)
 assert.match(page, /TA 想对你说的话仍然只在聊天里/)
