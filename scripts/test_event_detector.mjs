@@ -8,6 +8,8 @@ import {
   buildEventCandidateWindow,
   coarsePassCandidateWindow,
   buildEventCandidateUserPrompt,
+  buildEventWindowPrompt,
+  formatEventEvidenceTime,
   EVENT_CANDIDATE_WINDOW_SIZE,
   EVENT_CANDIDATE_TEXT_MAX,
   localDateKey,
@@ -157,7 +159,32 @@ console.log('\n[7] 硬过滤：isEvent/type/title/occurredAt 不晚于现在/con
   ok(EVENT_CONFIDENCE_THRESHOLD === 0.75, '阈值常量 = 0.75')
   ok(parseOccurredAt('昨天', now) == null, '相对词无法解析 → null')
   ok(parseOccurredAt('not-a-date', now) == null, '乱日期 → null')
-  ok(parseOccurredAt('2026-09-10', now) != null, 'YYYY-MM-DD 可解析')
+  const localDay = parseOccurredAt('2026-09-10', now)
+  ok(localDay != null, 'YYYY-MM-DD 可解析')
+  if (localDay != null) {
+    const d = new Date(localDay)
+    ok(
+      d.getFullYear() === 2026 && d.getMonth() === 8 && d.getDate() === 10 && d.getHours() === 0 && d.getMinutes() === 0,
+      'YYYY-MM-DD 按设备本地午夜解析，不按 UTC 漂到前一天',
+    )
+  }
+  ok(parseOccurredAt('2026-02-30', now) == null, '不存在的日历日期直接拒绝，不自动滚月')
+}
+
+console.log('\n[7a] Candidate Window 时间给模型也统一用设备本地口径')
+{
+  const localTs = new Date(2026, 8, 10, 0, 30, 0, 0).getTime()
+  ok(formatEventEvidenceTime(localTs) === '2026-09-10 00:30', '证据时间格式化为设备本地 YYYY-MM-DD HH:mm')
+  const prompt = buildEventWindowPrompt({
+    version: 2,
+    sessionId: 's1',
+    openedAt: localTs,
+    lastTouchedAt: localTs,
+    evidence: [{ id: 'e-local', text: '刚刚我们把话说开了', ts: localTs }],
+  })
+  ok(prompt.includes('[e-local] 2026-09-10 00:30 用户原话：'), 'Prompt 使用本地时间，不使用 UTC ISO')
+  ok(prompt.includes('用户设备本地时间') && prompt.includes('本地日期返回 YYYY-MM-DD'), 'Prompt 明确告诉模型日期口径')
+  ok(!prompt.includes('T16:30:00.000Z') && !prompt.includes('T00:30:00.000Z'), 'Prompt 不再暴露 UTC ISO 时间')
 }
 
 console.log('\n[8] 主流程：无 key 静默 + 未来表达不耗额度 + 非候选不耗额度')
