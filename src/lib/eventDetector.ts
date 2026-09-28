@@ -115,6 +115,11 @@ export interface EventCandidateState {
   evidence: EventEvidenceItem[]
 }
 
+export interface RecentEventUserEvidence {
+  text: string
+  ts: number
+}
+
 export function candidateWindowKey(sessionId?: string): string {
   return `${CANDIDATE_KEY_PREFIX}:${sessionId?.trim() || '_global'}`
 }
@@ -247,6 +252,38 @@ export function appendCandidateEvidence(
     lastTouchedAt: ts,
     evidence: [...withoutSame, { id, text: compact, ts }].slice(-EVENT_CANDIDATE_EVIDENCE_MAX),
   }
+}
+
+/**
+ * 窗口第一次打开时，把 Chat 已经持有的最近用户原话连同真实时间戳补进 Candidate。
+ * Candidate 可以宽，但这里只接真实 user 消息；未来/不确定表达和 3 天外内容仍不进硬证据。
+ */
+export function seedCandidateWindowFromRecent(
+  state: EventCandidateState | null,
+  sessionId: string | undefined,
+  recent: RecentEventUserEvidence[] | undefined,
+  now: number,
+): EventCandidateState | null {
+  let next = state
+  const eligible = (Array.isArray(recent) ? recent : [])
+    .filter((item): item is RecentEventUserEvidence =>
+      item != null
+      && typeof item.text === 'string'
+      && item.text.trim().length > 0
+      && typeof item.ts === 'number'
+      && Number.isFinite(item.ts)
+      && item.ts > 0
+      && item.ts < now
+      && now - item.ts <= EVENT_CANDIDATE_MAX_AGE_MS
+      && !isNegativeExpression(item.text),
+    )
+    .sort((a, b) => a.ts - b.ts)
+    .slice(-2)
+
+  for (const item of eligible) {
+    next = appendCandidateEvidence(next, sessionId, item.text, item.ts)
+  }
+  return next
 }
 
 const HARD_CLOSURE_RE =
@@ -639,8 +676,10 @@ export function closeOldestCandidateWindowOnStartup(now = Date.now()): Promise<v
 export async function processEventCandidate(input: {
   sessionId?: string
   userText: string
-  /** 仅保留旧调用兼容；V2 不把这些无时间戳历史文本当硬证据。 */
+  /** 旧调用兼容：无时间戳文本不作为 V2 硬证据。 */
   recentUserTexts?: string[]
+  /** Chat 当前已经持有的最近 user 原话；真实 ts 让软 Event 在首次收口时也能拿到多轮证据。 */
+  recentUserEvidence?: RecentEventUserEvidence[]
   now?: number
 }): Promise<void> {
   try {
@@ -657,7 +696,13 @@ export async function processEventCandidate(input: {
     // 纯未来/不确定表达不作为新证据；已有窗口也不拿它“补结局”。
     if (isNegativeExpression(text)) return
 
-    // 窗口开启后允许把后续用户原话继续收进证据；最多 8 条 / 3 天。
+    // 软关系 Event 常常在“收口句”才第一次命中候选；这时把 Chat 已持有的最近 user 原话
+    // 连同真实时间戳补进窗口，否则 state 只有 1 条，软事件的 >=2 evidence 闸门永远过不了。
+    if (!hasWindow && opensCandidate) {
+      state = seedCandidateWindowFromRecent(state, input.sessionId, input.recentUserEvidence, now)
+    }
+
+    // 窗口开启后允许把当前用户原话继续收进证据；最多 8 条 / 3 天。
     state = appendCandidateEvidence(state, input.sessionId, text, now)
     saveCandidateWindow(state)
 
