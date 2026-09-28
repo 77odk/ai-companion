@@ -340,11 +340,18 @@ const ZH_SELF_CURRENT_GRAMMAR_RE = /^我(?:现在|正(?:在)?|还在|在|去|先
 const ZH_OMITTED_CURRENT_GRAMMAR_RE = /^(?:现在|正(?:在)?|还在|在|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/
 const EN_SELF_CURRENT_GRAMMAR_RE = /\b(?:i'm|i am|i’ll|i'll|i will|i'm going to|i am going to|let me|i just|i've just|i have just)\b/i
 
-function currentActionGrammarIndex(clause: string): number {
+function currentActionGrammar(clause: string): { index: number; lang: Lang } | null {
   const t = clause.trim()
-  if (!t) return -1
-  if (ZH_SELF_CURRENT_GRAMMAR_RE.test(t) || ZH_OMITTED_CURRENT_GRAMMAR_RE.test(t)) return 0
-  return t.search(EN_SELF_CURRENT_GRAMMAR_RE)
+  if (!t) return null
+  if (ZH_SELF_CURRENT_GRAMMAR_RE.test(t) || ZH_OMITTED_CURRENT_GRAMMAR_RE.test(t)) {
+    return { index: 0, lang: 'zh' }
+  }
+  const enIndex = t.search(EN_SELF_CURRENT_GRAMMAR_RE)
+  return enIndex >= 0 ? { index: enIndex, lang: 'en' } : null
+}
+
+function currentActionGrammarIndex(clause: string): number {
+  return currentActionGrammar(clause)?.index ?? -1
 }
 
 function explicitSelfCurrentClause(clause: string): boolean {
@@ -392,28 +399,41 @@ interface RuntimeClauseStartMatch {
  * - 书名/歌名/对象里的另一种语言即使命中，也不会盖过主句动作。
  */
 function pickRuntimeStartMatchForClause(clause: string): RuntimeClauseStartMatch | null {
-  const grammarIndex = currentActionGrammarIndex(clause)
-  const searchFrom = grammarIndex >= 0 ? grammarIndex : 0
-  const actionText = clause.slice(searchFrom)
+  const grammar = currentActionGrammar(clause)
+  if (grammar) {
+    const actionText = clause.slice(grammar.index)
+    for (let ruleIndex = 0; ruleIndex < RUNTIME_TEXT_START_RULES.length; ruleIndex += 1) {
+      const rule = RUNTIME_TEXT_START_RULES[ruleIndex]
+      const pattern = grammar.lang === 'zh' ? rule.zh : rule.en
+      const index = actionText.search(pattern)
+      if (index !== 0) continue
+      return {
+        activityId: rule.activityId,
+        lang: grammar.lang,
+        index: grammar.index,
+        ruleIndex,
+      }
+    }
+    return null
+  }
 
   let best: RuntimeClauseStartMatch | null = null
   RUNTIME_TEXT_START_RULES.forEach((rule, ruleIndex) => {
     const candidates: Array<{ lang: Lang; index: number }> = [
-      { lang: 'zh', index: actionText.search(rule.zh) },
-      { lang: 'en', index: actionText.search(rule.en) },
+      { lang: 'zh', index: clause.search(rule.zh) },
+      { lang: 'en', index: clause.search(rule.en) },
     ]
     for (const item of candidates) {
       if (item.index < 0) continue
-      const absoluteIndex = searchFrom + item.index
       if (
         best == null
-        || absoluteIndex < best.index
-        || (absoluteIndex === best.index && ruleIndex < best.ruleIndex)
+        || item.index < best.index
+        || (item.index === best.index && ruleIndex < best.ruleIndex)
       ) {
         best = {
           activityId: rule.activityId,
           lang: item.lang,
-          index: absoluteIndex,
+          index: item.index,
           ruleIndex,
         }
       }
