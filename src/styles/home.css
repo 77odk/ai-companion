@@ -719,6 +719,19 @@
   backdrop-filter: blur(8px);
 }
 
+/* Home 的 bottom sheet 位于 .home-page 隔离栈内；打开时隐藏浮动底栏，避免底栏压在 sheet 上。 */
+.app:has(.home-page .home-inbox-mask) .app-nav,
+.app:has(.home-page .home-time-mask) .app-nav {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.home-weather-setup-sheet {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .home-weather-consent-copy {
   margin: 18px 0 16px;
   color: var(--el-text-secondary, var(--ui2-text-secondary));
