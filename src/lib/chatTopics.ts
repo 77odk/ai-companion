@@ -143,26 +143,12 @@ export function completeChatTopicPair(
 }
 
 /**
- * 只做机械粗筛，不做“事件有没有发生”的语义判断。
- * - 只保留极低的字数下限；
- * - 去掉空白/标点后至少有 2 个不同字符，挡住纯重复；是否值得发由现有 Space LLM 决定。
- * 拿不准的完整对话对全部留下，最终是否值得发交给进入 Space 时本来就会发生的那一次模型调用。
+ * 这里只验证“有没有可交给 Space 的用户文本”，不判断内容有没有意义。
+ * 完整 USER+TA pair 已由 pairVersion/taText/taTs 保证结构真实性；
+ * 是否值得留下由进入 Space 时既有的那一次 LLM 返回 CONVERSATION / SKIP。
  */
 export function hasConcreteTopicInfo(text: string): boolean {
-  const t = cleanTopicText(text)
-  if (t.length < CONVERSATION_MIN_LEN) return false
-  const dense = Array.from(t.toLowerCase()).filter((ch) => /[\p{L}\p{N}]/u.test(ch))
-  if (dense.length < CONVERSATION_MIN_LEN) return false
-  if (new Set(dense).size < 2) return false
-
-  // 纯机械重复过滤：只判断整串是否由一个更短片段重复组成，不看词义。
-  // 例如「好的好的好的」会被挡住；「失恋了」「好难过」仍保留给 Space LLM 决定是否 SKIP。
-  for (let size = 1; size <= Math.floor(dense.length / 2); size++) {
-    if (dense.length % size !== 0) continue
-    const unit = dense.slice(0, size).join('')
-    if (unit.repeat(dense.length / size) === dense.join('')) return false
-  }
-  return true
+  return cleanTopicText(text).length >= CONVERSATION_MIN_LEN
 }
 
 export function isConversationMaterialCandidate(topic: ChatTopic): boolean {
