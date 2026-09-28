@@ -64,6 +64,11 @@ assert.match(app, /readEpochAtStart !== readGuard\.epoch/)
 assert.match(app, /revision <= readGuard\.revision/)
 assert.match(app, /epoch: readGuard\.epoch \+ 1/)
 assert.match(app, /revision: Math\.max\(readGuard\.revision, revision\)/)
+// 并发 refresh 必须按请求顺序收敛：旧 GET 晚到不能覆盖新 GET。
+assert.match(app, /notificationRefreshGuardRef = useRef\(\{ next: 0, applied: 0 \}\)/)
+assert.match(app, /const requestId = notificationRefreshGuardRef\.current\.next \+ 1/)
+assert.match(app, /if \(requestId < refreshGuard\.applied\) return/)
+assert.match(app, /refreshGuard\.applied = requestId/)
 // 登录态变化仍按原节奏刷新（visibilitychange / online）
 assert.match(app, /document\.addEventListener\('visibilitychange', onVisible\)[\s\S]*window\.addEventListener\('online', onOnline\)/)
 
@@ -104,6 +109,12 @@ assert.match(feedback, /body: JSON\.stringify\(\{[\s\S]*type,[\s\S]*content: tri
 assert.match(feedback, /收到啦，我们会看到。回复会出现在消息与通知里。/)
 assert.match(feedback, /setContent\(''\)[\s\S]*setImages\(\[\]\)[\s\S]*setDone\(true\)/)
 assert.match(feedback, /没提交成功，网络可能开小差了。内容都还在/)
+// 提交期间冻结所有可修改表单控件，避免慢请求成功后清掉请求期间的新编辑。
+assert.match(feedback, /aria-checked=\{selected\}[\s\S]*disabled=\{submitting\}/)
+assert.match(feedback, /value=\{content\}[\s\S]*disabled=\{submitting\}/)
+assert.match(feedback, /multiple[\s\S]*disabled=\{submitting\}/)
+assert.match(feedback, /disabled=\{submitting \|\| images\.length >= MAX_IMAGES\}/)
+assert.match(feedback, /onClick=\{\(\) => removeImage\(index\)\}[\s\S]*disabled=\{submitting\}/)
 
 // 视觉：与通知页同一套（settings-page + detail-header + 返回走历史栈）
 assert.match(feedback, /className="page settings-page feedback-page"/)
