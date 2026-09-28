@@ -9,7 +9,7 @@
 //   7. 去重命中不破坏现有语义
 //   8. postMemory payload：source/taReply 有值才带；空不带
 
-import { upsertMemoryCache, getMemoriesCache, saveMemoriesCache, reconcileMemoryCacheId, mergeSessionMemories, sessionMemoryToItem } from '../src/lib/sessionStore.ts'
+import { upsertMemoryCache, getMemoriesCache, reconcileMemoryCacheId, mergeSessionMemories, sessionMemoryToItem } from '../src/lib/sessionStore.ts'
 import { postMemory } from '../src/lib/sessionApi.ts'
 
 // ---- Node mock：storage / fetch ----
@@ -165,7 +165,7 @@ console.log('\n[8] payload：source/taReply 空值不带键')
 {
   resetStore()
   captures.length = 0
-  const item = upsertMemoryCache('sess-1', '没有来源的记忆', undefined, undefined, true, undefined)
+  upsertMemoryCache('sess-1', '没有来源的记忆', undefined, undefined, true, undefined)
   await postMemory('tok', 'sess-1', { content: '没有来源的记忆' })
   const payload = captures[0]?.body ?? {}
   check('payload 无 source 键', !('source' in payload), JSON.stringify(payload))
