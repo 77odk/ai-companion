@@ -286,7 +286,7 @@
 }
 
 .event-archive-detail-actions button.is-danger {
-  color: color-mix(in srgb, #b3261e 76%, var(--color-text-muted));
+  color: color-mix(in srgb, var(--el-danger) 76%, var(--color-text-muted));
 }
 
 .event-archive-form-backdrop {
@@ -376,7 +376,7 @@
 
 .event-archive-form-error {
   margin: -4px 0 12px;
-  color: #b3261e;
+  color: var(--el-danger);
   font-size: 11px;
 }
 

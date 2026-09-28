@@ -446,7 +446,7 @@
   border: 0;
   border-radius: 50%;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--el-static-white);
   box-shadow: none;
   cursor: pointer;
   touch-action: manipulation;
@@ -467,7 +467,7 @@
 }
 
 .weekly-letter-send:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, var(--el-static-white));
   outline-offset: 2px;
 }
 

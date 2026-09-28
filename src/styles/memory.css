@@ -60,7 +60,7 @@
 }
 
 .memory-year-nav-btn:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--memory-accent) 42%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--memory-accent) 42%, var(--el-static-white));
   outline-offset: 2px;
   border-radius: var(--el-radius-sm, 10px);
 }
@@ -156,7 +156,7 @@
 }
 
 .memory-back:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--memory-accent) 42%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--memory-accent) 42%, var(--el-static-white));
   outline-offset: 2px;
 }
 
@@ -222,7 +222,7 @@
 }
 
 .memory-jump-trigger:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--memory-accent) 42%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--memory-accent) 42%, var(--el-static-white));
   outline-offset: 2px;
   border-radius: var(--el-radius-sm, 10px);
 }
@@ -254,7 +254,7 @@
 .memory-correction-cancel:focus-visible,
 .memory-correction-save:focus-visible,
 .memory-delete-confirm-btn:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--memory-accent) 40%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--memory-accent) 40%, var(--el-static-white));
   outline-offset: 2px;
 }
 
@@ -337,7 +337,7 @@
 .memory-book-exit:focus-visible,
 .memory-book-turn:focus-visible,
 .memory-book-entry:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 42%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 42%, var(--el-static-white));
   outline-offset: 2px;
 }
 

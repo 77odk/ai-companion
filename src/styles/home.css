@@ -117,7 +117,7 @@
 }
 
 .home-time-add:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 38%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 38%, var(--el-static-white));
   outline-offset: 1px;
   border-radius: var(--el-radius-round, 50%);
 }
@@ -196,7 +196,7 @@
 }
 
 .home-talk:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 38%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 38%, var(--el-static-white));
   outline-offset: 2px;
 }
 
@@ -261,7 +261,7 @@
 }
 
 .home-web-refresh:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 38%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 38%, var(--el-static-white));
   outline-offset: 1px;
   border-radius: var(--el-radius-round, 50%);
 }
@@ -270,7 +270,7 @@
 .home-time-mask {
   z-index: var(--el-z-overlay, 50);
   padding: var(--el-space-4, 16px);
-  background: rgba(38, 31, 28, 0.30);
+  background: var(--el-overlay-scrim);
 }
 
 .home-time-sheet {
@@ -301,7 +301,7 @@
 }
 
 .home-cycle-btn:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 38%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--ta-accent, var(--el-accent-primary)) 38%, var(--el-static-white));
   outline-offset: 2px;
 }
 

@@ -78,7 +78,7 @@
 }
 
 .ta-profile-back:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 38%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 38%, var(--el-static-white));
   outline-offset: 2px;
 }
 
@@ -94,7 +94,7 @@
   /* Large avatar is an intentional TA Profile exception. */
   width: 116px;
   height: 116px;
-  border: 3px solid color-mix(in srgb, var(--el-surface-card, var(--color-card)) 92%, #fff 8%);
+  border: 3px solid color-mix(in srgb, var(--el-surface-card, var(--color-card)) 92%, var(--el-static-white) 8%);
   border-radius: var(--el-radius-round, 50%);
   background: var(--el-surface-card, var(--color-card));
   color: var(--el-text-secondary, var(--color-text-muted));
@@ -111,7 +111,7 @@
 }
 
 .ta-profile-avatar:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 42%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 42%, var(--el-static-white));
   outline-offset: 3px;
 }
 
@@ -242,7 +242,7 @@
 .ta-profile-menu-row:focus-visible {
   position: relative;
   z-index: 1;
-  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, var(--el-static-white));
   outline-offset: -2px;
 }
 
