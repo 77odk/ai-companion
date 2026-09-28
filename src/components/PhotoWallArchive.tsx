@@ -34,7 +34,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const touchStartX = useRef<number | null>(null)
   const sorted = useMemo(() => [...photos].sort((a, b) => b.createdAt - a.createdAt), [photos])
-  const preview = sorted.slice(0, 10)
+  const preview = sorted.slice(0, 5)
   const groups = useMemo(() => groupPhotosByMonth(sorted), [sorted])
   // 每月「有照片的那几天」的行号（最新的一天 = 行 0）；Y 轴按行排，月份标题下面就是照片。
   const dayRows = useMemo(() => assignDayRows(sorted), [sorted])
@@ -96,7 +96,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
               const layout = layoutForPhoto(photo.id, photo.createdAt, dayRows.get(photo.id) ?? 0)
               const angle = layout.rotate + (index - Math.min(preview.length, 5) / 2) * 0.6
               const x = ((index % 5) - 2) * 26 + layout.shift * 0.45
-              const y = Math.floor(index / 5) * 38 + (index % 2) * 7
+              const y = (index % 2) * 7
               return (
                 <span
                   key={photo.id}
