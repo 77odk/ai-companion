@@ -38,6 +38,23 @@ function normalizePhotoCreatedAt(value: unknown): number {
   return 0
 }
 
+function isValidCloudPhotoRow(value: unknown): value is {
+  id: string
+  sessionId: string
+  width: number
+  height: number
+  createdAt: number | string
+} {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const row = value as Record<string, unknown>
+  const createdAt = normalizePhotoCreatedAt(row.createdAt)
+  return typeof row.id === 'string' && row.id.trim().length > 0
+    && typeof row.sessionId === 'string'
+    && typeof row.width === 'number' && Number.isFinite(row.width) && row.width > 0
+    && typeof row.height === 'number' && Number.isFinite(row.height) && row.height > 0
+    && createdAt > 0
+}
+
 const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，稍后再试。'
 
 export default function AISpace({ onOpenWeekly }: Props) {
@@ -71,13 +88,18 @@ export default function AISpace({ onOpenWeekly }: Props) {
     let alive = true
     listPhotos(token, sid).then((res) => {
       if (!alive) return
-      if (!res.ok || !res.data) {
+      const cloudRows = res.data?.photos
+      if (
+        !res.ok
+        || !Array.isArray(cloudRows)
+        || cloudRows.some((photo) => !isValidCloudPhotoRow(photo))
+      ) {
         setPhotoError(local.length > 0
           ? '云端照片暂时没加载完整，本机已有的先保留。'
           : '照片暂时没加载出来，稍后再试。')
         return
       }
-      const cloud: PhotoMeta[] = res.data.photos.map((photo) => ({
+      const cloud: PhotoMeta[] = cloudRows.map((photo) => ({
         id: photo.id,
         sessionId: photo.sessionId,
         width: photo.width,
