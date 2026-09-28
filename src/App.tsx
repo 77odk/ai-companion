@@ -178,12 +178,16 @@ export default function App() {
     const preloadPrimaryViews = () => {
       void Promise.allSettled([loadAISpaceView(), loadMemoryView(), loadSettingsView()])
     }
-    if ('requestIdleCallback' in window) {
-      const id = window.requestIdleCallback(preloadPrimaryViews, { timeout: 1200 })
-      return () => window.cancelIdleCallback(id)
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
+      cancelIdleCallback?: (handle: number) => void
     }
-    const timer = window.setTimeout(preloadPrimaryViews, 500)
-    return () => window.clearTimeout(timer)
+    if (typeof idleWindow.requestIdleCallback === 'function') {
+      const id = idleWindow.requestIdleCallback(preloadPrimaryViews, { timeout: 1200 })
+      return () => idleWindow.cancelIdleCallback?.(id)
+    }
+    const timer = globalThis.setTimeout(preloadPrimaryViews, 500)
+    return () => globalThis.clearTimeout(timer)
   }, [loggedIn])
 
   // ---- 导航历史 + 滚动位置（修正批第 2/3 条）----
