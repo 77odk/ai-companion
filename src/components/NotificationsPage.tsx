@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 interface Props {
   onBack: () => void
+  onRead?: (revision: number) => void
 }
 
 type OfficialNotificationKind = 'update' | 'announcement'
@@ -42,7 +43,7 @@ function dateLabel(value: string): string {
   return `${year}年${month}月${day}日`
 }
 
-export default function NotificationsPage({ onBack }: Props) {
+export default function NotificationsPage({ onBack, onRead }: Props) {
   const [items, setItems] = useState<OfficialNotification[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [reloadKey, setReloadKey] = useState(0)
@@ -57,8 +58,14 @@ export default function NotificationsPage({ onBack }: Props) {
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(`notification feed ${response.status}`)
-        const payload = await response.json() as { schemaVersion?: unknown; items?: unknown }
-        if (payload.schemaVersion !== 1 || !Array.isArray(payload.items)) {
+        const payload = await response.json() as { schemaVersion?: unknown; revision?: unknown; items?: unknown }
+        if (
+          payload.schemaVersion !== 1 ||
+          typeof payload.revision !== 'number' ||
+          !Number.isInteger(payload.revision) ||
+          payload.revision < 0 ||
+          !Array.isArray(payload.items)
+        ) {
           throw new Error('invalid notification feed')
         }
         const next = payload.items
@@ -67,6 +74,7 @@ export default function NotificationsPage({ onBack }: Props) {
           .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
         setItems(next)
         setLoadState('ready')
+        onRead?.(payload.revision)
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return
@@ -75,7 +83,7 @@ export default function NotificationsPage({ onBack }: Props) {
       })
 
     return () => controller.abort()
-  }, [reloadKey])
+  }, [onRead, reloadKey])
 
   return (
     <div className="page settings-page notifications-page">
