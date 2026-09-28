@@ -199,6 +199,7 @@ assert.equal(skipped.created, 0)
 assert.equal(loadCurrentPosts().length, 0)
 assert.equal(readLedger(undefined, now)[todayKey]?.conversation ?? 0, 0)
 assert.equal(JSON.parse(localStorage.getItem('ai_space_used_templates') ?? '{}')[marker], undefined)
+assert.equal(Object.keys(JSON.parse(localStorage.getItem('ai_space_used_templates') ?? '{}')).some((k) => k.startsWith('__generation_retry__:')), false)
 
 console.log('\n[10] 单次生成返回 CONVERSATION → source=conversation')
 reset()
@@ -326,5 +327,43 @@ const fallback = await generatePendingPosts({
 assert.equal(fallback.created, 1)
 assert.equal(fallback.usedFallback, true)
 assert.equal(fallback.posts[0].source, 'daily')
+
+console.log('\n[17] 历史 conversation 瞬时失败后，下次进入仍可重试')
+reset()
+const retryUserTs = now - DAY - HOUR
+recordChatTopic('昨天开会的时候我其实挺难受的', undefined, retryUserTs)
+assert.equal(completeChatTopicPair(
+  '昨天开会的时候我其实挺难受的',
+  '我记得，你当时其实已经撑得很累了。',
+  undefined,
+  retryUserTs,
+  retryUserTs + 10_000,
+), true)
+localStorage.setItem('ai_space_last_visit', String(now - 2 * DAY))
+const firstRetryPlan = refreshSpace('小忆', '你', now)
+assert.equal(firstRetryPlan.pending.length, 1)
+assert.equal(firstRetryPlan.pending[0].source, 'conversation')
+const failedRetrySlotId = generationSlotIdFor(firstRetryPlan.pending[0])
+globalThis.fetch = async () => { throw new Error('temporary network failure') }
+const failedRetry = await generatePendingPosts(firstRetryPlan, '小忆', '你', undefined, now, () => 0.1)
+assert.equal(failedRetry.created, 0)
+const usedAfterRetryFail = JSON.parse(localStorage.getItem('ai_space_used_templates') ?? '{}')
+assert.equal(usedAfterRetryFail[`__generation_slot__:${failedRetrySlotId}`], undefined)
+assert.equal(usedAfterRetryFail[`__generation_retry__:${failedRetrySlotId}`], firstRetryPlan.pending[0].at)
+
+const retryNow = now + 3 * HOUR
+const secondRetryPlan = refreshSpace('小忆', '你', retryNow)
+assert.equal(secondRetryPlan.pending.length, 1)
+assert.equal(generationSlotIdFor(secondRetryPlan.pending[0]), failedRetrySlotId)
+globalThis.fetch = async () => ({
+  ok: true,
+  status: 200,
+  json: async () => ({ choices: [{ message: { content: 'CONVERSATION: 你昨天那句难受，我没有忘。' } }] }),
+})
+const retried = await generatePendingPosts(secondRetryPlan, '小忆', '你', undefined, retryNow, () => 0.1)
+assert.equal(retried.created, 1)
+const usedAfterRetrySuccess = JSON.parse(localStorage.getItem('ai_space_used_templates') ?? '{}')
+assert.equal(usedAfterRetrySuccess[`__generation_retry__:${failedRetrySlotId}`], undefined)
+assert.equal(usedAfterRetrySuccess[`__generation_slot__:${failedRetrySlotId}`], 1)
 
 console.log('\nSpace-N1：全部通过')
