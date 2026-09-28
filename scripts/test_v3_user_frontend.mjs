@@ -57,6 +57,13 @@ assert.match(app, /fetch\(`\$\{API_BASE\}\/api\/notifications\/read`/)
 assert.match(app, /method: 'POST',[\s\S]*body: JSON\.stringify\(\{ revision \}\)/)
 assert.match(app, /onRead=\{markNotificationsRead\}/)
 assert.match(app, /hasUnreadNotifications=\{hasUnreadNotifications\}/)
+// 较早发出的 GET 不能在 read 之后用 stale unread=true 把红点重新点亮；更高 revision 的新消息仍可正常点亮。
+assert.match(app, /notificationReadGuardRef = useRef\(\{ epoch: 0, revision: 0 \}\)/)
+assert.match(app, /const readEpochAtStart = notificationReadGuardRef\.current\.epoch/)
+assert.match(app, /readEpochAtStart !== readGuard\.epoch/)
+assert.match(app, /revision <= readGuard\.revision/)
+assert.match(app, /epoch: readGuard\.epoch \+ 1/)
+assert.match(app, /revision: Math\.max\(readGuard\.revision, revision\)/)
 // 登录态变化仍按原节奏刷新（visibilitychange / online）
 assert.match(app, /document\.addEventListener\('visibilitychange', onVisible\)[\s\S]*window\.addEventListener\('online', onOnline\)/)
 
