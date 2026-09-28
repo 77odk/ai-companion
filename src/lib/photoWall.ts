@@ -27,6 +27,44 @@ export interface PhotoListResult {
   photos: PhotoUploadResult[]
 }
 
+function normalizePhotoCreatedAtValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value)
+    if (Number.isFinite(parsed) && parsed > 0) return parsed
+  }
+  return null
+}
+
+/** 云端照片列表边界校验：合法空数组允许；null/缺字段/畸形项整体按失败处理。 */
+export function normalizePhotoListData(value: unknown): PhotoListResult | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const rows = (value as { photos?: unknown }).photos
+  if (!Array.isArray(rows)) return null
+
+  const photos: PhotoUploadResult[] = []
+  for (const item of rows) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+    const row = item as Record<string, unknown>
+    const createdAt = normalizePhotoCreatedAtValue(row.createdAt)
+    if (
+      typeof row.id !== 'string' || !row.id.trim()
+      || typeof row.sessionId !== 'string'
+      || typeof row.width !== 'number' || !Number.isFinite(row.width) || row.width <= 0
+      || typeof row.height !== 'number' || !Number.isFinite(row.height) || row.height <= 0
+      || createdAt == null
+    ) return null
+    photos.push({
+      id: row.id,
+      sessionId: row.sessionId,
+      width: row.width,
+      height: row.height,
+      createdAt,
+    })
+  }
+  return { photos }
+}
+
 /** 本地元数据缓存 key：按会话隔离（契约：sessionId 必传；无会话兜底全局） */
 export function photoKey(sessionId?: string): string {
   return sessionId ? `ai_space_photos_${sessionId}` : 'ai_space_photos_global'
@@ -221,10 +259,17 @@ export function uploadPhoto(
 }
 
 /** GET /api/photos?sessionId= → { photos }（createdAt 倒序） */
-export function listPhotos(token: string, sessionId: string): Promise<ApiResult<PhotoListResult>> {
-  return apiRequest<PhotoListResult>(
+export async function listPhotos(token: string, sessionId: string): Promise<ApiResult<PhotoListResult>> {
+  const res = await apiRequest<unknown>(
     `/api/photos?sessionId=${encodeURIComponent(sessionId)}`,
     token,
     { method: 'GET' },
   )
+  if (!res.ok) return { ok: false, status: res.status, message: res.message }
+
+  const data = normalizePhotoListData(res.data)
+  if (!data) {
+    return { ok: false, status: res.status, message: '照片列表格式异常，请稍后再试' }
+  }
+  return { ok: true, status: res.status, message: '', data }
 }
