@@ -416,7 +416,6 @@ export default function App() {
       if (!token) return
       const requestId = notificationRefreshGuardRef.current.next + 1
       notificationRefreshGuardRef.current.next = requestId
-      const readEpochAtStart = notificationReadGuardRef.current.epoch
       // V3：消息与通知的事实来源是后端 GET /api/notifications（不再依赖 public 下的静态 feed 文件）。
       void fetch(`${API_BASE}/api/notifications`, {
         cache: 'no-store',
@@ -436,10 +435,7 @@ export default function App() {
           setNotificationRevision(revision)
           const unread = payload.unread === true
           const readGuard = notificationReadGuardRef.current
-          const staleUnread =
-            unread &&
-            readEpochAtStart !== readGuard.epoch &&
-            revision <= readGuard.revision
+          const staleUnread = unread && revision <= readGuard.revision
           if (!staleUnread) {
             setNotificationServerUnread(unread)
           }
