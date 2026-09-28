@@ -160,11 +160,15 @@ assert.deepEqual(
 )
 assert.deepEqual(
   parseSpaceGenerationDecision('EVENT[1]: 这件事真的发生了', 'conversation'),
-  { kind: 'skip' },
+  { kind: 'invalid' },
 )
 assert.deepEqual(
   parseSpaceGenerationDecision('没有遵守协议的普通正文', 'conversation'),
-  { kind: 'skip' },
+  { kind: 'invalid' },
+)
+assert.deepEqual(
+  parseSpaceGenerationDecision('', 'conversation'),
+  { kind: 'invalid' },
 )
 
 console.log('\n[8] 运行模块不再存在本地“完成/共同”语义判定 API')
@@ -365,5 +369,30 @@ assert.equal(retried.created, 1)
 const usedAfterRetrySuccess = JSON.parse(localStorage.getItem('ai_space_used_templates') ?? '{}')
 assert.equal(usedAfterRetrySuccess[`__generation_retry__:${failedRetrySlotId}`], undefined)
 assert.equal(usedAfterRetrySuccess[`__generation_slot__:${failedRetrySlotId}`], 1)
+
+console.log('\n[18] conversation 非法返回不是正式 SKIP：必须保留 retry')
+reset()
+recordChatTopic('昨天我其实有点撑不住了', undefined, retryUserTs)
+assert.equal(completeChatTopicPair(
+  '昨天我其实有点撑不住了',
+  '我听见了，那句不是随口一说。',
+  undefined,
+  retryUserTs,
+  retryUserTs + 10_000,
+), true)
+localStorage.setItem('ai_space_last_visit', String(now - 2 * DAY))
+const invalidPlan = refreshSpace('小忆', '你', now)
+assert.equal(invalidPlan.pending.length, 1)
+const invalidSlotId = generationSlotIdFor(invalidPlan.pending[0])
+globalThis.fetch = async () => ({
+  ok: true,
+  status: 200,
+  json: async () => ({ choices: [{ message: { content: '没有按协议返回的普通正文' } }] }),
+})
+const invalidResult = await generatePendingPosts(invalidPlan, '小忆', '你', undefined, now, () => 0.1)
+assert.equal(invalidResult.created, 0)
+const usedAfterInvalid = JSON.parse(localStorage.getItem('ai_space_used_templates') ?? '{}')
+assert.equal(usedAfterInvalid[`__generation_slot__:${invalidSlotId}`], undefined)
+assert.equal(usedAfterInvalid[`__generation_retry__:${invalidSlotId}`], invalidPlan.pending[0].at)
 
 console.log('\nSpace-N1：全部通过')
