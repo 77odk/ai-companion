@@ -62,7 +62,7 @@
 }
 
 .settings-page > .profile-card-link:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 38%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 38%, var(--el-static-white));
   outline-offset: 2px;
 }
 
@@ -118,7 +118,7 @@
 .entry-row:focus-visible {
   position: relative;
   z-index: 1;
-  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, var(--el-static-white));
   outline-offset: -2px;
 }
 
@@ -313,7 +313,7 @@
 .reply-length-option:focus-visible {
   position: relative;
   z-index: 1;
-  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, var(--el-static-white));
   outline-offset: -2px;
 }
 
@@ -360,7 +360,7 @@
 .reply-length-error {
   margin: 0;
   font-size: var(--el-font-caption, 12px);
-  color: var(--color-danger, #b3261e);
+  color: var(--el-danger);
 }
 
 /* ---- Chat settings ----------------------------------------------------- */
@@ -479,7 +479,7 @@
 }
 
 .chat-follow-switch:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 38%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 38%, var(--el-static-white));
   outline-offset: 2px;
 }
 
@@ -589,7 +589,7 @@
 }
 
 .chat-length-slider:focus-within {
-  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 30%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 30%, var(--el-static-white));
   outline-offset: 4px;
   border-radius: 999px;
 }
@@ -662,7 +662,7 @@
 }
 
 .chat-settings-row:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, #fff);
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, var(--el-static-white));
   outline-offset: -2px;
 }
 
@@ -736,10 +736,10 @@
 .logout-btn {
   min-height: var(--el-control-height, 46px);
   padding: 0 var(--el-space-4, 16px);
-  border: 1px solid color-mix(in srgb, var(--el-danger, #b3261e) 22%, var(--el-border, var(--color-border)));
+  border: 1px solid color-mix(in srgb, var(--el-danger) 22%, var(--el-border, var(--color-border)));
   border-radius: var(--el-radius-md, 16px);
   background: var(--el-surface-card, var(--color-card));
-  color: var(--el-danger, #b3261e);
+  color: var(--el-danger);
   font-size: var(--el-font-body, 15px);
   font-weight: var(--el-weight-medium, 500);
 }
