@@ -100,6 +100,8 @@ ok(aiSpaceSource.includes("const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显
 ok(aiSpaceSource.includes('setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? current : null)'), '列表/上传成功不会覆盖已发生的图片加载失败提示')
 ok(archiveSource.includes('loading="eager"'), '首屏预览不再 lazy，避免可见照片延迟/漏加载')
 ok(archiveSource.includes('onPhotoLoadError?.(photo)'), '图片失败会回传错误状态')
+ok(archiveSource.includes('const preview = sorted.slice(0, 5)'), '首页照片墙预览最多 5 张，只保留一排')
+ok(!archiveSource.includes('Math.floor(index / 5) * 38'), '首页预览不再生成第二排纵向位移')
 
 // ---- dataUrl 字节估算 ----
 ok(dataUrlBytes('data:image/jpeg;base64,AAAA') === 3, 'base64 长度 ×0.75 估算（4 字符 → 3 字节）')
