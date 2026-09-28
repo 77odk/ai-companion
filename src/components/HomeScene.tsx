@@ -75,7 +75,7 @@ export default function HomeScene({
     ? { '--home-scene-image': `url("${loadedPath}")` } as CSSProperties
     : undefined
   const weatherClass = weather && (weather.visual === 'clear' || overcastReady)
-    ? ` home-weather-${weather.visual}`
+    ? ` home-weather-state-${weather.visual}`
     : ''
 
   return (
@@ -83,11 +83,11 @@ export default function HomeScene({
       <div className="home-scene-overlay" aria-hidden="true" />
       {weatherClass ? (
         <div className="home-weather-atmosphere" aria-hidden="true">
-          <span className="home-weather-cloud cloud-a" />
-          <span className="home-weather-cloud cloud-b" />
-          <span className="home-weather-particles" />
-          <span className="home-weather-fog" />
-          <span className="home-weather-flash" />
+          <span className="home-weather-fx-cloud cloud-a" />
+          <span className="home-weather-fx-cloud cloud-b" />
+          <span className="home-weather-fx-particles" />
+          <span className="home-weather-fx-fog" />
+          <span className="home-weather-fx-flash" />
         </div>
       ) : null}
       {children}
