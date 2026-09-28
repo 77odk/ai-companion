@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import type { HomeWeather } from '../lib/homeWeather'
 
 export type HomeSceneId = 'morning' | 'day' | 'night'
 
@@ -14,36 +15,81 @@ export function getHomeScene(now: Date): HomeSceneState {
   return { id: 'night', greeting: '夜深了。' }
 }
 
-export default function HomeScene({ scene, children }: { scene: HomeSceneState; children: ReactNode }) {
-  const [loadedScene, setLoadedScene] = useState<HomeSceneId | null>(null)
+function needsOvercastScene(weather: HomeWeather | null): boolean {
+  return Boolean(weather && weather.visual !== 'clear')
+}
+
+export default function HomeScene({
+  scene,
+  weather,
+  children,
+}: {
+  scene: HomeSceneState
+  weather: HomeWeather | null
+  children: ReactNode
+}) {
+  const [loadedPath, setLoadedPath] = useState<string | null>(null)
+  const [overcastReady, setOvercastReady] = useState(false)
+  const wantsOvercast = needsOvercastScene(weather)
+  const clearPath = `/home-scenes/${scene.id}.webp`
+  const overcastPath = `/home-scenes/${scene.id}-overcast.webp`
+  const requestedPath = wantsOvercast ? overcastPath : clearPath
 
   useEffect(() => {
     let active = true
     const image = new Image()
+    setLoadedPath(null)
+    setOvercastReady(false)
 
-    setLoadedScene(null)
     image.onload = () => {
-      if (active) setLoadedScene(scene.id)
+      if (!active) return
+      setLoadedPath(requestedPath)
+      setOvercastReady(wantsOvercast)
     }
     image.onerror = () => {
-      if (active) setLoadedScene(null)
+      if (!active) return
+      if (!wantsOvercast) {
+        setLoadedPath(null)
+        return
+      }
+      // 阴天母版缺失时回退现有晴图，同时关闭全屏天气动效，避免“艳阳天下雨”的视觉穿帮。
+      const fallback = new Image()
+      fallback.onload = () => {
+        if (active) setLoadedPath(clearPath)
+      }
+      fallback.onerror = () => {
+        if (active) setLoadedPath(null)
+      }
+      fallback.src = clearPath
     }
-    image.src = `/home-scenes/${scene.id}.webp`
+    image.src = requestedPath
 
     return () => {
       active = false
       image.onload = null
       image.onerror = null
     }
-  }, [scene.id])
+  }, [clearPath, requestedPath, wantsOvercast])
 
-  const style = loadedScene === scene.id
-    ? { '--home-scene-image': `url("/home-scenes/${scene.id}.webp")` } as CSSProperties
+  const style = loadedPath
+    ? { '--home-scene-image': `url("${loadedPath}")` } as CSSProperties
     : undefined
+  const weatherClass = weather && (weather.visual === 'clear' || overcastReady)
+    ? ` home-weather-${weather.visual}`
+    : ''
 
   return (
-    <div className={`home-page home-scene-${scene.id}`} style={style}>
+    <div className={`home-page home-scene-${scene.id}${weatherClass}`} style={style}>
       <div className="home-scene-overlay" aria-hidden="true" />
+      {weatherClass ? (
+        <div className="home-weather-atmosphere" aria-hidden="true">
+          <span className="home-weather-cloud cloud-a" />
+          <span className="home-weather-cloud cloud-b" />
+          <span className="home-weather-particles" />
+          <span className="home-weather-fog" />
+          <span className="home-weather-flash" />
+        </div>
+      ) : null}
       {children}
     </div>
   )
