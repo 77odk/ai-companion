@@ -191,7 +191,6 @@ console.log('\n[8] 主流程：无 key 静默 + 未来表达不耗额度 + 非�
 resetAll()
 {
   // 不配 key（settings 空）→ 即使命中候选也静默跳过，不创建、不报错
-  const before = getJudgeQuotaUsed('s1', Date.now())
   let threw = false
   await processEventCandidate({ sessionId: 's1', userText: '我们昨天一起看了电影', now: Date.now() }).catch(() => {
     threw = true
