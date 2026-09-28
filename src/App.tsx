@@ -310,6 +310,9 @@ export default function App() {
   const [notificationReadRevision, setNotificationReadRevisionState] = useState(() => getNotificationReadRevision())
   // V3：未读以服务端 GET /api/notifications 的 unread 为准；本地 read revision 只作离线首帧镜像。
   const [notificationServerUnread, setNotificationServerUnread] = useState(false)
+  // 防止“较早发出的未读探测”在用户刚读完消息后晚到，又把红点点亮。
+  // 只记录本次 App 生命周期里真实执行过的 read，不拿历史本地 revision 压服务端事实。
+  const notificationReadGuardRef = useRef({ epoch: 0, revision: 0 })
   const hasUnreadNotifications = loggedIn && (notificationServerUnread || notificationRevision > notificationReadRevision)
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
@@ -409,6 +412,7 @@ export default function App() {
     const refresh = () => {
       const token = getToken()
       if (!token) return
+      const readEpochAtStart = notificationReadGuardRef.current.epoch
       // V3：消息与通知的事实来源是后端 GET /api/notifications（不再依赖 public 下的静态 feed 文件）。
       void fetch(`${API_BASE}/api/notifications`, {
         cache: 'no-store',
@@ -424,7 +428,14 @@ export default function App() {
           }
           setNotificationRevision(revision)
           const unread = payload.unread === true
-          setNotificationServerUnread(unread)
+          const readGuard = notificationReadGuardRef.current
+          const staleUnread =
+            unread &&
+            readEpochAtStart !== readGuard.epoch &&
+            revision <= readGuard.revision
+          if (!staleUnread) {
+            setNotificationServerUnread(unread)
+          }
           if (!unread) {
             // 服务端已读：本地镜像对齐，离线首帧也不再冒红点
             persistNotificationReadRevision(revision)
@@ -437,6 +448,7 @@ export default function App() {
     }
 
     if (!loggedIn) {
+      notificationReadGuardRef.current = { epoch: 0, revision: 0 }
       setNotificationRevision(0)
       setNotificationServerUnread(false)
       return () => { active = false }
@@ -459,6 +471,11 @@ export default function App() {
 
   // 已读回写：本地镜像立即生效（红点立刻消失）+ POST /api/notifications/read 落到服务端（只增不减）。
   const markNotificationsRead = useCallback((revision: number) => {
+    const readGuard = notificationReadGuardRef.current
+    notificationReadGuardRef.current = {
+      epoch: readGuard.epoch + 1,
+      revision: Math.max(readGuard.revision, revision),
+    }
     persistNotificationReadRevision(revision)
     setNotificationReadRevisionState((current) => Math.max(current, revision))
     setNotificationServerUnread(false)
