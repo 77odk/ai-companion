@@ -7,7 +7,9 @@ const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.u
 
 assert.match(weather, /export function readUserWeatherContext/)
 assert.match(weather, /!isHomeWeatherEnabled\(\)/)
-assert.match(weather, /return readCache\(city\)/)
+assert.match(weather, /!isUserWeatherChatEnabled\(\)/)
+assert.match(weather, /Date\.now\(\) - cached\.fetchedAt >= CACHE_MS/)
+assert.match(weather, /const cached = readCache\(city\)/)
 const reader = weather.slice(weather.indexOf('export function readUserWeatherContext'), weather.indexOf('export function buildUserWeatherContext'))
 assert.doesNotMatch(reader, /fetch\(/)
 assert.match(weather, /USER's local weather/)
