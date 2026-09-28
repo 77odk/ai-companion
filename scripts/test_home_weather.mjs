@@ -15,6 +15,9 @@ test('home weather uses manual profile city and keyless Open-Meteo endpoints', (
   assert.doesNotMatch(weather, /apiKey|api_key/)
   assert.match(weather, /!isHomeWeatherEnabled\(\)/)
   assert.match(home, /保存并开启天气/)
+  assert.match(home, /填写城市即可开启当地天气，不会读取你的定位。天气由 Open-Meteo 提供。/)
+  assert.doesNotMatch(home, /城市会同步到「关于我」/)
+  assert.doesNotMatch(home, /作为对话上下文发送给你选择的模型服务/)
   assert.match(home, /saveUserProfile\(\{ \.\.\.profile, city \}\)/)
 })
 
@@ -51,4 +54,13 @@ test('user profile city has its own Cloud State entity', () => {
   assert.match(cloud, /registerCloudStateAdapter\('user_profile'/)
   assert.match(cloud, /addEventListener\(ELUVIN_DATA_CHANGE, captureUserProfile\)/)
   assert.match(cloud, /city: profile\.city\?\.trim\(\) \?\? ''/)
+})
+
+
+test('home modal sheets hide the floating bottom navigation', () => {
+  const css = fs.readFileSync(new URL('../src/styles/home.css', import.meta.url), 'utf8')
+  assert.match(css, /\.app:has\(\.home-page \.home-inbox-mask\) \.app-nav/)
+  assert.match(css, /\.app:has\(\.home-page \.home-time-mask\) \.app-nav/)
+  assert.match(css, /visibility:\s*hidden/)
+  assert.match(css, /\.home-weather-setup-sheet[\s\S]*max-height:\s*calc\(100dvh - 32px\)/)
 })
