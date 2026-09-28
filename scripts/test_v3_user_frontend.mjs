@@ -94,7 +94,7 @@ assert.match(feedback, /accept="image\/jpeg,image\/png,image\/webp"/)
 // 选图时就校验 mime / 单张大小 / 数量，而且给人话提示（不静默失败）
 assert.match(feedback, /if \(!ACCEPTED_MIME\.includes\(file\.type\)\)/)
 assert.match(feedback, /if \(file\.size > MAX_IMAGE_BYTES\)/)
-assert.match(feedback, /if \(next\.length >= MAX_IMAGES\)/)
+assert.match(feedback, /if \(loaded\.length >= remaining\)/)
 // 提交前再核一遍（数量 / 单张大小 / mime），避免白跑一趟
 assert.match(feedback, /if \(images\.length > MAX_IMAGES\)/)
 assert.match(feedback, /images\.find\(\(image\) => image\.bytes > MAX_IMAGE_BYTES\)/)
