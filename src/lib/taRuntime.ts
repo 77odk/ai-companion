@@ -384,8 +384,17 @@ function findRuntimeDisplayCandidate(
       const zhMatch = rule.zh.test(clause)
       const enMatch = rule.en.test(clause)
       if (!zhMatch && !enMatch) continue
-      // 展示语言跟随命中的语法规则，而不是整句字符占比；书名/歌名等外语内容不能把中文句式误判成英文。
-      const lang: Lang = zhMatch ? 'zh' : 'en'
+
+      let lang: Lang
+      if (zhMatch && enMatch) {
+        // 双命中时看哪个语法规则更早进入主句；另一种语言可能只是书名/歌名/对象内容。
+        const zhIndex = clause.search(rule.zh)
+        const enIndex = clause.search(rule.en)
+        lang = enIndex >= 0 && (zhIndex < 0 || enIndex < zhIndex) ? 'en' : 'zh'
+      } else {
+        lang = zhMatch ? 'zh' : 'en'
+      }
+
       const display = compactRuntimeDisplayText(clause, lang)
       if (display) candidate = { text: display, lang }
     }
