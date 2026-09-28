@@ -558,8 +558,8 @@ button {
   margin: 0 14px 10px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
-  background: #fdecea;
-  color: #b3261e;
+  background: var(--el-danger-surface);
+  color: var(--el-danger);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -729,7 +729,7 @@ textarea.persona-input {
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
-  color: #b3261e;
+  color: var(--el-danger);
 }
 
 /* 账号输入框下边的即时格式提示（B2a 三标识：手机号/邮箱/用户名） */
@@ -737,7 +737,7 @@ textarea.persona-input {
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
-  color: #b3261e;
+  color: var(--el-danger);
 }
 
 .settings-actions {
@@ -941,7 +941,7 @@ textarea.persona-input {
 }
 
 .account-tab.on {
-  background: #fff;
+  background: var(--el-static-white);
   color: var(--color-text, #222);
   font-weight: 600;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
@@ -963,8 +963,8 @@ textarea.persona-input {
 }
 
 .test-result.error {
-  background: #fdecea;
-  color: #b3261e;
+  background: var(--el-danger-surface);
+  color: var(--el-danger);
 }
 
 /* B2e：找回密码 / 账号绑定 */
@@ -1353,8 +1353,8 @@ textarea.persona-input {
 .memory-delete:hover,
 .memory-delete:focus-visible {
   opacity: 1;
-  color: #b3261e;
-  background: #fdecea;
+  color: var(--el-danger);
+  background: var(--el-danger-surface);
 }
 
 /* 记忆条右上操作区：置顶「重要」按钮 + 删除按钮排在一起 */
@@ -1477,8 +1477,8 @@ textarea.persona-input {
   margin: 0 0 14px;
   padding: 8px 12px;
   border-radius: var(--radius-md);
-  background: #fdecea;
-  color: #b3261e;
+  background: var(--el-danger-surface);
+  color: var(--el-danger);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -1908,8 +1908,8 @@ textarea.persona-input {
 
 .anniversary-page-btn.danger:hover,
 .anniversary-page-btn.danger:focus-visible {
-  color: #b3261e;
-  background: #fdecea;
+  color: var(--el-danger);
+  background: var(--el-danger-surface);
 }
 
 .anniversary-confirm {
@@ -4706,7 +4706,7 @@ textarea.persona-input {
 
 .role-modal-required-hint {
   font-size: 12px;
-  color: #b3261e;
+  color: var(--el-danger);
 }
 
 .role-modal-hint {
@@ -5165,7 +5165,7 @@ textarea.persona-input {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-card);
-  color: #b3261e;
+  color: var(--el-danger);
   font-size: 14px;
   font-weight: 500;
 }
@@ -5573,7 +5573,7 @@ textarea.persona-input {
   padding: 0 5px;
   border-radius: 9px;
   background: #e5484d;
-  color: #fff;
+  color: var(--el-static-white);
   font-size: 11px;
   font-weight: 600;
   display: flex;
@@ -5642,11 +5642,11 @@ textarea.persona-input {
 }
 
 .roles-menu-danger {
-  color: #b3261e;
+  color: var(--el-danger);
 }
 
 .roles-menu-danger:hover:not(:disabled) {
-  background: #fdecea;
+  background: var(--el-danger-surface);
 }
 
 .roles-menu-item:disabled {
@@ -6123,7 +6123,7 @@ textarea.persona-input {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--el-static-white);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   transition: transform 0.2s ease;
 }
@@ -6189,7 +6189,7 @@ textarea.persona-input {
   font-size: 15px;
   font-weight: 700;
   color: var(--color-primary-deep);
-  background: #fff;
+  background: var(--el-static-white);
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s;
 }
@@ -7128,7 +7128,7 @@ textarea.persona-input {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
+  color: var(--el-static-white);
   pointer-events: none;
 }
 
