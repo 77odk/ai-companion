@@ -696,7 +696,7 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary, onGoNotifica
               <button type="button" onClick={() => setWeatherSetupOpen(false)} aria-label="关闭">×</button>
             </div>
             <p className="home-weather-consent-copy">
-              填写城市即可开启当地天气，不会读取你的定位。天气由 Open-Meteo 提供。
+              填写城市即可开启当地天气，不会读取定位。天气由 Open-Meteo 提供；开启后，城市和天气也会发送给你选择的模型，让 TA 知道你这边的天气。
             </p>
             <label className="home-weather-city-field">
               <span>城市</span>
