@@ -80,6 +80,25 @@ export function weatherVisualForCode(code: number): WeatherVisual {
   return weatherMeta(code).visual
 }
 
+
+/**
+ * Chat only reads already-consented cached weather. It never triggers a weather request.
+ * This is USER-side environment context, not TA's own location or physical state.
+ */
+export function readUserWeatherContext(cityInput: string): HomeWeather | null {
+  const city = cityInput.trim()
+  if (!city || !isHomeWeatherEnabled()) return null
+  return readCache(city)
+}
+
+export function buildUserWeatherContext(weather: HomeWeather, lang: 'zh' | 'en' = 'zh'): string {
+  const temperature = Math.round(weather.temperature)
+  if (lang === 'en') {
+    return `[USER's local weather] Their saved city is ${weather.city}; current cached weather: ${weather.label}, about ${temperature}°C. This describes USER's environment only, not your own location or physical surroundings. Use it naturally only when relevant; do not claim you are there.`
+  }
+  return `【USER 所在地天气】对方资料中的城市是${weather.city}；当前已缓存天气：${weather.label}，约 ${temperature}°C。这只描述 USER 那边的环境，不是你的所在地或你的现实环境。相关时自然参考即可，不要说成你也在那里。`
+}
+
 export async function loadHomeWeather(cityInput: string, now = Date.now()): Promise<HomeWeather | null> {
   const city = cityInput.trim()
   if (!city || !isHomeWeatherEnabled()) return null
