@@ -1041,17 +1041,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       uploadMessage(userMsg)
     }
 
-    // Event Candidate Window：只带最近 6 条聊天里最多 2 条历史用户原话；TA 文本永不作为 Event 证据。
-    // 本地粗筛仍先跑，只有命中才会消耗每天最多 3 次的精判额度。
-    const recentEventUserTexts = visibleMessages
+    // Event Candidate Window：只带最近 6 条聊天里最多 2 条历史 user 原话 + 真实 ts；TA 文本永不作为 Event 证据。
+    // 这让软 Event 在第一次“收口句”命中时就有多轮 evidence；最终仍由 Event V2 原五维硬闸门决定是否落库。
+    const recentEventUserEvidence = visibleMessages
       .slice(-6)
       .filter((m) => m.role === 'user')
       .slice(-2)
-      .map((m) => m.content)
+      .map((m) => ({ text: m.content, ts: m.ts }))
     void processEventCandidate({
       sessionId: activeSessionId || undefined,
       userText: userMsg.content,
-      recentUserTexts: recentEventUserTexts,
+      recentUserEvidence: recentEventUserEvidence,
       now: userMsg.ts,
     })
 

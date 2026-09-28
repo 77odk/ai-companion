@@ -12,6 +12,7 @@ import {
   leaksSensitiveSource,
   loadCandidateWindow,
   saveCandidateWindow,
+  seedCandidateWindowFromRecent,
   shouldJudgeCandidateWindow,
 } from '../src/lib/eventDetector.ts'
 import { eventsKey } from '../src/lib/eventStore.ts'
@@ -61,6 +62,36 @@ store.clear()
   ok(loadCandidateWindow('s1', now) == null, '超过 3 天未收口直接丢弃')
   ok(localStorage.getItem(candidateWindowKey('s1')) == null, '过期窗口从本地清掉')
   clearCandidateWindow('s1')
+}
+
+console.log('\n[2a] 首次命中软收口时补最近真实 user evidence')
+store.clear()
+{
+  const now = Date.now()
+  let state = seedCandidateWindowFromRecent(
+    null,
+    's-soft',
+    [
+      { text: '前面我其实一直有点难受', ts: now - 2000 },
+      { text: '刚才跟你聊完轻松多了', ts: now - 1000 },
+    ],
+    now,
+  )
+  state = appendCandidateEvidence(state, 's-soft', '感觉你更懂我了', now)
+  ok(state.evidence.length === 3, '首次打开窗口时带上最近两条真实 user 原话')
+  ok(shouldJudgeCandidateWindow(state, '感觉你更懂我了') === true, '首次软收口即可满足多轮 evidence 后进入精判')
+
+  const filtered = seedCandidateWindowFromRecent(
+    null,
+    's-filter',
+    [
+      { text: '以后我们一起去巴黎', ts: now - 2000 },
+      { text: '三天前以前的旧话', ts: now - EVENT_CANDIDATE_MAX_AGE_MS - 1 },
+      { text: '刚才我确实有点难受', ts: now - 1000 },
+    ],
+    now,
+  )
+  ok(filtered?.evidence.length === 1 && filtered.evidence[0].text === '刚才我确实有点难受', '未来/不确定或 3 天外内容不进入启动证据')
 }
 
 console.log('\n[2a] 启动收口：只处理最早的一个，过期和失败都不重试')
