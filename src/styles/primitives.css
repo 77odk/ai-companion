@@ -54,30 +54,36 @@
 }
 
 /* ---- Shared detail top bar -------------------------------------------- */
+/* 返回是页面结构，不是独立胶囊按钮；标题始终按视口真居中，不受左右控件宽度影响。 */
 .detail-header {
   min-height: var(--el-topbar-height, 52px);
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: var(--el-space-3, 12px);
+}
+
+.detail-header > :first-child {
+  justify-self: start;
+}
+
+.detail-header > :last-child {
+  justify-self: end;
 }
 
 .detail-back {
   flex: none;
-  width: var(--el-icon-button-size, 40px);
+  min-width: var(--el-icon-button-size, 40px);
   height: var(--el-icon-button-size, 40px);
   padding: 0;
-  border: 1px solid var(--el-border-soft, var(--color-border));
-  border-radius: var(--el-radius-round, 50%);
-  background: var(--el-surface-card, var(--color-card));
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--el-text-secondary, var(--color-text-muted));
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  transition:
-    color var(--el-motion-fast, 120ms) ease,
-    border-color var(--el-motion-fast, 120ms) ease,
-    background var(--el-motion-fast, 120ms) ease;
+  justify-content: flex-start;
+  transition: color var(--el-motion-fast, 120ms) ease;
 }
 
 .detail-back svg {
@@ -88,7 +94,8 @@
 
 .detail-back:hover {
   color: var(--el-accent-deep, var(--color-primary-deep));
-  border-color: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, transparent);
+  border-color: transparent;
+  background: transparent;
 }
 
 .detail-back:focus-visible {
@@ -99,21 +106,25 @@
 .detail-back.detail-back-text {
   width: auto;
   height: var(--el-icon-button-size, 40px);
-  padding: 0 var(--el-space-3, 12px) 0 var(--el-space-2, 8px);
+  padding: 0;
   gap: var(--el-space-1, 4px);
-  border-radius: var(--el-radius-pill, 999px);
+  border-radius: 0;
+  background: transparent;
   font-size: var(--el-font-support, 13px);
 }
 
 .detail-title {
+  grid-column: 2;
   margin: 0;
+  text-align: center;
   color: var(--el-text-primary, var(--color-text));
   font-size: var(--el-font-nav-title, 17px);
   font-weight: var(--el-weight-semibold, 600);
   line-height: var(--el-line-section, 1.4);
 }
 
-.detail-spacer {
+.detail-spacer,
+.detail-header-spacer {
   width: var(--el-icon-button-size, 40px);
   flex: none;
 }
