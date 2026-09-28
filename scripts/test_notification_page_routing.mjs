@@ -18,3 +18,5 @@ assert.match(settings, /onGoNotifications\?\.\(\)/)
 assert.doesNotMatch(life, /你在这个城市|life in this city/i)
 
 console.log('notification page routing: PASS')
+
+assert.doesNotMatch(app, /<NotificationsPage onBack=\{\(\) => navigate\(notificationFrom\)\}/)
