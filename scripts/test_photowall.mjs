@@ -11,6 +11,7 @@ import {
   mergePhotos,
   dataUrlBytes,
   photoKey,
+  normalizePhotoListData,
 } from '../src/lib/photoWall.ts'
 
 let passed = 0
@@ -88,20 +89,30 @@ ok(merged2.length === 1 && merged2[0].dataUrl === 'data:image/jpeg;base64,xx', '
 const merged3 = mergePhotos([photo('p5', 100, { width: 10 })], [photo('p5', 100, { width: 800 })])
 ok(merged3[0].width === 800, '同 id 云端信息优先')
 
+// ---- 云端列表边界校验 ----
+ok(normalizePhotoListData({ photos: [] })?.photos.length === 0, '合法空 photos 数组正常通过')
+ok(normalizePhotoListData({ photos: null }) == null, 'photos=null 按畸形响应拒绝')
+ok(normalizePhotoListData({}) == null, '缺 photos 字段按畸形响应拒绝')
+ok(normalizePhotoListData({ photos: 'bad' }) == null, 'photos 非数组按畸形响应拒绝')
+ok(normalizePhotoListData({ photos: [{ id: 'p1' }] }) == null, '畸形照片项整体拒绝')
+const normalizedCloud = normalizePhotoListData({
+  photos: [{ id: 'p1', sessionId: 's1', width: 800, height: 600, createdAt: '2026-09-28T12:00:00+08:00' }],
+})
+ok(typeof normalizedCloud?.photos[0]?.createdAt === 'number' && normalizedCloud.photos[0].createdAt > 0, '云端 createdAt 字符串在数据层归一成时间戳')
+
 // ---- 组件接线契约 ----
 const { readFileSync } = await import('node:fs')
 const aiSpaceSource = readFileSync(new URL('../src/components/AISpace.tsx', import.meta.url), 'utf8')
 const archiveSource = readFileSync(new URL('../src/components/PhotoWallArchive.tsx', import.meta.url), 'utf8')
+const photoWallSource = readFileSync(new URL('../src/lib/photoWall.ts', import.meta.url), 'utf8')
 ok(aiSpaceSource.includes('setPhotos(local)'), '切换 session 先切回该 session 本地照片，不沿用上一角色')
 ok(aiSpaceSource.includes('saveLocalPhotoMetadata(next, sid)'), '上传/云端合并后缓存登录用户元数据')
 ok(aiSpaceSource.includes('dataUrl: scaled.dataUrl'), '上传成功后先用本地压缩图即时展示')
 ok(aiSpaceSource.includes('照片暂时没加载出来，稍后再试。'), '列表读取失败不再静默伪装空墙')
 ok(aiSpaceSource.includes("const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，稍后再试。'"), '单图加载失败文案集中维护')
 ok(aiSpaceSource.includes('setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? current : null)'), '列表/上传成功不会覆盖已发生的图片加载失败提示')
-ok(aiSpaceSource.includes('const cloudRows = res.data?.photos'), '云端照片列表先取可选 photos，不直接假定存在')
-ok(aiSpaceSource.includes('!Array.isArray(cloudRows)'), 'photos 为 null/缺失/非数组时走失败兜底')
-ok(aiSpaceSource.includes('cloudRows.some((photo) => !isValidCloudPhotoRow(photo))'), '畸形照片项不会进入 map 导致页面异常')
-ok(aiSpaceSource.includes('本机已有的先保留'), '云端列表异常时保留本地照片，不误清空')
+ok(photoWallSource.includes('normalizePhotoListData'), '云端照片列表校验下沉到 photoWall 数据层')
+ok(photoWallSource.includes("message: '照片列表格式异常，请稍后再试'"), '畸形 200 响应被数据层转换成失败结果')
 ok(archiveSource.includes('loading="eager"'), '首屏预览不再 lazy，避免可见照片延迟/漏加载')
 ok(archiveSource.includes('onPhotoLoadError?.(photo)'), '图片失败会回传错误状态')
 ok(archiveSource.includes('const preview = sorted.slice(0, 5)'), '首页照片墙预览最多 5 张，只保留一排')

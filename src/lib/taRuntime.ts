@@ -11,7 +11,7 @@
 import { getSessionsCache } from './sessionStore.ts'
 import { resolveRolePersona } from './sessionProfile.ts'
 import { loadPersona } from './storage.ts'
-import { detectLang, type Lang } from './langDetect.ts'
+import type { Lang } from './langDetect.ts'
 import { formatAttributedLine } from './promptAttribution.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { resolveIdentityMode, type IdentityMode } from './companionPolicy.ts'
@@ -336,17 +336,43 @@ function looksNotFinishedYet(clause: string): boolean {
     || /\b(?:almost|about to|not yet|haven't|hasn't|still not)\b/i.test(t)
 }
 
+const ZH_SELF_CURRENT_GRAMMAR_RE = /^我(?:现在|正(?:在)?|还在|在|去|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/
+const ZH_OMITTED_CURRENT_GRAMMAR_RE = /^(?:现在|正(?:在)?|还在|在|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/
+const EN_SELF_CURRENT_GRAMMAR_RE = /\b(?:i'm|i am|i’ll|i'll|i will|i'm going to|i am going to|let me|i just|i've just|i have just)\b/i
+
+function currentActionGrammar(clause: string): { index: number; actionIndex: number; lang: Lang } | null {
+  const t = clause.trim()
+  if (!t) return null
+
+  const zhSelf = ZH_SELF_CURRENT_GRAMMAR_RE.exec(t)
+  if (zhSelf) {
+    return { index: 0, actionIndex: zhSelf[0].length, lang: 'zh' }
+  }
+
+  const zhOmitted = ZH_OMITTED_CURRENT_GRAMMAR_RE.exec(t)
+  if (zhOmitted) {
+    return { index: 0, actionIndex: zhOmitted[0].length, lang: 'zh' }
+  }
+
+  const en = EN_SELF_CURRENT_GRAMMAR_RE.exec(t)
+  if (!en || en.index < 0) return null
+  return {
+    index: en.index,
+    actionIndex: en.index + en[0].length,
+    lang: 'en',
+  }
+}
+
+function currentActionGrammarIndex(clause: string): number {
+  return currentActionGrammar(clause)?.index ?? -1
+}
+
 function explicitSelfCurrentClause(clause: string): boolean {
   const t = clause.trim()
   if (!t) return false
-  // “好，我去…” / “我正在…” / “我刚…” 等明确自我当前动作。
-  if (/(?:^|[，,；;]\s*)我(?:现在|正(?:在)?|还在|在|去|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/.test(t)) return true
-  // 省主语但带强当前标记：“先去洗澡”“正在看书”“刚到家”。
-  if (/^(?:现在|正(?:在)?|还在|在|先去?|这就|准备(?:去)?|要去?|刚(?:刚|在)?|开始|继续)/.test(t)) return true
+  if (currentActionGrammarIndex(t) >= 0) return true
   // 很短的口语自述：“洗澡去了”“看书呢”，避免把“看书这件事…”之类泛提及当当前状态。
-  if (t.length <= 16 && /(?:去了|中|呢|着呢|一会儿?|一下|了)$/.test(t)) return true
-  // English: only explicit first-person/current constructions.
-  return /\b(?:i'm|i am|i’ll|i'll|i will|i'm going to|i am going to|let me|i just|i've just|i have just)\b/i.test(t)
+  return t.length <= 16 && /(?:去了|中|呢|着呢|一会儿?|一下|了)$/.test(t)
 }
 
 function compactRuntimeDisplayText(clause: string, lang: Lang): string {
@@ -372,6 +398,66 @@ function compactRuntimeDisplayText(clause: string, lang: Lang): string {
   return t.length > 64 ? `${t.slice(0, 64).trimEnd()}…` : t
 }
 
+interface RuntimeClauseStartMatch {
+  activityId: string
+  lang: Lang
+  index: number
+  ruleIndex: number
+}
+
+/**
+ * 在单个 clause 内统一选择“活动 + 语言”：
+ * - 先比较所有活动规则真正命中的起始位置，主句语法通常最靠前；
+ * - 同位置时沿用规则表“更具体在前”的优先级；
+ * - 书名/歌名/对象里的另一种语言即使命中，也不会盖过主句动作。
+ */
+function pickRuntimeStartMatchForClause(clause: string): RuntimeClauseStartMatch | null {
+  const grammar = currentActionGrammar(clause)
+  if (grammar) {
+    const rawActionText = clause.slice(grammar.actionIndex)
+    const leadingSpace = rawActionText.length - rawActionText.trimStart().length
+    const actionText = rawActionText.trimStart()
+
+    for (let ruleIndex = 0; ruleIndex < RUNTIME_TEXT_START_RULES.length; ruleIndex += 1) {
+      const rule = RUNTIME_TEXT_START_RULES[ruleIndex]
+      const pattern = grammar.lang === 'zh' ? rule.zh : rule.en
+      const index = actionText.search(pattern)
+      if (index !== 0) continue
+      return {
+        activityId: rule.activityId,
+        lang: grammar.lang,
+        index: grammar.actionIndex + leadingSpace,
+        ruleIndex,
+      }
+    }
+    return null
+  }
+
+  let best: RuntimeClauseStartMatch | null = null
+  RUNTIME_TEXT_START_RULES.forEach((rule, ruleIndex) => {
+    const candidates: Array<{ lang: Lang; index: number }> = [
+      { lang: 'zh', index: clause.search(rule.zh) },
+      { lang: 'en', index: clause.search(rule.en) },
+    ]
+    for (const item of candidates) {
+      if (item.index < 0) continue
+      if (
+        best == null
+        || item.index < best.index
+        || (item.index === best.index && ruleIndex < best.ruleIndex)
+      ) {
+        best = {
+          activityId: rule.activityId,
+          lang: item.lang,
+          index: item.index,
+          ruleIndex,
+        }
+      }
+    }
+  })
+  return best
+}
+
 function findRuntimeDisplayCandidate(
   text: string,
   activityId: string,
@@ -379,13 +465,12 @@ function findRuntimeDisplayCandidate(
   let candidate: { text: string; lang: Lang } | null = null
   for (const clause of textClauses(text)) {
     if (isClearlyOtherPersonClause(clause) || blockedAsFutureOrNegative(clause) || !explicitSelfCurrentClause(clause)) continue
-    for (const rule of RUNTIME_TEXT_START_RULES) {
-      if (rule.activityId !== activityId) continue
-      if (!rule.zh.test(clause) && !rule.en.test(clause)) continue
-      const lang = detectLang(clause)
-      const display = compactRuntimeDisplayText(clause, lang)
-      if (display) candidate = { text: display, lang }
-    }
+    const match = pickRuntimeStartMatchForClause(clause)
+    if (!match || match.activityId !== activityId) continue
+    const grammarIndex = currentActionGrammarIndex(clause)
+    const displaySource = grammarIndex >= 0 ? clause.slice(grammarIndex) : clause
+    const display = compactRuntimeDisplayText(displaySource, match.lang)
+    if (display) candidate = { text: display, lang: match.lang }
   }
   return candidate
 }
@@ -397,11 +482,8 @@ export function detectTaRuntimeDecision(text: string, currentActivityId?: string
 
   for (const clause of clauses) {
     if (isClearlyOtherPersonClause(clause) || blockedAsFutureOrNegative(clause) || !explicitSelfCurrentClause(clause)) continue
-    for (const rule of RUNTIME_TEXT_START_RULES) {
-      if (rule.zh.test(clause) || rule.en.test(clause)) {
-        startDecision = { type: 'start', activityId: rule.activityId }
-      }
-    }
+    const match = pickRuntimeStartMatchForClause(clause)
+    if (match) startDecision = { type: 'start', activityId: match.activityId }
   }
   if (startDecision) return startDecision
 
