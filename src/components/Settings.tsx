@@ -142,6 +142,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenAppearance={() => setPage('appearance')}
       onOpenAnniversary={() => setPage('anniversary')}
       onOpenReply={() => setPage('reply')}
+      onOpenNotifications={() => setPage('notifications')}
       onGoRoles={() => onGoRoles?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
       onGoProfile={() => onGoProfile?.()}
@@ -188,6 +189,7 @@ function MainCenter({
   onOpenAppearance,
   onOpenAnniversary,
   onOpenReply,
+  onOpenNotifications,
   onGoRoles,
   onGoAboutMe,
   onGoProfile,
@@ -202,6 +204,7 @@ function MainCenter({
   onOpenAppearance: () => void
   onOpenAnniversary: () => void
   onOpenReply: () => void
+  onOpenNotifications: () => void
   onGoRoles?: () => void
   onGoAboutMe?: () => void
   onGoProfile?: () => void
@@ -278,7 +281,7 @@ function MainCenter({
           onClick={onOpenAccount}
           status={accountLabel ? '已登录' : '未登录'}
         />
-        <EntryRow icon={<NotificationIcon />} label="消息与通知" onClick={() => setPage('notifications')} />
+        <EntryRow icon={<NotificationIcon />} label="消息与通知" onClick={onOpenNotifications} />
         <EntryRow icon={<PrivacyIcon />} label="隐私" onClick={onOpenPrivacy} />
         <EntryRow icon={<PaletteIcon />} label="外观" onClick={onOpenAppearance} />
         <EntryRow icon={<InfoIcon />} label="关于忆文" onClick={onOpenAbout} />
