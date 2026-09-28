@@ -61,6 +61,8 @@ export default function FeedbackPage({ onBack }: Props) {
   const [content, setContent] = useState('')
   const [images, setImages] = useState<PickedImage[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const [readingImages, setReadingImages] = useState(false)
+  const imageReadInFlightRef = useRef(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -69,37 +71,48 @@ export default function FeedbackPage({ onBack }: Props) {
     const picked = Array.from(event.target.files ?? [])
     // 清掉 value，同一张图改完还能再选一次
     event.target.value = ''
-    if (picked.length === 0) return
+    if (picked.length === 0 || imageReadInFlightRef.current || submitting) return
 
-    const next = [...images]
+    imageReadInFlightRef.current = true
+    setReadingImages(true)
+    const loaded: PickedImage[] = []
     const problems: string[] = []
-    for (const file of picked) {
-      if (!ACCEPTED_MIME.includes(file.type)) {
-        problems.push(`「${file.name}」不是支持的类型，只收 JPG、PNG、WebP。`)
-        continue
+    const remaining = Math.max(0, MAX_IMAGES - images.length)
+
+    try {
+      for (const file of picked) {
+        if (!ACCEPTED_MIME.includes(file.type)) {
+          problems.push(`「${file.name}」不是支持的类型，只收 JPG、PNG、WebP。`)
+          continue
+        }
+        if (file.size > MAX_IMAGE_BYTES) {
+          problems.push(`「${file.name}」有 ${formatBytes(file.size)}，超过 5MB 了，换一张小一点的。`)
+          continue
+        }
+        if (loaded.length >= remaining) {
+          problems.push('截图最多 5 张，多出来的没有加进去。')
+          break
+        }
+        try {
+          loaded.push({
+            name: file.name,
+            mime: file.type,
+            bytes: file.size,
+            dataUrl: await readAsDataUrl(file),
+          })
+        } catch {
+          problems.push(`「${file.name}」没能读出来，再选一次试试。`)
+        }
       }
-      if (file.size > MAX_IMAGE_BYTES) {
-        problems.push(`「${file.name}」有 ${formatBytes(file.size)}，超过 5MB 了，换一张小一点的。`)
-        continue
+      if (loaded.length > 0) {
+        setImages((current) => [...current, ...loaded].slice(0, MAX_IMAGES))
       }
-      if (next.length >= MAX_IMAGES) {
-        problems.push('截图最多 5 张，多出来的没有加进去。')
-        break
-      }
-      try {
-        next.push({
-          name: file.name,
-          mime: file.type,
-          bytes: file.size,
-          dataUrl: await readAsDataUrl(file),
-        })
-      } catch {
-        problems.push(`「${file.name}」没能读出来，再选一次试试。`)
-      }
+      setError(problems.join(' '))
+      setDone(false)
+    } finally {
+      imageReadInFlightRef.current = false
+      setReadingImages(false)
     }
-    setImages(next)
-    setError(problems.join(' '))
-    setDone(false)
   }
 
   const removeImage = (index: number) => {
@@ -108,7 +121,7 @@ export default function FeedbackPage({ onBack }: Props) {
   }
 
   const handleSubmit = async () => {
-    if (submitting) return
+    if (submitting || readingImages || imageReadInFlightRef.current) return
     const trimmed = content.trim()
     if (!trimmed) {
       setError('先写点内容再提交吧。')
@@ -193,7 +206,7 @@ export default function FeedbackPage({ onBack }: Props) {
                 className="entry-row"
                 role="radio"
                 aria-checked={selected}
-                disabled={submitting}
+                disabled={submitting || readingImages}
                 onClick={() => {
                   setType(option.value)
                   setDone(false)
@@ -217,7 +230,7 @@ export default function FeedbackPage({ onBack }: Props) {
             maxLength={MAX_CONTENT_LENGTH}
             placeholder="遇到的情况、想要的功能，或者哪里用起来别扭，都可以写在这里。"
             value={content}
-            disabled={submitting}
+            disabled={submitting || readingImages}
             onChange={(e) => {
               setContent(e.target.value)
               setDone(false)
@@ -234,7 +247,7 @@ export default function FeedbackPage({ onBack }: Props) {
             type="file"
             accept="image/jpeg,image/png,image/webp"
             multiple
-            disabled={submitting}
+            disabled={submitting || readingImages}
             onChange={(e) => void pickImages(e)}
             aria-label="选择截图"
           />
@@ -242,7 +255,7 @@ export default function FeedbackPage({ onBack }: Props) {
             type="button"
             className="btn btn-ghost"
             onClick={() => fileInputRef.current?.click()}
-            disabled={submitting || images.length >= MAX_IMAGES}
+            disabled={submitting || readingImages || images.length >= MAX_IMAGES}
           >
             添加截图
           </button>
@@ -254,14 +267,14 @@ export default function FeedbackPage({ onBack }: Props) {
             <label>已选的截图（{images.length} / {MAX_IMAGES}）</label>
             <div className="profile-group-card">
               {images.map((image, index) => (
-                <div className="entry-row" key={`${image.name}-${index}`}>
-                  <span className="entry-label">{image.name}</span>
+                <div className="entry-row feedback-image-row" key={`${image.name}-${index}`}>
+                  <span className="entry-label feedback-image-name">{image.name}</span>
                   <span className="entry-status">{mimeLabel(image.mime)} · {formatBytes(image.bytes)}</span>
                   <button
                     type="button"
                     className="btn btn-ghost"
                     onClick={() => removeImage(index)}
-                    disabled={submitting}
+                    disabled={submitting || readingImages}
                     aria-label={`移除 ${image.name}`}
                   >
                     移除
@@ -274,8 +287,8 @@ export default function FeedbackPage({ onBack }: Props) {
       </div>
 
       <div className="settings-actions">
-        <button type="button" className="btn btn-primary" onClick={() => void handleSubmit()} disabled={submitting}>
-          {submitting ? '提交中…' : '提交'}
+        <button type="button" className="btn btn-primary" onClick={() => void handleSubmit()} disabled={submitting || readingImages}>
+          {submitting ? '提交中…' : readingImages ? '正在读取截图…' : '提交'}
         </button>
       </div>
 
