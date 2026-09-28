@@ -302,7 +302,7 @@ export default function App() {
   }
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
   const [settingsPrivacyOpen, setSettingsPrivacyOpen] = useState(false)
-  const [notificationFrom, setNotificationFrom] = useState<'home' | 'settings'>('home')
+  const [, setNotificationFrom] = useState<'home' | 'settings'>('home')
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
