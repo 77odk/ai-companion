@@ -32,7 +32,7 @@ export function fileToAvatarDataUrl(file: File): Promise<string> {
         }
         ctx.drawImage(img, sx, sy, size, size, 0, 0, AVATAR_SIZE, AVATAR_SIZE)
         resolve(canvas.toDataURL('image/jpeg', 0.82))
-      } catch (e) {
+      } catch {
         reject(new Error('图片处理失败，请换一张试试'))
       } finally {
         URL.revokeObjectURL(url)
