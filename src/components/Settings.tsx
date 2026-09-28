@@ -1029,7 +1029,7 @@ function MyProfileDetail({ onBack }: { onBack: () => void }) {
           <span>所在城市</span>
           <input className="profile-bio" type="text" placeholder="例如：杭州" value={user.city ?? ''} maxLength={40} onChange={(e) => updateUser({ city: e.target.value })} autoComplete="address-level2" />
         </label>
-        <p className="profile-city-note">仅用于为你提供当地天气，不会用于其他用途。</p>
+        <p className="profile-city-note">用于当地天气；开启首页天气后，城市和当前天气也可作为对话上下文发送给你选择的模型服务，让 TA 知道你那边的天气。</p>
         {picking && <div className="profile-avatar-pick"><AvatarPicker value={user.avatar} onChange={(avatar) => updateUser({ avatar })} /></div>}
       </div>
     </div>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import MessageBubble from './MessageBubble'
 import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
-import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, getContextUsage, setContextUsage, type ContextUsageState, type StoredMessage } from '../lib/storage'
+import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadUserProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, getContextUsage, setContextUsage, type ContextUsageState, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
 import { getAccount } from '../lib/sync'
@@ -52,6 +52,7 @@ import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
 import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
 import { estimateToken } from '../lib/token'
 import { calibrateContextFactor, contentTokensOf, loadContextFactor, saveContextFactor, usageMessages } from '../lib/contextUsage'
+import { buildUserWeatherContext, readUserWeatherContext } from '../lib/homeWeather'
 import { clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, savePendingMemoryCorrection, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 
 /**
@@ -1160,6 +1161,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       if (runtimeCtx) {
         contextBlocks.push({ id: 'runtime', content: runtimeCtx, priority: 'runtime' })
       }
+    }
+    const userWeather = readUserWeatherContext(loadUserProfile().city ?? '')
+    if (userWeather) {
+      contextBlocks.push({
+        id: 'user-weather',
+        content: buildUserWeatherContext(userWeather, lang),
+        priority: 'ambient',
+      })
     }
     const identityCtx = buildIdentityContext(activeSessionId || undefined, lang)
     if (identityCtx) {

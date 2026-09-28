@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getActiveSessionId, getBusyState, getSessionsCache, getSessionLang } from '../lib/sessionStore'
 import { getFirstSeen, loadAIProfile, loadSettings, loadUserProfile, saveUserProfile } from '../lib/storage'
-import { isHomeWeatherEnabled, loadHomeWeather, setHomeWeatherEnabled, type HomeWeather } from '../lib/homeWeather'
+import { isHomeWeatherEnabled, loadHomeWeather, setHomeWeatherEnabled, setUserWeatherChatEnabled, type HomeWeather } from '../lib/homeWeather'
 import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import {
   addAnniversary,
@@ -159,6 +159,7 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
     saveUserProfile({ ...profile, city })
     setUserCity(city)
     setHomeWeatherEnabled(true)
+    setUserWeatherChatEnabled(true)
     setWeatherEnabledState(true)
     setWeatherSetupOpen(false)
   }
@@ -693,7 +694,7 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
               <button type="button" onClick={() => setWeatherSetupOpen(false)} aria-label="关闭">×</button>
             </div>
             <p className="home-weather-consent-copy">
-              忆文会使用你填写的城市，通过 Open-Meteo 获取当前天气。城市会同步到「关于我」，并发送给天气服务用于获取天气。
+              忆文会使用你填写的城市，通过 Open-Meteo 获取当前天气。城市会同步到「关于我」，并发送给 Open-Meteo 获取天气；开启后，城市和当前天气也会作为对话上下文发送给你选择的模型服务，让 TA 知道你那边的天气。
             </p>
             <label className="home-weather-city-field">
               <span>城市</span>
