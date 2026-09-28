@@ -24,8 +24,14 @@ assert.match(page, /Authorization: `Bearer \$\{token\}`/)
 // 三值 kind：update / announcement / account
 assert.match(page, /kind !== 'update' && item\.kind !== 'announcement' && item\.kind !== 'account'/)
 assert.match(page, /return '账号提醒'/)
-// publishedAt 兼容 ISO 与 YYYY-MM-DD
+// publishedAt 兼容 ISO 与 YYYY-MM-DD；日期-only 直接按原年月日展示，不能被本地时区挪到前一天
 assert.match(page, /T00:00:00Z/)
+assert.match(page, /const dateOnly = \/\^\(\\d\{4\}\)\-\(\\d\{2\}\)\-\(\\d\{2\}\)\$\/.exec\(trimmed\)/)
+// 数字或字符串通知 id 都要能接住，统一落成 string key
+assert.match(page, /typeof item\.id === 'string'/)
+assert.match(page, /typeof item\.id === 'number'/)
+assert.match(page, /Number\.isSafeInteger\(item\.id\)/)
+assert.match(page, /id = String\(item\.id\)/)
 // 拉到数据后上抛 revision（App 统一回写已读）
 assert.match(page, /onRead\?\.\(revision\)/)
 
@@ -119,9 +125,9 @@ const groups = profileGroups(settings)
 const byTitle = new Map(groups.map((group) => [group.title, group]))
 
 assert.ok(byTitle.has('使用与支持'), '缺少「使用与支持」分组')
-assert.ok(byTitle.has('账号与同步'), '缺少「账号与同步」分组')
+assert.ok(byTitle.has('账号与隐私'), '缺少「账号与隐私」分组')
 assert.ok(!byTitle.has('开始使用'), '「开始使用」应改名为「使用与支持」')
-assert.ok(!byTitle.has('账号与隐私'), '「账号与隐私」应改名为「账号与同步」')
+assert.ok(!byTitle.has('账号与同步'), '不应把原有「账号与隐私」分组改成「账号与同步」')
 
 const support = byTitle.get('使用与支持')
 const supportWanted = ['使用指南', 'API 设置', '消息与通知', '反馈与建议']
@@ -137,17 +143,17 @@ assert.deepEqual(
 assert.match(support.body, /label="消息与通知" onClick=\{onOpenNotifications\} unread=\{hasUnreadNotifications\}/)
 assert.match(support.body, /label="反馈与建议" onClick=\{onOpenFeedback\}/)
 
-const account = byTitle.get('账号与同步')
-const accountWanted = ['隐私', '外观', '关于忆文', '回到欢迎页']
+const account = byTitle.get('账号与隐私')
+const accountWanted = ['账号与同步', '隐私', '外观', '关于忆文', '回到欢迎页']
 for (const label of accountWanted) {
-  assert.ok(account.labels.includes(label), `「账号与同步」组内缺少「${label}」`)
+  assert.ok(account.labels.includes(label), `「账号与隐私」组内缺少「${label}」`)
 }
 assert.deepEqual(
   accountWanted.map((label) => account.labels.indexOf(label)),
   [...accountWanted.map((label) => account.labels.indexOf(label))].sort((a, b) => a - b),
-  '「账号与同步」组内顺序应为 隐私 → 外观 → 关于忆文 → 回到欢迎页',
+  '「账号与隐私」组内顺序应保持 账号与同步 → 隐私 → 外观 → 关于忆文 → 回到欢迎页',
 )
-assert.match(account.body, /<UpdateControls \/>/, '「检查更新」入口应留在「账号与同步」组末尾')
+assert.match(account.body, /<UpdateControls \/>/, '「检查更新」入口应留在「账号与隐私」组末尾')
 assert.doesNotMatch(account.body, /消息与通知/, '「消息与通知」应挪到「使用与支持」组')
 
 // 其他分组一律不动（不重排、不删除、不改名）
