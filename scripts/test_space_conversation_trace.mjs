@@ -71,14 +71,14 @@ topics = loadChatTopics()
 assert.equal(isConversationMaterialCandidate(topics[0]), true)
 assert.equal(topics[0].pairVersion, 1)
 
-console.log('\n[3] 粗筛只做机械信息密度，不做中英文事件词表')
-assert.equal(hasConcreteTopicInfo('哈哈哈哈哈哈哈哈'), false)
-assert.equal(hasConcreteTopicInfo('好的好的好的'), false)
+console.log('\n[3] 候选门只验证文本存在，不在本地判断内容意义')
+assert.equal(hasConcreteTopicInfo('哈哈哈哈哈哈哈哈'), true)
+assert.equal(hasConcreteTopicInfo('好的好的好的'), true)
 assert.equal(hasConcreteTopicInfo('在吗，我跟你说个事'), true)
 assert.equal(hasConcreteTopicInfo('今天好累'), true)
 assert.equal(hasConcreteTopicInfo('失恋了'), true)
 assert.equal(hasConcreteTopicInfo('好难过'), true)
-assert.equal(hasConcreteTopicInfo('哈哈哈'), false)
+assert.equal(hasConcreteTopicInfo('哈哈哈'), true)
 
 reset()
 const shortTs = now - 2 * HOUR
