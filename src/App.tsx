@@ -69,8 +69,9 @@ const ProductIntro = lazy(() => import('./components/ProductIntro'))
 const RolesPage = lazy(() => import('./components/RolesPage'))
 const SpaceLife = lazy(() => import('./components/SpaceLife'))
 const Memory = lazy(loadMemoryView)
+const NotificationsPage = lazy(() => import('./components/NotificationsPage'))
 
-type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'loading'
+type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'notifications' | 'loading'
 
 // 公开路由 = auth 的游客白名单 + App 层例外（产品介绍页）。
 // 「产品介绍页」的公开特例只留在 App 层，不写进 src/lib/auth.ts 的 PUBLIC_VIEWS。
@@ -301,6 +302,7 @@ export default function App() {
   }
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
   const [settingsPrivacyOpen, setSettingsPrivacyOpen] = useState(false)
+  const [, setNotificationFrom] = useState<'home' | 'settings'>('home')
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
@@ -504,6 +506,11 @@ export default function App() {
   const openSettings = (target: SettingsPage) => {
     setSettingsTarget(target)
     navigate('settings')
+  }
+
+  const openNotifications = (from: 'home' | 'settings') => {
+    setNotificationFrom(from)
+    navigate('notifications')
   }
 
   const openSettingsRoot = () => {
@@ -877,6 +884,7 @@ export default function App() {
                 onGoChat={() => navigate('chat')}
                 onGoLife={() => goView('spacelife')}
                 onGoAnniversary={() => openSettings('anniversary')}
+                onGoNotifications={() => openNotifications('home')}
               />
             )}
             {view === 'roles' && (
@@ -914,6 +922,7 @@ export default function App() {
                 initialPage={settingsTarget}
                 onAnniversaryBack={settingsTarget === 'anniversary' ? () => navigate('home') : undefined}
                 onPrivacyOpenChange={setSettingsPrivacyOpen}
+                onGoNotifications={() => openNotifications('settings')}
                 onGoWelcome={() => navigate('welcome')}
                 onGoGuide={() => openGuide('settings')}
                 onGoWorkChat={() => navigate('chat')}
@@ -932,6 +941,9 @@ export default function App() {
                   navigate('chatprofile')
                 }}
               />
+            )}
+            {view === 'notifications' && (
+              <NotificationsPage onBack={() => window.history.back()} />
             )}
             {view === 'aispace' && (
               <AISpace

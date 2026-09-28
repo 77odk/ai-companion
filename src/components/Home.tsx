@@ -50,6 +50,7 @@ interface Props {
   onGoChat: () => void
   onGoLife: () => void
   onGoAnniversary: () => void
+  onGoNotifications: () => void
 }
 
 function pad2(n: number): string {
@@ -124,7 +125,7 @@ function periodSub(a: Anniversary, now: number): string {
 type TimeKind = 'birthday' | 'period'
 type TimeSheet = { kind: TimeKind; mode: 'add' | 'edit'; id?: string } | null
 
-export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
+export default function Home({ onGoChat, onGoLife, onGoAnniversary, onGoNotifications }: Props) {
   const sid = getActiveSessionId() || undefined
   const now = useMemo(() => new Date(), [])
   const scene = getHomeScene(now)
@@ -133,7 +134,6 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   const [weather, setWeather] = useState<HomeWeather | null>(null)
   const [weatherSetupOpen, setWeatherSetupOpen] = useState(false)
   const [weatherCityDraft, setWeatherCityDraft] = useState(userCity)
-  const [inboxOpen, setInboxOpen] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -422,7 +422,7 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
       <button
         type="button"
         className="home-inbox-button"
-        onClick={() => setInboxOpen(true)}
+        onClick={onGoNotifications}
         aria-label="消息与通知"
         title="消息与通知"
       >
@@ -714,20 +714,7 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
         </div>
       )}
 
-      {inboxOpen && (
-        <div className="home-inbox-mask" role="presentation" onClick={() => setInboxOpen(false)}>
-          <section className="home-inbox-sheet" role="dialog" aria-modal="true" aria-label="消息与通知" onClick={(e) => e.stopPropagation()}>
-            <div className="home-inbox-head">
-              <h2>消息与通知</h2>
-              <button type="button" onClick={() => setInboxOpen(false)} aria-label="关闭">×</button>
-            </div>
-            <div className="home-inbox-empty">
-              <strong>暂时没有新消息</strong>
-              <p>版本更新、系统公告和重要账号提醒会出现在这里。</p>
-            </div>
-          </section>
-        </div>
-      )}
+
     </HomeScene>
   )
 }

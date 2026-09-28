@@ -63,7 +63,7 @@ import {
 type TestState = 'idle' | 'testing' | 'success' | 'error'
 
 /** 设置页子页：使用指南已抽成 App 独立 view（guide），不再嵌在这里 */
-export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary' | 'profile' | 'privacy' | 'reply' | 'notifications'
+export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary' | 'profile' | 'privacy' | 'reply'
 
 interface Props {
   onGoWelcome?: () => void
@@ -85,9 +85,10 @@ interface Props {
   onAnniversaryBack?: () => void
   /** 隐私详情页是全屏二级页：通知 App 隐藏底部导航。 */
   onPrivacyOpenChange?: (open: boolean) => void
+  onGoNotifications?: () => void
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onAnniversaryBack, onPrivacyOpenChange }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onAnniversaryBack, onPrivacyOpenChange, onGoNotifications }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
 
   useEffect(() => {
@@ -107,9 +108,6 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
   }
   if (page === 'reply') {
     return <ReplyLengthDetail onBack={() => setPage('main')} />
-  }
-  if (page === 'notifications') {
-    return <NotificationsDetail onBack={() => setPage('main')} />
   }
   if (page === 'about') {
     return <AboutDetail onBack={() => setPage('main')} />
@@ -142,7 +140,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenAppearance={() => setPage('appearance')}
       onOpenAnniversary={() => setPage('anniversary')}
       onOpenReply={() => setPage('reply')}
-      onOpenNotifications={() => setPage('notifications')}
+      onOpenNotifications={() => onGoNotifications?.()}
       onGoRoles={() => onGoRoles?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
       onGoProfile={() => onGoProfile?.()}
@@ -294,18 +292,6 @@ function MainCenter({
           退出登录
         </button>
       )}
-    </div>
-  )
-}
-
-function NotificationsDetail({ onBack }: { onBack: () => void }) {
-  return (
-    <div className="page settings-page">
-      <DetailHeader title="消息与通知" onBack={onBack} />
-      <div className="settings-card notification-empty-card">
-        <strong>暂时没有新消息</strong>
-        <p className="hint">版本更新、系统公告和重要账号提醒会集中在这里。TA 想对你说的话仍然只在聊天里。</p>
-      </div>
     </div>
   )
 }
