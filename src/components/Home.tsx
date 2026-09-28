@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getActiveSessionId, getBusyState, getSessionsCache, getSessionLang } from '../lib/sessionStore'
-import { getFirstSeen, loadAIProfile, loadSettings, loadUserProfile } from '../lib/storage'
-import { loadHomeWeather, type HomeWeather } from '../lib/homeWeather'
+import { getFirstSeen, loadAIProfile, loadSettings, loadUserProfile, saveUserProfile } from '../lib/storage'
+import { isHomeWeatherEnabled, loadHomeWeather, setHomeWeatherEnabled, type HomeWeather } from '../lib/homeWeather'
 import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import {
   addAnniversary,
@@ -128,13 +128,16 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   const sid = getActiveSessionId() || undefined
   const now = useMemo(() => new Date(), [])
   const scene = getHomeScene(now)
-  const userCity = useMemo(() => loadUserProfile().city?.trim() ?? '', [])
+  const [userCity, setUserCity] = useState(() => loadUserProfile().city?.trim() ?? '')
+  const [weatherEnabled, setWeatherEnabledState] = useState(() => isHomeWeatherEnabled())
   const [weather, setWeather] = useState<HomeWeather | null>(null)
+  const [weatherSetupOpen, setWeatherSetupOpen] = useState(false)
+  const [weatherCityDraft, setWeatherCityDraft] = useState(userCity)
   const [inboxOpen, setInboxOpen] = useState(false)
 
   useEffect(() => {
     let active = true
-    if (!userCity) {
+    if (!userCity || !weatherEnabled) {
       setWeather(null)
       return () => { active = false }
     }
@@ -142,7 +145,23 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
       if (active) setWeather(next)
     })
     return () => { active = false }
-  }, [userCity])
+  }, [userCity, weatherEnabled])
+
+  const openWeatherSetup = () => {
+    setWeatherCityDraft(userCity)
+    setWeatherSetupOpen(true)
+  }
+
+  const saveWeatherSetup = () => {
+    const city = weatherCityDraft.trim()
+    if (!city) return
+    const profile = loadUserProfile()
+    saveUserProfile({ ...profile, city })
+    setUserCity(city)
+    setHomeWeatherEnabled(true)
+    setWeatherEnabledState(true)
+    setWeatherSetupOpen(false)
+  }
   const firstSeen = useMemo(() => getFirstSeen(sid), [sid])
   const days = useMemo(() => computeDaysKnown(firstSeen), [firstSeen])
   const taName = useMemo(() => {
@@ -421,7 +440,12 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
                 <small>{weather.city} · {weather.label}</small>
               </span>
             </>
-          ) : null}
+          ) : (
+            <button type="button" className="home-weather-setup-button" onClick={openWeatherSetup}>
+              <span aria-hidden="true">☁</span>
+              <span>{userCity ? '开启天气' : '设置天气'}</span>
+            </button>
+          )}
         </header>
 
         <section className="home-time" aria-label="相伴时间">
@@ -660,6 +684,34 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
           </div>
         </div>
       )}
+      {weatherSetupOpen && (
+        <div className="home-inbox-mask" role="presentation" onClick={() => setWeatherSetupOpen(false)}>
+          <section className="home-inbox-sheet home-weather-setup-sheet" role="dialog" aria-modal="true" aria-label="设置当地天气" onClick={(e) => e.stopPropagation()}>
+            <div className="home-inbox-head">
+              <h2>{userCity ? '开启当地天气' : '你在哪座城市？'}</h2>
+              <button type="button" onClick={() => setWeatherSetupOpen(false)} aria-label="关闭">×</button>
+            </div>
+            <p className="home-weather-consent-copy">
+              忆文会使用你填写的城市，通过 Open-Meteo 获取当前天气。城市会同步到「关于我」，并发送给天气服务用于获取天气。
+            </p>
+            <label className="home-weather-city-field">
+              <span>城市</span>
+              <input
+                value={weatherCityDraft}
+                onChange={(e) => setWeatherCityDraft(e.target.value)}
+                placeholder="例如：武汉"
+                autoComplete="address-level2"
+                autoFocus
+              />
+            </label>
+            <div className="home-weather-setup-actions">
+              <button type="button" className="secondary" onClick={() => setWeatherSetupOpen(false)}>暂不开启</button>
+              <button type="button" className="primary" disabled={!weatherCityDraft.trim()} onClick={saveWeatherSetup}>保存并开启天气</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {inboxOpen && (
         <div className="home-inbox-mask" role="presentation" onClick={() => setInboxOpen(false)}>
           <section className="home-inbox-sheet" role="dialog" aria-modal="true" aria-label="消息与通知" onClick={(e) => e.stopPropagation()}>
