@@ -11,7 +11,7 @@
 import { getSessionsCache } from './sessionStore.ts'
 import { resolveRolePersona } from './sessionProfile.ts'
 import { loadPersona } from './storage.ts'
-import type { Lang } from './langDetect.ts'
+import { detectLang, type Lang } from './langDetect.ts'
 import { formatAttributedLine } from './promptAttribution.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { resolveIdentityMode, type IdentityMode } from './companionPolicy.ts'
@@ -33,6 +33,10 @@ export interface TaRuntimeState {
   source: 'routine' | 'persona' | 'chat' | 'idle'
   /** 最近活动（最新在前，含当前，最多 3 个）；旧数据可缺省 */
   recentActivityIds?: string[]
+  /** Home「TA 此刻」优先展示的角色原话精简版；只来自已通过当前态判定的同一条 TA 最终回复。 */
+  displayText?: string
+  /** displayText 的原始语言；切换语言时不硬显示旧语言，回落 activity 映射。 */
+  displayLang?: Lang
 }
 
 /** 时段（够用即可，不做细粒度规划器） */
@@ -345,6 +349,47 @@ function explicitSelfCurrentClause(clause: string): boolean {
   return /\b(?:i'm|i am|i’ll|i'll|i will|i'm going to|i am going to|let me|i just|i've just|i have just)\b/i.test(t)
 }
 
+function compactRuntimeDisplayText(clause: string, lang: Lang): string {
+  let t = String(clause ?? '').trim().replace(/^[“”"'‘’]+|[“”"'‘’]+$/g, '')
+  if (!t) return ''
+
+  if (lang === 'zh') {
+    // Home 标题已经是「TA 此刻」，这里只保留 TA 自己说的动作核心，去掉“我/现在/正在”等壳。
+    t = t.replace(/^(?:好|嗯|行|那|诶|哎)[，,\s]*/u, '')
+    t = t.replace(/^我(?:现在)?(?:正(?:在)?|还在|在)?/u, '')
+    t = t.replace(/^(?:现在|正(?:在)?|还在|在)/u, '')
+    t = t.trim()
+    if (!t) return ''
+    const chars = Array.from(t)
+    return chars.length > 24 ? `${chars.slice(0, 24).join('')}…` : t
+  }
+
+  t = t.replace(/^(?:okay|ok|well|yeah|yep|sure)[,.:;\s-]*/i, '')
+  t = t.replace(/^(?:i['’]?m|i am)\s+/i, '')
+  t = t.replace(/^i\s+(?:just\s+)?/i, '')
+  t = t.trim()
+  if (!t) return ''
+  return t.length > 64 ? `${t.slice(0, 64).trimEnd()}…` : t
+}
+
+function findRuntimeDisplayCandidate(
+  text: string,
+  activityId: string,
+): { text: string; lang: Lang } | null {
+  let candidate: { text: string; lang: Lang } | null = null
+  for (const clause of textClauses(text)) {
+    if (isClearlyOtherPersonClause(clause) || blockedAsFutureOrNegative(clause) || !explicitSelfCurrentClause(clause)) continue
+    for (const rule of RUNTIME_TEXT_START_RULES) {
+      if (rule.activityId !== activityId) continue
+      if (!rule.zh.test(clause) && !rule.en.test(clause)) continue
+      const lang = detectLang(clause)
+      const display = compactRuntimeDisplayText(clause, lang)
+      if (display) candidate = { text: display, lang }
+    }
+  }
+  return candidate
+}
+
 /** 纯判定：只根据 TA 最终可见回复 + 当前 Runtime 判断是否需要写回。 */
 export function detectTaRuntimeDecision(text: string, currentActivityId?: string): RuntimeTextDecision {
   const clauses = textClauses(text)
@@ -376,6 +421,7 @@ function createChatOverrideState(
   activity: RuntimeActivity,
   now: number,
   recentIds: readonly string[],
+  display: { text: string; lang: Lang } | null,
 ): TaRuntimeState {
   const maxMinutes = Math.max(activity.minMin, Math.min(activity.maxMin, CHAT_OVERRIDE_MAX_MS / 60000))
   const recentActivityIds = [activity.id, ...recentIds.filter((id) => id !== activity.id)].slice(0, 3)
@@ -387,6 +433,7 @@ function createChatOverrideState(
     updatedAt: now,
     source: 'chat',
     recentActivityIds,
+    ...(display ? { displayText: display.text, displayLang: display.lang } : {}),
   }
 }
 
@@ -421,8 +468,21 @@ export function syncTaRuntimeFromAssistantText(
     if (!activity) return null
     const mode = resolveIdentityMode(sessionId)
     if (!activityAllowedForMode(activity, mode)) return null
-    if (cur?.activityId === activity.id && now < cur.plannedUntil) return cur
-    const next = createChatOverrideState(activity, now, recentIds)
+    const display = findRuntimeDisplayCandidate(text, activity.id)
+    if (cur?.activityId === activity.id && now < cur.plannedUntil) {
+      if (!display || (cur.displayText === display.text && cur.displayLang === display.lang)) return cur
+      // 同一活动可以用 TA 后续更具体的原话刷新展示，但绝不延长 plannedUntil。
+      const next = {
+        ...cur,
+        displayText: display.text,
+        displayLang: display.lang,
+        updatedAt: now,
+      }
+      map[key] = next
+      saveAll(map)
+      return next
+    }
+    const next = createChatOverrideState(activity, now, recentIds, display)
     map[key] = next
     saveAll(map)
     return next
@@ -495,6 +555,8 @@ export function isTaRuntimeState(value: unknown): value is TaRuntimeState {
       && state.recentActivityIds.length <= 3
       && state.recentActivityIds.every((id) => typeof id === 'string' && id.length > 0)
     ))
+    && (state.displayText == null || typeof state.displayText === 'string')
+    && (state.displayLang == null || state.displayLang === 'zh' || state.displayLang === 'en')
 }
 
 /**
@@ -547,6 +609,7 @@ const EN_FALLBACK_LABEL = 'Doing their own thing'
  */
 export function runtimeDisplayLabel(runtime: TaRuntimeState | null | undefined, lang: Lang = 'zh'): string {
   if (!runtime || runtime.activityId === TA_RUNTIME_IDLE_ID) return ''
+  if (runtime.displayText && runtime.displayLang === lang) return runtime.displayText
   if (lang !== 'en') return runtime.label || ''
   const act = ACTIVITIES.find((a) => a.id === runtime.activityId)
   return act?.labelEn || EN_FALLBACK_LABEL
@@ -575,6 +638,6 @@ export function buildTaRuntimeContext(runtime: TaRuntimeState | null, lang: Lang
     '下面是你自己当前的生活状态，不是对方告诉你的，也不是你们共同的经历——更不是在说对方，绝不要把这件事写成对方在做：',
     '这是一条候选上下文：先理解用户这一句到底是不是在问你自己的当前/刚刚状态；如果不是，就完全忽略下面这条状态，不要主动提起。',
     '如果相关，只能使用下面这条状态本身；除非聊天历史另有明确依据，不得补写地点、人物、食物、原因、前后经过或其他生活细节。',
-    `${formatAttributedLine(runtime.label, 'SELF', 'zh')}，预计会持续到 ${until} 左右。`,
+    `${formatAttributedLine(runtimeDisplayLabel(runtime, 'zh'), 'SELF', 'zh')}，预计会持续到 ${until} 左右。`,
   ].join('\n')
 }
