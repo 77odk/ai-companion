@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getActiveSessionId, getBusyState, getSessionsCache, getSessionLang } from '../lib/sessionStore'
-import { getFirstSeen, loadAIProfile, loadSettings } from '../lib/storage'
+import { getFirstSeen, loadAIProfile, loadSettings, loadUserProfile } from '../lib/storage'
+import { loadHomeWeather, type HomeWeather } from '../lib/homeWeather'
 import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import {
   addAnniversary,
@@ -127,6 +128,21 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   const sid = getActiveSessionId() || undefined
   const now = useMemo(() => new Date(), [])
   const scene = getHomeScene(now)
+  const userCity = useMemo(() => loadUserProfile().city?.trim() ?? '', [])
+  const [weather, setWeather] = useState<HomeWeather | null>(null)
+  const [inboxOpen, setInboxOpen] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    if (!userCity) {
+      setWeather(null)
+      return () => { active = false }
+    }
+    void loadHomeWeather(userCity).then((next) => {
+      if (active) setWeather(next)
+    })
+    return () => { active = false }
+  }, [userCity])
   const firstSeen = useMemo(() => getFirstSeen(sid), [sid])
   const days = useMemo(() => computeDaysKnown(firstSeen), [firstSeen])
   const taName = useMemo(() => {
@@ -382,24 +398,30 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
   const milestonePct = Math.round(Math.min(1, Math.max(0, milestone.progress)) * 100)
 
   return (
-    <HomeScene scene={scene}>
-      {/* UI2-02：Web 更新 ↻（页头级小入口，复用现有 forceRefresh；区别于 ChatProfile「刷新对话」） */}
+    <HomeScene scene={scene} weather={weather}>
       <button
         type="button"
-        className="home-web-refresh"
-        onClick={() => void import('../lib/forceRefresh').then((m) => m.forceRefresh())}
-        aria-label="检查页面更新"
-        title="检查页面更新"
+        className="home-inbox-button"
+        onClick={() => setInboxOpen(true)}
+        aria-label="消息与通知"
+        title="消息与通知"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M20 12a8 8 0 1 1-2.34-5.66" />
-          <path d="M20 4v4h-4" />
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+          <path d="M10 21h4" />
         </svg>
       </button>
       <div className="home-inner">
-        <header className="home-brand">
-          <span className="home-brand-mark" aria-hidden="true">忆</span>
-          <span><strong>忆文</strong><small>ELUVIN</small></span>
+        <header className="home-weather-slot" aria-label={weather ? `${weather.city} ${weather.label} ${Math.round(weather.temperature)}度` : undefined}>
+          {weather ? (
+            <>
+              <span className={`home-weather-icon weather-${weather.visual}`} aria-hidden="true"><i /></span>
+              <span className="home-weather-copy">
+                <strong>{Math.round(weather.temperature)}°</strong>
+                <small>{weather.city} · {weather.label}</small>
+              </span>
+            </>
+          ) : null}
         </header>
 
         <section className="home-time" aria-label="相伴时间">
@@ -636,6 +658,20 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary }: Props) {
               </>
             )}
           </div>
+        </div>
+      )}
+      {inboxOpen && (
+        <div className="home-inbox-mask" role="presentation" onClick={() => setInboxOpen(false)}>
+          <section className="home-inbox-sheet" role="dialog" aria-modal="true" aria-label="消息与通知" onClick={(e) => e.stopPropagation()}>
+            <div className="home-inbox-head">
+              <h2>消息与通知</h2>
+              <button type="button" onClick={() => setInboxOpen(false)} aria-label="关闭">×</button>
+            </div>
+            <div className="home-inbox-empty">
+              <strong>暂时没有新消息</strong>
+              <p>版本更新、系统公告和重要账号提醒会出现在这里。</p>
+            </div>
+          </section>
         </div>
       )}
     </HomeScene>
