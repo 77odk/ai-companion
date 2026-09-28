@@ -485,6 +485,19 @@
   border-radius: 50%;
 }
 
+.home-inbox-unread-dot {
+  position: absolute;
+  z-index: 2;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid color-mix(in srgb, var(--home-bg, var(--el-surface-card)) 88%, transparent);
+  border-radius: 50%;
+  background: var(--el-danger);
+  box-sizing: content-box;
+}
+
 .home-inbox-button svg {
   position: relative;
   z-index: 1;
