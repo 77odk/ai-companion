@@ -601,7 +601,7 @@ export async function generatePendingPosts(
     }
 
     newPosts.push({ ...made.post, ...(sessionId ? { sessionId } : {}) })
-    bump(dk, made.post.source)
+    bump(dk, made.post.source === 'event' ? 'event' : made.post.source === 'conversation' ? 'conversation' : 'daily')
     // 把刚生成的动态纳入「最近动态」，避免同批下一条雷同（v3 克制：最多留 2 条）
     recent.unshift(made.post.text)
     if (recent.length > 2) recent.pop()
