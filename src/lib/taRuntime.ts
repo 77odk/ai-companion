@@ -11,7 +11,7 @@
 import { getSessionsCache } from './sessionStore.ts'
 import { resolveRolePersona } from './sessionProfile.ts'
 import { loadPersona } from './storage.ts'
-import { detectLang, type Lang } from './langDetect.ts'
+import type { Lang } from './langDetect.ts'
 import { formatAttributedLine } from './promptAttribution.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { resolveIdentityMode, type IdentityMode } from './companionPolicy.ts'
@@ -381,8 +381,11 @@ function findRuntimeDisplayCandidate(
     if (isClearlyOtherPersonClause(clause) || blockedAsFutureOrNegative(clause) || !explicitSelfCurrentClause(clause)) continue
     for (const rule of RUNTIME_TEXT_START_RULES) {
       if (rule.activityId !== activityId) continue
-      if (!rule.zh.test(clause) && !rule.en.test(clause)) continue
-      const lang = detectLang(clause)
+      const zhMatch = rule.zh.test(clause)
+      const enMatch = rule.en.test(clause)
+      if (!zhMatch && !enMatch) continue
+      // 展示语言跟随命中的语法规则，而不是整句字符占比；书名/歌名等外语内容不能把中文句式误判成英文。
+      const lang: Lang = zhMatch ? 'zh' : 'en'
       const display = compactRuntimeDisplayText(clause, lang)
       if (display) candidate = { text: display, lang }
     }
