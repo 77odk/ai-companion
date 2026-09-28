@@ -108,10 +108,10 @@ assert.match(feedback, /收到啦，我们会看到。回复会出现在消息�
 assert.match(feedback, /setContent\(''\)[\s\S]*setImages\(\[\]\)[\s\S]*setDone\(true\)/)
 assert.match(feedback, /没提交成功，网络可能开小差了。内容都还在/)
 // 提交期间冻结所有可修改表单控件，避免慢请求成功后清掉请求期间的新编辑。
-assert.match(feedback, /aria-checked=\{selected\}[\s\S]*disabled=\{submitting\}/)
-assert.match(feedback, /value=\{content\}[\s\S]*disabled=\{submitting\}/)
-assert.match(feedback, /multiple[\s\S]*disabled=\{submitting\}/)
-assert.match(feedback, /disabled=\{submitting \|\| images\.length >= MAX_IMAGES\}/)
+assert.match(feedback, /aria-checked=\{selected\}[\s\S]*disabled=\{submitting \|\| readingImages\}/)
+assert.match(feedback, /value=\{content\}[\s\S]*disabled=\{submitting \|\| readingImages\}/)
+assert.match(feedback, /multiple[\s\S]*disabled=\{submitting \|\| readingImages\}/)
+assert.match(feedback, /disabled=\{submitting \|\| readingImages \|\| images\.length >= MAX_IMAGES\}/)
 assert.match(feedback, /onClick=\{\(\) => removeImage\(index\)\}[\s\S]*disabled=\{submitting \|\| readingImages\}/)
 // 截图读取串行化：读取完成前不能再次选图或提交，合并使用 functional update 避免 stale closure 覆盖。
 assert.match(feedback, /imageReadInFlightRef = useRef\(false\)/)
