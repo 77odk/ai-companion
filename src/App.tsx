@@ -14,6 +14,8 @@ import {
   loadPersona,
   loadAIProfile,
   loadUserProfile,
+  getNotificationReadRevision,
+  setNotificationReadRevision as persistNotificationReadRevision,
   saveAIProfile,
   saveAIRemark,
   saveAIGender,
@@ -303,6 +305,9 @@ export default function App() {
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
   const [settingsPrivacyOpen, setSettingsPrivacyOpen] = useState(false)
   const [, setNotificationFrom] = useState<'home' | 'settings'>('home')
+  const [notificationRevision, setNotificationRevision] = useState(0)
+  const [notificationReadRevision, setNotificationReadRevisionState] = useState(() => getNotificationReadRevision())
+  const hasUnreadNotifications = notificationRevision > notificationReadRevision
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
@@ -395,6 +400,53 @@ export default function App() {
       void closeOldestCandidateWindowOnStartup()
     }
   }, [loggedIn])
+
+  useEffect(() => {
+    let active = true
+    const refresh = () => {
+      void fetch(`${import.meta.env.BASE_URL}notifications.json`, { cache: 'no-store' })
+        .then(async (response) => {
+          if (!response.ok) return
+          const payload = await response.json() as { schemaVersion?: unknown; revision?: unknown }
+          if (
+            active &&
+            payload.schemaVersion === 1 &&
+            typeof payload.revision === 'number' &&
+            Number.isInteger(payload.revision) &&
+            payload.revision >= 0
+          ) {
+            setNotificationRevision(payload.revision)
+          }
+        })
+        .catch(() => {
+          // 通知探测失败不影响首页/我的正常使用。
+        })
+    }
+
+    if (!loggedIn) {
+      setNotificationRevision(0)
+      return () => { active = false }
+    }
+
+    setNotificationReadRevisionState(getNotificationReadRevision())
+    refresh()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    const onOnline = () => refresh()
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', onOnline)
+    return () => {
+      active = false
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [loggedIn])
+
+  const markNotificationsRead = useCallback((revision: number) => {
+    persistNotificationReadRevision(revision)
+    setNotificationReadRevisionState((current) => Math.max(current, revision))
+  }, [])
 
   // 聊天页头部：返回箭头 + 小星球资料卡入口；顶栏标题 = 当前角色名（微信式）
   // controls 只需要 active session id，不依赖 session cache 已经补齐；避免新建/离线会话首帧缺 controls 与底部 safe-area。
@@ -885,6 +937,7 @@ export default function App() {
                 onGoLife={() => goView('spacelife')}
                 onGoAnniversary={() => openSettings('anniversary')}
                 onGoNotifications={() => openNotifications('home')}
+                hasUnreadNotifications={hasUnreadNotifications}
               />
             )}
             {view === 'roles' && (
@@ -923,6 +976,7 @@ export default function App() {
                 onAnniversaryBack={settingsTarget === 'anniversary' ? () => navigate('home') : undefined}
                 onPrivacyOpenChange={setSettingsPrivacyOpen}
                 onGoNotifications={() => openNotifications('settings')}
+                hasUnreadNotifications={hasUnreadNotifications}
                 onGoWelcome={() => navigate('welcome')}
                 onGoGuide={() => openGuide('settings')}
                 onGoWorkChat={() => navigate('chat')}
@@ -943,7 +997,7 @@ export default function App() {
               />
             )}
             {view === 'notifications' && (
-              <NotificationsPage onBack={() => window.history.back()} />
+              <NotificationsPage onBack={() => window.history.back()} onRead={markNotificationsRead} />
             )}
             {view === 'aispace' && (
               <AISpace
