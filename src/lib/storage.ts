@@ -673,6 +673,8 @@ export interface UserProfile {
   bio: string
   /** 用户手动填写的城市；仅供本地天气能力使用，不请求 GPS。旧资料可缺省。 */
   city?: string
+  /** 本机已读到的官方通知 feed revision；不进入 Cloud State user_profile payload。 */
+  notificationReadRevision?: number
 }
 
 const USER_PROFILE_KEY = 'ai_companion_user_profile'
@@ -689,6 +691,12 @@ export function loadUserProfile(): UserProfile {
       avatar: typeof p.avatar === 'string' && p.avatar.startsWith('data:') ? p.avatar : '',
       bio: typeof p.bio === 'string' ? p.bio : '',
       city: typeof p.city === 'string' ? p.city : '',
+      notificationReadRevision:
+        typeof p.notificationReadRevision === 'number' &&
+        Number.isInteger(p.notificationReadRevision) &&
+        p.notificationReadRevision >= 0
+          ? p.notificationReadRevision
+          : undefined,
     }
   } catch {
     return DEFAULT_USER_PROFILE
@@ -696,8 +704,32 @@ export function loadUserProfile(): UserProfile {
 }
 
 export function saveUserProfile(p: UserProfile): void {
-  localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(p))
+  const current = loadUserProfile()
+  const notificationReadRevision =
+    typeof p.notificationReadRevision === 'number' &&
+    Number.isInteger(p.notificationReadRevision) &&
+    p.notificationReadRevision >= 0
+      ? p.notificationReadRevision
+      : current.notificationReadRevision
+  localStorage.setItem(
+    USER_PROFILE_KEY,
+    JSON.stringify({
+      ...p,
+      ...(notificationReadRevision === undefined ? {} : { notificationReadRevision }),
+    }),
+  )
   notifyDataChanged()
+}
+
+export function getNotificationReadRevision(): number {
+  return loadUserProfile().notificationReadRevision ?? 0
+}
+
+export function setNotificationReadRevision(revision: number): void {
+  if (!Number.isInteger(revision) || revision < 0) return
+  const current = loadUserProfile()
+  if ((current.notificationReadRevision ?? 0) >= revision) return
+  saveUserProfile({ ...current, notificationReadRevision: revision })
 }
 
 // ---- 我的 AI（角色资料） ----
