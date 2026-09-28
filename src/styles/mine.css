@@ -148,6 +148,19 @@
   color: var(--el-text-secondary, var(--color-text-muted));
 }
 
+.entry-unread-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--el-danger);
+}
+
+.entry-unread-dot + .entry-chevron {
+  margin-left: 0;
+}
+
 .entry-chevron {
   width: var(--el-icon-small-size, 16px);
   height: var(--el-icon-small-size, 16px);
