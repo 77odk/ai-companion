@@ -15,9 +15,9 @@ test('home weather uses manual profile city and keyless Open-Meteo endpoints', (
   assert.doesNotMatch(weather, /apiKey|api_key/)
   assert.match(weather, /!isHomeWeatherEnabled\(\)/)
   assert.match(home, /保存并开启天气/)
-  assert.match(home, /填写城市即可开启当地天气，不会读取你的定位。天气由 Open-Meteo 提供。/)
+  assert.match(home, /填写城市即可开启当地天气，不会读取定位。天气由 Open-Meteo 提供；开启后，城市和天气也会发送给你选择的模型，让 TA 知道你这边的天气。/)
   assert.doesNotMatch(home, /城市会同步到「关于我」/)
-  assert.doesNotMatch(home, /作为对话上下文发送给你选择的模型服务/)
+  assert.match(home, /发送给你选择的模型/)
   assert.match(home, /saveUserProfile\(\{ \.\.\.profile, city \}\)/)
 })
 
