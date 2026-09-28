@@ -7,7 +7,7 @@ import {
 } from './cloudState.ts'
 import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE, notifyDataChanged } from './dataChange.ts'
 import { getAccount } from './sync.ts'
-import { collectAllAIProfiles, getSessionStart, setSessionStart } from './storage.ts'
+import { collectAllAIProfiles, getSessionStart, setSessionStart, loadUserProfile, saveUserProfile, type UserProfile } from './storage.ts'
 import { isIdentityMode, mergeProfileIdentityField, type IdentityMode } from './companionPolicy.ts'
 import { getPendingOps, getSessionsCache, removePendingOp, type CloudStatePendingOp } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
@@ -38,6 +38,7 @@ const ANNIVERSARIES_PREFIX = 'ai_companion_anniversaries_'
 const MAIN_ANNIVERSARY_KEY = 'ai_companion_main_anniversary'
 const ANNIVERSARY_VIEW_UPDATE = 'memory-updated'
 const AI_PROFILE_KEY = 'ai_companion_ai_profile'
+const USER_PROFILE_ENTITY = 'global'
 
 type JsonRecord = Record<string, unknown>
 
@@ -643,6 +644,57 @@ function captureAiProfiles(): void {
   profileSnapshot = next
 }
 
+
+type SyncedUserProfile = Pick<UserProfile, 'nickname' | 'bio' | 'city'>
+
+function syncedUserProfile(): SyncedUserProfile {
+  const profile = loadUserProfile()
+  return {
+    nickname: profile.nickname,
+    bio: profile.bio,
+    city: profile.city?.trim() ?? '',
+  }
+}
+
+function validUserProfile(value: unknown): SyncedUserProfile | null {
+  const item = record(value)
+  if (!item) return null
+  return {
+    nickname: typeof item.nickname === 'string' ? item.nickname : '',
+    bio: typeof item.bio === 'string' ? item.bio : '',
+    city: typeof item.city === 'string' ? item.city : '',
+  }
+}
+
+let userProfileSnapshot = ''
+function resetUserProfileSnapshot(): void {
+  userProfileSnapshot = JSON.stringify(syncedUserProfile())
+}
+
+function captureUserProfile(): void {
+  const value = syncedUserProfile()
+  const next = JSON.stringify(value)
+  if (next === userProfileSnapshot) return
+  userProfileSnapshot = next
+  queue('user_profile', USER_PROFILE_ENTITY, value)
+}
+
+function applyUserProfileEntity(entity: CloudStateEntity): void {
+  if (entity.entityId !== USER_PROFILE_ENTITY) return
+  const incoming = validUserProfile(entity.payload)
+  if (!incoming) return
+  const current = loadUserProfile()
+  saveUserProfile({ ...current, ...incoming })
+  userProfileSnapshot = JSON.stringify(syncedUserProfile())
+}
+
+function deleteUserProfileEntity(entity: CloudStateEntity): void {
+  if (entity.entityId !== USER_PROFILE_ENTITY) return
+  const current = loadUserProfile()
+  saveUserProfile({ ...current, nickname: '', bio: '', city: '' })
+  resetUserProfileSnapshot()
+}
+
 function legacyBackfillOpId(accountId: string, kind: string, entityId: string, stage = 'probe'): string {
   return ['p0a-v1', kind, encodeURIComponent(accountId), encodeURIComponent(entityId), stage].join(':')
 }
@@ -1056,6 +1108,10 @@ export function initCloudStateResourceAdapters(): void {
     apply: applyAiProfileEntity,
     delete: deleteAiProfileEntity,
   })
+  registerCloudStateAdapter('user_profile', {
+    apply: applyUserProfileEntity,
+    delete: deleteUserProfileEntity,
+  })
   registerCloudStateAdapter('default_role', {
     apply: applyDefaultRoleEntity,
     delete: deleteDefaultRoleEntity,
@@ -1078,8 +1134,9 @@ export function initCloudStateResourceAdapters(): void {
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureTaRuntime)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureWeeklyReviews)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAiProfiles)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureUserProfile)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureDefaultRole)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureReplyLengths)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureSessionStarts)
-  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot(); resetDefaultRoleSnapshot(); resetReplyLengthSnapshot(); resetSessionStartSnapshot() })
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot(); resetUserProfileSnapshot(); resetDefaultRoleSnapshot(); resetReplyLengthSnapshot(); resetSessionStartSnapshot() })
 }
