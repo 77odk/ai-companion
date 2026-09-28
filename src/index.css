@@ -3799,6 +3799,17 @@ textarea.persona-input {
   color: var(--color-text-muted);
 }
 
+.feedback-image-row .feedback-image-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feedback-image-row .btn {
+  flex: none;
+}
+
 .profile-card-link {
   width: 100%;
   flex-direction: row;
