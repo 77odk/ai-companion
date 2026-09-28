@@ -18,6 +18,7 @@ export interface HomeWeather {
 }
 
 const CACHE_KEY = 'eluvin_home_weather_v1'
+const CONSENT_KEY = 'eluvin_home_weather_consent_v1'
 const CACHE_MS = 30 * 60 * 1000
 const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search'
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast'
@@ -61,13 +62,27 @@ function writeCache(value: CachedWeather): void {
   try { localStorage.setItem(CACHE_KEY, JSON.stringify(value)) } catch { /* weather must never block Home */ }
 }
 
+
+export function isHomeWeatherEnabled(): boolean {
+  try { return localStorage.getItem(CONSENT_KEY) === 'yes' } catch { return false }
+}
+
+export function setHomeWeatherEnabled(enabled: boolean): void {
+  try {
+    if (enabled) localStorage.setItem(CONSENT_KEY, 'yes')
+    else localStorage.removeItem(CONSENT_KEY)
+  } catch {
+    // Consent persistence failure means the next request remains gated.
+  }
+}
+
 export function weatherVisualForCode(code: number): WeatherVisual {
   return weatherMeta(code).visual
 }
 
 export async function loadHomeWeather(cityInput: string, now = Date.now()): Promise<HomeWeather | null> {
   const city = cityInput.trim()
-  if (!city) return null
+  if (!city || !isHomeWeatherEnabled()) return null
 
   const cached = readCache(city)
   if (cached && now - cached.fetchedAt < CACHE_MS) return cached
