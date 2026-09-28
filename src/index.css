@@ -941,7 +941,7 @@ textarea.persona-input {
 }
 
 .account-tab.on {
-  background: #fff;
+  background: var(--el-static-white);
   color: var(--color-text, #222);
   font-weight: 600;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
@@ -6123,7 +6123,7 @@ textarea.persona-input {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--el-static-white);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   transition: transform 0.2s ease;
 }
@@ -6189,7 +6189,7 @@ textarea.persona-input {
   font-size: 15px;
   font-weight: 700;
   color: var(--color-primary-deep);
-  background: #fff;
+  background: var(--el-static-white);
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s;
 }
