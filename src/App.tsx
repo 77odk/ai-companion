@@ -802,6 +802,10 @@ export default function App() {
           chatLogTarget={pendingChatLogJump}
           onClose={() => {
             setProfileTarget(null)
+            if (pendingChatLogJump) {
+              window.history.back()
+              return
+            }
             window.history.back()
           }}
           onGoMine={() => navigate('settings')}
