@@ -86,9 +86,10 @@ interface Props {
   /** 隐私详情页是全屏二级页：通知 App 隐藏底部导航。 */
   onPrivacyOpenChange?: (open: boolean) => void
   onGoNotifications?: () => void
+  hasUnreadNotifications?: boolean
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onAnniversaryBack, onPrivacyOpenChange, onGoNotifications }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onAnniversaryBack, onPrivacyOpenChange, onGoNotifications, hasUnreadNotifications = false }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
 
   useEffect(() => {
@@ -141,6 +142,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenAnniversary={() => setPage('anniversary')}
       onOpenReply={() => setPage('reply')}
       onOpenNotifications={() => onGoNotifications?.()}
+      hasUnreadNotifications={hasUnreadNotifications}
       onGoRoles={() => onGoRoles?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
       onGoProfile={() => onGoProfile?.()}
@@ -188,6 +190,7 @@ function MainCenter({
   onOpenAnniversary,
   onOpenReply,
   onOpenNotifications,
+  hasUnreadNotifications,
   onGoRoles,
   onGoAboutMe,
   onGoProfile,
@@ -203,6 +206,7 @@ function MainCenter({
   onOpenAnniversary: () => void
   onOpenReply: () => void
   onOpenNotifications: () => void
+  hasUnreadNotifications: boolean
   onGoRoles?: () => void
   onGoAboutMe?: () => void
   onGoProfile?: () => void
@@ -279,7 +283,7 @@ function MainCenter({
           onClick={onOpenAccount}
           status={accountLabel ? '已登录' : '未登录'}
         />
-        <EntryRow icon={<NotificationIcon />} label="消息与通知" onClick={onOpenNotifications} />
+        <EntryRow icon={<NotificationIcon />} label="消息与通知" onClick={onOpenNotifications} unread={hasUnreadNotifications} />
         <EntryRow icon={<PrivacyIcon />} label="隐私" onClick={onOpenPrivacy} />
         <EntryRow icon={<PaletteIcon />} label="外观" onClick={onOpenAppearance} />
         <EntryRow icon={<InfoIcon />} label="关于忆文" onClick={onOpenAbout} />
@@ -369,18 +373,27 @@ function EntryRow({
   onClick,
   status,
   disabled = false,
+  unread = false,
 }: {
   icon: ReactNode
   label: string
   onClick?: () => void
   status?: string
   disabled?: boolean
+  unread?: boolean
 }) {
   return (
-    <button type="button" className={`entry-row${disabled ? ' entry-row-disabled' : ''}`} onClick={onClick} disabled={disabled}>
+    <button
+      type="button"
+      className={`entry-row${disabled ? ' entry-row-disabled' : ''}`}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={unread ? `${label}，有新消息` : undefined}
+    >
       <span className="entry-icon">{icon}</span>
       <span className="entry-label">{label}</span>
       {status && <span className="entry-status">{status}</span>}
+      {unread ? <span className="entry-unread-dot" aria-hidden="true" /> : null}
       <svg
         className="entry-chevron"
         viewBox="0 0 24 24"
