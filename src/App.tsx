@@ -21,7 +21,7 @@ import {
   saveAIGender,
   savePersona,
 } from './lib/storage'
-import { getToken, isLoggedIn, isPublicView } from './lib/auth'
+import { getToken, isLoggedIn, isPublicView, logout } from './lib/auth'
 import { createSession, listSessions } from './lib/sessionApi'
 import {
   getActiveSessionId,
@@ -422,6 +422,10 @@ export default function App() {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then(async (response) => {
+          if (response.status === 401) {
+            logout()
+            return
+          }
           if (!response.ok) return
           const payload = await response.json() as { revision?: unknown; unread?: unknown }
           if (!active) return
@@ -492,9 +496,13 @@ export default function App() {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ revision }),
-    }).catch(() => {
-      // 回写失败不影响本次浏览：下次进页会再回写一次。
     })
+      .then((response) => {
+        if (response.status === 401) logout()
+      })
+      .catch(() => {
+        // 回写失败不影响本次浏览：下次进页会再回写一次。
+      })
   }, [])
 
   // 聊天页头部：返回箭头 + 小星球资料卡入口；顶栏标题 = 当前角色名（微信式）
