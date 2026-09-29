@@ -785,6 +785,7 @@ export default function App() {
   // 登录墙返回：不登录，回欢迎页继续逛展示内容
   const handleGateBack = () => {
     if (view === 'feedback') setFeedbackDraft(emptyFeedbackDraft())
+    expiredAccountRef.current = null
     setGateTarget(null)
     setPendingTarget(null)
     setPendingNatural(null)
@@ -877,7 +878,12 @@ export default function App() {
             }}
           />
         ) : (
-          <LoginGate onDone={handleGateDone} onGoGuide={() => openGuide('gate')} onBack={handleGateBack} />
+          <LoginGate
+            onDone={handleGateDone}
+            onGoGuide={() => openGuide('gate')}
+            onBack={handleGateBack}
+            expectedAccount={expiredAccountRef.current ?? undefined}
+          />
         )
       ) : view === 'productintro' ? (
         <ProductIntro onBack={() => window.history.back()} onStart={handleWelcomeStart} />
