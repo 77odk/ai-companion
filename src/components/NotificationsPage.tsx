@@ -97,8 +97,9 @@ export default function NotificationsPage({ onBack, onRead }: Props) {
       signal: controller.signal,
     })
       .then(async (response) => {
+        if (controller.signal.aborted) return
         if (response.status === 401) {
-          logout()
+          if (getToken() === token) logout()
           return
         }
         if (!response.ok) throw new Error(`notifications ${response.status}`)
