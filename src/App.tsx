@@ -1105,7 +1105,11 @@ export default function App() {
               />
             )}
             {view === 'notifications' && (
-              <NotificationsPage onBack={() => window.history.back()} onRead={markNotificationsRead} />
+              <NotificationsPage
+                onBack={() => window.history.back()}
+                onRead={markNotificationsRead}
+                onAuthExpired={rememberExpiredAccount}
+              />
             )}
             {view === 'aispace' && (
               <AISpace
