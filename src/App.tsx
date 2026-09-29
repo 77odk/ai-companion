@@ -309,12 +309,10 @@ export default function App() {
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
   const [settingsPrivacyOpen, setSettingsPrivacyOpen] = useState(false)
   const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft>(() => emptyFeedbackDraft())
-  // 401 发生时保留原账号身份用于后续隔离；UI 锁定是否仍处于“直接恢复”流程单独管理。
+  // 401 发生时只保留原账号身份；下一次登录若换了账号，就走严格隔离路径。
   const expiredAccountRef = useRef<string | null>(null)
-  const [reauthLocked, setReauthLocked] = useState(false)
   const rememberExpiredAccount = useCallback(() => {
     expiredAccountRef.current = getAccount()?.account ?? null
-    setReauthLocked(true)
   }, [])
   const [, setNotificationFrom] = useState<'home' | 'settings'>('home')
   const [notificationRevision, setNotificationRevision] = useState(0)
@@ -438,7 +436,6 @@ export default function App() {
             const account = getAccount()
             if (account?.token === token) {
               expiredAccountRef.current = account.account
-              setReauthLocked(true)
               logout()
             }
             return
@@ -518,7 +515,6 @@ export default function App() {
         const account = getAccount()
         if (account?.token === token) {
           expiredAccountRef.current = account.account
-          setReauthLocked(true)
           logout()
         }
       })
@@ -708,7 +704,6 @@ export default function App() {
   const handleGateDone = async (): Promise<boolean | void> => {
     setGateTarget(null)
     setPendingTarget(null)
-    setReauthLocked(false)
     const expiredAccount = expiredAccountRef.current
     expiredAccountRef.current = null
     const currentAccount = getAccount()?.account ?? null
@@ -790,9 +785,7 @@ export default function App() {
   // 登录墙返回：不登录，回欢迎页继续逛展示内容
   const handleGateBack = () => {
     if (view === 'feedback') setFeedbackDraft(emptyFeedbackDraft())
-    // 退出“必须同账号”的直接恢复 UI，但保留原账号身份；
-    // 若用户随后主动登录别的账号，handleGateDone 仍能进入跨账号隔离路径。
-    setReauthLocked(false)
+    // 保留 401 前的账号身份；用户之后若登录另一个账号，仍会进入严格隔离路径。
     setGateTarget(null)
     setPendingTarget(null)
     setPendingNatural(null)
@@ -885,12 +878,7 @@ export default function App() {
             }}
           />
         ) : (
-          <LoginGate
-            onDone={handleGateDone}
-            onGoGuide={() => openGuide('gate')}
-            onBack={handleGateBack}
-            expectedAccount={reauthLocked ? (expiredAccountRef.current ?? undefined) : undefined}
-          />
+          <LoginGate onDone={handleGateDone} onGoGuide={() => openGuide('gate')} onBack={handleGateBack} />
         )
       ) : view === 'productintro' ? (
         <ProductIntro onBack={() => window.history.back()} onStart={handleWelcomeStart} />
