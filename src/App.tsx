@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Welcome from './components/Welcome'
 import type { NaturalSetup } from './components/RolePicker'
+import type { FeedbackDraft } from './components/FeedbackPage'
 import Chat from './components/Chat'
 import type { SettingsPage } from './components/Settings'
 import LoginGate from './components/LoginGate'
@@ -75,6 +76,8 @@ const NotificationsPage = lazy(() => import('./components/NotificationsPage'))
 const FeedbackPage = lazy(() => import('./components/FeedbackPage'))
 
 type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'notifications' | 'feedback' | 'loading'
+
+const emptyFeedbackDraft = (): FeedbackDraft => ({ type: 'bug', content: '', images: [] })
 
 // 公开路由 = auth 的游客白名单 + App 层例外（产品介绍页）。
 // 「产品介绍页」的公开特例只留在 App 层，不写进 src/lib/auth.ts 的 PUBLIC_VIEWS。
@@ -305,6 +308,7 @@ export default function App() {
   }
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
   const [settingsPrivacyOpen, setSettingsPrivacyOpen] = useState(false)
+  const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft>(() => emptyFeedbackDraft())
   const [, setNotificationFrom] = useState<'home' | 'settings'>('home')
   const [notificationRevision, setNotificationRevision] = useState(0)
   const [notificationReadRevision, setNotificationReadRevisionState] = useState(() => getNotificationReadRevision())
@@ -422,13 +426,13 @@ export default function App() {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then(async (response) => {
+          if (!active) return
           if (response.status === 401) {
-            logout()
+            if (getToken() === token) logout()
             return
           }
           if (!response.ok) return
           const payload = await response.json() as { revision?: unknown; unread?: unknown }
-          if (!active) return
           const revision = payload.revision
           if (typeof revision !== 'number' || !Number.isInteger(revision) || revision < 0) {
             return
@@ -498,7 +502,7 @@ export default function App() {
       body: JSON.stringify({ revision }),
     })
       .then((response) => {
-        if (response.status === 401) logout()
+        if (response.status === 401 && getToken() === token) logout()
       })
       .catch(() => {
         // 回写失败不影响本次浏览：下次进页会再回写一次。
@@ -624,6 +628,7 @@ export default function App() {
 
   // 反馈与建议：独立全屏页，返回走历史栈（与通知页一致）
   const openFeedback = () => {
+    setFeedbackDraft(emptyFeedbackDraft())
     navigate('feedback')
   }
 
@@ -674,6 +679,10 @@ export default function App() {
   const handleGateDone = async () => {
     setGateTarget(null)
     setPendingTarget(null)
+    if (view === 'feedback' || view === 'notifications') {
+      replaceView(view)
+      return
+    }
     const natural = pendingNatural
     if (!natural) {
       void redirectBySessions()
@@ -723,6 +732,7 @@ export default function App() {
 
   // 登录墙返回：不登录，回欢迎页继续逛展示内容
   const handleGateBack = () => {
+    if (view === 'feedback') setFeedbackDraft(emptyFeedbackDraft())
     setGateTarget(null)
     setPendingTarget(null)
     setPendingNatural(null)
@@ -895,7 +905,14 @@ export default function App() {
           onBack={() => window.history.back()}
         />
       ) : view === 'feedback' ? (
-        <FeedbackPage onBack={() => window.history.back()} />
+        <FeedbackPage
+          initialDraft={feedbackDraft}
+          onDraftChange={setFeedbackDraft}
+          onBack={() => {
+            setFeedbackDraft(emptyFeedbackDraft())
+            window.history.back()
+          }}
+        />
       ) : view === 'loading' ? (
         <div className="session-loading">
           {migration === 'failed' ? (
