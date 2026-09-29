@@ -9,6 +9,7 @@ const app = read('src/App.tsx')
 const page = read('src/components/NotificationsPage.tsx')
 const feedback = read('src/components/FeedbackPage.tsx')
 const settings = read('src/components/Settings.tsx')
+const loginForm = read('src/components/LoginForm.tsx')
 
 /* ---------- 1. 通知页：不再读静态 feed，改读后端 ---------- */
 
@@ -91,6 +92,9 @@ assert.match(app, /else if \(!allowLegacyFallback\) \{[\s\S]*setActiveSessionId\
 assert.match(app, /if \(allowLegacyFallback\) queueLegacyCloudStateBackfill\(\)/)
 assert.match(app, /resolveActiveSession\(sessions, allowLegacyFallback \? getActiveSessionId\(\) : ''\)/)
 assert.match(app, /replaceView\(allowLegacyFallback \? \(getLastPrimaryView\(\) \?\? 'home'\) : 'home'\)/)
+assert.match(app, /redirectBySessions\(\{ allowLegacyFallback: false \}\)[\s\S]*return false/)
+assert.match(loginForm, /const shouldSync = await onSuccess\?\.\(acct\)/)
+assert.match(loginForm, /if \(shouldSync !== false\) \{[\s\S]*await syncNow\(\)/)
 assert.match(app, /if \(view === 'feedback' \|\| view === 'notifications'\) \{[\s\S]*expiredAccount && currentAccount === expiredAccount[\s\S]*replaceView\(view\)[\s\S]*return/)
 assert.match(app, /const rememberExpiredAccount = useCallback\(\(\) => \{[\s\S]*expiredAccountRef\.current = getAccount\(\)\?\.account \?\? null[\s\S]*\}, \[\]\)/)
 assert.match(app, /onAuthExpired=\{rememberExpiredAccount\}/)
