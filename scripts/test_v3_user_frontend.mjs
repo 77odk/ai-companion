@@ -64,6 +64,7 @@ assert.match(app, /if \(!active\) return[\s\S]*response\.status === 401[\s\S]*ac
 assert.match(app, /response\.status !== 401[\s\S]*account\?\.token === token[\s\S]*expiredAccountRef\.current = account\.account[\s\S]*logout\(\)/)
 assert.match(app, /method: 'POST',[\s\S]*body: JSON\.stringify\(\{ revision \}\)/)
 assert.match(app, /onRead=\{markNotificationsRead\}/)
+assert.match(app, /<NotificationsPage[\s\S]*onAuthExpired=\{rememberExpiredAccount\}/)
 assert.match(app, /hasUnreadNotifications=\{hasUnreadNotifications\}/)
 // 较早发出的 GET 不能在 read 之后用 stale unread=true 把红点重新点亮；更高 revision 的新消息仍可正常点亮。
 assert.match(app, /notificationReadGuardRef = useRef\(\{ epoch: 0, revision: 0 \}\)/)
