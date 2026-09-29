@@ -85,7 +85,8 @@ assert.match(app, /view === 'feedback' \? \([\s\S]*<FeedbackPage[\s\S]*initialDr
 assert.match(app, /const expiredAccount = expiredAccountRef\.current[\s\S]*expiredAccountRef\.current = null/)
 assert.match(app, /if \(view === 'feedback' \|\| view === 'notifications'\) \{[\s\S]*expiredAccount && currentAccount === expiredAccount[\s\S]*replaceView\(view\)[\s\S]*return/)
 assert.match(app, /setFeedbackDraft\(emptyFeedbackDraft\(\)\)[\s\S]*setActiveSessionId\(''\)[\s\S]*setSessionsCache\(\[\]\)[\s\S]*redirectBySessions\(\)/)
-assert.match(app, /onAuthExpired=\{\(\) => \{[\s\S]*expiredAccountRef\.current = getAccount\(\)\?\.account \?\? null/)
+assert.match(app, /const rememberExpiredAccount = useCallback\(\(\) => \{[\s\S]*expiredAccountRef\.current = getAccount\(\)\?\.account \?\? null[\s\S]*\}, \[\]\)/)
+assert.match(app, /onAuthExpired=\{rememberExpiredAccount\}/)
 assert.match(app, /const \[feedbackDraft, setFeedbackDraft\] = useState<FeedbackDraft>/)
 assert.match(app, /onGoFeedback=\{openFeedback\}/)
 
