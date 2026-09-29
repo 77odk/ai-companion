@@ -309,6 +309,8 @@ export default function App() {
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
   const [settingsPrivacyOpen, setSettingsPrivacyOpen] = useState(false)
   const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft>(() => emptyFeedbackDraft())
+  // 仅用于“401 后重新登录”的同账号恢复；不持久化，避免把 A 账号草稿带给 B。
+  const expiredAccountRef = useRef<string | null>(null)
   const [, setNotificationFrom] = useState<'home' | 'settings'>('home')
   const [notificationRevision, setNotificationRevision] = useState(0)
   const [notificationReadRevision, setNotificationReadRevisionState] = useState(() => getNotificationReadRevision())
@@ -428,7 +430,11 @@ export default function App() {
         .then(async (response) => {
           if (!active) return
           if (response.status === 401) {
-            if (getToken() === token) logout()
+            const account = getAccount()
+            if (account?.token === token) {
+              expiredAccountRef.current = account.account
+              logout()
+            }
             return
           }
           if (!response.ok) return
@@ -502,7 +508,12 @@ export default function App() {
       body: JSON.stringify({ revision }),
     })
       .then((response) => {
-        if (response.status === 401 && getToken() === token) logout()
+        if (response.status !== 401) return
+        const account = getAccount()
+        if (account?.token === token) {
+          expiredAccountRef.current = account.account
+          logout()
+        }
       })
       .catch(() => {
         // 回写失败不影响本次浏览：下次进页会再回写一次。
@@ -679,8 +690,19 @@ export default function App() {
   const handleGateDone = async () => {
     setGateTarget(null)
     setPendingTarget(null)
+    const expiredAccount = expiredAccountRef.current
+    expiredAccountRef.current = null
     if (view === 'feedback' || view === 'notifications') {
-      replaceView(view)
+      const currentAccount = getAccount()?.account ?? null
+      if (expiredAccount && currentAccount === expiredAccount) {
+        replaceView(view)
+        return
+      }
+      // 换账号登录：绝不沿用上一账号的会话缓存或反馈草稿，走正常账号初始化。
+      setFeedbackDraft(emptyFeedbackDraft())
+      setActiveSessionId('')
+      setSessionsCache([])
+      void redirectBySessions()
       return
     }
     const natural = pendingNatural
@@ -908,6 +930,9 @@ export default function App() {
         <FeedbackPage
           initialDraft={feedbackDraft}
           onDraftChange={setFeedbackDraft}
+          onAuthExpired={() => {
+            expiredAccountRef.current = getAccount()?.account ?? null
+          }}
           onBack={() => {
             setFeedbackDraft(emptyFeedbackDraft())
             window.history.back()
