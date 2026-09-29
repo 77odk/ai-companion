@@ -4,7 +4,7 @@ import { getToken, logout } from '../lib/auth'
 
 export type FeedbackType = 'bug' | 'idea' | 'experience' | 'other'
 
-export export interface PickedImage {
+export interface PickedImage {
   name: string
   mime: string
   bytes: number
