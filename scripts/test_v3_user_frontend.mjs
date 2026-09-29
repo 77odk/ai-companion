@@ -27,6 +27,11 @@ assert.match(page, /return '账号提醒'/)
 // publishedAt 兼容 ISO 与 YYYY-MM-DD；日期-only 直接按原年月日展示，不能被本地时区挪到前一天
 assert.match(page, /T00:00:00Z/)
 assert.match(page, /const dateOnly = \/\^\(\\d\{4\}\)\-\(\\d\{2\}\)\-\(\\d\{2\}\)\$\/.exec\(trimmed\)/)
+// ISO 带不同时区偏移时必须按真实时间排序，不能按原始字符串字典序。
+assert.match(page, /const bTime = publishedAtDate\(b\.publishedAt\)\?\.getTime\(\) \?\? 0/)
+assert.match(page, /const aTime = publishedAtDate\(a\.publishedAt\)\?\.getTime\(\) \?\? 0/)
+assert.match(page, /return bTime - aTime/)
+assert.doesNotMatch(page, /publishedAt\.localeCompare/)
 // 数字或字符串通知 id 都要能接住，统一落成 string key
 assert.match(page, /typeof item\.id === 'string'/)
 assert.match(page, /typeof item\.id === 'number'/)
