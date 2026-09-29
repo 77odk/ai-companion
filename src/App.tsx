@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Welcome from './components/Welcome'
 import type { NaturalSetup } from './components/RolePicker'
-import type { FeedbackDraft } from './components/FeedbackPage'
 import Chat from './components/Chat'
 import type { SettingsPage } from './components/Settings'
 import LoginGate from './components/LoginGate'
@@ -22,7 +21,7 @@ import {
   saveAIGender,
   savePersona,
 } from './lib/storage'
-import { getToken, isLoggedIn, isPublicView, logout } from './lib/auth'
+import { getToken, isLoggedIn, isPublicView } from './lib/auth'
 import { createSession, listSessions } from './lib/sessionApi'
 import {
   getActiveSessionId,
@@ -76,8 +75,6 @@ const NotificationsPage = lazy(() => import('./components/NotificationsPage'))
 const FeedbackPage = lazy(() => import('./components/FeedbackPage'))
 
 type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'notifications' | 'feedback' | 'loading'
-
-const emptyFeedbackDraft = (): FeedbackDraft => ({ type: 'bug', content: '', images: [] })
 
 // 公开路由 = auth 的游客白名单 + App 层例外（产品介绍页）。
 // 「产品介绍页」的公开特例只留在 App 层，不写进 src/lib/auth.ts 的 PUBLIC_VIEWS。
@@ -308,12 +305,6 @@ export default function App() {
   }
   const [settingsTarget, setSettingsTarget] = useState<SettingsPage>('main')
   const [settingsPrivacyOpen, setSettingsPrivacyOpen] = useState(false)
-  const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft>(() => emptyFeedbackDraft())
-  // 仅用于“401 后重新登录”的同账号恢复；不持久化，避免把 A 账号草稿带给 B。
-  const expiredAccountRef = useRef<string | null>(null)
-  const rememberExpiredAccount = useCallback(() => {
-    expiredAccountRef.current = getAccount()?.account ?? null
-  }, [])
   const [, setNotificationFrom] = useState<'home' | 'settings'>('home')
   const [notificationRevision, setNotificationRevision] = useState(0)
   const [notificationReadRevision, setNotificationReadRevisionState] = useState(() => getNotificationReadRevision())
@@ -431,17 +422,9 @@ export default function App() {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then(async (response) => {
-          if (!active) return
-          if (response.status === 401) {
-            const account = getAccount()
-            if (account?.token === token) {
-              expiredAccountRef.current = account.account
-              logout()
-            }
-            return
-          }
           if (!response.ok) return
           const payload = await response.json() as { revision?: unknown; unread?: unknown }
+          if (!active) return
           const revision = payload.revision
           if (typeof revision !== 'number' || !Number.isInteger(revision) || revision < 0) {
             return
@@ -509,18 +492,9 @@ export default function App() {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ revision }),
+    }).catch(() => {
+      // 回写失败不影响本次浏览：下次进页会再回写一次。
     })
-      .then((response) => {
-        if (response.status !== 401) return
-        const account = getAccount()
-        if (account?.token === token) {
-          expiredAccountRef.current = account.account
-          logout()
-        }
-      })
-      .catch(() => {
-        // 回写失败不影响本次浏览：下次进页会再回写一次。
-      })
   }, [])
 
   // 聊天页头部：返回箭头 + 小星球资料卡入口；顶栏标题 = 当前角色名（微信式）
@@ -567,8 +541,7 @@ export default function App() {
   // 没有也没数据 → 进选角色页新建。
   // 拉列表失败（断网等）走本地兜底：有缓存的当前会话进聊天，否则按本地记录判断。
   // 这里就把 redirectStarted 置位，避免 view 切到 loading 后下面的挂载 effect 再触发一次重复拉取。
-  const redirectBySessions = useCallback(async (options: { allowLegacyFallback?: boolean } = {}) => {
-    const allowLegacyFallback = options.allowLegacyFallback !== false
+  const redirectBySessions = useCallback(async () => {
     redirectStarted.current = true
     replaceView('loading')
     const token = getToken()
@@ -581,17 +554,16 @@ export default function App() {
       const sessions = res.data.sessions
       // S1 头部入口要显示当前角色名：列表直接落缓存，切换/重进不用等角色列表页
       setSessionsCache(sessions)
-      // 只有同账号正常启动才允许补种 legacy Cloud State。
-      // 跨账号恢复时，旧账号留在浏览器里的 legacy 值绝不能排队到新账号。
-      if (allowLegacyFallback) queueLegacyCloudStateBackfill()
-      const active = resolveActiveSession(sessions, allowLegacyFallback ? getActiveSessionId() : '')
+      // P0-A：sessions 已知后，用现有 Cloud State outbox 一次性补种上线前的显式旧值。
+      // helper 自己只补云端缺失项；已有 canonical 绝不被旧设备覆盖。
+      queueLegacyCloudStateBackfill()
+      const active = resolveActiveSession(sessions, getActiveSessionId())
       if (active) {
-        // 跨账号恢复只接受这次服务端返回的 session，并从 Home 干净进入；
-        // 同账号正常启动仍恢复上次主视图。
+        // 有云端会话 → 按上次主视图恢复（无合法记录回首页）；聊天/空间都从首页进
         setActiveSessionId(String(active.id))
         setMigration('idle')
-        replaceView(allowLegacyFallback ? (getLastPrimaryView() ?? 'home') : 'home')
-      } else if (allowLegacyFallback && !hasMigratedFlag() && hasLocalLegacyData()) {
+        replaceView(getLastPrimaryView() ?? 'home')
+      } else if (!hasMigratedFlag() && hasLocalLegacyData()) {
         // 无云端会话 + 本地有旧数据 + 没迁过 → 自动把本地数据搬成第一个会话
         setActiveSessionId('')
         setRoleMode('first')
@@ -608,15 +580,6 @@ export default function App() {
         }
         replaceView(target)
       }
-    } else if (!allowLegacyFallback) {
-      // 跨账号重登时，绝不读取全局 legacy persona/messages 兜底。
-      // 云端 sessions 暂时不可验证，就停在干净的新建 TA 流程，避免把上一账号本地聊天暴露给新账号。
-      setActiveSessionId('')
-      setSessionsCache([])
-      setMigration('idle')
-      setRoleMode('first')
-      setRoleBack('welcome')
-      replaceView('role')
     } else if (getActiveSessionId()) {
       replaceView('chat')
     } else if (needsRolePick()) {
@@ -653,7 +616,6 @@ export default function App() {
 
   // 反馈与建议：独立全屏页，返回走历史栈（与通知页一致）
   const openFeedback = () => {
-    setFeedbackDraft(emptyFeedbackDraft())
     navigate('feedback')
   }
 
@@ -704,36 +666,6 @@ export default function App() {
   const handleGateDone = async () => {
     setGateTarget(null)
     setPendingTarget(null)
-    const expiredAccount = expiredAccountRef.current
-    expiredAccountRef.current = null
-    const currentAccount = getAccount()?.account ?? null
-
-    // 任意受保护页面都可能被后台通知探测打出 401。
-    // 若重新登录的是另一个账号，必须先清掉上一账号的会话/草稿，再走正常云端初始化；
-    // 即使 listSessions 失败，也不能让 fallback 打开上一账号的本地缓存。
-    if (expiredAccount && currentAccount !== expiredAccount) {
-      setFeedbackDraft(emptyFeedbackDraft())
-      setActiveSessionId('')
-      setSessionsCache([])
-      setPendingChatLogJump(null)
-      setPendingMemoryReturn(null)
-      setProfileTarget(null)
-      setPendingNatural(null)
-      setPendingNaturalError(null)
-      void redirectBySessions({ allowLegacyFallback: false })
-      return
-    }
-
-    if (view === 'feedback' || view === 'notifications') {
-      if (expiredAccount && currentAccount === expiredAccount) {
-        replaceView(view)
-        return
-      }
-      // 非“过期后同账号恢复”的普通登录，按现有账号初始化流程走。
-      setFeedbackDraft(emptyFeedbackDraft())
-      void redirectBySessions()
-      return
-    }
     const natural = pendingNatural
     if (!natural) {
       void redirectBySessions()
@@ -783,7 +715,6 @@ export default function App() {
 
   // 登录墙返回：不登录，回欢迎页继续逛展示内容
   const handleGateBack = () => {
-    if (view === 'feedback') setFeedbackDraft(emptyFeedbackDraft())
     setGateTarget(null)
     setPendingTarget(null)
     setPendingNatural(null)
@@ -956,15 +887,7 @@ export default function App() {
           onBack={() => window.history.back()}
         />
       ) : view === 'feedback' ? (
-        <FeedbackPage
-          initialDraft={feedbackDraft}
-          onDraftChange={setFeedbackDraft}
-          onAuthExpired={rememberExpiredAccount}
-          onBack={() => {
-            setFeedbackDraft(emptyFeedbackDraft())
-            window.history.back()
-          }}
-        />
+        <FeedbackPage onBack={() => window.history.back()} />
       ) : view === 'loading' ? (
         <div className="session-loading">
           {migration === 'failed' ? (
@@ -1131,11 +1054,7 @@ export default function App() {
               />
             )}
             {view === 'notifications' && (
-              <NotificationsPage
-                onBack={() => window.history.back()}
-                onRead={markNotificationsRead}
-                onAuthExpired={rememberExpiredAccount}
-              />
+              <NotificationsPage onBack={() => window.history.back()} onRead={markNotificationsRead} />
             )}
             {view === 'aispace' && (
               <AISpace
