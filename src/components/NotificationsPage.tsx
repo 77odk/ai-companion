@@ -5,6 +5,7 @@ import { getToken, logout } from '../lib/auth'
 interface Props {
   onBack: () => void
   onRead?: (revision: number) => void
+  onAuthExpired?: () => void
 }
 
 type OfficialNotificationKind = 'update' | 'announcement' | 'account'
@@ -74,7 +75,7 @@ function dateLabel(value: string): string {
  * 消息与通知：数据来自后端 GET /api/notifications（未登录不请求、不发红点）。
  * 拉到数据即视为已读，回执上抛给 App 统一 POST /api/notifications/read。
  */
-export default function NotificationsPage({ onBack, onRead }: Props) {
+export default function NotificationsPage({ onBack, onRead, onAuthExpired }: Props) {
   const [items, setItems] = useState<OfficialNotification[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [reloadKey, setReloadKey] = useState(0)
@@ -99,7 +100,10 @@ export default function NotificationsPage({ onBack, onRead }: Props) {
       .then(async (response) => {
         if (controller.signal.aborted) return
         if (response.status === 401) {
-          if (getToken() === token) logout()
+          if (getToken() === token) {
+            onAuthExpired?.()
+            logout()
+          }
           return
         }
         if (!response.ok) throw new Error(`notifications ${response.status}`)
@@ -132,7 +136,7 @@ export default function NotificationsPage({ onBack, onRead }: Props) {
       })
 
     return () => controller.abort()
-  }, [onRead, reloadKey])
+  }, [onAuthExpired, onRead, reloadKey])
 
   return (
     <div className="page settings-page notifications-page">
