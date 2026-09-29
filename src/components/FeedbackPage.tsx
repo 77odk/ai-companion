@@ -2,17 +2,25 @@ import { useRef, useState, type ChangeEvent } from 'react'
 import { API_BASE } from '../lib/sync'
 import { getToken, logout } from '../lib/auth'
 
-interface Props {
-  onBack: () => void
-}
+export type FeedbackType = 'bug' | 'idea' | 'experience' | 'other'
 
-type FeedbackType = 'bug' | 'idea' | 'experience' | 'other'
-
-interface PickedImage {
+export export interface PickedImage {
   name: string
   mime: string
   bytes: number
   dataUrl: string
+}
+
+export interface FeedbackDraft {
+  type: FeedbackType
+  content: string
+  images: PickedImage[]
+}
+
+interface Props {
+  onBack: () => void
+  initialDraft: FeedbackDraft
+  onDraftChange: (draft: FeedbackDraft) => void
 }
 
 const MAX_IMAGES = 5
@@ -56,10 +64,10 @@ function readAsDataUrl(file: File): Promise<string> {
  * 反馈与建议：类型 + 正文（≤2000 字）+ 可选截图（最多 5 张、单张 ≤5MB、JPG/PNG/WebP）。
  * 提交前先在本地校验一遍，超出限制直接给人话提示；提交成功后清空表单，失败保留已填内容。
  */
-export default function FeedbackPage({ onBack }: Props) {
-  const [type, setType] = useState<FeedbackType>('bug')
-  const [content, setContent] = useState('')
-  const [images, setImages] = useState<PickedImage[]>([])
+export default function FeedbackPage({ onBack, initialDraft, onDraftChange }: Props) {
+  const [type, setType] = useState<FeedbackType>(initialDraft.type)
+  const [content, setContent] = useState(initialDraft.content)
+  const [images, setImages] = useState<PickedImage[]>(initialDraft.images)
   const [submitting, setSubmitting] = useState(false)
   const [readingImages, setReadingImages] = useState(false)
   const imageReadInFlightRef = useRef(false)
@@ -105,7 +113,11 @@ export default function FeedbackPage({ onBack }: Props) {
         }
       }
       if (loaded.length > 0) {
-        setImages((current) => [...current, ...loaded].slice(0, MAX_IMAGES))
+        setImages((current) => {
+          const next = [...current, ...loaded].slice(0, MAX_IMAGES)
+          onDraftChange({ type, content, images: next })
+          return next
+        })
       }
       setError(problems.join(' '))
       setDone(false)
@@ -116,7 +128,9 @@ export default function FeedbackPage({ onBack }: Props) {
   }
 
   const removeImage = (index: number) => {
-    setImages(images.filter((_, position) => position !== index))
+    const next = images.filter((_, position) => position !== index)
+    setImages(next)
+    onDraftChange({ type, content, images: next })
     setError('')
   }
 
@@ -168,13 +182,14 @@ export default function FeedbackPage({ onBack }: Props) {
         }),
       })
       if (response.status === 401) {
-        logout()
+        if (getToken() === token) logout()
         return
       }
       if (!response.ok) throw new Error(`feedback ${response.status}`)
       setContent('')
       setImages([])
       setType('bug')
+      onDraftChange({ type: 'bug', content: '', images: [] })
       setDone(true)
     } catch {
       // 失败保留已填内容，让 TA 直接重试
@@ -213,6 +228,7 @@ export default function FeedbackPage({ onBack }: Props) {
                 disabled={submitting || readingImages}
                 onClick={() => {
                   setType(option.value)
+                  onDraftChange({ type: option.value, content, images })
                   setDone(false)
                 }}
               >
@@ -236,7 +252,9 @@ export default function FeedbackPage({ onBack }: Props) {
             value={content}
             disabled={submitting || readingImages}
             onChange={(e) => {
-              setContent(e.target.value)
+              const next = e.target.value
+              setContent(next)
+              onDraftChange({ type, content: next, images })
               setDone(false)
             }}
           />
