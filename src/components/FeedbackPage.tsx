@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import { API_BASE } from '../lib/sync'
-import { getToken } from '../lib/auth'
+import { getToken, logout } from '../lib/auth'
 
 interface Props {
   onBack: () => void
@@ -167,6 +167,10 @@ export default function FeedbackPage({ onBack }: Props) {
           images: images.map((image) => ({ name: image.name, mime: image.mime, dataUrl: image.dataUrl })),
         }),
       })
+      if (response.status === 401) {
+        logout()
+        return
+      }
       if (!response.ok) throw new Error(`feedback ${response.status}`)
       setContent('')
       setImages([])
