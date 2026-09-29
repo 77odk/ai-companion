@@ -21,6 +21,7 @@ interface Props {
   onBack: () => void
   initialDraft: FeedbackDraft
   onDraftChange: (draft: FeedbackDraft) => void
+  onAuthExpired?: () => void
 }
 
 const MAX_IMAGES = 5
@@ -64,7 +65,7 @@ function readAsDataUrl(file: File): Promise<string> {
  * 反馈与建议：类型 + 正文（≤2000 字）+ 可选截图（最多 5 张、单张 ≤5MB、JPG/PNG/WebP）。
  * 提交前先在本地校验一遍，超出限制直接给人话提示；提交成功后清空表单，失败保留已填内容。
  */
-export default function FeedbackPage({ onBack, initialDraft, onDraftChange }: Props) {
+export default function FeedbackPage({ onBack, initialDraft, onDraftChange, onAuthExpired }: Props) {
   const [type, setType] = useState<FeedbackType>(initialDraft.type)
   const [content, setContent] = useState(initialDraft.content)
   const [images, setImages] = useState<PickedImage[]>(initialDraft.images)
@@ -182,7 +183,10 @@ export default function FeedbackPage({ onBack, initialDraft, onDraftChange }: Pr
         }),
       })
       if (response.status === 401) {
-        if (getToken() === token) logout()
+        if (getToken() === token) {
+          onAuthExpired?.()
+          logout()
+        }
         return
       }
       if (!response.ok) throw new Error(`feedback ${response.status}`)
