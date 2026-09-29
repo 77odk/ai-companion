@@ -84,7 +84,7 @@ assert.match(app, /const FeedbackPage = lazy\(\(\) => import\('\.\/components\/F
 assert.match(app, /\| 'feedback' \| 'loading'/)
 assert.match(app, /view === 'feedback' \? \([\s\S]*<FeedbackPage[\s\S]*initialDraft=\{feedbackDraft\}[\s\S]*onDraftChange=\{setFeedbackDraft\}/)
 assert.match(app, /const expiredAccount = expiredAccountRef\.current[\s\S]*expiredAccountRef\.current = null/)
-assert.match(app, /const currentAccount = getAccount\(\)\?\.account \?\? null[\s\S]*if \(expiredAccount && currentAccount !== expiredAccount\) \{[\s\S]*setFeedbackDraft\(emptyFeedbackDraft\(\)\)[\s\S]*setActiveSessionId\(''\)[\s\S]*setSessionsCache\(\[\]\)[\s\S]*setPendingNatural\(null\)[\s\S]*setPendingNaturalError\(null\)[\s\S]*redirectBySessions\(\)[\s\S]*return/)
+assert.match(app, /const currentAccount = getAccount\(\)\?\.account \?\? null[\s\S]*if \(expiredAccount && currentAccount !== expiredAccount\) \{[\s\S]*setFeedbackDraft\(emptyFeedbackDraft\(\)\)[\s\S]*setActiveSessionId\(''\)[\s\S]*setSessionsCache\(\[\]\)[\s\S]*setPendingChatLogJump\(null\)[\s\S]*setPendingMemoryReturn\(null\)[\s\S]*setProfileTarget\(null\)[\s\S]*setPendingNatural\(null\)[\s\S]*setPendingNaturalError\(null\)[\s\S]*redirectBySessions\(\)[\s\S]*return/)
 assert.match(app, /if \(view === 'feedback' \|\| view === 'notifications'\) \{[\s\S]*expiredAccount && currentAccount === expiredAccount[\s\S]*replaceView\(view\)[\s\S]*return/)
 assert.match(app, /const rememberExpiredAccount = useCallback\(\(\) => \{[\s\S]*expiredAccountRef\.current = getAccount\(\)\?\.account \?\? null[\s\S]*\}, \[\]\)/)
 assert.match(app, /onAuthExpired=\{rememberExpiredAccount\}/)
