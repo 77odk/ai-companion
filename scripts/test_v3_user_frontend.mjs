@@ -137,7 +137,7 @@ assert.match(feedback, /onClick=\{\(\) => removeImage\(index\)\}[\s\S]*disabled=
 // 截图读取串行化：读取完成前不能再次选图或提交，合并使用 functional update 避免 stale closure 覆盖。
 assert.match(feedback, /imageReadInFlightRef = useRef\(false\)/)
 assert.match(feedback, /setReadingImages\(true\)/)
-assert.match(feedback, /setImages\(\(current\) => \[\.\.\.current, \.\.\.loaded\]\.slice\(0, MAX_IMAGES\)\)/)
+assert.match(feedback, /setImages\(\(current\) => \{[\s\S]*const next = \[\.\.\.current, \.\.\.loaded\]\.slice\(0, MAX_IMAGES\)[\s\S]*return next[\s\S]*\}\)/)
 assert.match(feedback, /if \(submitting \|\| readingImages \|\| imageReadInFlightRef\.current\) return/)
 assert.match(feedback, /disabled=\{submitting \|\| readingImages\}/)
 assert.match(feedback, /正在读取截图…/)
