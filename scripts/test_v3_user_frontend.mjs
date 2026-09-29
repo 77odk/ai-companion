@@ -14,7 +14,7 @@ const settings = read('src/components/Settings.tsx')
 
 assert.doesNotMatch(page, /notifications\.json/, '通知页不应再以 notifications.json 为数据源')
 assert.match(page, /import \{ API_BASE \} from '\.\.\/lib\/sync'/)
-assert.match(page, /import \{ getToken \} from '\.\.\/lib\/auth'/)
+assert.match(page, /import \{ getToken, logout \} from '\.\.\/lib\/auth'/)
 
 // 请求路径：读 = GET /api/notifications（页面自持）；读回执 = POST /api/notifications/read（见第 2 节）。
 assert.match(page, /fetch\(`\$\{API_BASE\}\/api\/notifications`/)
@@ -51,6 +51,7 @@ assert.doesNotMatch(page, /dangerouslySetInnerHTML/)
 assert.match(page, /<h2 className="detail-title">消息与通知<\/h2>/)
 // 未登录不请求
 assert.match(page, /if \(!token\) \{[\s\S]*setLoadState\('signedout'\)/)
+assert.match(page, /response\.status === 401[\s\S]*logout\(\)/)
 
 /* ---------- 2. App：未读判定与已读回写都走后端 ---------- */
 
@@ -59,6 +60,7 @@ assert.match(app, /const \[notificationServerUnread, setNotificationServerUnread
 assert.match(app, /fetch\(`\$\{API_BASE\}\/api\/notifications`/)
 assert.match(app, /const hasUnreadNotifications = loggedIn && \(notificationServerUnread \|\| notificationRevision > notificationReadRevision\)/)
 assert.match(app, /fetch\(`\$\{API_BASE\}\/api\/notifications\/read`/)
+assert.match(app, /response\.status === 401[\s\S]*logout\(\)/)
 assert.match(app, /method: 'POST',[\s\S]*body: JSON\.stringify\(\{ revision \}\)/)
 assert.match(app, /onRead=\{markNotificationsRead\}/)
 assert.match(app, /hasUnreadNotifications=\{hasUnreadNotifications\}/)
@@ -81,6 +83,7 @@ assert.match(app, /\| 'feedback' \| 'loading'/)
 assert.match(app, /view === 'feedback' \? \(\s*<FeedbackPage onBack=\{\(\) => window\.history\.back\(\)\} \/>/)
 assert.match(app, /onGoFeedback=\{openFeedback\}/)
 
+assert.match(feedback, /import \{ getToken, logout \} from '\.\.\/lib\/auth'/)
 /* ---------- 3. 反馈与建议页：四类型 + 截图本地校验 ---------- */
 
 for (const type of ['bug', 'idea', 'experience', 'other']) {
@@ -106,6 +109,7 @@ assert.match(feedback, /images\.find\(\(image\) => image\.bytes > MAX_IMAGE_BYTE
 assert.match(feedback, /images\.find\(\(image\) => !ACCEPTED_MIME\.includes\(image\.mime\)\)/)
 
 assert.match(feedback, /fetch\(`\$\{API_BASE\}\/api\/feedback`/)
+assert.match(feedback, /response\.status === 401[\s\S]*logout\(\)/)
 assert.match(feedback, /method: 'POST'/)
 assert.match(feedback, /body: JSON\.stringify\(\{[\s\S]*type,[\s\S]*content: trimmed,[\s\S]*images: images\.map\(\(image\) => \(\{ name: image\.name, mime: image\.mime, dataUrl: image\.dataUrl \}\)\)/)
 // 成功：明确回执 + 清空；失败：保留已填内容
