@@ -51,7 +51,7 @@ assert.doesNotMatch(page, /dangerouslySetInnerHTML/)
 assert.match(page, /<h2 className="detail-title">消息与通知<\/h2>/)
 // 未登录不请求
 assert.match(page, /if \(!token\) \{[\s\S]*setLoadState\('signedout'\)/)
-assert.match(page, /controller\.signal\.aborted[\s\S]*response\.status === 401[\s\S]*getToken\(\) === token[\s\S]*logout\(\)/)
+assert.match(page, /controller\.signal\.aborted[\s\S]*response\.status === 401[\s\S]*getToken\(\) === token[\s\S]*onAuthExpired\?\.\(\)[\s\S]*logout\(\)/)
 
 /* ---------- 2. App：未读判定与已读回写都走后端 ---------- */
 
@@ -60,8 +60,8 @@ assert.match(app, /const \[notificationServerUnread, setNotificationServerUnread
 assert.match(app, /fetch\(`\$\{API_BASE\}\/api\/notifications`/)
 assert.match(app, /const hasUnreadNotifications = loggedIn && \(notificationServerUnread \|\| notificationRevision > notificationReadRevision\)/)
 assert.match(app, /fetch\(`\$\{API_BASE\}\/api\/notifications\/read`/)
-assert.match(app, /if \(!active\) return[\s\S]*response\.status === 401[\s\S]*getToken\(\) === token[\s\S]*logout\(\)/)
-assert.match(app, /response\.status === 401 && getToken\(\) === token[\s\S]*logout\(\)/)
+assert.match(app, /if \(!active\) return[\s\S]*response\.status === 401[\s\S]*account\?\.token === token[\s\S]*expiredAccountRef\.current = account\.account[\s\S]*logout\(\)/)
+assert.match(app, /response\.status !== 401[\s\S]*account\?\.token === token[\s\S]*expiredAccountRef\.current = account\.account[\s\S]*logout\(\)/)
 assert.match(app, /method: 'POST',[\s\S]*body: JSON\.stringify\(\{ revision \}\)/)
 assert.match(app, /onRead=\{markNotificationsRead\}/)
 assert.match(app, /hasUnreadNotifications=\{hasUnreadNotifications\}/)
@@ -82,7 +82,10 @@ assert.match(app, /document\.addEventListener\('visibilitychange', onVisible\)[\
 assert.match(app, /const FeedbackPage = lazy\(\(\) => import\('\.\/components\/FeedbackPage'\)\)/)
 assert.match(app, /\| 'feedback' \| 'loading'/)
 assert.match(app, /view === 'feedback' \? \([\s\S]*<FeedbackPage[\s\S]*initialDraft=\{feedbackDraft\}[\s\S]*onDraftChange=\{setFeedbackDraft\}/)
-assert.match(app, /if \(view === 'feedback' \|\| view === 'notifications'\) \{[\s\S]*replaceView\(view\)[\s\S]*return/)
+assert.match(app, /const expiredAccount = expiredAccountRef\.current[\s\S]*expiredAccountRef\.current = null/)
+assert.match(app, /if \(view === 'feedback' \|\| view === 'notifications'\) \{[\s\S]*expiredAccount && currentAccount === expiredAccount[\s\S]*replaceView\(view\)[\s\S]*return/)
+assert.match(app, /setFeedbackDraft\(emptyFeedbackDraft\(\)\)[\s\S]*setActiveSessionId\(''\)[\s\S]*setSessionsCache\(\[\]\)[\s\S]*redirectBySessions\(\)/)
+assert.match(app, /onAuthExpired=\{\(\) => \{[\s\S]*expiredAccountRef\.current = getAccount\(\)\?\.account \?\? null/)
 assert.match(app, /const \[feedbackDraft, setFeedbackDraft\] = useState<FeedbackDraft>/)
 assert.match(app, /onGoFeedback=\{openFeedback\}/)
 
@@ -112,7 +115,7 @@ assert.match(feedback, /images\.find\(\(image\) => image\.bytes > MAX_IMAGE_BYTE
 assert.match(feedback, /images\.find\(\(image\) => !ACCEPTED_MIME\.includes\(image\.mime\)\)/)
 
 assert.match(feedback, /fetch\(`\$\{API_BASE\}\/api\/feedback`/)
-assert.match(feedback, /response\.status === 401[\s\S]*getToken\(\) === token[\s\S]*logout\(\)/)
+assert.match(feedback, /response\.status === 401[\s\S]*getToken\(\) === token[\s\S]*onAuthExpired\?\.\(\)[\s\S]*logout\(\)/)
 assert.match(feedback, /method: 'POST'/)
 assert.match(feedback, /body: JSON\.stringify\(\{[\s\S]*type,[\s\S]*content: trimmed,[\s\S]*images: images\.map\(\(image\) => \(\{ name: image\.name, mime: image\.mime, dataUrl: image\.dataUrl \}\)\)/)
 // 401 重新登录期间，反馈草稿保存在 App 内存；重新登录后回原反馈页继续提交。
