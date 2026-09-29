@@ -20,8 +20,8 @@ function accountHint(value: string): string | null {
 }
 
 interface Props {
-  /** 登录/注册成功后回调（登录墙据此回跳目标页；账号页据此刷新已登录态） */
-  onSuccess?: (acct: Account) => void
+  /** 登录/注册成功后回调；返回 false 时仅本次跳过 legacy /api/sync 自动同步。 */
+  onSuccess?: (acct: Account) => void | boolean | Promise<void | boolean>
   /** 登录墙只切视觉层级；账号与同步页继续沿用原布局。 */
   variant?: 'default' | 'gate'
 }
@@ -80,14 +80,17 @@ export default function LoginForm({ onSuccess, variant = 'default' }: Props) {
       setPassword('')
       setBindEmail('')
       setBindPhone('')
-      // 登录成功：sync.ts 已广播登录状态变化，这里通知父组件回跳目标页
-      onSuccess?.(acct)
-      // 登录成功自动同步一次；同步失败也保留登录态，只提示原因
-      try {
-        await syncNow()
-        setInfo('记录已同步')
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '记录同步失败')
+      // 登录成功：sync.ts 已广播登录状态变化，这里通知父组件回跳目标页。
+      // 跨账号 401 恢复由 App 返回 false：这一次不跑 legacy blob sync，避免把上一账号本地旧值合入新账号。
+      const shouldSync = await onSuccess?.(acct)
+      if (shouldSync !== false) {
+        // 其它正常登录仍保持原有自动同步行为。
+        try {
+          await syncNow()
+          setInfo('记录已同步')
+        } catch (err) {
+          setError(err instanceof Error ? err.message : '记录同步失败')
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '操作失败，请稍后重试')
