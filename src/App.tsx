@@ -701,7 +701,7 @@ export default function App() {
 
   // 登录墙登录成功：按云端会话分流（有会话进聊天，无会话进选角色新建），
   // 不再硬回登录前的 gateTarget——游客点聊天被拦，登录后也是"有会话的聊天"或"选角色"
-  const handleGateDone = async () => {
+  const handleGateDone = async (): Promise<boolean | void> => {
     setGateTarget(null)
     setPendingTarget(null)
     const expiredAccount = expiredAccountRef.current
@@ -721,7 +721,8 @@ export default function App() {
       setPendingNatural(null)
       setPendingNaturalError(null)
       void redirectBySessions({ allowLegacyFallback: false })
-      return
+      // LoginForm 会据此跳过旧 /api/sync blob；跨账号恢复只走上面的 server-only 路径。
+      return false
     }
 
     if (view === 'feedback' || view === 'notifications') {
