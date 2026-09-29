@@ -114,11 +114,9 @@ export default function FeedbackPage({ onBack, initialDraft, onDraftChange, onAu
         }
       }
       if (loaded.length > 0) {
-        setImages((current) => {
-          const next = [...current, ...loaded].slice(0, MAX_IMAGES)
-          onDraftChange({ type, content, images: next })
-          return next
-        })
+        const next = [...images, ...loaded].slice(0, MAX_IMAGES)
+        setImages(next)
+        onDraftChange({ type, content, images: next })
       }
       setError(problems.join(' '))
       setDone(false)
