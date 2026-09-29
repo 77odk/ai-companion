@@ -567,7 +567,8 @@ export default function App() {
   // 没有也没数据 → 进选角色页新建。
   // 拉列表失败（断网等）走本地兜底：有缓存的当前会话进聊天，否则按本地记录判断。
   // 这里就把 redirectStarted 置位，避免 view 切到 loading 后下面的挂载 effect 再触发一次重复拉取。
-  const redirectBySessions = useCallback(async () => {
+  const redirectBySessions = useCallback(async (options: { allowLegacyFallback?: boolean } = {}) => {
+    const allowLegacyFallback = options.allowLegacyFallback !== false
     redirectStarted.current = true
     replaceView('loading')
     const token = getToken()
@@ -589,7 +590,7 @@ export default function App() {
         setActiveSessionId(String(active.id))
         setMigration('idle')
         replaceView(getLastPrimaryView() ?? 'home')
-      } else if (!hasMigratedFlag() && hasLocalLegacyData()) {
+      } else if (allowLegacyFallback && !hasMigratedFlag() && hasLocalLegacyData()) {
         // 无云端会话 + 本地有旧数据 + 没迁过 → 自动把本地数据搬成第一个会话
         setActiveSessionId('')
         setRoleMode('first')
@@ -606,6 +607,15 @@ export default function App() {
         }
         replaceView(target)
       }
+    } else if (!allowLegacyFallback) {
+      // 跨账号重登时，绝不读取全局 legacy persona/messages 兜底。
+      // 云端 sessions 暂时不可验证，就停在干净的新建 TA 流程，避免把上一账号本地聊天暴露给新账号。
+      setActiveSessionId('')
+      setSessionsCache([])
+      setMigration('idle')
+      setRoleMode('first')
+      setRoleBack('welcome')
+      replaceView('role')
     } else if (getActiveSessionId()) {
       replaceView('chat')
     } else if (needsRolePick()) {
@@ -709,7 +719,7 @@ export default function App() {
       setProfileTarget(null)
       setPendingNatural(null)
       setPendingNaturalError(null)
-      void redirectBySessions()
+      void redirectBySessions({ allowLegacyFallback: false })
       return
     }
 
