@@ -695,16 +695,28 @@ export default function App() {
     setPendingTarget(null)
     const expiredAccount = expiredAccountRef.current
     expiredAccountRef.current = null
+    const currentAccount = getAccount()?.account ?? null
+
+    // 任意受保护页面都可能被后台通知探测打出 401。
+    // 若重新登录的是另一个账号，必须先清掉上一账号的会话/草稿，再走正常云端初始化；
+    // 即使 listSessions 失败，也不能让 fallback 打开上一账号的本地缓存。
+    if (expiredAccount && currentAccount !== expiredAccount) {
+      setFeedbackDraft(emptyFeedbackDraft())
+      setActiveSessionId('')
+      setSessionsCache([])
+      setPendingNatural(null)
+      setPendingNaturalError(null)
+      void redirectBySessions()
+      return
+    }
+
     if (view === 'feedback' || view === 'notifications') {
-      const currentAccount = getAccount()?.account ?? null
       if (expiredAccount && currentAccount === expiredAccount) {
         replaceView(view)
         return
       }
-      // 换账号登录：绝不沿用上一账号的会话缓存或反馈草稿，走正常账号初始化。
+      // 非“过期后同账号恢复”的普通登录，按现有账号初始化流程走。
       setFeedbackDraft(emptyFeedbackDraft())
-      setActiveSessionId('')
-      setSessionsCache([])
       void redirectBySessions()
       return
     }
