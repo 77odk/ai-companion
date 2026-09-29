@@ -581,15 +581,16 @@ export default function App() {
       const sessions = res.data.sessions
       // S1 头部入口要显示当前角色名：列表直接落缓存，切换/重进不用等角色列表页
       setSessionsCache(sessions)
-      // P0-A：sessions 已知后，用现有 Cloud State outbox 一次性补种上线前的显式旧值。
-      // helper 自己只补云端缺失项；已有 canonical 绝不被旧设备覆盖。
-      queueLegacyCloudStateBackfill()
-      const active = resolveActiveSession(sessions, getActiveSessionId())
+      // 只有同账号正常启动才允许补种 legacy Cloud State。
+      // 跨账号恢复时，旧账号留在浏览器里的 legacy 值绝不能排队到新账号。
+      if (allowLegacyFallback) queueLegacyCloudStateBackfill()
+      const active = resolveActiveSession(sessions, allowLegacyFallback ? getActiveSessionId() : '')
       if (active) {
-        // 有云端会话 → 按上次主视图恢复（无合法记录回首页）；聊天/空间都从首页进
+        // 跨账号恢复只接受这次服务端返回的 session，并从 Home 干净进入；
+        // 同账号正常启动仍恢复上次主视图。
         setActiveSessionId(String(active.id))
         setMigration('idle')
-        replaceView(getLastPrimaryView() ?? 'home')
+        replaceView(allowLegacyFallback ? (getLastPrimaryView() ?? 'home') : 'home')
       } else if (allowLegacyFallback && !hasMigratedFlag() && hasLocalLegacyData()) {
         // 无云端会话 + 本地有旧数据 + 没迁过 → 自动把本地数据搬成第一个会话
         setActiveSessionId('')
