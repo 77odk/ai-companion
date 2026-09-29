@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { API_BASE } from '../lib/sync'
-import { getToken } from '../lib/auth'
+import { getToken, logout } from '../lib/auth'
 
 interface Props {
   onBack: () => void
@@ -97,6 +97,10 @@ export default function NotificationsPage({ onBack, onRead }: Props) {
       signal: controller.signal,
     })
       .then(async (response) => {
+        if (response.status === 401) {
+          logout()
+          return
+        }
         if (!response.ok) throw new Error(`notifications ${response.status}`)
         const payload = await response.json() as { revision?: unknown; items?: unknown }
         const revision = payload.revision
