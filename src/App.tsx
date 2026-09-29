@@ -311,6 +311,9 @@ export default function App() {
   const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft>(() => emptyFeedbackDraft())
   // 仅用于“401 后重新登录”的同账号恢复；不持久化，避免把 A 账号草稿带给 B。
   const expiredAccountRef = useRef<string | null>(null)
+  const rememberExpiredAccount = useCallback(() => {
+    expiredAccountRef.current = getAccount()?.account ?? null
+  }, [])
   const [, setNotificationFrom] = useState<'home' | 'settings'>('home')
   const [notificationRevision, setNotificationRevision] = useState(0)
   const [notificationReadRevision, setNotificationReadRevisionState] = useState(() => getNotificationReadRevision())
@@ -930,9 +933,7 @@ export default function App() {
         <FeedbackPage
           initialDraft={feedbackDraft}
           onDraftChange={setFeedbackDraft}
-          onAuthExpired={() => {
-            expiredAccountRef.current = getAccount()?.account ?? null
-          }}
+          onAuthExpired={rememberExpiredAccount}
           onBack={() => {
             setFeedbackDraft(emptyFeedbackDraft())
             window.history.back()
