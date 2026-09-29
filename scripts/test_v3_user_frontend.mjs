@@ -14,7 +14,7 @@ const settings = read('src/components/Settings.tsx')
 
 assert.doesNotMatch(page, /notifications\.json/, '通知页不应再以 notifications.json 为数据源')
 assert.match(page, /import \{ API_BASE \} from '\.\.\/lib\/sync'/)
-assert.match(page, /import \{ getToken \} from '\.\.\/lib\/auth'/)
+assert.match(page, /import \{ getToken, logout \} from '\.\.\/lib\/auth'/)
 
 // 请求路径：读 = GET /api/notifications（页面自持）；读回执 = POST /api/notifications/read（见第 2 节）。
 assert.match(page, /fetch\(`\$\{API_BASE\}\/api\/notifications`/)
@@ -51,6 +51,7 @@ assert.doesNotMatch(page, /dangerouslySetInnerHTML/)
 assert.match(page, /<h2 className="detail-title">消息与通知<\/h2>/)
 // 未登录不请求
 assert.match(page, /if \(!token\) \{[\s\S]*setLoadState\('signedout'\)/)
+assert.match(page, /controller\.signal\.aborted[\s\S]*response\.status === 401[\s\S]*getToken\(\) === token[\s\S]*onAuthExpired\?\.\(\)[\s\S]*logout\(\)/)
 
 /* ---------- 2. App：未读判定与已读回写都走后端 ---------- */
 
@@ -59,8 +60,11 @@ assert.match(app, /const \[notificationServerUnread, setNotificationServerUnread
 assert.match(app, /fetch\(`\$\{API_BASE\}\/api\/notifications`/)
 assert.match(app, /const hasUnreadNotifications = loggedIn && \(notificationServerUnread \|\| notificationRevision > notificationReadRevision\)/)
 assert.match(app, /fetch\(`\$\{API_BASE\}\/api\/notifications\/read`/)
+assert.match(app, /if \(!active\) return[\s\S]*response\.status === 401[\s\S]*account\?\.token === token[\s\S]*expiredAccountRef\.current = account\.account[\s\S]*logout\(\)/)
+assert.match(app, /response\.status !== 401[\s\S]*account\?\.token === token[\s\S]*expiredAccountRef\.current = account\.account[\s\S]*logout\(\)/)
 assert.match(app, /method: 'POST',[\s\S]*body: JSON\.stringify\(\{ revision \}\)/)
 assert.match(app, /onRead=\{markNotificationsRead\}/)
+assert.match(app, /<NotificationsPage[\s\S]*onAuthExpired=\{rememberExpiredAccount\}/)
 assert.match(app, /hasUnreadNotifications=\{hasUnreadNotifications\}/)
 // 较早发出的 GET 不能在 read 之后用 stale unread=true 把红点重新点亮；更高 revision 的新消息仍可正常点亮。
 assert.match(app, /notificationReadGuardRef = useRef\(\{ epoch: 0, revision: 0 \}\)/)
@@ -78,9 +82,22 @@ assert.match(app, /document\.addEventListener\('visibilitychange', onVisible\)[\
 // 反馈页作为独立全屏 view：懒加载 + 历史栈返回（与通知页一致）
 assert.match(app, /const FeedbackPage = lazy\(\(\) => import\('\.\/components\/FeedbackPage'\)\)/)
 assert.match(app, /\| 'feedback' \| 'loading'/)
-assert.match(app, /view === 'feedback' \? \(\s*<FeedbackPage onBack=\{\(\) => window\.history\.back\(\)\} \/>/)
+assert.match(app, /view === 'feedback' \? \([\s\S]*<FeedbackPage[\s\S]*initialDraft=\{feedbackDraft\}[\s\S]*onDraftChange=\{setFeedbackDraft\}/)
+assert.match(app, /const expiredAccount = expiredAccountRef\.current[\s\S]*expiredAccountRef\.current = null/)
+assert.match(app, /const currentAccount = getAccount\(\)\?\.account \?\? null[\s\S]*if \(expiredAccount && currentAccount !== expiredAccount\) \{[\s\S]*setFeedbackDraft\(emptyFeedbackDraft\(\)\)[\s\S]*setActiveSessionId\(''\)[\s\S]*setSessionsCache\(\[\]\)[\s\S]*setPendingChatLogJump\(null\)[\s\S]*setPendingMemoryReturn\(null\)[\s\S]*setProfileTarget\(null\)[\s\S]*setPendingNatural\(null\)[\s\S]*setPendingNaturalError\(null\)[\s\S]*redirectBySessions\(\{ allowLegacyFallback: false \}\)[\s\S]*return/)
+assert.match(app, /const redirectBySessions = useCallback\(async \(options: \{ allowLegacyFallback\?: boolean \} = \{\}\) => \{[\s\S]*const allowLegacyFallback = options\.allowLegacyFallback !== false/)
+assert.match(app, /else if \(allowLegacyFallback && !hasMigratedFlag\(\) && hasLocalLegacyData\(\)\)/)
+assert.match(app, /else if \(!allowLegacyFallback\) \{[\s\S]*setActiveSessionId\(''\)[\s\S]*setSessionsCache\(\[\]\)[\s\S]*setMigration\('idle'\)[\s\S]*setRoleMode\('first'\)[\s\S]*setRoleBack\('welcome'\)[\s\S]*replaceView\('role'\)/)
+assert.match(app, /if \(allowLegacyFallback\) queueLegacyCloudStateBackfill\(\)/)
+assert.match(app, /resolveActiveSession\(sessions, allowLegacyFallback \? getActiveSessionId\(\) : ''\)/)
+assert.match(app, /replaceView\(allowLegacyFallback \? \(getLastPrimaryView\(\) \?\? 'home'\) : 'home'\)/)
+assert.match(app, /if \(view === 'feedback' \|\| view === 'notifications'\) \{[\s\S]*expiredAccount && currentAccount === expiredAccount[\s\S]*replaceView\(view\)[\s\S]*return/)
+assert.match(app, /const rememberExpiredAccount = useCallback\(\(\) => \{[\s\S]*expiredAccountRef\.current = getAccount\(\)\?\.account \?\? null[\s\S]*\}, \[\]\)/)
+assert.match(app, /onAuthExpired=\{rememberExpiredAccount\}/)
+assert.match(app, /const \[feedbackDraft, setFeedbackDraft\] = useState<FeedbackDraft>/)
 assert.match(app, /onGoFeedback=\{openFeedback\}/)
 
+assert.match(feedback, /import \{ getToken, logout \} from '\.\.\/lib\/auth'/)
 /* ---------- 3. 反馈与建议页：四类型 + 截图本地校验 ---------- */
 
 for (const type of ['bug', 'idea', 'experience', 'other']) {
@@ -106,8 +123,18 @@ assert.match(feedback, /images\.find\(\(image\) => image\.bytes > MAX_IMAGE_BYTE
 assert.match(feedback, /images\.find\(\(image\) => !ACCEPTED_MIME\.includes\(image\.mime\)\)/)
 
 assert.match(feedback, /fetch\(`\$\{API_BASE\}\/api\/feedback`/)
+assert.match(feedback, /response\.status === 401[\s\S]*getToken\(\) === token[\s\S]*onAuthExpired\?\.\(\)[\s\S]*logout\(\)/)
 assert.match(feedback, /method: 'POST'/)
 assert.match(feedback, /body: JSON\.stringify\(\{[\s\S]*type,[\s\S]*content: trimmed,[\s\S]*images: images\.map\(\(image\) => \(\{ name: image\.name, mime: image\.mime, dataUrl: image\.dataUrl \}\)\)/)
+// 401 重新登录期间，反馈草稿保存在 App 内存；重新登录后回原反馈页继续提交。
+assert.match(feedback, /initialDraft: FeedbackDraft/)
+assert.match(feedback, /onDraftChange: \(draft: FeedbackDraft\) => void/)
+assert.match(feedback, /useState<FeedbackType>\(initialDraft\.type\)/)
+assert.match(feedback, /useState\(initialDraft\.content\)/)
+assert.match(feedback, /useState<PickedImage\[]>\(initialDraft\.images\)/)
+assert.match(feedback, /onDraftChange\(\{ type: option\.value, content, images \}\)/)
+assert.match(feedback, /onDraftChange\(\{ type, content: next, images \}\)/)
+assert.match(feedback, /onDraftChange\(\{ type, content, images: next \}\)/)
 // 成功：明确回执 + 清空；失败：保留已填内容
 assert.match(feedback, /收到啦，我们会看到。回复会出现在消息与通知里。/)
 assert.match(feedback, /setContent\(''\)[\s\S]*setImages\(\[\]\)[\s\S]*setDone\(true\)/)
@@ -121,7 +148,8 @@ assert.match(feedback, /onClick=\{\(\) => removeImage\(index\)\}[\s\S]*disabled=
 // 截图读取串行化：读取完成前不能再次选图或提交，合并使用 functional update 避免 stale closure 覆盖。
 assert.match(feedback, /imageReadInFlightRef = useRef\(false\)/)
 assert.match(feedback, /setReadingImages\(true\)/)
-assert.match(feedback, /setImages\(\(current\) => \[\.\.\.current, \.\.\.loaded\]\.slice\(0, MAX_IMAGES\)\)/)
+assert.match(feedback, /const next = \[\.\.\.images, \.\.\.loaded\]\.slice\(0, MAX_IMAGES\)[\s\S]*setImages\(next\)[\s\S]*onDraftChange\(\{ type, content, images: next \}\)/)
+assert.doesNotMatch(feedback, /setImages\(\(current\) => \{[\s\S]*onDraftChange/)
 assert.match(feedback, /if \(submitting \|\| readingImages \|\| imageReadInFlightRef\.current\) return/)
 assert.match(feedback, /disabled=\{submitting \|\| readingImages\}/)
 assert.match(feedback, /正在读取截图…/)
