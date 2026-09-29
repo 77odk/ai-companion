@@ -12,11 +12,9 @@ interface Props {
   onGoGuide: () => void
   /** 返回（暂不登录，回欢迎页） */
   onBack: () => void
-  /** 401 恢复时只允许重新登录刚才的账号；主动返回欢迎页后可正常换账号。 */
-  expectedAccount?: string
 }
 
-export default function LoginGate({ onDone, onGoGuide, onBack, expectedAccount }: Props) {
+export default function LoginGate({ onDone, onGoGuide, onBack }: Props) {
   const handleForceRefresh = () => {
     if (!window.confirm('强制刷新会清除页面缓存并重新加载，继续吗？')) return
     void forceRefresh()
@@ -52,7 +50,7 @@ export default function LoginGate({ onDone, onGoGuide, onBack, expectedAccount }
         <p className="login-gate-sub">登录后，TA 才能继续记得你。</p>
 
         <div className="login-gate-card">
-          <LoginForm onSuccess={onDone} variant="gate" expectedAccount={expectedAccount} />
+          <LoginForm onSuccess={onDone} variant="gate" />
         </div>
 
         <div className="login-gate-weak-actions">
