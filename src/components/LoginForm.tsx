@@ -24,9 +24,11 @@ interface Props {
   onSuccess?: (acct: Account) => void | boolean | Promise<void | boolean>
   /** 登录墙只切视觉层级；账号与同步页继续沿用原布局。 */
   variant?: 'default' | 'gate'
+  /** 401 恢复专用：本次只能重新登录原账号；不影响正常登录/注册入口。 */
+  expectedAccount?: string
 }
 
-export default function LoginForm({ onSuccess, variant = 'default' }: Props) {
+export default function LoginForm({ onSuccess, variant = 'default', expectedAccount }: Props) {
   const [view, setView] = useState<View>('login')
   const [accountInput, setAccountInput] = useState('')
   const [password, setPassword] = useState('')
@@ -56,6 +58,13 @@ export default function LoginForm({ onSuccess, variant = 'default' }: Props) {
     const acctValue = accountInput.trim()
     if (!acctValue || !password) {
       setError('请输入账号和密码')
+      return
+    }
+    if (
+      expectedAccount &&
+      (view !== 'login' || acctValue.toLowerCase() !== expectedAccount.trim().toLowerCase())
+    ) {
+      setError('登录已过期，这次请先登录刚才的账号。要换账号，请先返回欢迎页。')
       return
     }
     setSubmitting(true)
