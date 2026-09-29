@@ -111,7 +111,11 @@ export default function NotificationsPage({ onBack, onRead }: Props) {
         const next = payload.items
           .map(normalizeNotification)
           .filter((item): item is OfficialNotification => item !== null)
-          .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+          .sort((a, b) => {
+            const bTime = publishedAtDate(b.publishedAt)?.getTime() ?? 0
+            const aTime = publishedAtDate(a.publishedAt)?.getTime() ?? 0
+            return bTime - aTime
+          })
         setItems(next)
         setLoadState('ready')
         onRead?.(revision)
