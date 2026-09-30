@@ -10,6 +10,7 @@ import {
   countPersonaCharacters,
   canSavePersonaLength,
   hasPersonaIdentityConflict,
+  needsPersonaPersistenceRepair,
   PERSONA_SOFT_LIMIT,
   PERSONA_HARD_LIMIT,
 } from './customPersona.ts'
@@ -100,6 +101,40 @@ eq(
 eq(extractPersonality(''), '', '空 persona → 空串')
 eq(extractBackgroundLine('性格特质：温柔\n关系背景：同事'), '同事', '有背景行 → 内容')
 eq(extractBackgroundLine('性格特质：温柔'), '', '无背景行 → 空串')
+
+console.log('\n[6.5] 多行结构化字段必须完整保留')
+const multilinePersona = [
+  '角色昵称：阿沉',
+  '性格特质：第一行',
+  '第二行',
+  '第三行',
+  '关系背景：我们认识很久',
+  '还一起住过一段',
+  '初次见面开场白：这么晚还没睡？',
+].join('\n')
+eq(
+  extractPersonality(multilinePersona),
+  '第一行\n第二行\n第三行',
+  '多行性格 → 读到下一个标签前，续行不丢',
+)
+eq(
+  extractBackgroundLine(multilinePersona),
+  '我们认识很久\n还一起住过一段',
+  '多行背景 → 续行不丢',
+)
+eq(
+  applyPersonaEdits(multilinePersona, { opening: '回来啦？' }),
+  [
+    '角色昵称：阿沉',
+    '性格特质：第一行',
+    '第二行',
+    '第三行',
+    '关系背景：我们认识很久',
+    '还一起住过一段',
+    '初次见面开场白：回来啦？',
+  ].join('\n'),
+  '只改开场白 → 多行性格和背景原样保留',
+)
 
 console.log('\n[7] applyPersonaEdits 结构化人设（自定义）')
 const custom = '角色昵称：阿温\n性格特质：温柔\n关系背景：同事\n初次见面开场白：嗨'
@@ -197,6 +232,15 @@ ok(
 ok(
   !hasPersonaIdentityConflict('她的朋友名字叫卡桑德拉·诺特，性格活泼。', '赫敏·格兰杰'),
   '叙述里的「名字叫」不算命中',
+)
+
+console.log('\n[12] 新建角色 persona 持久化校验')
+ok(!needsPersonaPersistenceRepair('', ''), 'Natural 空人设 → 不补写')
+ok(!needsPersonaPersistenceRepair('性格特质：温柔', '性格特质：温柔'), '服务端原样返回 → 不补写')
+ok(needsPersonaPersistenceRepair('性格特质：温柔', ''), '服务端返回空 → 必须补写')
+ok(
+  needsPersonaPersistenceRepair('性格特质：第一行\n第二行', '性格特质：第一行'),
+  '服务端吞掉续行 → 必须补写',
 )
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
