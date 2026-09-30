@@ -5,6 +5,7 @@ import {
   canSavePersonaLength,
   countPersonaCharacters,
   hasPersonaIdentityConflict,
+  needsPersonaPersistenceRepair,
   PERSONA_HARD_LIMIT,
   PERSONA_SOFT_LIMIT,
 } from '../lib/customPersona'
@@ -16,8 +17,8 @@ import {
   type AIGender,
 } from '../lib/storage'
 import { getToken, isLoggedIn } from '../lib/auth'
-import { createSession } from '../lib/sessionApi'
-import { getActiveSessionId, setActiveSessionId } from '../lib/sessionStore'
+import { createSession, patchSession } from '../lib/sessionApi'
+import { getActiveSessionId, getSessionsCache, setActiveSessionId, setSessionsCache } from '../lib/sessionStore'
 import { resolveSessionName, type RolePickMode } from '../lib/sessionFlow'
 import AvatarPicker from './AvatarPicker'
 import GenderSelect from './GenderSelect'
@@ -176,15 +177,33 @@ export default function RolePicker({
       let createdTitle: string | undefined
       if (isLoggedIn()) {
         // current 已在组件顶部直接复用 AIDetail；走到这里的一定是 first/new，只负责新建 TA。
-        const res = await createSession(getToken(), { persona, title })
+        const token = getToken()
+        const res = await createSession(token, { persona, title })
         if (!res.ok) throw new Error(res.message)
-        setActiveSessionId(String(res.data.id))
-        createdTitle = res.data.title
+
+        let createdSession = res.data
+        if (!allowEmptyPersona && needsPersonaPersistenceRepair(persona, createdSession.persona)) {
+          // 防止“创建成功但 persona 被后端/链路吞掉”的假成功：立即用既有 PATCH 契约补写一次。
+          const repaired = await patchSession(token, createdSession.id, { persona })
+          if (!repaired.ok) throw new Error(`角色已创建，但人设保存失败：${repaired.message}`)
+          if (needsPersonaPersistenceRepair(persona, repaired.data.persona)) {
+            throw new Error('角色已创建，但人设没有完整保存，请稍后重试')
+          }
+          createdSession = repaired.data
+        }
+
+        setActiveSessionId(String(createdSession.id))
+        // 新角色立刻写入本地会话缓存，避免 onDone 后刷新列表前短暂读到旧角色/空 persona。
+        setSessionsCache([
+          ...getSessionsCache().filter((session) => String(session.id) !== String(createdSession.id)),
+          createdSession,
+        ])
+        createdTitle = createdSession.title
         // Natural 允许姓名为空，但会话级 profile 也必须有安全称呼，避免只读 ai_profile 的页面出现空名字。
         const profileState = allowEmptyPersona && !s.nickname.trim()
-          ? { ...s, nickname: res.data.title?.trim() || 'TA' }
+          ? { ...s, nickname: createdSession.title?.trim() || 'TA' }
           : s
-        saveProfileForSession(profileState, String(res.data.id))
+        saveProfileForSession(profileState, String(createdSession.id))
       } else if (allowEmptyPersona) {
         // UI 允许 Natural 名字留空；游客登录链仍需要一个安全标题，内部用 TA 兜底，不把空串交给建会话。
         onNaturalLogin?.({
