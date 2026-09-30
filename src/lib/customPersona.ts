@@ -158,7 +158,7 @@ function personaFieldAtLine(line: string): PersonaField | null {
  */
 function personaBlock(persona: string, field: PersonaField): string {
   if (!persona) return ''
-  const lines = persona.split(/\\r?\\n/)
+  const lines = persona.split(/\r?\n/)
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]
     if (personaFieldAtLine(raw) !== field) continue
@@ -178,7 +178,7 @@ function personaBlock(persona: string, field: PersonaField): string {
 function dropPersonaBlocks(persona: string, fields: PersonaField[]): string {
   if (!persona) return ''
   const removed = new Set(fields)
-  const lines = persona.split(/\\r?\\n/)
+  const lines = persona.split(/\r?\n/)
   const kept: string[] = []
   let skipping = false
 
