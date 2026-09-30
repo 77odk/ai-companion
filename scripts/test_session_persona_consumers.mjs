@@ -19,6 +19,22 @@ function source(path) {
   return readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')
 }
 
+const rolePicker = source('../src/components/RolePicker.tsx')
+
+console.log('\n[BUG-CUSTOM-PERSONA] 自定义角色创建后必须校验 persona 持久化')
+ok(
+  rolePicker.includes('needsPersonaPersistenceRepair(persona, createdSession.persona)'),
+  'RolePicker 检查 createSession 返回的人设是否完整',
+)
+ok(
+  rolePicker.includes('patchSession(token, createdSession.id, { persona })'),
+  'RolePicker 在创建结果丢 persona 时立即 PATCH 补写',
+)
+ok(
+  rolePicker.includes('setSessionsCache(['),
+  '新角色创建后立即写本地会话缓存，避免刷新前读到空 persona',
+)
+
 const consumers = [
   ['aiSpace', source('../src/lib/aiSpace.ts')],
   ['taRuntime', source('../src/lib/taRuntime.ts')],
