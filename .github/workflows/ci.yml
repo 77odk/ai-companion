@@ -35,12 +35,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Resolve audit findings (diagnostic)
-        run: |
-          npm audit fix
-          npm audit --json || true
-          git diff -- package-lock.json
-
       - name: Test
         run: npm test
 
