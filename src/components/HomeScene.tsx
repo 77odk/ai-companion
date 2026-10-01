@@ -8,6 +8,35 @@ export interface HomeSceneState {
   greeting: string
 }
 
+type RainDropStyle = CSSProperties & {
+  '--rain-x': string
+  '--rain-length': string
+  '--rain-alpha': string
+  '--rain-delay': string
+  '--rain-drift': string
+}
+
+const RAIN_DROP_COUNT = 24
+
+function rainDropStyle(index: number): RainDropStyle {
+  const x = 3 + ((index * 37 + 11) % 94)
+  const length = 9 + ((index * 7 + 3) % 13)
+  const alpha = 0.42 + (((index * 17 + 5) % 43) / 100)
+  const delay = -(((index * 29 + 7) % 180) / 100)
+  const drift = -(5 + ((index * 11 + 3) % 9))
+  return {
+    '--rain-x': `${x}%`,
+    '--rain-length': `${length}px`,
+    '--rain-alpha': alpha.toFixed(2),
+    '--rain-delay': `${delay.toFixed(2)}s`,
+    '--rain-drift': `${drift}vw`,
+  }
+}
+
+function hasRain(weather: HomeWeather | null): boolean {
+  return Boolean(weather && (weather.visual === 'drizzle' || weather.visual === 'rain' || weather.visual === 'thunder'))
+}
+
 export function getHomeScene(now: Date): HomeSceneState {
   const hour = now.getHours()
   if (hour >= 5 && hour < 12) return { id: 'morning', greeting: '早安。' }
@@ -77,6 +106,7 @@ export default function HomeScene({
   const weatherClass = weather && (weather.visual === 'clear' || overcastReady)
     ? ` home-weather-state-${weather.visual}`
     : ''
+  const rainy = Boolean(weatherClass && hasRain(weather))
 
   return (
     <div className={`home-page home-scene-${scene.id}${weatherClass}`} style={style}>
@@ -85,7 +115,17 @@ export default function HomeScene({
         <div className="home-weather-atmosphere" aria-hidden="true">
           <span className="home-weather-fx-cloud cloud-a" />
           <span className="home-weather-fx-cloud cloud-b" />
-          <span className="home-weather-fx-particles" />
+          <span className="home-weather-fx-particles">
+            {rainy
+              ? Array.from({ length: RAIN_DROP_COUNT }, (_, index) => (
+                  <i
+                    key={index}
+                    className={`home-weather-rain-drop layer-${index % 3}`}
+                    style={rainDropStyle(index)}
+                  />
+                ))
+              : null}
+          </span>
           <span className="home-weather-fx-fog" />
           <span className="home-weather-fx-flash" />
         </div>
