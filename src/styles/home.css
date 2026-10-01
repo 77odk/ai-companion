@@ -580,20 +580,69 @@
   background: rgba(236, 243, 248, .24);
 }
 
-.home-weather-state-drizzle .home-weather-fx-particles,
-.home-weather-state-rain .home-weather-fx-particles,
-.home-weather-state-thunder .home-weather-fx-particles {
-  opacity: .28;
-  background-image:
-    repeating-linear-gradient(105deg, transparent 0 18px, rgba(232, 242, 250, .68) 19px 20px, transparent 21px 35px);
-  background-size: 44px 72px;
-  animation: home-weather-rain 1.25s linear infinite;
+.home-weather-fx-particles {
+  overflow: hidden;
 }
 
-.home-weather-state-rain .home-weather-fx-particles,
+.home-weather-state-drizzle .home-weather-fx-particles {
+  opacity: .34;
+  --rain-near-duration: 1.52s;
+  --rain-mid-duration: 1.94s;
+  --rain-far-duration: 2.38s;
+}
+
+.home-weather-state-rain .home-weather-fx-particles {
+  opacity: .52;
+  --rain-near-duration: .78s;
+  --rain-mid-duration: 1.04s;
+  --rain-far-duration: 1.34s;
+}
+
 .home-weather-state-thunder .home-weather-fx-particles {
-  opacity: .4;
-  animation-duration: .82s;
+  opacity: .58;
+  --rain-near-duration: .7s;
+  --rain-mid-duration: .94s;
+  --rain-far-duration: 1.22s;
+}
+
+.home-weather-rain-drop {
+  position: absolute;
+  top: -22vh;
+  left: var(--rain-x);
+  width: 1px;
+  height: var(--rain-length);
+  border-radius: 999px;
+  opacity: var(--rain-alpha);
+  background: linear-gradient(
+    to bottom,
+    rgba(244, 249, 253, 0),
+    rgba(232, 242, 250, .82) 28%,
+    rgba(224, 238, 248, .68) 76%,
+    rgba(224, 238, 248, 0)
+  );
+  transform-origin: center;
+  will-change: transform;
+  animation-name: home-weather-rain-drop;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-delay: var(--rain-delay);
+}
+
+.home-weather-rain-drop.layer-0 {
+  animation-duration: var(--rain-near-duration, 1s);
+}
+
+.home-weather-rain-drop.layer-1 {
+  width: .8px;
+  opacity: calc(var(--rain-alpha) * .78);
+  animation-duration: var(--rain-mid-duration, 1.3s);
+}
+
+.home-weather-rain-drop.layer-2 {
+  width: .7px;
+  opacity: calc(var(--rain-alpha) * .58);
+  filter: blur(.15px);
+  animation-duration: var(--rain-far-duration, 1.6s);
 }
 
 .home-weather-state-snow .home-weather-fx-particles {
@@ -678,9 +727,9 @@
   to { opacity: .28; transform: translate3d(2%, 1%, 0); }
 }
 
-@keyframes home-weather-rain {
-  from { transform: translate3d(0, -72px, 0); }
-  to { transform: translate3d(-18px, 72px, 0); }
+@keyframes home-weather-rain-drop {
+  from { transform: translate3d(0, -14vh, 0) rotate(12deg); }
+  to { transform: translate3d(var(--rain-drift), 132vh, 0) rotate(12deg); }
 }
 
 @keyframes home-weather-snow {
