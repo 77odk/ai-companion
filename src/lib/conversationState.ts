@@ -430,7 +430,8 @@ function applyCloudState(entity: CloudStateEntity): void {
     if (JSON.stringify(merged) !== JSON.stringify(canonical)) queueState(merged, entity.version)
     return
   }
-  writeLocal(local ? mergeConversationStates(canonical, local) : canonical)
+  // No local pending intent: Cloud State is canonical. Never resurrect a stale local-only branch.
+  writeLocal(canonical)
 }
 
 function deleteCloudState(entity: CloudStateEntity): void {
