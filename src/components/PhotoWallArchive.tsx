@@ -24,6 +24,52 @@ type BoardStyle = CSSProperties & {
   '--photo-board-height': string
 }
 
+type PreviewStyle = CSSProperties & {
+  '--photo-preview-x': string
+  '--photo-preview-y': string
+  '--photo-preview-rotate': string
+  '--photo-preview-scale': string
+  '--photo-preview-z': string
+}
+
+const PREVIEW_Y = [50, 26, 62, 34, 54, 22, 66, 38, 58, 28, 70, 42]
+const PREVIEW_ROTATE = [-6, 4, -3, 7, -5, 2, 5, -7, 3, -2, 6, -4]
+const PREVIEW_SCALE = [1, 0.95, 0.98, 0.93, 1.01, 0.96, 0.94, 0.99, 0.95, 0.93, 1, 0.96]
+
+function stablePreviewUnit(seed: string): number {
+  let hash = 2166136261
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0) / 4294967295
+}
+
+function previewX(index: number, count: number): number {
+  if (count <= 1) return 50
+  if (count === 2) return 35 + index * 30
+  if (count === 3) return 23 + index * 27
+  const edge = 16
+  return edge + index * ((100 - edge * 2) / (count - 1))
+}
+
+function previewStyle(photo: PhotoMeta, index: number, count: number): PreviewStyle {
+  const seed = `${photo.id}:${photo.createdAt}`
+  const jitterX = (stablePreviewUnit(`${seed}:x`) - 0.5) * 8
+  const jitterY = (stablePreviewUnit(`${seed}:y`) - 0.5) * 6
+  const jitterRotate = (stablePreviewUnit(`${seed}:r`) - 0.5) * 2.4
+  const jitterScale = (stablePreviewUnit(`${seed}:s`) - 0.5) * 0.02
+  const compactY = count <= 1 ? 40 : count === 2 ? [42, 34][index] : count === 3 ? [46, 28, 46][index] : PREVIEW_Y[index]
+
+  return {
+    '--photo-preview-x': `calc(${previewX(index, count)}% + ${jitterX.toFixed(1)}px)`,
+    '--photo-preview-y': `${(compactY + jitterY).toFixed(1)}px`,
+    '--photo-preview-rotate': `${(PREVIEW_ROTATE[index] + jitterRotate).toFixed(1)}deg`,
+    '--photo-preview-scale': `${(PREVIEW_SCALE[index] + jitterScale).toFixed(3)}`,
+    '--photo-preview-z': `${count - index + 10}`,
+  }
+}
+
 function fmtMD(ts: number): string {
   const d = new Date(ts)
   return `${d.getMonth() + 1}月${d.getDate()}日`
@@ -34,7 +80,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const touchStartX = useRef<number | null>(null)
   const sorted = useMemo(() => [...photos].sort((a, b) => b.createdAt - a.createdAt), [photos])
-  const preview = sorted.slice(0, 5)
+  const preview = sorted.slice(0, 12)
   const groups = useMemo(() => groupPhotosByMonth(sorted), [sorted])
   // 每月「有照片的那几天」的行号（最新的一天 = 行 0）；Y 轴按行排，月份标题下面就是照片。
   const dayRows = useMemo(() => assignDayRows(sorted), [sorted])
@@ -94,22 +140,16 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
             <span className="photo-stack-felt" aria-hidden="true" />
             {preview.map((photo, index) => {
               const layout = layoutForPhoto(photo.id, photo.createdAt, dayRows.get(photo.id) ?? 0)
-              const angle = layout.rotate + (index - Math.min(preview.length, 5) / 2) * 0.6
-              const x = ((index % 5) - 2) * 26 + layout.shift * 0.45
-              const y = (index % 2) * 7
               return (
                 <span
                   key={photo.id}
                   className={`photo-stack-card pin-${layout.pin}`}
-                  style={{
-                    zIndex: index + 1,
-                    transform: `translate(${x}px, ${y}px) rotate(${angle}deg)`,
-                  }}
+                  style={previewStyle(photo, index, preview.length)}
                 >
                   <img
                     src={photoSrc(photo)}
                     alt=""
-                    loading="eager"
+                    loading={index < 6 ? 'eager' : 'lazy'}
                     onError={() => onPhotoLoadError?.(photo)}
                   />
                 </span>
