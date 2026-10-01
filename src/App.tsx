@@ -57,6 +57,7 @@ import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from '.
 import {
   attemptPendingPersonaRepair,
   filterPendingPersonaRepairSession,
+  preservePendingPersonaRepairInCache,
 } from './lib/personaRepair'
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
@@ -599,7 +600,7 @@ export default function App() {
       } else if (personaRepair.kind === 'blocked') {
         sessions = sessions.filter((session) => session.id !== personaRepair.pending.id)
         if (getActiveSessionId() === String(personaRepair.pending.id)) setActiveSessionId('')
-        setSessionsCache(sessions)
+        setSessionsCache(preservePendingPersonaRepairInCache(sessions, account))
 
         // 401 已由 sessionApi logout；停在受保护 loading，让现有 LoginGate 接管，不能继续路由旧 session。
         if (personaRepair.status === 401 || !isLoggedIn()) {
@@ -620,7 +621,7 @@ export default function App() {
 
       sessions = filterPendingPersonaRepairSession(sessions, account)
       // S1 头部入口要显示当前角色名：列表直接落缓存，切换/重进不用等角色列表页
-      setSessionsCache(sessions)
+      setSessionsCache(preservePendingPersonaRepairInCache(sessions, account))
       // 只有同账号正常启动才允许补种 legacy Cloud State。
       // 跨账号恢复时，旧账号留在浏览器里的 legacy 值绝不能排队到新账号。
       if (allowLegacyFallback) queueLegacyCloudStateBackfill()
@@ -855,7 +856,7 @@ export default function App() {
     const res = await listSessions(token)
     if (res.ok) {
       const account = getAccount()?.account ?? ''
-      setSessionsCache(filterPendingPersonaRepairSession(res.data.sessions, account))
+      setSessionsCache(preservePendingPersonaRepairInCache(filterPendingPersonaRepairSession(res.data.sessions, account), account))
     }
   }, [])
 
