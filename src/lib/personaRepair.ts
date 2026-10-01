@@ -122,8 +122,17 @@ export function filterPendingPersonaRepairSession(sessions: Session[], account: 
  * sessions cache 保持原语义：只缓存当前账号 server sessions。
  * repair 元数据独立保存在 session 级 ai_profile 里，所以这里不再混入跨账号条目。
  */
-export function preservePendingPersonaRepairInCache(sessions: Session[], _account: string): Session[] {
-  return Array.isArray(sessions) ? sessions : []
+export function preservePendingPersonaRepairInCache(sessions: Session[], account: string): Session[] {
+  const pending = getSessionsCache().filter((session) => {
+    const marker = loadLocalPersonaRepair(String(session.id))
+    return marker?.account === account && marker.state === 'pending'
+  })
+  if (pending.length === 0) return Array.isArray(sessions) ? sessions : []
+  const pendingIds = new Set(pending.map((session) => session.id))
+  return [
+    ...(Array.isArray(sessions) ? sessions : []).filter((session) => !pendingIds.has(session.id)),
+    ...pending,
+  ]
 }
 
 /**
