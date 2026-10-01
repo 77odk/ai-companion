@@ -175,12 +175,14 @@ export function stripActionMarkers(text: string, lang?: Lang): string {
  * 这里只去掉动作标记外壳、保留内部文字，供 fabricated / embodied / attribution 等检查使用。
  */
 export function flattenActionMarkersForGuard(text: string, lang?: Lang): string {
-  return cleanAttributionArtifacts(stripTimeLabels(
+  // Guard 只需要“看见动作里写了什么”，不需要解析动作语法本身。
+  // 直接移除所有动作分隔符，嵌套、未闭合、流式半截都不会吞掉内部文字。
+  return cleanAttributionArtifacts(
     stripTimeLabels(text)
-      .replace(/\*([^*]*)\*/g, '$1')
-      .replace(/（([^（）]*)）/g, '$1')
-      .replace(/\(([^()]*)\)/g, '$1'),
-  ), lang)
+      .replace(/[（）()]/g, '')
+      .replace(/\*/g, ''),
+    lang,
+  )
     .replace(/\s{2,}/g, ' ')
     .trim()
 }
