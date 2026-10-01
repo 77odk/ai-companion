@@ -10,6 +10,8 @@ import { getPendingOps, removePendingOp, type CloudStatePendingOp } from './sess
 import type { StoredMessage } from './storage.ts'
 
 export const CONVERSATION_STATE_KIND = 'conversation_state'
+export const CONVERSATION_STATE_CHANGE_EVENT = 'yiwem:conversation-state-change'
+export const MESSAGE_SERVER_CONFIRMED_EVENT = 'yiwem:message-server-confirmed'
 const KEY_PREFIX = 'ai_companion_conversation_state_v1_'
 const ROOT_BRANCH_ID = 'root'
 
@@ -158,6 +160,11 @@ function writeLocal(state: ConversationState): void {
   const account = accountKey()
   if (!account) return
   localStorage.setItem(stateKey(state.sessionId, account), JSON.stringify(state))
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(CONVERSATION_STATE_CHANGE_EVENT, {
+      detail: { sessionId: state.sessionId },
+    }))
+  }
 }
 
 function rawById(messages: StoredMessage[]): Map<number, StoredMessage> {
@@ -213,6 +220,15 @@ function resolveBranch(
     const message = byId.get(messageId)
     if (!message || hidden.has(messageId)) continue
     const override = overrides[String(messageId)]
+    out.push(override ? { ...message, content: override } : message)
+  }
+
+  // 当前设备刚发出的 optimistic / streaming 消息尚未拿到 server id；
+  // conversationBranchId 是本地 membership，保证分支里立即可见。server id 回来后会固化到 appendedMessageIds。
+  for (const message of rawMessages) {
+    if (message.conversationBranchId !== branch.id) continue
+    if (validId(message.id) && hidden.has(message.id)) continue
+    const override = validId(message.id) ? overrides[String(message.id)] : undefined
     out.push(override ? { ...message, content: override } : message)
   }
 
@@ -304,6 +320,32 @@ export function forkConversation(
   state.activeBranchId = branchId
   state.updatedAt = now
   return state
+}
+
+/** Root 原始会话不需要 membership；真正 fork 后的新消息才写 branchId。 */
+export function branchIdForNewMessage(state: ConversationState | null): string | undefined {
+  if (!state) return undefined
+  return state.activeBranchId === ROOT_BRANCH_ID ? undefined : state.activeBranchId
+}
+
+export function appendConfirmedMessageToBranch(
+  sessionId: string,
+  branchId: string,
+  messageId: number,
+  now = Date.now(),
+): boolean {
+  if (!sessionId.trim() || !branchId || !validId(messageId)) return false
+  const state = loadConversationState(sessionId)
+  if (!state) return false
+  const branch = state.branches[branchId]
+  if (!branch) return false
+  if (!branch.appendedMessageIds.includes(messageId)) {
+    branch.appendedMessageIds.push(messageId)
+    branch.updatedAt = Math.max(branch.updatedAt, now)
+    state.updatedAt = Math.max(state.updatedAt, now)
+    saveConversationState(state)
+  }
+  return true
 }
 
 export function appendMessageToActiveBranch(
@@ -449,6 +491,11 @@ function deleteCloudState(entity: CloudStateEntity): void {
   }
   const account = accountKey()
   if (account) localStorage.removeItem(stateKey(sessionId, account))
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(CONVERSATION_STATE_CHANGE_EVENT, {
+      detail: { sessionId },
+    }))
+  }
 }
 
 let initialized = false
@@ -459,4 +506,11 @@ export function initConversationStateCloudAdapter(): void {
     apply(entity) { applyCloudState(entity) },
     delete(entity) { deleteCloudState(entity) },
   })
+  if (typeof window !== 'undefined') {
+    window.addEventListener(MESSAGE_SERVER_CONFIRMED_EVENT, (event) => {
+      const detail = (event as CustomEvent<{ sessionId?: string; branchId?: string; messageId?: number }>).detail
+      if (!detail?.sessionId || !detail.branchId || !validId(detail.messageId)) return
+      appendConfirmedMessageToBranch(detail.sessionId, detail.branchId, detail.messageId)
+    })
+  }
 }
