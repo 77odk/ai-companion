@@ -835,8 +835,16 @@ export default function App() {
   // 登录墙是否展示：正在请求需登录 view 且未登录；或已登录页退出后落在需登录 view
   const gateShown = (gateTarget !== null || !isPublicRoute(view)) && !loggedIn
 
+  // Responsive App Shell：由 React 明确告诉样式“主导航是否真的存在”，不让 CSS 猜 DOM。
+  const primaryNavVisible =
+    loggedIn &&
+    !needLightConsent &&
+    !gateShown &&
+    isNavView(view) &&
+    !(view === 'settings' && settingsPrivacyOpen)
+
   return (
-    <div className="app">
+    <div className={`app${primaryNavVisible ? ' app--with-primary-nav' : ''}`}>
       {deployedUpdateVersion && (
         <div className="version-update-notice" role="status" aria-live="polite">
           <span className="version-update-notice-copy">发现新版本，刷新后即可使用</span>
@@ -1167,7 +1175,7 @@ export default function App() {
             )}
           </main>
 
-          {isNavView(view) && !(view === 'settings' && settingsPrivacyOpen) && (
+          {primaryNavVisible && (
             <nav className="app-nav">
               <button
                 className={`nav-btn${navActive('ta') ? ' active' : ''}`}
