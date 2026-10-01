@@ -28,6 +28,7 @@ import {
   saveWeeklyReviewsFromCloud,
   type WeeklyReview,
 } from './weeklyReview.ts'
+import { initMessageMutationCloudAdapter } from './messageMutation.ts'
 
 const GLOBAL = 'global'
 const THEME_KEY = 'ai_companion_theme'
@@ -1063,6 +1064,7 @@ export function initCloudStateResourceAdapters(): void {
   resetReplyLengthSnapshot()
   resetSessionStartSnapshot()
   registerTaRuntimeCloudSnapshotResetter(resetRuntimeSnapshot)
+  initMessageMutationCloudAdapter()
   registerCloudStateAdapter('theme', {
     apply: applyThemeEntity,
     delete() { localStorage.setItem(THEME_KEY, JSON.stringify({ type: 'preset', presetId: 'peach' })); void import('./theme.ts').then(({ applyTheme }) => applyTheme()) },
