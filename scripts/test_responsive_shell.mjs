@@ -34,7 +34,7 @@ assert.match(responsive, /body \.photo-archive-lightbox\s*\{[\s\S]*var\(--el-con
 
 console.log('[responsive] full-width page backgrounds are preserved')
 assert.match(responsive, /\.home-page\s*\{[\s\S]*padding-inline:\s*var\(--el-wide-gutter\)/)
-assert.match(responsive, /\.home-inner\s*\{[\s\S]*var\(--el-content-home-max\)[\s\S]*margin-inline:\s*auto/)
+assert.match(responsive, /body \.home-inner\s*\{[\s\S]*width:\s*min\(100%, var\(--el-content-home-max\)\)[\s\S]*max-width:\s*var\(--el-content-home-max\)[\s\S]*margin-inline:\s*auto/)
 assert.match(responsive, /\.settings-page\s*\{[\s\S]*width:\s*100%/)
 assert.match(responsive, /\.memory-page\s*\{[\s\S]*width:\s*100%/)
 assert.match(responsive, /\.ai-space-page\s*\{[\s\S]*width:\s*100%/)
