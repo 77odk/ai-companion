@@ -197,6 +197,9 @@ export default function RolePicker({
           personaRepairTransactionRef.current = pendingRepair.pending.transactionId
         }
         if (pendingRepair.kind === 'blocked') {
+          // 新标签页接手旧 pending 后，即使这次仍失败，也必须继承原 transactionId。
+          // 之后若别的标签修好，当前页才能识别 completed transaction 并复用原 session。
+          personaRepairTransactionRef.current = pendingRepair.pending.transactionId
           throw new Error(`上次创建的角色人设还没保存完整：${pendingRepair.message}`)
         }
         if (pendingRepair.kind === 'repaired') {
