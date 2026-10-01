@@ -219,6 +219,17 @@ eq(
   '用户原文自己的零宽字符 round-trip 不丢',
 )
 
+eq(
+  decodePersonaText('\u200B普通旧文本'),
+  '\u200B普通旧文本',
+  '不是本序列化器生成的零宽前缀不会被误删',
+)
+eq(
+  countPersonaCharacters(leadingZeroWidth),
+  countPersonaCharacters('性格特质：\u200B用户原文真的以零宽字符开头'),
+  '字数统计只忽略内部转义，不吞用户真实零宽字符',
+)
+
 console.log('\n[7] applyPersonaEdits 结构化人设（自定义）')
 const custom = '角色昵称：阿温\n性格特质：温柔\n关系背景：同事\n初次见面开场白：嗨'
 eq(
