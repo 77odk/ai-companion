@@ -748,6 +748,11 @@
   .home-weather-atmosphere::before {
     animation: none !important;
   }
+
+  .home-weather-rain-drop {
+    top: var(--rain-static-y);
+    transform: rotate(12deg);
+  }
 }
 
 
