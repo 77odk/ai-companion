@@ -38,13 +38,13 @@ assert.equal(
   '语言多数只统计包含当前 userMsg 的最近 5 条',
 )
 
-const userMsgAt = chat.indexOf("const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }")
+const userMsgAt = chat.indexOf("const userMsg: StoredMessage = { role: 'user', content: messageText, ts: Date.now() }")
 const langAt = chat.indexOf('const personaText = persona?.trim() || \'\'')
 assert.ok(userMsgAt >= 0 && userMsgAt < langAt, 'userMsg 在 lang 计算前已构造')
 assert.match(
   chat,
-  /const recentUserMsgs = \[[\s\S]*visibleMessages\.filter\(\(m\) => m\.role === 'user'\)\.map\(\(m\) => m\.content\),[\s\S]*userMsg\.content,[\s\S]*\]\.slice\(-5\)/,
-  'Chat 的 Natural 统计包含当前 userMsg，且总窗口仍为最近 5 条',
+  /const recentUserMsgs = \[[\s\S]*visibleMessages\.filter\(\(m\) => m\.role === 'user'\)\.map\(\(m\) => messageEvidenceText\(m\.content\)\),[\s\S]*text,[\s\S]*\]\.slice\(-5\)/,
+  'Chat 的 Natural 统计包含当前正文、剥离历史引用块，且总窗口仍为最近 5 条',
 )
 
 console.log('✓ BUG-02 Chat language regression passed')

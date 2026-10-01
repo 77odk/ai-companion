@@ -54,6 +54,7 @@ import { estimateToken } from '../lib/token'
 import { calibrateContextFactor, contentTokensOf, loadContextFactor, saveContextFactor, usageMessages } from '../lib/contextUsage'
 import { buildUserWeatherContext, readUserWeatherContext } from '../lib/homeWeather'
 import { clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, savePendingMemoryCorrection, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
+import { formatQuotedMessage, messageEvidenceText, type MessageQuote, type MessageQuoteSpeaker } from '../lib/messageQuote'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -168,6 +169,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     activeSessionId ? getMessagesCache(activeSessionId) : loadMessages(),
   )
   const [input, setInput] = useState('')
+  const [quoteDraft, setQuoteDraft] = useState<MessageQuote | null>(null)
   const [actionNarrationEnabled, setActionNarrationEnabledState] = useState(() => isActionNarrationEnabled())
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -264,6 +266,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     setFailedReplyRetryAvailable(false)
     setError(null)
     setFailedText(null)
+    setQuoteDraft(null)
     if (!activeSessionId) {
       setCompactDone(false)
       setCompactSummary('')
@@ -899,13 +902,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
   }, [])
 
-  const send = useCallback((raw: string) => {
+  const send = useCallback((raw: string, quote: MessageQuote | null = null) => {
     // UI2-03B-1：用户自己发了消息 → 立刻解除「看原对话」的跳转保护，恢复正常滚到底。
     // 必须在这里显式释放：不能靠 auto-scroll 里猜「最后一条是不是 user」——
     // 历史最后一条本来就常是 user，那样会在挂载瞬间误解除保护，把列表拉到底。
     releaseJumpHold()
     const text = raw.trim()
     if (!text || streaming) return
+    const messageText = quote ? formatQuotedMessage(quote, text) : text
     // 新消息开始即废弃上一轮的失败重试；重试永远不能跨轮次存活。
     failedReplyRetryRef.current = null
     setFailedReplyRetryAvailable(false)
@@ -920,7 +924,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
     // 真人忙碌只属于沉浸档。自然 / AI 即使残留 isBusy，也立即回正常聊天路径。
     if (isBusy && activeSessionId && allowsBusyState(resolveIdentityMode(activeSessionId))) {
-      handleBusySend(text)
+      handleBusySend(messageText)
+      setQuoteDraft(null)
       return
     }
     if (isBusy) setIsBusy(false)
@@ -930,7 +935,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     spacePairEligibleRef.current = true
     busyTriggeredRef.current = false
 
-    const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
+    const userMsg: StoredMessage = { role: 'user', content: messageText, ts: Date.now() }
 
     // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看包含当前消息的最近5条用户消息），存 sessionStore
     const personaText = persona?.trim() || ''
@@ -939,8 +944,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       lang = detectLang(personaText)
     } else {
       const recentUserMsgs = [
-        ...visibleMessages.filter((m) => m.role === 'user').map((m) => m.content),
-        userMsg.content,
+        ...visibleMessages.filter((m) => m.role === 'user').map((m) => messageEvidenceText(m.content)),
+        text,
       ].slice(-5)
       const zhCount = recentUserMsgs.filter((m) => detectLang(m) === 'zh').length
       lang = zhCount > recentUserMsgs.length / 2 ? 'zh' : 'en'
@@ -993,14 +998,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 纠正申请必须先经过用户确认；只要本轮存在可纠正目标，就禁止 fallback 新写一条矛盾 Memory。
       if ((correctionIntent && correctionTargets.size > 0) || hasMemoryCorrectionMarker(rawText)) return false
       if (explicitCandidates.length === 0 && !rawText) return
-      const plans = planMemoryWrites(explicitCandidates, rawText ? extractMemories(rawText) : [], userMsg.content.trim())
+      const plans = planMemoryWrites(explicitCandidates, rawText ? extractMemories(rawText) : [], text)
       // 当轮 TA 回应短快照（仅追溯展示；去系统标记/思考链后截断，不整段复制聊天历史）
       const replySnapshot = rawText
         ? stripMemoryCorrectionMarkers(stripMemoryMarkers(stripThinkBlocks(rawText, lang))).trim().slice(0, 160) || undefined
         : undefined
       let created = false
       for (const p of plans) {
-        const res = writeMemory(p.text, { source: p.source || userMsg.content.trim(), topic: p.topic, explicit: p.explicit, taReply: replySnapshot })
+        const res = writeMemory(p.text, { source: p.source || text, topic: p.topic, explicit: p.explicit, taReply: replySnapshot })
         // 只要这一轮真实新增过 ≥1 条就给一次轻量成功反馈（不再要求必须 explicit）；去重命中 / 写失败都不算
         if (res.created) created = true
       }
@@ -1008,7 +1013,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       return created
     }
 
-    recordChatTopic(userMsg.content, activeSessionId || undefined, userMsg.ts)
+    recordChatTopic(text, activeSessionId || undefined, userMsg.ts)
     // TASK-MEM-DISTILL：本地显式检测先收集候选、不抢先写——等模型回复的【记忆】marker 到达后统一归并
     // （有 marker 对应 → 只写一条提炼版 explicit；无对应 marker → fallback 写本地候选；只有 marker → 保持 inferred）
     // 候选的 explicit 身份来自用户证据（用户明确说过），text 若被 marker 匹配则采用模型提炼 wording。
@@ -1056,6 +1061,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     reasoningRef.current = ''
     setMessages([...messages, userMsg, { role: 'assistant', content: '', ts: assistantTs }])
     setInput('')
+    setQuoteDraft(null)
     setError(null)
     setStreaming(true)
     partialTsRef.current = assistantTs
@@ -1072,10 +1078,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       .slice(-6)
       .filter((m) => m.role === 'user')
       .slice(-2)
-      .map((m) => ({ text: m.content, ts: m.ts }))
+      .map((m) => ({ text: messageEvidenceText(m.content), ts: m.ts }))
+      .filter((m) => m.text.length > 0)
     void processEventCandidate({
       sessionId: activeSessionId || undefined,
-      userText: userMsg.content,
+      userText: text,
       recentUserEvidence: recentEventUserEvidence,
       now: userMsg.ts,
     })
@@ -1365,7 +1372,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         if (spacePairEligibleRef.current) {
           const pairCommittedAt = Date.now()
           completeChatTopicPair(
-            userMsg.content,
+            text,
             committedAssistantText,
             activeSessionId || undefined,
             userMsg.ts,
@@ -1601,7 +1608,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       finalize()  // finalize 自己设置 finishedRef 防重入
       if (mountedRef.current && hadNoReply) {
         setError(err?.message ?? 'TA 没有返回正文')
-        setFailedText(userMsg.content)
+        setFailedText(text)
+        if (quote) setQuoteDraft(quote)
         if (retrySameRound) {
           // 0 正文只开放显式手动重试；不自动烧 Key，也不重新走 send/user upload/Event/Memory 前置链路。
           failedReplyRetryRef.current = retrySameRound
@@ -1609,7 +1617,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         }
       } else if (err && mountedRef.current) {
         setError(err.message)
-        setFailedText(userMsg.content)
+        setFailedText(text)
+        if (quote) setQuoteDraft(quote)
       }
     }
     tickPlayRef.current = playTick
@@ -1887,6 +1896,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
   }
 
+  const handleQuoteMessage = (text: string, speaker: MessageQuoteSpeaker) => {
+    const clean = text.trim()
+    if (!clean) return
+    setQuoteDraft({ speaker, text: clean })
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus({ preventScroll: true })
+    })
+  }
+
   const insertActionNarration = () => {
     const el = inputRef.current
     const start = el?.selectionStart ?? input.length
@@ -1906,7 +1924,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
   const handleSend = () => {    const text = input
     if (!text.trim() || streaming) return
-    send(text)
+    send(text, quoteDraft)
     // 移动端连续聊天：发送后保持 textarea 焦点，让软键盘像微信一样继续留在屏幕上。
     window.requestAnimationFrame(() => {
       inputRef.current?.focus({ preventScroll: true })
@@ -1967,6 +1985,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }
 
   const isEmpty = displayMessages.length === 0
+  const chatUiLang = getSessionLang(activeSessionId || undefined)
   const chatBg = useMemo(() => loadChatBg(activeSessionId ?? undefined), [activeSessionId])
 
   return (
@@ -1998,6 +2017,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 message={m}
                 typing={streaming && i === displayMessages.length - 1 && m.role === 'assistant' && m.content === ''}
                 onAvatarClick={onOpenProfile}
+                onQuote={handleQuoteMessage}
               />
             ))}
           </>
@@ -2068,6 +2088,26 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       )}
 
       <div className="chat-composer-panel">
+        {quoteDraft && (
+          <div className="chat-quote-draft">
+            <div className="chat-quote-draft-text">
+              <strong>
+                {chatUiLang === 'en'
+                  ? `Quoting ${quoteDraft.speaker === 'assistant' ? 'TA' : 'me'}`
+                  : `引用${quoteDraft.speaker === 'assistant' ? ' TA' : '我'}`}
+              </strong>
+              <span>{quoteDraft.text.replace(/\s+/g, ' ').slice(0, 120)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setQuoteDraft(null)}
+              aria-label={chatUiLang === 'en' ? 'Remove quote' : '取消引用'}
+              title={chatUiLang === 'en' ? 'Remove quote' : '取消引用'}
+            >
+              ×
+            </button>
+          </div>
+        )}
         <div className="composer">
           <textarea
             ref={inputRef}
