@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { applyRoleTemplatePersonality, ROLE_TEMPLATES, type RoleTemplate, type RoleTemplateCategory } from '../lib/personaTemplates'
 import {
   buildCustomPersona,
@@ -17,7 +17,7 @@ import {
   type AIGender,
 } from '../lib/storage'
 import { getToken, isLoggedIn } from '../lib/auth'
-import { createSession, patchSession } from '../lib/sessionApi'
+import { createSession, patchSession, type Session } from '../lib/sessionApi'
 import { getActiveSessionId, getSessionsCache, setActiveSessionId, setSessionsCache } from '../lib/sessionStore'
 import { resolveSessionName, type RolePickMode } from '../lib/sessionFlow'
 import AvatarPicker from './AvatarPicker'
@@ -112,6 +112,8 @@ export default function RolePicker({
   )
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(initialNaturalError ?? null)
+  // POST 已成功但 persona 补写失败时，后续确认继续修同一个 session，禁止重复创建角色。
+  const pendingCreatedSessionRef = useRef<Session | null>(null)
 
   // current 不再经过“选模板/换人设”页，直接复用角色详情里的同一套编辑器，避免两个入口抢同一件事。
   if (mode === 'current') {
@@ -178,18 +180,40 @@ export default function RolePicker({
       if (isLoggedIn()) {
         // current 已在组件顶部直接复用 AIDetail；走到这里的一定是 first/new，只负责新建 TA。
         const token = getToken()
-        const res = await createSession(token, { persona, title })
-        if (!res.ok) throw new Error(res.message)
+        let createdSession: Session
 
-        let createdSession = res.data
-        if (!allowEmptyPersona && needsPersonaPersistenceRepair(persona, createdSession.persona)) {
-          // 防止“创建成功但 persona 被后端/链路吞掉”的假成功：立即用既有 PATCH 契约补写一次。
-          const repaired = await patchSession(token, createdSession.id, { persona })
+        if (!allowEmptyPersona && pendingCreatedSessionRef.current) {
+          // 上一次 POST 已经成功，只是 persona 补写失败：继续修同一个 session，绝不再次 POST。
+          const pending = pendingCreatedSessionRef.current
+          const repaired = await patchSession(token, pending.id, { persona, title })
           if (!repaired.ok) throw new Error(`角色已创建，但人设保存失败：${repaired.message}`)
           if (needsPersonaPersistenceRepair(persona, repaired.data.persona)) {
             throw new Error('角色已创建，但人设没有完整保存，请稍后重试')
           }
           createdSession = repaired.data
+          pendingCreatedSessionRef.current = null
+        } else {
+          const res = await createSession(token, { persona, title })
+          if (!res.ok) throw new Error(res.message)
+          createdSession = res.data
+
+          if (!allowEmptyPersona && needsPersonaPersistenceRepair(persona, createdSession.persona)) {
+            // POST 已成功，先保留这条 session；补写失败时下一次仍修它，避免重复创建。
+            pendingCreatedSessionRef.current = createdSession
+            setActiveSessionId(String(createdSession.id))
+            setSessionsCache([
+              ...getSessionsCache().filter((session) => String(session.id) !== String(createdSession.id)),
+              createdSession,
+            ])
+
+            const repaired = await patchSession(token, createdSession.id, { persona, title })
+            if (!repaired.ok) throw new Error(`角色已创建，但人设保存失败：${repaired.message}`)
+            if (needsPersonaPersistenceRepair(persona, repaired.data.persona)) {
+              throw new Error('角色已创建，但人设没有完整保存，请稍后重试')
+            }
+            createdSession = repaired.data
+            pendingCreatedSessionRef.current = null
+          }
         }
 
         setActiveSessionId(String(createdSession.id))
