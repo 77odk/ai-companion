@@ -212,6 +212,8 @@ export function saveSettings(settings: ModelSettings): void {
 export interface StoredMessage {
   /** 后端 messages 表的稳定 id；旧本地消息/尚未上传的乐观消息没有。 */
   id?: number
+  /** 本地/Cloud State 分支归属；不进入 messages POST，请求成功后由 Conversation State 记录 server id。 */
+  conversationBranchId?: string
   role: 'user' | 'assistant'
   content: string
   ts: number
