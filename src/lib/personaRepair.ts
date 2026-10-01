@@ -60,6 +60,13 @@ export function clearPendingPersonaRepair(account: string, id?: number): void {
   }
 }
 
+/** 待修复角色在事务完成前不能出现在正常角色列表/路由候选里。 */
+export function filterPendingPersonaRepairSession(sessions: Session[], account: string): Session[] {
+  const pending = readPendingPersonaRepair(account)
+  if (!pending) return Array.isArray(sessions) ? sessions : []
+  return (Array.isArray(sessions) ? sessions : []).filter((session) => session.id !== pending.id)
+}
+
 /**
  * 尝试修复当前账号尚未确认完整的人设。
  * - 404：session 已不存在，清掉过期事务标记；
