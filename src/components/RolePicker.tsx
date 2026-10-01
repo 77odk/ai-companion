@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { applyRoleTemplatePersonality, ROLE_TEMPLATES, type RoleTemplate, type RoleTemplateCategory } from '../lib/personaTemplates'
 import {
   buildCustomPersona,
@@ -23,7 +23,8 @@ import { getActiveSessionId, getSessionsCache, setActiveSessionId, setSessionsCa
 import { resolveSessionName, type RolePickMode } from '../lib/sessionFlow'
 import {
   attemptPendingPersonaRepair,
-  clearPendingPersonaRepair,
+  newPersonaRepairTransactionId,
+  rememberCompletedPersonaRepair,
   writePendingPersonaRepair,
 } from '../lib/personaRepair'
 import AvatarPicker from './AvatarPicker'
@@ -118,6 +119,7 @@ export default function RolePicker({
   )
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(initialNaturalError ?? null)
+  const personaRepairTransactionRef = useRef('')
 
   // current 不再经过“选模板/换人设”页，直接复用角色详情里的同一套编辑器，避免两个入口抢同一件事。
   if (mode === 'current') {
@@ -186,8 +188,14 @@ export default function RolePicker({
         const token = getToken()
         const account = getAccount()?.account ?? ''
         let createdSession: Session | null = null
+        const repairTransactionId =
+          personaRepairTransactionRef.current || newPersonaRepairTransactionId()
+        personaRepairTransactionRef.current = repairTransactionId
 
-        const pendingRepair = await attemptPendingPersonaRepair(token, account)
+        const pendingRepair = await attemptPendingPersonaRepair(token, account, repairTransactionId)
+        if (pendingRepair.kind === 'repaired') {
+          personaRepairTransactionRef.current = pendingRepair.pending.transactionId
+        }
         if (pendingRepair.kind === 'blocked') {
           throw new Error(`上次创建的角色人设还没保存完整：${pendingRepair.message}`)
         }
@@ -199,11 +207,11 @@ export default function RolePicker({
           } else {
             const updated = await patchSession(token, pendingRepair.session.id, { persona, title })
             if (!updated.ok) {
-              writePendingPersonaRepair(pendingRepair.session, { account, persona, title })
+              writePendingPersonaRepair(pendingRepair.session, { account, persona, title, transactionId: pendingRepair.pending.transactionId })
               throw new Error(`角色已创建，但更新后的人设保存失败：${updated.message}`)
             }
             if (needsPersonaPersistenceRepair(persona, updated.data.persona)) {
-              writePendingPersonaRepair(updated.data, { account, persona, title })
+              writePendingPersonaRepair(updated.data, { account, persona, title, transactionId: pendingRepair.pending.transactionId })
               throw new Error('角色已创建，但更新后的人设没有完整保存，请稍后重试')
             }
             createdSession = updated.data
@@ -218,7 +226,7 @@ export default function RolePicker({
           if (!allowEmptyPersona && needsPersonaPersistenceRepair(persona, createdSession.persona)) {
             // POST 已成功但返回的人设缺失/截断：先写当前浏览器会话的恢复标记，再尝试 PATCH。
             // 成功前不激活、不写正常会话缓存，避免空 persona 被用户直接拿去聊天。
-            writePendingPersonaRepair(createdSession, { account, persona, title })
+            writePendingPersonaRepair(createdSession, { account, persona, title, transactionId: repairTransactionId })
             const repaired = await patchSession(token, createdSession.id, { persona, title })
             if (!repaired.ok) {
               throw new Error(`角色已创建，但人设保存失败：${repaired.message}`)
@@ -227,7 +235,13 @@ export default function RolePicker({
               throw new Error('角色已创建，但人设没有完整保存，请稍后重试')
             }
             createdSession = repaired.data
-            clearPendingPersonaRepair(account, createdSession.id)
+            rememberCompletedPersonaRepair(createdSession, {
+              account,
+              id: createdSession.id,
+              persona,
+              title,
+              transactionId: repairTransactionId,
+            })
           }
         }
 
