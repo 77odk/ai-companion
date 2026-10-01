@@ -1103,7 +1103,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const assistantTs = Date.now()
     assistantText.current = ''
     reasoningRef.current = ''
-    setMessages([...messages, userMsg, tagCurrentBranch(tagCurrentBranch({ role: 'assistant', content: '', ts: assistantTs }))])
+    setMessages([...messages, userMsg, tagCurrentBranch({ role: 'assistant', content: '', ts: assistantTs })])
     setInput('')
     setQuoteDraft(null)
     setError(null)
