@@ -38,6 +38,7 @@ interface Props {
   onNaturalLogin?: (setup: NaturalSetup) => void
   initialNatural?: NaturalSetup
   initialNaturalError?: string
+  initialPersonaRepairTransactionId?: string
   onBack?: () => void
   onLogin?: () => void
 }
@@ -100,6 +101,7 @@ export default function RolePicker({
   onNaturalLogin,
   initialNatural,
   initialNaturalError,
+  initialPersonaRepairTransactionId,
   onBack,
   onLogin,
 }: Props) {
@@ -119,7 +121,7 @@ export default function RolePicker({
   )
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(initialNaturalError ?? null)
-  const personaRepairTransactionRef = useRef('')
+  const personaRepairTransactionRef = useRef(initialPersonaRepairTransactionId ?? '')
 
   // current 不再经过“选模板/换人设”页，直接复用角色详情里的同一套编辑器，避免两个入口抢同一件事。
   if (mode === 'current') {
@@ -237,6 +239,12 @@ export default function RolePicker({
             // POST 已成功但返回的人设缺失/截断：先写当前浏览器会话的恢复标记，再尝试 PATCH。
             // 成功前不激活、不写正常会话缓存，避免空 persona 被用户直接拿去聊天。
             writePendingPersonaRepair(createdSession, { account, persona, title, transactionId: repairTransactionId })
+            // repair 发现依赖可枚举 sessions；先把这条未完成 session 放进当前账号缓存，
+            // 正常 UI 会通过 pending filter 隐藏它，但当前页再次 Save 时能复用而不是重复 POST。
+            setSessionsCache([
+              ...getSessionsCache().filter((session) => String(session.id) !== String(createdSession.id)),
+              createdSession,
+            ])
             const repaired = await patchSession(token, createdSession.id, { persona, title })
             if (!repaired.ok) {
               throw new Error(`角色已创建，但人设保存失败：${repaired.message}`)
