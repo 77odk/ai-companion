@@ -136,6 +136,18 @@ eq(
   '只改开场白 → 多行性格和背景原样保留',
 )
 
+console.log('\n[6.6] 旧版自由文本 persona 不能被标签删除误伤')
+eq(
+  extractPersonality('角色昵称：阿温\n温柔理智'),
+  '温柔理智',
+  '只有昵称标签 + 自由文本主体 → 主体保留',
+)
+eq(
+  applyPersonaEdits('角色昵称：阿温\n温柔理智', { background: '同事' }),
+  '温柔理智\n关系背景：同事',
+  '旧版自由文本加背景 → 不吞主体',
+)
+
 console.log('\n[7] applyPersonaEdits 结构化人设（自定义）')
 const custom = '角色昵称：阿温\n性格特质：温柔\n关系背景：同事\n初次见面开场白：嗨'
 eq(
