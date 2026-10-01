@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import MessageBubble from './MessageBubble'
 import { buildActionNarrationInstruction, buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
-import { getSessionStart, isActionNarrationEnabled, loadMessages, loadPersona, loadSettings, loadAIProfile, loadUserProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, getContextUsage, setContextUsage, type ContextUsageState, type StoredMessage } from '../lib/storage'
+import { getSessionStart, isActionNarrationEnabled, loadMessages, loadPersona, loadSettings, loadAIProfile, loadUserProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, clearContextBridge, getContextUsage, setContextUsage, clearContextUsage, type ContextUsageState, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
 import { getAccount } from '../lib/sync'
@@ -55,7 +55,7 @@ import { calibrateContextFactor, contentTokensOf, loadContextFactor, saveContext
 import { buildUserWeatherContext, readUserWeatherContext } from '../lib/homeWeather'
 import { clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, savePendingMemoryCorrection, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 import { formatQuotedMessage, messageEvidenceText, type MessageQuote, type MessageQuoteSpeaker } from '../lib/messageQuote'
-import { CONVERSATION_STATE_CHANGE_EVENT, branchIdForNewMessage, loadConversationState, resolveConversationMessages, type ConversationState } from '../lib/conversationState'
+import { CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState } from '../lib/conversationState'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -182,6 +182,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   // 仅内存态：只允许重试当前会话、当前页面生命周期、当前这一轮；绝不进 storage / cloud。
   const [failedReplyRetryAvailable, setFailedReplyRetryAvailable] = useState(false)
   const failedReplyRetryRef = useRef<null | (() => void)>(null)
+  const [branchActionNotice, setBranchActionNotice] = useState<{
+    branchId: string
+    previousBranchId: string
+    text: string
+  } | null>(null)
   const [hasKey] = useState(() => Boolean(loadSettings().apiKey))
   // 该模型不支持思考链：请求被服务商拒了以后由 modelChat 降级并通知，这里只负责显示一行灰字
   const [thinkingUnsupported, setThinkingUnsupported] = useState(() => isThinkingUnsupported(loadSettings()))
@@ -192,29 +197,32 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [showMilestone, setShowMilestone] = useState(false)
   // 刷新对话只推进当前 session 的上下文分界线；历史仍完整保留。
   const sessionStart = getSessionStart(activeSessionId || undefined)
-  // Context：session 级状态。退出聊天 / 页面刷新不清零；只有 sessionStart 真推进才进入新上下文段。
+  // 新 branch 创建后，旧 branch 生成的 Compact/Bridge/Meter 都不能继续注入。
+  const conversationBranchBoundary = getActiveConversationBranchCreatedAt(conversationState)
+  const contextBoundary = Math.max(sessionStart, conversationBranchBoundary)
+  // Context：session 级状态。退出聊天 / 页面刷新不清零；sessionStart 或 active branch 变化都会进入新上下文段。
   const [contextMeter, setContextMeter] = useState<ContextUsageState | null>(() => {
     if (!activeSessionId) return null
     const stored = getContextUsage(activeSessionId)
-    return stored && stored.sessionStart === sessionStart ? stored : null
+    return stored && stored.sessionStart === sessionStart && stored.updatedAt >= contextBoundary ? stored : null
   })
   // Compact：用户主动「压缩」→ 最多 1 次模型调用，把较老历史压成 summary；之后注入 = summary + recent raw。
   // 每会话最多压缩 1 次；原聊天记录绝不删除。summary 持久化，刷新后无需再调模型。
   const [compactDone, setCompactDone] = useState(() => {
     if (!activeSessionId) return false
     const compactedAt = getContextCompactAt(activeSessionId)
-    return compactedAt > 0 && compactedAt >= sessionStart
+    return compactedAt > 0 && compactedAt >= contextBoundary
   })
   const [compactSummary, setCompactSummary] = useState(() => {
     if (!activeSessionId) return ''
     const compactedAt = getContextCompactAt(activeSessionId)
-    return compactedAt > 0 && compactedAt >= sessionStart ? getContextCompactSummary(activeSessionId) : ''
+    return compactedAt > 0 && compactedAt >= contextBoundary ? getContextCompactSummary(activeSessionId) : ''
   })
   // Bridge：用户主动「承接」→ 最多 1 次模型调用生成 evidence-only bridge，临时参与约 6–10 轮后退出。
   const [bridgeInfo, setBridgeInfo] = useState(() => {
     if (!activeSessionId) return null
     const stored = getContextBridge(activeSessionId)
-    return stored && stored.bridgedAt >= sessionStart ? stored : null
+    return stored && stored.bridgedAt >= contextBoundary ? stored : null
   })
   // contextBusy：防止 Compact / Bridge 的模型调用并发（每次最多 1 次）。
   const [contextBusy, setContextBusy] = useState<'compact' | 'bridge' | null>(null)
@@ -300,19 +308,19 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       return
     }
     const compactedAt = getContextCompactAt(activeSessionId)
-    const compactIsCurrent = compactedAt > 0 && compactedAt >= sessionStart
+    const compactIsCurrent = compactedAt > 0 && compactedAt >= contextBoundary
     setCompactDone(compactIsCurrent)
     setCompactSummary(compactIsCurrent ? getContextCompactSummary(activeSessionId) : '')
     const storedBridge = getContextBridge(activeSessionId)
     setBridgeInfo(storedBridge && storedBridge.bridgedAt >= sessionStart ? storedBridge : null)
     const storedUsage = getContextUsage(activeSessionId)
-    setContextMeter(storedUsage && storedUsage.sessionStart === sessionStart ? storedUsage : null)
+    setContextMeter(storedUsage && storedUsage.sessionStart === sessionStart && storedUsage.updatedAt >= contextBoundary ? storedUsage : null)
     setContextNotice(null)
     setContextBusy(null)
     setPendingMemoryCorrection(loadPendingMemoryCorrection(activeSessionId, sessionStart, getToken() ?? ''))
     setMemoryCorrectionBusy(false)
     setMemoryCorrectionNotice(null)
-  }, [activeSessionId, sessionStart])
+  }, [activeSessionId, sessionStart, contextBoundary])
   // UI2-03B-1：jump effect 只依赖 pendingJump/session，消息列表通过 ref 读取最新值 ——
   // 这样消息每次更新都不会重跑 jump effect（否则 cleanup 会把跳转保护窗口的定时器提前清掉）
   const visibleMessagesRef = useRef(visibleMessages)
@@ -1356,7 +1364,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // PR #99 Session Bridge：已承接时，注入 evidence-only bridge 摘要（memory 优先级块，不新增 LLM 调用）。
     // 只临时参与后续约 BRIDGE_ACTIVE_TURNS 轮（turnsLeft 递减，归零后退出注入）；不写 Memory / Event。
     const bridgeBlocks: ContextBlock[] = []
-    if (activeSessionId && bridgeInfo && bridgeInfo.bridgedAt >= sessionStart && bridgeInfo.turnsLeft > 0 && bridgeInfo.content.trim()) {
+    if (activeSessionId && bridgeInfo && bridgeInfo.bridgedAt >= contextBoundary && bridgeInfo.turnsLeft > 0 && bridgeInfo.content.trim()) {
       bridgeBlocks.push({ id: 'bridge', content: bridgeInfo.content, priority: 'memory' })
     }
     // PR #99 Context Compact：已压缩时，注入 = [较老历史摘要(system)] + [最近原始消息]。
@@ -1850,6 +1858,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       return
     }
     const compactBoundary = sessionStart
+    const compactBranchId = conversationState?.activeBranchId ?? null
     const prompt =
       uiLang === 'en'
         ? 'Below is the earlier part of a conversation. Summarize ONLY what actually happened — main topics, decisions, the user\'s preferences/state, and anything the assistant (TA) explicitly promised. Do not invent, infer, or add anything not in the text. Keep it concise and neutral.\n\n' +
@@ -1868,8 +1877,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       )
       const trimmed = summary.trim()
       if (!trimmed) throw new Error('empty summary')
-      // 请求期间如果用户再次「刷新对话」，旧段结果必须作废，不能写进新 boundary。
+      // 请求期间如果刷新边界或 active branch 变化，旧段结果必须作废。
       if (getSessionStart(activeSessionId) !== compactBoundary) return
+      if ((loadConversationState(activeSessionId)?.activeBranchId ?? null) !== compactBranchId) return
       setContextCompactSummary(trimmed, activeSessionId)
       setContextCompactAt(Date.now(), activeSessionId)
       notifyDataChanged()
@@ -1912,6 +1922,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     const lines = bridgeSource.map((m) => `${m.role === 'user' ? 'USER' : 'TA'}: ${m.content}`)
     const bridgeBoundary = sessionStart
+    const bridgeBranchId = conversationState?.activeBranchId ?? null
     const prompt =
       uiLang === 'en'
         ? 'Below is the recent tail from before this same conversation was refreshed. Write a short evidence-only handover note covering: 1) what you two were talking about, 2) unfinished topics, 3) the user\'s current state, 4) any explicit promises the companion made, 5) necessary referents (who "he/she" means). Only state what is actually in the text. Never invent or infer. Keep it in plain concise notes.\n\n' +
@@ -1930,8 +1941,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       )
       const trimmed = content.trim()
       if (!trimmed) throw new Error('empty bridge')
-      // Bridge 只属于发起请求时的刷新段；期间若再次刷新，旧结果直接丢弃。
+      // Bridge 只属于发起请求时的刷新段 + active branch；任何一边变化都丢弃旧结果。
       if (getSessionStart(activeSessionId) !== bridgeBoundary) return
+      if ((loadConversationState(activeSessionId)?.activeBranchId ?? null) !== bridgeBranchId) return
       const bridgedAt = Date.now()
       setContextBridge(activeSessionId, activeSessionId, trimmed, BRIDGE_ACTIVE_TURNS, bridgedAt)
       notifyDataChanged()
@@ -1943,6 +1955,69 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       setContextBusy(null)
     }
   }
+
+  const invalidateDerivedContextForBranchChange = (sessionId: string) => {
+    setContextCompactAt(0, sessionId)
+    setContextCompactSummary('', sessionId)
+    clearContextBridge(sessionId)
+    clearContextUsage(sessionId, false)
+    clearPendingMemoryCorrection(sessionId)
+    setCompactDone(false)
+    setCompactSummary('')
+    setBridgeInfo(null)
+    setContextMeter(null)
+    setContextNotice(null)
+    setContextMenuOpen(false)
+    setContextDetailOpen(false)
+    setPendingMemoryCorrection(null)
+    setMemoryCorrectionNotice(null)
+    notifyDataChanged()
+  }
+
+  const commitConversationBranchAction = (message: StoredMessage, reason: 'delete' | 'rollback') => {
+    if (!activeSessionId || streaming || contextBusy || typeof message.id !== 'number') return
+    const lastStable = [...activeMessages].reverse().find((item) => typeof item.id === 'number')
+    const next = forkConversation(conversationState, activeSessionId, messages, {
+      forkAfterMessageId: reason === 'rollback' ? message.id : (lastStable?.id ?? message.id),
+      ...(reason === 'delete' ? { hideMessageIds: [message.id] } : {}),
+      reason,
+    })
+    const created = next.branches[next.activeBranchId]
+    if (!created?.parentBranchId) return
+    saveConversationState(next)
+    invalidateDerivedContextForBranchChange(activeSessionId)
+    const actionLang = getSessionLang(activeSessionId)
+    setBranchActionNotice({
+      branchId: next.activeBranchId,
+      previousBranchId: created.parentBranchId,
+      text: actionLang === 'en'
+        ? (reason === 'delete' ? 'Removed from this conversation' : 'Rewound to this message')
+        : (reason === 'delete' ? '已从当前对话删除' : '已回溯到这里'),
+    })
+  }
+
+  const undoConversationBranchAction = () => {
+    if (!activeSessionId || !branchActionNotice) return
+    const current = loadConversationState(activeSessionId)
+    if (!current || current.activeBranchId !== branchActionNotice.branchId) {
+      setBranchActionNotice(null)
+      return
+    }
+    if (!current.branches[branchActionNotice.previousBranchId]) {
+      setBranchActionNotice(null)
+      return
+    }
+    const restored = activateConversationBranch(current, branchActionNotice.previousBranchId)
+    saveConversationState(restored)
+    invalidateDerivedContextForBranchChange(activeSessionId)
+    setBranchActionNotice(null)
+  }
+
+  useEffect(() => {
+    if (!branchActionNotice) return
+    const timer = window.setTimeout(() => setBranchActionNotice(null), 6000)
+    return () => window.clearTimeout(timer)
+  }, [branchActionNotice])
 
   const handleQuoteMessage = (text: string, speaker: MessageQuoteSpeaker) => {
     const clean = text.trim()
@@ -2066,6 +2141,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 typing={streaming && i === displayMessages.length - 1 && m.role === 'assistant' && m.content === ''}
                 onAvatarClick={onOpenProfile}
                 onQuote={handleQuoteMessage}
+                onDelete={!streaming && !contextBusy && typeof m.id === 'number'
+                  ? () => commitConversationBranchAction(m, 'delete')
+                  : undefined}
+                onRollback={!streaming && !contextBusy && typeof m.id === 'number' && m.id !== [...activeMessages].reverse().find((item) => typeof item.id === 'number')?.id
+                  ? () => commitConversationBranchAction(m, 'rollback')
+                  : undefined}
               />
             ))}
           </>
@@ -2074,6 +2155,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
       {jumpNotice && (
         <div className="chat-jump-notice" role="status">{jumpNotice}</div>
+      )}
+
+      {branchActionNotice && (
+        <div className="chat-branch-action-notice" role="status">
+          <span>{branchActionNotice.text}</span>
+          <button type="button" onClick={undoConversationBranchAction}>{chatUiLang === 'en' ? 'Undo' : '撤销'}</button>
+        </div>
       )}
 
       {error && (

@@ -18,6 +18,10 @@ interface Props {
   onAvatarClick?: () => void
   /** 把当前可见消息带入输入区作为引用上下文。 */
   onQuote?: (text: string, speaker: MessageQuoteSpeaker) => void
+  /** 软删除当前 active branch 里的这一条消息。 */
+  onDelete?: () => void
+  /** 从这一条消息回溯；旧后缀留在旧 branch，可恢复。 */
+  onRollback?: () => void
 }
 
 function Avatar({ value, kind, className }: { value: string; kind: 'user' | 'ai'; className: string }) {
@@ -78,7 +82,7 @@ async function copyVisibleText(text: string): Promise<boolean> {
   }
 }
 
-export default function MessageBubble({ message, typing = false, onAvatarClick, onQuote }: Props) {
+export default function MessageBubble({ message, typing = false, onAvatarClick, onQuote, onDelete, onRollback }: Props) {
   const isUser = message.role === 'user'
   // 模块三·内心戏：思考链展开/收起状态（Hooks 必须在所有条件返回之前调用，防 React Hooks 顺序崩溃）
   const [thinkOpen, setThinkOpen] = useState(false)
@@ -126,6 +130,8 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
       ? (sessionLang === 'en' ? 'Copy failed' : '复制失败')
       : (sessionLang === 'en' ? 'Copy' : '复制')
   const quoteLabel = sessionLang === 'en' ? 'Quote' : '引用'
+  const rollbackLabel = sessionLang === 'en' ? 'Rewind here' : '回溯到这里'
+  const deleteLabel = sessionLang === 'en' ? 'Delete' : '删除'
   const actionsLabel = sessionLang === 'en' ? 'Message actions' : '消息操作'
   // 思考链是否需要翻译：中文会话 + thinking 是英文 → 需要懒翻译
   const thinkingRaw = cleanAttributionArtifacts(message.thinking ?? '', sessionLang)
@@ -277,6 +283,31 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
                       }}
                     >
                       {quoteLabel}
+                    </button>
+                  )}
+                  {onRollback && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onRollback()
+                        setActionsOpen(false)
+                      }}
+                    >
+                      {rollbackLabel}
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="message-action-danger"
+                      onClick={() => {
+                        onDelete()
+                        setActionsOpen(false)
+                      }}
+                    >
+                      {deleteLabel}
                     </button>
                   )}
                 </div>
