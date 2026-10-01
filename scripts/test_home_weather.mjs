@@ -79,4 +79,6 @@ test('rain effect uses deterministic layered streaks instead of one repeating st
   assert.match(css, /@keyframes home-weather-rain-drop/)
   assert.doesNotMatch(css, /repeating-linear-gradient\(105deg, transparent 0 18px/)
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.home-weather-atmosphere/)
+  assert.match(scene, /--rain-static-y/)
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.home-weather-rain-drop[\s\S]*top:\s*var\(--rain-static-y\)/)
 })
