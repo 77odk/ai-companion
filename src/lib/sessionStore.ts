@@ -576,47 +576,74 @@ export function newPendingOpId(): string {
  * 与 sync.ts 的 mergeMessages 思路一致（输入顺序不影响结果），但这里后端优先（权威数据源）。
  */
 export function mergeSessionMessages(local: StoredMessage[], cloud: StoredMessage[]): StoredMessage[] {
-  // 去重：同 ts（云端优先）或同 role+内容（本地乐观 ts 与云端 createdAt 毫秒差）都算同一条。
-  // 根因（2026-08-25 七七实测）：本地乐观写入 ts=Date.now()，云端=后端 createdAt，毫秒差导致同一条消息被当两条显示。
-  // 云端仍负责 role/content/ts 等权威字段；memorySaved 是本地展示元数据，服务端消息没有该字段，
-  // 所以命中同一条消息时必须从本地缓存带回，否则重新拉会话后「已记住这个瞬间」会消失。
   const validLocal = (local ?? []).filter(
     (m): m is StoredMessage => m != null && typeof m.ts === 'number' && !Number.isNaN(m.ts),
   )
-  const localByTs = new Map<number, StoredMessage>()
+  const validCloud = (cloud ?? []).filter(
+    (m): m is StoredMessage => m != null && typeof m.ts === 'number' && !Number.isNaN(m.ts),
+  )
+
+  // 后端 id 是第一身份。旧缓存 / 尚未上传的乐观消息没有 id，才允许回退到 ts，
+  // 再退到“本地唯一 role+content”去对上服务端 createdAt 的毫秒差。
+  const localById = new Map<number, StoredMessage>()
+  const localByTs = new Map<number, StoredMessage[]>()
   const localByContent = new Map<string, StoredMessage[]>()
   for (const m of validLocal) {
-    localByTs.set(m.ts, m)
+    if (typeof m.id === 'number' && Number.isFinite(m.id)) localById.set(m.id, m)
+    const byTs = localByTs.get(m.ts) ?? []
+    byTs.push(m)
+    localByTs.set(m.ts, byTs)
     const ck = `${m.role}|${m.content}`
-    const matches = localByContent.get(ck) ?? []
-    matches.push(m)
-    localByContent.set(ck, matches)
+    const byContent = localByContent.get(ck) ?? []
+    byContent.push(m)
+    localByContent.set(ck, byContent)
   }
 
-  const cloudWithLocalMetadata = (cloud ?? []).map((m) => {
-    if (m == null || typeof m.ts !== 'number' || Number.isNaN(m.ts)) return m
+  const matchedLocal = new Set<StoredMessage>()
+  const cloudMerged = validCloud.map((m) => {
     const ck = `${m.role}|${m.content}`
+    const idMatch =
+      typeof m.id === 'number' && Number.isFinite(m.id)
+        ? localById.get(m.id)
+        : undefined
+    const tsMatches = localByTs.get(m.ts) ?? []
+    const exactTsMatch = tsMatches.find((x) => x.role === m.role && x.content === m.content)
     const contentMatches = localByContent.get(ck) ?? []
-    // 优先精确 ts；只有 role+content 在本地唯一时才用内容兜底，避免重复文案串错徽标。
-    const localMatch = localByTs.get(m.ts) ?? (contentMatches.length === 1 ? contentMatches[0] : undefined)
+    const contentFallback = contentMatches.length === 1 ? contentMatches[0] : undefined
+    const localMatch = idMatch ?? exactTsMatch ?? contentFallback
+    if (localMatch) matchedLocal.add(localMatch)
+
+    // 云端负责消息身份 / 正文 / 时间；memorySaved 是本地展示元数据，命中同一条时带回。
     return localMatch?.memorySaved === true ? { ...m, memorySaved: true } : m
   })
 
-  // cloud 在前 = 同 ts 时云端版本优先（后端权威）。
-  const seenTs = new Set<number>()
-  const seenContent = new Set<string>()
   const out: StoredMessage[] = []
-  for (const m of [...cloudWithLocalMetadata, ...validLocal]) {
-    if (m == null || typeof m.ts !== 'number' || Number.isNaN(m.ts)) continue
-    const ck = `${m.role}|${m.content}`
-    if (seenTs.has(m.ts) || seenContent.has(ck)) continue
-    seenTs.add(m.ts)
-    seenContent.add(ck)
+  const seenIds = new Set<number>()
+  const seenExact = new Set<string>()
+
+  const push = (m: StoredMessage) => {
+    const id = typeof m.id === 'number' && Number.isFinite(m.id) ? m.id : undefined
+    const exact = `${m.role}|${m.content}|${m.ts}`
+    if (id !== undefined) {
+      if (seenIds.has(id)) return
+      seenIds.add(id)
+    } else if (seenExact.has(exact)) {
+      return
+    }
+    seenExact.add(exact)
     out.push(m)
   }
+
+  // 后端权威消息先入；不同 id 即使正文相同也必须全部保留。
+  for (const m of cloudMerged) push(m)
+  // 只补尚未被后端对上的本地乐观消息。
+  for (const m of validLocal) {
+    if (matchedLocal.has(m)) continue
+    push(m)
+  }
+
   return out.sort((a, b) => a.ts - b.ts)
 }
-
 // ---- 上传成功后的本地对账 ----
 
 /**
@@ -626,7 +653,7 @@ export function mergeSessionMessages(local: StoredMessage[], cloud: StoredMessag
 export function confirmMessageInCache(
   sessionId: string,
   op: SessionPendingOp,
-  serverMsg: { role: 'user' | 'assistant'; content: string; createdAt: string },
+  serverMsg: { id: number; role: 'user' | 'assistant'; content: string; createdAt: string },
 ): void {
   const list = getMessagesCache(sessionId)
   // 同批拆分消息 ts 相同（同 assistantTs）——必须带 content 精确定位，否则 findIndex 永远命中批内第一条，对账错乱（2026-09-03 排查乱序时发现）
@@ -636,7 +663,7 @@ export function confirmMessageInCache(
   if (idx < 0) return
   const ts = Date.parse(serverMsg.createdAt)
   if (!Number.isFinite(ts)) return
-  list[idx] = { ...list[idx], role: serverMsg.role, content: serverMsg.content, ts }
+  list[idx] = { ...list[idx], id: serverMsg.id, role: serverMsg.role, content: serverMsg.content, ts }
   // 对账只把本地 ts 换成服务端 ts，内容不变：不广播（避免双同步），RolesPage 列表摘要已是最新
   saveMessagesCache(sessionId, list, false)
 }
