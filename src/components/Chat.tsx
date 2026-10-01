@@ -55,6 +55,7 @@ import { calibrateContextFactor, contentTokensOf, loadContextFactor, saveContext
 import { buildUserWeatherContext, readUserWeatherContext } from '../lib/homeWeather'
 import { clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, savePendingMemoryCorrection, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 import { formatQuotedMessage, messageEvidenceText, type MessageQuote, type MessageQuoteSpeaker } from '../lib/messageQuote'
+import { CONVERSATION_STATE_CHANGE_EVENT, branchIdForNewMessage, loadConversationState, resolveConversationMessages, type ConversationState } from '../lib/conversationState'
 
 /**
  * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
@@ -168,6 +169,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [messages, setMessages] = useState<StoredMessage[]>(() =>
     activeSessionId ? getMessagesCache(activeSessionId) : loadMessages(),
   )
+  const [conversationState, setConversationState] = useState<ConversationState | null>(() =>
+    activeSessionId ? loadConversationState(activeSessionId) : null,
+  )
+  const currentConversationBranchId = branchIdForNewMessage(conversationState)
   const [input, setInput] = useState('')
   const [quoteDraft, setQuoteDraft] = useState<MessageQuote | null>(null)
   const [actionNarrationEnabled, setActionNarrationEnabledState] = useState(() => isActionNarrationEnabled())
@@ -236,9 +241,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [memoryCorrectionBusy, setMemoryCorrectionBusy] = useState(false)
   const [memoryCorrectionNotice, setMemoryCorrectionNotice] = useState<string | null>(null)
 
+  // messages 始终保留完整 raw 历史；只有 activeMessages 参与显示/上下文。
+  const activeMessages = useMemo(
+    () => resolveConversationMessages(conversationState, messages),
+    [conversationState, messages],
+  )
   const visibleMessages = useMemo(
-    () => filterSessionMessages(messages, sessionStart),
-    [messages, sessionStart],
+    () => filterSessionMessages(activeMessages, sessionStart),
+    [activeMessages, sessionStart],
   )
   // 只在展示层合并“同一生成批次内、相邻、内容完全相同”的 TA 气泡；底层历史/上传/上下文一律不改。
   const displayMessages = useMemo(
@@ -259,6 +269,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     window.addEventListener(ELUVIN_DATA_CHANGE, refreshActionNarration)
     return () => window.removeEventListener(ELUVIN_DATA_CHANGE, refreshActionNarration)
   }, [])
+
+  useEffect(() => {
+    const refreshConversationState = (event: Event) => {
+      const sid = (event as CustomEvent<{ sessionId?: string }>).detail?.sessionId
+      if (!activeSessionId || (sid && sid !== activeSessionId)) return
+      setConversationState(loadConversationState(activeSessionId))
+    }
+    window.addEventListener(CONVERSATION_STATE_CHANGE_EVENT, refreshConversationState)
+    return () => window.removeEventListener(CONVERSATION_STATE_CHANGE_EVENT, refreshConversationState)
+  }, [activeSessionId])
 
   useEffect(() => {
     // 切会话 / 刷新当前上下文段：上一轮失败的“重试”立即失效。
@@ -370,6 +390,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       id: newPendingOpId(),
       type: 'message',
       sessionId: sid,
+      ...(msg.conversationBranchId ? { conversationBranchId: msg.conversationBranchId } : {}),
       payload: { role: msg.role, content: msg.content, thinking: msg.thinking ?? '' },
       ts: msg.ts,
     }
@@ -446,7 +467,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           : title
         const systemPrompt = buildSystemPrompt(sessionPersona, nameForPrompt, undefined, targetSid, busyLang)
         const cache = getMessagesCache(targetSid)
-        const tail = cache.slice(-3).map((message) => ({
+        const activeCache = resolveConversationMessages(loadConversationState(targetSid), cache)
+        const tail = activeCache.slice(-3).map((message) => ({
           role: message.role,
           content: stripThinkBlocks(stripMemoryMarkers(message.content), busyLang),
         }))
@@ -463,7 +485,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       commit: async (targetSid, content) => {
         const latest = getBusyState(targetSid)
         if (targetSid !== getActiveSessionId() || latest.status !== 'busy') return 'cancelled-before-commit'
-        const msg: StoredMessage = { role: 'assistant', content, ts: Date.now() }
+        const busyBranchId = branchIdForNewMessage(loadConversationState(targetSid))
+        const msg: StoredMessage = {
+          role: 'assistant',
+          content,
+          ts: Date.now(),
+          ...(busyBranchId ? { conversationBranchId: busyBranchId } : {}),
+        }
         const current = getMessagesCache(targetSid)
         const next = [...current, msg]
         saveMessagesCache(targetSid, next)
@@ -479,6 +507,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           }
           const op: PendingOp = {
             id: newPendingOpId(), type: 'message', sessionId: targetSid,
+            ...(msg.conversationBranchId ? { conversationBranchId: msg.conversationBranchId } : {}),
             payload: { role: msg.role, content: msg.content, thinking: '' }, ts: msg.ts,
           }
           addPendingOp(op)
@@ -514,7 +543,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
   // ---- 真人忙碌：沉浸档里消息照常收下，但 TA 暂时不回复；忙完后主动回来接上。 ----
   const handleBusySend = (text: string) => {
-    const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
+    const userMsg: StoredMessage = {
+      role: 'user',
+      content: text,
+      ts: Date.now(),
+      ...(currentConversationBranchId ? { conversationBranchId: currentConversationBranchId } : {}),
+    }
     const next = [...messages, userMsg]
     persistMessages(next)
     if (activeSessionId) void uploadMessage(userMsg)
@@ -606,6 +640,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       busyTimerRef.current = null
     }
     setMessages(activeSessionId ? getMessagesCache(activeSessionId) : loadMessages())
+    setConversationState(activeSessionId ? loadConversationState(activeSessionId) : null)
     setActiveSession(null)
     if (activeSessionId) markRead(activeSessionId)
     // 恢复忙碌状态：只有沉浸档允许恢复；自然 / AI 遇到旧 busy 立即取消，避免模式切换后继续“闭嘴”。
@@ -935,7 +970,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     spacePairEligibleRef.current = true
     busyTriggeredRef.current = false
 
-    const userMsg: StoredMessage = { role: 'user', content: messageText, ts: Date.now() }
+    const userMsg: StoredMessage = {
+      role: 'user',
+      content: messageText,
+      ts: Date.now(),
+      ...(currentConversationBranchId ? { conversationBranchId: currentConversationBranchId } : {}),
+    }
+    const tagCurrentBranch = (message: StoredMessage): StoredMessage =>
+      currentConversationBranchId
+        ? { ...message, conversationBranchId: currentConversationBranchId }
+        : message
 
     // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看包含当前消息的最近5条用户消息），存 sessionStore
     const personaText = persona?.trim() || ''
@@ -1059,7 +1103,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const assistantTs = Date.now()
     assistantText.current = ''
     reasoningRef.current = ''
-    setMessages([...messages, userMsg, { role: 'assistant', content: '', ts: assistantTs }])
+    setMessages([...messages, userMsg, tagCurrentBranch(tagCurrentBranch({ role: 'assistant', content: '', ts: assistantTs }))])
     setInput('')
     setQuoteDraft(null)
     setError(null)
@@ -1353,13 +1397,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     apiMessages.splice(0, apiMessages.length, ...composed.messages)
 
     const commitFinal = (final: StoredMessage[]) => {
-      persistMessages(final)
+      const branchFinal = currentConversationBranchId
+        ? final.map((m) => (m.role === 'assistant' && m.ts === assistantTs ? tagCurrentBranch(m) : m))
+        : final
+      persistMessages(branchFinal)
       // 模块二：组件卸载后跳过 UI 更新，落库/云同步继续执行
-      if (mountedRef.current) setMessages(final)
+      if (mountedRef.current) setMessages(branchFinal)
       const sid = getActiveSessionId()
       // v7 #7：只在最终可见回复已经落库后，把 TA 明确说出的“自己正在/马上做什么”写回同一 Runtime。
       // 不读用户文本、不改聊天记录；失败/无可信动作时函数返回 null，保持原 Runtime。
-      const committedAssistantText = final
+      const committedAssistantText = branchFinal
         .filter((m) => m.role === 'assistant' && m.ts === assistantTs)
         .map((m) => m.content)
         .join('\n')
@@ -1384,7 +1431,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const token = getToken()
       if (sid && token) {
         let chain: Promise<void> = Promise.resolve()
-        for (const m of final) {
+        for (const m of branchFinal) {
           if (m.role !== 'assistant' || m.ts !== assistantTs) continue
           chain = chain.then(() => uploadMessage(m))
         }
@@ -1546,7 +1593,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const hygienicParts = splitParts
         .map((m) => ({ ...m, content: stripTimeLabels(m.content).trim() }))
         .filter((m) => m.content !== '')
-      const assistantMsgs = dropRepeatedReplies(hygienicParts, messages)
+      const assistantMsgs = dropRepeatedReplies(hygienicParts, activeMessages)
       // 思考链存到第一条 assistant 消息的 thinking 字段（内心戏展示用）
       if (assistantMsgs.length > 0 && thinking) {
         assistantMsgs[0].thinking = thinking
@@ -1596,7 +1643,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const splits = replyLength === 'long'
         ? splitDetailedAssistantReply(displayCleanRef.current, assistantTs)
         : splitAssistantReplies(displayCleanRef.current, assistantTs)
-      setMessages([...messages, userMsg, ...splits])
+      setMessages([...messages, userMsg, ...splits.map(tagCurrentBranch)])
       if (showLenRef.current >= total && streamEndedRef.current) finishStreaming()
     }
     const finishStreaming = () => {
@@ -1740,7 +1787,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         setFailedReplyRetryAvailable(false)
         setError(null)
         setFailedText(null)
-        setMessages([...messages, userMsg, { role: 'assistant', content: '', ts: assistantTs }])
+        setMessages([...messages, userMsg, tagCurrentBranch({ role: 'assistant', content: '', ts: assistantTs })])
         setStreaming(true)
       }
       runId = ++runIdRef.current
@@ -1763,7 +1810,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
     const thinkMs = computeThinkDelayMs(text.length)
     thinkTimerRef.current = window.setTimeout(startStream, thinkMs)
-  }, [messages, visibleMessages, streaming, persona, activeSession, activeSessionId, isBusy, persistMessages, uploadMessage, bridgeInfo, compactDone, compactSummary, pendingMemoryCorrection])
+  }, [messages, activeMessages, visibleMessages, streaming, persona, activeSession, activeSessionId, isBusy, persistMessages, uploadMessage, bridgeInfo, compactDone, compactSummary, pendingMemoryCorrection, currentConversationBranchId])
 
   useEffect(() => {
     const injected = takeChatMessage()
@@ -1841,13 +1888,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const handleBridge = async () => {
     if (!activeSessionId || bridgeInfo || streaming || contextBusy) return
     const uiLang = getSessionLang(activeSessionId)
-    if (!hasBridgableHistory(messages, sessionStart)) return
+    if (!hasBridgableHistory(activeMessages, sessionStart)) return
     const settings = loadSettings()
     if (!settings.apiKey || !settings.baseUrl || !settings.model) {
       setError('还没接上 TA，去「我的」页填一下 API Key 就能聊了')
       return
     }
-    const tail = messages.filter((message) => message.ts < sessionStart).slice(-BRIDGE_TAIL_COUNT)
+    const tail = activeMessages.filter((message) => message.ts < sessionStart).slice(-BRIDGE_TAIL_COUNT)
     if (tail.length === 0) {
       setContextNotice(uiLang === 'en' ? 'There is no earlier context to bridge.' : '没有可承接的上一段对话。')
       return
@@ -2237,7 +2284,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                         {contextBusy === 'compact' ? '整理中…' : '整理'}
                       </button>
                     )}
-                    {!bridgeInfo && hasBridgableHistory(messages, sessionStart) && (
+                    {!bridgeInfo && hasBridgableHistory(activeMessages, sessionStart) && (
                       <button
                         type="button"
                         onClick={() => {
