@@ -155,7 +155,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
       if (accountId) clearReplyLengthOverride(accountId, id)
       const remaining = list.filter((s) => String(s.id) !== String(id))
       setSessions(remaining)
-      setSessionsCache(remaining)
+      setSessionsCache(preservePendingPersonaRepairInCache(remaining, accountId))
 
       const resolution = resolveSessionAfterDelete(
         remaining,
@@ -197,7 +197,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
     }
     const updated = list.map((s) => (String(s.id) === String(renaming.id) ? { ...s, title: t } : s))
     setSessions(updated)
-    setSessionsCache(updated)
+    setSessionsCache(preservePendingPersonaRepairInCache(updated, accountId))
     // 统一数据源：改名同时写 ai_profile，空间头部显示从 ai_profile 读（2026-09-05 乔定案）
     const sid = String(renaming.id)
     const profile = loadAIProfile(sid)
