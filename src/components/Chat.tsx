@@ -1986,10 +1986,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (!created?.parentBranchId) return
     saveConversationState(next)
     invalidateDerivedContextForBranchChange(activeSessionId)
+    const actionLang = getSessionLang(activeSessionId)
     setBranchActionNotice({
       branchId: next.activeBranchId,
       previousBranchId: created.parentBranchId,
-      text: reason === 'delete' ? '已从当前对话删除' : '已回溯到这里',
+      text: actionLang === 'en'
+        ? (reason === 'delete' ? 'Removed from this conversation' : 'Rewound to this message')
+        : (reason === 'delete' ? '已从当前对话删除' : '已回溯到这里'),
     })
   }
 
@@ -2157,7 +2160,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       {branchActionNotice && (
         <div className="chat-branch-action-notice" role="status">
           <span>{branchActionNotice.text}</span>
-          <button type="button" onClick={undoConversationBranchAction}>撤销</button>
+          <button type="button" onClick={undoConversationBranchAction}>{chatUiLang === 'en' ? 'Undo' : '撤销'}</button>
         </div>
       )}
 
