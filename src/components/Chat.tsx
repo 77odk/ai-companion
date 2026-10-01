@@ -514,7 +514,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
   // ---- 真人忙碌：沉浸档里消息照常收下，但 TA 暂时不回复；忙完后主动回来接上。 ----
   const handleBusySend = (text: string) => {
-    const userMsg: StoredMessage = { role: 'user', content: messageText, ts: Date.now() }
+    const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
     const next = [...messages, userMsg]
     persistMessages(next)
     if (activeSessionId) void uploadMessage(userMsg)
@@ -935,7 +935,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     spacePairEligibleRef.current = true
     busyTriggeredRef.current = false
 
-    const userMsg: StoredMessage = { role: 'user', content: text, ts: Date.now() }
+    const userMsg: StoredMessage = { role: 'user', content: messageText, ts: Date.now() }
 
     // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看包含当前消息的最近5条用户消息），存 sessionStore
     const personaText = persona?.trim() || ''
