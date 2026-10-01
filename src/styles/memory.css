@@ -348,3 +348,11 @@
     transition: none;
   }
 }
+
+/* Responsive Memory: reading-first content stays comfortably narrow. */
+@media (min-width: 768px) {
+  .memory-page {
+    width: min(100%, var(--el-content-reading-max));
+    margin-inline: auto;
+  }
+}

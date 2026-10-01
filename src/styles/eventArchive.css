@@ -404,3 +404,32 @@
   background: var(--color-primary);
   color: var(--color-on-primary);
 }
+
+/* Responsive Event Archive: own its desktop layout in the lazy-loaded stylesheet. */
+@media (min-width: 768px) {
+  .event-archive-page,
+  .event-archive-form-backdrop {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .event-archive-topbar,
+  .event-archive-scroll,
+  .event-archive-detail {
+    padding-left: max(24px, calc((100% - var(--el-content-reading-max)) / 2));
+    padding-right: max(24px, calc((100% - var(--el-content-reading-max)) / 2));
+  }
+
+  .event-archive-form-backdrop {
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+  }
+
+  .event-archive-form {
+    width: min(680px, 100%);
+    max-height: min(88vh, 760px);
+    border-radius: 24px;
+  }
+}

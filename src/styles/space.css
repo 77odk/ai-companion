@@ -423,3 +423,11 @@
     transition: none;
   }
 }
+
+/* Responsive Space: archives may use substantially more width than chat. */
+@media (min-width: 768px) {
+  .ai-space-v2 {
+    width: min(100%, var(--el-content-space-max));
+    margin-inline: auto;
+  }
+}

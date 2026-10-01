@@ -845,3 +845,17 @@
 .home-weather-setup-actions .primary:disabled {
   opacity: .45;
 }
+
+/* Responsive Home: scene stays full width; content grows beyond the mobile 480px cap. */
+@media (min-width: 768px) {
+  .home-page {
+    padding-inline: var(--el-wide-gutter);
+  }
+
+  .home-inner {
+    width: min(100%, var(--el-content-home-max));
+    max-width: var(--el-content-home-max);
+    margin-inline: auto;
+    padding-bottom: 48px;
+  }
+}
