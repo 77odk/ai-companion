@@ -858,3 +858,11 @@
   padding: 0 var(--el-space-4, 16px);
   border-radius: var(--el-radius-md, 16px);
 }
+
+/* Responsive Mine: preserve a readable settings column. */
+@media (min-width: 768px) {
+  .settings-page {
+    width: min(100%, var(--el-content-reading-max));
+    margin-inline: auto;
+  }
+}
