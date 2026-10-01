@@ -35,8 +35,8 @@ ok(
   'RolePicker 在创建结果丢 persona 时立即 PATCH 补写',
 )
 ok(
-  rolePicker.includes('writePendingPersonaRepair({ account, id: createdSession.id, persona, title })'),
-  'PATCH 前先写临时恢复事务',
+  rolePicker.includes('writePendingPersonaRepair(createdSession, { account, persona, title })'),
+  'PATCH 前把未完成 session 挂到现有 sessions cache',
 )
 ok(
   rolePicker.includes('attemptPendingPersonaRepair(token, account)'),
@@ -48,8 +48,16 @@ ok(
   '只有 persona 补写确认后才激活角色',
 )
 ok(
-  personaRepair.includes("sessionStorage.setItem(PENDING_PERSONA_REPAIR_KEY"),
-  '恢复目标持久到当前浏览器会话，刷新/跳页不丢',
+  personaRepair.includes('__personaRepair'),
+  '恢复目标作为仅本地字段挂在现有 sessions cache',
+)
+ok(
+  !personaRepair.includes('sessionStorage'),
+  '不再依赖 tab 级 sessionStorage',
+)
+ok(
+  !personaRepair.includes("localStorage.setItem("),
+  'personaRepair 不新增 localStorage key，只复用 sessionStore 现有缓存',
 )
 ok(
   personaRepair.includes("repaired.status === 404"),
@@ -62,6 +70,22 @@ ok(
 ok(
   personaRepair.includes('filterPendingPersonaRepairSession'),
   '提供统一过滤器，把未完成 session 排除在角色列表外',
+)
+ok(
+  personaRepair.includes('preservePendingPersonaRepairInCache'),
+  'server 会话刷新时保留本地 repair 占位，避免覆盖丢失',
+)
+ok(
+  app.includes('preservePendingPersonaRepairInCache'),
+  'App 刷新/路由写缓存时保留 repair 标记',
+)
+ok(
+  rolesPage.includes('preservePendingPersonaRepairInCache'),
+  '角色列表刷新后不覆盖 repair 标记',
+)
+ok(
+  settings.includes('preservePendingPersonaRepairInCache'),
+  'TA 资料刷新后不覆盖 repair 标记',
 )
 ok(
   app.indexOf('await attemptPendingPersonaRepair(token, account)') <
