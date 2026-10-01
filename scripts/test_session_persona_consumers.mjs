@@ -44,6 +44,10 @@ ok(
   '再次提交前先按 transactionId 复用/修复原 session',
 )
 ok(
+  rolePicker.includes('personaRepairTransactionRef.current = pendingRepair.pending.transactionId'),
+  '接手旧 pending 后继承原 transactionId，后续可识别其它标签完成的事务',
+)
+ok(
   rolePicker.includes('transactionId: repairTransactionId'),
   '首次补写前把 transactionId 写入角色自己的 repair 元数据',
 )
