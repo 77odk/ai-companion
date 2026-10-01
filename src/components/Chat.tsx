@@ -1858,6 +1858,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       return
     }
     const compactBoundary = sessionStart
+    const compactBranchId = conversationState?.activeBranchId ?? null
     const prompt =
       uiLang === 'en'
         ? 'Below is the earlier part of a conversation. Summarize ONLY what actually happened — main topics, decisions, the user\'s preferences/state, and anything the assistant (TA) explicitly promised. Do not invent, infer, or add anything not in the text. Keep it concise and neutral.\n\n' +
@@ -1876,8 +1877,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       )
       const trimmed = summary.trim()
       if (!trimmed) throw new Error('empty summary')
-      // 请求期间如果用户再次「刷新对话」，旧段结果必须作废，不能写进新 boundary。
+      // 请求期间如果刷新边界或 active branch 变化，旧段结果必须作废。
       if (getSessionStart(activeSessionId) !== compactBoundary) return
+      if ((loadConversationState(activeSessionId)?.activeBranchId ?? null) !== compactBranchId) return
       setContextCompactSummary(trimmed, activeSessionId)
       setContextCompactAt(Date.now(), activeSessionId)
       notifyDataChanged()
@@ -1920,6 +1922,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     const lines = bridgeSource.map((m) => `${m.role === 'user' ? 'USER' : 'TA'}: ${m.content}`)
     const bridgeBoundary = sessionStart
+    const bridgeBranchId = conversationState?.activeBranchId ?? null
     const prompt =
       uiLang === 'en'
         ? 'Below is the recent tail from before this same conversation was refreshed. Write a short evidence-only handover note covering: 1) what you two were talking about, 2) unfinished topics, 3) the user\'s current state, 4) any explicit promises the companion made, 5) necessary referents (who "he/she" means). Only state what is actually in the text. Never invent or infer. Keep it in plain concise notes.\n\n' +
@@ -1938,8 +1941,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       )
       const trimmed = content.trim()
       if (!trimmed) throw new Error('empty bridge')
-      // Bridge 只属于发起请求时的刷新段；期间若再次刷新，旧结果直接丢弃。
+      // Bridge 只属于发起请求时的刷新段 + active branch；任何一边变化都丢弃旧结果。
       if (getSessionStart(activeSessionId) !== bridgeBoundary) return
+      if ((loadConversationState(activeSessionId)?.activeBranchId ?? null) !== bridgeBranchId) return
       const bridgedAt = Date.now()
       setContextBridge(activeSessionId, activeSessionId, trimmed, BRIDGE_ACTIVE_TURNS, bridgedAt)
       notifyDataChanged()
