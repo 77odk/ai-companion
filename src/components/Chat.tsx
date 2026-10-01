@@ -1569,11 +1569,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         pauseLeftRef.current -= 1
         return
       }
-      const streamingBase = cleanStreamingAttributionArtifacts(
+      // 流式游标必须基于单调增长的清洗结果；动作是否最终保留只在 finalization 决定。
+      // 关闭旁白时保持改造前的流式行为，避免完成括号后字符串突然变短卡住游标。
+      const clean = cleanStreamingAttributionArtifacts(
         stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(assistantText.current)), lang),
         lang,
       )
-      const clean = allowActionNarration ? streamingBase : stripActionMarkers(streamingBase, lang)
       const total = clean.length
       if (showLenRef.current >= total) {
         if (streamEndedRef.current) finishStreaming()
