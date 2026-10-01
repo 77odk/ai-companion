@@ -143,21 +143,65 @@ const LINE_LABELS = {
 
 type PersonaField = keyof typeof LINE_LABELS
 
-/** 读 persona 中某一行标签的内容（行首允许空白；无该行/内容为空返回空串） */
-function personaLine(persona: string, field: PersonaField): string {
-  if (!persona) return ''
-  const m = persona.match(new RegExp(`^\\s*${LINE_LABELS[field]}：(.+)$`, 'm'))
-  return m ? m[1].trim() : ''
+const PERSONA_FIELDS = Object.keys(LINE_LABELS) as PersonaField[]
+const MULTILINE_FIELDS = new Set<PersonaField>(['personality', 'background'])
+
+function personaFieldAtLine(line: string): PersonaField | null {
+  for (const field of PERSONA_FIELDS) {
+    if (new RegExp(`^\\s*${LINE_LABELS[field]}：`).test(line)) return field
+  }
+  return null
 }
 
-/** 去掉 persona 里指定的几行（按行首标签精确匹配，容忍行首空白） */
-function dropPersonaLines(persona: string, fields: PersonaField[]): string {
+/**
+ * 读取结构化 persona 字段。
+ * - 昵称 / 开场白来自单行 input，只读标签所在行；
+ * - 性格 / 关系背景来自 textarea，保留后续换行，直到下一个已知字段标签。
+ */
+function personaValue(persona: string, field: PersonaField): string {
   if (!persona) return ''
-  const labels = fields.map((f) => LINE_LABELS[f])
-  return persona
-    .split('\n')
-    .filter((l) => !labels.some((label) => new RegExp(`^\\s*${label}：`).test(l.trim())))
-    .join('\n')
+  const lines = persona.split(/\\r?\\n/)
+  const prefix = new RegExp(`^\\s*${LINE_LABELS[field]}：`)
+
+  for (let i = 0; i < lines.length; i++) {
+    if (personaFieldAtLine(lines[i]) !== field) continue
+
+    const first = lines[i].replace(prefix, '')
+    if (!MULTILINE_FIELDS.has(field)) return first.trim()
+
+    const value = [first]
+    for (let j = i + 1; j < lines.length; j++) {
+      if (personaFieldAtLine(lines[j])) break
+      value.push(lines[j])
+    }
+    return value.join('\n').trim()
+  }
+  return ''
+}
+
+/**
+ * 去掉指定字段。
+ * 性格 / 关系背景是 textarea 字段，删除时连同续行一起去掉；
+ * 昵称 / 开场白只删除标签所在单行，不能误吞旧版自由文本正文。
+ */
+function dropPersonaFields(persona: string, fields: PersonaField[]): string {
+  if (!persona) return ''
+  const removed = new Set(fields)
+  const kept: string[] = []
+  let skipContinuation = false
+
+  for (const line of persona.split(/\\r?\\n/)) {
+    const field = personaFieldAtLine(line)
+    if (field) {
+      const shouldRemove = removed.has(field)
+      skipContinuation = shouldRemove && MULTILINE_FIELDS.has(field)
+      if (!shouldRemove) kept.push(line)
+      continue
+    }
+    if (!skipContinuation) kept.push(line)
+  }
+
+  return kept.join('\n')
 }
 
 /**
@@ -166,14 +210,14 @@ function dropPersonaLines(persona: string, fields: PersonaField[]): string {
  * - 模板原文（无结构化性格行）→ 返回去掉附加的背景/开场白/昵称行后的主体。
  */
 export function extractPersonality(persona: string): string {
-  const structured = personaLine(persona, 'personality')
+  const structured = personaValue(persona, 'personality')
   if (structured) return structured
-  return dropPersonaLines(persona, ['background', 'opening', 'nickname']).trim()
+  return dropPersonaFields(persona, ['background', 'opening', 'nickname']).trim()
 }
 
 /** 从 persona 解析「关系背景」行内容（无 → 空串） */
 export function extractBackgroundLine(persona: string): string {
-  return personaLine(persona, 'background')
+  return personaValue(persona, 'background')
 }
 
 export interface PersonaEdits {
@@ -193,13 +237,13 @@ export interface PersonaEdits {
  */
 export function applyPersonaEdits(persona: string, edits: PersonaEdits): string {
   const structured = /^\s*性格特质：/m.test(persona)
-  const background = edits.background !== undefined ? edits.background.trim() : personaLine(persona, 'background')
-  const opening = edits.opening !== undefined ? edits.opening.trim() : personaLine(persona, 'opening')
+  const background = edits.background !== undefined ? edits.background.trim() : personaValue(persona, 'background')
+  const opening = edits.opening !== undefined ? edits.opening.trim() : personaValue(persona, 'opening')
 
   if (structured) {
-    const nickname = personaLine(persona, 'nickname')
+    const nickname = personaValue(persona, 'nickname')
     const personality =
-      edits.personality !== undefined ? edits.personality.trim() : personaLine(persona, 'personality')
+      edits.personality !== undefined ? edits.personality.trim() : personaValue(persona, 'personality')
     const lines: string[] = []
     if (nickname) lines.push(`角色昵称：${nickname}`)
     if (personality) lines.push(`性格特质：${personality}`)
@@ -209,7 +253,7 @@ export function applyPersonaEdits(persona: string, edits: PersonaEdits): string 
   }
 
   // 自由文本：主体去掉附加行后保留/替换，再追加背景与开场白
-  const base = dropPersonaLines(persona, ['background', 'opening', 'nickname'])
+  const base = dropPersonaFields(persona, ['background', 'opening', 'nickname'])
   const personality = edits.personality !== undefined ? edits.personality.trim() : base.trim()
   const lines: string[] = []
   if (personality) lines.push(personality)
