@@ -59,6 +59,8 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
     return getThinkZhCache(message.ts)
   })
   const [thinkTranslating, setThinkTranslating] = useState(false)
+  const [actionOpen, setActionOpen] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
   // 模块三：纯思考链消息不渲染气泡（历史泄漏的英文推理段，没 `` 包裹的那种）
   // 注意：必须在 useState 之后再条件返回，否则列表重排时同一位置组件实例 Hooks 调用次数不一致会崩
   if (!isUser && isPureThinkBlock(message.content)) return null
@@ -125,6 +127,16 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
     }
   }
 
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(displayText)
+      setCopyFailed(false)
+      setActionOpen(false)
+    } catch {
+      setCopyFailed(true)
+    }
+  }
+
   return (
     <div
       className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}
@@ -179,6 +191,44 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
             )}
           </div>
           <span className="msg-bubble-time">{chatBubbleTime(message.ts)}</span>
+          {!typing && displayText.trim() && (
+            <span
+              className="message-action-slot"
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  setActionOpen(false)
+                  setCopyFailed(false)
+                }
+              }}
+            >
+              <button
+                type="button"
+                className="message-action-trigger"
+                aria-label={sessionLang === 'en' ? 'Message actions' : '消息操作'}
+                aria-expanded={actionOpen}
+                onClick={() => {
+                  setCopyFailed(false)
+                  setActionOpen((value) => !value)
+                }}
+              >
+                ···
+              </button>
+              {actionOpen && (
+                <span className="message-action-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="message-action-item"
+                    onClick={() => void handleCopy()}
+                  >
+                    {copyFailed
+                      ? (sessionLang === 'en' ? 'Copy failed' : '复制失败')
+                      : (sessionLang === 'en' ? 'Copy' : '复制')}
+                  </button>
+                </span>
+              )}
+            </span>
+          )}
         </div>
         {hasMemory && (
           <span className="memory-moment">
