@@ -160,7 +160,7 @@ function personaFieldAtLine(line: string): PersonaField | null {
  */
 function personaValue(persona: string, field: PersonaField): string {
   if (!persona) return ''
-  const lines = persona.split(/\\r?\\n/)
+  const lines = persona.split(/\r?\n/)
   const prefix = new RegExp(`^\\s*${LINE_LABELS[field]}：`)
 
   for (let i = 0; i < lines.length; i++) {
@@ -190,7 +190,7 @@ function dropPersonaFields(persona: string, fields: PersonaField[]): string {
   const kept: string[] = []
   let skipContinuation = false
 
-  for (const line of persona.split(/\\r?\\n/)) {
+  for (const line of persona.split(/\r?\n/)) {
     const field = personaFieldAtLine(line)
     if (field) {
       const shouldRemove = removed.has(field)
