@@ -50,6 +50,7 @@ import {
 } from '../lib/customPersona'
 import { listSessions, patchSession, type Session } from '../lib/sessionApi'
 import { getActiveSessionId, getSessionsCache, setSessionsCache } from '../lib/sessionStore'
+import { filterPendingPersonaRepairSession } from '../lib/personaRepair'
 import { forceRefresh } from '../lib/forceRefresh'
 import { checkDeployedBuild } from '../lib/appVersion'
 import { getGlobalReplyLength, replyLengthLabel, saveGlobalReplyLength, type ReplyLength } from '../lib/replyLength'
@@ -636,7 +637,7 @@ const HomeIcon = () => (
  * 性格/背景/开场白拼回 ai_companion_persona。
  */
 export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => void; onOpenSpace?: () => void; sessionId?: string }) {
-  const [sessions, setSessions] = useState<Session[]>(() => getSessionsCache())
+  const [sessions, setSessions] = useState<Session[]>(() => filterPendingPersonaRepairSession(getSessionsCache(), getAccount()?.account ?? ''))
   // 正在看的角色：角色管理「角色详情」会把该角色的 sessionId 传进来；不传 = 当前会话。
   // 2026-09-14 修串号：以前一律读当前会话，导致「看 A 的资料卡、改的却是 B」。
   const viewSessionId = sessionId ?? getActiveSessionId()
@@ -686,7 +687,7 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
     let cancelled = false
     listSessions(token).then((res) => {
       if (cancelled || !res.ok || dirtyRef.current) return
-      const list = res.data.sessions
+      const list = filterPendingPersonaRepairSession(res.data.sessions, getAccount()?.account ?? '')
       setSessions(list)
       setSessionsCache(list)
     })
