@@ -744,12 +744,71 @@ export interface AIProfile {
   identityMode?: 'immersive' | 'natural' | 'ai'
 }
 
+/** 仅本地的角色创建修复事务；不属于 AIProfile，不上传 Cloud State。 */
+export interface LocalPersonaRepair {
+  account: string
+  persona: string
+  title: string
+  transactionId: string
+  state: 'pending' | 'repaired'
+}
+
 const AI_PROFILE_KEY = 'ai_companion_ai_profile'
 
 export const DEFAULT_AI_PROFILE: AIProfile = { nickname: 'TA', avatar: '', identityMode: 'immersive' }
 
 const aiProfileKey = (sessionId?: string): string =>
   sessionId ? `${AI_PROFILE_KEY}_${sessionId}` : AI_PROFILE_KEY
+
+function readRawAIProfile(sessionId: string): Record<string, unknown> {
+  try {
+    const raw = localStorage.getItem(aiProfileKey(sessionId))
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
+  } catch {
+    return {}
+  }
+}
+
+export function loadLocalPersonaRepair(sessionId: string): LocalPersonaRepair | null {
+  if (!sessionId) return null
+  const raw = readRawAIProfile(sessionId).__personaRepair
+  if (!raw || typeof raw !== 'object') return null
+  const value = raw as Partial<LocalPersonaRepair>
+  if (
+    typeof value.account !== 'string' ||
+    typeof value.persona !== 'string' ||
+    typeof value.title !== 'string' ||
+    typeof value.transactionId !== 'string' ||
+    (value.state !== 'pending' && value.state !== 'repaired')
+  ) return null
+  return value as LocalPersonaRepair
+}
+
+export function saveLocalPersonaRepair(sessionId: string, repair: LocalPersonaRepair): void {
+  if (!sessionId) return
+  try {
+    const raw = readRawAIProfile(sessionId)
+    localStorage.setItem(aiProfileKey(sessionId), JSON.stringify({ ...raw, __personaRepair: repair }))
+  } catch {
+    // repair 元数据写失败不改产品资料；调用方仍按 server 结果处理。
+  }
+}
+
+export function clearLocalPersonaRepair(sessionId: string, transactionId?: string): void {
+  if (!sessionId) return
+  try {
+    const raw = readRawAIProfile(sessionId)
+    const repair = loadLocalPersonaRepair(sessionId)
+    if (!repair) return
+    if (transactionId && repair.transactionId !== transactionId) return
+    const { __personaRepair: _discard, ...clean } = raw
+    localStorage.setItem(aiProfileKey(sessionId), JSON.stringify(clean))
+  } catch {
+    // ignore
+  }
+}
 
 /** 该会话是否有自己独立的 TA 资料（区别于回落全局；老角色没写过 = false） */
 export function hasOwnAIProfile(sessionId: string): boolean {
@@ -796,7 +855,11 @@ export function loadAIProfile(sessionId?: string): AIProfile {
 /** 保存 TA 资料（会话感知）：传 sessionId 写会话 key（角色隔离），否则写全局 key（无会话兜底） */
 export function saveAIProfile(p: AIProfile, sessionId?: string): void {
   const current = loadAIProfile(sessionId)
-  localStorage.setItem(aiProfileKey(sessionId), JSON.stringify({ ...current, ...p }))
+  const repair = sessionId ? loadLocalPersonaRepair(sessionId) : null
+  localStorage.setItem(
+    aiProfileKey(sessionId),
+    JSON.stringify({ ...current, ...p, ...(repair ? { __personaRepair: repair } : {}) }),
+  )
   notifyDataChanged()
 }
 
