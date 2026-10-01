@@ -12,6 +12,7 @@ import {
   hasPersonaIdentityConflict,
   PERSONA_SOFT_LIMIT,
   PERSONA_HARD_LIMIT,
+  decodePersonaText,
 } from './customPersona.ts'
 
 let passed = 0
@@ -203,6 +204,20 @@ eq(
   '带缩进的标签样正文也完整保留',
 )
 eq(extractBackgroundLine(spacedLabelLike), '真实背景', '带缩进正文不会抢真实背景字段')
+
+const runtimeDecoded = decodePersonaText(labelLikeContent)
+ok(!runtimeDecoded.includes('\u200B'), '运行时 persona 不包含内部转义标记')
+ok(runtimeDecoded.includes('关系背景：很看重承诺'), '运行时 persona 恢复用户原文')
+ok(runtimeDecoded.includes('关系背景：真实背景'), '运行时 persona 仍保留真实结构字段')
+
+const leadingZeroWidth = buildCustomPersona({
+  personality: '\u200B用户原文真的以零宽字符开头',
+})
+eq(
+  extractPersonality(leadingZeroWidth),
+  '\u200B用户原文真的以零宽字符开头',
+  '用户原文自己的零宽字符 round-trip 不丢',
+)
 
 console.log('\n[7] applyPersonaEdits 结构化人设（自定义）')
 const custom = '角色昵称：阿温\n性格特质：温柔\n关系背景：同事\n初次见面开场白：嗨'
