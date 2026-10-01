@@ -106,10 +106,10 @@ export function buildCustomPersona(input: CustomPersonaInput): string {
   const opening = input.opening?.trim() ?? ''
 
   const lines: string[] = []
-  if (nickname) lines.push(`角色昵称：${nickname}`)
-  if (personality) lines.push(`性格特质：${personality}`)
-  if (background) lines.push(`关系背景：${background}`)
-  if (opening) lines.push(`初次见面开场白：${opening}`)
+  if (nickname) lines.push(serializePersonaField('nickname', nickname))
+  if (personality) lines.push(serializePersonaField('personality', personality))
+  if (background) lines.push(serializePersonaField('background', background))
+  if (opening) lines.push(serializePersonaField('opening', opening))
   return lines.join('\n')
 }
 
@@ -146,6 +146,39 @@ type PersonaField = keyof typeof LINE_LABELS
 const PERSONA_FIELDS = Object.keys(LINE_LABELS) as PersonaField[]
 const MULTILINE_FIELDS = new Set<PersonaField>(['personality', 'background'])
 
+// 多行 textarea 内容与字段标签共用一条 persona 字符串。
+ // 用零宽字符只转义“看起来像字段标签”的正文行：界面读回时会还原，避免正文被误判成字段边界。
+const PERSONA_CONTENT_ESCAPE = '\u200B'
+
+function isPersonaFieldLine(line: string): boolean {
+  return PERSONA_FIELDS.some((field) => new RegExp(`^\\s*${LINE_LABELS[field]}：`).test(line))
+}
+
+function escapePersonaContent(value: string): string {
+  return value
+    .split(/\r?\n/)
+    .map((line, index) => {
+      if (index === 0) return line
+      if (line.startsWith(PERSONA_CONTENT_ESCAPE) || isPersonaFieldLine(line)) {
+        return PERSONA_CONTENT_ESCAPE + line
+      }
+      return line
+    })
+    .join('\n')
+}
+
+function unescapePersonaContent(value: string): string {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.startsWith(PERSONA_CONTENT_ESCAPE) ? line.slice(PERSONA_CONTENT_ESCAPE.length) : line)
+    .join('\n')
+}
+
+function serializePersonaField(field: PersonaField, value: string): string {
+  const encoded = MULTILINE_FIELDS.has(field) ? escapePersonaContent(value) : value
+  return `${LINE_LABELS[field]}：${encoded}`
+}
+
 function personaFieldAtLine(line: string): PersonaField | null {
   for (const field of PERSONA_FIELDS) {
     if (new RegExp(`^\\s*${LINE_LABELS[field]}：`).test(line)) return field
@@ -174,7 +207,7 @@ function personaValue(persona: string, field: PersonaField): string {
       if (personaFieldAtLine(lines[j])) break
       value.push(lines[j])
     }
-    return value.join('\n').trim()
+    return unescapePersonaContent(value.join('\n').trim())
   }
   return ''
 }
@@ -245,10 +278,10 @@ export function applyPersonaEdits(persona: string, edits: PersonaEdits): string 
     const personality =
       edits.personality !== undefined ? edits.personality.trim() : personaValue(persona, 'personality')
     const lines: string[] = []
-    if (nickname) lines.push(`角色昵称：${nickname}`)
-    if (personality) lines.push(`性格特质：${personality}`)
-    if (background) lines.push(`关系背景：${background}`)
-    if (opening) lines.push(`初次见面开场白：${opening}`)
+    if (nickname) lines.push(serializePersonaField('nickname', nickname))
+    if (personality) lines.push(serializePersonaField('personality', personality))
+    if (background) lines.push(serializePersonaField('background', background))
+    if (opening) lines.push(serializePersonaField('opening', opening))
     return lines.join('\n')
   }
 
@@ -257,7 +290,7 @@ export function applyPersonaEdits(persona: string, edits: PersonaEdits): string 
   const personality = edits.personality !== undefined ? edits.personality.trim() : base.trim()
   const lines: string[] = []
   if (personality) lines.push(personality)
-  if (background) lines.push(`关系背景：${background}`)
-  if (opening) lines.push(`初次见面开场白：${opening}`)
+  if (background) lines.push(serializePersonaField('background', background))
+  if (opening) lines.push(serializePersonaField('opening', opening))
   return lines.join('\n')
 }
