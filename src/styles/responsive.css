@@ -15,7 +15,8 @@
   }
 
   body {
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   /* Root cause fix: desktop is no longer a 480px phone shell.
