@@ -50,7 +50,7 @@ import {
 } from '../lib/customPersona'
 import { listSessions, patchSession, type Session } from '../lib/sessionApi'
 import { getActiveSessionId, getSessionsCache, setSessionsCache } from '../lib/sessionStore'
-import { filterPendingPersonaRepairSession } from '../lib/personaRepair'
+import { filterPendingPersonaRepairSession, preservePendingPersonaRepairInCache } from '../lib/personaRepair'
 import { forceRefresh } from '../lib/forceRefresh'
 import { checkDeployedBuild } from '../lib/appVersion'
 import { getGlobalReplyLength, replyLengthLabel, saveGlobalReplyLength, type ReplyLength } from '../lib/replyLength'
@@ -689,7 +689,7 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
       if (cancelled || !res.ok || dirtyRef.current) return
       const list = filterPendingPersonaRepairSession(res.data.sessions, getAccount()?.account ?? '')
       setSessions(list)
-      setSessionsCache(list)
+      setSessionsCache(preservePendingPersonaRepairInCache(list, getAccount()?.account ?? ''))
     })
     return () => {
       cancelled = true
