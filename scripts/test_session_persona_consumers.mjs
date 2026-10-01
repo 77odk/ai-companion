@@ -43,6 +43,14 @@ ok(
   '再次提交前先修复上次未完成 session，避免重复 POST',
 )
 ok(
+  rolePicker.includes("if (pendingRepair.kind === 'repaired')"),
+  '上次创建事务一旦修复成功，重试必须复用原 session',
+)
+ok(
+  rolePicker.includes("patchSession(token, pendingRepair.session.id, { persona, title })"),
+  '重试前草稿有变化时更新原 session，不再 POST 新角色',
+)
+ok(
   rolePicker.indexOf('setActiveSessionId(String(createdSession.id))') >
     rolePicker.indexOf('clearPendingPersonaRepair(account, createdSession.id)'),
   '只有 persona 补写确认后才激活角色',
