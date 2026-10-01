@@ -709,7 +709,7 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
     const exists = sessions.some((s) => String(s.id) === id)
     const next = exists ? patchSessionInList(sessions, activeSessionId, patch) : server ? [...sessions, server] : sessions
     setSessions(next)
-    setSessionsCache(next)
+    setSessionsCache(preservePendingPersonaRepairInCache(next, getAccount()?.account ?? ''))
   }
 
   // 改名：有会话 patchSession title（列表/聊天顶/空间/资料卡全部更新，微信备注式）；全局 ai_profile.nickname 始终同步
