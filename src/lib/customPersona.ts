@@ -156,9 +156,12 @@ function escapePersonaContent(value: string): string {
   return value
     .split(/\r?\n/)
     .map((line, index) => {
-      // 用户原文自己以零宽字符开头时也要先转义，否则读回时会误删这个真实字符。
-      if (line.startsWith(PERSONA_CONTENT_ESCAPE)) return PERSONA_CONTENT_ESCAPE + line
-      if (index > 0 && isPersonaFieldLine(line)) return PERSONA_CONTENT_ESCAPE + line
+      // 首行已经被外层字段标签包住，不存在边界歧义，永远原样。
+      if (index === 0) return line
+      // 只有续行需要转义：字段样行防止被误判；真实零宽前缀双写以保证可逆。
+      if (line.startsWith(PERSONA_CONTENT_ESCAPE) || isPersonaFieldLine(line)) {
+        return PERSONA_CONTENT_ESCAPE + line
+      }
       return line
     })
     .join('\n')
