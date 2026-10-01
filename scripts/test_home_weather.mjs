@@ -64,3 +64,19 @@ test('home modal sheets hide the floating bottom navigation', () => {
   assert.match(css, /visibility:\s*hidden/)
   assert.match(css, /\.home-weather-setup-sheet[\s\S]*max-height:\s*calc\(100dvh - 32px\)/)
 })
+
+
+test('rain effect uses deterministic layered streaks instead of one repeating stripe texture', () => {
+  const css = fs.readFileSync(new URL('../src/styles/home.css', import.meta.url), 'utf8')
+  assert.match(scene, /const RAIN_DROP_COUNT = 24/)
+  assert.match(scene, /home-weather-rain-drop layer-\$\{index % 3\}/)
+  assert.match(scene, /rainDropStyle\(index\)/)
+  assert.doesNotMatch(scene, /Math\.random\(\)/)
+  assert.match(css, /\.home-weather-rain-drop[\s\S]*width:\s*1px/)
+  assert.match(css, /--rain-near-duration/)
+  assert.match(css, /--rain-mid-duration/)
+  assert.match(css, /--rain-far-duration/)
+  assert.match(css, /@keyframes home-weather-rain-drop/)
+  assert.doesNotMatch(css, /repeating-linear-gradient\(105deg, transparent 0 18px/)
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.home-weather-atmosphere/)
+})
