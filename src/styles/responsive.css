@@ -146,20 +146,43 @@
     padding-right: max(var(--el-wide-gutter), calc((100% - var(--el-content-space-max)) / 2));
   }
 
-  /* Full photo archive is no longer capped by the old 480px shell. */
-  .photo-archive-page {
+  /* Fixed archive overlays are lazy-loaded after this stylesheet.
+     Use a parent qualifier so these wide rules win by specificity, not by load order. */
+  body .photo-archive-page,
+  body .photo-archive-lightbox,
+  body .event-archive-page,
+  body .event-archive-form-backdrop {
     width: 100%;
     max-width: none;
     margin: 0;
   }
 
-  .photo-archive-topbar {
+  body .photo-archive-topbar,
+  body .photo-archive-scroll {
     padding-left: max(24px, calc((100% - var(--el-content-photo-max)) / 2));
     padding-right: max(24px, calc((100% - var(--el-content-photo-max)) / 2));
   }
 
-  .photo-archive-scroll {
-    padding-left: max(24px, calc((100% - var(--el-content-photo-max)) / 2));
-    padding-right: max(24px, calc((100% - var(--el-content-photo-max)) / 2));
+  body .event-archive-topbar,
+  body .event-archive-scroll,
+  body .event-archive-detail {
+    padding-left: max(24px, calc((100% - var(--el-content-reading-max)) / 2));
+    padding-right: max(24px, calc((100% - var(--el-content-reading-max)) / 2));
+  }
+
+  body .event-archive-form-backdrop {
+    justify-content: center;
+    padding: 32px;
+  }
+
+  body .event-archive-form {
+    width: min(680px, 100%);
+    max-height: min(88vh, 760px);
+    border-radius: 24px;
+  }
+
+  body .photo-archive-lightbox {
+    padding-left: max(64px, calc((100% - var(--el-content-photo-max)) / 2));
+    padding-right: max(64px, calc((100% - var(--el-content-photo-max)) / 2));
   }
 }
