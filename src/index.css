@@ -9663,7 +9663,7 @@ html, body {
     padding-bottom: 0;
   }
 
-  .app-nav {
+  .app.app--with-primary-nav > .app-nav {
     position: fixed;
     inset: 0 auto 0 0;
     width: var(--el-wide-rail-width);
@@ -9681,7 +9681,7 @@ html, body {
     backdrop-filter: blur(14px);
   }
 
-  .app-nav .nav-btn {
+  .app.app--with-primary-nav > .app-nav > .nav-btn {
     flex: 0 0 auto;
     width: 100%;
     min-height: 52px;
@@ -9689,8 +9689,14 @@ html, body {
     border-radius: 14px;
   }
 
-  .app-nav .nav-btn.active {
-    box-shadow: inset 3px 0 0 var(--color-primary-deep);
+  .app.app--with-primary-nav > .app-nav > .nav-btn.active::after {
+    left: auto;
+    right: 2px;
+    top: 50%;
+    bottom: auto;
+    width: 3px;
+    height: 18px;
+    transform: translateY(-50%);
   }
 
   .app-header {
