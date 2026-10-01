@@ -52,6 +52,18 @@ ok(
   '首次补写前把 transactionId 写入角色自己的 repair 元数据',
 )
 ok(
+  rolePicker.includes('initialPersonaRepairTransactionId?: string'),
+  'RolePicker 可接收启动对账留下的原 transactionId',
+)
+ok(
+  rolePicker.includes("useRef(initialPersonaRepairTransactionId ?? '')"),
+  'retry 表单从启动 transactionId 初始化，避免首个提交生成新事务',
+)
+ok(
+  rolePicker.includes("setSessionsCache(["),
+  '首次 PATCH 前把未完成 session 放进当前账号可枚举缓存',
+)
+ok(
   rolePicker.includes('rememberCompletedPersonaRepair'),
   '补写成功后保留 completed transaction，旧标签页不得再次 POST',
 )
@@ -98,6 +110,14 @@ ok(
 ok(
   app.includes('attemptPendingPersonaRepair(token, account, undefined, sessions)'),
   'App 用当前账号刚拉到的 server sessions 在正常路由前修复 pending persona',
+)
+ok(
+  app.includes('setPendingPersonaRepairTransactionId(personaRepair.pending.transactionId)'),
+  '启动 repair 被阻塞时保存原 transactionId',
+)
+ok(
+  app.includes('initialPersonaRepairTransactionId={pendingPersonaRepairTransactionId ?? undefined}'),
+  'App 把原 transactionId 传给 retry RolePicker',
 )
 ok(
   app.includes("sessions = sessions.filter((session) => session.id !== personaRepair.pending.id)"),
