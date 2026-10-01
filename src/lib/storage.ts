@@ -210,6 +210,8 @@ export function saveSettings(settings: ModelSettings): void {
 // ---- 历史消息 ----
 
 export interface StoredMessage {
+  /** 后端 messages 表的稳定 id；旧本地消息/尚未上传的乐观消息没有。 */
+  id?: number
   role: 'user' | 'assistant'
   content: string
   ts: number
