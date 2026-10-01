@@ -144,9 +144,13 @@ export async function attemptPendingPersonaRepair(
     }
   }
 
-  const pendingMatch = transactionId
+  let pendingMatch = transactionId
     ? findRepairSession(sessions, account, transactionId, 'pending')
     : findRepairSession(sessions, account, undefined, 'pending')
+  // 新标签页 / 重载后的创建页会生成新的 transactionId；若账号下仍有旧 pending，先修它，不能再 POST。
+  if (!pendingMatch && transactionId) {
+    pendingMatch = findRepairSession(sessions, account, undefined, 'pending')
+  }
   if (!pendingMatch) return { kind: 'none' }
 
   const { session, repair: pending } = pendingMatch
