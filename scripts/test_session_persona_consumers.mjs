@@ -27,12 +27,16 @@ ok(
   'RolePicker 检查 createSession 返回的人设是否完整',
 )
 ok(
-  rolePicker.includes('patchSession(token, createdSession.id, { persona })'),
+  rolePicker.includes('patchSession(token, createdSession.id, { persona, title })'),
   'RolePicker 在创建结果丢 persona 时立即 PATCH 补写',
 )
 ok(
   rolePicker.includes('setSessionsCache(['),
   '新角色创建后立即写本地会话缓存，避免刷新前读到空 persona',
+)
+ok(
+  rolePicker.includes('pendingCreatedSessionRef.current'),
+  'persona 补写失败后保留已创建 session，重试不得再次 POST',
 )
 
 const consumers = [
