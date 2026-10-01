@@ -23,6 +23,7 @@ import { getActiveSessionId, getSessionsCache, setActiveSessionId, setSessionsCa
 import { resolveSessionName, type RolePickMode } from '../lib/sessionFlow'
 import {
   attemptPendingPersonaRepair,
+  clearPendingPersonaRepair,
   writePendingPersonaRepair,
 } from '../lib/personaRepair'
 import AvatarPicker from './AvatarPicker'
@@ -216,12 +217,7 @@ export default function RolePicker({
               throw new Error('角色已创建，但人设没有完整保存，请稍后重试')
             }
             createdSession = repaired.data
-            // attemptPendingPersonaRepair 会在成功时清理；本轮直接成功则覆盖写入同一事务后交给启动链对账。
-            const verified = await attemptPendingPersonaRepair(token, account)
-            if (verified.kind === 'blocked') {
-              throw new Error(`角色已创建，但人设保存确认失败：${verified.message}`)
-            }
-            if (verified.kind === 'repaired') createdSession = verified.session
+            clearPendingPersonaRepair(account, createdSession.id)
           }
         }
 
