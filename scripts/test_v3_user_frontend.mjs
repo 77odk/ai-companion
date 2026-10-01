@@ -224,8 +224,8 @@ assert.deepEqual(
 assert.match(account.body, /<UpdateControls \/>/, '「检查更新」入口应留在「账号与隐私」组末尾')
 assert.doesNotMatch(account.body, /消息与通知/, '「消息与通知」应挪到「使用与支持」组')
 
-// 其他分组一律不动（不重排、不删除、不改名）
-assert.deepEqual(byTitle.get('关于 TA').labels, ['TA 的资料', '回复长度', '角色管理'])
+// 其它分组结构不动；本批只把「回复长度」入口升级为「聊天设置」
+assert.deepEqual(byTitle.get('关于 TA').labels, ['TA 的资料', '聊天设置', '角色管理'])
 assert.deepEqual(byTitle.get('关于我').labels, ['重要记录 & 记忆'])
 assert.deepEqual(byTitle.get('关于我们').labels, ['纪念日管理'])
 assert.deepEqual(byTitle.get('即将开放').labels, ['AI 工作台'])
