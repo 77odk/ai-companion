@@ -20,6 +20,10 @@ function source(path) {
 }
 
 const rolePicker = source('../src/components/RolePicker.tsx')
+const personaRepair = source('../src/lib/personaRepair.ts')
+const app = source('../src/App.tsx')
+const rolesPage = source('../src/components/RolesPage.tsx')
+const settings = source('../src/components/Settings.tsx')
 
 console.log('\n[BUG-CUSTOM-PERSONA] 自定义角色创建后必须校验 persona 持久化')
 ok(
@@ -31,29 +35,54 @@ ok(
   'RolePicker 在创建结果丢 persona 时立即 PATCH 补写',
 )
 ok(
-  rolePicker.includes('setSessionsCache(['),
-  '新角色创建后立即写本地会话缓存，避免刷新前读到空 persona',
+  rolePicker.includes('writePendingPersonaRepair({ account, id: createdSession.id, persona, title })'),
+  'PATCH 前先写临时恢复事务',
 )
 ok(
-  rolePicker.includes("sessionStorage.setItem(PENDING_PERSONA_REPAIR_KEY"),
-  'persona 补写失败后把恢复目标持久到当前浏览器会话',
-)
-ok(
-  rolePicker.includes('readPendingPersonaRepair(account)'),
-  '刷新/跳页/401 重登后先读取待修复 session',
-)
-ok(
-  rolePicker.includes('if (!repairedPending.ok)'),
-  '待修复 session 未修好前不得继续新建',
-)
-ok(
-  rolePicker.includes('deleteSession(token, createdSession.id)'),
-  '补写失败且仍有鉴权时尝试回滚未完成 session',
+  rolePicker.includes('attemptPendingPersonaRepair(token, account)'),
+  '再次提交前先修复上次未完成 session，避免重复 POST',
 )
 ok(
   rolePicker.indexOf('setActiveSessionId(String(createdSession.id))') >
     rolePicker.indexOf('clearPendingPersonaRepair(account, createdSession.id)'),
   '只有 persona 补写确认后才激活角色',
+)
+ok(
+  personaRepair.includes("sessionStorage.setItem(PENDING_PERSONA_REPAIR_KEY"),
+  '恢复目标持久到当前浏览器会话，刷新/跳页不丢',
+)
+ok(
+  personaRepair.includes("repaired.status === 404"),
+  '后端已不存在的 pending session 会清理过期事务',
+)
+ok(
+  personaRepair.includes("kind: 'blocked'"),
+  '修复未确认时明确返回 blocked，不允许当正常角色使用',
+)
+ok(
+  personaRepair.includes('filterPendingPersonaRepairSession'),
+  '提供统一过滤器，把未完成 session 排除在角色列表外',
+)
+ok(
+  app.indexOf('await attemptPendingPersonaRepair(token, account)') <
+    app.indexOf('const active = resolveActiveSession('),
+  'App 在正常 session 路由前先修复 pending persona',
+)
+ok(
+  app.includes("sessions = sessions.filter((session) => session.id !== personaRepair.pending.id)"),
+  '启动对账失败时从本次路由候选排除 pending session',
+)
+ok(
+  app.includes("if (personaRepair.status === 401 || !isLoggedIn())"),
+  '401 后停止正常路由，由现有登录墙接管',
+)
+ok(
+  rolesPage.includes('filterPendingPersonaRepairSession'),
+  '角色管理列表不会展示未完成 persona session',
+)
+ok(
+  settings.includes('filterPendingPersonaRepairSession'),
+  'TA 资料列表不会展示未完成 persona session',
 )
 
 const consumers = [
