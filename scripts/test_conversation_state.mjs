@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import {
+  activateConversationBranch,
   appendMessageToActiveBranch,
   createConversationState,
   forkConversation,
+  getActiveConversationBranchCreatedAt,
   mergeConversationStates,
   normalizeConversationState,
   resolveConversationMessages,
@@ -60,6 +62,11 @@ const deleted = forkConversation(null, 's2', raw, {
   now: 2000,
 })
 assert.deepEqual(resolveConversationMessages(deleted, raw).map(m => m.id), [1, 3, 4])
+assert.equal(getActiveConversationBranchCreatedAt(deleted), 2000, 'branch boundary is the mutation time')
+const deleteParent = deleted.branches[deleted.activeBranchId].parentBranchId
+assert.ok(deleteParent)
+const deleteUndone = activateConversationBranch(deleted, deleteParent, 2100)
+assert.deepEqual(resolveConversationMessages(deleteUndone, raw).map(m => m.id), [1, 2, 3, 4], 'undo switches back without rebuilding raw history')
 
 console.log('[conversation state] rollback keeps the prefix and archives the suffix')
 const rolledBack = forkConversation(null, 's3', raw, {
