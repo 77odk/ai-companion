@@ -27,7 +27,7 @@ import { clearAIProfile, loadAIProfile, saveAIProfile } from '../lib/storage'
 import type { StoredMessage } from '../lib/storage'
 import { clearDefaultRoleId, getDefaultRoleId, setDefaultRoleId } from '../lib/defaultRole'
 import { clearReplyLengthOverride } from '../lib/replyLength'
-import { filterPendingPersonaRepairSession } from '../lib/personaRepair'
+import { filterPendingPersonaRepairSession, preservePendingPersonaRepairInCache } from '../lib/personaRepair'
 
 interface Props {
   /** 返回「我的」（角色管理页的返回落点） */
@@ -74,7 +74,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
       if (cancelled || !res.ok) return
       const visible = filterPendingPersonaRepairSession(res.data.sessions, getAccount()?.account ?? '')
       setSessions(visible)
-      setSessionsCache(visible)
+      setSessionsCache(preservePendingPersonaRepairInCache(visible, getAccount()?.account ?? ''))
     })
     return () => {
       cancelled = true
