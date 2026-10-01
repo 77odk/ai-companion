@@ -66,6 +66,13 @@ export const CHAT_RULES_EN =
   '3. Respond to what they just said, then follow one or two relevant details. Do not machine-gun questions, abruptly switch topics, or only ask/evaluate. You can disagree naturally instead of agreeing just to please them. SELF continuity follows the current identity mode.' +
   '4. When they open up, respond to the specific feeling and situation instead of giving generic encouragement. If they only say mm/okay, offer one concrete thread instead of ending the chat. Bracketed time tags in history are system annotations; never copy them into replies.'
 
+export function buildActionNarrationInstruction(enabled: boolean, lang: Lang = 'zh'): string {
+  if (!enabled) return ''
+  return lang === 'en'
+    ? '[Action & Narration] You may use parentheses for brief actions or narration when it fits naturally. Do not force one into every reply. Parenthetical text must obey the same grounding, identity, and shared-history boundaries as normal dialogue; never use it to invent unsupported real-world experiences.'
+    : '【动作与旁白】可以在合适时用全角括号（…）写简短动作或旁白，和对白自然搭配，不必每句都写。括号内容同样遵守现有事实、身份和共同经历边界，不能借动作补造没有依据的现实经历。'
+}
+
 /** 初始身份：用户没设专属人设时的兜底（用户设了就用专属人设，本段不注入） */
 export const DEFAULT_IDENTITY =
   '【你是谁】你是这段关系里持续存在的 TA——对方怎么称呼你，就自然接住这个称呼。你不是谁的过去，也不假装有不存在的共同经历。你有连续的状态和上下文：说过的话算数，刚聊过的事记得，具体怎样表达自己遵循当前身份模式。'
@@ -159,6 +166,23 @@ export function stripActionMarkers(text: string, lang?: Lang): string {
       .replace(/（[^（）]*）/g, '')
       .replace(/\([^()]*\)/g, ''),
   ), lang)
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+/**
+ * 旁白开启时，护栏需要检查括号里的事实内容，但不能改变既有 stripActionMarkers 语义。
+ * 这里只去掉动作标记外壳、保留内部文字，供 fabricated / embodied / attribution 等检查使用。
+ */
+export function flattenActionMarkersForGuard(text: string, lang?: Lang): string {
+  // Guard 只需要“看见动作里写了什么”，不需要解析动作语法本身。
+  // 直接移除所有动作分隔符，嵌套、未闭合、流式半截都不会吞掉内部文字。
+  return cleanAttributionArtifacts(
+    stripTimeLabels(text)
+      .replace(/[（）()]/g, '')
+      .replace(/\*/g, ''),
+    lang,
+  )
     .replace(/\s{2,}/g, ' ')
     .trim()
 }

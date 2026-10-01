@@ -27,6 +27,8 @@ import {
   COMMON_MODELS,
   loadModelHistory,
   saveModelHistory,
+  isActionNarrationEnabled,
+  saveActionNarrationEnabled,
   type AIGender,
   type ModelSettings,
   type Provider,
@@ -278,7 +280,7 @@ function MainCenter({
         {onGoProfile && <EntryRow icon={<ProfileIcon />} label="TA 的资料" onClick={onGoProfile} />}
         <EntryRow
           icon={<ReplyLengthIcon />}
-          label="回复长度"
+          label="聊天设置"
           status={replyLengthLabel(replyLength)}
           onClick={onOpenReply}
         />
@@ -323,6 +325,7 @@ function MainCenter({
 function ReplyLengthDetail({ onBack }: { onBack: () => void }) {
   const accountId = getAccount()?.account ?? ''
   const [value, setValue] = useState<ReplyLength>(() => getGlobalReplyLength(accountId))
+  const [actionNarration, setActionNarration] = useState(() => isActionNarrationEnabled())
   const [error, setError] = useState('')
 
   const options: Array<{ value: ReplyLength; title: string; note: string }> = [
@@ -342,37 +345,76 @@ function ReplyLengthDetail({ onBack }: { onBack: () => void }) {
     setValue(next)
   }
 
+  const toggleActionNarration = () => {
+    const next = !actionNarration
+    if (!saveActionNarrationEnabled(next)) {
+      setError('没有保存成功，稍后再试一下')
+      return
+    }
+    setError('')
+    setActionNarration(next)
+  }
+
   return (
     <div className="page settings-page reply-length-page">
-      <DetailHeader title="回复长度" onBack={onBack} />
-      <div className="reply-length-copy">
-        <p className="reply-length-lead">选择 TA 平时说话展开到什么程度。</p>
-        <p className="hint">这个偏好会跟账号同步；某个 TA 想单独调整，可以在聊天右上角「聊天设置」里覆盖。</p>
-      </div>
+      <DetailHeader title="聊天设置" onBack={onBack} />
 
-      <div className="reply-length-options" role="radiogroup" aria-label="全局回复长度">
-        {options.map((option) => {
-          const selected = option.value === value
-          return (
+      <section className="chat-settings-section">
+        <div className="chat-settings-section-head">
+          <h2>回复长度</h2>
+          <p>选择 TA 平时说话展开到什么程度。</p>
+        </div>
+        <p className="hint">这个偏好会跟账号同步；某个 TA 想单独调整，可以在聊天右上角「聊天设置」里覆盖。</p>
+        <div className="reply-length-options" role="radiogroup" aria-label="全局回复长度">
+          {options.map((option) => {
+            const selected = option.value === value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={`reply-length-option${selected ? ' is-selected' : ''}`}
+                role="radio"
+                aria-checked={selected}
+                onClick={() => choose(option.value)}
+              >
+                <span className="reply-length-option-copy">
+                  <strong>{option.title}</strong>
+                  <span>{option.note}</span>
+                </span>
+                <span className="reply-length-radio" aria-hidden="true">
+                  {selected ? <span /> : null}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="chat-settings-section">
+        <div className="chat-settings-section-head">
+          <h2>动作与旁白</h2>
+          <p>开启后，TA 可以用括号写简短动作或旁白，输入框也会显示（）快捷按钮。</p>
+        </div>
+        <div className="chat-settings-card">
+          <div className="chat-follow-row">
+            <div className="chat-follow-copy">
+              <strong>允许括号动作与旁白</strong>
+              <small>{actionNarration ? '已开启 · 所有 TA 共用' : '已关闭 · 保持纯对话'}</small>
+            </div>
             <button
-              key={option.value}
               type="button"
-              className={`reply-length-option${selected ? ' is-selected' : ''}`}
-              role="radio"
-              aria-checked={selected}
-              onClick={() => choose(option.value)}
+              className={`chat-follow-switch${actionNarration ? ' is-on' : ''}`}
+              role="switch"
+              aria-checked={actionNarration}
+              aria-label={`动作与旁白，当前${actionNarration ? '已开启' : '已关闭'}`}
+              onClick={toggleActionNarration}
             >
-              <span className="reply-length-option-copy">
-                <strong>{option.title}</strong>
-                <span>{option.note}</span>
-              </span>
-              <span className="reply-length-radio" aria-hidden="true">
-                {selected ? <span /> : null}
-              </span>
+              <span aria-hidden="true" />
             </button>
-          )
-        })}
-      </div>
+          </div>
+        </div>
+      </section>
+
       {error ? <p className="reply-length-error" role="status">{error}</p> : null}
     </div>
   )

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
+import { buildActionNarrationInstruction, buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
-import { getSessionStart, loadMessages, loadPersona, loadSettings, loadAIProfile, loadUserProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, getContextUsage, setContextUsage, type ContextUsageState, type StoredMessage } from '../lib/storage'
+import { getSessionStart, isActionNarrationEnabled, loadMessages, loadPersona, loadSettings, loadAIProfile, loadUserProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, getContextUsage, setContextUsage, type ContextUsageState, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
 import { getAccount } from '../lib/sync'
@@ -101,6 +101,24 @@ function formatTokenCount(value: number): string {
   return `${compact.replace(/\.0$/, '')}k`
 }
 
+function cleanAssistantReplyBody(raw: string, lang: Lang, preserveActions: boolean): string {
+  const base = stripEmoji(
+    stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(raw)), lang),
+  )
+  return preserveActions
+    ? cleanAttributionArtifacts(stripTimeLabels(base), lang).replace(/\s{2,}/g, ' ').trim()
+    : stripActionMarkers(base, lang)
+}
+
+function guardAssistantReplyBody(raw: string, lang: Lang, preserveActions: boolean): string {
+  const base = stripEmoji(
+    stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(raw)), lang),
+  )
+  return preserveActions
+    ? flattenActionMarkersForGuard(base, lang)
+    : stripActionMarkers(base, lang)
+}
+
 const SendArrowIcon = () => (  <svg
     viewBox="0 0 24 24"
     fill="none"
@@ -150,6 +168,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     activeSessionId ? getMessagesCache(activeSessionId) : loadMessages(),
   )
   const [input, setInput] = useState('')
+  const [actionNarrationEnabled, setActionNarrationEnabledState] = useState(() => isActionNarrationEnabled())
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [failedText, setFailedText] = useState<string | null>(null)
@@ -231,6 +250,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const onThinkingUnsupported = () => setThinkingUnsupported(true)
     window.addEventListener('yiwem:thinking-unsupported', onThinkingUnsupported)
     return () => window.removeEventListener('yiwem:thinking-unsupported', onThinkingUnsupported)
+  }, [])
+
+  useEffect(() => {
+    const refreshActionNarration = () => setActionNarrationEnabledState(isActionNarrationEnabled())
+    window.addEventListener(ELUVIN_DATA_CHANGE, refreshActionNarration)
+    return () => window.removeEventListener(ELUVIN_DATA_CHANGE, refreshActionNarration)
   }, [])
 
   useEffect(() => {
@@ -702,20 +727,19 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       const sid = getActiveSessionId()
       const lang = sid ? getSessionLang(sid) : 'zh'
-      const text = stripActionMarkers(
-        stripEmoji(stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(raw)), lang)),
-        lang,
-      )
+      const preserveActions = isActionNarrationEnabled()
+      const guardText = guardAssistantReplyBody(raw, lang, preserveActions)
+      const text = cleanAssistantReplyBody(raw, lang, preserveActions)
       const liveIdentityMode = resolveIdentityMode(sid || undefined)
-      const partialAvailability = text ? classifyAvailability(text) : null
+      const partialAvailability = guardText ? classifyAvailability(guardText) : null
       const identityProblem = Boolean(
-        text && (
-          looksEmbodiedSelfClaim(text, liveIdentityMode) ||
+        guardText && (
+          looksEmbodiedSelfClaim(guardText, liveIdentityMode) ||
           (!allowsBusyState(liveIdentityMode) && partialAvailability?.state === 'unavailable' && partialAvailability.owner === 'SELF')
         ),
       )
-      // 后台/关页兜底也必须守身份边界：违规 partial 宁可不落库、不进 pending upload。
-      if (identityProblem) return
+      // 后台/关页兜底也必须守身份边界：括号里的动作内容同样检查；违规 partial 宁可不落库、不进 pending upload。
+      if (identityProblem || !text) return
       const partialReplyLength = sid
         ? getEffectiveReplyLength(getAccount()?.account ?? '', sid)
         : 'natural'
@@ -1068,13 +1092,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       ? getEffectiveReplyLength(accountId, activeSessionId)
       : 'natural'
     const replyPreference = buildReplyLengthInstruction(replyLength, lang).trim()
-    // 回复偏好并进现有的主 system 文本末尾（不新增第二条 system）；自然档时这一行为空
+    const allowActionNarration = isActionNarrationEnabled()
+    const actionNarrationPreference = buildActionNarrationInstruction(allowActionNarration, lang).trim()
+    // 回复偏好与旁白约定都并进现有主 system 文本末尾，不增加第二条 system。
     const apiMessages: ApiMessage[] = [
       {
         role: 'system',
         content:
           buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined, lang) +
-          (replyPreference ? '\n\n' + replyPreference : ''),
+          (replyPreference ? '\n\n' + replyPreference : '') +
+          (actionNarrationPreference ? '\n\n' + actionNarrationPreference : ''),
       },
     ]
     // 核心 system 只留稳定身份/规则；Memory/Event/Runtime/Space 等都走现有 ContextBlock，
@@ -1414,30 +1441,29 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const proposedCorrection = correctionTarget && correctionProposal && correctionProposal.value !== correctionTarget.item.text
         ? { target: correctionTarget, value: correctionProposal.value }
         : null
-      const cleaned = stripActionMarkers(
-        stripEmoji(stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(raw)), lang)),
-        lang,
-      )
-      const attributionProblem = cleaned ? hasAttributionLeak(cleaned) : false
-      const roboticProblem = cleaned ? looksRobotic(cleaned, liveIdentityMode) : false
-      const fabricatedProblem = cleaned ? looksFabricated(cleaned) : false
-      const embodiedProblem = cleaned ? looksEmbodiedSelfClaim(cleaned, liveIdentityMode) : false
-      const cleanedAvailability = cleaned ? classifyAvailability(cleaned) : null
+      // 护栏文本与最终可见文本分开：旁白开启时保留括号展示，但把括号内文字展开给事实/身份护栏检查。
+      const guardCleaned = guardAssistantReplyBody(raw, lang, allowActionNarration)
+      const visibleCleaned = cleanAssistantReplyBody(raw, lang, allowActionNarration)
+      const attributionProblem = guardCleaned ? hasAttributionLeak(guardCleaned) : false
+      const roboticProblem = guardCleaned ? looksRobotic(guardCleaned, liveIdentityMode) : false
+      const fabricatedProblem = guardCleaned ? looksFabricated(guardCleaned) : false
+      const embodiedProblem = guardCleaned ? looksEmbodiedSelfClaim(guardCleaned, liveIdentityMode) : false
+      const cleanedAvailability = guardCleaned ? classifyAvailability(guardCleaned) : null
       const unavailableIdentityProblem = Boolean(
-        cleaned && !liveAllowBusy && cleanedAvailability?.state === 'unavailable' && cleanedAvailability.owner === 'SELF',
+        guardCleaned && !liveAllowBusy && cleanedAvailability?.state === 'unavailable' && cleanedAvailability.owner === 'SELF',
       )
       const identityProblem = embodiedProblem || unavailableIdentityProblem
       // 首版如果只是“客服腔”，repair 自己失败时优先保住已经清洗过的首版；
       // 只要首版涉及归因泄漏 / 编造 / 身份越界，就绝不能因为 repair 失败而复活原文。
       const canReuseFirstReplyOnRepairFailure = Boolean(
-        cleaned && looksRecoverableServiceStyle(cleaned) && !attributionProblem && !fabricatedProblem && !identityProblem,
+        guardCleaned && looksRecoverableServiceStyle(guardCleaned) && !attributionProblem && !fabricatedProblem && !identityProblem,
       )
       // 用户主动 Stop 不再发第二次模型请求；若截停片段已经越过身份边界，直接不落这段 assistant 文本。
-      if (cleaned && identityProblem && retriedRef.current) {
+      if (guardCleaned && identityProblem && retriedRef.current) {
         commitFinal([...messages, userMsg])
         return
       }
-      if (cleaned && (attributionProblem || roboticProblem || fabricatedProblem || identityProblem) && !retriedRef.current) {
+      if (guardCleaned && (attributionProblem || roboticProblem || fabricatedProblem || identityProblem) && !retriedRef.current) {
         retriedRef.current = true
         setError(null)
         setMessages([...messages, userMsg, { role: 'assistant', content: '…', ts: assistantTs }])
@@ -1457,42 +1483,43 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           // repair 等待期间身份模式可能切换；真正提交首版前按“此刻”模式重新验身份边界。
           const fallbackIdentityMode = resolveIdentityMode(activeSessionId || undefined)
           const fallbackAllowBusy = allowsBusyState(fallbackIdentityMode)
-          const fallbackAvailability = classifyAvailability(cleaned)
+          const fallbackAvailability = classifyAvailability(guardCleaned)
           const fallbackIdentityProblem =
-            (fallbackIdentityMode === 'immersive' && looksIdentityDisclosure(cleaned)) ||
-            looksEmbodiedSelfClaim(cleaned, fallbackIdentityMode) ||
+            (fallbackIdentityMode === 'immersive' && looksIdentityDisclosure(guardCleaned)) ||
+            looksEmbodiedSelfClaim(guardCleaned, fallbackIdentityMode) ||
             (!fallbackAllowBusy && fallbackAvailability?.state === 'unavailable' && fallbackAvailability.owner === 'SELF')
-          return fallbackIdentityProblem ? safeFallback : cleaned
+          return fallbackIdentityProblem ? safeFallback : visibleCleaned
         }
         void chatCompletion(settings, [
           ...apiMessages,
-          { role: 'assistant', content: cleaned },
+          { role: 'assistant', content: guardCleaned },
           {
             role: 'user',
             content: identityRepair ? `${genericRepair}\n${identityRepair}` : genericRepair,
           },
         ])
           .then((retry) => {
-            const retryCleaned = stripActionMarkers(stripEmoji(stripMemoryCorrectionMarkers(stripMemoryMarkers(retry))), lang)
-            const retryAvailability = retryCleaned ? classifyAvailability(retryCleaned) : null
+            const retryGuard = guardAssistantReplyBody(retry, lang, allowActionNarration)
+            const retryVisible = cleanAssistantReplyBody(retry, lang, allowActionNarration)
+            const retryAvailability = retryGuard ? classifyAvailability(retryGuard) : null
             const retryIdentityMode = resolveIdentityMode(activeSessionId || undefined)
             const retryAllowBusy = allowsBusyState(retryIdentityMode)
             if (
-              !retryCleaned ||
-              looksRobotic(retryCleaned, retryIdentityMode) ||
-              looksFabricated(retryCleaned) ||
-              looksEmbodiedSelfClaim(retryCleaned, retryIdentityMode) ||
+              !retryGuard ||
+              looksRobotic(retryGuard, retryIdentityMode) ||
+              looksFabricated(retryGuard) ||
+              looksEmbodiedSelfClaim(retryGuard, retryIdentityMode) ||
               (!retryAllowBusy && retryAvailability?.state === 'unavailable' && retryAvailability.owner === 'SELF')
             ) {
               const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: resolveRepairFailureText(), ts: assistantTs }]
               commitFinal(final)
             } else if (retryAllowBusy && retryAvailability?.state === 'unavailable' && retryAvailability.owner === 'SELF') {
               busyTriggeredRef.current = true
-              const cut = findBusyCutoff(retryCleaned)
-              const busyText = cut > 0 && cut < retryCleaned.length ? retryCleaned.slice(0, cut) : retryCleaned
+              const cut = findBusyCutoff(retryGuard)
+              const busyText = cut > 0 && cut < retryGuard.length ? retryGuard.slice(0, cut) : retryGuard
               enterBusyRef.current(busyText, retryAvailability)
             } else {
-              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: retryCleaned, ts: assistantTs }]
+              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: retryVisible, ts: assistantTs }]
               commitFinal(final)
             }
           })
@@ -1506,8 +1533,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 回复卫生（2026-09-19）：
       // ① 时间标签兜底——模型可能把历史里的 [3 分钟前] 抄进第二条气泡开头，逐条再剥一次；
       // ② 去复读——丢掉与最近两条 TA 自己消息整条重复的气泡（弱模型实测会连发三条一样的生活状态）。
-      const splitParts = cleaned
-        ? (replyLength === 'long' ? splitDetailedAssistantReply(cleaned, assistantTs) : splitAssistantReplies(cleaned, assistantTs))
+      const splitParts = visibleCleaned
+        ? (replyLength === 'long' ? splitDetailedAssistantReply(visibleCleaned, assistantTs) : splitAssistantReplies(visibleCleaned, assistantTs))
         : []
       const hygienicParts = splitParts
         .map((m) => ({ ...m, content: stripTimeLabels(m.content).trim() }))
@@ -1542,6 +1569,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         pauseLeftRef.current -= 1
         return
       }
+      // 流式游标必须基于单调增长的清洗结果；动作是否最终保留只在 finalization 决定。
+      // 关闭旁白时保持改造前的流式行为，避免完成括号后字符串突然变短卡住游标。
       const clean = cleanStreamingAttributionArtifacts(
         stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(assistantText.current)), lang),
         lang,
@@ -1567,10 +1596,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       if (finishedRef.current) return
       const err = streamErrorRef.current
       // “一个字都没回来”看最终可见正文，不看 raw：只有 think / Memory / correction / action marker 也算 0 正文。
-      const visibleReplyBody = stripActionMarkers(
-        stripEmoji(stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(assistantText.current)), lang)),
-        lang,
-      ).trim()
+      const visibleReplyBody = cleanAssistantReplyBody(assistantText.current, lang, allowActionNarration)
       const hadNoReply = visibleReplyBody === ''
       finalize()  // finalize 自己设置 finishedRef 防重入
       if (mountedRef.current && hadNoReply) {
@@ -1861,6 +1887,23 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
   }
 
+  const insertActionNarration = () => {
+    const el = inputRef.current
+    const start = el?.selectionStart ?? input.length
+    const end = el?.selectionEnd ?? start
+    const selected = input.slice(start, end)
+    const wrapped = `（${selected}）`
+    const next = input.slice(0, start) + wrapped + input.slice(end)
+    setInput(next)
+    window.requestAnimationFrame(() => {
+      const target = inputRef.current
+      if (!target) return
+      target.focus({ preventScroll: true })
+      const cursor = selected ? start + wrapped.length : start + 1
+      target.setSelectionRange(cursor, cursor)
+    })
+  }
+
   const handleSend = () => {    const text = input
     if (!text.trim() || streaming) return
     send(text)
@@ -2040,6 +2083,19 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               }
             }}
           />
+          {actionNarrationEnabled && (
+            <button
+              type="button"
+              className="btn-action-narration"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={insertActionNarration}
+              disabled={streaming}
+              aria-label="插入动作或旁白括号"
+              title="动作与旁白"
+            >
+              （）
+            </button>
+          )}
           {streaming ? (
             <button className="btn btn-stop" onClick={handleStop}>
               停止

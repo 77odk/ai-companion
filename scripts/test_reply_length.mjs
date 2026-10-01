@@ -168,6 +168,7 @@ const chatSettingsSrc = readFileSync(new URL('../src/components/ChatSettings.tsx
 const partialSrc = readFileSync(new URL('../src/lib/partialReply.ts', import.meta.url), 'utf8')
 const storeSrc = readFileSync(new URL('../src/lib/sessionStore.ts', import.meta.url), 'utf8')
 const cloudSrc = readFileSync(new URL('../src/lib/cloudStateResources.ts', import.meta.url), 'utf8')
+const storageSrc = readFileSync(new URL('../src/lib/storage.ts', import.meta.url), 'utf8')
 
 check('Chat 不再 push 第二条长度 system', !/apiMessages\.push\(\{\s*role:\s*'system',\s*content:\s*buildReplyLengthInstruction/.test(chatSrc))
 check('长度偏好拼进同一主 system content', chatSrc.includes('replyPreference') && chatSrc.includes("replyPreference ? '\\n\\n' + replyPreference : ''"))
@@ -179,6 +180,14 @@ check('聊天设置有跟随全局 switch', chatSettingsSrc.includes('role="swit
 check('聊天设置是一条四档 range', chatSettingsSrc.includes('type="range"') && ['自然', '简洁', '适中', '详细'].every((label) => chatSettingsSrc.includes(`label: '${label}'`)))
 check('跟随全局开启会锁住 range', chatSettingsSrc.includes('disabled={preference.followGlobal}'))
 check('提示文案是当前全局 + 开启覆盖', chatSettingsSrc.includes('当前全局：{replyLengthLabel(globalValue)} · 开启将覆盖已选'))
+check('我的入口升级为聊天设置', settingsSrc.includes('label="聊天设置"'))
+check('全局聊天设置有动作旁白 switch', settingsSrc.includes('saveActionNarrationEnabled') && settingsSrc.includes('允许括号动作与旁白'))
+check('旁白复用 ai_companion_settings，不新建 storage key', storageSrc.includes("const SETTINGS_KEY = 'ai_companion_settings'") && !storageSrc.includes('ai_companion_action_narration'))
+check('模型设置保存会保留旁白开关', storageSrc.includes('const actionNarrationEnabled = isActionNarrationEnabled()') && storageSrc.includes('...(actionNarrationEnabled ? { actionNarrationEnabled: true } : {})'))
+check('Chat 把旁白约定拼进同一主 system', chatSrc.includes('buildActionNarrationInstruction') && chatSrc.includes("actionNarrationPreference ? '\\n\\n' + actionNarrationPreference : ''"))
+check('Chat 护栏文本和最终展示文本分离', chatSrc.includes('guardAssistantReplyBody') && chatSrc.includes('visibleCleaned'))
+check('Chat 的括号快捷按钮存在', chatSrc.includes('className="btn-action-narration"') && chatSrc.includes('（'));
+
 check('reply_length_global 仍注册', cloudSrc.includes("registerCloudStateAdapter('reply_length_global'"))
 check('reply_length preference 仍复用原 Cloud kind', cloudSrc.includes("registerCloudStateAdapter('reply_length'"))
 check('Cloud payload 同步 mode + followGlobal', cloudSrc.includes('{ mode: value.mode, followGlobal: value.followGlobal }'))

@@ -3,7 +3,7 @@
 // 背景（2026-09-19 生产库实据）：
 //   · 2315495967 / 1625638072 两个用户的 TA 回复开头漏出 [3 分钟前]、[此刻]；
 //   · 「我正在吃早餐呢，等下还得去图书馆把论文改完，下午可能去湖边坐坐。」09:45/09:46/09:47 原样三连。
-import { stripActionMarkers, stripTimeLabels } from '../src/lib/chatPrompts.ts'
+import { buildActionNarrationInstruction, flattenActionMarkersForGuard, stripActionMarkers, stripTimeLabels } from '../src/lib/chatPrompts.ts'
 import { dropRepeatedReplies, MIN_DUP_LEN } from '../src/lib/replyDedupe.ts'
 import { collapseAdjacentDuplicateAssistantReplies } from '../src/lib/chatDisplay.ts'
 
@@ -38,6 +38,12 @@ eq('空串安全', stripTimeLabels(''), '')
 
 // ---- stripActionMarkers 现在也带时间标签 ----
 eq('动作旁白链同时剥时间标签', stripActionMarkers('（转身）[5 分钟前] 好'), '好')
+eq('旁白默认关闭不注入 prompt', buildActionNarrationInstruction(false, 'zh'), '')
+ok('旁白开启注入动作约定', buildActionNarrationInstruction(true, 'zh').includes('动作与旁白'))
+eq('护栏展开括号内容而不是整段删掉', flattenActionMarkersForGuard('（刚从楼下买咖啡回来）好'), '刚从楼下买咖啡回来好')
+eq('护栏展开星号动作内容', flattenActionMarkersForGuard('*转身看向窗外*嗯'), '转身看向窗外嗯')
+eq('护栏能看到未闭合流式旁白内容', flattenActionMarkersForGuard('（我刚下班回家'), '我刚下班回家')
+eq('护栏能看到嵌套旁白内容', flattenActionMarkersForGuard('（（我们上次一起去过巴黎））'), '我们上次一起去过巴黎')
 
 // ---- dropRepeatedReplies ----
 const dupLine = '我正在吃早餐呢，等下还得去图书馆把论文改完，下午可能去湖边坐坐。'

@@ -25,6 +25,35 @@ export interface ProviderConfig {
 
 const SETTINGS_KEY = 'ai_companion_settings'
 
+/** 全局聊天动作/旁白开关：与模型设置共用现有 settings key，不新建 localStorage key。 */
+export function isActionNarrationEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw) as { actionNarrationEnabled?: unknown }
+    return parsed?.actionNarrationEnabled === true
+  } catch {
+    return false
+  }
+}
+
+export function saveActionNarrationEnabled(enabled: boolean): boolean {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    const base = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {}
+    const next = { ...base, actionNarrationEnabled: enabled }
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
+    if (isActionNarrationEnabled() !== enabled) return false
+    notifyDataChanged()
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** 各服务商默认 base_url 与模型 */
 export const DEFAULT_SETTINGS: Record<Provider, { baseUrl: string; model: string }> = {
   deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' },
@@ -165,9 +194,14 @@ export function saveSettings(settings: ModelSettings): void {
     baseUrl: settings.baseUrl.trim() || DEFAULT_SETTINGS[settings.provider].baseUrl,
     model: settings.model.trim() || DEFAULT_SETTINGS[settings.provider].model,
   }
+  const actionNarrationEnabled = isActionNarrationEnabled()
   localStorage.setItem(
     SETTINGS_KEY,
-    JSON.stringify({ provider: settings.provider, providers }),
+    JSON.stringify({
+      provider: settings.provider,
+      providers,
+      ...(actionNarrationEnabled ? { actionNarrationEnabled: true } : {}),
+    }),
   )
   notifyDataChanged()
   queueCurrentModelSettingsCloudChange()
