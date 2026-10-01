@@ -106,8 +106,9 @@
     padding-inline: var(--el-wide-gutter);
   }
 
-  .home-inner {
+  body .home-inner {
     width: min(100%, var(--el-content-home-max));
+    max-width: var(--el-content-home-max);
     margin-inline: auto;
     padding-bottom: 48px;
   }
