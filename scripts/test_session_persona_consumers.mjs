@@ -35,8 +35,25 @@ ok(
   '新角色创建后立即写本地会话缓存，避免刷新前读到空 persona',
 )
 ok(
-  rolePicker.includes('pendingCreatedSessionRef.current'),
-  'persona 补写失败后保留已创建 session，重试不得再次 POST',
+  rolePicker.includes("sessionStorage.setItem(PENDING_PERSONA_REPAIR_KEY"),
+  'persona 补写失败后把恢复目标持久到当前浏览器会话',
+)
+ok(
+  rolePicker.includes('readPendingPersonaRepair(account)'),
+  '刷新/跳页/401 重登后先读取待修复 session',
+)
+ok(
+  rolePicker.includes('if (!repairedPending.ok)'),
+  '待修复 session 未修好前不得继续新建',
+)
+ok(
+  rolePicker.includes('deleteSession(token, createdSession.id)'),
+  '补写失败且仍有鉴权时尝试回滚未完成 session',
+)
+ok(
+  rolePicker.indexOf('setActiveSessionId(String(createdSession.id))') >
+    rolePicker.indexOf('clearPendingPersonaRepair(account, createdSession.id)'),
+  '只有 persona 补写确认后才激活角色',
 )
 
 const consumers = [
