@@ -88,7 +88,7 @@ ok(
   '只有 pending 事务会被正常 UI / Chat 隐藏',
 )
 ok(
-  personaRepair.includes("marker.state === 'repaired'"),
+  personaRepair.includes("findRepairSession(sessions, account, transactionId, 'repaired')"),
   '已完成事务可被旧标签页按 transactionId 复用',
 )
 ok(
