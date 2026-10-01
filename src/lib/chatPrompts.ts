@@ -170,6 +170,21 @@ export function stripActionMarkers(text: string, lang?: Lang): string {
     .trim()
 }
 
+/**
+ * 旁白开启时，护栏需要检查括号里的事实内容，但不能改变既有 stripActionMarkers 语义。
+ * 这里只去掉动作标记外壳、保留内部文字，供 fabricated / embodied / attribution 等检查使用。
+ */
+export function flattenActionMarkersForGuard(text: string, lang?: Lang): string {
+  return cleanAttributionArtifacts(stripTimeLabels(
+    stripTimeLabels(text)
+      .replace(/\*([^*]*)\*/g, '$1')
+      .replace(/（([^（）]*)）/g, '$1')
+      .replace(/\(([^()]*)\)/g, '$1'),
+  ), lang)
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 // 回复风格护栏按身份模式分档：
 // - 沉浸：AI 身份披露 + 明显客服/设定腔都需要重写。
 // - 自然：允许承认 AI 身份，但仍避免明显客服/设定腔。
