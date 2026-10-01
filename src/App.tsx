@@ -54,6 +54,10 @@ import { initCloudStateSync, syncCloudState } from './lib/cloudState'
 import { queueLegacyCloudStateBackfill } from './lib/cloudStateResources'
 import { closeOldestCandidateWindowOnStartup } from './lib/eventDetector'
 import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from './lib/taRuntime'
+import {
+  attemptPendingPersonaRepair,
+  filterPendingPersonaRepairSession,
+} from './lib/personaRepair'
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
 const RolePicker = lazy(() => import('./components/RolePicker'))
@@ -578,7 +582,43 @@ export default function App() {
     }
     const res = await listSessions(token)
     if (res.ok) {
-      const sessions = res.data.sessions
+      const account = getAccount()?.account ?? ''
+      let sessions = res.data.sessions
+
+      // 自定义角色若曾出现“POST 成功但 persona 补写未确认”，必须在正常路由前先对账。
+      // 对账仍失败时把该 session 从本次候选里排除，绝不先把空/截断 persona 暴露给 Chat。
+      const personaRepair = await attemptPendingPersonaRepair(token, account)
+      if (personaRepair.kind === 'repaired') {
+        sessions = [
+          ...sessions.filter((session) => session.id !== personaRepair.pending.id),
+          personaRepair.session,
+        ]
+        setPendingNaturalError(null)
+      } else if (personaRepair.kind === 'missing') {
+        sessions = sessions.filter((session) => session.id !== personaRepair.pending.id)
+      } else if (personaRepair.kind === 'blocked') {
+        sessions = sessions.filter((session) => session.id !== personaRepair.pending.id)
+        if (getActiveSessionId() === String(personaRepair.pending.id)) setActiveSessionId('')
+        setSessionsCache(sessions)
+
+        // 401 已由 sessionApi logout；停在受保护 loading，让现有 LoginGate 接管，不能继续路由旧 session。
+        if (personaRepair.status === 401 || !isLoggedIn()) {
+          replaceView('loading')
+          return
+        }
+
+        // 没有其它完整角色时直接回创建页，不触发 legacy 迁移，避免把全局 fallback 再创建成第二个角色。
+        if (sessions.length === 0) {
+          setMigration('idle')
+          setRoleMode('first')
+          setRoleBack('welcome')
+          setPendingNaturalError('上次创建的角色人设还没保存完整，已暂时拦住这个角色。请重试保存。')
+          replaceView('role')
+          return
+        }
+      }
+
+      sessions = filterPendingPersonaRepairSession(sessions, account)
       // S1 头部入口要显示当前角色名：列表直接落缓存，切换/重进不用等角色列表页
       setSessionsCache(sessions)
       // 只有同账号正常启动才允许补种 legacy Cloud State。
@@ -814,7 +854,8 @@ export default function App() {
     if (!token) return
     const res = await listSessions(token)
     if (res.ok) {
-      setSessionsCache(res.data.sessions)
+      const account = getAccount()?.account ?? ''
+      setSessionsCache(filterPendingPersonaRepairSession(res.data.sessions, account))
     }
   }, [])
 
