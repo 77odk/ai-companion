@@ -96,6 +96,18 @@ ok(
   'TA 资料刷新后不覆盖 repair 标记',
 )
 ok(
+  rolesPage.includes('setSessionsCache(preservePendingPersonaRepairInCache(remaining, accountId))'),
+  '删除正常角色时不擦掉 pending repair 标记',
+)
+ok(
+  rolesPage.includes('setSessionsCache(preservePendingPersonaRepairInCache(updated, accountId))'),
+  '重命名正常角色时不擦掉 pending repair 标记',
+)
+ok(
+  settings.includes("setSessionsCache(preservePendingPersonaRepairInCache(next, getAccount()?.account ?? ''))"),
+  '资料编辑写缓存时不擦掉 pending repair 标记',
+)
+ok(
   app.indexOf('await attemptPendingPersonaRepair(token, account)') <
     app.indexOf('const active = resolveActiveSession('),
   'App 在正常 session 路由前先修复 pending persona',
