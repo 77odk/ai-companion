@@ -6,6 +6,9 @@ const index = fs.readFileSync(new URL('../src/index.css', import.meta.url), 'utf
 const responsive = fs.readFileSync(new URL('../src/styles/responsive.css', import.meta.url), 'utf8')
 
 console.log('[responsive] mobile contract remains canonical')
+assert.match(responsive, /body\s*\{[\s\S]*overflow-x:\s*hidden;[\s\S]*overflow-y:\s*auto;/)
+assert.doesNotMatch(responsive, /body\s*\{[\s\S]*overflow:\s*hidden;/)
+
 assert.match(index, /--max-width:\s*480px/)
 assert.match(index, /\.app\s*\{[\s\S]*max-width:\s*var\(--max-width\)/)
 assert.match(responsive, /@media \(min-width:\s*768px\)/)
