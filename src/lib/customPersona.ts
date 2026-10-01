@@ -174,22 +174,24 @@ function personaBlock(persona: string, field: PersonaField): string {
   return ''
 }
 
-/** 去掉 persona 里的指定字段块；多行字段的续行也一起去掉。 */
+/** 去掉 persona 里的指定字段块；只有本来允许多行的性格/背景才吞续行。 */
 function dropPersonaBlocks(persona: string, fields: PersonaField[]): string {
   if (!persona) return ''
   const removed = new Set(fields)
+  const multilineFields = new Set<PersonaField>(['personality', 'background'])
   const lines = persona.split(/\r?\n/)
   const kept: string[] = []
-  let skipping = false
+  let skippingContinuation = false
 
   for (const line of lines) {
     const field = personaFieldAtLine(line)
     if (field) {
-      skipping = removed.has(field)
-      if (!skipping) kept.push(line)
+      const shouldRemove = removed.has(field)
+      skippingContinuation = shouldRemove && multilineFields.has(field)
+      if (!shouldRemove) kept.push(line)
       continue
     }
-    if (!skipping) kept.push(line)
+    if (!skippingContinuation) kept.push(line)
   }
   return kept.join('\n')
 }
