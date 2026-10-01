@@ -606,11 +606,16 @@ export function mergeSessionMessages(local: StoredMessage[], cloud: StoredMessag
       typeof m.id === 'number' && Number.isFinite(m.id)
         ? localById.get(m.id)
         : undefined
-    const tsMatches = localByTs.get(m.ts) ?? []
-    const exactTsMatch = tsMatches.find((x) => x.role === m.role && x.content === m.content)
-    const contentMatches = localByContent.get(ck) ?? []
+    const tsMatches = (localByTs.get(m.ts) ?? []).filter((x) => !matchedLocal.has(x))
+    // 老缓存没有 id 时，ts 是此前的 canonical identity。即使云端正文被修正，也要让云端权威覆盖；
+    // 但若两边都已有不同 id，就绝不能再靠 ts 把两条真实消息揉成一条。
+    const timestampFallback = tsMatches.find((x) =>
+      x.role === m.role &&
+      !(typeof m.id === 'number' && Number.isFinite(m.id) && typeof x.id === 'number' && Number.isFinite(x.id) && x.id !== m.id)
+    )
+    const contentMatches = (localByContent.get(ck) ?? []).filter((x) => !matchedLocal.has(x))
     const contentFallback = contentMatches.length === 1 ? contentMatches[0] : undefined
-    const localMatch = idMatch ?? exactTsMatch ?? contentFallback
+    const localMatch = idMatch ?? timestampFallback ?? contentFallback
     if (localMatch) matchedLocal.add(localMatch)
 
     // 云端负责消息身份 / 正文 / 时间；memorySaved 是本地展示元数据，命中同一条时带回。
