@@ -10,7 +10,8 @@ export const PERSONA_HARD_LIMIT = 4000
  * B 的“明显较长”与 C 的软/硬上限必须复用这个函数，避免同一张卡口径漂移。
  */
 export function countPersonaCharacters(text: string): number {
-  return (text ?? '').replace(/\s/g, '').length
+  // 先还原内部序列化标记，再按用户真实内容计数。
+  return decodePersonaText(text ?? '').replace(/\s/g, '').length
 }
 
 /**
@@ -106,10 +107,10 @@ export function buildCustomPersona(input: CustomPersonaInput): string {
   const opening = input.opening?.trim() ?? ''
 
   const lines: string[] = []
-  if (nickname) lines.push(`角色昵称：${nickname}`)
-  if (personality) lines.push(`性格特质：${personality}`)
-  if (background) lines.push(`关系背景：${background}`)
-  if (opening) lines.push(`初次见面开场白：${opening}`)
+  if (nickname) lines.push(serializePersonaField('nickname', nickname))
+  if (personality) lines.push(serializePersonaField('personality', personality))
+  if (background) lines.push(serializePersonaField('background', background))
+  if (opening) lines.push(serializePersonaField('opening', opening))
   return lines.join('\n')
 }
 
@@ -118,10 +119,7 @@ export function buildCustomPersona(input: CustomPersonaInput): string {
  * 没有这一行或内容为空 → 返回空串。
  */
 export function extractOpeningLine(persona: string): string {
-  if (!persona) return ''
-  // 容忍行首空白（高级编辑可能贴进来的文本带缩进），只要这行以「初次见面开场白：」开头就算
-  const m = persona.match(/^\s*初次见面开场白：(.+)$/m)
-  return m ? m[1].trim() : ''
+  return personaValue(persona, 'opening')
 }
 
 /**
@@ -143,21 +141,113 @@ const LINE_LABELS = {
 
 type PersonaField = keyof typeof LINE_LABELS
 
-/** 读 persona 中某一行标签的内容（行首允许空白；无该行/内容为空返回空串） */
-function personaLine(persona: string, field: PersonaField): string {
-  if (!persona) return ''
-  const m = persona.match(new RegExp(`^\\s*${LINE_LABELS[field]}：(.+)$`, 'm'))
-  return m ? m[1].trim() : ''
+const PERSONA_FIELDS = Object.keys(LINE_LABELS) as PersonaField[]
+const MULTILINE_FIELDS = new Set<PersonaField>(['personality', 'background'])
+
+// 多行 textarea 内容与字段标签共用一条 persona 字符串。
+ // 用零宽字符只转义“看起来像字段标签”的正文行：界面读回时会还原，避免正文被误判成字段边界。
+const PERSONA_CONTENT_ESCAPE = '\u200B'
+
+function isPersonaFieldLine(line: string): boolean {
+  return PERSONA_FIELDS.some((field) => new RegExp(`^\\s*${LINE_LABELS[field]}：`).test(line))
 }
 
-/** 去掉 persona 里指定的几行（按行首标签精确匹配，容忍行首空白） */
-function dropPersonaLines(persona: string, fields: PersonaField[]): string {
-  if (!persona) return ''
-  const labels = fields.map((f) => LINE_LABELS[f])
-  return persona
-    .split('\n')
-    .filter((l) => !labels.some((label) => new RegExp(`^\\s*${label}：`).test(l.trim())))
+function escapePersonaContent(value: string): string {
+  return value
+    .split(/\r?\n/)
+    .map((line, index) => {
+      // 首行已经被外层字段标签包住，不存在边界歧义，永远原样。
+      if (index === 0) return line
+      // 只有续行需要转义：字段样行防止被误判；真实零宽前缀双写以保证可逆。
+      if (line.startsWith(PERSONA_CONTENT_ESCAPE) || isPersonaFieldLine(line)) {
+        return PERSONA_CONTENT_ESCAPE + line
+      }
+      return line
+    })
     .join('\n')
+}
+
+function unescapePersonaContent(value: string): string {
+  return value
+    .split(/\r?\n/)
+    .map((line) => {
+      if (!line.startsWith(PERSONA_CONTENT_ESCAPE)) return line
+      const rest = line.slice(PERSONA_CONTENT_ESCAPE.length)
+      // 只还原本序列化器生成的两种形式：
+      // 1) 用户原文自己以零宽字符开头 → 存储时被双写；
+      // 2) textarea 续行长得像字段标签 → 存储时在标签前加一个零宽字符。
+      if (rest.startsWith(PERSONA_CONTENT_ESCAPE) || isPersonaFieldLine(rest)) return rest
+      return line
+    })
+    .join('\n')
+}
+
+/** 把内部序列化标记还原成用户原文；供 Chat / prompt 等语义消费入口使用。 */
+export function decodePersonaText(persona: string): string {
+  return unescapePersonaContent(persona ?? '')
+}
+
+function serializePersonaField(field: PersonaField, value: string): string {
+  const encoded = MULTILINE_FIELDS.has(field) ? escapePersonaContent(value) : value
+  return `${LINE_LABELS[field]}：${encoded}`
+}
+
+function personaFieldAtLine(line: string): PersonaField | null {
+  for (const field of PERSONA_FIELDS) {
+    if (new RegExp(`^\\s*${LINE_LABELS[field]}：`).test(line)) return field
+  }
+  return null
+}
+
+/**
+ * 读取结构化 persona 字段。
+ * - 昵称 / 开场白来自单行 input，只读标签所在行；
+ * - 性格 / 关系背景来自 textarea，保留后续换行，直到下一个已知字段标签。
+ */
+function personaValue(persona: string, field: PersonaField): string {
+  if (!persona) return ''
+  const lines = persona.split(/\r?\n/)
+  const prefix = new RegExp(`^\\s*${LINE_LABELS[field]}：`)
+
+  for (let i = 0; i < lines.length; i++) {
+    if (personaFieldAtLine(lines[i]) !== field) continue
+
+    const first = lines[i].replace(prefix, '')
+    if (!MULTILINE_FIELDS.has(field)) return first.trim()
+
+    const value = [first]
+    for (let j = i + 1; j < lines.length; j++) {
+      if (personaFieldAtLine(lines[j])) break
+      value.push(lines[j])
+    }
+    return unescapePersonaContent(value.join('\n').trim())
+  }
+  return ''
+}
+
+/**
+ * 去掉指定字段。
+ * 性格 / 关系背景是 textarea 字段，删除时连同续行一起去掉；
+ * 昵称 / 开场白只删除标签所在单行，不能误吞旧版自由文本正文。
+ */
+function dropPersonaFields(persona: string, fields: PersonaField[]): string {
+  if (!persona) return ''
+  const removed = new Set(fields)
+  const kept: string[] = []
+  let skipContinuation = false
+
+  for (const line of persona.split(/\r?\n/)) {
+    const field = personaFieldAtLine(line)
+    if (field) {
+      const shouldRemove = removed.has(field)
+      skipContinuation = shouldRemove && MULTILINE_FIELDS.has(field)
+      if (!shouldRemove) kept.push(line)
+      continue
+    }
+    if (!skipContinuation) kept.push(line)
+  }
+
+  return kept.join('\n')
 }
 
 /**
@@ -166,14 +256,14 @@ function dropPersonaLines(persona: string, fields: PersonaField[]): string {
  * - 模板原文（无结构化性格行）→ 返回去掉附加的背景/开场白/昵称行后的主体。
  */
 export function extractPersonality(persona: string): string {
-  const structured = personaLine(persona, 'personality')
+  const structured = personaValue(persona, 'personality')
   if (structured) return structured
-  return dropPersonaLines(persona, ['background', 'opening', 'nickname']).trim()
+  return dropPersonaFields(persona, ['background', 'opening', 'nickname']).trim()
 }
 
 /** 从 persona 解析「关系背景」行内容（无 → 空串） */
 export function extractBackgroundLine(persona: string): string {
-  return personaLine(persona, 'background')
+  return personaValue(persona, 'background')
 }
 
 export interface PersonaEdits {
@@ -193,27 +283,27 @@ export interface PersonaEdits {
  */
 export function applyPersonaEdits(persona: string, edits: PersonaEdits): string {
   const structured = /^\s*性格特质：/m.test(persona)
-  const background = edits.background !== undefined ? edits.background.trim() : personaLine(persona, 'background')
-  const opening = edits.opening !== undefined ? edits.opening.trim() : personaLine(persona, 'opening')
+  const background = edits.background !== undefined ? edits.background.trim() : personaValue(persona, 'background')
+  const opening = edits.opening !== undefined ? edits.opening.trim() : personaValue(persona, 'opening')
 
   if (structured) {
-    const nickname = personaLine(persona, 'nickname')
+    const nickname = personaValue(persona, 'nickname')
     const personality =
-      edits.personality !== undefined ? edits.personality.trim() : personaLine(persona, 'personality')
+      edits.personality !== undefined ? edits.personality.trim() : personaValue(persona, 'personality')
     const lines: string[] = []
-    if (nickname) lines.push(`角色昵称：${nickname}`)
-    if (personality) lines.push(`性格特质：${personality}`)
-    if (background) lines.push(`关系背景：${background}`)
-    if (opening) lines.push(`初次见面开场白：${opening}`)
+    if (nickname) lines.push(serializePersonaField('nickname', nickname))
+    if (personality) lines.push(serializePersonaField('personality', personality))
+    if (background) lines.push(serializePersonaField('background', background))
+    if (opening) lines.push(serializePersonaField('opening', opening))
     return lines.join('\n')
   }
 
   // 自由文本：主体去掉附加行后保留/替换，再追加背景与开场白
-  const base = dropPersonaLines(persona, ['background', 'opening', 'nickname'])
+  const base = dropPersonaFields(persona, ['background', 'opening', 'nickname'])
   const personality = edits.personality !== undefined ? edits.personality.trim() : base.trim()
   const lines: string[] = []
   if (personality) lines.push(personality)
-  if (background) lines.push(`关系背景：${background}`)
-  if (opening) lines.push(`初次见面开场白：${opening}`)
+  if (background) lines.push(serializePersonaField('background', background))
+  if (opening) lines.push(serializePersonaField('opening', opening))
   return lines.join('\n')
 }

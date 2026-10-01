@@ -1,5 +1,6 @@
 // 提示词层（2026-09-09 从 api.ts 手术拆分：只搬职责，不改任何逻辑/文案/接口）
 // 职责：聊天规矩/初始身份/记忆规则/时间上下文/纪念日/认识天数/systemPrompt 组装/文本清洗/人机味与编造质检/busy 回来提示词
+import { decodePersonaText } from './customPersona.ts'
 import { getAnniversariesForPrompt } from './anniversary.ts'
 import type { Anniversary } from './anniversary.ts'
 import { getFirstSeen } from './storage.ts'
@@ -324,7 +325,7 @@ export function buildSystemPrompt(persona?: string, aiName?: string, now?: numbe
         ? `Your name is "${aiName.trim()}". That's what they call you. You refer to yourself as "I", never as "them" or "the AI".`
         : `你的名字叫「${aiName.trim()}」，对方会这样称呼你，你自称「我」，绝不自称「TA」。`)
     : ''
-  const custom = persona?.trim()
+  const custom = decodePersonaText(persona ?? '').trim()
   let prompt: string
   if (custom) {
     const lifeHeader = isEn

@@ -12,6 +12,7 @@ import {
   hasPersonaIdentityConflict,
   PERSONA_SOFT_LIMIT,
   PERSONA_HARD_LIMIT,
+  decodePersonaText,
 } from './customPersona.ts'
 
 let passed = 0
@@ -100,6 +101,134 @@ eq(
 eq(extractPersonality(''), '', '空 persona → 空串')
 eq(extractBackgroundLine('性格特质：温柔\n关系背景：同事'), '同事', '有背景行 → 内容')
 eq(extractBackgroundLine('性格特质：温柔'), '', '无背景行 → 空串')
+
+console.log('\n[6.5] textarea 多行内容 round-trip 不得丢失')
+const multiline = buildCustomPersona({
+  nickname: '阿沉',
+  personality: '第一行\n第二行\n第三行',
+  background: '我们认识很久\n后来一起住过',
+  opening: '这么晚还没睡？',
+})
+eq(
+  multiline,
+  [
+    '角色昵称：阿沉',
+    '性格特质：第一行',
+    '第二行',
+    '第三行',
+    '关系背景：我们认识很久',
+    '后来一起住过',
+    '初次见面开场白：这么晚还没睡？',
+  ].join('\n'),
+  'buildCustomPersona 原样保留 textarea 换行',
+)
+eq(extractPersonality(multiline), '第一行\n第二行\n第三行', '重新读取性格 → 换行完整保留')
+eq(extractBackgroundLine(multiline), '我们认识很久\n后来一起住过', '重新读取背景 → 换行完整保留')
+eq(
+  applyPersonaEdits(multiline, { opening: '回来啦？' }),
+  [
+    '角色昵称：阿沉',
+    '性格特质：第一行',
+    '第二行',
+    '第三行',
+    '关系背景：我们认识很久',
+    '后来一起住过',
+    '初次见面开场白：回来啦？',
+  ].join('\n'),
+  '只改开场白 → 性格/背景多行内容原样保留',
+)
+
+console.log('\n[6.6] 单行字段不能误吞旧版自由文本')
+eq(
+  extractPersonality('角色昵称：阿温\n温柔理智'),
+  '温柔理智',
+  '昵称下一行是旧版自由文本 → 正文不能被昵称吞掉',
+)
+eq(
+  applyPersonaEdits('角色昵称：阿温\n温柔理智', { background: '同事' }),
+  '温柔理智\n关系背景：同事',
+  '旧版自由文本新增背景 → 原正文保留',
+)
+
+console.log('\n[6.7] textarea 正文里出现字段标签字样也不能被截断')
+const labelLikeContent = buildCustomPersona({
+  nickname: '阿沉',
+  personality: '温柔\n关系背景：很看重承诺\n初次见面开场白：这只是性格正文',
+  background: '真实背景',
+  opening: '真正的开场白',
+})
+ok(
+  labelLikeContent.includes('\u200B关系背景：很看重承诺'),
+  '正文中的关系背景标签行会被内部转义',
+)
+ok(
+  labelLikeContent.includes('\u200B初次见面开场白：这只是性格正文'),
+  '正文中的开场白标签行会被内部转义',
+)
+eq(
+  extractPersonality(labelLikeContent),
+  '温柔\n关系背景：很看重承诺\n初次见面开场白：这只是性格正文',
+  '重新读取 → 标签样正文完整还原',
+)
+eq(extractBackgroundLine(labelLikeContent), '真实背景', '真实背景字段不被正文标签抢走')
+eq(extractOpeningLine(labelLikeContent), '真正的开场白', '真实开场白字段不被正文标签抢走')
+eq(
+  extractPersonality(applyPersonaEdits(labelLikeContent, { opening: '换一句' })),
+  '温柔\n关系背景：很看重承诺\n初次见面开场白：这只是性格正文',
+  '改其它字段后 → 标签样正文仍完整保留',
+)
+
+console.log('\n[6.8] 字段组合与内部转义统一口径')
+const onlyPersonalityWithFakeOpening = buildCustomPersona({
+  personality: '第一行\n初次见面开场白：这是性格正文',
+})
+eq(
+  extractPersonality(onlyPersonalityWithFakeOpening),
+  '第一行\n初次见面开场白：这是性格正文',
+  '没有真实开场白时，性格里的开场白标签样正文仍归性格',
+)
+eq(extractOpeningLine(onlyPersonalityWithFakeOpening), '', '没有真实开场白 → 不误读正文标签样行')
+eq(
+  countPersonaCharacters(onlyPersonalityWithFakeOpening),
+  countPersonaCharacters('性格特质：第一行\n初次见面开场白：这是性格正文'),
+  '内部零宽转义不计入人设字数',
+)
+
+const spacedLabelLike = buildCustomPersona({
+  personality: '第一行\n  关系背景：仍然是性格正文',
+  background: '真实背景',
+})
+eq(
+  extractPersonality(spacedLabelLike),
+  '第一行\n  关系背景：仍然是性格正文',
+  '带缩进的标签样正文也完整保留',
+)
+eq(extractBackgroundLine(spacedLabelLike), '真实背景', '带缩进正文不会抢真实背景字段')
+
+const runtimeDecoded = decodePersonaText(labelLikeContent)
+ok(!runtimeDecoded.includes('\u200B'), '运行时 persona 不包含内部转义标记')
+ok(runtimeDecoded.includes('关系背景：很看重承诺'), '运行时 persona 恢复用户原文')
+ok(runtimeDecoded.includes('关系背景：真实背景'), '运行时 persona 仍保留真实结构字段')
+
+const leadingZeroWidth = buildCustomPersona({
+  personality: '\u200B用户原文真的以零宽字符开头',
+})
+eq(
+  extractPersonality(leadingZeroWidth),
+  '\u200B用户原文真的以零宽字符开头',
+  '用户原文自己的零宽字符 round-trip 不丢',
+)
+
+eq(
+  decodePersonaText('\u200B普通旧文本'),
+  '\u200B普通旧文本',
+  '不是本序列化器生成的零宽前缀不会被误删',
+)
+eq(
+  countPersonaCharacters(leadingZeroWidth),
+  countPersonaCharacters('性格特质：\u200B用户原文真的以零宽字符开头'),
+  '字数统计只忽略内部转义，不吞用户真实零宽字符',
+)
 
 console.log('\n[7] applyPersonaEdits 结构化人设（自定义）')
 const custom = '角色昵称：阿温\n性格特质：温柔\n关系背景：同事\n初次见面开场白：嗨'
