@@ -191,13 +191,23 @@ export default function RolePicker({
         if (pendingRepair.kind === 'blocked') {
           throw new Error(`上次创建的角色人设还没保存完整：${pendingRepair.message}`)
         }
-        if (
-          pendingRepair.kind === 'repaired' &&
-          pendingRepair.pending.persona === persona &&
-          pendingRepair.pending.title === title
-        ) {
-          // 用户是在重试同一份创建：直接复用已修好的 session，不再次 POST。
-          createdSession = pendingRepair.session
+        if (pendingRepair.kind === 'repaired') {
+          // 这是上一次已经 POST 成功的创建事务：无论用户重试前有没有改草稿，都复用同一个 session。
+          // 若草稿有变化，就继续 PATCH 这个 session，绝不再 POST 出第二个角色。
+          if (pendingRepair.pending.persona === persona && pendingRepair.pending.title === title) {
+            createdSession = pendingRepair.session
+          } else {
+            const updated = await patchSession(token, pendingRepair.session.id, { persona, title })
+            if (!updated.ok) {
+              writePendingPersonaRepair(pendingRepair.session, { account, persona, title })
+              throw new Error(`角色已创建，但更新后的人设保存失败：${updated.message}`)
+            }
+            if (needsPersonaPersistenceRepair(persona, updated.data.persona)) {
+              writePendingPersonaRepair(updated.data, { account, persona, title })
+              throw new Error('角色已创建，但更新后的人设没有完整保存，请稍后重试')
+            }
+            createdSession = updated.data
+          }
         }
 
         if (!createdSession) {
