@@ -395,3 +395,24 @@
     padding-inline: 10px;
   }
 }
+
+/* Responsive Photo Archive: own its desktop layout here so lazy CSS load order cannot undo it. */
+@media (min-width: 768px) {
+  .photo-archive-page,
+  .photo-archive-lightbox {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .photo-archive-topbar,
+  .photo-archive-scroll {
+    padding-left: max(24px, calc((100% - var(--el-content-photo-max)) / 2));
+    padding-right: max(24px, calc((100% - var(--el-content-photo-max)) / 2));
+  }
+
+  .photo-archive-lightbox {
+    padding-left: max(64px, calc((100% - var(--el-content-photo-max)) / 2));
+    padding-right: max(64px, calc((100% - var(--el-content-photo-max)) / 2));
+  }
+}
