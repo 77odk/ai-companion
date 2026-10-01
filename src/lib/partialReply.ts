@@ -31,10 +31,14 @@ export function commitPartialReply(
   cleanedText: string,
   queue = true,
   replyLength: ReplyLength = 'natural',
+  conversationBranchId?: string,
 ): StoredMessage[] {
-  const parts = replyLength === 'long'
+  const rawParts = replyLength === 'long'
     ? splitDetailedAssistantReply(cleanedText, ts)
     : splitAssistantReplies(cleanedText, ts)
+  const parts = conversationBranchId
+    ? rawParts.map((part) => ({ ...part, conversationBranchId }))
+    : rawParts
   if (!parts.length) return []
   const base = sessionId ? getMessagesCache(sessionId) : loadMessages()
   // 替换同 ts 的旧内容（占位空消息 / 之前落过的半截），不是追加
@@ -48,6 +52,7 @@ export function commitPartialReply(
         id: newPendingOpId(),
         type: 'message',
         sessionId,
+        ...(conversationBranchId ? { conversationBranchId } : {}),
         payload: { role: m.role, content: m.content, thinking: m.thinking ?? '' },
         ts: m.ts,
       })

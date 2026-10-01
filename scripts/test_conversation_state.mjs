@@ -30,6 +30,16 @@ assert.deepEqual(resolveConversationMessages(edited, raw).map(m => [m.id, m.cont
 ])
 assert.equal(raw[2].content, '三', 'raw backend transcript stays immutable')
 
+const optimisticOnBranch = [
+  ...raw,
+  { role: 'assistant', content: '还没拿到 server id', ts: 450, conversationBranchId: edited.activeBranchId },
+]
+assert.deepEqual(
+  resolveConversationMessages(edited, optimisticOnBranch).map(m => m.content),
+  ['一', '二', '三（改）', '还没拿到 server id'],
+  'branch-tagged optimistic message is visible before server id reconciliation',
+)
+
 console.log('[conversation state] new reply belongs only to the active branch')
 const rawWithNew = [...raw, { id: 5, role: 'assistant', content: '新四', ts: 500 }]
 const editedWithReply = appendMessageToActiveBranch(edited, 's1', rawWithNew, 5, 1100)

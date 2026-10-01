@@ -38,7 +38,8 @@ assert.equal(
   '语言多数只统计包含当前 userMsg 的最近 5 条',
 )
 
-const userMsgAt = chat.indexOf("const userMsg: StoredMessage = { role: 'user', content: messageText, ts: Date.now() }")
+const userMsgMatch = /const userMsg: StoredMessage = \{[\s\S]*?role: 'user',[\s\S]*?content: messageText,[\s\S]*?ts: Date\.now\(\),[\s\S]*?\}/.exec(chat)
+const userMsgAt = userMsgMatch?.index ?? -1
 const langAt = chat.indexOf('const personaText = persona?.trim() || \'\'')
 assert.ok(userMsgAt >= 0 && userMsgAt < langAt, 'userMsg 在 lang 计算前已构造')
 assert.match(
