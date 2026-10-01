@@ -101,6 +101,54 @@ eq(extractPersonality(''), '', '空 persona → 空串')
 eq(extractBackgroundLine('性格特质：温柔\n关系背景：同事'), '同事', '有背景行 → 内容')
 eq(extractBackgroundLine('性格特质：温柔'), '', '无背景行 → 空串')
 
+console.log('\n[6.5] textarea 多行内容 round-trip 不得丢失')
+const multiline = buildCustomPersona({
+  nickname: '阿沉',
+  personality: '第一行\n第二行\n第三行',
+  background: '我们认识很久\n后来一起住过',
+  opening: '这么晚还没睡？',
+})
+eq(
+  multiline,
+  [
+    '角色昵称：阿沉',
+    '性格特质：第一行',
+    '第二行',
+    '第三行',
+    '关系背景：我们认识很久',
+    '后来一起住过',
+    '初次见面开场白：这么晚还没睡？',
+  ].join('\n'),
+  'buildCustomPersona 原样保留 textarea 换行',
+)
+eq(extractPersonality(multiline), '第一行\n第二行\n第三行', '重新读取性格 → 换行完整保留')
+eq(extractBackgroundLine(multiline), '我们认识很久\n后来一起住过', '重新读取背景 → 换行完整保留')
+eq(
+  applyPersonaEdits(multiline, { opening: '回来啦？' }),
+  [
+    '角色昵称：阿沉',
+    '性格特质：第一行',
+    '第二行',
+    '第三行',
+    '关系背景：我们认识很久',
+    '后来一起住过',
+    '初次见面开场白：回来啦？',
+  ].join('\n'),
+  '只改开场白 → 性格/背景多行内容原样保留',
+)
+
+console.log('\n[6.6] 单行字段不能误吞旧版自由文本')
+eq(
+  extractPersonality('角色昵称：阿温\n温柔理智'),
+  '温柔理智',
+  '昵称下一行是旧版自由文本 → 正文不能被昵称吞掉',
+)
+eq(
+  applyPersonaEdits('角色昵称：阿温\n温柔理智', { background: '同事' }),
+  '温柔理智\n关系背景：同事',
+  '旧版自由文本新增背景 → 原正文保留',
+)
+
 console.log('\n[7] applyPersonaEdits 结构化人设（自定义）')
 const custom = '角色昵称：阿温\n性格特质：温柔\n关系背景：同事\n初次见面开场白：嗨'
 eq(
