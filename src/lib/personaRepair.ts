@@ -1,17 +1,21 @@
 // 自定义角色创建的临时 persona 修复事务。
 //
-// 不新增 storage key：直接复用现有 sessions cache，在未完成 session 上挂一个仅本地字段。
+// 不新增 storage key：直接复用现有 sessions cache，在创建事务对应的 session 上挂仅本地字段。
 // 该字段不会发送给后端 / Cloud State；服务端 session 仍是权威数据。
-// 目的：POST 已成功但 persona 补写尚未确认时，跨刷新 / 关标签页 / 多标签仍能识别并先修复。
+// pending = persona 尚未确认完整，UI/路由必须隐藏；repaired = 已修好，但保留事务 id 供旧标签页复用。
 
 import { needsPersonaPersistenceRepair } from './customPersona.ts'
 import { patchSession, type Session } from './sessionApi.ts'
 import { getSessionsCache, setSessionsCache } from './sessionStore.ts'
 
+type PersonaRepairState = 'pending' | 'repaired'
+
 interface PersonaRepairMarker {
   account: string
   persona: string
   title: string
+  transactionId: string
+  state: PersonaRepairState
 }
 
 type RepairCachedSession = Session & {
@@ -24,6 +28,7 @@ export interface PendingPersonaRepair {
   id: number
   persona: string
   title: string
+  transactionId: string
 }
 
 export type PendingPersonaRepairAttempt =
@@ -32,58 +37,125 @@ export type PendingPersonaRepairAttempt =
   | { kind: 'repaired'; pending: PendingPersonaRepair; session: Session }
   | { kind: 'blocked'; pending: PendingPersonaRepair; status?: number; message: string }
 
-function pendingCachedSessions(account: string): RepairCachedSession[] {
-  if (!account) return []
-  return getSessionsCache().filter((session): session is RepairCachedSession => {
-    const marker = (session as RepairCachedSession).__personaRepair
-    return Boolean(
-      marker &&
-      marker.account === account &&
-      typeof marker.persona === 'string' &&
-      typeof marker.title === 'string',
-    )
-  })
+function markerOf(session: Session): PersonaRepairMarker | null {
+  const marker = (session as RepairCachedSession).__personaRepair
+  if (
+    !marker ||
+    typeof marker.account !== 'string' ||
+    typeof marker.persona !== 'string' ||
+    typeof marker.title !== 'string' ||
+    typeof marker.transactionId !== 'string' ||
+    (marker.state !== 'pending' && marker.state !== 'repaired')
+  ) return null
+  return marker
 }
 
-export function readPendingPersonaRepair(account: string): PendingPersonaRepair | null {
-  const session = pendingCachedSessions(account)[0]
-  const marker = session?.__personaRepair
-  if (!session || !marker) return null
+function repairCachedSessions(): RepairCachedSession[] {
+  return getSessionsCache().filter((session): session is RepairCachedSession => markerOf(session) !== null)
+}
+
+function toRepair(session: RepairCachedSession): PendingPersonaRepair | null {
+  const marker = markerOf(session)
+  if (!marker) return null
   return {
     account: marker.account,
     id: session.id,
     persona: marker.persona,
     title: marker.title,
+    transactionId: marker.transactionId,
   }
+}
+
+function findRepairTransaction(
+  account: string,
+  transactionId: string,
+): { session: RepairCachedSession; marker: PersonaRepairMarker; repair: PendingPersonaRepair } | null {
+  if (!account || !transactionId) return null
+  for (const session of repairCachedSessions()) {
+    const marker = markerOf(session)
+    const repair = toRepair(session)
+    if (marker && repair && marker.account === account && marker.transactionId === transactionId) {
+      return { session, marker, repair }
+    }
+  }
+  return null
+}
+
+function replaceRepairSession(
+  session: Session,
+  marker: PersonaRepairMarker,
+): RepairCachedSession {
+  const marked: RepairCachedSession = { ...session, __personaRepair: marker }
+  const current = getSessionsCache()
+  setSessionsCache([
+    ...current.filter((item) => {
+      if (String(item.id) !== String(session.id)) return true
+      const existingMarker = markerOf(item)
+      return Boolean(existingMarker && existingMarker.account !== marker.account)
+    }),
+    marked,
+  ])
+  return marked
+}
+
+export function newPersonaRepairTransactionId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  } catch {
+    // fall through
+  }
+  return `persona_repair_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+export function readPendingPersonaRepair(account: string): PendingPersonaRepair | null {
+  if (!account) return null
+  for (const session of repairCachedSessions()) {
+    const marker = markerOf(session)
+    const repair = toRepair(session)
+    if (marker?.account === account && marker.state === 'pending' && repair) return repair
+  }
+  return null
 }
 
 /**
  * 把“尚未确认 persona 完整”的 server session 放进现有 sessions cache，并挂仅本地 repair 标记。
- * 这一步必须发生在 PATCH 前，这样即使刷新、关标签页或另一个标签页打开，也不会失去修复目标。
+ * 必须发生在 PATCH 前，这样刷新、关标签页、换标签页或切账号都不会失去修复目标。
  */
 export function writePendingPersonaRepair(
   session: Session,
   value: Omit<PendingPersonaRepair, 'id'>,
-): void {
-  const marked: RepairCachedSession = {
-    ...session,
-    __personaRepair: {
-      account: value.account,
-      persona: value.persona,
-      title: value.title,
-    },
-  }
-  setSessionsCache([
-    ...getSessionsCache().filter((item) => String(item.id) !== String(session.id)),
-    marked,
-  ])
+): Session {
+  return replaceRepairSession(session, {
+    account: value.account,
+    persona: value.persona,
+    title: value.title,
+    transactionId: value.transactionId,
+    state: 'pending',
+  })
 }
 
-/** 修复完成后只清本地标记，保留 session；后续 server 返回会覆盖成干净对象。 */
+/**
+ * persona 已确认完整后仍保留“repaired transaction”标记。
+ * 正常 UI 会显示该 session；只有持有同 transactionId 的旧标签页会复用它，避免再次 POST。
+ */
+export function rememberCompletedPersonaRepair(
+  session: Session,
+  value: PendingPersonaRepair,
+): Session {
+  return replaceRepairSession(session, {
+    account: value.account,
+    persona: value.persona,
+    title: value.title,
+    transactionId: value.transactionId,
+    state: 'repaired',
+  })
+}
+
+/** 显式清理某账号的 repair 元数据；保留 session 本体。 */
 export function clearPendingPersonaRepair(account: string, id?: number): void {
   const next = getSessionsCache().map((session) => {
-    const repair = (session as RepairCachedSession).__personaRepair
-    if (!repair || repair.account !== account) return session
+    const marker = markerOf(session)
+    if (!marker || marker.account !== account) return session
     if (id != null && session.id !== id) return session
     const { __personaRepair: _discard, ...clean } = session as RepairCachedSession
     return clean as Session
@@ -91,48 +163,83 @@ export function clearPendingPersonaRepair(account: string, id?: number): void {
   setSessionsCache(next)
 }
 
-/** server 已确认该 session 不存在时，把对应本地 repair 占位一起清掉。 */
-function removePendingPersonaRepairSession(account: string, id: number): void {
+/** server 已确认该 session 不存在时，只移除对应账号的 repair 占位。 */
+function removePersonaRepairSession(account: string, id: number): void {
   setSessionsCache(
     getSessionsCache().filter((session) => {
-      const repair = (session as RepairCachedSession).__personaRepair
-      return !(session.id === id && repair?.account === account)
+      if (session.id !== id) return true
+      return markerOf(session)?.account !== account
     }),
   )
 }
 
-/** 待修复角色在事务完成前不能出现在正常角色列表/路由候选里。 */
+/**
+ * 正常 UI / 路由可见列表：
+ * - 当前账号 pending：隐藏；
+ * - 当前账号 repaired：可见；
+ * - 其它账号的 repair 条目：永远隐藏，防账号串数据。
+ */
 export function filterPendingPersonaRepairSession(sessions: Session[], account: string): Session[] {
-  const pendingIds = new Set(pendingCachedSessions(account).map((session) => session.id))
-  if (pendingIds.size === 0) return Array.isArray(sessions) ? sessions : []
-  return (Array.isArray(sessions) ? sessions : []).filter((session) => !pendingIds.has(session.id))
+  const currentMarkers = new Map<number, PersonaRepairMarker>()
+  for (const session of repairCachedSessions()) {
+    const marker = markerOf(session)
+    if (marker?.account === account) currentMarkers.set(session.id, marker)
+  }
+
+  return (Array.isArray(sessions) ? sessions : []).filter((session) => {
+    const ownMarker = markerOf(session)
+    if (ownMarker) {
+      if (ownMarker.account !== account) return false
+      return ownMarker.state !== 'pending'
+    }
+    return currentMarkers.get(session.id)?.state !== 'pending'
+  })
 }
 
 /**
- * 刷新 server sessions 时保留本地 repair 占位，避免 listSessions 覆盖掉恢复事务。
- * UI / 路由仍应使用 filterPendingPersonaRepairSession 后的可见列表。
+ * server sessions 刷新/本地角色变更时保留所有账号的 repair transaction：
+ * - 当前账号：用最新 server session 数据 + 本地 marker；
+ * - 其它账号：原样保留 marker 条目，但由 filterPendingPersonaRepairSession 对当前账号隐藏。
  */
 export function preservePendingPersonaRepairInCache(sessions: Session[], account: string): Session[] {
-  const pending = pendingCachedSessions(account)
-  if (pending.length === 0) return Array.isArray(sessions) ? sessions : []
-  const pendingIds = new Set(pending.map((session) => session.id))
-  return [
-    ...(Array.isArray(sessions) ? sessions : []).filter((session) => !pendingIds.has(session.id)),
-    ...pending,
-  ]
+  const repairs = repairCachedSessions()
+  if (repairs.length === 0) return Array.isArray(sessions) ? sessions : []
+
+  const currentRepairs = repairs.filter((session) => markerOf(session)?.account === account)
+  const foreignRepairs = repairs.filter((session) => markerOf(session)?.account !== account)
+  const currentById = new Map(currentRepairs.map((session) => [session.id, session]))
+  const source = (Array.isArray(sessions) ? sessions : []).filter((session) => markerOf(session) === null)
+
+  const merged = source.map((session) => {
+    const cached = currentById.get(session.id)
+    const marker = cached ? markerOf(cached) : null
+    return marker ? ({ ...session, __personaRepair: marker } as RepairCachedSession) : session
+  })
+
+  const sourceIds = new Set(source.map((session) => session.id))
+  const missingCurrent = currentRepairs.filter((session) => !sourceIds.has(session.id))
+  return [...merged, ...missingCurrent, ...foreignRepairs]
 }
 
 /**
  * 尝试修复当前账号尚未确认完整的人设。
- * - 404：session 已不存在，清掉本地 repair 占位；
- * - PATCH 成功且 persona 完整：用修好的 server session 覆盖本地占位并清标记；
- * - 其它失败/仍不完整：保留占位，调用方必须把该 session 排除在正常路由之外。
+ * transactionId 用于旧标签页：若别的标签页已经修好同一事务，直接返回 repaired session，不再 PATCH/POST。
  */
 export async function attemptPendingPersonaRepair(
   token: string,
   account: string,
+  transactionId?: string,
 ): Promise<PendingPersonaRepairAttempt> {
-  const pending = readPendingPersonaRepair(account)
+  if (transactionId) {
+    const transaction = findRepairTransaction(account, transactionId)
+    if (transaction?.marker.state === 'repaired') {
+      return { kind: 'repaired', pending: transaction.repair, session: transaction.session }
+    }
+  }
+
+  const pending = transactionId
+    ? findRepairTransaction(account, transactionId)?.repair ?? readPendingPersonaRepair(account)
+    : readPendingPersonaRepair(account)
   if (!pending) return { kind: 'none' }
 
   const repaired = await patchSession(token, pending.id, {
@@ -141,7 +248,7 @@ export async function attemptPendingPersonaRepair(
   })
   if (!repaired.ok) {
     if (repaired.status === 404) {
-      removePendingPersonaRepairSession(account, pending.id)
+      removePersonaRepairSession(account, pending.id)
       return { kind: 'missing', pending }
     }
     return {
@@ -160,9 +267,6 @@ export async function attemptPendingPersonaRepair(
     }
   }
 
-  setSessionsCache([
-    ...getSessionsCache().filter((session) => String(session.id) !== String(pending.id)),
-    repaired.data,
-  ])
-  return { kind: 'repaired', pending, session: repaired.data }
+  const completed = rememberCompletedPersonaRepair(repaired.data, pending)
+  return { kind: 'repaired', pending, session: completed }
 }
