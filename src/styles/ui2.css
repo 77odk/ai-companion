@@ -3382,6 +3382,118 @@
   flex-direction: row-reverse;
 }
 
+.message-actions {
+  position: relative;
+  flex: none;
+  align-self: flex-end;
+}
+
+.message-actions-trigger {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: color-mix(in srgb, var(--color-text-muted) 66%, transparent);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.message-row:hover .message-actions-trigger,
+.message-actions:focus-within .message-actions-trigger {
+  opacity: 1;
+}
+
+.message-actions-trigger:hover,
+.message-actions-trigger:focus-visible {
+  background: color-mix(in srgb, var(--color-card) 78%, transparent);
+  outline: none;
+}
+
+.message-actions-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 4px);
+  z-index: 24;
+  min-width: 78px;
+  padding: 4px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 62%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-card) 96%, transparent);
+  box-shadow: 0 8px 24px rgba(47, 38, 31, 0.1);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.row-user .message-actions-menu {
+  right: 0;
+  left: auto;
+}
+
+.message-actions-menu button {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.message-actions-menu button:hover,
+.message-actions-menu button:focus-visible {
+  background: color-mix(in srgb, var(--color-primary-soft) 46%, transparent);
+  outline: none;
+}
+
+.bubble-quote {
+  display: block;
+  margin: -1px 0 6px;
+  padding: 5px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--color-primary) 44%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-card) 62%, transparent);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.bubble-quote strong,
+.bubble-quote span {
+  display: block;
+}
+
+.bubble-quote strong {
+  margin-bottom: 2px;
+  color: color-mix(in srgb, var(--color-text) 76%, var(--color-text-muted));
+  font-weight: 600;
+}
+
+.bubble-quote span {
+  white-space: pre-wrap;
+}
+
+@media (hover: none) {
+  .message-actions-trigger {
+    opacity: 0.42;
+  }
+
+  .message-actions:focus-within .message-actions-trigger {
+    opacity: 1;
+  }
+}
+
 /* TA：恢复小气泡。连续消息仍共用同一头像列，避免“大卡片感”。 */
 .chat-page .bubble-assistant {
   padding: 7px 11px;
@@ -3532,6 +3644,60 @@
 
 /* 输入区去掉“白色大容器再套输入框”的网页表单感。 */
 /* P0-C + P1-F UI 校正：输入框与控制条是一体；Context Meter 为圆环，并与沉浸感/模型胶囊同一水平线。 */
+.chat-page .chat-quote-draft {
+  margin: 0 6px 4px;
+  padding: 7px 8px 7px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 2px solid color-mix(in srgb, var(--color-primary) 44%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-primary-soft) 26%, transparent);
+}
+
+.chat-page .chat-quote-draft-text {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.chat-page .chat-quote-draft-text strong {
+  color: var(--color-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.chat-page .chat-quote-draft-text span {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-page .chat-quote-draft > button {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chat-page .chat-quote-draft > button:hover,
+.chat-page .chat-quote-draft > button:focus-visible {
+  background: color-mix(in srgb, var(--color-card) 72%, transparent);
+  outline: none;
+}
+
 .chat-page .chat-composer-panel {
   position: relative;
   overflow: visible;
