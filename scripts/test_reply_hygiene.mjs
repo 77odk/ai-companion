@@ -42,6 +42,8 @@ eq('旁白默认关闭不注入 prompt', buildActionNarrationInstruction(false, 
 ok('旁白开启注入动作约定', buildActionNarrationInstruction(true, 'zh').includes('动作与旁白'))
 eq('护栏展开括号内容而不是整段删掉', flattenActionMarkersForGuard('（刚从楼下买咖啡回来）好'), '刚从楼下买咖啡回来好')
 eq('护栏展开星号动作内容', flattenActionMarkersForGuard('*转身看向窗外*嗯'), '转身看向窗外嗯')
+eq('护栏能看到未闭合流式旁白内容', flattenActionMarkersForGuard('（我刚下班回家'), '我刚下班回家')
+eq('护栏能看到嵌套旁白内容', flattenActionMarkersForGuard('（（我们上次一起去过巴黎））'), '我们上次一起去过巴黎')
 
 // ---- dropRepeatedReplies ----
 const dupLine = '我正在吃早餐呢，等下还得去图书馆把论文改完，下午可能去湖边坐坐。'
