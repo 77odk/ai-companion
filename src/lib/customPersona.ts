@@ -156,10 +156,9 @@ function escapePersonaContent(value: string): string {
   return value
     .split(/\r?\n/)
     .map((line, index) => {
-      if (index === 0) return line
-      if (line.startsWith(PERSONA_CONTENT_ESCAPE) || isPersonaFieldLine(line)) {
-        return PERSONA_CONTENT_ESCAPE + line
-      }
+      // 用户原文自己以零宽字符开头时也要先转义，否则读回时会误删这个真实字符。
+      if (line.startsWith(PERSONA_CONTENT_ESCAPE)) return PERSONA_CONTENT_ESCAPE + line
+      if (index > 0 && isPersonaFieldLine(line)) return PERSONA_CONTENT_ESCAPE + line
       return line
     })
     .join('\n')
@@ -170,6 +169,11 @@ function unescapePersonaContent(value: string): string {
     .split(/\r?\n/)
     .map((line) => line.startsWith(PERSONA_CONTENT_ESCAPE) ? line.slice(PERSONA_CONTENT_ESCAPE.length) : line)
     .join('\n')
+}
+
+/** 把内部序列化标记还原成用户原文；供 Chat / prompt 等语义消费入口使用。 */
+export function decodePersonaText(persona: string): string {
+  return unescapePersonaContent(persona ?? '')
 }
 
 function serializePersonaField(field: PersonaField, value: string): string {
