@@ -215,6 +215,13 @@ export default function RolePicker({
               throw new Error('角色已创建，但更新后的人设没有完整保存，请稍后重试')
             }
             createdSession = updated.data
+            rememberCompletedPersonaRepair(createdSession, {
+              account,
+              id: createdSession.id,
+              persona,
+              title,
+              transactionId: pendingRepair.pending.transactionId,
+            })
           }
         }
 
