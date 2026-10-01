@@ -236,16 +236,17 @@ export default function RolePicker({
           createdSession = res.data
 
           if (!allowEmptyPersona && needsPersonaPersistenceRepair(persona, createdSession.persona)) {
+            const pendingSession = createdSession
             // POST 已成功但返回的人设缺失/截断：先写当前浏览器会话的恢复标记，再尝试 PATCH。
             // 成功前不激活、不写正常会话缓存，避免空 persona 被用户直接拿去聊天。
-            writePendingPersonaRepair(createdSession, { account, persona, title, transactionId: repairTransactionId })
+            writePendingPersonaRepair(pendingSession, { account, persona, title, transactionId: repairTransactionId })
             // repair 发现依赖可枚举 sessions；先把这条未完成 session 放进当前账号缓存，
             // 正常 UI 会通过 pending filter 隐藏它，但当前页再次 Save 时能复用而不是重复 POST。
             setSessionsCache([
-              ...getSessionsCache().filter((session) => String(session.id) !== String(createdSession.id)),
-              createdSession,
+              ...getSessionsCache().filter((session) => String(session.id) !== String(pendingSession.id)),
+              pendingSession,
             ])
-            const repaired = await patchSession(token, createdSession.id, { persona, title })
+            const repaired = await patchSession(token, pendingSession.id, { persona, title })
             if (!repaired.ok) {
               throw new Error(`角色已创建，但人设保存失败：${repaired.message}`)
             }
