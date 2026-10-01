@@ -9634,3 +9634,68 @@ html, body {
     margin-top: 16px;
   }
 }
+
+/* Responsive App Shell: desktop root layout lives with the root shell. */
+@media (min-width: 768px) {
+  :root {
+    --el-wide-rail-width: 88px;
+    --el-wide-gutter: clamp(24px, 3vw, 48px);
+    --el-content-chat-max: 820px;
+    --el-content-reading-max: 860px;
+    --el-content-home-max: 980px;
+    --el-content-space-max: 1120px;
+    --el-content-photo-max: 1180px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .app.app--with-primary-nav {
+    padding-left: var(--el-wide-rail-width);
+  }
+
+  .app-main {
+    width: 100%;
+    min-width: 0;
+    padding-bottom: 0;
+  }
+
+  .app-nav {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--el-wide-rail-width);
+    height: 100dvh;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    flex-shrink: 0;
+    gap: 6px;
+    padding: 20px 10px;
+    border-top: 0;
+    border-right: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+    background: color-mix(in srgb, var(--color-card) 90%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+
+  .app-nav .nav-btn {
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 4px;
+    border-radius: 14px;
+  }
+
+  .app-nav .nav-btn.active {
+    box-shadow: inset 3px 0 0 var(--color-primary-deep);
+  }
+
+  .app-header {
+    width: min(100%, var(--el-content-reading-max));
+    margin-inline: auto;
+    padding-inline: var(--el-wide-gutter);
+  }
+}
