@@ -494,6 +494,71 @@ button {
   align-items: flex-end;
 }
 
+/* 消息操作：保持轻量，后续动作复用同一个 on-demand 入口。 */
+.message-action-slot {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.message-action-trigger {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0.56;
+}
+
+.message-action-trigger:hover,
+.message-action-trigger:focus-visible {
+  background: color-mix(in srgb, var(--color-card) 72%, transparent);
+  opacity: 1;
+}
+
+.message-action-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: 84px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-card);
+  box-shadow: var(--shadow);
+}
+
+.row-user .message-action-menu {
+  left: auto;
+  right: 0;
+}
+
+.message-action-item {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.message-action-item:hover,
+.message-action-item:focus-visible {
+  background: color-mix(in srgb, var(--color-primary-soft) 42%, transparent);
+}
+
 /* TA 记住时，气泡下方的小字 */
 .memory-remembered {
   padding-left: 4px;
