@@ -20,6 +20,8 @@ export interface SessionPendingOp {
   id: string
   type: 'message' | 'memory'
   sessionId: string
+  /** 本地会话分支归属；只用于缓存/Cloud State 对账，绝不发送给 messages API。 */
+  conversationBranchId?: string
   /** 上传用的载荷：message = {role, content}，memory = {content} */
   payload: Record<string, unknown>
   /** 本地写入时的时间戳（消息按这个 ts 跟缓存里的乐观条目对上号） */
@@ -618,8 +620,12 @@ export function mergeSessionMessages(local: StoredMessage[], cloud: StoredMessag
     const localMatch = idMatch ?? timestampFallback ?? contentFallback
     if (localMatch) matchedLocal.add(localMatch)
 
-    // 云端负责消息身份 / 正文 / 时间；memorySaved 是本地展示元数据，命中同一条时带回。
-    return localMatch?.memorySaved === true ? { ...m, memorySaved: true } : m
+    // 云端负责消息身份 / 正文 / 时间；本地展示/分支元数据命中同一条时带回。
+    return {
+      ...m,
+      ...(localMatch?.memorySaved === true ? { memorySaved: true } : {}),
+      ...(localMatch?.conversationBranchId ? { conversationBranchId: localMatch.conversationBranchId } : {}),
+    }
   })
 
   const out: StoredMessage[] = []
@@ -668,9 +674,22 @@ export function confirmMessageInCache(
   if (idx < 0) return
   const ts = Date.parse(serverMsg.createdAt)
   if (!Number.isFinite(ts)) return
-  list[idx] = { ...list[idx], id: serverMsg.id, role: serverMsg.role, content: serverMsg.content, ts }
-  // 对账只把本地 ts 换成服务端 ts，内容不变：不广播（避免双同步），RolesPage 列表摘要已是最新
+  list[idx] = {
+    ...list[idx],
+    id: serverMsg.id,
+    role: serverMsg.role,
+    content: serverMsg.content,
+    ts,
+    ...(op.conversationBranchId ? { conversationBranchId: op.conversationBranchId } : {}),
+  }
+  // 对账只把本地 ts 换成服务端 ts，内容不变：不广播 legacy dataChange。
   saveMessagesCache(sessionId, list, false)
+  // 不让 sessionStore 反向依赖 Conversation State：仅广播 server id 确认事件，由分支层自己消费。
+  if (typeof window !== 'undefined' && op.conversationBranchId) {
+    window.dispatchEvent(new CustomEvent('yiwem:message-server-confirmed', {
+      detail: { sessionId, branchId: op.conversationBranchId, messageId: serverMsg.id },
+    }))
+  }
 }
 
 // ---- 补传 pending 队列（联网自动补传，Chat 挂载 / window online 时调用） ----
