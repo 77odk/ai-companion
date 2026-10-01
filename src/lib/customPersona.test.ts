@@ -149,6 +149,34 @@ eq(
   '旧版自由文本新增背景 → 原正文保留',
 )
 
+console.log('\n[6.7] textarea 正文里出现字段标签字样也不能被截断')
+const labelLikeContent = buildCustomPersona({
+  nickname: '阿沉',
+  personality: '温柔\n关系背景：很看重承诺\n初次见面开场白：这只是性格正文',
+  background: '真实背景',
+  opening: '真正的开场白',
+})
+ok(
+  labelLikeContent.includes('\u200B关系背景：很看重承诺'),
+  '正文中的关系背景标签行会被内部转义',
+)
+ok(
+  labelLikeContent.includes('\u200B初次见面开场白：这只是性格正文'),
+  '正文中的开场白标签行会被内部转义',
+)
+eq(
+  extractPersonality(labelLikeContent),
+  '温柔\n关系背景：很看重承诺\n初次见面开场白：这只是性格正文',
+  '重新读取 → 标签样正文完整还原',
+)
+eq(extractBackgroundLine(labelLikeContent), '真实背景', '真实背景字段不被正文标签抢走')
+eq(extractOpeningLine(labelLikeContent), '真正的开场白', '真实开场白字段不被正文标签抢走')
+eq(
+  extractPersonality(applyPersonaEdits(labelLikeContent, { opening: '换一句' })),
+  '温柔\n关系背景：很看重承诺\n初次见面开场白：这只是性格正文',
+  '改其它字段后 → 标签样正文仍完整保留',
+)
+
 console.log('\n[7] applyPersonaEdits 结构化人设（自定义）')
 const custom = '角色昵称：阿温\n性格特质：温柔\n关系背景：同事\n初次见面开场白：嗨'
 eq(
