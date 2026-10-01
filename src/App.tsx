@@ -588,7 +588,7 @@ export default function App() {
 
       // 自定义角色若曾出现“POST 成功但 persona 补写未确认”，必须在正常路由前先对账。
       // 对账仍失败时把该 session 从本次候选里排除，绝不先把空/截断 persona 暴露给 Chat。
-      const personaRepair = await attemptPendingPersonaRepair(token, account)
+      const personaRepair = await attemptPendingPersonaRepair(token, account, undefined, sessions)
       if (personaRepair.kind === 'repaired') {
         sessions = [
           ...sessions.filter((session) => session.id !== personaRepair.pending.id),
