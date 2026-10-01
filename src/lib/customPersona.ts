@@ -10,7 +10,8 @@ export const PERSONA_HARD_LIMIT = 4000
  * B 的“明显较长”与 C 的软/硬上限必须复用这个函数，避免同一张卡口径漂移。
  */
 export function countPersonaCharacters(text: string): number {
-  return (text ?? '').replace(/\s/g, '').length
+  // PERSONA_CONTENT_ESCAPE 是内部序列化标记，不属于用户内容，不能占用可见字数额度。
+  return (text ?? '').replace(/\u200B/g, '').replace(/\s/g, '').length
 }
 
 /**
@@ -118,10 +119,7 @@ export function buildCustomPersona(input: CustomPersonaInput): string {
  * 没有这一行或内容为空 → 返回空串。
  */
 export function extractOpeningLine(persona: string): string {
-  if (!persona) return ''
-  // 容忍行首空白（高级编辑可能贴进来的文本带缩进），只要这行以「初次见面开场白：」开头就算
-  const m = persona.match(/^\s*初次见面开场白：(.+)$/m)
-  return m ? m[1].trim() : ''
+  return personaValue(persona, 'opening')
 }
 
 /**
