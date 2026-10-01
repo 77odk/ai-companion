@@ -1569,10 +1569,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         pauseLeftRef.current -= 1
         return
       }
-      const clean = cleanStreamingAttributionArtifacts(
+      const streamingBase = cleanStreamingAttributionArtifacts(
         stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(assistantText.current)), lang),
         lang,
       )
+      const clean = allowActionNarration ? streamingBase : stripActionMarkers(streamingBase, lang)
       const total = clean.length
       if (showLenRef.current >= total) {
         if (streamEndedRef.current) finishStreaming()
