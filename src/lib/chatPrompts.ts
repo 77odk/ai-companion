@@ -1,5 +1,6 @@
 // 提示词层（2026-09-09 从 api.ts 手术拆分：只搬职责，不改任何逻辑/文案/接口）
 // 职责：聊天规矩/初始身份/记忆规则/时间上下文/纪念日/认识天数/systemPrompt 组装/文本清洗/人机味与编造质检/busy 回来提示词
+import { decodePersonaText } from './customPersona.ts'
 import { getAnniversariesForPrompt } from './anniversary.ts'
 import type { Anniversary } from './anniversary.ts'
 import { getFirstSeen } from './storage.ts'
@@ -298,9 +299,9 @@ export function buildRelationshipBlock(now: number = Date.now(), sessionId?: str
     const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
     const days = Math.max(1, Math.round(todayDay - startDay + 1))
     if (lang === 'en') {
-      return `[Your Relationship] Today is day ${days} since you met (since ${start.getMonth() + 1}/${start.getDate()}). If they ask how long you've known each other or what day it is, answer with this — don't make up other dates.`
+      return `[Your Relationship — Time Fact Only] Today is day ${days} since you met (since ${start.getMonth() + 1}/${start.getDate()}). This is only a date/count fact, not a relationship stage, intimacy level, or behavioral boundary. If they ask how long you've known each other or what day it is, answer with this — don't infer how close or distant you should act from the day count.`
     }
-    return `【你们】今天是你们认识的第 ${days} 天（从 ${start.getMonth() + 1}月${start.getDate()}日算起）。对方问起认识多久、认识第几天，就照这个答，别编别的。`
+    return `【你们·时间事实】今天是你们认识的第 ${days} 天（从 ${start.getMonth() + 1}月${start.getDate()}日算起）。这只是日期和天数事实，不代表关系阶段、亲密程度或相处边界。对方问起认识多久、认识第几天时照这个答，不要根据天数自行推断该亲近还是疏远。`
   } catch {
     return ''
   }
@@ -324,7 +325,7 @@ export function buildSystemPrompt(persona?: string, aiName?: string, now?: numbe
         ? `Your name is "${aiName.trim()}". That's what they call you. You refer to yourself as "I", never as "them" or "the AI".`
         : `你的名字叫「${aiName.trim()}」，对方会这样称呼你，你自称「我」，绝不自称「TA」。`)
     : ''
-  const custom = persona?.trim()
+  const custom = decodePersonaText(persona ?? '').trim()
   let prompt: string
   if (custom) {
     const lifeHeader = isEn

@@ -23,6 +23,8 @@ console.log('\n[1] 减法之后，唯一 system prompt 仍保留日期与关系�
 const prompt = buildSystemPrompt('', '饺子', now, sid, 'zh')
 assert.match(prompt, /【此刻时间】2026年9月23日/)
 assert.match(prompt, /今天是你们认识的第 30 天/)
+assert.match(prompt, /这只是日期和天数事实，不代表关系阶段、亲密程度或相处边界/)
+assert.match(prompt, /不要根据天数自行推断该亲近还是疏远/)
 assert.equal((prompt.match(/【此刻时间】/g) || []).length, 1, '当前时间在 system prompt 内只出现一次')
 
 console.log('\n[2] 最近对话仍原样在最终 payload，弱模型能看到“刚才说过什么”')

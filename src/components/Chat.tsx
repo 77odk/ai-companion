@@ -75,7 +75,7 @@ import { detectLang, type Lang } from '../lib/langDetect'
 import { getSessionLang, saveSessionLang } from '../lib/sessionStore'
 import { filterSessionMessages } from '../lib/aiSpaceDetail'
 import { takeChatMessage } from '../lib/chatInject'
-import { extractOpeningLine } from '../lib/customPersona'
+import { decodePersonaText, extractOpeningLine } from '../lib/customPersona'
 import { ensureMilestoneEvent, getMilestoneStatus, latestReachedMilestoneDay, markMilestoneShown } from '../lib/milestone'
 import { getWeeklyReviews } from '../lib/weeklyReview'
 import { completeChatTopicPair, recordChatTopic, loadChatTopics } from '../lib/chatTopics'
@@ -161,7 +161,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [thinkingUnsupported, setThinkingUnsupported] = useState(() => isThinkingUnsupported(loadSettings()))
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [isBusy, setIsBusy] = useState(false)
-  const persona = activeSession?.persona ?? loadPersona()
+  const persona = decodePersonaText(activeSession?.persona ?? loadPersona())
   const [milestone, setMilestone] = useState<{ day: number; hit: boolean; shown: boolean } | null>(null)
   const [showMilestone, setShowMilestone] = useState(false)
   // 刷新对话只推进当前 session 的上下文分界线；历史仍完整保留。
