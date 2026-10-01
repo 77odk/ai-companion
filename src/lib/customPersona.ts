@@ -10,8 +10,8 @@ export const PERSONA_HARD_LIMIT = 4000
  * B 的“明显较长”与 C 的软/硬上限必须复用这个函数，避免同一张卡口径漂移。
  */
 export function countPersonaCharacters(text: string): number {
-  // PERSONA_CONTENT_ESCAPE 是内部序列化标记，不属于用户内容，不能占用可见字数额度。
-  return (text ?? '').replace(/\u200B/g, '').replace(/\s/g, '').length
+  // 先还原内部序列化标记，再按用户真实内容计数。
+  return decodePersonaText(text ?? '').replace(/\s/g, '').length
 }
 
 /**
@@ -167,7 +167,15 @@ function escapePersonaContent(value: string): string {
 function unescapePersonaContent(value: string): string {
   return value
     .split(/\r?\n/)
-    .map((line) => line.startsWith(PERSONA_CONTENT_ESCAPE) ? line.slice(PERSONA_CONTENT_ESCAPE.length) : line)
+    .map((line) => {
+      if (!line.startsWith(PERSONA_CONTENT_ESCAPE)) return line
+      const rest = line.slice(PERSONA_CONTENT_ESCAPE.length)
+      // 只还原本序列化器生成的两种形式：
+      // 1) 用户原文自己以零宽字符开头 → 存储时被双写；
+      // 2) textarea 续行长得像字段标签 → 存储时在标签前加一个零宽字符。
+      if (rest.startsWith(PERSONA_CONTENT_ESCAPE) || isPersonaFieldLine(rest)) return rest
+      return line
+    })
     .join('\n')
 }
 
