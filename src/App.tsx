@@ -585,6 +585,9 @@ export default function App() {
     if (res.ok) {
       const account = getAccount()?.account ?? ''
       let sessions = res.data.sessions
+      // 当前账号刚从服务端拉到的列表先作为本地权威候选；repair 元数据另存在各 session 自己的 profile。
+      // 这里只覆盖原本就会覆盖的 sessions cache，不保留/混入其它账号的会话。
+      setSessionsCache(sessions)
 
       // 自定义角色若曾出现“POST 成功但 persona 补写未确认”，必须在正常路由前先对账。
       // 对账仍失败时把该 session 从本次候选里排除，绝不先把空/截断 persona 暴露给 Chat。
