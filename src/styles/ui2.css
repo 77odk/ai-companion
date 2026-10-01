@@ -3873,3 +3873,19 @@
     transition: none;
   }
 }
+
+/* Responsive Chat: keep a readable conversation column on wide screens. */
+@media (min-width: 768px) {
+  .chat-shell {
+    width: min(100%, var(--el-content-chat-max));
+    margin-inline: auto;
+  }
+
+  .chat-page .message-list {
+    padding-inline: clamp(18px, 3vw, 32px);
+  }
+
+  .chat-page .chat-composer-panel {
+    margin-inline: clamp(14px, 2.4vw, 26px);
+  }
+}
