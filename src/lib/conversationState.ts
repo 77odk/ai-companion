@@ -250,6 +250,24 @@ export function resolveConversationMessages(
   return resolveBranch(state, state.activeBranchId, rawMessages ?? [])
 }
 
+export function getActiveConversationBranchCreatedAt(state: ConversationState | null): number {
+  if (!state) return 0
+  const branch = state.branches[state.activeBranchId]
+  return branch && Number.isFinite(branch.createdAt) ? branch.createdAt : 0
+}
+
+export function activateConversationBranch(
+  current: ConversationState,
+  branchId: string,
+  now = Date.now(),
+): ConversationState {
+  const state = cloneState(current)
+  if (!state.branches[branchId]) throw new Error('conversation_state_branch_missing')
+  state.activeBranchId = branchId
+  state.updatedAt = Math.max(state.updatedAt, now)
+  return state
+}
+
 function lastStableMessageId(messages: StoredMessage[]): number | undefined {
   for (let index = messages.length - 1; index >= 0; index--) {
     if (validId(messages[index]?.id)) return messages[index].id
