@@ -175,9 +175,11 @@ const duplicateContentNoLeak = mergeSessionMessages(
     { role: 'assistant', content: '重复', ts: 600, memorySaved: true },
     { role: 'assistant', content: '重复', ts: 700 },
   ],
-  [{ role: 'assistant', content: '重复', ts: 800 }],
+  [{ id: 13, role: 'assistant', content: '重复', ts: 800 }],
 )
-eq(duplicateContentNoLeak[0]?.memorySaved, undefined, '重复 role+content 不用内容兜底，避免徽标串到错误消息')
+const duplicateCloudRow = duplicateContentNoLeak.find((m) => m.id === 13)
+eq(duplicateCloudRow?.memorySaved, undefined, '重复 role+content 不用内容兜底，避免徽标串到错误云端消息')
+eq(duplicateContentNoLeak.length, 3, '多条同文且无法确定对应关系时不误吞真实本地消息')
 
 
 const repeatedCloudMessages = mergeSessionMessages(
