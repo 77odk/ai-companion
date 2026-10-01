@@ -175,9 +175,30 @@ const duplicateContentNoLeak = mergeSessionMessages(
     { role: 'assistant', content: '重复', ts: 600, memorySaved: true },
     { role: 'assistant', content: '重复', ts: 700 },
   ],
-  [{ role: 'assistant', content: '重复', ts: 800 }],
+  [{ id: 13, role: 'assistant', content: '重复', ts: 800 }],
 )
-eq(duplicateContentNoLeak[0]?.memorySaved, undefined, '重复 role+content 不用内容兜底，避免徽标串到错误消息')
+const duplicateCloudRow = duplicateContentNoLeak.find((m) => m.id === 13)
+eq(duplicateCloudRow?.memorySaved, undefined, '重复 role+content 不用内容兜底，避免徽标串到错误云端消息')
+eq(duplicateContentNoLeak.length, 3, '多条同文且无法确定对应关系时不误吞真实本地消息')
+
+
+const repeatedCloudMessages = mergeSessionMessages(
+  [],
+  [
+    { id: 11, role: 'assistant', content: '真的一样', ts: 900 },
+    { id: 12, role: 'assistant', content: '真的一样', ts: 1000 },
+  ],
+)
+eq(repeatedCloudMessages.length, 2, '不同后端 id 的相同正文必须全部保留')
+eq(repeatedCloudMessages.map((m) => m.id), [11, 12], 'merge 保留后端稳定 id')
+
+const idWinsOverChangedTimestamp = mergeSessionMessages(
+  [{ id: 21, role: 'user', content: '同一条', ts: 1100, memorySaved: true }],
+  [{ id: 21, role: 'user', content: '同一条', ts: 1200 }],
+)
+eq(idWinsOverChangedTimestamp.length, 1, '同 id 即使时间变化仍只是一条')
+eq(idWinsOverChangedTimestamp[0]?.ts, 1200, '同 id 以云端时间为准')
+eq(idWinsOverChangedTimestamp[0]?.memorySaved, true, '同 id 合并仍保留本地展示元数据')
 
 console.log('\n[6] confirmMessageInCache：上传成功后本地对账')
 resetStore()
@@ -186,10 +207,11 @@ saveMessagesCache('7', [
   { role: 'assistant', content: 'hey', ts: 2 },
 ])
 const op = { id: 'x', type: 'message' as const, sessionId: '7', payload: { role: 'user', content: 'hi' }, ts: 1 }
-confirmMessageInCache('7', op, { role: 'user', content: 'hi', createdAt: '2026-08-24T00:00:00.000Z' })
+confirmMessageInCache('7', op, { id: 77, role: 'user', content: 'hi', createdAt: '2026-08-24T00:00:00.000Z' })
 const list = getMessagesCache('7')
 eq(list.length, 2, '对账后消息条数不变')
 eq(list.find((m) => m.role === 'user')!.ts, Date.parse('2026-08-24T00:00:00.000Z'), '乐观条目 ts 换成服务端 createdAt')
+eq(list.find((m) => m.role === 'user')!.id, 77, '乐观条目拿到后端稳定 id')
 
 console.log('\n[7] flushPendingOps：成功清队列 + 失败留在队列')
 resetStore()
