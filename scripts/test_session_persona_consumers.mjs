@@ -24,6 +24,7 @@ const personaRepair = source('../src/lib/personaRepair.ts')
 const app = source('../src/App.tsx')
 const rolesPage = source('../src/components/RolesPage.tsx')
 const settings = source('../src/components/Settings.tsx')
+const storage = source('../src/lib/storage.ts')
 
 console.log('\n[BUG-CUSTOM-PERSONA] 自定义角色创建后必须校验 persona 持久化')
 ok(
@@ -35,82 +36,64 @@ ok(
   'RolePicker 在创建结果丢 persona 时立即 PATCH 补写',
 )
 ok(
-  rolePicker.includes('writePendingPersonaRepair(createdSession, { account, persona, title })'),
-  'PATCH 前把未完成 session 挂到现有 sessions cache',
+  rolePicker.includes('newPersonaRepairTransactionId()'),
+  '每次创建流程有独立 transactionId，旧标签页可识别同一事务',
 )
 ok(
-  rolePicker.includes('attemptPendingPersonaRepair(token, account)'),
-  '再次提交前先修复上次未完成 session，避免重复 POST',
+  rolePicker.includes('attemptPendingPersonaRepair(token, account, repairTransactionId)'),
+  '再次提交前先按 transactionId 复用/修复原 session',
 )
 ok(
-  rolePicker.includes("if (pendingRepair.kind === 'repaired')"),
-  '上次创建事务一旦修复成功，重试必须复用原 session',
+  rolePicker.includes('transactionId: repairTransactionId'),
+  '首次补写前把 transactionId 写入角色自己的 repair 元数据',
+)
+ok(
+  rolePicker.includes('rememberCompletedPersonaRepair'),
+  '补写成功后保留 completed transaction，旧标签页不得再次 POST',
 )
 ok(
   rolePicker.includes("patchSession(token, pendingRepair.session.id, { persona, title })"),
   '重试前草稿有变化时更新原 session，不再 POST 新角色',
 )
 ok(
-  rolePicker.indexOf('setActiveSessionId(String(createdSession.id))') >
-    rolePicker.indexOf('clearPendingPersonaRepair(account, createdSession.id)'),
-  '只有 persona 补写确认后才激活角色',
+  personaRepair.includes("loadLocalPersonaRepair(String(session.id))"),
+  'repair 状态从 session 自己的本地 profile 读取',
 )
 ok(
-  personaRepair.includes('__personaRepair'),
-  '恢复目标作为仅本地字段挂在现有 sessions cache',
+  personaRepair.includes("saveLocalPersonaRepair(String(session.id)"),
+  'repair 状态写入 session 自己的本地 profile',
 )
 ok(
   !personaRepair.includes('sessionStorage'),
-  '不再依赖 tab 级 sessionStorage',
+  '不依赖 tab 级 sessionStorage',
 )
 ok(
   !personaRepair.includes("localStorage.setItem("),
-  'personaRepair 不新增 localStorage key，只复用 sessionStore 现有缓存',
+  'personaRepair 本身不新增 localStorage key',
+)
+ok(
+  storage.includes('__personaRepair'),
+  'storage 只在既有 ai_profile_<sessionId> 中保存本地 repair 元数据',
+)
+ok(
+  storage.includes("collectAllAIProfiles"),
+  '角色资料仍走既有 Cloud State 汇总路径',
 )
 ok(
   personaRepair.includes("repaired.status === 404"),
   '后端已不存在的 pending session 会清理过期事务',
 )
 ok(
-  personaRepair.includes("kind: 'blocked'"),
-  '修复未确认时明确返回 blocked，不允许当正常角色使用',
+  personaRepair.includes("marker.state === 'pending'"),
+  '只有 pending 事务会被正常 UI / Chat 隐藏',
 )
 ok(
-  personaRepair.includes('filterPendingPersonaRepairSession'),
-  '提供统一过滤器，把未完成 session 排除在角色列表外',
+  personaRepair.includes("marker.state === 'repaired'"),
+  '已完成事务可被旧标签页按 transactionId 复用',
 )
 ok(
-  personaRepair.includes('preservePendingPersonaRepairInCache'),
-  'server 会话刷新时保留本地 repair 占位，避免覆盖丢失',
-)
-ok(
-  app.includes('preservePendingPersonaRepairInCache'),
-  'App 刷新/路由写缓存时保留 repair 标记',
-)
-ok(
-  rolesPage.includes('preservePendingPersonaRepairInCache'),
-  '角色列表刷新后不覆盖 repair 标记',
-)
-ok(
-  settings.includes('preservePendingPersonaRepairInCache'),
-  'TA 资料刷新后不覆盖 repair 标记',
-)
-ok(
-  rolesPage.includes('setSessionsCache(preservePendingPersonaRepairInCache(remaining, accountId))'),
-  '删除正常角色时不擦掉 pending repair 标记',
-)
-ok(
-  rolesPage.includes('setSessionsCache(preservePendingPersonaRepairInCache(updated, accountId))'),
-  '重命名正常角色时不擦掉 pending repair 标记',
-)
-ok(
-  settings.includes("setSessionsCache(preservePendingPersonaRepairInCache(next, getAccount()?.account ?? ''))"),
-  '资料编辑写缓存时不擦掉 pending repair 标记',
-)
-ok(
-  app.indexOf('await attemptPendingPersonaRepair(token, account)') <
-    app.indexOf('const active = resolveActiveSession('),
-  'App 在正常 session 路由前先修复 pending persona',
+  app.includes('attemptPendingPersonaRepair(token, account, undefined, sessions)'),
+  'App 用当前账号刚拉到的 server sessions 在正常路由前修复 pending persona',
 )
 ok(
   app.includes("sessions = sessions.filter((session) => session.id !== personaRepair.pending.id)"),
