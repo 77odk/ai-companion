@@ -177,6 +177,33 @@ eq(
   '改其它字段后 → 标签样正文仍完整保留',
 )
 
+console.log('\n[6.8] 字段组合与内部转义统一口径')
+const onlyPersonalityWithFakeOpening = buildCustomPersona({
+  personality: '第一行\n初次见面开场白：这是性格正文',
+})
+eq(
+  extractPersonality(onlyPersonalityWithFakeOpening),
+  '第一行\n初次见面开场白：这是性格正文',
+  '没有真实开场白时，性格里的开场白标签样正文仍归性格',
+)
+eq(extractOpeningLine(onlyPersonalityWithFakeOpening), '', '没有真实开场白 → 不误读正文标签样行')
+eq(
+  countPersonaCharacters(onlyPersonalityWithFakeOpening),
+  countPersonaCharacters('性格特质：第一行\n初次见面开场白：这是性格正文'),
+  '内部零宽转义不计入人设字数',
+)
+
+const spacedLabelLike = buildCustomPersona({
+  personality: '第一行\n  关系背景：仍然是性格正文',
+  background: '真实背景',
+})
+eq(
+  extractPersonality(spacedLabelLike),
+  '第一行\n  关系背景：仍然是性格正文',
+  '带缩进的标签样正文也完整保留',
+)
+eq(extractBackgroundLine(spacedLabelLike), '真实背景', '带缩进正文不会抢真实背景字段')
+
 console.log('\n[7] applyPersonaEdits 结构化人设（自定义）')
 const custom = '角色昵称：阿温\n性格特质：温柔\n关系背景：同事\n初次见面开场白：嗨'
 eq(
