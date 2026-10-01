@@ -14,6 +14,7 @@ type RainDropStyle = CSSProperties & {
   '--rain-alpha': string
   '--rain-delay': string
   '--rain-drift': string
+  '--rain-static-y': string
 }
 
 const RAIN_DROP_COUNT = 24
@@ -24,12 +25,14 @@ function rainDropStyle(index: number): RainDropStyle {
   const alpha = 0.42 + (((index * 17 + 5) % 43) / 100)
   const delay = -(((index * 29 + 7) % 180) / 100)
   const drift = -(5 + ((index * 11 + 3) % 9))
+  const staticY = 4 + ((index * 53 + 19) % 90)
   return {
     '--rain-x': `${x}%`,
     '--rain-length': `${length}px`,
     '--rain-alpha': alpha.toFixed(2),
     '--rain-delay': `${delay.toFixed(2)}s`,
     '--rain-drift': `${drift}vw`,
+    '--rain-static-y': `${staticY}vh`,
   }
 }
 
