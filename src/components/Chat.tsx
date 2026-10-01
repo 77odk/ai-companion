@@ -664,7 +664,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const res = await getSession(token, sessionId)
     if (!res.ok || !mountedRef.current || String(getActiveSessionId()) !== String(sessionId)) return
     const cloud: StoredMessage[] = res.data.messages
-      .map((m) => ({ role: m.role, content: m.content, ts: Date.parse(m.createdAt), thinking: m.thinking }))
+      .map((m) => ({ id: m.id, role: m.role, content: m.content, ts: Date.parse(m.createdAt), thinking: m.thinking }))
       .filter((m) => Number.isFinite(m.ts))
     const merged = mergeSessionMessages(getMessagesCache(sessionId), cloud)
     saveMessagesCache(sessionId, merged)
