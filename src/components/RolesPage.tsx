@@ -27,6 +27,7 @@ import { clearAIProfile, loadAIProfile, saveAIProfile } from '../lib/storage'
 import type { StoredMessage } from '../lib/storage'
 import { clearDefaultRoleId, getDefaultRoleId, setDefaultRoleId } from '../lib/defaultRole'
 import { clearReplyLengthOverride } from '../lib/replyLength'
+import { filterPendingPersonaRepairSession } from '../lib/personaRepair'
 
 interface Props {
   /** 返回「我的」（角色管理页的返回落点） */
@@ -52,7 +53,7 @@ function lastMessage(sessionId: string): StoredMessage | null {
 
 export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSelectDone, standalone = true }: Props) {
   // 列表自持：进页面先用缓存秒开，再拉后端刷新（拉取失败用缓存兜底）
-  const [sessions, setSessions] = useState<Session[]>(() => getSessionsCache())
+  const [sessions, setSessions] = useState<Session[]>(() => filterPendingPersonaRepairSession(getSessionsCache(), getAccount()?.account ?? ''))
   // 「···」动作菜单开在哪个会话上（null = 收起）
   const [menuFor, setMenuFor] = useState<string | null>(null)
   // 改名弹窗：正在改的会话 + 输入框草稿
@@ -71,8 +72,9 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
     let cancelled = false
     listSessions(token).then((res) => {
       if (cancelled || !res.ok) return
-      setSessions(res.data.sessions)
-      setSessionsCache(res.data.sessions)
+      const visible = filterPendingPersonaRepairSession(res.data.sessions, getAccount()?.account ?? '')
+      setSessions(visible)
+      setSessionsCache(visible)
     })
     return () => {
       cancelled = true
@@ -82,7 +84,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
   // 微信式实时刷新（2026-08-26 七七拍板）：有新消息/缓存变化立刻重读重排，不用手动重进
   useEffect(() => {
     const onData = () => {
-      setSessions([...getSessionsCache()])
+      setSessions(filterPendingPersonaRepairSession([...getSessionsCache()], accountId))
       setDefaultRoleState(getDefaultRoleId(accountId))
     }
     window.addEventListener('eluvin-data-change', onData)
