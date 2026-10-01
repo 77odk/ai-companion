@@ -634,14 +634,13 @@
 
 .home-weather-rain-drop.layer-1 {
   width: .8px;
-  opacity: calc(var(--rain-alpha) * .78);
+  filter: opacity(.78);
   animation-duration: var(--rain-mid-duration, 1.3s);
 }
 
 .home-weather-rain-drop.layer-2 {
   width: .7px;
-  opacity: calc(var(--rain-alpha) * .58);
-  filter: blur(.15px);
+  filter: opacity(.58) blur(.15px);
   animation-duration: var(--rain-far-duration, 1.6s);
 }
 
