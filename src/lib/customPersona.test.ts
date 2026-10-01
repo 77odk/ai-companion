@@ -101,6 +101,37 @@ eq(extractPersonality(''), '', '空 persona → 空串')
 eq(extractBackgroundLine('性格特质：温柔\n关系背景：同事'), '同事', '有背景行 → 内容')
 eq(extractBackgroundLine('性格特质：温柔'), '', '无背景行 → 空串')
 
+console.log('\n[6.5] textarea 换行内容必须完整读回')
+const multiline = [
+  '角色昵称：阿沉',
+  '性格特质：第一行',
+  '第二行',
+  '第三行',
+  '关系背景：我们认识很久',
+  '后来又一起住过',
+  '初次见面开场白：这么晚还没睡？',
+].join('\n')
+eq(extractPersonality(multiline), '第一行\n第二行\n第三行', '多行性格完整读回')
+eq(extractBackgroundLine(multiline), '我们认识很久\n后来又一起住过', '多行背景完整读回')
+eq(
+  applyPersonaEdits(multiline, { opening: '回来啦？' }),
+  [
+    '角色昵称：阿沉',
+    '性格特质：第一行',
+    '第二行',
+    '第三行',
+    '关系背景：我们认识很久',
+    '后来又一起住过',
+    '初次见面开场白：回来啦？',
+  ].join('\n'),
+  '只改其它字段时，多行性格/背景原样保留',
+)
+eq(
+  extractPersonality('你是对方的恋人。\n关系背景：第一行\n第二行\n初次见面开场白：嗨'),
+  '你是对方的恋人。',
+  '模板原文后的多行背景不会串进性格正文',
+)
+
 console.log('\n[7] applyPersonaEdits 结构化人设（自定义）')
 const custom = '角色昵称：阿温\n性格特质：温柔\n关系背景：同事\n初次见面开场白：嗨'
 eq(
