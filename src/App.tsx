@@ -344,6 +344,8 @@ export default function App() {
   // Natural 游客草稿只存当前 App 内存；刷新丢失时按 V1 要求回正常 RolePicker。
   const [pendingNatural, setPendingNatural] = useState<NaturalSetup | null>(null)
   const [pendingNaturalError, setPendingNaturalError] = useState<string | null>(null)
+  // 启动对账发现 persona repair 被阻塞时，把原 transactionId 带进创建页，防其它标签页修好后本页重复 POST。
+  const [pendingPersonaRepairTransactionId, setPendingPersonaRepairTransactionId] = useState<string | null>(null)
   // 使用指南独立 view：返回时回到来源（欢迎页 / 我的 / 登录墙）
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate' | 'chat'>('welcome')
   // 选角色页的用途：first=首次/游客新建；current=换个TA·当前会话换人设；new=换个TA·开新会话换TA
@@ -598,9 +600,12 @@ export default function App() {
           personaRepair.session,
         ]
         setPendingNaturalError(null)
+        setPendingPersonaRepairTransactionId(null)
       } else if (personaRepair.kind === 'missing') {
+        setPendingPersonaRepairTransactionId(null)
         sessions = sessions.filter((session) => session.id !== personaRepair.pending.id)
       } else if (personaRepair.kind === 'blocked') {
+        setPendingPersonaRepairTransactionId(personaRepair.pending.transactionId)
         sessions = sessions.filter((session) => session.id !== personaRepair.pending.id)
         if (getActiveSessionId() === String(personaRepair.pending.id)) setActiveSessionId('')
         setSessionsCache(preservePendingPersonaRepairInCache(sessions, account))
@@ -943,6 +948,9 @@ export default function App() {
             // Natural 创建后直接进聊天；其他登录用户保留新建后回首页的原流程。
             // 游客 Natural 填完资料会走 LoginGate：这时 info?.startChat 也可能为真，
             // 但不能把待用的草稿清掉——只有已登录并真的建出 Natural session 才清（TA-NATURAL-01 blocker）。
+            if (loggedIn) {
+              setPendingPersonaRepairTransactionId(null)
+            }
             if (info?.startChat && loggedIn) {
               setPendingNatural(null)
               setPendingNaturalError(null)
@@ -957,6 +965,7 @@ export default function App() {
           }}
           initialNatural={pendingNatural ?? undefined}
           initialNaturalError={pendingNaturalError ?? undefined}
+          initialPersonaRepairTransactionId={pendingPersonaRepairTransactionId ?? undefined}
           onBack={() => navigate(loggedIn && roleBack === 'welcome' ? 'home' : roleBack)}
           onLogin={() => setGateTarget('chat')}
         />
