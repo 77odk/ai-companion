@@ -781,7 +781,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const partialReplyLength = sid
         ? getEffectiveReplyLength(getAccount()?.account ?? '', sid)
         : 'natural'
-      const parts = commitPartialReply(sid, ts, text, leaving, partialReplyLength)
+      const partialBranchId = sid ? branchIdForNewMessage(loadConversationState(sid)) : undefined
+      const parts = commitPartialReply(sid, ts, text, leaving, partialReplyLength, partialBranchId)
       if (!parts.length) return
       if (leaving) window.dispatchEvent(new CustomEvent('yiwem:ai-reply-committed', { detail: { sid } }))
     }
