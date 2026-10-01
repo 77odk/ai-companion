@@ -3785,6 +3785,39 @@
   box-shadow: none;
 }
 
+.chat-page .btn-action-narration {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 4px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-card) 88%, transparent);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: -0.08em;
+  touch-action: manipulation;
+}
+
+.chat-page .btn-action-narration:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.chat-page .btn-action-narration:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, var(--el-static-white));
+  outline-offset: 2px;
+}
+
+.chat-page .btn-action-narration:disabled {
+  opacity: 0.4;
+}
+
 .chat-page .btn-send {
   flex: none;
   width: var(--el-control-height, 46px);
