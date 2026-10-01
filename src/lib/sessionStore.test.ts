@@ -200,6 +200,12 @@ eq(idWinsOverChangedTimestamp.length, 1, '同 id 即使时间变化仍只是一�
 eq(idWinsOverChangedTimestamp[0]?.ts, 1200, '同 id 以云端时间为准')
 eq(idWinsOverChangedTimestamp[0]?.memorySaved, true, '同 id 合并仍保留本地展示元数据')
 
+const branchMetadataMerged = mergeSessionMessages(
+  [{ id: 31, role: 'assistant', content: '分支消息', ts: 1300, conversationBranchId: 'branch-a' }],
+  [{ id: 31, role: 'assistant', content: '分支消息', ts: 1400 }],
+)
+eq(branchMetadataMerged[0]?.conversationBranchId, 'branch-a', '同 id 云端合并保留本地 conversationBranchId')
+
 console.log('\n[6] confirmMessageInCache：上传成功后本地对账')
 resetStore()
 saveMessagesCache('7', [
@@ -212,6 +218,16 @@ const list = getMessagesCache('7')
 eq(list.length, 2, '对账后消息条数不变')
 eq(list.find((m) => m.role === 'user')!.ts, Date.parse('2026-08-24T00:00:00.000Z'), '乐观条目 ts 换成服务端 createdAt')
 eq(list.find((m) => m.role === 'user')!.id, 77, '乐观条目拿到后端稳定 id')
+
+resetStore()
+saveMessagesCache('7', [{ role: 'user', content: 'branch hi', ts: 3, conversationBranchId: 'branch-b' }])
+const branchOp = {
+  id: 'branch-op', type: 'message' as const, sessionId: '7', conversationBranchId: 'branch-b',
+  payload: { role: 'user', content: 'branch hi' }, ts: 3,
+}
+confirmMessageInCache('7', branchOp, { id: 78, role: 'user', content: 'branch hi', createdAt: '2026-08-24T00:00:01.000Z' })
+eq(getMessagesCache('7')[0]?.conversationBranchId, 'branch-b', '上传对账后 branch membership 仍保留')
+eq(getMessagesCache('7')[0]?.id, 78, 'branch 消息同样拿到 server id')
 
 console.log('\n[7] flushPendingOps：成功清队列 + 失败留在队列')
 resetStore()
