@@ -299,9 +299,9 @@ export function buildRelationshipBlock(now: number = Date.now(), sessionId?: str
     const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
     const days = Math.max(1, Math.round(todayDay - startDay + 1))
     if (lang === 'en') {
-      return `[Your Relationship] Today is day ${days} since you met (since ${start.getMonth() + 1}/${start.getDate()}). If they ask how long you've known each other or what day it is, answer with this — don't make up other dates.`
+      return `[Your Relationship — Time Fact Only] Today is day ${days} since you met (since ${start.getMonth() + 1}/${start.getDate()}). This is only a date/count fact, not a relationship stage, intimacy level, or behavioral boundary. If they ask how long you've known each other or what day it is, answer with this — don't infer how close or distant you should act from the day count.`
     }
-    return `【你们】今天是你们认识的第 ${days} 天（从 ${start.getMonth() + 1}月${start.getDate()}日算起）。对方问起认识多久、认识第几天，就照这个答，别编别的。`
+    return `【你们·时间事实】今天是你们认识的第 ${days} 天（从 ${start.getMonth() + 1}月${start.getDate()}日算起）。这只是日期和天数事实，不代表关系阶段、亲密程度或相处边界。对方问起认识多久、认识第几天时照这个答，不要根据天数自行推断该亲近还是疏远。`
   } catch {
     return ''
   }
