@@ -12,6 +12,7 @@ import { isIdentityMode, mergeProfileIdentityField, type IdentityMode } from './
 import { getPendingOps, getSessionsCache, removePendingOp, type CloudStatePendingOp } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
 import { applyGlobalReplyLengthFromCloud, applyReplyLengthPreferenceFromCloud, collectStoredReplyLengthPreferences, deleteGlobalReplyLengthFromCloud, deleteReplyLengthOverrideFromCloud, getStoredGlobalReplyLength, type ReplyLength } from './replyLength.ts'
+import { initConversationStateCloudAdapter } from './conversationState.ts'
 import { applySpacePostFromCloud, deleteSpacePostFromCloud } from './aiSpace.ts'
 import type { SpacePost } from './aiSpaceCore.ts'
 import {
@@ -1063,6 +1064,7 @@ export function initCloudStateResourceAdapters(): void {
   resetReplyLengthSnapshot()
   resetSessionStartSnapshot()
   registerTaRuntimeCloudSnapshotResetter(resetRuntimeSnapshot)
+  initConversationStateCloudAdapter()
   registerCloudStateAdapter('theme', {
     apply: applyThemeEntity,
     delete() { localStorage.setItem(THEME_KEY, JSON.stringify({ type: 'preset', presetId: 'peach' })); void import('./theme.ts').then(({ applyTheme }) => applyTheme()) },

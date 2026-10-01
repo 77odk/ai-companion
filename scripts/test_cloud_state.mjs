@@ -32,6 +32,7 @@ const taRuntime = await import('../src/lib/taRuntime.ts')
 const weeklyReview = await import('../src/lib/weeklyReview.ts')
 const companionPolicy = await import('../src/lib/companionPolicy.ts')
 const replyLength = await import('../src/lib/replyLength.ts')
+const conversationState = await import('../src/lib/conversationState.ts')
 
 function login(account = 'account-a') {
   localStorage.setItem('ai_companion_account', JSON.stringify({ account, token: `token-${account}` }))
@@ -162,6 +163,44 @@ test('V5: failed replay remains in inbox and is removed only after success', asy
   assert.deepEqual(cloud.getCloudStateInbox('retry_kind'), [])
   assert.equal(cloud.getCloudStateVersion('retry_kind', 'retry'), 5)
   unregister()
+})
+
+test('CONVERSATION-CS-1/2: conversation state applies per account/session and tombstone deletes only that state', async () => {
+  clearState('conversation-a')
+  conversationState.initConversationStateCloudAdapter()
+  const stateA = conversationState.createConversationState('session-a', 1000)
+  const branchA = conversationState.forkConversation(stateA, 'session-a', [
+    { id: 1, role: 'user', content: 'hi', ts: 1 },
+    { id: 2, role: 'assistant', content: 'hello', ts: 2 },
+  ], {
+    forkAfterMessageId: 1,
+    reason: 'rollback',
+    now: 1100,
+  })
+
+  globalThis.fetch = async () => jsonResponse(pullBody(1, [{
+    kind: conversationState.CONVERSATION_STATE_KIND,
+    entityId: 'session-a',
+    sessionId: 'session-a',
+    version: 1,
+    payload: branchA,
+  }]))
+  await cloud.pullCloudState()
+  assert.equal(conversationState.loadConversationState('session-a')?.activeBranchId, branchA.activeBranchId)
+
+  login('conversation-b')
+  assert.equal(conversationState.loadConversationState('session-a'), null, 'same session id is isolated by account')
+  login('conversation-a')
+
+  globalThis.fetch = async () => jsonResponse(pullBody(2, [{
+    kind: conversationState.CONVERSATION_STATE_KIND,
+    entityId: 'session-a',
+    sessionId: 'session-a',
+    version: 2,
+    deleted: true,
+  }]))
+  await cloud.pullCloudState()
+  assert.equal(conversationState.loadConversationState('session-a'), null)
 })
 
 test('V6: unknown inbox persistence failure prevents page cursor advancement', async () => {
