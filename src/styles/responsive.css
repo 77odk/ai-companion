@@ -1,0 +1,165 @@
+/* ==========================================================================
+   Responsive App Shell — wide-screen extension
+   Mobile remains the canonical layout. Only >= 768px changes the shell.
+   ========================================================================== */
+
+@media (min-width: 768px) {
+  :root {
+    --el-wide-rail-width: 88px;
+    --el-wide-gutter: clamp(24px, 3vw, 48px);
+    --el-content-chat-max: 820px;
+    --el-content-reading-max: 860px;
+    --el-content-home-max: 980px;
+    --el-content-space-max: 1120px;
+    --el-content-photo-max: 1180px;
+  }
+
+  body {
+    overflow: hidden;
+  }
+
+  /* Root cause fix: desktop is no longer a 480px phone shell. */
+  .app {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding-left: var(--el-wide-rail-width);
+  }
+
+  .app-main {
+    width: 100%;
+    min-width: 0;
+    padding-bottom: 0 !important;
+  }
+
+  /* The same nav DOM becomes a left rail on wide screens. */
+  .app-nav {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: var(--el-wide-rail-width);
+    height: 100dvh;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 6px;
+    padding: 20px 10px;
+    border-right: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+    background: color-mix(in srgb, var(--color-card) 86%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+
+  .app-nav::before {
+    top: 0;
+    bottom: 0;
+    left: 100%;
+    right: auto;
+    width: 24px;
+    height: auto;
+    background: linear-gradient(to right, color-mix(in srgb, var(--color-bg) 18%, transparent), transparent);
+  }
+
+  .app-nav .nav-btn {
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 4px;
+    border-radius: 14px;
+  }
+
+  .app-nav .nav-btn.active::after {
+    left: auto;
+    right: 2px;
+    top: 50%;
+    bottom: auto;
+    width: 3px;
+    height: 18px;
+    transform: translateY(-50%);
+  }
+
+  /* Home still lets its scene own the whole content canvas; only the rail gets material. */
+  .app:has(.home-page) .app-nav {
+    background: color-mix(in srgb, var(--color-card) 72%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+
+  .app:has(.home-scene-night) .app-nav {
+    background: rgba(20, 34, 61, 0.48);
+  }
+
+  /* Global header follows the readable content width instead of spanning the monitor. */
+  .app-header {
+    width: min(100%, var(--el-content-reading-max));
+    margin-inline: auto;
+    padding-inline: var(--el-wide-gutter);
+  }
+
+  .app:has(.chat-page) .app-header {
+    width: min(100%, var(--el-content-chat-max));
+  }
+
+  /* Home: scene remains full width, actual content breathes but does not become a tiny centered phone. */
+  .home-page {
+    padding-inline: var(--el-wide-gutter);
+  }
+
+  .home-inner {
+    width: min(100%, var(--el-content-home-max));
+    margin-inline: auto;
+    padding-bottom: 48px;
+  }
+
+  /* Chat deliberately stays narrower for reading rhythm. */
+  .chat-shell {
+    width: min(100%, var(--el-content-chat-max));
+    margin-inline: auto;
+  }
+
+  .chat-page .message-list {
+    padding-inline: clamp(18px, 3vw, 32px);
+  }
+
+  .chat-page .chat-composer-panel {
+    padding-inline: clamp(14px, 2.4vw, 26px);
+  }
+
+  /* Reading/settings surfaces use a medium container while their page background remains full width. */
+  .settings-page {
+    width: 100%;
+    padding-left: max(var(--el-wide-gutter), calc((100% - var(--el-content-reading-max)) / 2));
+    padding-right: max(var(--el-wide-gutter), calc((100% - var(--el-content-reading-max)) / 2));
+  }
+
+  .memory-page {
+    width: 100%;
+    padding-left: max(var(--el-wide-gutter), calc((100% - var(--el-content-reading-max)) / 2));
+    padding-right: max(var(--el-wide-gutter), calc((100% - var(--el-content-reading-max)) / 2));
+  }
+
+  /* Space gets materially more room than chat/reading pages. */
+  .ai-space-page {
+    width: 100%;
+    padding-left: max(var(--el-wide-gutter), calc((100% - var(--el-content-space-max)) / 2));
+    padding-right: max(var(--el-wide-gutter), calc((100% - var(--el-content-space-max)) / 2));
+  }
+
+  /* Full photo archive is no longer capped by the old 480px shell. */
+  .photo-archive-page {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .photo-archive-topbar {
+    padding-left: max(24px, calc((100% - var(--el-content-photo-max)) / 2));
+    padding-right: max(24px, calc((100% - var(--el-content-photo-max)) / 2));
+  }
+
+  .photo-archive-scroll {
+    padding-left: max(24px, calc((100% - var(--el-content-photo-max)) / 2));
+    padding-right: max(24px, calc((100% - var(--el-content-photo-max)) / 2));
+  }
+}
