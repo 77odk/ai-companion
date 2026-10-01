@@ -131,8 +131,8 @@ const compactSection = chatSource.slice(
 )
 assert.ok(!compactSection.includes('saveMessagesCache('), 'Compact 不改动消息缓存')
 // Bridge：承接 = 上一会话有限聊天尾部 + 1 次模型生成 evidence-only bridge；不再注入旧会话 Memory
-assert.match(chatSource, /hasBridgableHistory\(messages, sessionStart\)/, 'Bridge 只由同一 session 的刷新边界控制')
-assert.match(chatSource, /messages\.filter\(\(message\) => message\.ts < sessionStart\)\.slice\(-BRIDGE_TAIL_COUNT\)/, 'Bridge 只取同一 session 刷新前有限尾部')
+assert.match(chatSource, /hasBridgableHistory\(activeMessages, sessionStart\)/, 'Bridge 只由当前 active branch 的同一 session 刷新边界控制')
+assert.match(chatSource, /activeMessages\.filter\(\(message\) => message\.ts < sessionStart\)\.slice\(-BRIDGE_TAIL_COUNT\)/, 'Bridge 只取 active branch 内同一 session 刷新前有限尾部')
 assert.match(chatSource, /buildCompactSource\(bridgeHistory, BRIDGE_INPUT_BUDGET\)/, 'Bridge 尾部除了条数上限，还必须受 token 预算限制')
 assert.match(chatSource, /const bridgeBoundary = sessionStart/, 'Bridge 发起时捕获刷新边界')
 assert.match(chatSource, /getSessionStart\(activeSessionId\) !== bridgeBoundary/, 'Bridge 写回前必须确认刷新边界未变化')
