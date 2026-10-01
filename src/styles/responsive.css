@@ -18,11 +18,16 @@
     overflow: hidden;
   }
 
-  /* Root cause fix: desktop is no longer a 480px phone shell. */
+  /* Root cause fix: desktop is no longer a 480px phone shell.
+     Reserve rail space only when this render actually contains the primary nav. */
   .app {
     width: 100%;
     max-width: none;
     margin: 0;
+    padding-left: 0;
+  }
+
+  .app:has(.app-nav) {
     padding-left: var(--el-wide-rail-width);
   }
 
