@@ -7,6 +7,7 @@ import { chatBubbleTime } from '../lib/time'
 import { chatCompletion } from '../lib/api'
 import { detectLang } from '../lib/langDetect'
 import { cleanAttributionArtifacts } from '../lib/promptAttribution'
+import { parseQuotedMessage, type MessageQuoteSpeaker } from '../lib/messageQuote'
 import DefaultAvatar from './DefaultAvatar'
 
 interface Props {
@@ -15,6 +16,8 @@ interface Props {
   typing?: boolean
   /** 点 TA 的头像 → 打开聊天头像资料卡（TASK-UI3）；不传时头像不可点 */
   onAvatarClick?: () => void
+  /** 把当前可见消息带入输入区作为引用上下文。 */
+  onQuote?: (text: string, speaker: MessageQuoteSpeaker) => void
 }
 
 function Avatar({ value, kind, className }: { value: string; kind: 'user' | 'ai'; className: string }) {
@@ -49,7 +52,33 @@ function setThinkZhCache(ts: number, text: string): void {
 // 翻译 prompt：把英文思考链改写成第一人称中文心里话
 const THINK_TRANSLATE_PROMPT = `把下面这段 AI 的思考过程改写成第一人称中文心里话，3-5句，150字以内，口语化，去技术味，保留在意对方的点。只输出改写后的中文，不要解释。`
 
-export default function MessageBubble({ message, typing = false, onAvatarClick }: Props) {
+
+async function copyVisibleText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // iOS / 权限失败时走旧兼容兜底。
+  }
+  try {
+    const node = document.createElement('textarea')
+    node.value = text
+    node.setAttribute('readonly', '')
+    node.style.position = 'fixed'
+    node.style.opacity = '0'
+    document.body.appendChild(node)
+    node.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(node)
+    return ok
+  } catch {
+    return false
+  }
+}
+
+export default function MessageBubble({ message, typing = false, onAvatarClick, onQuote }: Props) {
   const isUser = message.role === 'user'
   // 模块三·内心戏：思考链展开/收起状态（Hooks 必须在所有条件返回之前调用，防 React Hooks 顺序崩溃）
   const [thinkOpen, setThinkOpen] = useState(false)
@@ -59,6 +88,8 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
     return getThinkZhCache(message.ts)
   })
   const [thinkTranslating, setThinkTranslating] = useState(false)
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   // 模块三：纯思考链消息不渲染气泡（历史泄漏的英文推理段，没 `` 包裹的那种）
   // 注意：必须在 useState 之后再条件返回，否则列表重排时同一位置组件实例 Hooks 调用次数不一致会崩
   if (!isUser && isPureThinkBlock(message.content)) return null
@@ -68,9 +99,19 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
   const avatar = isUser ? loadUserProfile().avatar : loadAIProfile(getActiveSessionId() || undefined).avatar
   // 展示时把「【记忆】xxx」那行和思考链「」藏起来，不让用户看到标记（原文仍保存在存储里）
   // 第一批③：裸英文思考泄漏——只在中文会话剥，英文会话正文绝不动
+  const parsedUserMessage = isUser ? parseQuotedMessage(message.content) : null
   const displayText = isUser
-    ? message.content
+    ? (parsedUserMessage?.body ?? message.content)
     : cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(message.content), sessionLang), sessionLang)
+  const quotedContext = parsedUserMessage?.quote ?? null
+  const quoteSpeakerLabel = quotedContext
+    ? quotedContext.speaker === 'assistant'
+      ? 'TA'
+      : sessionLang === 'en' ? 'Me' : '我'
+    : ''
+  const visibleCopyText = quotedContext
+    ? `${quoteSpeakerLabel}: ${quotedContext.text}${displayText ? `\n${displayText}` : ''}`
+    : displayText
   // 「已记住」必须绑真实写入结果：只凭模型输出了 marker 不算保存成功（memorySaved 由写入链在成功时标记）
   const hasMemory = !isUser && message.memorySaved === true
   // 内心戏：TA 消息有 thinking 字段时显示灰条
@@ -79,6 +120,13 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
   const thinkLabel = sessionLang === 'en' ? 'TA was thinking' : 'TA 想了想'
   const typingLabel = sessionLang === 'en' ? 'TA is thinking…' : 'TA 正在想…'
   const memoryMomentLabel = sessionLang === 'en' ? 'Saved this moment' : '已记住这个瞬间'
+  const copyLabel = copyState === 'copied'
+    ? (sessionLang === 'en' ? 'Copied' : '已复制')
+    : copyState === 'failed'
+      ? (sessionLang === 'en' ? 'Copy failed' : '复制失败')
+      : (sessionLang === 'en' ? 'Copy' : '复制')
+  const quoteLabel = sessionLang === 'en' ? 'Quote' : '引用'
+  const actionsLabel = sessionLang === 'en' ? 'Message actions' : '消息操作'
   // 思考链是否需要翻译：中文会话 + thinking 是英文 → 需要懒翻译
   const thinkingRaw = cleanAttributionArtifacts(message.thinking ?? '', sessionLang)
   const needThinkTranslate = hasThink && sessionLang === 'zh' && detectLang(thinkingRaw) === 'en'
@@ -130,6 +178,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
       className={`message-row ${isUser ? 'row-user' : 'row-assistant'}`}
       data-msg-ts={message.ts}
       data-msg-role={message.role}
+      data-msg-id={message.id}
     >
       {!isUser &&
         (onAvatarClick ? (
@@ -175,10 +224,65 @@ export default function MessageBubble({ message, typing = false, onAvatarClick }
                 <i />
               </span>
             ) : (
-              <span className="bubble-text">{displayText}</span>
+              <>
+                {quotedContext && (
+                  <span className="bubble-quote">
+                    <strong>{quoteSpeakerLabel}</strong>
+                    <span>{quotedContext.text}</span>
+                  </span>
+                )}
+                <span className="bubble-text">{displayText}</span>
+              </>
             )}
           </div>
           <span className="msg-bubble-time">{chatBubbleTime(message.ts)}</span>
+          {!typing && visibleCopyText.trim() && (
+            <div
+              className="message-actions"
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setActionsOpen(false)
+              }}
+            >
+              <button
+                type="button"
+                className="message-actions-trigger"
+                aria-label={actionsLabel}
+                aria-expanded={actionsOpen}
+                aria-haspopup="menu"
+                onClick={() => {
+                  setCopyState('idle')
+                  setActionsOpen((value) => !value)
+                }}
+              >
+                ···
+              </button>
+              {actionsOpen && (
+                <div className="message-actions-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      void copyVisibleText(visibleCopyText).then((ok) => setCopyState(ok ? 'copied' : 'failed'))
+                    }}
+                  >
+                    {copyLabel}
+                  </button>
+                  {onQuote && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onQuote(visibleCopyText, message.role)
+                        setActionsOpen(false)
+                      }}
+                    >
+                      {quoteLabel}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         {hasMemory && (
           <span className="memory-moment">
