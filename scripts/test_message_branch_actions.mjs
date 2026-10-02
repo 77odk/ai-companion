@@ -31,13 +31,18 @@ assert.match(chat, /stored\.bridgedAt >= contextBoundary/, 'old bridge cannot cr
 assert.match(chat, /stored\.updatedAt >= contextBoundary/, 'old context meter cannot cross a branch boundary')
 assert.match(
   app,
-  /if \(active\) \{[\s\S]*?await hydrateCloudState\(\)[\s\S]*?setActiveSessionId\(activeId\)/,
-  'existing cloud sessions finish authoritative Cloud State hydration before becoming writable',
+  /const ensureStartupConversationReady = useCallback\(async \(sessionId: string\): Promise<boolean> => \{[\s\S]*?await hydrateCloudState\(\)[\s\S]*?if \(loadConversationState\(sessionId\)\) return true[\s\S]*?setStartupHydrationFailed\(true\)[\s\S]*?return false/,
+  'all existing-session startup writes share one authoritative Cloud State readiness gate',
 )
 assert.match(
   app,
-  /catch \{[\s\S]*?if \(!loadConversationState\(activeId\)\)[\s\S]*?setStartupHydrationFailed\(true\)[\s\S]*?return/,
-  'a device with unknown branch state stays gated when startup hydration fails',
+  /if \(active\) \{[\s\S]*?if \(!await ensureStartupConversationReady\(activeId\)\) return[\s\S]*?setActiveSessionId\(activeId\)/,
+  'normal cloud-session restore waits for the readiness gate before becoming writable',
+)
+assert.match(
+  app,
+  /else if \(getActiveSessionId\(\)\) \{[\s\S]*?const fallbackSessionId = getActiveSessionId\(\)[\s\S]*?if \(!await ensureStartupConversationReady\(fallbackSessionId\)\) return[\s\S]*?replaceView\('chat'\)/,
+  'offline/session-list fallback cannot bypass startup conversation hydration',
 )
 
 assert.match(

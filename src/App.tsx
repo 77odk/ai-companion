@@ -567,9 +567,24 @@ export default function App() {
     replaceView('role')
   }
 
+  // 已有会话进入“可写”前统一经过这一个门：Cloud State 至少完成一次权威 pull；
+  // 真离线时只有本机已经有 conversation state 才允许继续写，未知状态宁可停在 loading。
+  const ensureStartupConversationReady = useCallback(async (sessionId: string): Promise<boolean> => {
+    try {
+      await hydrateCloudState()
+      return true
+    } catch {
+      if (loadConversationState(sessionId)) return true
+      setMigration('idle')
+      setStartupHydrationFailed(true)
+      return false
+    }
+  }, [])
+
   // 登录用户分流：拉会话列表 → 有会话进最近会话聊天；没有但有本地旧数据（且没迁过）→ 自动迁移；
   // 没有也没数据 → 进选角色页新建。
-  // 拉列表失败（断网等）走本地兜底：有缓存的当前会话进聊天，否则按本地记录判断。
+  // 拉列表失败（断网等）走本地兜底：只有本机已知 branch 状态的缓存会话可继续写；
+  // 本机没有 branch 状态时保持 loading，避免离线先写 root、联网后远端 branch 到达导致消息消失。
   // 这里就把 redirectStarted 置位，避免 view 切到 loading 后下面的挂载 effect 再触发一次重复拉取。
   const redirectBySessions = useCallback(async (options: { allowLegacyFallback?: boolean } = {}) => {
     const allowLegacyFallback = options.allowLegacyFallback !== false
@@ -593,19 +608,9 @@ export default function App() {
       const active = resolveActiveSession(sessions, allowLegacyFallback ? getActiveSessionId() : '')
       if (active) {
         const activeId = String(active.id)
-        try {
-          // Cloud State 已在登录 effect 里并行启动；这里把它提升成“进入可写会话前必须完成”的 barrier。
-          // 若另一个标签页正在 pull，hydrateCloudState 会等锁并从最新 cursor 再确认一次。
-          await hydrateCloudState()
-        } catch {
-          // 已有本地 branch 状态时，离线继续写仍会带 branchId，后续 merge 不会吞消息；
-          // 真正危险的是“本机无 branch 状态、云端是否有 branch 又未知”的新设备/清缓存场景。
-          if (!loadConversationState(activeId)) {
-            setMigration('idle')
-            setStartupHydrationFailed(true)
-            return
-          }
-        }
+        // Cloud State 已在登录 effect 里并行启动；这里把它提升成“进入可写会话前必须完成”的 barrier。
+        // 若另一个标签页正在 pull，hydrateCloudState 会等锁并从最新 cursor 再确认一次。
+        if (!await ensureStartupConversationReady(activeId)) return
         // 跨账号恢复只接受这次服务端返回的 session，并从 Home 干净进入；
         // 同账号正常启动仍恢复上次主视图。
         setActiveSessionId(activeId)
@@ -638,6 +643,8 @@ export default function App() {
       setRoleBack('welcome')
       replaceView('role')
     } else if (getActiveSessionId()) {
+      const fallbackSessionId = getActiveSessionId()
+      if (!await ensureStartupConversationReady(fallbackSessionId)) return
       replaceView('chat')
     } else if (needsRolePick()) {
       setRoleMode('first')
@@ -646,7 +653,7 @@ export default function App() {
     } else {
       replaceView('chat')
     }
-  }, [runMigration])
+  }, [runMigration, ensureStartupConversationReady])
 
   // 访问门禁：需登录 view 且未登录 → 记下目标交给登录墙；游客可看的直接进
   const navigate = (v: View) => {
