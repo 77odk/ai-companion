@@ -24,6 +24,7 @@ const GROUPS: { label: string; options: Option[] }[] = [
     label: '更多服务商',
     options: [
       { value: 'deepseek', label: 'DeepSeek' },
+      { value: 'mimo', label: '小米 MiMo' },
       { value: 'custom', label: '自定义（OpenAI 兼容）' },
       { value: 'openai', label: 'OpenAI（需代理/中转）' },
     ],
