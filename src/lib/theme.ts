@@ -209,6 +209,10 @@ export function applyThemeVars(vars: ThemeVars): void {
   root.style.setProperty('--color-card', vars.card)
   root.style.setProperty('--color-border', vars.border)
   root.style.setProperty('--color-on-primary', vars.onPrimary)
+
+  // Browser chrome / iOS notch area should follow the active theme background.
+  const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+  if (themeColor) themeColor.content = vars.bg
 }
 /** 应用一次主题：读状态 → 解析色值 → 写 CSS 变量 */
 export function applyTheme(): void {
