@@ -1683,8 +1683,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       finalize()  // finalize 自己设置 finishedRef 防重入
       if (mountedRef.current && hadNoReply) {
         setError(err?.message ?? 'TA 没有返回正文')
-        setFailedText(text)
-        if (quote) setQuoteDraft(quote)
+        if (!replayExistingUser) {
+          setFailedText(text)
+          if (quote) setQuoteDraft(quote)
+        }
         if (retrySameRound) {
           // 0 正文只开放显式手动重试；不自动烧 Key，也不重新走 send/user upload/Event/Memory 前置链路。
           failedReplyRetryRef.current = retrySameRound
@@ -1692,8 +1694,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         }
       } else if (err && mountedRef.current) {
         setError(err.message)
-        setFailedText(text)
-        if (quote) setQuoteDraft(quote)
+        if (!replayExistingUser) {
+          setFailedText(text)
+          if (quote) setQuoteDraft(quote)
+        }
       }
     }
     tickPlayRef.current = playTick
@@ -1805,7 +1809,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 失败重试只属于发起它的会话与当前 segment；切会话/刷新对话后即使旧闭包还在也不能再跑。
       const sameSession = (getActiveSessionId() || null) === (activeSessionId || null)
       const sameSegment = !activeSessionId || getSessionStart(activeSessionId) === sessionStart
-      if (!sameSession || !sameSegment || streamingRef.current) {
+      const sameBranch =
+        !roundBranchId ||
+        !activeSessionId ||
+        loadConversationState(activeSessionId)?.activeBranchId === roundBranchId
+      if (!sameSession || !sameSegment || !sameBranch || streamingRef.current) {
         failedReplyRetryRef.current = null
         if (mountedRef.current) setFailedReplyRetryAvailable(false)
         return
@@ -2015,6 +2023,69 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     })
   }
 
+  const replyFromExistingUserBranch = (
+    next: ConversationState,
+    sourceUserId: number,
+    noticeText: string,
+  ): boolean => {
+    if (!activeSessionId) return false
+    const created = next.branches[next.activeBranchId]
+    if (!created?.parentBranchId) return false
+
+    const branchMessages = resolveConversationMessages(next, messages)
+    const branchVisibleMessages = filterSessionMessages(branchMessages, sessionStart)
+    const branchUser = branchVisibleMessages.find(
+      (message) => message.role === 'user' && message.id === sourceUserId,
+    )
+    if (!branchUser) return false
+
+    const parsed = parseQuotedMessage(branchUser.content)
+    const body = messageEvidenceText(branchUser.content)
+    if (!body) return false
+
+    saveConversationState(next)
+    invalidateDerivedContextForBranchChange(activeSessionId)
+    setBranchActionNotice({
+      branchId: next.activeBranchId,
+      previousBranchId: created.parentBranchId,
+      text: noticeText,
+    })
+    send(body, parsed.quote, {
+      userMessage: branchUser,
+      visibleHistory: branchVisibleMessages,
+      branchId: next.activeBranchId,
+    })
+    return true
+  }
+
+  const regenerationSourceUser = (assistant: StoredMessage): StoredMessage | null => {
+    if (assistant.role !== 'assistant' || typeof assistant.id !== 'number') return null
+    const index = visibleMessages.findIndex((message) => message.id === assistant.id)
+    if (index <= 0) return null
+    for (let cursor = index - 1; cursor >= 0; cursor--) {
+      const candidate = visibleMessages[cursor]
+      if (candidate.role === 'user' && typeof candidate.id === 'number') return candidate
+    }
+    return null
+  }
+
+  const commitConversationRegenerate = (assistant: StoredMessage) => {
+    if (!activeSessionId || streaming || contextBusy || isBusy) return
+    const sourceUser = regenerationSourceUser(assistant)
+    if (!sourceUser || typeof sourceUser.id !== 'number') return
+
+    const next = forkConversation(conversationState, activeSessionId, messages, {
+      forkAfterMessageId: sourceUser.id,
+      reason: 'regenerate',
+    })
+    const actionLang = getSessionLang(activeSessionId)
+    replyFromExistingUserBranch(
+      next,
+      sourceUser.id,
+      actionLang === 'en' ? 'Regenerating this reply' : '正在重新生成这条回复',
+    )
+  }
+
   const commitConversationEdit = (message: StoredMessage, nextBody: string) => {
     if (
       !activeSessionId ||
@@ -2035,19 +2106,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       contentOverrides: { [message.id]: editedContent },
       reason: 'edit',
     })
-    const created = next.branches[next.activeBranchId]
-    if (!created?.parentBranchId) return
-
-    saveConversationState(next)
-    invalidateDerivedContextForBranchChange(activeSessionId)
     const actionLang = getSessionLang(activeSessionId)
-    setBranchActionNotice({
-      branchId: next.activeBranchId,
-      previousBranchId: created.parentBranchId,
-      text: actionLang === 'en'
-        ? 'Edited in a new conversation branch'
-        : '已编辑，旧对话已保留',
-    })
+    replyFromExistingUserBranch(
+      next,
+      message.id,
+      actionLang === 'en'
+        ? 'Edited — regenerating the reply'
+        : '已编辑，正在重新生成回复',
+    )
   }
 
   const undoConversationBranchAction = () => {
@@ -2068,10 +2134,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }
 
   useEffect(() => {
-    if (!branchActionNotice) return
+    if (!branchActionNotice || streaming) return
     const timer = window.setTimeout(() => setBranchActionNotice(null), 6000)
     return () => window.clearTimeout(timer)
-  }, [branchActionNotice])
+  }, [branchActionNotice, streaming])
 
   const handleQuoteMessage = (text: string, speaker: MessageQuoteSpeaker) => {
     const clean = text.trim()
@@ -2195,8 +2261,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 typing={streaming && i === displayMessages.length - 1 && m.role === 'assistant' && m.content === ''}
                 onAvatarClick={onOpenProfile}
                 onQuote={handleQuoteMessage}
-                onEdit={!streaming && !contextBusy && m.role === 'user' && typeof m.id === 'number'
+                onEdit={!streaming && !contextBusy && !isBusy && m.role === 'user' && typeof m.id === 'number'
                   ? (nextText) => commitConversationEdit(m, nextText)
+                  : undefined}
+                onRegenerate={!streaming && !contextBusy && !isBusy && regenerationSourceUser(m)
+                  ? () => commitConversationRegenerate(m)
                   : undefined}
                 onDelete={!streaming && !contextBusy && typeof m.id === 'number'
                   ? () => commitConversationBranchAction(m, 'delete')
@@ -2217,7 +2286,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       {branchActionNotice && (
         <div className="chat-branch-action-notice" role="status">
           <span>{branchActionNotice.text}</span>
-          <button type="button" onClick={undoConversationBranchAction}>{chatUiLang === 'en' ? 'Undo' : '撤销'}</button>
+          <button type="button" onClick={undoConversationBranchAction} disabled={streaming}>{chatUiLang === 'en' ? 'Undo' : '撤销'}</button>
         </div>
       )}
 
