@@ -111,5 +111,13 @@ for (const hex of ['#ff8a5c', '#6a6fdc', '#3f6b5c', '#7089a6', '#c05f3a', '#39ff
   ok(hSoft.l > 80, `${hex} soft 永远够浅（L=${hSoft.l.toFixed(0)}）`)
   ok(/^#[0-9a-f]{6}$/i.test(v.deep) && /^#[0-9a-f]{6}$/i.test(v.border), `${hex} 全部产物合法 hex`)
 }
+console.log('\n[7] 移动端系统栏跟随主题')
+{
+  const { readFileSync } = await import('node:fs')
+  const source = readFileSync(new URL('../src/lib/theme.ts', import.meta.url), 'utf8')
+  ok(source.includes("root.style.backgroundColor = vars.bg"), '根节点背景跟随当前主题背景色')
+  ok(source.includes("meta[name=\\\"theme-color\\\"]"), '主题应用会定位 theme-color meta')
+  ok(source.includes("themeColor?.setAttribute('content', vars.bg)"), 'theme-color 跟随当前主题背景色')
+}
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)
