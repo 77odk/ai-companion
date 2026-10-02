@@ -997,7 +997,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       ts: Date.now(),
       ...(roundBranchId ? { conversationBranchId: roundBranchId } : {}),
     }
-    const rawWithUser = replayExistingUser ? messages : [...rawWithUser]
+    const rawWithUser = replayExistingUser ? messages : [...messages, userMsg]
     const tagCurrentBranch = (message: StoredMessage): StoredMessage =>
       roundBranchId
         ? { ...message, conversationBranchId: roundBranchId }
