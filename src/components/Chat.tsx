@@ -377,7 +377,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   // 忙碌状态相关 ref
   const busyTimerRef = useRef<number | null>(null)
   const busyTriggeredRef = useRef(false)
-  const enterBusyRef = useRef<(text: string, decision: AvailabilityDecision) => void>(() => {})
+  const enterBusyRef = useRef<(text: string, decision: AvailabilityDecision, contextMessages?: StoredMessage[]) => void>(() => {})
   const sendBusyReturnRef = useRef<(runId: number, sid: string, state: BusyState) => Promise<void>>(async () => {})
 
   const persistMessages = useCallback((msgs: StoredMessage[]) => {
@@ -412,13 +412,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }, [])
 
   // ---- 忙碌状态：进入忙碌 ----
-  const enterBusy = (triggerText: string, decision: AvailabilityDecision) => {
+  const enterBusy = (triggerText: string, decision: AvailabilityDecision, contextMessages = visibleMessages) => {
     const sid = getActiveSessionId()
     if (!sid || !allowsBusyState(resolveIdentityMode(sid))) return
     const duration = randomBusyDurationMs()
     const busyUntil = Date.now() + duration
     const reason = inferBusyReason(triggerText)
-    const context = serializeBusyContext(visibleMessages.slice(-3))
+    const context = serializeBusyContext(contextMessages.slice(-3))
     const state: BusyState = {
       status: 'busy',
       busyUntil,
@@ -557,7 +557,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       ts: Date.now(),
       ...(currentConversationBranchId ? { conversationBranchId: currentConversationBranchId } : {}),
     }
-    const next = [...rawWithUser]
+    const next = [...messages, userMsg]
     persistMessages(next)
     if (activeSessionId) void uploadMessage(userMsg)
     setMessages(next)
@@ -1493,7 +1493,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         const busyText = cut > 0 && cut < raw.length ? raw.slice(0, cut) : raw
         // TASK-MEM-DISTILL：忙碌截断前先把本轮候选/已到 marker 归并落库（模型给完整回复前 = 无对应 marker → fallback）
         flushMemoryWrites(raw)
-        enterBusyRef.current(busyText, availability)
+        enterBusyRef.current(busyText, availability, roundVisibleMessages)
         return
       }
       // TASK-MEM-DISTILL：唯一归并写入出口——candidate + marker 只写一条；无 marker 的候选 fallback 落库
@@ -1599,7 +1599,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               busyTriggeredRef.current = true
               const cut = findBusyCutoff(retryGuard)
               const busyText = cut > 0 && cut < retryGuard.length ? retryGuard.slice(0, cut) : retryGuard
-              enterBusyRef.current(busyText, retryAvailability)
+              enterBusyRef.current(busyText, retryAvailability, roundVisibleMessages)
             } else {
               const final: StoredMessage[] = [...rawWithUser, { role: 'assistant', content: retryVisible, ts: assistantTs }]
               commitFinal(final)
@@ -1730,7 +1730,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             controllerRef.current?.abort()
             streamEndedRef.current = true
             // 进入忙碌状态（用 ref 避免闭包）
-            enterBusyRef.current(assistantText.current, availability)
+            enterBusyRef.current(assistantText.current, availability, roundVisibleMessages)
           }
         },
         onDone: (reasoning, usage) => {
