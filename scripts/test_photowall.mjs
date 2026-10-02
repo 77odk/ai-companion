@@ -8,6 +8,7 @@ import {
   saveLocalPhotos,
   saveLocalPhotoMetadata,
   addLocalPhoto,
+  removeLocalPhoto,
   mergePhotos,
   dataUrlBytes,
   photoKey,
@@ -71,6 +72,9 @@ ok(cachedMeta[0].dataUrl === undefined, '登录用户本地缓存不长期保存
 const afterAdd = addLocalPhoto(photo('p3', 300), 's1')
 ok(afterAdd.length === 3 && afterAdd[0].id === 'p3', 'addLocalPhoto 追加到最前')
 ok(loadLocalPhotos('s1').length === 3, 'addLocalPhoto 持久化')
+const afterRemove = removeLocalPhoto('p2', 's1')
+ok(afterRemove.length === 2 && afterRemove.every((p) => p.id !== 'p2'), 'removeLocalPhoto 只删除指定照片')
+ok(loadLocalPhotos('s1').every((p) => p.id !== 'p2'), 'removeLocalPhoto 持久化删除结果')
 mem.set('ai_space_photos_s1', '{bad json')
 ok(loadLocalPhotos('s1').length === 0, '损坏 JSON 读空')
 
@@ -108,11 +112,16 @@ const photoWallSource = readFileSync(new URL('../src/lib/photoWall.ts', import.m
 ok(aiSpaceSource.includes('setPhotos(local)'), '切换 session 先切回该 session 本地照片，不沿用上一角色')
 ok(aiSpaceSource.includes('saveLocalPhotoMetadata(next, sid)'), '上传/云端合并后缓存登录用户元数据')
 ok(aiSpaceSource.includes('dataUrl: scaled.dataUrl'), '上传成功后先用本地压缩图即时展示')
+ok(aiSpaceSource.includes('await deletePhoto(token, photo.id)'), '登录照片先确认云端删除成功再移出界面')
+ok(aiSpaceSource.includes('removeLocalPhoto(photo.id, sid)'), '游客照片删除会同步移出本地缓存')
+ok(archiveSource.includes("window.confirm('确定删除这张照片吗？删除后无法恢复。')"), '照片删除有明确二次确认')
+ok(archiveSource.includes("deletingId === sorted[selectedIndex].id ? '删除中…' : '删除'"), '删除按钮有进行中状态，避免重复提交')
 ok(aiSpaceSource.includes('照片暂时没加载出来，稍后再试。'), '列表读取失败不再静默伪装空墙')
 ok(aiSpaceSource.includes("const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，稍后再试。'"), '单图加载失败文案集中维护')
 ok(aiSpaceSource.includes('setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? current : null)'), '列表/上传成功不会覆盖已发生的图片加载失败提示')
 ok(photoWallSource.includes('normalizePhotoListData'), '云端照片列表校验下沉到 photoWall 数据层')
 ok(photoWallSource.includes("message: '照片列表格式异常，请稍后再试'"), '畸形 200 响应被数据层转换成失败结果')
+ok(photoWallSource.includes("method: 'DELETE'"), '云端照片删除使用现有照片资源 DELETE 契约')
 ok(archiveSource.includes("loading={index < 6 ? 'eager' : 'lazy'}"), '首屏前 6 张 eager，其余 lazy，避免 12 张同时抢加载')
 ok(archiveSource.includes('onPhotoLoadError?.(photo)'), '图片失败会回传错误状态')
 ok(archiveSource.includes('const preview = sorted.slice(0, 12)'), '首页照片墙预览最多 12 张')
