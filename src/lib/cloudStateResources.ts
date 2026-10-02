@@ -7,7 +7,7 @@ import {
 } from './cloudState.ts'
 import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE, notifyDataChanged } from './dataChange.ts'
 import { getAccount } from './sync.ts'
-import { collectAllAIProfiles, getSessionStart, setSessionStart, loadUserProfile, saveUserProfile, type UserProfile } from './storage.ts'
+import { collectAllAIProfiles, collectAllGenders, getSessionStart, setSessionStart, loadUserProfile, saveUserProfile, type AIGender, type UserProfile } from './storage.ts'
 import { isIdentityMode, mergeProfileIdentityField, type IdentityMode } from './companionPolicy.ts'
 import { getPendingOps, getSessionsCache, removePendingOp, type CloudStatePendingOp } from './sessionStore.ts'
 import { applyDefaultRoleFromCloud, deleteDefaultRoleFromCloud, getDefaultRoleId } from './defaultRole.ts'
@@ -603,7 +603,7 @@ function aiProfileStorageKey(entityId: string): string {
   return entityId === GLOBAL ? AI_PROFILE_KEY : `${AI_PROFILE_KEY}_${entityId}`
 }
 
-type SyncedAIProfile = { nickname: string; avatar: string; identityMode?: IdentityMode }
+type SyncedAIProfile = { nickname: string; avatar: string; identityMode?: IdentityMode; gender?: AIGender }
 
 function validAiProfile(value: unknown): SyncedAIProfile | null {
   const item = record(value)
@@ -613,15 +613,20 @@ function validAiProfile(value: unknown): SyncedAIProfile | null {
   if (!nickname && !avatar) return null
   const profile: SyncedAIProfile = { nickname: nickname || 'TA', avatar }
   if (isIdentityMode(item.identityMode)) profile.identityMode = item.identityMode
+  if (item.gender === 'male' || item.gender === 'female') profile.gender = item.gender
   return profile
 }
 
 function profileEntities(): Map<string, SyncedAIProfile> {
   const out = new Map<string, SyncedAIProfile>()
+  const genders = collectAllGenders()
   for (const [sid, profile] of Object.entries(collectAllAIProfiles())) {
     const entityId = sid === '_global' ? GLOBAL : String(sid)
     const value = validAiProfile(profile)
-    if (entityId && value) out.set(entityId, value)
+    if (entityId && value) {
+      const gender = genders[entityId === GLOBAL ? '__global' : entityId]?.g
+      out.set(entityId, gender === 'male' || gender === 'female' ? { ...value, gender } : value)
+    }
   }
   return out
 }
@@ -774,6 +779,9 @@ function applyAiProfileEntity(entity: CloudStateEntity): void {
       ? { ...value, identityMode: localMode }
       : value
     localStorage.setItem(key, JSON.stringify(merged))
+    if (merged.gender === 'male' || merged.gender === 'female') {
+      localStorage.setItem(genderStorageKey(entity.entityId), JSON.stringify({ g: merged.gender, locked: true }))
+    }
     profileSnapshot.set(entity.entityId, merged)
     if (!isIdentityMode(value.identityMode) && isIdentityMode(localMode)) {
       replacePendingProfileWithRebasedValue(
@@ -797,6 +805,9 @@ function applyAiProfileEntity(entity: CloudStateEntity): void {
   if (pending) merged = { ...merged, ...pending }
 
   localStorage.setItem(key, JSON.stringify(merged))
+  if (merged.gender === 'male' || merged.gender === 'female') {
+    localStorage.setItem(genderStorageKey(entity.entityId), JSON.stringify({ g: merged.gender, locked: true }))
+  }
   const mergedValue = validAiProfile(merged)
   if (!mergedValue) return
   profileSnapshot.set(entity.entityId, mergedValue)
