@@ -82,13 +82,13 @@ check('发送前写入：总量 = 会话累计估算', () => {
 
 check('provider usage 返回后：总量仍按当前上下文段累计写入，并反推校准系数', () => {
   assert.match(chatSource, /calibrateContextFactor\(loadContextFactor\(\), composed\.totalTokens, usage\.promptTokens\)/, '必须用真实 usage 反推系数')
-  assert.match(chatSource, /used: contentTokensOf\(usageMessages\(visibleMessages, userMsg\), nextFactor\)/, '最终总量必须按当前上下文段 + 校准系数')
+  assert.match(chatSource, /used: contentTokensOf\(usageMessages\(roundVisibleMessages, userMsg\), nextFactor\)/, '最终总量必须按当前 active round 上下文段 + 校准系数')
   assert.doesNotMatch(chatSource, /used: usage\.promptTokens \+ \(outputTokens \?\? 0\)/, '不得再退回「本轮 prompt + 输出」当总量')
 })
 
 check('发送前写入也限定在刷新之后那一段，不把刷新前历史算进来', () => {
   assert.match(chatSource, /used: sessionContentTokens,[\s\S]*inputTokens: composed\.totalTokens/, '总量与明细分开')
-  assert.match(chatSource, /contentTokensOf\(usageMessages\(visibleMessages, userMsg\), loadContextFactor\(\)\)/, '总量必须走 sessionStart 之后的可见消息')
+  assert.match(chatSource, /contentTokensOf\(usageMessages\(roundVisibleMessages, userMsg\), loadContextFactor\(\)\)/, '总量必须走 sessionStart + active branch 之后的当前 round 可见消息')
   assert.doesNotMatch(chatSource, /used: contentTokensOf\(messages,/, '不得直接用全部 messages 当总量')
 })
 

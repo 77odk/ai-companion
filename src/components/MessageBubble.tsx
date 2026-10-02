@@ -20,6 +20,8 @@ interface Props {
   onQuote?: (text: string, speaker: MessageQuoteSpeaker) => void
   /** 编辑当前 user 消息正文；Chat 会创建新 branch，不改原始 message。 */
   onEdit?: (text: string) => void
+  /** 重新生成当前 TA 回复；旧回复留在旧 branch。 */
+  onRegenerate?: () => void
   /** 软删除当前 active branch 里的这一条消息。 */
   onDelete?: () => void
   /** 从这一条消息回溯；旧后缀留在旧 branch，可恢复。 */
@@ -84,7 +86,7 @@ async function copyVisibleText(text: string): Promise<boolean> {
   }
 }
 
-export default function MessageBubble({ message, typing = false, onAvatarClick, onQuote, onEdit, onDelete, onRollback }: Props) {
+export default function MessageBubble({ message, typing = false, onAvatarClick, onQuote, onEdit, onRegenerate, onDelete, onRollback }: Props) {
   const isUser = message.role === 'user'
   // 模块三·内心戏：思考链展开/收起状态（Hooks 必须在所有条件返回之前调用，防 React Hooks 顺序崩溃）
   const [thinkOpen, setThinkOpen] = useState(false)
@@ -135,6 +137,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
       : (sessionLang === 'en' ? 'Copy' : '复制')
   const quoteLabel = sessionLang === 'en' ? 'Quote' : '引用'
   const editLabel = sessionLang === 'en' ? 'Edit' : '编辑'
+  const regenerateLabel = sessionLang === 'en' ? 'Regenerate' : '重新生成'
   const saveEditLabel = sessionLang === 'en' ? 'Save' : '保存'
   const cancelEditLabel = sessionLang === 'en' ? 'Cancel' : '取消'
   const rollbackLabel = sessionLang === 'en' ? 'Rewind here' : '回溯到这里'
@@ -358,6 +361,18 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
                       }}
                     >
                       {editLabel}
+                    </button>
+                  )}
+                  {!isUser && onRegenerate && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onRegenerate()
+                        setActionsOpen(false)
+                      }}
+                    >
+                      {regenerateLabel}
                     </button>
                   )}
                   {onRollback && (
