@@ -373,25 +373,26 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   // 2026-09-14：生成中途关页面/切后台的兜底（七七实测「退出去再进来，回复没过来」）。
   // partialTsRef = 本轮 assistant 占位消息的 ts（null = 当前没有在生成的回复）；streamingRef 镜像 streaming state
   const partialTsRef = useRef<number | null>(null)
+  // 一轮生成的持久化 owner：页面当前切到哪个 TA 都不能改变这轮消息归属。
+  const partialSessionIdRef = useRef<string | null>(null)
   const streamingRef = useRef(false)
   // 忙碌状态相关 ref
   const busyTimerRef = useRef<number | null>(null)
   const busyTriggeredRef = useRef(false)
-  const enterBusyRef = useRef<(text: string, decision: AvailabilityDecision, contextMessages?: StoredMessage[]) => void>(() => {})
+  const enterBusyRef = useRef<(sid: string | null, text: string, decision: AvailabilityDecision, contextMessages?: StoredMessage[]) => void>(() => {})
   const sendBusyReturnRef = useRef<(runId: number, sid: string, state: BusyState) => Promise<void>>(async () => {})
 
-  const persistMessages = useCallback((msgs: StoredMessage[]) => {
-    const sid = getActiveSessionId()
+  const persistMessages = useCallback((sid: string | null, msgs: StoredMessage[]) => {
     if (sid) {
       saveMessagesCache(sid, msgs)
-      markRead(sid)
+      // 数据 owner 由 sid 决定；“已读”只属于此刻仍在看的会话。
+      if (sid === getActiveSessionId()) markRead(sid)
     } else {
       saveMessages(msgs)
     }
   }, [])
 
-  const uploadMessage = useCallback((msg: StoredMessage): Promise<void> => {
-    const sid = getActiveSessionId()
+  const uploadMessage = useCallback((sid: string | null, msg: StoredMessage): Promise<void> => {
     const token = getToken()
     if (!sid || !token) return Promise.resolve()
     const op: PendingOp = {
@@ -412,8 +413,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }, [])
 
   // ---- 忙碌状态：进入忙碌 ----
-  const enterBusy = (triggerText: string, decision: AvailabilityDecision, contextMessages = visibleMessages) => {
-    const sid = getActiveSessionId()
+  const enterBusy = (sid: string | null, triggerText: string, decision: AvailabilityDecision, contextMessages = visibleMessages) => {
     if (!sid || !allowsBusyState(resolveIdentityMode(sid))) return
     const duration = randomBusyDurationMs()
     const busyUntil = Date.now() + duration
@@ -558,8 +558,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       ...(currentConversationBranchId ? { conversationBranchId: currentConversationBranchId } : {}),
     }
     const next = [...messages, userMsg]
-    persistMessages(next)
-    if (activeSessionId) void uploadMessage(userMsg)
+    persistMessages(activeSessionId || null, next)
+    if (activeSessionId) void uploadMessage(activeSessionId, userMsg)
     setMessages(next)
     setInput('')
   }
@@ -770,8 +770,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         finishedRef.current = true
         streamingRef.current = false
         partialTsRef.current = null
+        partialSessionIdRef.current = null
       }
-      const sid = getActiveSessionId()
+      const sid = partialSessionIdRef.current
       const lang = sid ? getSessionLang(sid) : 'zh'
       const preserveActions = isActionNarrationEnabled()
       const guardText = guardAssistantReplyBody(raw, lang, preserveActions)
@@ -965,6 +966,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const replayExistingUser = Boolean(existingRound)
     const roundVisibleMessages = existingRound?.visibleHistory ?? visibleMessages
     const roundBranchId = existingRound?.branchId ?? currentConversationBranchId
+    // 轮次 owner 在发送瞬间固定；之后 UI 切会话/卸载都不能改变数据写入目标。
+    const roundSessionId = activeSessionId || null
     // 新消息开始即废弃上一轮的失败重试；重试永远不能跨轮次存活。
     failedReplyRetryRef.current = null
     setFailedReplyRetryAvailable(false)
@@ -1142,11 +1145,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     setError(null)
     setStreaming(true)
     partialTsRef.current = assistantTs
+    partialSessionIdRef.current = roundSessionId
     streamingRef.current = true
 
     if (activeSessionId && !replayExistingUser) {
-      persistMessages(rawWithUser)
-      uploadMessage(userMsg)
+      persistMessages(roundSessionId, rawWithUser)
+      uploadMessage(roundSessionId, userMsg)
     }
 
     // Event Candidate Window：只带最近 6 条聊天里最多 2 条历史 user 原话 + 真实 ts；TA 文本永不作为 Event 证据。
@@ -1420,6 +1424,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       setStreaming(false)
       streamingRef.current = false
       partialTsRef.current = null
+      partialSessionIdRef.current = null
       setError(lang === 'en' ? 'This message is too long for the current context. Please shorten it and send again.' : '这条消息加上当前上下文超过 64k，请缩短后再发。')
       return
     }
@@ -1435,10 +1440,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const branchFinal = roundBranchId
         ? final.map((m) => (m.role === 'assistant' && m.ts === assistantTs ? tagCurrentBranch(m) : m))
         : final
-      persistMessages(branchFinal)
-      // 模块二：组件卸载后跳过 UI 更新，落库/云同步继续执行
-      if (mountedRef.current) setMessages(branchFinal)
-      const sid = getActiveSessionId()
+      persistMessages(roundSessionId, branchFinal)
+      // 模块二：组件卸载后跳过 UI 更新，落库/云同步继续执行。
+      // 若同一实例的 active session 已变化，只落 owner 会话，不把旧轮次画进新会话。
+      if (mountedRef.current && (!roundSessionId || roundSessionId === getActiveSessionId())) setMessages(branchFinal)
+      const sid = roundSessionId
       // v7 #7：只在最终可见回复已经落库后，把 TA 明确说出的“自己正在/马上做什么”写回同一 Runtime。
       // 不读用户文本、不改聊天记录；失败/无可信动作时函数返回 null，保持原 Runtime。
       const committedAssistantText = branchFinal
@@ -1447,7 +1453,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         .join('\n')
         .trim()
       if (committedAssistantText) {
-        syncTaRuntimeFromAssistantText(activeSessionId || undefined, committedAssistantText, Date.now())
+        syncTaRuntimeFromAssistantText(roundSessionId || undefined, committedAssistantText, Date.now())
         // Space-N1 唯一 Chat 例外（产品已冻结“完整 USER+TA 对话对”为硬要求）：
         // 只在正常最终可见回复真实落库后补 pair；Stop / 切模型 / stream error 已把 eligible 置 false。
         // 不改消息、不改上传/合并/去重，也不新增模型调用。taTs 必须是真正 commit 时刻，不能用请求开始的 assistantTs。
@@ -1456,7 +1462,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           completeChatTopicPair(
             text,
             committedAssistantText,
-            activeSessionId || undefined,
+            roundSessionId || undefined,
             userMsg.ts,
             pairCommittedAt,
           )
@@ -1468,7 +1474,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         let chain: Promise<void> = Promise.resolve()
         for (const m of branchFinal) {
           if (m.role !== 'assistant' || m.ts !== assistantTs) continue
-          chain = chain.then(() => uploadMessage(m))
+          chain = chain.then(() => uploadMessage(roundSessionId, m))
         }
       }
       if (mountedRef.current) setStreaming(false)
@@ -1476,9 +1482,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 卸载期间回复完成落库（2026-09-05 夜乔修：返回主界面后 TA 的回复"消失"，发下一条才一起冒出）
       // ——广播事件，重新进入的聊天页实例收到后刷新缓存，让这条回复立即显示
       if (!mountedRef.current) {
-        window.dispatchEvent(new CustomEvent('yiwem:ai-reply-committed', { detail: { sid: getActiveSessionId() } }))
+        window.dispatchEvent(new CustomEvent('yiwem:ai-reply-committed', { detail: { sid: roundSessionId } }))
       }
       partialTsRef.current = null
+      partialSessionIdRef.current = null
       streamingRef.current = false
     }
 
@@ -1500,7 +1507,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         const busyText = cut > 0 && cut < raw.length ? raw.slice(0, cut) : raw
         // TASK-MEM-DISTILL：忙碌截断前先把本轮候选/已到 marker 归并落库（模型给完整回复前 = 无对应 marker → fallback）
         flushMemoryWrites(raw)
-        enterBusyRef.current(busyText, availability, roundVisibleMessages)
+        enterBusyRef.current(roundSessionId, busyText, availability, roundVisibleMessages)
         return
       }
       // TASK-MEM-DISTILL：唯一归并写入出口——candidate + marker 只写一条；无 marker 的候选 fallback 落库
@@ -1606,7 +1613,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               busyTriggeredRef.current = true
               const cut = findBusyCutoff(retryGuard)
               const busyText = cut > 0 && cut < retryGuard.length ? retryGuard.slice(0, cut) : retryGuard
-              enterBusyRef.current(busyText, retryAvailability, roundVisibleMessages)
+              enterBusyRef.current(roundSessionId, busyText, retryAvailability, roundVisibleMessages)
             } else {
               const final: StoredMessage[] = [...rawWithUser, { role: 'assistant', content: retryVisible, ts: assistantTs }]
               commitFinal(final)
@@ -1737,7 +1744,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             controllerRef.current?.abort()
             streamEndedRef.current = true
             // 进入忙碌状态（用 ref 避免闭包）
-            enterBusyRef.current(assistantText.current, availability, roundVisibleMessages)
+            enterBusyRef.current(roundSessionId, assistantText.current, availability, roundVisibleMessages)
           }
         },
         onDone: (reasoning, usage) => {
@@ -1846,6 +1853,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       displayCleanRef.current = ''
       finishedRef.current = false
       partialTsRef.current = assistantTs
+      partialSessionIdRef.current = roundSessionId
       streamingRef.current = true
       // 保留正常聊天的思考节奏，但这仍是同一轮请求：不追加 user、不重复上传 user、不重跑 Event candidate。
       thinkTimerRef.current = window.setTimeout(startStream, computeThinkDelayMs(text.length))
