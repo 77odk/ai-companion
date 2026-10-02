@@ -17,7 +17,7 @@ import { getKnownDays } from '../lib/milestone'
 import { getFirstSeen, isSlowLetterMode, loadMessages, loadPersona, loadSettings, setSlowLetterMode } from '../lib/storage'
 import { chatCompletion } from '../lib/api'
 import { loadCurrentPosts } from '../lib/aiSpace'
-import { loadChatTopics } from '../lib/chatTopics'
+import { futureTopicsFromMessages } from '../lib/chatTopics'
 import { dayKeyOf } from '../lib/aiSpaceCore'
 import { getActiveSessionId, getMemoriesCache, getMessagesCache, getSessionsCache } from '../lib/sessionStore'
 import { resolveRolePersona } from '../lib/sessionProfile'
@@ -27,6 +27,7 @@ import { buildAttributionLegend, cleanAttributionArtifacts, formatAttributedLine
 import { buildAttributedWeeklyPrompt, formatAttributedWeeklyMessage } from '../lib/weeklyPromptAttribution'
 import { pullCloudState } from '../lib/cloudState'
 import { getAccount } from '../lib/sync'
+import { loadConversationState, resolveConversationMessages } from '../lib/conversationState'
 
 const REPLY_PLACEHOLDER = '把此刻的心情写下来…'
 const SUCCESS_IMMEDIATE = '你的回信已经寄出。TA 的回信到了以后，会先等你亲手拆开。'
@@ -331,7 +332,11 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
 
       const ts = Date.now()
       const week = getWeekRange(ts, getFirstSeen(currentSid))
-      const weekMsgs = (currentSid ? getMessagesCache(currentSid) : loadMessages())
+      const rawMessages = currentSid ? getMessagesCache(currentSid) : loadMessages()
+      const activeMessages = currentSid
+        ? resolveConversationMessages(loadConversationState(currentSid), rawMessages)
+        : rawMessages
+      const weekMsgs = activeMessages
         .filter((m) => m.ts >= week.startTs && m.ts <= week.endTs)
         .sort((a, b) => a.ts - b.ts)
         .slice(-40)
@@ -345,7 +350,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
         .filter((p) => p.at >= week.startTs && p.at <= week.endTs)
         .slice(0, 5)
         .map((p) => p.text)
-      const weekAgenda = loadChatTopics(currentSid || undefined)
+      const weekAgenda = futureTopicsFromMessages(activeMessages)
         .filter((t) => typeof t.futureDay === 'string' && t.futureDay >= dayKeyOf(week.startTs) && t.futureDay <= dayKeyOf(week.endTs))
         .map((t) => `${t.t}（约在 ${t.futureDay}）`)
       const weekEvents = getEventsForWeek(currentSid || undefined, week.startTs, week.endTs)
