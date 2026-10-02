@@ -44,8 +44,8 @@ const langAt = chat.indexOf('const personaText = persona?.trim() || \'\'')
 assert.ok(userMsgAt >= 0 && userMsgAt < langAt, 'userMsg 在 lang 计算前已构造')
 assert.match(
   chat,
-  /const recentUserMsgs = \[[\s\S]*visibleMessages\.filter\(\(m\) => m\.role === 'user'\)\.map\(\(m\) => messageEvidenceText\(m\.content\)\),[\s\S]*text,[\s\S]*\]\.slice\(-5\)/,
-  'Chat 的 Natural 统计包含当前正文、剥离历史引用块，且总窗口仍为最近 5 条',
+  /const recentUserMsgs = \(replayExistingUser[\s\S]*roundVisibleMessages\.filter\(\(m\) => m\.role === 'user'\)\.map\(\(m\) => messageEvidenceText\(m\.content\)\)[\s\S]*:[\s\S]*roundVisibleMessages\.filter\(\(m\) => m\.role === 'user'\)\.map\(\(m\) => messageEvidenceText\(m\.content\)\),[\s\S]*text,[\s\S]*\)[\s\S]*\.slice\(-5\)/,
+  'Chat 的 Natural 统计：正常发送包含当前正文；existing-user 重答不重复当前 user；两者都只看最近 5 条',
 )
 
 console.log('✓ BUG-02 Chat language regression passed')
