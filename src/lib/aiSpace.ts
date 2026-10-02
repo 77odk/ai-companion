@@ -310,8 +310,8 @@ export interface RefreshPlan {
   pending: SpaceSlot[]
   /** used 快照，供 llm 降级模板时去重 */
   used: UsedTemplates
-  /** 规划 conversation 素材时的 active branch；生成前必须仍一致。 */
-  conversationBranchId: string
+  /** 规划 conversation 素材时的 active branch；旧计划没有 = root。 */
+  conversationBranchId?: string
   /** 内部标记：该计划是否已启动异步生成（防 StrictMode 重复触发） */
   started?: boolean
 }
@@ -480,7 +480,7 @@ export async function generatePendingPosts(
   const currentConversationBranchId = sessionId
     ? (loadConversationState(sessionId)?.activeBranchId ?? 'root')
     : 'root'
-  const conversationBranchStillActive = currentConversationBranchId === plan.conversationBranchId
+  const conversationBranchStillActive = currentConversationBranchId === (plan.conversationBranchId ?? 'root')
   const rawTopics = conversationBranchStillActive
     ? filterChatTopicsForBranch(loadChatTopics(sessionId), currentConversationBranchId)
     : []
