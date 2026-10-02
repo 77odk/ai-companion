@@ -73,6 +73,7 @@ export default function AISpace({ onOpenWeekly }: Props) {
   const [photoUploading, setPhotoUploading] = useState(0)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const failedPhotoIdsRef = useRef<Set<string>>(new Set())
 
   const clearNonImagePhotoError = () => {
     setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? current : null)
@@ -80,6 +81,7 @@ export default function AISpace({ onOpenWeekly }: Props) {
 
   useEffect(() => {
     const local = loadLocalPhotos(sid)
+    failedPhotoIdsRef.current.clear()
     setPhotos(local)
     setPhotoError(null)
     if (!sid) return
@@ -209,8 +211,15 @@ export default function AISpace({ onOpenWeekly }: Props) {
           uploading={photoUploading}
           error={photoError}
           photoSrc={(photo) => photo.dataUrl ?? photoUrl(photo.id, token)}
-          onPhotoLoadError={() => {
+          onPhotoLoadError={(photo) => {
+            failedPhotoIdsRef.current.add(photo.id)
             setPhotoError(PHOTO_IMAGE_LOAD_ERROR)
+          }}
+          onPhotoLoadSuccess={(photo) => {
+            failedPhotoIdsRef.current.delete(photo.id)
+            if (failedPhotoIdsRef.current.size === 0) {
+              setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? null : current)
+            }
           }}
           onAdd={() => fileInputRef.current?.click()}
           onDelete={handleDeletePhoto}
