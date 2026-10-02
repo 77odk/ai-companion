@@ -322,6 +322,42 @@ test('M/N: concurrent pulls share one flight and a later pull rereads the latest
   assert.deepEqual(requested, [0, 1])
 })
 
+test('M2: startup hydration waits for an authoritative cross-tab pull before resolving', async () => {
+  clearState('hydrate-wait')
+  let releaseLock
+  const lockGate = new Promise(resolve => { releaseLock = resolve })
+  let pullCount = 0
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: {
+      locks: {
+        async request(_name, optionsOrCallback, maybeCallback) {
+          assert.equal(typeof optionsOrCallback, 'function', 'startup hydration requests a blocking lock')
+          assert.equal(maybeCallback, undefined)
+          await lockGate
+          return optionsOrCallback({ name: 'hydrate-lock' })
+        },
+      },
+    },
+  })
+  globalThis.fetch = async () => {
+    pullCount++
+    return jsonResponse(pullBody(1))
+  }
+
+  let settled = false
+  const hydration = cloud.hydrateCloudState().then(() => { settled = true })
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(settled, false, 'hydration does not report ready while another tab still owns the lock')
+  releaseLock()
+  await hydration
+  assert.equal(pullCount, 1)
+  assert.equal(cloud.getCloudStateCursor(), 1)
+
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} })
+})
+
 test('O: cursor, versions, and queued cloud ops are isolated by account', async () => {
   clearState('A')
   const unregister = cloud.registerCloudStateAdapter('test_kind', { apply() {}, delete() {} })
