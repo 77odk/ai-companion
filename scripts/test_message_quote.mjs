@@ -55,7 +55,11 @@ const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.u
 const bubble = fs.readFileSync(new URL('../src/components/MessageBubble.tsx', import.meta.url), 'utf8')
 
 assert.match(chat, /userText:\s*text/, 'current Event candidate uses newly typed body only')
-assert.match(chat, /recordChatTopic\(text,/, 'FutureIntent\/Space topic capture uses newly typed body only')
+assert.match(
+  chat,
+  /recordChatTopic\([\s\S]*?text,[\s\S]*?userMsg\.ts,[\s\S]*?roundBranchId \?\? conversationState\?\.activeBranchId \?\? 'root',[\s\S]*?\)/,
+  'FutureIntent/Space topic capture uses newly typed body and the current conversation branch',
+)
 assert.match(chat, /messageEvidenceText\(m\.content\)/, 'historical quoted rows are stripped before Event evidence reuse')
 assert.match(chat, /formatQuotedMessage\(quote, text\)/, 'stored session message keeps quote context in normal content')
 assert.match(chat, /const userMsg: StoredMessage = \{[\s\S]*?content: messageText,[\s\S]*?ts: Date\.now\(\)/, 'normal send persists quoted content')
