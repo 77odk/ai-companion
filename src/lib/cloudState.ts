@@ -62,6 +62,7 @@ interface PushResult {
 
 const adapters = new Map<string, CloudStateAdapter>()
 const localFlights = new Map<string, Promise<boolean>>()
+const hydrationFlights = new Map<string, Promise<void>>()
 const syncFlights = new Map<string, Promise<void>>()
 const flushFlights = new Map<string, Promise<void>>()
 const replayFlights = new Map<string, Promise<void>>()
@@ -349,6 +350,27 @@ async function withCrossTabLock(account: string, task: () => Promise<void>): Pro
   return withFallbackLock(account, task)
 }
 
+/**
+ * Startup hydration is correctness-critical: if another tab owns the account lock,
+ * wait for it instead of treating "lock busy" as "state is ready".
+ */
+async function withCrossTabLockWait(account: Account, task: () => Promise<void>): Promise<void> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined
+  if (locks?.request) {
+    await locks.request(lockName(account.account), async lock => {
+      if (!lock || !isCurrentAccount(account)) throw new Error('cloud_state_account_changed')
+      await task()
+    })
+    return
+  }
+
+  while (isCurrentAccount(account)) {
+    if (await withFallbackLock(account.account, task)) return
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  throw new Error('cloud_state_account_changed')
+}
+
 /** Pull is single-flight in this tab and guarded across tabs for the same account. */
 export function pullCloudState(): Promise<boolean> {
   const account = getAccount()
@@ -358,6 +380,36 @@ export function pullCloudState(): Promise<boolean> {
   if (active) return active
   const flight = withCrossTabLock(account.account, () => pullPages(account)).finally(() => localFlights.delete(key))
   localFlights.set(key, flight)
+  return flight
+}
+
+/**
+ * Complete one authoritative Cloud State pull before an existing cloud conversation becomes writable.
+ * Reuses an in-tab pull when one is already running; if that pull skipped because another tab owns
+ * the account lock, waits for the lock and performs a fresh cursor-based pull.
+ */
+export function hydrateCloudState(): Promise<void> {
+  const account = getAccount()
+  if (!account) return Promise.resolve()
+  const key = accountKey(account.account)
+  const active = hydrationFlights.get(key)
+  if (active) return active
+
+  const flight = (async () => {
+    await replayCloudStateInbox()
+    const currentPull = localFlights.get(key)
+    if (currentPull) {
+      const pulled = await currentPull
+      if (pulled) {
+        await replayCloudStateInbox()
+        return
+      }
+    }
+    await withCrossTabLockWait(account, () => pullPages(account))
+    await replayCloudStateInbox()
+  })().finally(() => hydrationFlights.delete(key))
+
+  hydrationFlights.set(key, flight)
   return flight
 }
 

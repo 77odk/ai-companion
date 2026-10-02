@@ -50,10 +50,11 @@ import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh, refreshToLatest } from './lib/forceRefresh'
 import { checkDeployedBuild, getCurrentBuildVersion, subscribeDeployedBuild } from './lib/appVersion'
 import Home from './components/Home'
-import { initCloudStateSync, syncCloudState } from './lib/cloudState'
+import { hydrateCloudState, initCloudStateSync, syncCloudState } from './lib/cloudState'
 import { queueLegacyCloudStateBackfill } from './lib/cloudStateResources'
 import { closeOldestCandidateWindowOnStartup } from './lib/eventDetector'
 import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from './lib/taRuntime'
+import { loadConversationState } from './lib/conversationState'
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
 const RolePicker = lazy(() => import('./components/RolePicker'))
@@ -347,6 +348,9 @@ export default function App() {
   const [roleBack, setRoleBack] = useState<'welcome' | 'settings' | 'roles' | 'chatprofile'>('welcome')
   // 老数据一键迁移状态（无云端会话 + 本地有旧数据时触发，见 redirectBySessions）
   const [migration, setMigration] = useState<MigrationState>('idle')
+  // 已有云端会话恢复时，Conversation Branch 属于“写前必须知道”的状态；首次权威 pull 失败时停在 loading。
+  const [startupHydrationFailed, setStartupHydrationFailed] = useState(false)
+  const startupHydrationAllowLegacyRef = useRef(true)
   // 已登录用户首次拉会话列表只做一次（StrictMode 双跑防重）
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
@@ -563,12 +567,29 @@ export default function App() {
     replaceView('role')
   }
 
+  // 已有会话进入“可写”前统一经过这一个门：Cloud State 至少完成一次权威 pull；
+  // 真离线时只有本机已经有 conversation state 才允许继续写，未知状态宁可停在 loading。
+  const ensureStartupConversationReady = useCallback(async (sessionId: string): Promise<boolean> => {
+    try {
+      await hydrateCloudState()
+      return true
+    } catch {
+      if (loadConversationState(sessionId)) return true
+      setMigration('idle')
+      setStartupHydrationFailed(true)
+      return false
+    }
+  }, [])
+
   // 登录用户分流：拉会话列表 → 有会话进最近会话聊天；没有但有本地旧数据（且没迁过）→ 自动迁移；
   // 没有也没数据 → 进选角色页新建。
-  // 拉列表失败（断网等）走本地兜底：有缓存的当前会话进聊天，否则按本地记录判断。
+  // 拉列表失败（断网等）走本地兜底：只有本机已知 branch 状态的缓存会话可继续写；
+  // 本机没有 branch 状态时保持 loading，避免离线先写 root、联网后远端 branch 到达导致消息消失。
   // 这里就把 redirectStarted 置位，避免 view 切到 loading 后下面的挂载 effect 再触发一次重复拉取。
   const redirectBySessions = useCallback(async (options: { allowLegacyFallback?: boolean } = {}) => {
     const allowLegacyFallback = options.allowLegacyFallback !== false
+    startupHydrationAllowLegacyRef.current = allowLegacyFallback
+    setStartupHydrationFailed(false)
     redirectStarted.current = true
     replaceView('loading')
     const token = getToken()
@@ -586,9 +607,13 @@ export default function App() {
       if (allowLegacyFallback) queueLegacyCloudStateBackfill()
       const active = resolveActiveSession(sessions, allowLegacyFallback ? getActiveSessionId() : '')
       if (active) {
+        const activeId = String(active.id)
+        // Cloud State 已在登录 effect 里并行启动；这里把它提升成“进入可写会话前必须完成”的 barrier。
+        // 若另一个标签页正在 pull，hydrateCloudState 会等锁并从最新 cursor 再确认一次。
+        if (!await ensureStartupConversationReady(activeId)) return
         // 跨账号恢复只接受这次服务端返回的 session，并从 Home 干净进入；
         // 同账号正常启动仍恢复上次主视图。
-        setActiveSessionId(String(active.id))
+        setActiveSessionId(activeId)
         setMigration('idle')
         replaceView(allowLegacyFallback ? (getLastPrimaryView() ?? 'home') : 'home')
       } else if (allowLegacyFallback && !hasMigratedFlag() && hasLocalLegacyData()) {
@@ -618,6 +643,8 @@ export default function App() {
       setRoleBack('welcome')
       replaceView('role')
     } else if (getActiveSessionId()) {
+      const fallbackSessionId = getActiveSessionId()
+      if (!await ensureStartupConversationReady(fallbackSessionId)) return
       replaceView('chat')
     } else if (needsRolePick()) {
       setRoleMode('first')
@@ -626,7 +653,7 @@ export default function App() {
     } else {
       replaceView('chat')
     }
-  }, [runMigration])
+  }, [runMigration, ensureStartupConversationReady])
 
   // 访问门禁：需登录 view 且未登录 → 记下目标交给登录墙；游客可看的直接进
   const navigate = (v: View) => {
@@ -977,7 +1004,23 @@ export default function App() {
         />
       ) : view === 'loading' ? (
         <div className="session-loading">
-          {migration === 'failed' ? (
+          {startupHydrationFailed ? (
+            <>
+              <p>聊天还没接上，点重试再试一次。</p>
+              <div className="migrate-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setStartupHydrationFailed(false)
+                    void redirectBySessions({ allowLegacyFallback: startupHydrationAllowLegacyRef.current })
+                  }}
+                >
+                  重试
+                </button>
+              </div>
+            </>
+          ) : migration === 'failed' ? (
             <>
               <p>记录没带完，点重试再试一次。</p>
               <div className="migrate-actions">
