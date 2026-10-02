@@ -48,7 +48,7 @@ console.log('[message regenerate] one reply pipeline, no duplicate user side eff
 assert.match(chat, /existingRound\?: \{[\s\S]*userMessage: StoredMessage[\s\S]*visibleHistory: StoredMessage\[\][\s\S]*branchId: string/)
 assert.match(chat, /const replayExistingUser = Boolean\(existingRound\)/)
 assert.match(chat, /const rawWithUser = replayExistingUser \? messages : \[\.\.\.messages, userMsg\]/)
-assert.match(chat, /if \(activeSessionId && !replayExistingUser\) \{[\s\S]*persistMessages\(rawWithUser\)[\s\S]*uploadMessage\(userMsg\)/)
+assert.match(chat, /if \(activeSessionId && !replayExistingUser\) \{[\s\S]*persistMessages\(roundSessionId, rawWithUser\)[\s\S]*uploadMessage\(roundSessionId, userMsg\)/)
 assert.match(
   chat,
   /if \(!replayExistingUser\) \{[\s\S]*?recordChatTopic\([\s\S]*?roundBranchId \?\? conversationState\?\.activeBranchId \?\? 'root'[\s\S]*?\)[\s\S]*?\}/,
@@ -63,7 +63,7 @@ console.log('[message regenerate] branch-specific runtime + retry')
 assert.match(chat, /const branchFinal = roundBranchId/)
 assert.match(chat, /dropRepeatedReplies\(hygienicParts, roundVisibleMessages\)/)
 assert.match(chat, /loadConversationState\(activeSessionId\)\?\.activeBranchId === roundBranchId/)
-assert.match(chat, /enterBusyRef\.current\([^\n]+roundVisibleMessages\)/)
+assert.match(chat, /enterBusyRef\.current\(roundSessionId, [^\n]+roundVisibleMessages\)/)
 
 console.log('[message regenerate] regenerate and edit share one existing-user reply entry')
 assert.match(chat, /const replyFromExistingUserBranch = \(/)
