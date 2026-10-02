@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useMemo, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react'
 import type { PhotoMeta } from '../lib/photoWall'
 import { assignDayRows, boardHeightForPhotos, groupPhotosByMonth, layoutForPhoto } from '../lib/photoWallLayout'
 import '../styles/photoWallArchive.css'
@@ -9,6 +9,7 @@ interface Props {
   error: string | null
   photoSrc: (photo: PhotoMeta) => string
   onPhotoLoadError?: (photo: PhotoMeta) => void
+  onPhotoLoadSuccess?: (photo: PhotoMeta) => void
   onAdd: () => void
   onDelete: (photo: PhotoMeta) => Promise<boolean>
 }
@@ -76,7 +77,7 @@ function fmtMD(ts: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
-export default function PhotoWallArchive({ photos, uploading, error, photoSrc, onPhotoLoadError, onAdd, onDelete }: Props) {
+export default function PhotoWallArchive({ photos, uploading, error, photoSrc, onPhotoLoadError, onPhotoLoadSuccess, onAdd, onDelete }: Props) {
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -87,6 +88,22 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
   // 每月「有照片的那几天」的行号（最新的一天 = 行 0）；Y 轴按行排，月份标题下面就是照片。
   const dayRows = useMemo(() => assignDayRows(sorted), [sorted])
   const selectedIndex = selectedId ? sorted.findIndex((photo) => photo.id === selectedId) : -1
+
+  const handlePhotoImageError = (event: SyntheticEvent<HTMLImageElement>, photo: PhotoMeta) => {
+    const image = event.currentTarget
+    const src = image.currentSrc || image.src
+    if (!src.startsWith('data:') && image.dataset.photoRetry !== '1') {
+      image.dataset.photoRetry = '1'
+      image.src = `${src}${src.includes('?') ? '&' : '?'}_retry=${Date.now()}`
+      return
+    }
+    onPhotoLoadError?.(photo)
+  }
+
+  const handlePhotoImageLoad = (event: SyntheticEvent<HTMLImageElement>, photo: PhotoMeta) => {
+    delete event.currentTarget.dataset.photoRetry
+    onPhotoLoadSuccess?.(photo)
+  }
 
   const showAt = (index: number) => {
     if (sorted.length === 0) return
@@ -152,7 +169,8 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
                     src={photoSrc(photo)}
                     alt=""
                     loading={index < 6 ? 'eager' : 'lazy'}
-                    onError={() => onPhotoLoadError?.(photo)}
+                    onError={(event) => handlePhotoImageError(event, photo)}
+                    onLoad={(event) => handlePhotoImageLoad(event, photo)}
                   />
                 </span>
               )
@@ -208,7 +226,8 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
                           src={photoSrc(photo)}
                           alt=""
                           loading="lazy"
-                          onError={() => onPhotoLoadError?.(photo)}
+                          onError={(event) => handlePhotoImageError(event, photo)}
+                    onLoad={(event) => handlePhotoImageLoad(event, photo)}
                         />
                         <span className="photo-archive-date">{fmtMD(photo.createdAt)}</span>
                       </button>
@@ -289,7 +308,8 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
             src={photoSrc(sorted[selectedIndex])}
             alt=""
             loading="eager"
-            onError={() => onPhotoLoadError?.(sorted[selectedIndex])}
+            onError={(event) => handlePhotoImageError(event, sorted[selectedIndex])}
+            onLoad={(event) => handlePhotoImageLoad(event, sorted[selectedIndex])}
             onClick={(event) => event.stopPropagation()}
           />
           <button
