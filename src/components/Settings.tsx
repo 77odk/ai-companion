@@ -7,6 +7,7 @@ import Account from './Account'
 import GenderSelect from './GenderSelect'
 import Work from './Work'
 import Appearance from './Appearance'
+import KeyGuideSheet from './KeyGuideSheet'
 import AnniversaryManager from './AnniversaryManager'
 import {
   DEFAULT_SETTINGS,
@@ -1143,7 +1144,8 @@ function PrivacyDetail({ onBack }: { onBack: () => void }) {
 
 /* ---------------- 详情页：API 设置 ---------------- */
 
-function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?: () => void }) {
+// onGoGuide 保留在签名里兼容调用方，页面内已改为打开「怎么获取 API Key」弹层
+function ProviderDetail({ onBack }: { onBack: () => void; onGoGuide?: () => void }) {
   const [initial] = useState(loadSettings)
   const [provider, setProvider] = useState<Provider>(initial.provider)
   const [apiKey, setApiKey] = useState(initial.providers[initial.provider].apiKey)
@@ -1164,6 +1166,8 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
   const [savedConfigs, setSavedConfigs] = useState<SavedConfig[]>(() => loadSavedConfigs())
   const [saveNameOpen, setSaveNameOpen] = useState(false)
   const [saveName, setSaveName] = useState('')
+  // 不会配 Key？打开「怎么获取 API Key」弹层（不再跳去使用指南）
+  const [keyGuideOpen, setKeyGuideOpen] = useState(false)
 
   const handleProviderChange = (p: Provider) => {
     setProvider(p)
@@ -1281,11 +1285,9 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
 
       <div className="settings-card">
         <p className="hint">Key 只存你浏览器本地，不经过任何服务器。请放心填写。</p>
-        {onGoGuide && (
-          <button type="button" className="provider-guide-link" onClick={onGoGuide}>
-            不会配？先看使用指南（30 秒看懂）
-          </button>
-        )}
+        <button type="button" className="provider-guide-link" onClick={() => setKeyGuideOpen(true)}>
+          不会配？点这里看怎么获取 Key
+        </button>
 
         <div className="field">
           <ProviderSelect value={provider} onChange={handleProviderChange} />
@@ -1462,6 +1464,8 @@ function ProviderDetail({ onBack, onGoGuide }: { onBack: () => void; onGoGuide?:
       </div>
 
       {testMsg && <p className={resultClass}>{testMsg}</p>}
+
+      <KeyGuideSheet open={keyGuideOpen} onClose={() => setKeyGuideOpen(false)} />
 
         {savedConfigs.length > 0 && (
           <div className="field saved-configs-bottom">
