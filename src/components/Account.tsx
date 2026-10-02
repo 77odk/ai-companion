@@ -3,7 +3,7 @@
 // 登录表单与登录墙 LoginGate 共用一套（LoginForm.tsx）。
 // 登录状态不影响聊天：未登录照常用本地，登录只是多一层同步。
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { getAccount, syncNow, bindIdentity, getIdentities, verifySend, verifyConfirm, getAccountStatus, type Account, type Identity } from '../lib/sync'
 import { getToken, logout } from '../lib/auth'
 import LoginForm from './LoginForm'
@@ -278,7 +278,7 @@ export default function AccountPage({ onBack }: { onBack: () => void }) {
   )
 }
 
-function AccountGroup({ title, children }: { title: string; children: React.ReactNode }) {
+function AccountGroup({ title, children }: { title: string; children: ReactNode }) {
   return <section className="account-section"><p className="account-section-title">{title}</p><div className="account-list-card">{children}</div></section>
 }
 
