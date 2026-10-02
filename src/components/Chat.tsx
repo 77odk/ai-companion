@@ -557,7 +557,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       ts: Date.now(),
       ...(currentConversationBranchId ? { conversationBranchId: currentConversationBranchId } : {}),
     }
-    const next = [...messages, userMsg]
+    const next = [...rawWithUser]
     persistMessages(next)
     if (activeSessionId) void uploadMessage(userMsg)
     setMessages(next)
@@ -946,7 +946,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
   }, [])
 
-  const send = useCallback((raw: string, quote: MessageQuote | null = null) => {
+  const send = useCallback((
+    raw: string,
+    quote: MessageQuote | null = null,
+    existingRound?: {
+      userMessage: StoredMessage
+      visibleHistory: StoredMessage[]
+      branchId: string
+    },
+  ) => {
     // UI2-03B-1：用户自己发了消息 → 立刻解除「看原对话」的跳转保护，恢复正常滚到底。
     // 必须在这里显式释放：不能靠 auto-scroll 里猜「最后一条是不是 user」——
     // 历史最后一条本来就常是 user，那样会在挂载瞬间误解除保护，把列表拉到底。
@@ -954,6 +962,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const text = raw.trim()
     if (!text || streaming) return
     const messageText = quote ? formatQuotedMessage(quote, text) : text
+    const replayExistingUser = Boolean(existingRound)
+    const roundVisibleMessages = existingRound?.visibleHistory ?? visibleMessages
+    const roundBranchId = existingRound?.branchId ?? currentConversationBranchId
     // 新消息开始即废弃上一轮的失败重试；重试永远不能跨轮次存活。
     failedReplyRetryRef.current = null
     setFailedReplyRetryAvailable(false)
@@ -967,27 +978,29 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
 
     // 真人忙碌只属于沉浸档。自然 / AI 即使残留 isBusy，也立即回正常聊天路径。
-    if (isBusy && activeSessionId && allowsBusyState(resolveIdentityMode(activeSessionId))) {
+    if (!replayExistingUser && isBusy && activeSessionId && allowsBusyState(resolveIdentityMode(activeSessionId))) {
       handleBusySend(messageText)
       setQuoteDraft(null)
       return
     }
-    if (isBusy) setIsBusy(false)
+    if (!replayExistingUser && isBusy) setIsBusy(false)
 
     let runId = ++runIdRef.current
     retriedRef.current = false
-    spacePairEligibleRef.current = true
+    // Regenerate reuses an existing user turn: never create a second Space pair for the same user evidence.
+    spacePairEligibleRef.current = !replayExistingUser
     busyTriggeredRef.current = false
 
-    const userMsg: StoredMessage = {
+    const userMsg: StoredMessage = existingRound?.userMessage ?? {
       role: 'user',
       content: messageText,
       ts: Date.now(),
-      ...(currentConversationBranchId ? { conversationBranchId: currentConversationBranchId } : {}),
+      ...(roundBranchId ? { conversationBranchId: roundBranchId } : {}),
     }
+    const rawWithUser = replayExistingUser ? messages : [...rawWithUser]
     const tagCurrentBranch = (message: StoredMessage): StoredMessage =>
-      currentConversationBranchId
-        ? { ...message, conversationBranchId: currentConversationBranchId }
+      roundBranchId
+        ? { ...message, conversationBranchId: roundBranchId }
         : message
 
     // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看包含当前消息的最近5条用户消息），存 sessionStore
@@ -996,10 +1009,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (personaText) {
       lang = detectLang(personaText)
     } else {
-      const recentUserMsgs = [
-        ...visibleMessages.filter((m) => m.role === 'user').map((m) => messageEvidenceText(m.content)),
-        text,
-      ].slice(-5)
+      const recentUserMsgs = (replayExistingUser
+        ? roundVisibleMessages.filter((m) => m.role === 'user').map((m) => messageEvidenceText(m.content))
+        : [
+            ...roundVisibleMessages.filter((m) => m.role === 'user').map((m) => messageEvidenceText(m.content)),
+            text,
+          ]
+      ).slice(-5)
       const zhCount = recentUserMsgs.filter((m) => detectLang(m) === 'zh').length
       lang = zhCount > recentUserMsgs.length / 2 ? 'zh' : 'en'
     }
@@ -1048,6 +1064,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // 唯一写入出口：send 里不再抢先写；finalize / busy 截断 / 失败路径都从这里落库。
     // 同一轮绝不产生「原话 + 提炼」两条同义记忆（planMemoryWrites 内部归并 + 落库判重双保险）。
     const flushMemoryWrites = (rawText: string) => {
+      if (replayExistingUser) return false
       // 纠正申请必须先经过用户确认；只要本轮存在可纠正目标，就禁止 fallback 新写一条矛盾 Memory。
       if ((correctionIntent && correctionTargets.size > 0) || hasMemoryCorrectionMarker(rawText)) return false
       if (explicitCandidates.length === 0 && !rawText) return
@@ -1066,7 +1083,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       return created
     }
 
-    recordChatTopic(text, activeSessionId || undefined, userMsg.ts)
+    if (!replayExistingUser) recordChatTopic(text, activeSessionId || undefined, userMsg.ts)
     // TASK-MEM-DISTILL：本地显式检测先收集候选、不抢先写——等模型回复的【记忆】marker 到达后统一归并
     // （有 marker 对应 → 只写一条提炼版 explicit；无对应 marker → fallback 写本地候选；只有 marker → 保持 inferred）
     // 候选的 explicit 身份来自用户证据（用户明确说过），text 若被 marker 匹配则采用模型提炼 wording。
@@ -1090,7 +1107,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         if (sched) {
           explicitCandidates.push({ text: sched, source: text, topic: '工作' })
         } else if (text.trim().length >= 1 && text.trim().length <= 8) {
-        const prevAi = visibleMessages.filter((m) => m.role === 'assistant').slice(-1)[0]
+        const prevAi = roundVisibleMessages.filter((m) => m.role === 'assistant').slice(-1)[0]
         const askText = prevAi ? stripMemoryMarkers(prevAi.content) : ''
         if (askText) {
           const askAsk = /(爱|喜欢|爱吃|爱喝|口味|喜欢什么|想要什么|想要|想去|想做什么|是什么|叫什么)[，,。.！!？?]|(告诉我|说说|讲讲).{0,10}(喜欢|想要|想去|想)/.test(askText)
@@ -1108,11 +1125,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       }
     }
-    const base = [...visibleMessages, userMsg]
+    const base = replayExistingUser ? roundVisibleMessages : [...roundVisibleMessages, userMsg]
     const assistantTs = Date.now()
     assistantText.current = ''
     reasoningRef.current = ''
-    setMessages([...messages, userMsg, tagCurrentBranch({ role: 'assistant', content: '', ts: assistantTs })])
+    setMessages([...rawWithUser, tagCurrentBranch({ role: 'assistant', content: '', ts: assistantTs })])
     setInput('')
     setQuoteDraft(null)
     setError(null)
@@ -1120,25 +1137,27 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     partialTsRef.current = assistantTs
     streamingRef.current = true
 
-    if (activeSessionId) {
-      persistMessages([...messages, userMsg])
+    if (activeSessionId && !replayExistingUser) {
+      persistMessages(rawWithUser)
       uploadMessage(userMsg)
     }
 
     // Event Candidate Window：只带最近 6 条聊天里最多 2 条历史 user 原话 + 真实 ts；TA 文本永不作为 Event 证据。
     // 这让软 Event 在第一次“收口句”命中时就有多轮 evidence；最终仍由 Event V2 原五维硬闸门决定是否落库。
-    const recentEventUserEvidence = visibleMessages
-      .slice(-6)
-      .filter((m) => m.role === 'user')
-      .slice(-2)
-      .map((m) => ({ text: messageEvidenceText(m.content), ts: m.ts }))
-      .filter((m) => m.text.length > 0)
-    void processEventCandidate({
-      sessionId: activeSessionId || undefined,
-      userText: text,
-      recentUserEvidence: recentEventUserEvidence,
-      now: userMsg.ts,
-    })
+    if (!replayExistingUser) {
+      const recentEventUserEvidence = roundVisibleMessages
+        .slice(-6)
+        .filter((m) => m.role === 'user')
+        .slice(-2)
+        .map((m) => ({ text: messageEvidenceText(m.content), ts: m.ts }))
+        .filter((m) => m.text.length > 0)
+      void processEventCandidate({
+        sessionId: activeSessionId || undefined,
+        userText: text,
+        recentUserEvidence: recentEventUserEvidence,
+        now: userMsg.ts,
+      })
+    }
 
     const nameForPrompt = (() => {
       if (!activeSessionId) return loadAIProfile().nickname
@@ -1376,7 +1395,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const composed = composeContext(apiMessages, historyForModel, [...contextBlocks, ...bridgeBlocks])
     // 上下文总量 = 刷新之后这一段（sessionStart 起）所有内容的 provider 口径估算；
     // 「本轮输入」仍是本轮 payload 的估算，两者分开显示。
-    const sessionContentTokens = contentTokensOf(usageMessages(visibleMessages, userMsg), loadContextFactor())
+    const sessionContentTokens = contentTokensOf(usageMessages(roundVisibleMessages, userMsg), loadContextFactor())
     const estimatedContextState: ContextUsageState = {
       sessionStart,
       used: sessionContentTokens,
@@ -1390,7 +1409,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (composed.overBudget) {
       // 当前用户消息 / 核心 system 本身已经放不进 64k：不静默裁用户原话，也不把超限请求发给 provider。
       // 用户消息已经正常落历史；这里只撤掉空 assistant 占位并结束本轮流式状态。
-      setMessages([...messages, userMsg])
+      setMessages([...rawWithUser])
       setStreaming(false)
       streamingRef.current = false
       partialTsRef.current = null
@@ -1406,7 +1425,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     apiMessages.splice(0, apiMessages.length, ...composed.messages)
 
     const commitFinal = (final: StoredMessage[]) => {
-      const branchFinal = currentConversationBranchId
+      const branchFinal = roundBranchId
         ? final.map((m) => (m.role === 'assistant' && m.ts === assistantTs ? tagCurrentBranch(m) : m))
         : final
       persistMessages(branchFinal)
@@ -1523,13 +1542,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       )
       // 用户主动 Stop 不再发第二次模型请求；若截停片段已经越过身份边界，直接不落这段 assistant 文本。
       if (guardCleaned && identityProblem && retriedRef.current) {
-        commitFinal([...messages, userMsg])
+        commitFinal([...rawWithUser])
         return
       }
       if (guardCleaned && (attributionProblem || roboticProblem || fabricatedProblem || identityProblem) && !retriedRef.current) {
         retriedRef.current = true
         setError(null)
-        setMessages([...messages, userMsg, { role: 'assistant', content: '…', ts: assistantTs }])
+        setMessages([...rawWithUser, { role: 'assistant', content: '…', ts: assistantTs }])
         const genericRepair = liveIdentityMode === 'ai'
           ? (lang === 'en'
               ? 'Your previous reply had a grounding or reality-boundary problem. Answer again using only supported context, without inventing shared history or human physical experiences. Do not rewrite merely because the wording sounds like an AI or assistant.'
@@ -1574,7 +1593,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               looksEmbodiedSelfClaim(retryGuard, retryIdentityMode) ||
               (!retryAllowBusy && retryAvailability?.state === 'unavailable' && retryAvailability.owner === 'SELF')
             ) {
-              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: resolveRepairFailureText(), ts: assistantTs }]
+              const final: StoredMessage[] = [...rawWithUser, { role: 'assistant', content: resolveRepairFailureText(), ts: assistantTs }]
               commitFinal(final)
             } else if (retryAllowBusy && retryAvailability?.state === 'unavailable' && retryAvailability.owner === 'SELF') {
               busyTriggeredRef.current = true
@@ -1582,13 +1601,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               const busyText = cut > 0 && cut < retryGuard.length ? retryGuard.slice(0, cut) : retryGuard
               enterBusyRef.current(busyText, retryAvailability)
             } else {
-              const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: retryVisible, ts: assistantTs }]
+              const final: StoredMessage[] = [...rawWithUser, { role: 'assistant', content: retryVisible, ts: assistantTs }]
               commitFinal(final)
             }
           })
           .catch(() => {
             // repair 失败/超时：只有“纯客服腔”首版可以退回；编造/身份/归因问题仍绝不放回。
-            const final: StoredMessage[] = [...messages, userMsg, { role: 'assistant', content: resolveRepairFailureText(), ts: assistantTs }]
+            const final: StoredMessage[] = [...rawWithUser, { role: 'assistant', content: resolveRepairFailureText(), ts: assistantTs }]
             commitFinal(final)
           })
         return
@@ -1602,7 +1621,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const hygienicParts = splitParts
         .map((m) => ({ ...m, content: stripTimeLabels(m.content).trim() }))
         .filter((m) => m.content !== '')
-      const assistantMsgs = dropRepeatedReplies(hygienicParts, activeMessages)
+      const assistantMsgs = dropRepeatedReplies(hygienicParts, roundVisibleMessages)
       // 思考链存到第一条 assistant 消息的 thinking 字段（内心戏展示用）
       if (assistantMsgs.length > 0 && thinking) {
         assistantMsgs[0].thinking = thinking
@@ -1611,7 +1630,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       if (memoryWroteThisTurn && assistantMsgs.length > 0) {
         assistantMsgs[0].memorySaved = true
       }
-      const final: StoredMessage[] = [...messages, userMsg, ...assistantMsgs]
+      const final: StoredMessage[] = [...rawWithUser, ...assistantMsgs]
       if (proposedCorrection) {
         if (activeSessionId) savePendingMemoryCorrection(activeSessionId, sessionStart, proposedCorrection)
         if (mountedRef.current) {
@@ -1652,7 +1671,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const splits = replyLength === 'long'
         ? splitDetailedAssistantReply(displayCleanRef.current, assistantTs)
         : splitAssistantReplies(displayCleanRef.current, assistantTs)
-      setMessages([...messages, userMsg, ...splits.map(tagCurrentBranch)])
+      setMessages([...rawWithUser, ...splits.map(tagCurrentBranch)])
       if (showLenRef.current >= total && streamEndedRef.current) finishStreaming()
     }
     const finishStreaming = () => {
@@ -1734,7 +1753,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               const actualContextState: ContextUsageState = {
                 sessionStart,
                 // 上下文总量 = 刷新之后这一段（sessionStart 起）所有内容的 provider 口径估算；只随这一段增长。
-                used: contentTokensOf(usageMessages(visibleMessages, userMsg), nextFactor),
+                used: contentTokensOf(usageMessages(roundVisibleMessages, userMsg), nextFactor),
                 budget: composed.hardBudget,
                 source: 'actual',
                 inputTokens: usage.promptTokens,
@@ -1796,12 +1815,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         setFailedReplyRetryAvailable(false)
         setError(null)
         setFailedText(null)
-        setMessages([...messages, userMsg, tagCurrentBranch({ role: 'assistant', content: '', ts: assistantTs })])
+        setMessages([...rawWithUser, tagCurrentBranch({ role: 'assistant', content: '', ts: assistantTs })])
         setStreaming(true)
       }
       runId = ++runIdRef.current
       retriedRef.current = false
-      spacePairEligibleRef.current = true
+      spacePairEligibleRef.current = !replayExistingUser
       busyTriggeredRef.current = false
       assistantText.current = ''
       reasoningRef.current = ''
