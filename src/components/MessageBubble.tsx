@@ -18,6 +18,8 @@ interface Props {
   onAvatarClick?: () => void
   /** 把当前可见消息带入输入区作为引用上下文。 */
   onQuote?: (text: string, speaker: MessageQuoteSpeaker) => void
+  /** 编辑当前 user 消息正文；Chat 会创建新 branch，不改原始 message。 */
+  onEdit?: (text: string) => void
   /** 软删除当前 active branch 里的这一条消息。 */
   onDelete?: () => void
   /** 从这一条消息回溯；旧后缀留在旧 branch，可恢复。 */
@@ -82,7 +84,7 @@ async function copyVisibleText(text: string): Promise<boolean> {
   }
 }
 
-export default function MessageBubble({ message, typing = false, onAvatarClick, onQuote, onDelete, onRollback }: Props) {
+export default function MessageBubble({ message, typing = false, onAvatarClick, onQuote, onEdit, onDelete, onRollback }: Props) {
   const isUser = message.role === 'user'
   // 模块三·内心戏：思考链展开/收起状态（Hooks 必须在所有条件返回之前调用，防 React Hooks 顺序崩溃）
   const [thinkOpen, setThinkOpen] = useState(false)
@@ -94,6 +96,8 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
   const [thinkTranslating, setThinkTranslating] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [editing, setEditing] = useState(false)
+  const [editDraft, setEditDraft] = useState('')
   // 模块三：纯思考链消息不渲染气泡（历史泄漏的英文推理段，没 `` 包裹的那种）
   // 注意：必须在 useState 之后再条件返回，否则列表重排时同一位置组件实例 Hooks 调用次数不一致会崩
   if (!isUser && isPureThinkBlock(message.content)) return null
@@ -130,6 +134,9 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
       ? (sessionLang === 'en' ? 'Copy failed' : '复制失败')
       : (sessionLang === 'en' ? 'Copy' : '复制')
   const quoteLabel = sessionLang === 'en' ? 'Quote' : '引用'
+  const editLabel = sessionLang === 'en' ? 'Edit' : '编辑'
+  const saveEditLabel = sessionLang === 'en' ? 'Save' : '保存'
+  const cancelEditLabel = sessionLang === 'en' ? 'Cancel' : '取消'
   const rollbackLabel = sessionLang === 'en' ? 'Rewind here' : '回溯到这里'
   const deleteLabel = sessionLang === 'en' ? 'Delete' : '删除'
   const actionsLabel = sessionLang === 'en' ? 'Message actions' : '消息操作'
@@ -221,7 +228,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
           </div>
         )}
         <div className="message-bubble-line">
-          <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
+          <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}${editing ? ' bubble-editing' : ''}`}>
             {typing ? (
               <span className="typing" aria-label={typingLabel}>
                 <span className="typing-text">{typingLabel}</span>
@@ -229,6 +236,61 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
                 <i />
                 <i />
               </span>
+            ) : editing && isUser && onEdit ? (
+              <div className="message-edit-box">
+                {quotedContext && (
+                  <span className="bubble-quote">
+                    <strong>{quoteSpeakerLabel}</strong>
+                    <span>{quotedContext.text}</span>
+                  </span>
+                )}
+                <textarea
+                  className="message-edit-input"
+                  rows={2}
+                  value={editDraft}
+                  autoFocus
+                  onChange={(event) => setEditDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault()
+                      setEditing(false)
+                      setEditDraft('')
+                    }
+                    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                      event.preventDefault()
+                      const next = editDraft.trim()
+                      if (!next || next === displayText.trim()) return
+                      onEdit(next)
+                      setEditing(false)
+                      setEditDraft('')
+                    }
+                  }}
+                />
+                <span className="message-edit-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(false)
+                      setEditDraft('')
+                    }}
+                  >
+                    {cancelEditLabel}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!editDraft.trim() || editDraft.trim() === displayText.trim()}
+                    onClick={() => {
+                      const next = editDraft.trim()
+                      if (!next || next === displayText.trim()) return
+                      onEdit(next)
+                      setEditing(false)
+                      setEditDraft('')
+                    }}
+                  >
+                    {saveEditLabel}
+                  </button>
+                </span>
+              </div>
             ) : (
               <>
                 {quotedContext && (
@@ -283,6 +345,19 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
                       }}
                     >
                       {quoteLabel}
+                    </button>
+                  )}
+                  {isUser && onEdit && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setEditDraft(displayText)
+                        setEditing(true)
+                        setActionsOpen(false)
+                      }}
+                    >
+                      {editLabel}
                     </button>
                   )}
                   {onRollback && (

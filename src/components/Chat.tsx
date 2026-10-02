@@ -54,7 +54,7 @@ import { estimateToken } from '../lib/token'
 import { calibrateContextFactor, contentTokensOf, loadContextFactor, saveContextFactor, usageMessages } from '../lib/contextUsage'
 import { buildUserWeatherContext, readUserWeatherContext } from '../lib/homeWeather'
 import { clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, savePendingMemoryCorrection, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
-import { formatQuotedMessage, messageEvidenceText, type MessageQuote, type MessageQuoteSpeaker } from '../lib/messageQuote'
+import { formatQuotedMessage, messageEvidenceText, parseQuotedMessage, type MessageQuote, type MessageQuoteSpeaker } from '../lib/messageQuote'
 import { CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState } from '../lib/conversationState'
 
 /**
@@ -1996,6 +1996,41 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     })
   }
 
+  const commitConversationEdit = (message: StoredMessage, nextBody: string) => {
+    if (
+      !activeSessionId ||
+      streaming ||
+      contextBusy ||
+      message.role !== 'user' ||
+      typeof message.id !== 'number'
+    ) return
+
+    const body = nextBody.trim()
+    if (!body) return
+    const parsed = parseQuotedMessage(message.content)
+    const editedContent = parsed.quote ? formatQuotedMessage(parsed.quote, body) : body
+    if (editedContent === message.content) return
+
+    const next = forkConversation(conversationState, activeSessionId, messages, {
+      forkAfterMessageId: message.id,
+      contentOverrides: { [message.id]: editedContent },
+      reason: 'edit',
+    })
+    const created = next.branches[next.activeBranchId]
+    if (!created?.parentBranchId) return
+
+    saveConversationState(next)
+    invalidateDerivedContextForBranchChange(activeSessionId)
+    const actionLang = getSessionLang(activeSessionId)
+    setBranchActionNotice({
+      branchId: next.activeBranchId,
+      previousBranchId: created.parentBranchId,
+      text: actionLang === 'en'
+        ? 'Edited in a new conversation branch'
+        : '已编辑，旧对话已保留',
+    })
+  }
+
   const undoConversationBranchAction = () => {
     if (!activeSessionId || !branchActionNotice) return
     const current = loadConversationState(activeSessionId)
@@ -2141,6 +2176,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 typing={streaming && i === displayMessages.length - 1 && m.role === 'assistant' && m.content === ''}
                 onAvatarClick={onOpenProfile}
                 onQuote={handleQuoteMessage}
+                onEdit={!streaming && !contextBusy && m.role === 'user' && typeof m.id === 'number'
+                  ? (nextText) => commitConversationEdit(m, nextText)
+                  : undefined}
                 onDelete={!streaming && !contextBusy && typeof m.id === 'number'
                   ? () => commitConversationBranchAction(m, 'delete')
                   : undefined}

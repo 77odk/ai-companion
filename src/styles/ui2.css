@@ -3461,6 +3461,66 @@
   color: #b44b4b;
 }
 
+.chat-page .bubble-user.bubble-editing {
+  width: min(360px, 68vw);
+  padding: 9px 10px;
+}
+
+.message-edit-box {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.message-edit-input {
+  width: 100%;
+  min-height: 58px;
+  max-height: 150px;
+  resize: vertical;
+  padding: 8px 9px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
+  border-radius: 10px;
+  outline: none;
+  background: color-mix(in srgb, var(--color-card) 92%, transparent);
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.message-edit-input:focus {
+  border-color: color-mix(in srgb, var(--color-primary) 52%, var(--color-border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary-soft) 42%, transparent);
+}
+
+.message-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.message-edit-actions button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--color-card) 76%, transparent);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.message-edit-actions button:last-child {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+  font-weight: 600;
+}
+
+.message-edit-actions button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
 .bubble-quote {
   display: block;
   margin: -1px 0 6px;
