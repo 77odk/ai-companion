@@ -3,6 +3,7 @@ import fs from 'node:fs'
 
 const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
 const bubble = fs.readFileSync(new URL('../src/components/MessageBubble.tsx', import.meta.url), 'utf8')
+const app = fs.readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 
 console.log('[message branch actions] recoverable delete / rollback wiring')
 
@@ -28,6 +29,16 @@ assert.match(chat, /const contextBoundary = Math\.max\(sessionStart, conversatio
 assert.match(chat, /compactedAt >= contextBoundary/, 'old compact summary cannot cross a branch boundary')
 assert.match(chat, /stored\.bridgedAt >= contextBoundary/, 'old bridge cannot cross a branch boundary')
 assert.match(chat, /stored\.updatedAt >= contextBoundary/, 'old context meter cannot cross a branch boundary')
+assert.match(
+  app,
+  /if \(active\) \{[\s\S]*?await hydrateCloudState\(\)[\s\S]*?setActiveSessionId\(activeId\)/,
+  'existing cloud sessions finish authoritative Cloud State hydration before becoming writable',
+)
+assert.match(
+  app,
+  /catch \{[\s\S]*?if \(!loadConversationState\(activeId\)\)[\s\S]*?setStartupHydrationFailed\(true\)[\s\S]*?return/,
+  'a device with unknown branch state stays gated when startup hydration fails',
+)
 
 assert.match(
   chat,

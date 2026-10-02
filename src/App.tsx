@@ -50,10 +50,11 @@ import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
 import { forceRefresh, refreshToLatest } from './lib/forceRefresh'
 import { checkDeployedBuild, getCurrentBuildVersion, subscribeDeployedBuild } from './lib/appVersion'
 import Home from './components/Home'
-import { initCloudStateSync, syncCloudState } from './lib/cloudState'
+import { hydrateCloudState, initCloudStateSync, syncCloudState } from './lib/cloudState'
 import { queueLegacyCloudStateBackfill } from './lib/cloudStateResources'
 import { closeOldestCandidateWindowOnStartup } from './lib/eventDetector'
 import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from './lib/taRuntime'
+import { loadConversationState } from './lib/conversationState'
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
 const RolePicker = lazy(() => import('./components/RolePicker'))
@@ -347,6 +348,9 @@ export default function App() {
   const [roleBack, setRoleBack] = useState<'welcome' | 'settings' | 'roles' | 'chatprofile'>('welcome')
   // 老数据一键迁移状态（无云端会话 + 本地有旧数据时触发，见 redirectBySessions）
   const [migration, setMigration] = useState<MigrationState>('idle')
+  // 已有云端会话恢复时，Conversation Branch 属于“写前必须知道”的状态；首次权威 pull 失败时停在 loading。
+  const [startupHydrationFailed, setStartupHydrationFailed] = useState(false)
+  const startupHydrationAllowLegacyRef = useRef(true)
   // 已登录用户首次拉会话列表只做一次（StrictMode 双跑防重）
   const redirectStarted = useRef(false)
   const titleClicks = useRef<number[]>([])
@@ -569,6 +573,8 @@ export default function App() {
   // 这里就把 redirectStarted 置位，避免 view 切到 loading 后下面的挂载 effect 再触发一次重复拉取。
   const redirectBySessions = useCallback(async (options: { allowLegacyFallback?: boolean } = {}) => {
     const allowLegacyFallback = options.allowLegacyFallback !== false
+    startupHydrationAllowLegacyRef.current = allowLegacyFallback
+    setStartupHydrationFailed(false)
     redirectStarted.current = true
     replaceView('loading')
     const token = getToken()
@@ -586,9 +592,23 @@ export default function App() {
       if (allowLegacyFallback) queueLegacyCloudStateBackfill()
       const active = resolveActiveSession(sessions, allowLegacyFallback ? getActiveSessionId() : '')
       if (active) {
+        const activeId = String(active.id)
+        try {
+          // Cloud State 已在登录 effect 里并行启动；这里把它提升成“进入可写会话前必须完成”的 barrier。
+          // 若另一个标签页正在 pull，hydrateCloudState 会等锁并从最新 cursor 再确认一次。
+          await hydrateCloudState()
+        } catch {
+          // 已有本地 branch 状态时，离线继续写仍会带 branchId，后续 merge 不会吞消息；
+          // 真正危险的是“本机无 branch 状态、云端是否有 branch 又未知”的新设备/清缓存场景。
+          if (!loadConversationState(activeId)) {
+            setMigration('idle')
+            setStartupHydrationFailed(true)
+            return
+          }
+        }
         // 跨账号恢复只接受这次服务端返回的 session，并从 Home 干净进入；
         // 同账号正常启动仍恢复上次主视图。
-        setActiveSessionId(String(active.id))
+        setActiveSessionId(activeId)
         setMigration('idle')
         replaceView(allowLegacyFallback ? (getLastPrimaryView() ?? 'home') : 'home')
       } else if (allowLegacyFallback && !hasMigratedFlag() && hasLocalLegacyData()) {
@@ -977,7 +997,23 @@ export default function App() {
         />
       ) : view === 'loading' ? (
         <div className="session-loading">
-          {migration === 'failed' ? (
+          {startupHydrationFailed ? (
+            <>
+              <p>聊天还没接上，点重试再试一次。</p>
+              <div className="migrate-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setStartupHydrationFailed(false)
+                    void redirectBySessions({ allowLegacyFallback: startupHydrationAllowLegacyRef.current })
+                  }}
+                >
+                  重试
+                </button>
+              </div>
+            </>
+          ) : migration === 'failed' ? (
             <>
               <p>记录没带完，点重试再试一次。</p>
               <div className="migrate-actions">
