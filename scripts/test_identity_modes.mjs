@@ -203,7 +203,7 @@ assert.match(chatSource, /if \(guardCleaned && identityProblem && retriedRef\.cu
 assert.match(chatSource, /looksEmbodiedSelfClaim\(guardText, liveIdentityMode\)/, 'pagehide / hidden partial 落库前也必须检查当前身份边界')
 assert.match(chatSource, /if \(identityProblem \|\| !text\) return\s*const partialReplyLength/s, '违规或无可见正文的 partial 不得进入 commitPartialReply / pending upload')
 assert.match(chatSource, /else if \(retryAllowBusy && retryAvailability\?\.state === 'unavailable' && retryAvailability\.owner === 'SELF'\)/, 'repair 期间切回沉浸后，SELF 离开话术必须真正进入 Busy')
-assert.match(chatSource, /enterBusyRef\.current\(busyText, retryAvailability, roundVisibleMessages\)/, '沉浸 repair 的 unavailable 回复必须建立 Busy/Return 周期，并绑定当前 branch 上下文')
+assert.match(chatSource, /enterBusyRef\.current\(roundSessionId, busyText, retryAvailability, roundVisibleMessages\)/, '沉浸 repair 的 unavailable 回复必须建立 Busy/Return 周期，并绑定当前 branch 上下文')
 assert.ok(chatSource.includes('const canReuseFirstReplyOnRepairFailure'), 'repair 失败前区分纯客服腔与安全边界问题')
 assert.ok(chatSource.includes('looksRecoverableServiceStyle(guardCleaned) && !attributionProblem && !fabricatedProblem && !identityProblem'), '只有纯客服腔首版允许在 repair 失败时回退')
 assert.equal(looksRecoverableServiceStyle('有什么可以帮你的吗'), true, '纯客服腔可作为 repair 失败回退')
