@@ -177,5 +177,25 @@ console.log('\n[13] 小数/缩写保护：句点后非空白不断句')
   eq(chunks, ["It's 3.5 miles away.", 'Mr Smith left.'], '仅在句尾句点处断句')
 }
 
+console.log('\n[14] 时间标签先清洗，再拆条')
+{
+  eq(cut('[9:21] 别动，下巴抬高点[09:21] 少拿这种肉麻的话折腾我'), ['别动，下巴抬高点少拿这种肉麻的话折腾我'], '钟点标签不会进入正文或被拆成断肢')
+  eq(cut('[昨晚] 早点睡  [今天早上] 记得吃饭'), ['早点睡', '记得吃饭'], '中文时间词清掉，2+ 空白仍作为语义边界')
+}
+
+console.log('\n[15] 成对括号跨 60 字边界不从内部切断')
+{
+  const bracketed = '前面说两句，' + '（' + '动作'.repeat(35) + '）' + '，然后继续说完。'
+  const chunks = cut(bracketed)
+  ok(!chunks.some((c) => c.includes('（') && !c.includes('）')), '中文圆括号不被拆开')
+  checkIntegrity(bracketed, chunks, '括号保护')
+}
+
+console.log('\n[16] 多空格可作为无标点语义边界，普通英文单空格不拆')
+{
+  eq(cut('写了就交  又不是养不起你  不过过来得负责给糖铲屎干不干？'), ['写了就交', '又不是养不起你', '不过过来得负责给糖铲屎干不干？'], '连续空格拆成自然多条')
+  eq(cut('This is still one normal English sentence'), ['This is still one normal English sentence'], '英文单空格不当句边界')
+}
+
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

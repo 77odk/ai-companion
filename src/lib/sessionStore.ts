@@ -8,6 +8,7 @@ import type { StoredMessage } from './storage.ts'
 import { isSimilarMemory, loadMemory, newMemoryItemId, recallRelevantMemories, type MemoryItem, type RecallOptions } from './memory.ts'
 import type { BusyState } from './aiBusy.ts'
 import { recordMemoryIdAlias } from './memoryIdAliases.ts'
+import { stripTimeLabels } from './timeLabels.ts'
 
 const ACTIVE_SESSION_KEY = 'ai_companion_active_session_id'
 const SESSIONS_CACHE_KEY = 'ai_companion_sessions_cache'
@@ -754,31 +755,30 @@ function chunkText(text: string, maxLen: number = 60): string[] {
       chunks.push(remaining)
       break
     }
-    const window = remaining.slice(0, maxLen)
-    // 1) 窗口内找断点：句子边界 > 停顿标点 > 空格（各自取最后一个出现位置；类型间按优先级选择）
+    // 括号内是一个语义单元：即使刚好跨过 60 字，也不从 () / （） / [] / 【】 / ［］ 中间切断。
+    const stack: string[] = []
+    const closeFor: Record<string, string> = { '(': ')', '（': '）', '[': ']', '【': '】', '［': '］' }
     let sentPos = -1
     let punctPos = -1
     let spacePos = -1
-    for (let i = window.length - 1; i >= 0; i--) {
-      const ch = window[i]
-      if (SENT_END_ZH.includes(ch)) {
-        if (sentPos < 0) sentPos = i + 1
-      } else if (PAUSE_PUNCT.includes(ch)) {
-        if (punctPos < 0) punctPos = i + 1
-      } else if (/\s/.test(ch)) {
-        if (spacePos < 0) spacePos = i + 1
+    let forwardPos = -1
+    for (let i = 0; i < remaining.length; i++) {
+      const ch = remaining[i]
+      if (closeFor[ch]) stack.push(closeFor[ch])
+      else if (stack.length && ch === stack[stack.length - 1]) stack.pop()
+      if (stack.length > 0) continue
+      if (i < maxLen) {
+        if (SENT_END_ZH.includes(ch)) sentPos = i + 1
+        else if (PAUSE_PUNCT.includes(ch)) punctPos = i + 1
+        else if (/\s/.test(ch)) spacePos = i + 1
+      } else if (isSafeBreakChar(ch)) {
+        forwardPos = i + 1
+        break
       }
     }
     let breakPos = sentPos >= 0 ? sentPos : punctPos >= 0 ? punctPos : spacePos
-    // 2) 窗口内无安全断点 → 向后找最近的安全断点（宁可气泡稍长，不切词）
-    if (breakPos < 0) {
-      for (let i = maxLen; i < remaining.length; i++) {
-        if (isSafeBreakChar(remaining[i])) {
-          breakPos = i + 1
-          break
-        }
-      }
-    }
+    // 窗口内没有括号外安全断点 → 向后取最近的括号外安全断点。
+    if (breakPos < 0) breakPos = forwardPos
     // 3) 整个剩余文本都没有安全断点（连续 token）→ 不硬切，整条收尾
     if (breakPos < 0) {
       chunks.push(remaining)
@@ -801,7 +801,8 @@ function chunkText(text: string, maxLen: number = 60): string[] {
  * - 第二批⑨：超长内容折行不丢弃，不再 slice+省略号
  */
 export function splitAssistantReplies(content: string, ts: number): StoredMessage[] {
-  const text = String(content ?? '').trim()
+  // 时间上下文是元数据：先清掉再拆，避免 [16: / 21] 这类“断肢”进入气泡。
+  const text = stripTimeLabels(String(content ?? '')).trim()
   if (!text) return []
   // 1) 优先按换行/空行拆：AI 在提示词约束下会像发微信一样分行发（一条一行）
   const lines = text
@@ -822,19 +823,20 @@ export function splitAssistantReplies(content: string, ts: number): StoredMessag
   //    不让一大段直接甩脸上；英文半角句点后须跟空白或结尾才断（避免拆小数/缩写）；
   //    单句超 60 字折行不丢弃（第二批⑨ / TASK-CHAT-SPLIT）
   const sentenceParts: string[] = []
-  {
+  // 模型偶尔用多个空格代替标点；2+ 空白视为语义边界，普通英文单空格仍保留为词间空格。
+  for (const semanticPart of text.split(/\s{2,}/).map((part) => part.trim()).filter(Boolean)) {
     let start = 0
-    for (let i = 0; i < text.length; i++) {
-      const ch = text[i]
+    for (let i = 0; i < semanticPart.length; i++) {
+      const ch = semanticPart[i]
       const isSentEnd =
         SENT_END_ZH.includes(ch) ||
-        (ch === '.' && (i === text.length - 1 || /\s/.test(text[i + 1])))
+        (ch === '.' && (i === semanticPart.length - 1 || /\s/.test(semanticPart[i + 1])))
       if (isSentEnd) {
-        sentenceParts.push(text.slice(start, i + 1).trim())
+        sentenceParts.push(semanticPart.slice(start, i + 1).trim())
         start = i + 1
       }
     }
-    if (start < text.length) sentenceParts.push(text.slice(start).trim())
+    if (start < semanticPart.length) sentenceParts.push(semanticPart.slice(start).trim())
   }
   const sentences = sentenceParts.filter(Boolean)
   if (sentences.length <= 1) {

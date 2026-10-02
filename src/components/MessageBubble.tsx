@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { StoredMessage } from '../lib/storage'
 import { loadAIProfile, loadSettings, loadUserProfile } from '../lib/storage'
 import { isPureThinkBlock, stripMemoryMarkers, stripThinkBlocks } from '../lib/memory'
@@ -98,6 +98,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
   const [thinkTranslating, setThinkTranslating] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const actionsRef = useRef<HTMLDivElement | null>(null)
   const [editing, setEditing] = useState(false)
   const [editDraft, setEditDraft] = useState('')
   // 模块三：纯思考链消息不渲染气泡（历史泄漏的英文推理段，没 `` 包裹的那种）
@@ -140,7 +141,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
   const regenerateLabel = sessionLang === 'en' ? 'Regenerate' : '重新生成'
   const saveEditLabel = sessionLang === 'en' ? 'Save' : '保存'
   const cancelEditLabel = sessionLang === 'en' ? 'Cancel' : '取消'
-  const rollbackLabel = sessionLang === 'en' ? 'Rewind here' : '回溯到这里'
+  const rollbackLabel = sessionLang === 'en' ? 'Rewind here' : '回溯'
   const deleteLabel = sessionLang === 'en' ? 'Delete' : '删除'
   const actionsLabel = sessionLang === 'en' ? 'Message actions' : '消息操作'
   // 思考链是否需要翻译：中文会话 + thinking 是英文 → 需要懒翻译
@@ -153,6 +154,28 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
       : thinkingRaw.length > 600 ? `${thinkingRaw.slice(0, 600)}…` : thinkingRaw
     : ''
   // 点开灰条时触发懒翻译（仅中文会话+英文思考链）
+  useEffect(() => {
+    if (!actionsOpen) return
+    const closeOnPointer = (event: PointerEvent) => {
+      if (!actionsRef.current?.contains(event.target as Node)) setActionsOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActionsOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnPointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnPointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [actionsOpen])
+
+  useEffect(() => {
+    if (copyState === 'idle') return
+    const timer = window.setTimeout(() => setCopyState('idle'), 1200)
+    return () => window.clearTimeout(timer)
+  }, [copyState])
+
   const handleThinkToggle = () => {
     const nextOpen = !thinkOpen
     setThinkOpen(nextOpen)
@@ -307,37 +330,34 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
             )}
           </div>
           <span className="msg-bubble-time">{chatBubbleTime(message.ts)}</span>
-          {!typing && visibleCopyText.trim() && (
-            <div
-              className="message-actions"
-              onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setActionsOpen(false)
+        </div>
+        {!typing && visibleCopyText.trim() && (
+          <div className="message-actions" ref={actionsRef}>
+            <button
+              type="button"
+              className="message-actions-trigger"
+              aria-label={actionsLabel}
+              aria-expanded={actionsOpen}
+              aria-haspopup="menu"
+              onClick={() => {
+                setCopyState('idle')
+                setActionsOpen((value) => !value)
               }}
             >
-              <button
-                type="button"
-                className="message-actions-trigger"
-                aria-label={actionsLabel}
-                aria-expanded={actionsOpen}
-                aria-haspopup="menu"
-                onClick={() => {
-                  setCopyState('idle')
-                  setActionsOpen((value) => !value)
-                }}
-              >
-                ···
-              </button>
-              {actionsOpen && (
-                <div className="message-actions-menu" role="menu">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      void copyVisibleText(visibleCopyText).then((ok) => setCopyState(ok ? 'copied' : 'failed'))
-                    }}
-                  >
-                    {copyLabel}
-                  </button>
+              ···
+            </button>
+            {actionsOpen && (
+              <div className="message-actions-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setActionsOpen(false)
+                    void copyVisibleText(visibleCopyText).then((ok) => setCopyState(ok ? 'copied' : 'failed'))
+                  }}
+                >
+                  {sessionLang === 'en' ? 'Copy' : '复制'}
+                </button>
                   {onQuote && (
                     <button
                       type="button"
@@ -401,10 +421,16 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
                     </button>
                   )}
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
+        {copyState !== 'idle' && (
+          <span className={`message-copy-toast ${copyState === 'copied' ? 'is-success' : 'is-error'}`} role="status">
+            {copyState === 'copied'
+              ? (sessionLang === 'en' ? 'Copied' : '已复制')
+              : (sessionLang === 'en' ? 'Copy failed' : '复制失败')}
+          </span>
+        )}
         {hasMemory && (
           <span className="memory-moment">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
