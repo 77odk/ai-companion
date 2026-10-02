@@ -8,7 +8,7 @@ import type { MemoryItem } from './memory'
 import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
 import { queueCurrentModelSettingsCloudChange, queueGenderCloudChange } from './cloudStateResources.ts'
 
-export type Provider = 'deepseek' | 'zhipu' | 'openai' | 'custom' | 'volcengine'
+export type Provider = 'deepseek' | 'zhipu' | 'openai' | 'custom' | 'volcengine' | 'mimo'
 
 export interface ModelSettings {
   provider: Provider
@@ -61,6 +61,7 @@ export const DEFAULT_SETTINGS: Record<Provider, { baseUrl: string; model: string
   openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   custom: { baseUrl: '', model: 'gpt-4o-mini' },
   volcengine: { baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seed-character-260628' },
+  mimo: { baseUrl: 'https://api.xiaomimimo.com/v1', model: 'mimo-v2.5' },
 }
 
 /** 服务商显示名（用于提示文案） */
@@ -70,6 +71,7 @@ export const PROVIDER_NAMES: Record<Provider, string> = {
   openai: 'OpenAI',
   custom: '自定义',
   volcengine: '火山豆包',
+  mimo: '小米 MiMo',
 }
 
 /**
@@ -82,6 +84,7 @@ export const COMMON_MODELS: Record<Provider, string[]> = {
   openai: ['gpt-4o', 'gpt-4o-mini'],
   custom: ['claude-sonnet-5', 'claude-opus-4', 'gemini-3.1-pro-high', 'gpt-4o', 'deepseek-v4-flash', 'glm-4.7-flash', 'doubao-seed-character'],
   volcengine: ['doubao-seed-character', 'doubao-1.5-pro-32k', 'doubao-1.5-lite-32k'],
+  mimo: ['mimo-v2.5-pro', 'mimo-v2.5'],
 }
 
 /** 历史模型名存储 key（用户填过的模型名，下次直接可选） */
@@ -123,6 +126,7 @@ function defaultProviders(): Record<Provider, ProviderConfig> {
     openai: defaultProviderConfig('openai'),
     custom: defaultProviderConfig('custom'),
     volcengine: defaultProviderConfig('volcengine'),
+    mimo: defaultProviderConfig('mimo'),
   }
 }
 
@@ -130,7 +134,7 @@ function normalizeProviders(raw: unknown): Record<Provider, ProviderConfig> {
   const base = defaultProviders()
   if (raw == null || typeof raw !== 'object') return base
   const r = raw as Record<string, Partial<ProviderConfig>>
-  for (const p of ['deepseek', 'zhipu', 'openai', 'custom', 'volcengine'] as Provider[]) {
+  for (const p of ['deepseek', 'zhipu', 'openai', 'custom', 'volcengine', 'mimo'] as Provider[]) {
     const item = r[p]
     if (item == null || typeof item !== 'object') continue
     if (typeof item.apiKey === 'string') base[p].apiKey = item.apiKey
