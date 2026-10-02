@@ -43,6 +43,7 @@ import {
 } from './aiSpaceLlm.ts'
 import {
   loadChatTopics,
+  filterChatTopicsForBranch,
   collectConversationDays,
   collectConversationEvidenceAt,
   collectPlannedDays,
@@ -52,6 +53,7 @@ import { chatCompletion } from './api.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { getFirstSeen, loadPersona, loadSettings } from './storage.ts'
 import { getDefaultSessionId, getSessionsCache } from './sessionStore.ts'
+import { loadConversationState } from './conversationState.ts'
 import { resolveRolePersona } from './sessionProfile.ts'
 import { migrateGlobalToDefaultSession } from './roleData.ts'
 import { detectLang } from './langDetect.ts'
@@ -308,6 +310,8 @@ export interface RefreshPlan {
   pending: SpaceSlot[]
   /** used 快照，供 llm 降级模板时去重 */
   used: UsedTemplates
+  /** 规划 conversation 素材时的 active branch；生成前必须仍一致。 */
+  conversationBranchId: string
   /** 内部标记：该计划是否已启动异步生成（防 StrictMode 重复触发） */
   started?: boolean
 }
@@ -334,7 +338,10 @@ export function refreshSpace(
   const persona = sessionPersona(sessionId)
   const settings = loadSettings()
   const policy = resolveCompanionPolicy(sessionId)
-  const topics = loadChatTopics(sessionId)
+  const conversationBranchId = sessionId
+    ? (loadConversationState(sessionId)?.activeBranchId ?? 'root')
+    : 'root'
+  const topics = filterChatTopicsForBranch(loadChatTopics(sessionId), conversationBranchId)
   const todayKey = dayKeyOf(now)
   // 本地只规划“有完整真实对话素材的日子”。是否属于已发生共同事件，不再本地猜；
   // conversation 槽在唯一一次 Space LLM 生成里返回 CONVERSATION / EVENT / SKIP。
@@ -382,11 +389,11 @@ export function refreshSpace(
       const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
       const pending = reserveSlots(state, slots)
       saveState(state, sessionId)
-      return { posts: state.posts, mode: 'llm', created: pending.length, pending, used: state.used }
+      return { posts: state.posts, mode: 'llm', created: pending.length, pending, used: state.used, conversationBranchId }
     }
     const state: SpaceState = { ...prev, used: { ...prev.used }, lastVisit: now }
     saveState(state, sessionId)
-    return { posts: state.posts, mode: 'no-persona', created: 0, pending: [], used: state.used }
+    return { posts: state.posts, mode: 'no-persona', created: 0, pending: [], used: state.used, conversationBranchId }
   }
   // 会话语言（canonical 优先，回退人设检测）——模板/LLM 两条路径共用
   const spaceLang = resolveSpaceLang(sessionId, persona)
@@ -402,6 +409,7 @@ export function refreshSpace(
       created: pending.length,
       pending,
       used: state.used,
+      conversationBranchId,
     }
   }
 
@@ -434,7 +442,7 @@ export function refreshSpace(
   const newlyCreated = posts.filter((p) => !prevIds.has(p.id))
   if (newlyCreated.length > 0) recordLedger(newlyCreated, sessionId, now)
   saveState({ ...state, posts }, sessionId)
-  return { posts, mode: 'template', created, pending: [], used: state.used }
+  return { posts, mode: 'template', created, pending: [], used: state.used, conversationBranchId }
 }
 
 export interface GenerateResult {
@@ -468,8 +476,14 @@ export async function generatePendingPosts(
   const spaceLang = resolveSpaceLang(sessionId, persona)
   // v3 素材注入：TA 最近自己发过的 1-2 条动态原文（宁缺毋滥）——别重复，生活继续往前
   const recent = plan.posts.slice(0, 2).map((p) => p.text)
-  // 事件触发：最近聊天话题（带日期）注入 LLM，让 TA 只在「当天相关」时呼应（2026-08-26 七七拍板）
-  const rawTopics = loadChatTopics(sessionId)
+  // Conversation 素材必须仍属于规划时的 active branch；期间若回溯/编辑，旧 pending 直接失效。
+  const currentConversationBranchId = sessionId
+    ? (loadConversationState(sessionId)?.activeBranchId ?? 'root')
+    : 'root'
+  const conversationBranchStillActive = currentConversationBranchId === plan.conversationBranchId
+  const rawTopics = conversationBranchStillActive
+    ? filterChatTopicsForBranch(loadChatTopics(sessionId), currentConversationBranchId)
+    : []
   const used = { ...plan.used }
   const newPosts: SpacePost[] = []
   let usedFallback = false // Immersive daily 的非-SKIP失败可安全模板降级；SKIP 本身不补位。
@@ -506,6 +520,7 @@ export async function generatePendingPosts(
     if (policy.mode !== 'immersive' && usage.total >= 1) continue
     if (usage.total >= MAX_TOTAL_PER_DAY) continue
     if (source === 'event' && usage.event >= 1) continue
+    if (source === 'conversation' && !conversationBranchStillActive) continue
     if (source === 'conversation' && usage.conversation >= 1) continue
     if (source === 'daily' && usage.daily >= MAX_POSTS_PER_DAY) continue
     let made: { post: SpacePost; templateKey?: string } | null = null
