@@ -1087,17 +1087,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // TASK-MEM-DISTILL：本地显式检测先收集候选、不抢先写——等模型回复的【记忆】marker 到达后统一归并
     // （有 marker 对应 → 只写一条提炼版 explicit；无对应 marker → fallback 写本地候选；只有 marker → 保持 inferred）
     // 候选的 explicit 身份来自用户证据（用户明确说过），text 若被 marker 匹配则采用模型提炼 wording。
-    const correctionIntent = !pendingMemoryCorrection && looksLikeMemoryCorrectionIntent(text)
+    const correctionIntent = !replayExistingUser && !pendingMemoryCorrection && looksLikeMemoryCorrectionIntent(text)
     const explicitCandidates: ExplicitCandidate[] = []
     const memInstr = detectMemoryInstruction(text)
-    const isRetort = !memInstr.isInstruction && isMemoryRetort(text)
-    if (memInstr.isInstruction) {
+    const isRetort = !replayExistingUser && !memInstr.isInstruction && isMemoryRetort(text)
+    if (!replayExistingUser && memInstr.isInstruction) {
       const content = (memInstr.fact ?? stripMemoryKeyword(text)).trim()
       if (content.length >= 4) {
         explicitCandidates.push({ text: content, source: text, topic: inferTopic(content) })
       }
     }
-    if (explicitCandidates.length === 0) {
+    if (!replayExistingUser && explicitCandidates.length === 0) {
       const pref = detectPreferenceFact(text)
       if (pref) {
         explicitCandidates.push({ text: pref, source: text, topic: inferTopic(pref) })
@@ -1339,7 +1339,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         })
       }
     }
-    if (memInstr.isInstruction && !(correctionIntent && correctionTargets.size > 0)) {
+    if (!replayExistingUser && memInstr.isInstruction && !(correctionIntent && correctionTargets.size > 0)) {
       if (lang === 'en') {
         contextBlocks.push({
           id: 'memory-explicit',
@@ -1512,7 +1512,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         thinking = thinkFromReasoning || thinkFromContent
       }
       thinking = cleanAttributionArtifacts(thinking, lang)
-      const explicitCorrectionProposal = extractMemoryCorrectionProposal(raw)
+      const explicitCorrectionProposal = replayExistingUser ? null : extractMemoryCorrectionProposal(raw)
       const markerMemories = extractMemories(raw)
       const fallbackCorrectionProposal =
         !explicitCorrectionProposal && correctionIntent && correctionTargets.size === 1 && markerMemories.length === 1
