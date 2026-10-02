@@ -7,7 +7,9 @@
 // “是否真的共同发生/完成”不在本地做语义正则判断；交给 Space 本来就会执行的那一次 LLM 生成判定。
 
 import { stripMemoryMarkers } from './memory.ts'
+import { messageEvidenceText } from './messageQuote.ts'
 import { parseFutureIntent, futureDayKey } from './futureIntent.ts'
+import type { StoredMessage } from './storage.ts'
 
 const TOPICS_KEY = 'ai_space_recent_topic'
 const MAX_TOPICS = 8
@@ -21,6 +23,8 @@ export interface ChatTopic {
   ts: number
   /** 约定发生日（YYYY-MM-DD）；只代表 planned，不代表发生。 */
   futureDay?: string
+  /** 该素材产生时所在 conversation branch；旧数据没有 = root。 */
+  branchId?: string
   /** TA 当轮最终真实可见回复；旧数据没有。 */
   taText?: string
   /** TA 回复真实落库时间。 */
@@ -79,10 +83,12 @@ export function loadChatTopics(sessionId?: string): ChatTopic[] {
         const futureDay = typeof x.futureDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.futureDay)
           ? x.futureDay
           : undefined
+        const branchId = typeof x.branchId === 'string' && x.branchId.trim() ? x.branchId.trim() : undefined
         const topic: ChatTopic = {
           t: x.t.trim(),
           ts: typeof x.ts === 'number' && Number.isFinite(x.ts) ? x.ts : 0,
           ...(futureDay ? { futureDay } : {}),
+          ...(branchId ? { branchId } : {}),
         }
         if (
           x.pairVersion === 1 &&
@@ -104,13 +110,53 @@ export function loadChatTopics(sessionId?: string): ChatTopic[] {
   }
 }
 
+/**
+ * 当前对话分支专用：旧 topic 没有 branchId，按历史语义视为 root。
+ * 这让回溯/编辑/重生成后的 Space 不再消费旧 branch 素材；切回旧 branch 时素材仍可恢复。
+ */
+export function filterChatTopicsForBranch(topics: ChatTopic[], activeBranchId: string = 'root'): ChatTopic[] {
+  const branch = String(activeBranchId || 'root').trim() || 'root'
+  return (Array.isArray(topics) ? topics : []).filter((topic) => {
+    const topicBranch = String(topic?.branchId ?? 'root').trim() || 'root'
+    return topicBranch === branch
+  })
+}
+
+/**
+ * FutureIntent 是 USER 当前仍有效的话，不应依赖历史 ChatTopic 缓存。
+ * 直接从 active branch 的 user 消息现算；编辑/删除/回溯后自然得到新事实边界。
+ */
+export function futureTopicsFromMessages(messages: StoredMessage[]): ChatTopic[] {
+  const out: ChatTopic[] = []
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (message?.role !== 'user' || !Number.isFinite(message.ts)) continue
+    const evidence = messageEvidenceText(message.content)
+    const clean = cleanTopicText(evidence)
+    if (clean.length < CONVERSATION_MIN_LEN) continue
+    const intent = parseFutureIntent(evidence, new Date(message.ts))
+    if (!intent) continue
+    out.push({
+      t: clean,
+      ts: message.ts,
+      futureDay: futureDayKey(intent, new Date(message.ts)),
+    })
+  }
+  return out.slice(-MAX_TOPICS)
+}
+
 /** USER 消息先记下来；此时还不是 conversation 素材，必须等 TA 回复真实落库。 */
-export function recordChatTopic(text: string, sessionId?: string, ts: number = Date.now()): void {
+export function recordChatTopic(
+  text: string,
+  sessionId?: string,
+  ts: number = Date.now(),
+  branchId?: string,
+): void {
   const clean = cleanTopicText(text)
   if (clean.length < CONVERSATION_MIN_LEN) return
   const topics = loadChatTopics(sessionId)
   const intent = parseFutureIntent(String(text ?? ''), new Date(ts))
-  const topic: ChatTopic = { t: clean, ts }
+  const branch = String(branchId ?? '').trim()
+  const topic: ChatTopic = { t: clean, ts, ...(branch ? { branchId: branch } : {}) }
   if (intent) topic.futureDay = futureDayKey(intent, new Date(ts))
   topics.push(topic)
   localStorage.setItem(topicsKey(sessionId), JSON.stringify(topics.slice(-MAX_TOPICS)))

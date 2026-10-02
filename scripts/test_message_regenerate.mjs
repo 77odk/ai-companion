@@ -49,7 +49,10 @@ assert.match(chat, /existingRound\?: \{[\s\S]*userMessage: StoredMessage[\s\S]*v
 assert.match(chat, /const replayExistingUser = Boolean\(existingRound\)/)
 assert.match(chat, /const rawWithUser = replayExistingUser \? messages : \[\.\.\.messages, userMsg\]/)
 assert.match(chat, /if \(activeSessionId && !replayExistingUser\) \{[\s\S]*persistMessages\(rawWithUser\)[\s\S]*uploadMessage\(userMsg\)/)
-assert.match(chat, /if \(!replayExistingUser\) recordChatTopic\(/)
+assert.match(
+  chat,
+  /if \(!replayExistingUser\) \{[\s\S]*?recordChatTopic\([\s\S]*?roundBranchId \?\? conversationState\?\.activeBranchId \?\? 'root'[\s\S]*?\)[\s\S]*?\}/,
+)
 assert.match(chat, /if \(!replayExistingUser\) \{[\s\S]*processEventCandidate\(/)
 assert.match(chat, /const flushMemoryWrites = \(rawText: string\) => \{[\s\S]*if \(replayExistingUser\) return false/)
 assert.match(chat, /spacePairEligibleRef\.current = !replayExistingUser/)

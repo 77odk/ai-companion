@@ -80,7 +80,7 @@ import { takeChatMessage } from '../lib/chatInject'
 import { decodePersonaText, extractOpeningLine } from '../lib/customPersona'
 import { ensureMilestoneEvent, getMilestoneStatus, latestReachedMilestoneDay, markMilestoneShown } from '../lib/milestone'
 import { getWeeklyReviews } from '../lib/weeklyReview'
-import { completeChatTopicPair, recordChatTopic, loadChatTopics } from '../lib/chatTopics'
+import { completeChatTopicPair, futureTopicsFromMessages, recordChatTopic } from '../lib/chatTopics'
 import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
 import { processEventCandidate } from '../lib/eventDetector'
 import MilestoneCard from './MilestoneCard'
@@ -1083,7 +1083,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       return created
     }
 
-    if (!replayExistingUser) recordChatTopic(text, activeSessionId || undefined, userMsg.ts)
+    if (!replayExistingUser) {
+      recordChatTopic(
+        text,
+        activeSessionId || undefined,
+        userMsg.ts,
+        roundBranchId ?? conversationState?.activeBranchId ?? 'root',
+      )
+    }
     // TASK-MEM-DISTILL：本地显式检测先收集候选、不抢先写——等模型回复的【记忆】marker 到达后统一归并
     // （有 marker 对应 → 只写一条提炼版 explicit；无对应 marker → fallback 写本地候选；只有 marker → 保持 inferred）
     // 候选的 explicit 身份来自用户证据（用户明确说过），text 若被 marker 匹配则采用模型提炼 wording。
@@ -1312,7 +1319,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     // 未来约定注入（因果链第二环 TASK-FUTURE-AGENDA）：TA 记得「约好还没做的事」，
     // 对方问起/到期临近时能自然接，不会一问三不知；没约定返回空串跳过，不占上下文。
-    const agendaBlock = buildFutureAgendaBlock(loadChatTopics(activeSessionId || undefined), new Date(), lang)
+    const agendaBlock = buildFutureAgendaBlock(futureTopicsFromMessages(base), new Date(), lang)
     if (agendaBlock) {
       contextBlocks.push({ id: 'future-agenda', content: agendaBlock, priority: 'event' })
     }
