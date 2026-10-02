@@ -131,11 +131,6 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
   const thinkLabel = sessionLang === 'en' ? 'TA was thinking' : 'TA 想了想'
   const typingLabel = sessionLang === 'en' ? 'TA is thinking…' : 'TA 正在想…'
   const memoryMomentLabel = sessionLang === 'en' ? 'Saved this moment' : '已记住这个瞬间'
-  const copyLabel = copyState === 'copied'
-    ? (sessionLang === 'en' ? 'Copied' : '已复制')
-    : copyState === 'failed'
-      ? (sessionLang === 'en' ? 'Copy failed' : '复制失败')
-      : (sessionLang === 'en' ? 'Copy' : '复制')
   const quoteLabel = sessionLang === 'en' ? 'Quote' : '引用'
   const editLabel = sessionLang === 'en' ? 'Edit' : '编辑'
   const regenerateLabel = sessionLang === 'en' ? 'Regenerate' : '重新生成'

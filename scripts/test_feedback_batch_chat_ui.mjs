@@ -9,7 +9,7 @@ assert.match(settings, /page === 'privacy' \|\| page === 'reply'/, '聊天设置
 assert.match(bubble, /className="message-actions" ref=\{actionsRef\}/, '消息操作位于气泡行之后的独立区域')
 assert.match(css, /\.row-assistant \.message-actions \{[\s\S]*align-self: flex-start/, 'TA 操作入口贴气泡左下')
 assert.match(css, /\.row-user \.message-actions \{[\s\S]*align-self: flex-end/, '用户操作入口贴气泡右下')
-assert.match(css, /\.message-actions-menu \{[\s\S]*display: flex[\s\S]*max-width: calc\(100vw - 24px\)/, '操作菜单横排且受视口宽度约束')
+assert.match(css, /\.message-actions-menu \{[\s\S]*max-width: calc\(100vw - 24px\)[\s\S]*display: flex/, '操作菜单横排且受视口宽度约束')
 assert.match(css, /animation: message-actions-in/, '操作菜单有轻量开启动效')
 
 console.log('feedback batch chat UI: PASS')
