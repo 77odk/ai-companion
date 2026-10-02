@@ -763,16 +763,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const commitPartialOnHide = (leaving: boolean) => {
       const ts = partialTsRef.current
       if (ts == null || finishedRef.current) return
+      const sid = partialSessionIdRef.current
       const raw = assistantText.current
       if (!raw || !raw.trim()) return
       if (leaving) {
-        // 页面真的要走了（关页面/离开）：立防重入标记，这次之后不再重复落库
+        // 页面真的要走了（关页面/离开）：先锁住本轮 owner，再清 ref 防重入。
         finishedRef.current = true
         streamingRef.current = false
         partialTsRef.current = null
         partialSessionIdRef.current = null
       }
-      const sid = partialSessionIdRef.current
       const lang = sid ? getSessionLang(sid) : 'zh'
       const preserveActions = isActionNarrationEnabled()
       const guardText = guardAssistantReplyBody(raw, lang, preserveActions)
