@@ -28,11 +28,11 @@ export default function KeyGuideSheet({ open, onClose }: Props) {
         </div>
         <div className="key-guide-body">
           <section className="key-guide-block">
-            <h3>智谱 GLM</h3>
+            <h3>智谱 GLM（免费，但高峰时期会连不上）</h3>
             <p>打开 bigmodel.cn → 注册并登录 → 个人中心里的「API Keys」→ 创建 → 复制</p>
           </section>
           <section className="key-guide-block">
-            <h3>DeepSeek</h3>
+            <h3>DeepSeek（付费，物美价廉，忆文做了省 token，一天上限最多 2 元）</h3>
             <p>打开 platform.deepseek.com → 登录（首次要实名）→ 先充一点余额（最低 1 元）→ 左侧「API Keys」→ 创建 → 复制</p>
           </section>
           <section className="key-guide-block">
