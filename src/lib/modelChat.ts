@@ -151,6 +151,12 @@ export async function testConnection(settings: ModelSettings): Promise<void> {
 }
 
 /** 智谱 GLM 思考模型默认开启思考，内容会跑进 reasoning 导致 content 空；统一关掉 */
+function mimoThinking(settings: ModelSettings): Record<string, unknown> | undefined {
+  return settings.provider === 'mimo' || settings.baseUrl.includes('xiaomimimo.com')
+    ? { thinking: { type: 'enabled' } }
+    : undefined
+}
+
 function zhipuThinking(settings: ModelSettings): Record<string, unknown> | undefined {
   return settings.baseUrl.includes('bigmodel.cn') ? { thinking: { type: 'disabled' } } : undefined
 }
@@ -214,6 +220,8 @@ export function looksLikeThinkingRejection(status: number, bodyText = ''): boole
 export function thinkingRequestOpts(settings: ModelSettings, withThinking = true): Record<string, unknown> | undefined {
   const zhipu = zhipuThinking(settings)
   if (zhipu) return zhipu
+  const mimo = mimoThinking(settings)
+  if (mimo) return withThinking ? mimo : undefined
   if (!withThinking) return undefined
   if (isThinkingUnsupported(settings)) return undefined
   return ASK_THINKING_OPTS
