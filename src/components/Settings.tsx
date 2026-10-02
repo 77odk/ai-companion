@@ -1399,7 +1399,7 @@ function ProviderDetail({ onBack }: { onBack: () => void; onGoGuide?: () => void
                     onMouseEnter={(e) => (e.currentTarget.style.background = '#f5f5f5')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    {m}
+                    {provider === 'mimo' && (m === 'mimo-v2.5-pro' || m === 'mimo-v2.5') ? `${m}（即将下线）` : m}
                   </div>
                 ))}
               </div>
