@@ -10,6 +10,7 @@ interface Props {
   photoSrc: (photo: PhotoMeta) => string
   onPhotoLoadError?: (photo: PhotoMeta) => void
   onAdd: () => void
+  onDelete: (photo: PhotoMeta) => Promise<boolean>
 }
 
 type WallStyle = CSSProperties & {
@@ -75,9 +76,10 @@ function fmtMD(ts: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
-export default function PhotoWallArchive({ photos, uploading, error, photoSrc, onPhotoLoadError, onAdd }: Props) {
+export default function PhotoWallArchive({ photos, uploading, error, photoSrc, onPhotoLoadError, onAdd, onDelete }: Props) {
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const touchStartX = useRef<number | null>(null)
   const sorted = useMemo(() => [...photos].sort((a, b) => b.createdAt - a.createdAt), [photos])
   const preview = sorted.slice(0, 12)
@@ -245,6 +247,23 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
             showAt(selectedIndex + (delta < 0 ? 1 : -1))
           }}
         >
+          <button
+            type="button"
+            className="photo-archive-lightbox-delete"
+            disabled={deletingId === sorted[selectedIndex].id}
+            onClick={(event) => {
+              event.stopPropagation()
+              const photo = sorted[selectedIndex]
+              if (!window.confirm('确定删除这张照片吗？删除后无法恢复。')) return
+              setDeletingId(photo.id)
+              void onDelete(photo).then((deleted) => {
+                setDeletingId(null)
+                if (deleted) setSelectedId(null)
+              })
+            }}
+          >
+            {deletingId === sorted[selectedIndex].id ? '删除中…' : '删除'}
+          </button>
           <button
             type="button"
             className="photo-archive-lightbox-close"

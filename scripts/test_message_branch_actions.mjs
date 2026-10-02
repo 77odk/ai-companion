@@ -9,8 +9,13 @@ console.log('[message branch actions] recoverable delete / rollback wiring')
 
 assert.match(bubble, /onDelete\?: \(\) => void/, 'MessageBubble exposes delete only through callback')
 assert.match(bubble, /onRollback\?: \(\) => void/, 'MessageBubble exposes rollback only through callback')
-assert.match(bubble, /回溯到这里/, 'rollback action is visible in the action menu')
+assert.match(bubble, /'回溯'/, 'Chinese rollback action uses the short label')
 assert.match(bubble, /message-action-danger/, 'delete is visually distinguished')
+assert.match(bubble, /document\.addEventListener\('pointerdown'/, 'message action menu closes on outside pointerdown')
+assert.match(bubble, /document\.addEventListener\('keydown'/, 'message action menu closes on Escape')
+assert.match(bubble, /setActionsOpen\(false\)[\s\S]*copyVisibleText/, 'copy closes the menu before reporting result')
+assert.match(bubble, /message-copy-toast/, 'copy result has a short visible status')
+assert.match(app, /!\(view === 'settings' && settingsPrivacyOpen\)/, 'settings child-page nav visibility is controlled by App')
 
 assert.match(
   chat,

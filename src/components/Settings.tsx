@@ -87,7 +87,7 @@ interface Props {
   onInitialPageBack?: () => void
   /** 兼容旧调用：App 级来源进入纪念日时可显式指定返回。 */
   onAnniversaryBack?: () => void
-  /** 隐私详情页是全屏二级页：通知 App 隐藏底部导航。 */
+  /** 全屏设置二级页（隐私 / 聊天设置）：通知 App 隐藏底部导航。 */
   onPrivacyOpenChange?: (open: boolean) => void
   onGoNotifications?: () => void
   /** 「反馈与建议」入口：由 App 切到独立 feedback view（与通知页同一套全屏页） */
@@ -111,7 +111,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
   }
 
   useEffect(() => {
-    onPrivacyOpenChange?.(page === 'privacy')
+    onPrivacyOpenChange?.(page === 'privacy' || page === 'reply')
   }, [page, onPrivacyOpenChange])
 
   useEffect(() => () => onPrivacyOpenChange?.(false), [onPrivacyOpenChange])

@@ -106,6 +106,13 @@ export function addLocalPhoto(photo: PhotoMeta, sessionId?: string): PhotoMeta[]
   return next
 }
 
+/** 本地删除一张；游客图片与登录用户元数据都走同一个会话隔离缓存。 */
+export function removeLocalPhoto(photoId: string, sessionId?: string): PhotoMeta[] {
+  const next = loadLocalPhotos(sessionId).filter((photo) => photo.id !== photoId)
+  saveLocalPhotos(next, sessionId)
+  return next
+}
+
 /**
  * 登录用户只缓存元数据，不把图片 dataUrl 长期塞进 localStorage。
  * 这样刷新时可立即知道“这里有照片”并直接发起图片读取，同时避免撑爆浏览器配额。
@@ -272,4 +279,10 @@ export async function listPhotos(token: string, sessionId: string): Promise<ApiR
     return { ok: false, status: res.status, message: '照片列表格式异常，请稍后再试' }
   }
   return { ok: true, status: res.status, message: '', data }
+}
+
+
+/** DELETE /api/photos/<id>：删除当前账号拥有的单张云端照片。 */
+export function deletePhoto(token: string, photoId: string): Promise<ApiResult<unknown>> {
+  return apiRequest<unknown>(`/api/photos/${encodeURIComponent(photoId)}`, token, { method: 'DELETE' })
 }

@@ -7,12 +7,14 @@ import {
   loadLocalPhotos,
   saveLocalPhotoMetadata,
   addLocalPhoto,
+  removeLocalPhoto,
   mergePhotos,
   photoUrl,
   scaleImageToDataUrl,
   dataUrlBytes,
   uploadPhoto,
   listPhotos,
+  deletePhoto,
   type PhotoMeta,
 } from '../lib/photoWall'
 import { getToken } from '../lib/auth'
@@ -170,6 +172,25 @@ export default function AISpace({ onOpenWeekly }: Props) {
     }
   }
 
+  async function handleDeletePhoto(photo: PhotoMeta): Promise<boolean> {
+    const token = getToken()
+    if (token && sid && !photo.id.startsWith('local-')) {
+      const res = await deletePhoto(token, photo.id)
+      if (!res.ok) {
+        setPhotoError(res.message || '删除失败，稍后再试')
+        return false
+      }
+    }
+    setPhotos((prev) => {
+      const next = prev.filter((item) => item.id !== photo.id)
+      if (token && sid) saveLocalPhotoMetadata(next, sid)
+      else removeLocalPhoto(photo.id, sid)
+      return next
+    })
+    clearNonImagePhotoError()
+    return true
+  }
+
   async function handlePhotoFiles(files: FileList | null) {
     if (!files || files.length === 0) return
     const list = Array.from(files)
@@ -192,6 +213,7 @@ export default function AISpace({ onOpenWeekly }: Props) {
             setPhotoError(PHOTO_IMAGE_LOAD_ERROR)
           }}
           onAdd={() => fileInputRef.current?.click()}
+          onDelete={handleDeletePhoto}
         />
         <input
           ref={fileInputRef}

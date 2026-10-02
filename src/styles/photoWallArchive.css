@@ -338,6 +338,7 @@
 }
 
 .photo-archive-lightbox-close,
+.photo-archive-lightbox-delete,
 .photo-archive-lightbox-nav {
   position: absolute;
   border: 0;
@@ -350,6 +351,20 @@
   right: 18px;
   font-size: 32px;
   font-weight: 200;
+}
+
+.photo-archive-lightbox-delete {
+  top: calc(22px + env(safe-area-inset-top));
+  left: 18px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(20, 16, 15, 0.42);
+  color: rgba(255, 224, 224, 0.92);
+  font-size: 12px;
+}
+
+.photo-archive-lightbox-delete:disabled {
+  opacity: 0.5;
 }
 
 .photo-archive-lightbox-nav {

@@ -8,6 +8,8 @@ import type { Lang } from './langDetect.ts'
 import type { MemoryItem } from './memory.ts'
 import { buildCompanionCore, buildIdentitySoul, buildLanguageContinuity, resolveCompanionPolicy, type IdentityMode } from './companionPolicy.ts'
 import { buildAttributionLegend, cleanAttributionArtifacts, formatAttributedLine } from './promptAttribution.ts'
+import { stripTimeLabels } from './timeLabels.ts'
+export { stripTimeLabels } from './timeLabels.ts'
 
 /**
  * 记忆注入块（2026-09-18 七七拍板「二」）：
@@ -146,16 +148,6 @@ export function stripEmoji(text: string): string {
  * 用户看到的回复就是「[3 分钟前] 真要睡就早点。」这种。
  * 只删标签本身和紧跟的空白，正文一个字不动；整条只剩标签时返回空串，由调用方兜底。
  */
-export function stripTimeLabels(text: string): string {
-  if (!text) return ''
-  const LABEL =
-    '[\\[［【]\\s*(?:刚刚|此刻|当前|现在|今天|昨天|前天|刚才|\\d+\\s*(?:秒|分钟|个小时|小时|天|个月|年)前|' +
-    'just now|\\d+\\s*(?:secs?|seconds|mins?|minutes|hours?|hrs?|days?)\\s+ago)\\s*[\\]］】]'
-  return text
-    .replace(new RegExp(`^(?:\\s*${LABEL})+\\s*`, 'u'), '')
-    .replace(new RegExp(`(^|\\n)\\s*${LABEL}\\s*`, 'gu'), '$1')
-}
-
 /**
  * 硬过滤：删掉角色扮演式的动作旁白（*摸头*、（转身看向窗外）这类），像真人打字一样说话。
  */
