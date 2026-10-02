@@ -1,0 +1,92 @@
+/* 「怎么获取 API Key」弹层（API 设置页里「不会配？」打开）
+   居中、半屏高、内容可上下滚动、右上角 ×、点遮罩关闭。 */
+
+.key-guide-mask {
+  position: fixed;
+  z-index: var(--el-z-overlay, 50);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--el-space-4, 16px);
+  background: var(--el-overlay-scrim);
+}
+
+.key-guide-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 420px);
+  max-height: min(78dvh, 620px);
+  padding: var(--el-space-5, 24px);
+  border-radius: var(--el-radius-lg, 24px);
+  background: var(--el-surface-elevated, var(--ui2-surface-elevated));
+  color: var(--el-text-primary, var(--ui2-text));
+  box-shadow: var(--el-shadow-modal, var(--ui2-shadow));
+}
+
+.key-guide-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+}
+
+.key-guide-head h2 {
+  margin: 0;
+  font-size: var(--el-font-nav-title, 17px);
+}
+
+.key-guide-head button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.key-guide-body {
+  margin-top: var(--el-space-4, 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.key-guide-block + .key-guide-block {
+  margin-top: var(--el-space-4, 16px);
+}
+
+.key-guide-block h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.key-guide-block p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--el-text-secondary, inherit);
+}
+
+.key-guide-block ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--el-text-secondary, inherit);
+}
+
+.key-guide-note {
+  margin: var(--el-space-4, 16px) 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  opacity: 0.72;
+}
+
+/* 弹层打开时藏掉底部导航，跟其它浮层一致 */
+.app:has(.key-guide-mask) .app-nav {
+  visibility: hidden;
+  pointer-events: none;
+}
