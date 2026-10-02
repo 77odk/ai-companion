@@ -108,6 +108,11 @@ export function mergeProfileIdentityField(
     // 本地资料损坏时由传入的合法 profile 重建。
   }
   const merged = { ...current, ...incoming }
+  // 空头像表示“这份同步 payload 没带可用头像”，不能覆盖本机已有头像。
+  // 真正删除头像应走显式资料编辑/删除语义，而不是被旧/部分 profile 的空字符串顺带清掉。
+  if (incoming.avatar === '' && typeof current.avatar === 'string' && current.avatar.startsWith('data:')) {
+    merged.avatar = current.avatar
+  }
   if (!isIdentityMode(incoming.identityMode)) {
     if (isIdentityMode(current.identityMode)) merged.identityMode = current.identityMode
     else delete merged.identityMode
