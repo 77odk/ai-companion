@@ -3435,7 +3435,7 @@
   position: absolute;
   bottom: calc(100% + 6px);
   z-index: 24;
-  max-width: calc(100vw - 24px);
+  max-width: min(320px, calc(100vw - 72px));
   padding: 5px;
   display: flex;
   align-items: center;
