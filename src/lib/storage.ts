@@ -61,7 +61,7 @@ export const DEFAULT_SETTINGS: Record<Provider, { baseUrl: string; model: string
   openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   custom: { baseUrl: '', model: 'gpt-4o-mini' },
   volcengine: { baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seed-character-260628' },
-  mimo: { baseUrl: 'https://api.xiaomimimo.com/v1', model: 'mimo-v2.5' },
+  mimo: { baseUrl: 'https://api.xiaomimimo.com/v1', model: 'mimo-v2.6-pro' },
 }
 
 /** 服务商显示名（用于提示文案） */
@@ -84,7 +84,7 @@ export const COMMON_MODELS: Record<Provider, string[]> = {
   openai: ['gpt-4o', 'gpt-4o-mini'],
   custom: ['claude-sonnet-5', 'claude-opus-4', 'gemini-3.1-pro-high', 'gpt-4o', 'deepseek-v4-flash', 'glm-4.7-flash', 'doubao-seed-character'],
   volcengine: ['doubao-seed-character', 'doubao-1.5-pro-32k', 'doubao-1.5-lite-32k'],
-  mimo: ['mimo-v2.5-pro', 'mimo-v2.5'],
+  mimo: ['mimo-v2.6-pro', 'mimo-v2.6-flash', 'mimo-v2.6-pro-ultraspeed', 'mimo-v2.5-pro', 'mimo-v2.5'],
 }
 
 /** 历史模型名存储 key（用户填过的模型名，下次直接可选） */
