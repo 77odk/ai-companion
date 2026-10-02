@@ -5,7 +5,7 @@ const settings = fs.readFileSync(new URL('../src/components/Settings.tsx', impor
 const bubble = fs.readFileSync(new URL('../src/components/MessageBubble.tsx', import.meta.url), 'utf8')
 const css = fs.readFileSync(new URL('../src/styles/ui2.css', import.meta.url), 'utf8')
 
-assert.match(settings, /page === 'privacy' \|\| page === 'reply'/, '聊天设置与隐私共用全屏二级页导航隐藏信号')
+assert.match(settings, /onPrivacyOpenChange\?\.\(page !== 'main'\)/, '设置里的任意子页都藏底部导航（2026-10-02：原来只藏 privacy / reply，API 设置 / 纪念日 / 账号 / 外观 / 关于忆文 全漏了）')
 assert.match(bubble, /className="message-actions" ref=\{actionsRef\}/, '消息操作位于气泡行之后的独立区域')
 assert.match(css, /\.row-assistant \.message-actions \{[\s\S]*align-self: flex-start/, 'TA 操作入口贴气泡左下')
 assert.match(css, /\.row-user \.message-actions \{[\s\S]*align-self: flex-end/, '用户操作入口贴气泡右下')

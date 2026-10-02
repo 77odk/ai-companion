@@ -132,7 +132,8 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
   }, [page])
 
   useEffect(() => {
-    onPrivacyOpenChange?.(page === 'privacy' || page === 'reply')
+    // 设置里的任意子页都要藏掉底部导航（原来只藏 privacy / reply，API 设置、纪念日、账号、外观、关于忆文都漏了）
+    onPrivacyOpenChange?.(page !== 'main')
   }, [page, onPrivacyOpenChange])
 
   useEffect(() => () => onPrivacyOpenChange?.(false), [onPrivacyOpenChange])
