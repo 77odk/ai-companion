@@ -919,6 +919,46 @@ textarea.persona-input {
   color: var(--color-primary-deep);
 }
 
+/* 账号与同步 V2：状态优先，复杂操作按需展开 */
+.account-page { gap: 18px; padding-bottom: calc(34px + env(safe-area-inset-bottom)); }
+.account-overview { padding: 8px 12px 14px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.account-overview-avatar { width: 58px; height: 58px; margin-bottom: 10px; display: grid; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--color-primary-soft) 82%, var(--color-card)); color: var(--color-primary-deep); font-size: 22px; font-weight: 700; }
+.account-overview > strong { max-width: 100%; overflow: hidden; color: var(--color-text); font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.account-overview > p { margin: 6px 0 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.5; }
+.account-sync-state { margin-top: 7px; display: inline-flex; align-items: center; gap: 6px; color: var(--color-primary-deep); font-size: 12px; font-weight: 600; }
+.account-sync-state > span { width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-soft) 70%, transparent); }
+.account-section { display: grid; gap: 7px; }
+.account-section-title { margin: 0 4px; color: var(--color-text-muted); font-size: 12px; font-weight: 600; letter-spacing: 0.02em; }
+.account-list-card { overflow: hidden; border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent); border-radius: 16px; background: color-mix(in srgb, var(--color-card) 96%, transparent); }
+.account-list-row { width: 100%; min-height: 52px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--color-border) 58%, transparent); background: transparent; color: var(--color-text); font: inherit; text-align: left; }
+button.account-list-row { cursor: pointer; }
+button.account-list-row:active { background: color-mix(in srgb, var(--color-primary-soft) 28%, transparent); }
+.account-list-row:last-child { border-bottom: 0; }
+.account-list-row:disabled { opacity: 0.55; cursor: default; }
+.account-list-main { min-width: 0; font-size: 14px; font-weight: 550; }
+.account-list-value { min-width: 0; max-width: 62%; overflow: hidden; color: var(--color-text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.account-list-trailing { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 5px; color: var(--color-text-muted); font-size: 12px; }
+.account-chevron { flex: none; width: 17px; height: 17px; color: color-mix(in srgb, var(--color-text-muted) 68%, transparent); }
+.account-sync-row > span:first-child { min-width: 0; display: grid; gap: 3px; }
+.account-sync-row small { color: var(--color-text-muted); font-size: 11px; line-height: 1.4; }
+.account-status-pill { flex: none; padding: 3px 8px; border-radius: 999px; background: color-mix(in srgb, var(--color-primary-soft) 72%, transparent); color: var(--color-primary-deep); font-size: 11px; font-weight: 600; }
+.account-delete-entry { align-self: center; margin: 2px 0 4px; padding: 8px 12px; border: 0; background: transparent; color: var(--el-danger, #b44b4b); font: inherit; font-size: 13px; cursor: pointer; }
+.account-delete-panel { padding: 14px; display: grid; gap: 10px; border: 1px solid color-mix(in srgb, var(--el-danger, #b44b4b) 22%, var(--color-border)); border-radius: 16px; background: color-mix(in srgb, var(--el-danger-surface, #fff0f0) 55%, var(--color-card)); }
+.account-delete-panel strong { color: var(--color-text); font-size: 14px; }
+.account-delete-panel p { margin: 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.55; }
+.account-delete-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.account-delete-confirm { background: var(--el-danger, #b44b4b); color: var(--el-static-white, #fff); }
+.account-delete-confirm:disabled { opacity: 0.45; }
+.account-inline-form { padding: 14px; display: grid; gap: 10px; }
+.account-inline-form > p { margin: 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.5; }
+.account-code-row { display: flex; align-items: center; gap: 7px; }
+.account-code-row .input { min-width: 0; flex: 1; }
+.account-code-row .btn { flex: none; white-space: nowrap; }
+.account-inline-cancel { justify-self: end; padding: 4px 2px; border: 0; background: transparent; color: var(--color-text-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.account-notice { position: sticky; bottom: 8px; z-index: 3; box-shadow: 0 6px 18px rgba(47, 38, 31, 0.08); }
+.account-login-card { margin-top: 4px; }
+@media (max-width: 430px) { .account-code-row { flex-wrap: wrap; } .account-code-row .input { flex-basis: 100%; } .account-code-row .btn { flex: 1; } }
+
 /* 登录/注册 tab（2026-08-26 七七拍板：清晰分开，别把登录页误认成注册页） */
 .account-tabs {
   display: flex;

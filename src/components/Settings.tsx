@@ -98,6 +98,14 @@ interface Props {
 
 export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onInitialPageBack, onAnniversaryBack, onPrivacyOpenChange, onGoNotifications, onGoFeedback, hasUnreadNotifications = false }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
+  const mainScrollTopRef = useRef(0)
+  const restoreMainScrollRef = useRef(false)
+
+  const openSubpage = (next: SettingsPage) => {
+    const mainPage = document.querySelector<HTMLElement>('.app-main > .settings-page')
+    mainScrollTopRef.current = mainPage?.scrollTop ?? 0
+    setPage(next)
+  }
 
   const backFrom = (current: SettingsPage) => {
     if (current === 'anniversary' && onAnniversaryBack) {
@@ -108,8 +116,20 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onInitialPageBack()
       return
     }
+    restoreMainScrollRef.current = true
     setPage('main')
   }
+
+  useEffect(() => {
+    if (page !== 'main' || !restoreMainScrollRef.current) return
+    restoreMainScrollRef.current = false
+    const top = mainScrollTopRef.current
+    const frame = window.requestAnimationFrame(() => {
+      const mainPage = document.querySelector<HTMLElement>('.app-main > .settings-page')
+      if (mainPage) mainPage.scrollTop = top
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [page])
 
   useEffect(() => {
     onPrivacyOpenChange?.(page === 'privacy' || page === 'reply')
@@ -151,15 +171,15 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
   }
   return (
     <MainCenter
-      onOpenProfile={() => setPage('profile')}
-      onOpenAccount={() => setPage('account')}
-      onOpenPrivacy={() => setPage('privacy')}
-      onOpenProvider={() => setPage('provider')}
+      onOpenProfile={() => openSubpage('profile')}
+      onOpenAccount={() => openSubpage('account')}
+      onOpenPrivacy={() => openSubpage('privacy')}
+      onOpenProvider={() => openSubpage('provider')}
       onOpenGuide={() => onGoGuide?.()}
-      onOpenAbout={() => setPage('about')}
-      onOpenAppearance={() => setPage('appearance')}
-      onOpenAnniversary={() => setPage('anniversary')}
-      onOpenReply={() => setPage('reply')}
+      onOpenAbout={() => openSubpage('about')}
+      onOpenAppearance={() => openSubpage('appearance')}
+      onOpenAnniversary={() => openSubpage('anniversary')}
+      onOpenReply={() => openSubpage('reply')}
       onOpenNotifications={() => onGoNotifications?.()}
       onOpenFeedback={() => onGoFeedback?.()}
       hasUnreadNotifications={hasUnreadNotifications}

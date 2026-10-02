@@ -16,6 +16,10 @@ assert.match(notifications, /className="detail-spacer"/)
 assert.match(settings, /onInitialPageBack\?: \(\) => void/)
 assert.match(settings, /initialPage === current && onInitialPageBack/)
 assert.match(settings, /ProviderDetail onBack=\{\(\) => backFrom\('provider'\)\}/)
+assert.match(settings, /mainScrollTopRef = useRef\(0\)/)
+assert.match(settings, /mainScrollTopRef\.current = mainPage\?\.scrollTop \?\? 0/)
+assert.match(settings, /mainPage\.scrollTop = top/)
+assert.match(settings, /onOpenAccount=\{\(\) => openSubpage\('account'\)\}/)
 assert.match(app, /initialPage=\{settingsTarget\}[\s\S]*onInitialPageBack=\{\(\) => window\.history\.back\(\)\}/)
 
 // Independent detail views entered through goView/navigate return through browser history,
