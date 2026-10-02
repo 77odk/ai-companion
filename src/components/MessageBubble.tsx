@@ -101,6 +101,28 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
   const actionsRef = useRef<HTMLDivElement | null>(null)
   const [editing, setEditing] = useState(false)
   const [editDraft, setEditDraft] = useState('')
+  useEffect(() => {
+    if (!actionsOpen) return
+    const closeOnPointer = (event: PointerEvent) => {
+      if (!actionsRef.current?.contains(event.target as Node)) setActionsOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActionsOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnPointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnPointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [actionsOpen])
+
+  useEffect(() => {
+    if (copyState === 'idle') return
+    const timer = window.setTimeout(() => setCopyState('idle'), 1200)
+    return () => window.clearTimeout(timer)
+  }, [copyState])
+
   // 模块三：纯思考链消息不渲染气泡（历史泄漏的英文推理段，没 `` 包裹的那种）
   // 注意：必须在 useState 之后再条件返回，否则列表重排时同一位置组件实例 Hooks 调用次数不一致会崩
   if (!isUser && isPureThinkBlock(message.content)) return null
@@ -149,28 +171,6 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
       : thinkingRaw.length > 600 ? `${thinkingRaw.slice(0, 600)}…` : thinkingRaw
     : ''
   // 点开灰条时触发懒翻译（仅中文会话+英文思考链）
-  useEffect(() => {
-    if (!actionsOpen) return
-    const closeOnPointer = (event: PointerEvent) => {
-      if (!actionsRef.current?.contains(event.target as Node)) setActionsOpen(false)
-    }
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setActionsOpen(false)
-    }
-    document.addEventListener('pointerdown', closeOnPointer)
-    document.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('pointerdown', closeOnPointer)
-      document.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [actionsOpen])
-
-  useEffect(() => {
-    if (copyState === 'idle') return
-    const timer = window.setTimeout(() => setCopyState('idle'), 1200)
-    return () => window.clearTimeout(timer)
-  }, [copyState])
-
   const handleThinkToggle = () => {
     const nextOpen = !thinkOpen
     setThinkOpen(nextOpen)
