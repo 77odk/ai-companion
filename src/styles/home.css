@@ -585,21 +585,21 @@
 }
 
 .home-weather-state-drizzle .home-weather-fx-particles {
-  opacity: .34;
+  opacity: .44;
   --rain-near-duration: 1.52s;
   --rain-mid-duration: 1.94s;
   --rain-far-duration: 2.38s;
 }
 
 .home-weather-state-rain .home-weather-fx-particles {
-  opacity: .52;
+  opacity: .66;
   --rain-near-duration: .78s;
   --rain-mid-duration: 1.04s;
   --rain-far-duration: 1.34s;
 }
 
 .home-weather-state-thunder .home-weather-fx-particles {
-  opacity: .58;
+  opacity: .70;
   --rain-near-duration: .7s;
   --rain-mid-duration: .94s;
   --rain-far-duration: 1.22s;
