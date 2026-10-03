@@ -123,7 +123,7 @@ ok(photoWallSource.includes('normalizePhotoListData'), '云端照片列表校验
 ok(photoWallSource.includes("message: '照片列表格式异常，请稍后再试'"), '畸形 200 响应被数据层转换成失败结果')
 ok(photoWallSource.includes("method: 'DELETE'"), '云端照片删除使用现有照片资源 DELETE 契约')
 ok(archiveSource.includes("loading={index < 6 ? 'eager' : 'lazy'}"), '首屏前 6 张 eager，其余 lazy，避免 12 张同时抢加载')
-ok(archiveSource.includes("image.dataset.photoRetry !== '1'"), '云端图片首次失败会自动重试一次')
+ok(archiveSource.includes("const retryDelays = [350, 1200, 2500]"), '云端图片瞬时失败会做有限退避重试')
 ok(archiveSource.includes("_retry=${Date.now()}"), '图片重试绕过失败缓存，不改原照片地址')
 ok(archiveSource.includes('onPhotoLoadError?.(photo)'), '重试后仍失败才回传错误状态')
 ok(archiveSource.includes('onPhotoLoadSuccess?.(photo)'), '图片恢复后会回传成功状态')

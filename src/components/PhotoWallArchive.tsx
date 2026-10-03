@@ -92,10 +92,18 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
   const handlePhotoImageError = (event: SyntheticEvent<HTMLImageElement>, photo: PhotoMeta) => {
     const image = event.currentTarget
     const src = image.currentSrc || image.src
-    if (!src.startsWith('data:') && image.dataset.photoRetry !== '1') {
-      image.dataset.photoRetry = '1'
-      image.src = `${src}${src.includes('?') ? '&' : '?'}_retry=${Date.now()}`
-      return
+    if (!src.startsWith('data:')) {
+      const retryCount = Number(image.dataset.photoRetry ?? '0')
+      const retryDelays = [350, 1200, 2500]
+      if (retryCount < retryDelays.length) {
+        image.dataset.photoRetry = String(retryCount + 1)
+        const retryBase = src.replace(/([?&])_retry=[^&]*/g, '$1').replace(/[?&]$/, '')
+        window.setTimeout(() => {
+          if (!image.isConnected) return
+          image.src = `${retryBase}${retryBase.includes('?') ? '&' : '?'}_retry=${Date.now()}`
+        }, retryDelays[retryCount])
+        return
+      }
     }
     onPhotoLoadError?.(photo)
   }
