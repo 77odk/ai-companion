@@ -54,11 +54,19 @@ export function setReplyLifecycle(
   state: ReplyLifecycleState,
   reason?: ReplyInterruptionReason,
 ): StoredMessage[] {
-  return (Array.isArray(messages) ? messages : []).map((message) => {
-    if (message.role === 'user' && message.ts === userTs) return withLifecycle(message, state, reason)
-    if (assistantTs != null && message.role === 'assistant' && message.ts === assistantTs) {
-      return withLifecycle(message, state, reason)
+  const list = Array.isArray(messages) ? messages : []
+  let lastAssistantIndex = -1
+  if (assistantTs != null) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i]?.role === 'assistant' && list[i].ts === assistantTs) {
+        lastAssistantIndex = i
+        break
+      }
     }
+  }
+  return list.map((message, index) => {
+    if (message.role === 'user' && message.ts === userTs) return withLifecycle(message, state, reason)
+    if (index === lastAssistantIndex) return withLifecycle(message, state, reason)
     return message
   })
 }
@@ -110,6 +118,8 @@ export function findRecoverableReply(messages: StoredMessage[]): RecoverableRepl
   if (userIndex < 0) return null
   const user = list[userIndex]
   if (user.replyState !== 'interrupted') return null
+  // 输入本身超出上下文时，原话仍保留，但“只重试 TA”不会改变结果，不能给误导入口。
+  if (user.replyInterruptedReason === 'context-limit') return null
 
   return {
     userIndex,
