@@ -4,6 +4,7 @@ import {
   applyCloudContextUsages,
   clearContextUsage,
   collectAllContextUsages,
+  getAllLocalContextUsageTurns,
   getContextUsage,
   getContextUsageTurns,
   setContextUsage,
@@ -64,6 +65,20 @@ assert.equal(turns[0].provider, 'deepseek')
 assert.equal(turns[0].model, 'deepseek-v4-flash')
 assert.equal(turns[0].baseUrlHost, 'api.deepseek.com')
 assert.equal(turns[0].cachedTokens, 600)
+
+console.log('[usage info] 展示扫描必须按当前账号 session 白名单隔离')
+setContextUsage({
+  sessionStart: 0,
+  used: 20,
+  budget: 64000,
+  source: 'actual',
+  inputTokens: 20,
+  outputTokens: 5,
+  updatedAt: 2500,
+}, 'other-account-session')
+assert.equal(getAllLocalContextUsageTurns(['s1']).every((turn) => turn.sessionId === 's1'), true)
+assert.equal(getAllLocalContextUsageTurns([]).length, 0, 'session 列表未恢复时宁可空，也不能扫旧账号')
+assert.equal(getAllLocalContextUsageTurns(['other-account-session']).length, 1)
 
 console.log('[usage info] 同步 payload 只有 current meter，绝不带 localTurns')
 const syncUsage = collectAllContextUsages()
