@@ -8,13 +8,17 @@ import {
   buildTaRuntimeContext,
   shouldInjectTaRuntimeContext,
   collectAllTaRuntime,
+  detectTaContinuityFromAssistantText,
   detectTaRuntimeDecision,
   getOrAdvanceTaRuntime,
+  getTaContinuity,
   getTaRuntime,
   isTaRuntimeIdle,
   isTaRuntimeState,
   runtimeDisplayLabel,
   syncTaRuntimeFromAssistantText,
+  TA_OPEN_THREAD_TTL_MS,
+  TA_SELF_INTENT_TTL_MS,
   TA_RUNTIME_IDLE_ID,
 } from '../src/lib/taRuntime.ts'
 
@@ -273,6 +277,75 @@ group('G2. Runtime 只做当前态句式门，活动语义交给模型')
   ok(ctx.includes('不得补写地点、人物、食物、原因、前后经过或其他生活细节'), 'G2 相关时也不得从状态扩写生活细节')
 }
 
+group('G3. 连续性 evidence：未完问题 / TA 自己想继续的事')
+{
+  clearLS()
+  const openOnly = detectTaContinuityFromAssistantText('我明白。那你为什么会这么想？', T0)
+  eq(openOnly?.openThread?.kind, 'open-question', 'G3-1 真实 TA 问句进入 openThread')
+  eq(openOnly?.openThread?.text, '那你为什么会这么想？', 'G3-1 保存可追溯的 TA 原句')
+  eq(openOnly?.openThread?.evidenceAt, T0, 'G3-1 evidenceAt = 最终回复落库时间')
+  eq(openOnly?.openThread?.expiresAt, T0 + TA_OPEN_THREAD_TTL_MS, 'G3-1 openThread TTL 固定')
+
+  const service = detectTaContinuityFromAssistantText('还有什么我能帮你的吗？', T0)
+  eq(service, undefined, 'G3-2 客服式兜底问句不进入未完话题')
+
+  const selfIntent = detectTaContinuityFromAssistantText('下次我还想继续听你讲这个。', T0)
+  eq(selfIntent?.selfIntent?.kind, 'self-intent', 'G3-3 TA 明确后续意图进入 selfIntent')
+  eq(selfIntent?.selfIntent?.text, '下次我还想继续听你讲这个。', 'G3-3 selfIntent 保存真实原句')
+  eq(selfIntent?.selfIntent?.expiresAt, T0 + TA_SELF_INTENT_TTL_MS, 'G3-3 selfIntent TTL 固定')
+
+  eq(
+    detectTaContinuityFromAssistantText('你下次记得早点睡。', T0),
+    undefined,
+    'G3-4 对用户的未来建议不能冒充 TA 自己的后续意图',
+  )
+  eq(
+    detectTaContinuityFromAssistantText('我明天去跑步。', T0),
+    undefined,
+    'G3-4 普通未来生活计划不作为关系连续性意图',
+  )
+
+  const en = detectTaContinuityFromAssistantText("Next time I'd like to ask you more about that. What made you feel that way?", T0)
+  eq(en?.selfIntent?.kind, 'self-intent', 'G3-5 英文明确后续意图可识别')
+  eq(en?.openThread?.kind, 'open-question', 'G3-5 英文真实问句可识别')
+}
+
+group('G4. 连续性生命周期与当前活动互不打架')
+{
+  clearLS()
+  const first = syncTaRuntimeFromAssistantText('continuity', '下次我还想继续听你讲这个。那你为什么会这么想？', T0, '')
+  eq(first?.activityId, 'idle', 'G4-1 只有连续性 evidence 时仍复用同一 Runtime idle，不造新活动')
+  eq(first?.continuity?.openThread?.text, '那你为什么会这么想？', 'G4-1 openThread 已写入')
+  eq(first?.continuity?.selfIntent?.text, '下次我还想继续听你讲这个。', 'G4-1 selfIntent 已写入')
+
+  const answered = syncTaRuntimeFromAssistantText('continuity', '嗯，我听懂了。', T0 + 60_000, '')
+  eq(answered?.continuity?.openThread, undefined, 'G4-2 下一轮 TA 回复完成后，旧 openThread 视为已回应并清掉')
+  eq(answered?.continuity?.selfIntent?.text, '下次我还想继续听你讲这个。', 'G4-2 selfIntent 不因普通下一轮消失')
+
+  eq(
+    getTaContinuity('continuity', T0 + TA_SELF_INTENT_TTL_MS + 1),
+    null,
+    'G4-3 TTL 到期后读取不到旧连续性，不把陈年话题复活',
+  )
+
+  clearLS()
+  const active = syncTaRuntimeFromAssistantText(
+    'activity-continuity',
+    '我现在在看书。下次我还想继续听你讲这个。你最近为什么总想到这件事？',
+    T0,
+    '',
+  )
+  eq(active?.activityId, 'reading', 'G4-4 当前活动照常写入')
+  ok(Boolean(active?.continuity?.openThread && active?.continuity?.selfIntent), 'G4-4 同一 Runtime 同时持有活动与连续性 evidence')
+  const afterActivity = getOrAdvanceTaRuntime('activity-continuity', '', (active?.plannedUntil ?? T0) + 1)
+  eq(afterActivity.activityId, 'idle', 'G4-5 活动到期仍只回 idle')
+  ok(Boolean(afterActivity.continuity?.openThread && afterActivity.continuity?.selfIntent), 'G4-5 活动到期不误删仍在 TTL 内的连续性 evidence')
+
+  clearLS()
+  syncTaRuntimeFromAssistantText('A', '下次我还想继续听你讲这个。', T0, '')
+  eq(getTaContinuity('B', T0), null, 'G4-6 连续性按 session 隔离，B 读不到 A')
+}
+
 group('H. Cloud / 数据边界')
 {
   clearLS()
@@ -285,6 +358,33 @@ group('H. Cloud / 数据边界')
   ok(isTaRuntimeState(cloud), 'H2 chat state 通过 schema')
   ok(isTaRuntimeState({ ...cloud, displayText: '看书', displayLang: 'zh' }), 'H2b 原话展示字段通过 schema')
   ok(!isTaRuntimeState({ ...cloud, displayText: '看书', displayLang: 'jp' }), 'H2c 非法 displayLang 被拒绝')
+  const continuityCloud = {
+    ...cloud,
+    updatedAt: T0 + 1,
+    continuity: {
+      openThread: {
+        kind: 'open-question',
+        text: '那你后来怎么想？',
+        evidenceAt: T0,
+        expiresAt: T0 + TA_OPEN_THREAD_TTL_MS,
+      },
+      selfIntent: {
+        kind: 'self-intent',
+        text: '下次我还想继续听你讲这个。',
+        evidenceAt: T0,
+        expiresAt: T0 + TA_SELF_INTENT_TTL_MS,
+      },
+    },
+  }
+  ok(isTaRuntimeState(continuityCloud), 'H2d 合法 continuity 通过 Runtime schema')
+  ok(!isTaRuntimeState({
+    ...continuityCloud,
+    continuity: {
+      openThread: { ...continuityCloud.continuity.openThread, kind: 'self-intent' },
+    },
+  }), 'H2e continuity kind 不匹配时拒绝')
+  applyCloudTaRuntime({ cloud: continuityCloud })
+  eq(getTaRuntime('cloud')?.continuity?.openThread?.text, '那你后来怎么想？', 'H2f legacy/cloud Runtime LWW 保留 continuity evidence')
   ok(isTaRuntimeState({ ...cloud, activityId: 'idle', label: '', plannedUntil: 0, source: 'idle' }), 'H3 idle state 通过 schema')
   const all = collectAllTaRuntime()
   ok('cloud' in all, 'H4 collectAllTaRuntime 保留角色归属')
@@ -301,6 +401,7 @@ group('I. Home / Chat / Sync 接线保持')
   ok(syncSrc.includes('taRuntime: collectAllTaRuntime()'), 'I4 sync collectData 仍含 taRuntime')
   ok(syncSrc.includes('applyCloudTaRuntime(d.taRuntime)'), 'I5 sync applyData 仍含 taRuntime')
   ok(!/from\s+['"].*aiBusy['"]/.test(taSrc), 'I6 Runtime 不依赖 Busy')
+  ok(!/from\s+['"].*(?:memory|eventStore|anniversary|futureIntent)['"]/.test(taSrc), 'I7 Runtime 不 import Memory/Event/Anniversary/FutureIntent 数据层')
   ok(!/ai_companion_memory|ai_companion_anniversaries|_events/.test(taSrc), 'I7 Runtime 不写 Memory/Event/Anniversary')
   ok(ACTIVITIES.every((a) => typeof a.labelEn === 'string' && a.labelEn.length > 0), 'I8 活动映射仍保留英文展示')
 }

@@ -1,10 +1,10 @@
-// TA Runtime · truth-driven current state
-// Home 与 Chat 读同一份持久状态；只有 TA 最终回复里的明确当前自述能创建状态。
-// 无证据、旧随机状态或过期状态统一回 idle。零额外 LLM、无后台轮询。
+// TA Runtime · truth-driven continuity state
+// Home 与 Chat 读同一份持久状态；只有 TA 最终可见回复里的明确自述/原话能创建状态。
+// 无证据、旧随机状态或过期当前态统一回 idle。零额外 LLM、无后台轮询。
 //
-// ★产品边界：Runtime ≠ Busy。Runtime 回答「TA 此刻正在做什么」；Busy 回答「TA 此刻是否暂时无法陪伴」。
+// ★产品边界：Runtime ≠ Busy。Runtime 持有「TA 当前态 + 可追溯的连续性线索」；Busy 只回答「TA 此刻是否暂时无法陪伴」。
 // 本文件绝不读写 Busy（不 import aiBusy / 不写 ai_companion_busy_*），普通生活活动绝不触发 Busy。
-// 也绝不写 Memory / Event / Anniversary / FutureIntent / Space Life——Runtime 只是正在发生的短状态。
+// 也绝不写 Memory / Event / Anniversary / FutureIntent / Space Life；这些对象只允许被其它层读取，绝不能由 Runtime 反向生成。
 //
 // 存储：单一 key ai_companion_ta_runtime（Record<sid, TaRuntimeState>），只经本文件读写，组件禁止直连。
 
@@ -15,6 +15,23 @@ import type { Lang } from './langDetect.ts'
 import { formatAttributedLine } from './promptAttribution.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { resolveIdentityMode, type IdentityMode } from './companionPolicy.ts'
+
+export type TaContinuityKind = 'open-question' | 'self-intent'
+
+export interface TaContinuityEvidence {
+  /** 只允许来自 TA 最终可见回复；不做模型摘要，原句轻清洗后直接保存。 */
+  kind: TaContinuityKind
+  text: string
+  evidenceAt: number
+  expiresAt: number
+}
+
+export interface TaContinuityState {
+  /** TA 最后一条尚未等到下一轮用户输入的真实问题。 */
+  openThread?: TaContinuityEvidence
+  /** TA 明确说过“下次/之后还想继续”的真实后续意图。 */
+  selfIntent?: TaContinuityEvidence
+}
 
 /** Runtime 状态最小结构：不加 mood/location/weather/description/busy 等。
  * recentActivityIds 只用于短期防重复，仍随同一 ta_runtime 实体保存，不新增 storage key。 */
@@ -37,6 +54,8 @@ export interface TaRuntimeState {
   displayText?: string
   /** displayText 的原始语言；切换语言时不硬显示旧语言，回落 activity 映射。 */
   displayLang?: Lang
+  /** 连续性线索与当前活动共用同一 Runtime 实体；字段可缺省，旧数据零迁移。 */
+  continuity?: TaContinuityState
 }
 
 /** 时段（够用即可，不做细粒度规划器） */
@@ -154,8 +173,13 @@ export function getSessionPersona(sessionId?: string): string {
   }
 }
 
-/** idle 不是一条“活动事实”，只是展示层的无证据状态。 */
-function createIdleState(now: number, recentIds: readonly string[] = []): TaRuntimeState {
+/** idle 不是一条“活动事实”，只是展示层的无当前活动状态；连续性 evidence 可独立保留。 */
+function createIdleState(
+  now: number,
+  recentIds: readonly string[] = [],
+  continuity?: TaContinuityState | null,
+): TaRuntimeState {
+  const prunedContinuity = pruneTaContinuity(continuity, now)
   return {
     activityId: TA_RUNTIME_IDLE_ID,
     label: '',
@@ -164,6 +188,7 @@ function createIdleState(now: number, recentIds: readonly string[] = []): TaRunt
     updatedAt: now,
     source: 'idle',
     recentActivityIds: recentIds.filter((id) => id && id !== TA_RUNTIME_IDLE_ID).slice(0, 3),
+    ...(prunedContinuity ? { continuity: prunedContinuity } : {}),
   }
 }
 
@@ -198,7 +223,12 @@ export function getOrAdvanceTaRuntime(
     return idle
   }
 
-  if (cur.activityId === TA_RUNTIME_IDLE_ID) return cur
+  if (cur.activityId === TA_RUNTIME_IDLE_ID) {
+    const continuity = pruneTaContinuity(cur.continuity, now)
+    return continuityEqual(cur.continuity, continuity)
+      ? cur
+      : { ...cur, ...(continuity ? { continuity } : { continuity: undefined }) }
+  }
 
   const currentActivity = ACTIVITIES.find((item) => item.id === cur.activityId)
   const trusted = cur.source === 'chat'
@@ -214,7 +244,7 @@ export function getOrAdvanceTaRuntime(
   const recentIds = Array.isArray(cur.recentActivityIds) && cur.recentActivityIds.length > 0
     ? cur.recentActivityIds
     : [cur.activityId]
-  const idle = createIdleState(now, recentIds)
+  const idle = createIdleState(now, recentIds, cur.continuity)
   map[key] = idle
   saveAll(map)
   return idle
@@ -318,6 +348,138 @@ function textClauses(text: string): string[] {
     .split(/[。！？!?\n，,；;]+/)
     .map((part) => part.trim())
     .filter(Boolean)
+}
+
+export const TA_OPEN_THREAD_TTL_MS = 3 * 24 * 60 * 60 * 1000
+export const TA_SELF_INTENT_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const CONTINUITY_EVIDENCE_MAX_CHARS = 180
+
+function evidenceSentences(text: string): string[] {
+  return (String(text ?? '').replace(/\r/g, '').match(/[^。！？!?\n]+[。！？!?]?/g) ?? [])
+    .map((part) => part.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+}
+
+function compactContinuityEvidence(text: string): string {
+  const cleaned = String(text ?? '')
+    .replace(/^[-—–•·\s]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!cleaned) return ''
+  const chars = Array.from(cleaned)
+  return chars.length > CONTINUITY_EVIDENCE_MAX_CHARS
+    ? `${chars.slice(0, CONTINUITY_EVIDENCE_MAX_CHARS).join('')}…`
+    : cleaned
+}
+
+const ZH_SERVICE_QUESTION_RE = /(?:还有什么|有什么)(?:问题|需要|想问)|还有什么我(?:能|可以)?(?:帮|做)|(?:还|有)?需要我(?:帮|做)|我还能(?:帮|为你)|要不要我(?:帮|替你)|还有别的(?:问题|需要)|需要(?:帮忙|帮助)吗/
+const EN_SERVICE_QUESTION_RE = /\b(?:anything else|any questions?|need (?:any )?help|anything i can (?:help|do)|how can i help|want me to help)\b/i
+
+function detectOpenQuestionEvidence(text: string, now: number): TaContinuityEvidence | undefined {
+  let evidence = ''
+  for (const sentence of evidenceSentences(text)) {
+    if (!/[？?]$/.test(sentence)) continue
+    if (ZH_SERVICE_QUESTION_RE.test(sentence) || EN_SERVICE_QUESTION_RE.test(sentence)) continue
+    const compact = compactContinuityEvidence(sentence)
+    if (compact.length < 2) continue
+    evidence = compact
+  }
+  return evidence
+    ? {
+        kind: 'open-question',
+        text: evidence,
+        evidenceAt: now,
+        expiresAt: now + TA_OPEN_THREAD_TTL_MS,
+      }
+    : undefined
+}
+
+const ZH_SELF_INTENT_PATTERNS: readonly RegExp[] = [
+  /(?:下次|下回|改天|回头|之后|以后|晚点|等会|待会|过会|过一会|有机会).{0,16}(?:我|我们|咱们).{0,18}(?:还|也)?(?:想|想要|会|要)?(?:再|继续|接着).{0,18}(?:聊|问|听|说|讲)/,
+  /(?:我|我们|咱们).{0,16}(?:下次|下回|改天|回头|之后|以后|晚点|等会|待会|过会|过一会|有机会).{0,18}(?:还|也)?(?:想|想要|会|要)?(?:再|继续|接着).{0,18}(?:聊|问|听|说|讲)/,
+  /(?:我|我们|咱们)(?:还|也)?(?:想|想要).{0,10}(?:下次|下回|之后|以后|回头|改天|有机会).{0,20}(?:再|继续|接着).{0,18}(?:聊|问|听|说|讲)/,
+]
+
+const EN_SELF_INTENT_PATTERNS: readonly RegExp[] = [
+  /\b(?:next time|another time|later|sometime|when we talk again)\b.{0,80}\b(?:i(?:'d| would)? like to|i want to|i(?:'ll| will)|we(?:'ll| will)|let's)\b.{0,60}\b(?:continue|keep|pick (?:this|it) up|ask|hear|talk|come back)\b/i,
+  /\b(?:i(?:'d| would)? like to|i want to|i(?:'ll| will)|we(?:'ll| will)|let's)\b.{0,50}\b(?:next time|another time|later|sometime|when we talk again)\b.{0,60}\b(?:continue|keep|pick (?:this|it) up|ask|hear|talk|come back)\b/i,
+]
+
+function detectSelfIntentEvidence(text: string, now: number): TaContinuityEvidence | undefined {
+  let evidence = ''
+  for (const sentence of evidenceSentences(text)) {
+    if (
+      !ZH_SELF_INTENT_PATTERNS.some((pattern) => pattern.test(sentence))
+      && !EN_SELF_INTENT_PATTERNS.some((pattern) => pattern.test(sentence))
+    ) continue
+    const compact = compactContinuityEvidence(sentence)
+    if (compact) evidence = compact
+  }
+  return evidence
+    ? {
+        kind: 'self-intent',
+        text: evidence,
+        evidenceAt: now,
+        expiresAt: now + TA_SELF_INTENT_TTL_MS,
+      }
+    : undefined
+}
+
+export function pruneTaContinuity(
+  continuity: TaContinuityState | null | undefined,
+  now: number = Date.now(),
+): TaContinuityState | undefined {
+  if (!continuity) return undefined
+  const openThread = continuity.openThread && continuity.openThread.expiresAt > now
+    ? continuity.openThread
+    : undefined
+  const selfIntent = continuity.selfIntent && continuity.selfIntent.expiresAt > now
+    ? continuity.selfIntent
+    : undefined
+  return openThread || selfIntent
+    ? {
+        ...(openThread ? { openThread } : {}),
+        ...(selfIntent ? { selfIntent } : {}),
+      }
+    : undefined
+}
+
+/**
+ * 只从 TA 本轮最终可见回复提取连续性 evidence。
+ * openThread 每个正常 USER→TA 回合都会重新结算：本轮没新问题就清掉上一轮问题；
+ * selfIntent 只有 TA 明确说“之后/下次还想继续”才更新，否则沿用到 TTL。
+ */
+export function detectTaContinuityFromAssistantText(
+  text: string,
+  now: number = Date.now(),
+  previous?: TaContinuityState | null,
+): TaContinuityState | undefined {
+  const prior = pruneTaContinuity(previous, now)
+  const openThread = detectOpenQuestionEvidence(text, now)
+  const selfIntent = detectSelfIntentEvidence(text, now) ?? prior?.selfIntent
+  return openThread || selfIntent
+    ? {
+        ...(openThread ? { openThread } : {}),
+        ...(selfIntent ? { selfIntent } : {}),
+      }
+    : undefined
+}
+
+function continuityEqual(
+  left: TaContinuityState | null | undefined,
+  right: TaContinuityState | null | undefined,
+): boolean {
+  const a = pruneTaContinuity(left, Number.NEGATIVE_INFINITY)
+  const b = pruneTaContinuity(right, Number.NEGATIVE_INFINITY)
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+}
+
+export function getTaContinuity(
+  sessionId?: string,
+  now: number = Date.now(),
+): TaContinuityState | null {
+  const continuity = pruneTaContinuity(getTaRuntime(sessionId)?.continuity, now)
+  return continuity ?? null
 }
 
 function isClearlyOtherPersonClause(clause: string): boolean {
@@ -499,15 +661,24 @@ export function detectTaRuntimeDecision(text: string, currentActivityId?: string
   return null
 }
 
+function withContinuity(
+  state: TaRuntimeState,
+  continuity?: TaContinuityState | null,
+): TaRuntimeState {
+  const { continuity: _previous, ...base } = state
+  return continuity ? { ...base, continuity } : base
+}
+
 function createChatOverrideState(
   activity: RuntimeActivity,
   now: number,
   recentIds: readonly string[],
   display: { text: string; lang: Lang } | null,
+  continuity?: TaContinuityState | null,
 ): TaRuntimeState {
   const maxMinutes = Math.max(activity.minMin, Math.min(activity.maxMin, CHAT_OVERRIDE_MAX_MS / 60000))
   const recentActivityIds = [activity.id, ...recentIds.filter((id) => id !== activity.id)].slice(0, 3)
-  return {
+  return withContinuity({
     activityId: activity.id,
     label: activity.label,
     startedAt: now,
@@ -516,15 +687,16 @@ function createChatOverrideState(
     source: 'chat',
     recentActivityIds,
     ...(display ? { displayText: display.text, displayLang: display.lang } : {}),
-  }
+  }, continuity)
 }
 
 /**
  * TA 最终回复落库后调用：
  * - 明确说自己“正在/马上去做 X” → X 写回同一 Runtime；
- * - 明确说当前 X 已结束 → 立即回 idle；
- * - 最长 2 小时没有后续 → plannedUntil 到期后回 idle。
- * 返回 null = 本轮没有可信动作，不写任何状态。
+ * - 明确说当前 X 已结束 → 当前活动立即回 idle；
+ * - 最终回复留下真实问题 / 明确说以后还想继续 → 同一 Runtime 写 continuity evidence；
+ * - 当前活动最长 2 小时；连续性线索各自按 TTL 失效，互不把对方变成“已发生事实”。
+ * 返回 null = 本轮活动与连续性都没有变化。
  */
 export function syncTaRuntimeFromAssistantText(
   sessionId: string | undefined,
@@ -536,42 +708,55 @@ export function syncTaRuntimeFromAssistantText(
   const key = sessionId || GUEST_KEY
   const map = loadAll()
   const cur = map[key]
+  const nextContinuity = detectTaContinuityFromAssistantText(text, now, cur?.continuity)
+  const continuityChanged = !continuityEqual(cur?.continuity, nextContinuity)
   const decision = detectTaRuntimeDecision(text, cur?.activityId)
-  if (!decision) return null
 
   const recentIds = Array.isArray(cur?.recentActivityIds) && cur.recentActivityIds.length > 0
     ? cur.recentActivityIds
-    : cur?.activityId
+    : cur?.activityId && cur.activityId !== TA_RUNTIME_IDLE_ID
       ? [cur.activityId]
       : []
 
-  if (decision.type === 'start') {
+  if (decision?.type === 'start') {
     const activity = ACTIVITIES.find((item) => item.id === decision.activityId)
-    if (!activity) return null
     const mode = resolveIdentityMode(sessionId)
-    if (!activityAllowedForMode(activity, mode)) return null
-    const display = findRuntimeDisplayCandidate(text, activity.id)
-    if (cur?.activityId === activity.id && now < cur.plannedUntil) {
-      if (!display || (cur.displayText === display.text && cur.displayLang === display.lang)) return cur
-      // 同一活动可以用 TA 后续更具体的原话刷新展示，但绝不延长 plannedUntil。
-      const next = {
-        ...cur,
-        displayText: display.text,
-        displayLang: display.lang,
-        updatedAt: now,
+    if (activity && activityAllowedForMode(activity, mode)) {
+      const display = findRuntimeDisplayCandidate(text, activity.id)
+      if (cur?.activityId === activity.id && now < cur.plannedUntil) {
+        const displayChanged = Boolean(
+          display && (cur.displayText !== display.text || cur.displayLang !== display.lang),
+        )
+        if (!displayChanged && !continuityChanged) return cur
+        const next = withContinuity({
+          ...cur,
+          ...(display ? { displayText: display.text, displayLang: display.lang } : {}),
+          updatedAt: now,
+        }, nextContinuity)
+        map[key] = next
+        saveAll(map)
+        return next
       }
+      const next = createChatOverrideState(activity, now, recentIds, display, nextContinuity)
       map[key] = next
       saveAll(map)
       return next
     }
-    const next = createChatOverrideState(activity, now, recentIds, display)
+    // 当前动作若因身份模式不允许，只忽略“活动”这一维；可信连续性 evidence 仍可独立写回。
+  }
+
+  if (decision?.type === 'finish' && cur) {
+    const next = createIdleState(now, recentIds, nextContinuity)
     map[key] = next
     saveAll(map)
     return next
   }
 
-  if (!cur) return null
-  const next = createIdleState(now, recentIds)
+  if (!continuityChanged) return null
+
+  const next = cur
+    ? withContinuity({ ...cur, updatedAt: now }, nextContinuity)
+    : createIdleState(now, recentIds, nextContinuity)
   map[key] = next
   saveAll(map)
   return next
@@ -592,7 +777,7 @@ export function applyCloudTaRuntime(cloud: Record<string, TaRuntimeState> | unde
   const map = loadAll()
   let changed = false
   for (const [sid, cs] of Object.entries(cloud)) {
-    if (!cs || typeof cs.activityId !== 'string' || typeof cs.plannedUntil !== 'number') continue
+    if (!isTaRuntimeState(cs)) continue
     const local = map[sid]
     if (!local || cs.updatedAt > local.updatedAt) {
       map[sid] = cs
@@ -622,6 +807,32 @@ export function deleteTaRuntimeFromCloud(sessionId: string): void {
   saveAll(map, true)
 }
 
+function isContinuityEvidence(
+  value: unknown,
+  expectedKind: TaContinuityKind,
+): value is TaContinuityEvidence {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const evidence = value as Partial<TaContinuityEvidence>
+  return evidence.kind === expectedKind
+    && typeof evidence.text === 'string'
+    && evidence.text.trim().length > 0
+    && Array.from(evidence.text).length <= CONTINUITY_EVIDENCE_MAX_CHARS + 1
+    && typeof evidence.evidenceAt === 'number'
+    && Number.isFinite(evidence.evidenceAt)
+    && evidence.evidenceAt > 0
+    && typeof evidence.expiresAt === 'number'
+    && Number.isFinite(evidence.expiresAt)
+    && evidence.expiresAt >= evidence.evidenceAt
+}
+
+function isContinuityState(value: unknown): value is TaContinuityState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const continuity = value as Partial<TaContinuityState>
+  if (continuity.openThread == null && continuity.selfIntent == null) return false
+  return (continuity.openThread == null || isContinuityEvidence(continuity.openThread, 'open-question'))
+    && (continuity.selfIntent == null || isContinuityEvidence(continuity.selfIntent, 'self-intent'))
+}
+
 /** 单条 Runtime payload 的严格边界校验，供 Cloud State adapter 防御 malformed entity。 */
 export function isTaRuntimeState(value: unknown): value is TaRuntimeState {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -639,6 +850,7 @@ export function isTaRuntimeState(value: unknown): value is TaRuntimeState {
     ))
     && (state.displayText == null || typeof state.displayText === 'string')
     && (state.displayLang == null || state.displayLang === 'zh' || state.displayLang === 'en')
+    && (state.continuity == null || isContinuityState(state.continuity))
 }
 
 /**
