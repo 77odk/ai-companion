@@ -93,6 +93,7 @@ const FeedbackPage = lazy(() => import('./components/FeedbackPage'))
 type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'notifications' | 'feedback' | 'loading'
 
 interface InitiativeNotice {
+  accountId: string
   sessionId: string
   taName: string
   content: string
@@ -371,7 +372,9 @@ export default function App() {
     if (!sessionId) return
     if (!getSessionsCache().some((session) => String(session.id) === sessionId)) return
 
-    const preference = getInitiativePreference(sessionId)
+    const accountId = getAccount()?.account ?? ''
+    if (!accountId) return
+    const preference = getInitiativePreference(accountId, sessionId)
     if (!preference.enabled) return
 
     const latestUserMessageAt = getMessagesCache(sessionId)
@@ -379,7 +382,7 @@ export default function App() {
       .reduce((latest, message) => Math.max(latest, message.ts), 0)
     const evaluated = evaluateInitiativeResponse(preference, latestUserMessageAt)
     const leftAt = evaluated.lastBackgroundAt > 0 ? evaluated.lastBackgroundAt : Date.now()
-    saveInitiativePreference(sessionId, {
+    saveInitiativePreference(accountId, sessionId, {
       ...evaluated,
       lastBackgroundAt: leftAt,
     })
@@ -393,12 +396,12 @@ export default function App() {
     const session = sessions.find((item) => String(item.id) === sessionId)
     if (!session) return
 
-    const preference = getInitiativePreference(sessionId)
-    if (!preference.enabled || preference.lastBackgroundAt <= 0) return
-
     const account = getAccount()
     const token = getToken()
     if (!account?.account || !token) return
+
+    const preference = getInitiativePreference(account.account, sessionId)
+    if (!preference.enabled || preference.lastBackgroundAt <= 0) return
 
     const settings = loadSettings()
     if (!settings.apiKey || !settings.baseUrl || !settings.model) return
@@ -408,6 +411,9 @@ export default function App() {
     const activeMessages = resolveConversationMessages(conversationState, rawMessages)
     const conversationBranchId = branchIdForNewMessage(conversationState)
     const now = Date.now()
+    if (activeMessages.some((message) => message.replyState === 'pending' || message.replyState === 'streaming')) return
+    const busy = getBusyState(sessionId)
+    if (busy.status === 'busy' && busy.busyUntil > now) return
     const taName = displaySessionName(session)
     const accountId = account.account
 
@@ -440,6 +446,14 @@ export default function App() {
           return { text, ...(usage ? { usage } : {}) }
         },
         commit: async (content) => {
+          if (getAccount()?.account !== accountId || getToken() !== token) return false
+          if (getActiveSessionId() !== sessionId) return false
+          const latestState = loadConversationState(sessionId)
+          if (branchIdForNewMessage(latestState) !== conversationBranchId) return false
+          const latestMessages = resolveConversationMessages(latestState, getMessagesCache(sessionId))
+          if (latestMessages.some((message) => message.replyState === 'pending' || message.replyState === 'streaming')) return false
+          if (latestMessages.some((message) => Number.isFinite(message.ts) && message.ts > now)) return false
+
           const message = await commitInitiativeMessage({
             sessionId,
             content,
@@ -450,15 +464,19 @@ export default function App() {
           return message != null
         },
         recordUsage: (usage) => {
+          if (getAccount()?.account !== accountId || getToken() !== token) return
           recordLocalModelUsageTurn(sessionId, usage, settings)
         },
-        savePreference: (next) => saveInitiativePreference(sessionId, next),
+        savePreference: (next) => {
+          if (getAccount()?.account !== accountId || getToken() !== token) return false
+          return saveInitiativePreference(accountId, sessionId, next)
+        },
         onDelivered: (content) => {
           // 只触达原账号 / 原 TA；生成途中切账号时 commit 已经会拒绝。
           if (getAccount()?.account !== accountId) return
           if (!getSessionsCache().some((item) => String(item.id) === sessionId)) return
 
-          setInitiativeNotice({ sessionId, taName, content })
+          setInitiativeNotice({ accountId, sessionId, taName, content })
           if (getActiveSessionId() === sessionId && viewRef.current === 'chat') {
             setInitiativeChatRevision((value) => value + 1)
           }
@@ -514,6 +532,10 @@ export default function App() {
   const openInitiativeNotice = useCallback(() => {
     if (!initiativeNotice) return
     const sessionId = initiativeNotice.sessionId
+    if (getAccount()?.account !== initiativeNotice.accountId) {
+      setInitiativeNotice(null)
+      return
+    }
     if (!getSessionsCache().some((session) => String(session.id) === sessionId)) {
       setInitiativeNotice(null)
       return
