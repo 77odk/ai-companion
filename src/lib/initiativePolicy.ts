@@ -19,7 +19,7 @@ export interface InitiativeCandidate {
 
 export interface InitiativePolicyInput {
   preference: InitiativePreference
-  lastActiveAt: number
+  leftAt: number
   now: number
   futureTopics: ChatTopic[]
   events: CompanionEvent[]
@@ -66,12 +66,12 @@ function currentDeliveredCount(preference: InitiativePreference, today: string):
 
 function futureIntentCandidates(
   topics: ChatTopic[],
-  lastActiveAt: number,
+  leftAt: number,
   now: number,
 ): InitiativeCandidate[] {
   const today = localDayKey(now)
-  const lastDay = lastActiveAt > 0 ? localDayKey(lastActiveAt) : ''
-  const longEnough = now - lastActiveAt >= INITIATIVE_MIN_AWAY_MS
+  const lastDay = leftAt > 0 ? localDayKey(leftAt) : ''
+  const longEnough = now - leftAt >= INITIATIVE_MIN_AWAY_MS
   const returnedOnLaterDay = Boolean(lastDay && lastDay !== today)
   const out: InitiativeCandidate[] = []
   for (const topic of Array.isArray(topics) ? topics : []) {
@@ -96,7 +96,7 @@ function futureIntentCandidates(
 
 function eventCandidates(
   events: CompanionEvent[],
-  lastActiveAt: number,
+  leftAt: number,
   now: number,
 ): InitiativeCandidate[] {
   return (Array.isArray(events) ? events : [])
@@ -104,7 +104,7 @@ function eventCandidates(
       event &&
       event.deletedAt == null &&
       Number.isFinite(event.occurredAt) &&
-      event.occurredAt > lastActiveAt &&
+      event.occurredAt > leftAt &&
       event.occurredAt <= now &&
       typeof event.title === 'string' &&
       event.title.trim().length > 0,
@@ -120,13 +120,13 @@ function eventCandidates(
 
 function anniversaryCandidates(
   anniversaries: Anniversary[],
-  lastActiveAt: number,
+  leftAt: number,
   now: number,
 ): InitiativeCandidate[] {
   const today = localDayKey(now)
-  const lastDay = lastActiveAt > 0 ? localDayKey(lastActiveAt) : ''
+  const lastDay = leftAt > 0 ? localDayKey(leftAt) : ''
   const crossedDay = Boolean(lastDay && lastDay !== today)
-  const longEnough = now - lastActiveAt >= INITIATIVE_MIN_AWAY_MS
+  const longEnough = now - leftAt >= INITIATIVE_MIN_AWAY_MS
   if (!crossedDay && !longEnough) return []
 
   const out: InitiativeCandidate[] = []
@@ -151,14 +151,14 @@ function anniversaryCandidates(
  * 没有真实 evidence / 被限频 / 夜间 / 连续不回应冷却中 → null。
  */
 export function chooseInitiativeCandidate(input: InitiativePolicyInput): InitiativeCandidate | null {
-  const { preference, lastActiveAt, now } = input
+  const { preference, leftAt, now } = input
   if (!preference.enabled) return null
-  if (!Number.isFinite(now) || now <= 0 || !Number.isFinite(lastActiveAt) || lastActiveAt <= 0) return null
-  if (now <= lastActiveAt) return null
+  if (!Number.isFinite(now) || now <= 0 || !Number.isFinite(leftAt) || leftAt <= 0) return null
+  if (now <= leftAt) return null
 
   const today = localDayKey(now)
-  const lastDay = localDayKey(lastActiveAt)
-  const awayMs = now - lastActiveAt
+  const lastDay = localDayKey(leftAt)
+  const awayMs = now - leftAt
   // A2 不是“每次切回来都发”：同一天至少离开 2 小时；跨天则允许补算。
   if (awayMs < INITIATIVE_MIN_AWAY_MS && lastDay === today) return null
 
@@ -174,9 +174,9 @@ export function chooseInitiativeCandidate(input: InitiativePolicyInput): Initiat
   ) return null
 
   const candidates = [
-    ...futureIntentCandidates(input.futureTopics, lastActiveAt, now),
-    ...anniversaryCandidates(input.anniversaries, lastActiveAt, now),
-    ...eventCandidates(input.events, lastActiveAt, now),
+    ...futureIntentCandidates(input.futureTopics, leftAt, now),
+    ...anniversaryCandidates(input.anniversaries, leftAt, now),
+    ...eventCandidates(input.events, leftAt, now),
   ]
     .filter((candidate) => candidate.key !== preference.lastCandidateKey)
     .sort((a, b) => {
