@@ -41,17 +41,21 @@ const basePref = {
   lastResponseEvaluatedAt: 0,
 }
 
-console.log('[initiative] 默认关闭、按 TA 隔离、复用 settings key')
-assert.equal(getInitiativePreference('1').enabled, false)
-assert.equal(saveInitiativePreference('1', { enabled: true }), true)
-assert.equal(getInitiativePreference('1').enabled, true)
-assert.equal(getInitiativePreference('2').enabled, false)
+console.log('[initiative] 默认关闭、按账号 + TA 双隔离、复用 settings key')
+const accountA = 'a@example.com'
+const accountB = 'b@example.com'
+assert.equal(getInitiativePreference(accountA, '1').enabled, false)
+assert.equal(saveInitiativePreference(accountA, '1', { enabled: true }), true)
+assert.equal(getInitiativePreference(accountA, '1').enabled, true)
+assert.equal(getInitiativePreference(accountA, '2').enabled, false)
+assert.equal(getInitiativePreference(accountB, '1').enabled, false, '相同 sessionId 也不能跨账号读主动开关')
 assert.equal([...store.keys()].every((key) => key === 'ai_companion_settings'), true, '不得新增 localStorage key')
 
 console.log('[initiative] API 设置保存不能把主动消息偏好擦掉')
 const settings = loadSettings()
 saveSettings({ provider: settings.provider, apiKey: 'x', baseUrl: settings.baseUrl, model: settings.model })
-assert.equal(getInitiativePreference('1').enabled, true)
+assert.equal(getInitiativePreference(accountA, '1').enabled, true)
+assert.equal(getInitiativePreference(accountB, '1').enabled, false)
 
 console.log('[initiative] disabled / quiet / 无理由 = 零候选')
 assert.equal(chooseInitiativeCandidate({
