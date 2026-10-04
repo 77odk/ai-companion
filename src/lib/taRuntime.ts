@@ -1,10 +1,10 @@
-// TA Runtime · truth-driven current state
-// Home 与 Chat 读同一份持久状态；只有 TA 最终回复里的明确当前自述能创建状态。
-// 无证据、旧随机状态或过期状态统一回 idle。零额外 LLM、无后台轮询。
+// TA Runtime · truth-driven continuity state
+// Home 与 Chat 读同一份持久状态；只有 TA 最终可见回复里的明确自述/原话能创建状态。
+// 无证据、旧随机状态或过期当前态统一回 idle。零额外 LLM、无后台轮询。
 //
-// ★产品边界：Runtime ≠ Busy。Runtime 回答「TA 此刻正在做什么」；Busy 回答「TA 此刻是否暂时无法陪伴」。
+// ★产品边界：Runtime ≠ Busy。Runtime 持有「TA 当前态 + 可追溯的连续性线索」；Busy 只回答「TA 此刻是否暂时无法陪伴」。
 // 本文件绝不读写 Busy（不 import aiBusy / 不写 ai_companion_busy_*），普通生活活动绝不触发 Busy。
-// 也绝不写 Memory / Event / Anniversary / FutureIntent / Space Life——Runtime 只是正在发生的短状态。
+// 也绝不写 Memory / Event / Anniversary / FutureIntent / Space Life；这些对象只允许被其它层读取，绝不能由 Runtime 反向生成。
 //
 // 存储：单一 key ai_companion_ta_runtime（Record<sid, TaRuntimeState>），只经本文件读写，组件禁止直连。
 
@@ -15,6 +15,23 @@ import type { Lang } from './langDetect.ts'
 import { formatAttributedLine } from './promptAttribution.ts'
 import { notifyDataChanged } from './dataChange.ts'
 import { resolveIdentityMode, type IdentityMode } from './companionPolicy.ts'
+
+export type TaContinuityKind = 'open-question' | 'self-intent'
+
+export interface TaContinuityEvidence {
+  /** 只允许来自 TA 最终可见回复；不做模型摘要，原句轻清洗后直接保存。 */
+  kind: TaContinuityKind
+  text: string
+  evidenceAt: number
+  expiresAt: number
+}
+
+export interface TaContinuityState {
+  /** TA 最后一条尚未等到下一轮用户输入的真实问题。 */
+  openThread?: TaContinuityEvidence
+  /** TA 明确说过“下次/之后还想继续”的真实后续意图。 */
+  selfIntent?: TaContinuityEvidence
+}
 
 /** Runtime 状态最小结构：不加 mood/location/weather/description/busy 等。
  * recentActivityIds 只用于短期防重复，仍随同一 ta_runtime 实体保存，不新增 storage key。 */
@@ -37,6 +54,8 @@ export interface TaRuntimeState {
   displayText?: string
   /** displayText 的原始语言；切换语言时不硬显示旧语言，回落 activity 映射。 */
   displayLang?: Lang
+  /** 连续性线索与当前活动共用同一 Runtime 实体；字段可缺省，旧数据零迁移。 */
+  continuity?: TaContinuityState
 }
 
 /** 时段（够用即可，不做细粒度规划器） */
