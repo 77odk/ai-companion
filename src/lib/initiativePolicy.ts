@@ -218,3 +218,22 @@ export function markInitiativeEngaged(preference: InitiativePreference): Initiat
     ignoredStreak: 0,
   }
 }
+
+export function evaluateInitiativeResponse(
+  preference: InitiativePreference,
+  latestUserMessageAt: number,
+): InitiativePreference {
+  if (
+    preference.lastDeliveredAt <= 0 ||
+    preference.lastDeliveredAt <= preference.lastResponseEvaluatedAt
+  ) {
+    return preference
+  }
+  const responded = Number.isFinite(latestUserMessageAt) && latestUserMessageAt > preference.lastDeliveredAt
+  const next = responded ? markInitiativeEngaged(preference) : markInitiativeIgnored(preference)
+  return {
+    ...next,
+    lastResponseEvaluatedAt: preference.lastDeliveredAt,
+  }
+}
+
