@@ -148,7 +148,7 @@ export function composeContext(
     ...core,
     ...keptHistory,
     ...included,
-    ...(newest ? [newest] : []),
+    ...(newestFits && newest ? [newest] : []),
     ...tail,
   ]
   const totalTokens = messages.reduce((sum, message) => sum + estimateToken(message.content), 0)
