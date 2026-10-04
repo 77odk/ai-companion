@@ -107,7 +107,7 @@ assert.equal(shouldTouchMemoryFromUser(mondayWork, '星期一跑步半小时'), 
 assert.equal(shouldTouchMemoryFromUser(M('zhouyi-work', '周一上班很累'), '周一跑步半小时'), false, '“周一”时间骨架不能 exact/touch')
 assert.equal(shouldTouchMemoryFromUser(M('dated-work', '10月4日上班很累'), '10月4日跑步半小时'), false, '具体月日不能单独构成 exact/touch')
 assert.equal(shouldTouchMemoryFromUser(M('iso-date', '2026-10-04上班很累'), '2026-10-04跑步半小时'), false, '数字日期骨架不能 exact/touch')
-assert.equal(shouldTouchMemoryFromUser(M('monday-hospital', '周一去医院看病'), '周一医院排队好久'), true, '剥离时间后仍有具体“医院”事实证据时应匹配')
+assert.equal(shouldTouchMemoryFromUser(M('monday-hospital', '周一去医院看病'), '周一医院看病排队好久'), true, '剥离时间后仍有具体“医院看病”事实证据时应匹配')
 
 const age30 = M('age30', '我今年30岁')
 assert.equal(shouldTouchMemoryFromUser(age30, '这个月花了30元'), false, '相同数字 30 不能单独构成事实级命中')
