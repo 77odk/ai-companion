@@ -124,6 +124,16 @@ const crossDay = chooseInitiativeCandidate({
 })
 assert.equal(crossDay?.reason, 'future-intent')
 
+const departureDayDue = chooseInitiativeCandidate({
+  preference: basePref,
+  lastActiveAt: new Date(2026, 9, 7, 9, 0, 0).getTime(),
+  now: new Date(2026, 9, 8, 9, 0, 0).getTime(),
+  futureTopics: [{ t: '7号晚上一起吃饭', ts: now - 3 * 86400000, futureDay: '2026-10-07' }],
+  events: [],
+  anniversaries: [],
+})
+assert.equal(departureDayDue?.reason, 'future-intent', '跨天补算不能漏掉离开当天到期的计划')
+
 console.log('[initiative] 真实 Event / 今日纪念日可成为候选')
 const event = {
   id: 'ev1',
