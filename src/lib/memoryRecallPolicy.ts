@@ -36,8 +36,9 @@ const STOP_CHARS = new Set(
 
 const GENERIC_ZH_PHRASES = [
   '特别喜欢', '非常喜欢', '比较喜欢', '有点喜欢',
-  '今天', '昨天', '明天', '最近', '现在', '刚才', '刚刚', '今年', '本月', '这个月',
-  '每天', '每日', '天天', '每周', '每星期', '周末', '工作日', '平时', '经常', '总是', '有时', '偶尔',
+  '今天', '昨天', '明天', '前天', '后天', '最近', '现在', '刚才', '刚刚',
+  '今年', '本月', '这个月', '每天', '每日', '天天', '每周', '每星期',
+  '周末', '工作日', '平时', '经常', '总是', '有时', '偶尔',
   '凌晨', '早晨', '早上', '上午', '中午', '下午', '傍晚', '晚上', '深夜', '今早', '今晚',
   '感觉', '觉得', '喜欢', '真的', '还是', '可以', '需要', '可能',
   '就是', '这个', '那个', '其实', '然后', '但是', '因为', '所以',
@@ -51,32 +52,53 @@ const COMMON_ENGLISH = new Set([
   'know', 'knows', 'today', 'yesterday', 'tomorrow', 'now', 'recently', 'really', 'very',
 ])
 
+const ZH_NUM = '〇零一二三四五六七八九十百千廿卅'
+
+/**
+ * 统一剥离“何时”而不是靠枚举单词补洞。
+ * 时间相同不代表事实相同；真正动作/对象会留给后续事实匹配。
+ */
 function stripChineseTimeExpressions(text: string): string {
+  const zh = ZH_NUM
   return text
-    // 星期骨架：周一 / 星期一 / 礼拜一，以及“本周一 / 下星期三”等。
-    .replace(/(?:上|下|这|本)?(?:周|星期|礼拜)[一二三四五六日天]/g, ' ')
+    // 星期：周一 / 星期一 / 礼拜一 / 本周一 / 下星期三。
+    .replace(new RegExp(`(?:上|下|这|本)?(?:周|星期|礼拜)[一二三四五六日天]`, 'g'), ' ')
     .replace(/(?:上|下|这|本)?周末/g, ' ')
-    // 数字日期：2026年10月4日、10月4号、2026-10-04、10/04。
+    .replace(/(?:上|下|这|本)(?:周|星期|礼拜|个月|月)/g, ' ')
+    // 阿拉伯数字日期：2026年10月4日、10月4号、2026-10-04、10/04。
     .replace(/\d{2,4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*[日号]?/g, ' ')
     .replace(/\d{1,2}\s*月\s*\d{1,2}\s*[日号]?/g, ' ')
     .replace(/\d{2,4}[-/.]\d{1,2}[-/.]\d{1,2}/g, ' ')
     .replace(/\d{1,2}[-/.]\d{1,2}/g, ' ')
-    // 中文数字日期：十月四日、二〇二六年十月四日、每月一号。
-    .replace(/[〇零一二三四五六七八九十百千]{2,4}\s*年\s*[〇零一二三四五六七八九十廿卅]{1,3}\s*月\s*[〇零一二三四五六七八九十廿卅]{1,3}\s*[日号]?/g, ' ')
-    .replace(/每月\s*(?:\d{1,2}|[〇零一二三四五六七八九十廿卅]{1,3})\s*[日号]/g, ' ')
-    .replace(/[〇零一二三四五六七八九十廿卅]{1,3}\s*月\s*[〇零一二三四五六七八九十廿卅]{1,3}\s*[日号]/g, ' ')
-    // 纯时长不是事实实体：半小时、30分钟、三天等先剥离；真正动作/对象仍留在文本里。
-    .replace(/(?:半|\d+(?:\.\d+)?|[一二三四五六七八九十百]{1,4})\s*(?:分钟|小时|天|周|个月|月|年)/g, ' ')
-    // 钟点：8点、8:30、上午8点半、晚上九点（中文数字钟点也覆盖）。
-    .replace(/(?:凌晨|早上|上午|中午|下午|傍晚|晚上|深夜)?\s*(?:\d{1,2}|[一二三四五六七八九十]{1,3})\s*(?::|：)\s*\d{1,2}/g, ' ')
-    .replace(/(?:凌晨|早上|上午|中午|下午|傍晚|晚上|深夜)?\s*(?:\d{1,2}|[一二三四五六七八九十]{1,3})\s*(?:点|时)(?:半|\d{1,2}\s*分)?/g, ' ')
+    // 中文数字日期：十月四日、二〇二六年十月四日、每月一号/每个月一号。
+    .replace(new RegExp(`[${zh}]{2,4}\\s*年\\s*[${zh}]{1,3}\\s*月\\s*[${zh}]{1,3}\\s*[日号]?`, 'g'), ' ')
+    .replace(new RegExp(`每(?:个)?月\\s*(?:\\d{1,2}|[${zh}]{1,3})\\s*[日号]`, 'g'), ' ')
+    .replace(new RegExp(`[${zh}]{1,3}\\s*月\\s*[${zh}]{1,3}\\s*[日号]`, 'g'), ' ')
+    // 纯时长不是事实实体：半小时、30分钟、三天等。
+    .replace(new RegExp(`(?:半|\\d+(?:\\.\\d+)?|[${zh}]{1,4})\\s*(?:分钟|小时|天|周|个月|月|年)`, 'g'), ' ')
+    // 钟点：8点、8:30、上午8点半、晚上九点。
+    .replace(new RegExp(`(?:凌晨|早上|上午|中午|下午|傍晚|晚上|深夜)?\\s*(?:\\d{1,2}|[${zh}]{1,3})\\s*(?::|：)\\s*\\d{1,2}`, 'g'), ' ')
+    .replace(new RegExp(`(?:凌晨|早上|上午|中午|下午|傍晚|晚上|深夜)?\\s*(?:\\d{1,2}|[${zh}]{1,3})\\s*(?:点|时)(?:半|\\d{1,2}\\s*分)?`, 'g'), ' ')
+}
+
+/**
+ * 量词/单位只有和数字一起才有辨识力；先剥离，避免“岁/元/公斤”自己变成实体证据。
+ * 例如“咪咪今年3岁”会留下“咪咪”，使 3→4 岁的纠正仍能凭实体命中。
+ */
+function stripNumericUnits(text: string): string {
+  return text.replace(
+    /\d+(?:\.\d+)?\s*(?:岁|元|块钱?|只|个|公斤|千克|斤|厘米|毫米|公里|次)/g,
+    ' ',
+  )
 }
 
 function chineseSpecificSegments(text: string): string[] {
-  let raw = stripChineseTimeExpressions(
-    String(text ?? '')
-      .toLowerCase()
-      .replace(/用户|对方|ta/g, ' '),
+  let raw = stripNumericUnits(
+    stripChineseTimeExpressions(
+      String(text ?? '')
+        .toLowerCase()
+        .replace(/用户|对方|ta/g, ' '),
+    ),
   )
 
   for (const phrase of GENERIC_ZH_PHRASES) raw = raw.split(phrase).join(' ')
@@ -93,6 +115,17 @@ function chineseSpecificSegments(text: string): string[] {
     .filter(Boolean)
 }
 
+function numberUnitAnchors(text: string): Set<string> {
+  // 先去掉日期/钟点/时长，防止“10月4日”自己成为数字事实锚点。
+  const raw = stripChineseTimeExpressions(String(text ?? '').toLowerCase())
+  const anchors = new Set<string>()
+  const matches = raw.match(
+    /\d+(?:\.\d+)?\s*(?:岁|元|块钱?|只|个|公斤|千克|斤|厘米|毫米|公里|次)/g,
+  ) ?? []
+  for (const match of matches) anchors.add(match.replace(/\s+/g, ''))
+  return anchors
+}
+
 function lexicalSignals(text: string): {
   english: Set<string>
   chinese: string[]
@@ -105,7 +138,7 @@ function lexicalSignals(text: string): {
         .filter((word) => word.length >= 3 && !COMMON_ENGLISH.has(word)),
     ),
     chinese: chineseSpecificSegments(raw),
-    numbers: new Set(raw.match(/\d+(?:\.\d+)?/g) ?? []),
+    numberAnchors: numberUnitAnchors(raw),
   }
 }
 
@@ -129,8 +162,8 @@ function hasSpecificChineseOverlap(memorySegments: string[], userSegments: strin
 
 /**
  * 判断“当前用户原话”是否确实点到这条记忆。
- * topic 相同、通用词相同、任意中文二元窗口相同都不够；
- * 必须有具体中文片段、具体英文词或明确数字证据。
+ * topic 相同、通用词相同、裸数字相同都不够；
+ * 必须有具体中文实体/动作、具体英文词，或完整“数字+单位”锚点。
  */
 export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boolean {
   const memoryText = String(item?.text ?? '').trim()
@@ -150,8 +183,7 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
   }
   const sharedChinese = hasSpecificChineseOverlap(mem.chinese, usr.chinese)
 
-  // 裸数字永远不能单独构成事实级证据；“数字+单位”可作为一个完整事实锚点。
-  // 数字发生变化也不提前否决：若仍有“咪咪”等具体实体证据，纠正旧事实必须能命中。
+  // 数字变化不提前否决：若仍有“咪咪”等具体实体证据，纠正旧事实必须能命中。
   return sharedNumberAnchor || sharedEnglish || sharedChinese
 }
 
@@ -175,7 +207,7 @@ function selectionTokens(
 /**
  * 二段式召回的“选择层”：
  * - 候选排序仍沿用现有 recallRelevantMemories（pinned / explicit / recency 等规则不重写）
- * - 入场资格先保护本轮“精确提到”的候选，再按既有排序填剩余预算
+ * - 入场资格：pinned → 本轮精确提到 → 既有候选顺序
  * - 最终返回顺序仍恢复为候选原顺序，不重新洗牌
  * - 生产路径按 buildMemoryBlock 的最终渲染字符串计 token，防止格式展开后实际超预算
  */
