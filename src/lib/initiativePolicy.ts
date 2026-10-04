@@ -152,11 +152,17 @@ export function chooseInitiativeCandidate(input: InitiativePolicyInput): Initiat
   if (!preference.enabled) return null
   if (!Number.isFinite(now) || now <= 0 || !Number.isFinite(lastActiveAt) || lastActiveAt <= 0) return null
   if (now <= lastActiveAt) return null
+
+  const today = localDayKey(now)
+  const lastDay = localDayKey(lastActiveAt)
+  const awayMs = now - lastActiveAt
+  // A2 不是“每次切回来都发”：同一天至少离开 2 小时；跨天则允许补算。
+  if (awayMs < INITIATIVE_MIN_AWAY_MS && lastDay === today) return null
+
   if (
     isInitiativeQuietHour(now, preference.quietStartHour, preference.quietEndHour)
   ) return null
 
-  const today = localDayKey(now)
   if (currentDeliveredCount(preference, today) >= preference.dailyLimit) return null
 
   if (
