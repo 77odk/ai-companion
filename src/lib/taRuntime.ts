@@ -339,6 +339,138 @@ function textClauses(text: string): string[] {
     .filter(Boolean)
 }
 
+export const TA_OPEN_THREAD_TTL_MS = 3 * 24 * 60 * 60 * 1000
+export const TA_SELF_INTENT_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const CONTINUITY_EVIDENCE_MAX_CHARS = 180
+
+function evidenceSentences(text: string): string[] {
+  return (String(text ?? '').replace(/\r/g, '').match(/[^。！？!?\n]+[。！？!?]?/g) ?? [])
+    .map((part) => part.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+}
+
+function compactContinuityEvidence(text: string): string {
+  const cleaned = String(text ?? '')
+    .replace(/^[-—–•·\s]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!cleaned) return ''
+  const chars = Array.from(cleaned)
+  return chars.length > CONTINUITY_EVIDENCE_MAX_CHARS
+    ? `${chars.slice(0, CONTINUITY_EVIDENCE_MAX_CHARS).join('')}…`
+    : cleaned
+}
+
+const ZH_SERVICE_QUESTION_RE = /(?:还有什么|有什么)(?:问题|需要|想问)|(?:还|有)?需要我(?:帮|做)|我还能(?:帮|为你)|要不要我(?:帮|替你)|还有别的(?:问题|需要)|需要(?:帮忙|帮助)吗/
+const EN_SERVICE_QUESTION_RE = /\b(?:anything else|any questions?|need (?:any )?help|anything i can (?:help|do)|how can i help|want me to help)\b/i
+
+function detectOpenQuestionEvidence(text: string, now: number): TaContinuityEvidence | undefined {
+  let evidence = ''
+  for (const sentence of evidenceSentences(text)) {
+    if (!/[？?]$/.test(sentence)) continue
+    if (ZH_SERVICE_QUESTION_RE.test(sentence) || EN_SERVICE_QUESTION_RE.test(sentence)) continue
+    const compact = compactContinuityEvidence(sentence)
+    if (compact.length < 2) continue
+    evidence = compact
+  }
+  return evidence
+    ? {
+        kind: 'open-question',
+        text: evidence,
+        evidenceAt: now,
+        expiresAt: now + TA_OPEN_THREAD_TTL_MS,
+      }
+    : undefined
+}
+
+const ZH_SELF_INTENT_PATTERNS: readonly RegExp[] = [
+  /(?:下次|下回|改天|回头|之后|以后|晚点|等会|待会|过会|过一会|有机会).{0,16}(?:我|我们|咱们).{0,18}(?:还|也)?(?:想|想要|会|要)?(?:再|继续|接着).{0,18}(?:聊|问|听|说|讲)/,
+  /(?:我|我们|咱们).{0,16}(?:下次|下回|改天|回头|之后|以后|晚点|等会|待会|过会|过一会|有机会).{0,18}(?:还|也)?(?:想|想要|会|要)?(?:再|继续|接着).{0,18}(?:聊|问|听|说|讲)/,
+  /(?:我|我们|咱们)(?:还|也)?(?:想|想要).{0,10}(?:下次|下回|之后|以后|回头|改天|有机会).{0,20}(?:再|继续|接着).{0,18}(?:聊|问|听|说|讲)/,
+]
+
+const EN_SELF_INTENT_PATTERNS: readonly RegExp[] = [
+  /\b(?:next time|another time|later|sometime|when we talk again)\b.{0,80}\b(?:i(?:'d| would)? like to|i want to|i(?:'ll| will)|we(?:'ll| will)|let's)\b.{0,60}\b(?:continue|keep|pick (?:this|it) up|ask|hear|talk|come back)\b/i,
+  /\b(?:i(?:'d| would)? like to|i want to|i(?:'ll| will)|we(?:'ll| will)|let's)\b.{0,50}\b(?:next time|another time|later|sometime|when we talk again)\b.{0,60}\b(?:continue|keep|pick (?:this|it) up|ask|hear|talk|come back)\b/i,
+]
+
+function detectSelfIntentEvidence(text: string, now: number): TaContinuityEvidence | undefined {
+  let evidence = ''
+  for (const sentence of evidenceSentences(text)) {
+    if (
+      !ZH_SELF_INTENT_PATTERNS.some((pattern) => pattern.test(sentence))
+      && !EN_SELF_INTENT_PATTERNS.some((pattern) => pattern.test(sentence))
+    ) continue
+    const compact = compactContinuityEvidence(sentence)
+    if (compact) evidence = compact
+  }
+  return evidence
+    ? {
+        kind: 'self-intent',
+        text: evidence,
+        evidenceAt: now,
+        expiresAt: now + TA_SELF_INTENT_TTL_MS,
+      }
+    : undefined
+}
+
+export function pruneTaContinuity(
+  continuity: TaContinuityState | null | undefined,
+  now: number = Date.now(),
+): TaContinuityState | undefined {
+  if (!continuity) return undefined
+  const openThread = continuity.openThread && continuity.openThread.expiresAt > now
+    ? continuity.openThread
+    : undefined
+  const selfIntent = continuity.selfIntent && continuity.selfIntent.expiresAt > now
+    ? continuity.selfIntent
+    : undefined
+  return openThread || selfIntent
+    ? {
+        ...(openThread ? { openThread } : {}),
+        ...(selfIntent ? { selfIntent } : {}),
+      }
+    : undefined
+}
+
+/**
+ * 只从 TA 本轮最终可见回复提取连续性 evidence。
+ * openThread 每个正常 USER→TA 回合都会重新结算：本轮没新问题就清掉上一轮问题；
+ * selfIntent 只有 TA 明确说“之后/下次还想继续”才更新，否则沿用到 TTL。
+ */
+export function detectTaContinuityFromAssistantText(
+  text: string,
+  now: number = Date.now(),
+  previous?: TaContinuityState | null,
+): TaContinuityState | undefined {
+  const prior = pruneTaContinuity(previous, now)
+  const openThread = detectOpenQuestionEvidence(text, now)
+  const selfIntent = detectSelfIntentEvidence(text, now) ?? prior?.selfIntent
+  return openThread || selfIntent
+    ? {
+        ...(openThread ? { openThread } : {}),
+        ...(selfIntent ? { selfIntent } : {}),
+      }
+    : undefined
+}
+
+function continuityEqual(
+  left: TaContinuityState | null | undefined,
+  right: TaContinuityState | null | undefined,
+): boolean {
+  const a = pruneTaContinuity(left, Number.NEGATIVE_INFINITY)
+  const b = pruneTaContinuity(right, Number.NEGATIVE_INFINITY)
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+}
+
+export function getTaContinuity(
+  sessionId?: string,
+  now: number = Date.now(),
+): TaContinuityState | null {
+  const continuity = pruneTaContinuity(getTaRuntime(sessionId)?.continuity, now)
+  return continuity ?? null
+}
+
 function isClearlyOtherPersonClause(clause: string): boolean {
   const t = clause.trim()
   return /^(?:你|对方|他|她)(?![A-Za-z0-9_])/i.test(t) || /^TA\b/i.test(t) || /^(?:you|they|he|she)\b/i.test(t)
