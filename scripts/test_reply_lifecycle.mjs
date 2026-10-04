@@ -1,0 +1,96 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import {
+  findRecoverableReply,
+  interruptionReasonFromError,
+  normalizeStaleReplyLifecycle,
+  preserveReplyLifecycle,
+  registerActiveReplyRun,
+  setReplyLifecycle,
+  unregisterActiveReplyRun,
+} from '../src/lib/replyLifecycle.ts'
+
+const U = (ts, state, reason) => ({
+  role: 'user',
+  content: '原话不能丢',
+  ts,
+  ...(state ? { replyState: state } : {}),
+  ...(reason ? { replyInterruptedReason: reason } : {}),
+})
+const A = (ts, content, state, reason) => ({
+  role: 'assistant',
+  content,
+  ts,
+  ...(state ? { replyState: state } : {}),
+  ...(reason ? { replyInterruptedReason: reason } : {}),
+})
+
+console.log('[reply lifecycle] pending → streaming → interrupted / complete')
+const userTs = 100
+const assistantTs = 200
+const split = [U(userTs, 'pending'), A(assistantTs, '第一泡'), A(assistantTs, '第二泡')]
+const interrupted = setReplyLifecycle(split, userTs, assistantTs, 'interrupted', 'network')
+assert.equal(interrupted[0].replyState, 'interrupted')
+assert.equal(interrupted[0].replyInterruptedReason, 'network')
+assert.equal(interrupted[1].replyState, undefined, '多泡只在最后一泡挂中断标记')
+assert.equal(interrupted[2].replyState, 'interrupted')
+assert.equal(interrupted[2].replyInterruptedReason, 'network')
+
+const completed = setReplyLifecycle(interrupted, userTs, 300, 'complete')
+assert.equal(completed[0].replyState, 'complete')
+assert.equal(completed[0].replyInterruptedReason, undefined, '正常完成必须清掉旧中断原因')
+assert.equal(completed[2].replyState, 'interrupted', '旧 partial 不得被新 retry 冒充 complete')
+
+console.log('[reply lifecycle] 同页 active run 不误判；页面重载后的 stale run 才转 interrupted')
+registerActiveReplyRun('s1', userTs)
+const active = normalizeStaleReplyLifecycle([U(userTs, 'streaming')], 's1')
+assert.equal(active.changed, false)
+unregisterActiveReplyRun('s1', userTs)
+const stale = normalizeStaleReplyLifecycle([U(userTs, 'streaming'), A(assistantTs, '半截', 'streaming')], 's1')
+assert.equal(stale.changed, true)
+assert.equal(stale.messages[0].replyState, 'interrupted')
+assert.equal(stale.messages[0].replyInterruptedReason, 'pagehide')
+assert.equal(stale.messages[1].replyState, 'interrupted')
+
+console.log('[reply lifecycle] 恢复入口只认最近一轮 interrupted，context-limit 不误导重试')
+const recoverable = findRecoverableReply([
+  U(10, 'complete'),
+  A(11, '完整', 'complete'),
+  U(20, 'interrupted', 'timeout'),
+  A(21, '半截', 'interrupted', 'timeout'),
+])
+assert.equal(recoverable?.userMessage.ts, 20)
+assert.equal(recoverable?.reason, 'timeout')
+assert.equal(findRecoverableReply([U(30, 'interrupted', 'context-limit')]), null)
+
+console.log('[reply lifecycle] cloud merge 后保留本地生命周期，但正文/身份仍以后端为准')
+const local = [
+  { id: 7, role: 'user', content: '原话不能丢', ts: 100, replyState: 'interrupted', replyInterruptedReason: 'network' },
+]
+const merged = [
+  { id: 7, role: 'user', content: '原话不能丢', ts: 101 },
+]
+const preserved = preserveReplyLifecycle(local, merged)
+assert.equal(preserved[0].ts, 101)
+assert.equal(preserved[0].replyState, 'interrupted')
+assert.equal(preserved[0].replyInterruptedReason, 'network')
+
+console.log('[reply lifecycle] 429 / timeout / network 分类')
+assert.equal(interruptionReasonFromError({ message: '请求失败（HTTP 429）' }), 'rate-limit')
+assert.equal(interruptionReasonFromError({ message: 'request timeout' }), 'timeout')
+assert.equal(interruptionReasonFromError({ kind: 'network', message: '网络不通' }), 'network')
+assert.equal(interruptionReasonFromError({ message: 'other failure' }), 'unknown')
+
+console.log('[reply lifecycle] Chat 静态闭环：Stop / 切模型 / 切会话 / pagehide + TA-only retry')
+const chatSrc = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+assert.match(chatSrc, /replyInterruptionReasonRef\.current = 'stop'/)
+assert.match(chatSrc, /replyInterruptionReasonRef\.current = 'model-switch'/)
+assert.match(chatSrc, /replyInterruptionReasonRef\.current = 'session-switch'/)
+assert.match(chatSrc, /replyInterruptionReasonRef\.current = 'pagehide'/)
+assert.match(chatSrc, /replyInterruptionReasonRef\.current = interruptionReasonFromError\(err\)/)
+assert.match(chatSrc, /assistantTs = Math\.max\(Date\.now\(\), assistantTs \+ 1\)/)
+assert.match(chatSrc, /if \(!replayExistingUser\) uploadMessage\(roundSessionId, userMsg\)/)
+assert.match(chatSrc, /visibleHistory: visibleMessages\.slice\(0, sourceIndex \+ 1\)/)
+assert.match(chatSrc, /只重试 TA/)
+
+console.log('reply lifecycle tests passed')

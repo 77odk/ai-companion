@@ -213,6 +213,18 @@ export function saveSettings(settings: ModelSettings): void {
 
 // ---- 历史消息 ----
 
+export type ReplyLifecycleState = 'pending' | 'streaming' | 'interrupted' | 'complete'
+export type ReplyInterruptionReason =
+  | 'network'
+  | 'rate-limit'
+  | 'timeout'
+  | 'stop'
+  | 'model-switch'
+  | 'session-switch'
+  | 'pagehide'
+  | 'context-limit'
+  | 'unknown'
+
 export interface StoredMessage {
   /** 后端 messages 表的稳定 id；旧本地消息/尚未上传的乐观消息没有。 */
   id?: number
@@ -225,6 +237,10 @@ export interface StoredMessage {
   memorySaved?: boolean
   /** 思考链原文（模块三·内心戏）：模型推理过程，展示时以「TA 想了想」灰条折叠；旧数据没有 = 不显示 */
   thinking?: string
+  /** 本地 BYOK 回复生命周期；只随现有消息缓存保存，不进入 messages API。 */
+  replyState?: ReplyLifecycleState
+  /** replyState=interrupted 时记录中断原因；旧数据没有 = 未知。 */
+  replyInterruptedReason?: ReplyInterruptionReason
 }
 
 /** 用户气泡下「✅已帮你记下」反馈是否显示：仅用户消息且该条触发了记忆写入（TASK-LM2） */

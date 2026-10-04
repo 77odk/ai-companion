@@ -199,7 +199,7 @@ assert.ok(chatSource.includes("if (liveAllowBusy && !busyTriggeredRef.current &&
 assert.match(chatSource, /const unavailableIdentityProblem = Boolean\(/, '自然 / AI 的离开话术转身份 repair，不进入 Busy')
 assert.match(chatSource, /!liveAllowBusy && cleanedAvailability\?\.state === 'unavailable'/, '自然 / AI finalize 拦截不可用声明')
 assert.match(chatSource, /!retryAllowBusy && retryAvailability\?\.state === 'unavailable'/, 'repair 后按当前身份再次校验，不放行离开话术')
-assert.match(chatSource, /if \(guardCleaned && identityProblem && retriedRef\.current\) \{\s*commitFinal\(\[\.\.\.rawWithUser\]\)/s, '用户 Stop 命中身份问题时不落违规 partial，也不再发模型请求；existing-user round 也不重复 user')
+assert.match(chatSource, /if \(guardCleaned && identityProblem && retriedRef\.current\) \{\s*commitFinal\(\[\.\.\.replyBaseMessages\]\)/s, '用户 Stop 命中身份问题时不落违规 partial，也不再发模型请求；existing-user round 保留已有 partial 且不重复 user')
 assert.match(chatSource, /looksEmbodiedSelfClaim\(guardText, liveIdentityMode\)/, 'pagehide / hidden partial 落库前也必须检查当前身份边界')
 assert.match(chatSource, /if \(identityProblem \|\| !text\) return\s*const partialReplyLength/s, '违规或无可见正文的 partial 不得进入 commitPartialReply / pending upload')
 assert.match(chatSource, /else if \(retryAllowBusy && retryAvailability\?\.state === 'unavailable' && retryAvailability\.owner === 'SELF'\)/, 'repair 期间切回沉浸后，SELF 离开话术必须真正进入 Busy')
@@ -232,6 +232,6 @@ assert.match(chatSource, /const sameSession = \(getActiveSessionId\(\) \|\| null
 assert.match(chatSource, /const sameSegment = !activeSessionId \|\| getSessionStart\(activeSessionId\) === sessionStart/, '刷新对话后旧重试失效')
 assert.ok(!chatSource.includes('send(failedText)'), '失败重试不能把旧文本重新塞回 send')
 assert.ok(chatSource.includes('新消息开始即废弃上一轮的失败重试'), '发新消息后旧重试失效')
-assert.match(chatSource, /setFailedReplyRetryAvailable\(false\)\s*setError\(null\)\s*setFailedText\(null\)/, '切会话/刷新上下文同时清掉旧失败提示')
+assert.match(chatSource, /setFailedReplyRetryAvailable\(false\)[\s\S]*?setRecoveryDismissedTs\(null\)[\s\S]*?setError\(null\)\s*setFailedText\(null\)/, '切会话/刷新上下文同时清掉旧失败提示与恢复提示')
 
 console.log('\n身份模式 #13：全部通过')

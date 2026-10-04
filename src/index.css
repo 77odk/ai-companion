@@ -337,6 +337,37 @@ button {
   padding: 0 12px 8px;
 }
 
+.chat-reply-recovery {
+  margin: 0 14px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border, #e8e8ec);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface, #fff);
+  color: var(--color-text-secondary, #666);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.chat-reply-recovery-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.chat-reply-recovery-actions button {
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  color: var(--color-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.chat-reply-recovery-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .rate-fallback {
   display: flex;
   align-items: center;
@@ -500,6 +531,12 @@ button {
   font-size: 11px;
   color: var(--color-primary-deep);
   opacity: 0.8;
+}
+
+.message-interrupted {
+  padding-left: 4px;
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 
 /* 用户指令触发记忆写入时，用户气泡下方的小字反馈（与「已记住」同款浅色小字，右对齐贴气泡） */

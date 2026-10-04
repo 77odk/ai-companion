@@ -6,7 +6,7 @@
 //
 // 做法：关页面/切后台时把已经生成出来的那部分落库，并排进 pendingOps（同步写 localStorage，
 // 不需要网络）；下次打开聊天页时的 flushPendingOps 会把它补传到后端。
-import { loadMessages, saveMessages, type StoredMessage } from './storage.ts'
+import { loadMessages, saveMessages, type ReplyInterruptionReason, type ReplyLifecycleState, type StoredMessage } from './storage.ts'
 import { splitDetailedAssistantReply, type ReplyLength } from './replyLength.ts'
 import {
   addPendingOp,
@@ -32,13 +32,27 @@ export function commitPartialReply(
   queue = true,
   replyLength: ReplyLength = 'natural',
   conversationBranchId?: string,
+  lifecycle?: { state: ReplyLifecycleState; reason?: ReplyInterruptionReason },
 ): StoredMessage[] {
   const rawParts = replyLength === 'long'
     ? splitDetailedAssistantReply(cleanedText, ts)
     : splitAssistantReplies(cleanedText, ts)
-  const parts = conversationBranchId
+  const branchParts = conversationBranchId
     ? rawParts.map((part) => ({ ...part, conversationBranchId }))
     : rawParts
+  const parts = lifecycle
+    ? branchParts.map((part, index) => (
+        index === branchParts.length - 1
+          ? {
+              ...part,
+              replyState: lifecycle.state,
+              ...(lifecycle.state === 'interrupted' && lifecycle.reason
+                ? { replyInterruptedReason: lifecycle.reason }
+                : {}),
+            }
+          : part
+      ))
+    : branchParts
   if (!parts.length) return []
   const base = sessionId ? getMessagesCache(sessionId) : loadMessages()
   // 替换同 ts 的旧内容（占位空消息 / 之前落过的半截），不是追加
