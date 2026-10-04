@@ -117,6 +117,10 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
   const mem = lexicalSignals(memoryText)
   const usr = lexicalSignals(user)
 
+  const sharedNumber = [...mem.numbers].some((number) => usr.numbers.has(number))
+  // 两边都带数字但数字不一致时，先否决：避免“30岁”与“31岁”只因共享“岁”被视为同一事实。
+  if (mem.numbers.size > 0 && usr.numbers.size > 0 && !sharedNumber) return false
+
   let sharedEnglish = false
   for (const word of mem.english) {
     if (!usr.english.has(word)) continue
@@ -124,17 +128,9 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
     break
   }
   const sharedChinese = hasSpecificChineseOverlap(mem.chinese, usr.chinese)
-  if (sharedEnglish || sharedChinese) return true
 
-  // 数字只能作为“具体事实”的辅助证据，不能单独把 30岁 与 30元 判成同一事实。
-  // 没有具体词/实体重合时，即使数字相同也不算 exact/touch。
-  let sharedNumber = false
-  for (const number of mem.numbers) {
-    if (!usr.numbers.has(number)) continue
-    sharedNumber = true
-    break
-  }
-  return sharedNumber && (sharedEnglish || sharedChinese)
+  // 数字永远不能单独构成事实级证据；必须同时有具体实体/动作/单位等文本证据。
+  return sharedEnglish || sharedChinese
 }
 
 function roughSelectionTokens(items: MemoryItem[]): number {
