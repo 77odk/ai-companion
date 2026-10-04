@@ -220,6 +220,7 @@ export type ReplyInterruptionReason =
   | 'timeout'
   | 'stop'
   | 'model-switch'
+  | 'session-switch'
   | 'pagehide'
   | 'context-limit'
   | 'unknown'
