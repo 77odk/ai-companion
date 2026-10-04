@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
-import { buildActionNarrationInstruction, buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
+import { buildActionNarrationInstruction, buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
 import { getSessionStart, isActionNarrationEnabled, loadMessages, loadPersona, loadSettings, loadAIProfile, loadUserProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, clearContextBridge, getContextUsage, setContextUsage, clearContextUsage, type ContextUsageState, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
@@ -58,20 +58,19 @@ import { formatQuotedMessage, messageEvidenceText, parseQuotedMessage, type Mess
 import { CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState } from '../lib/conversationState'
 
 /**
- * 时间流逝感知（2026-09-05 夜 乔修，数据层不加设定）：发给模型的每条历史消息标上相对时间，
- * TA 看到「你 3 小时前发的」自然知道隔了多久——解决「对时间流逝无感」。只在间隔明显时标，不刷屏。
+ * 历史时间锚必须稳定：同一条历史消息无论过几分钟再次发送，前缀都完全一致，
+ * 让 provider 能复用「核心 system + 历史」这一大段前缀。当前时间另走动态 ContextBlock。
  */
-function msgTimeMark(ts: number, lang: Lang): string {
+function msgTimeMark(ts: number, _lang: Lang): string {
   if (!Number.isFinite(ts) || ts <= 0) return ''
-  const diff = Date.now() - ts
-  if (diff < 2 * 60000) return ''
-  const m = Math.floor(diff / 60000)
-  if (m < 60) return lang === 'en' ? `[${m} min ago] ` : `[${m} 分钟前] `
-  const h = Math.floor(m / 60)
-  if (h < 24) return lang === 'en' ? `[${h} h ago] ` : `[${h} 小时前] `
-  const days = Math.floor(h / 24)
-  if (days === 1) return lang === 'en' ? '[yesterday] ' : '[昨天] '
-  return lang === 'en' ? `[${days} days ago] ` : `[${days} 天前] `
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ''
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `[${yyyy}-${mm}-${dd} ${hh}:${min}] `
 }
 import { detectLang, type Lang } from '../lib/langDetect'
 import { getSessionLang, saveSessionLang } from '../lib/sessionStore'
@@ -1189,14 +1188,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       {
         role: 'system',
         content:
-          buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined, lang) +
+          buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined, lang, false) +
           (replyPreference ? '\n\n' + replyPreference : '') +
           (actionNarrationPreference ? '\n\n' + actionNarrationPreference : ''),
       },
     ]
     // 核心 system 只留稳定身份/规则；Memory/Event/Runtime/Space 等都走现有 ContextBlock，
     // 避免所有功能永久挤进不可裁剪的 core。
-    const contextBlocks: ContextBlock[] = []
+    const contextBlocks: ContextBlock[] = [
+      { id: 'current-time', content: buildTimeContext(Date.now(), lang), priority: 'core' },
+    ]
     const correctionTargets = new Map<string, MemoryCorrectionTarget>()
 
     const contextText = base
