@@ -262,7 +262,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   )
   const recoverableReply = useMemo(() => findRecoverableReply(visibleMessages), [visibleMessages])
   const showReplyRecovery = Boolean(
-    recoverableReply && recoveryDismissedTs !== recoverableReply.userMessage.ts,
+    recoverableReply &&
+    !failedReplyRetryAvailable &&
+    recoveryDismissedTs !== recoverableReply.userMessage.ts,
   )
   // 只在展示层合并“同一生成批次内、相邻、内容完全相同”的 TA 气泡；底层历史/上传/上下文一律不改。
   const displayMessages = useMemo(
@@ -1186,7 +1188,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
     }
     const base = replayExistingUser ? roundVisibleMessages : [...roundVisibleMessages, userMsg]
-    const assistantTs = Date.now()
+    let assistantTs = Date.now()
     assistantText.current = ''
     reasoningRef.current = ''
     setMessages([...rawWithUser, tagCurrentBranch({ role: 'assistant', content: '', ts: assistantTs })])
@@ -1926,6 +1928,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       failedReplyRetryRef.current = null
       replyInterruptionReasonRef.current = null
+      // 每次 TA-only retry 使用新的 assistant ts：保留上一段 interrupted partial，同时绝不把它再次上传。
+      assistantTs = Math.max(Date.now(), assistantTs + 1)
       replyBaseMessages = roundSessionId ? getMessagesCache(roundSessionId) : loadMessages()
       replyBaseMessages = setReplyLifecycle(replyBaseMessages, userMsg.ts, assistantTs, 'pending')
       persistMessages(roundSessionId, replyBaseMessages)
@@ -2454,7 +2458,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
       {error && (
         <div className="chat-error-wrap">
-          <div className="chat-error">{failedReplyRetryAvailable ? 'TA 刚才没回出来，可以重试这一条。' : error}</div>
+          <div className="chat-error">
+            {failedReplyRetryAvailable
+              ? (chatUiLang === 'en' ? 'That reply was interrupted. You can retry TA only.' : 'TA 刚才的回复中断了，可以只重试 TA。')
+              : error}
+          </div>
           {failedReplyRetryAvailable && (
             <button
               type="button"
@@ -2462,7 +2470,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
               disabled={streaming}
               onClick={() => failedReplyRetryRef.current?.()}
             >
-              重试
+              {chatUiLang === 'en' ? 'Retry TA only' : '只重试 TA'}
             </button>
           )}
           {isRateLimitError(error) && (
