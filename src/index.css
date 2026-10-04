@@ -3876,6 +3876,236 @@ button.account-list-row:active { background: color-mix(in srgb, var(--color-prim
   color: var(--color-text-muted);
 }
 
+/* 我的 → 使用与支持 → 用量信息 */
+.usage-info-page {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(36px + env(safe-area-inset-bottom));
+}
+
+.usage-info-local-note,
+.usage-info-footnote {
+  margin: 0;
+  padding: 0 2px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.usage-info-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 18px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+}
+
+.usage-info-empty strong {
+  font-size: 15px;
+  color: var(--color-text);
+}
+
+.usage-info-empty span {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.usage-info-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.usage-info-stat,
+.usage-info-section {
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  border-radius: var(--radius-md);
+}
+
+.usage-info-stat {
+  min-width: 0;
+  padding: 12px 10px;
+}
+
+.usage-info-stat > span,
+.usage-info-stat small {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.usage-info-stat strong {
+  display: block;
+  margin: 4px 0 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-text);
+  font-size: 18px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.usage-info-section {
+  padding: 14px;
+}
+
+.usage-info-section h3 {
+  margin: 0 0 12px;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.usage-info-days {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.usage-info-day {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 54px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.usage-info-day-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+}
+
+.usage-info-day-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+
+.usage-info-day-value {
+  text-align: right;
+}
+
+.usage-info-role-list,
+.usage-info-turn-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.usage-info-role {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+}
+
+.usage-info-role + .usage-info-role,
+.usage-info-turn + .usage-info-turn {
+  border-top: 1px solid var(--color-border);
+}
+
+.usage-info-role > div,
+.usage-info-role-value {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.usage-info-role strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.usage-info-role span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.usage-info-role-value {
+  flex: none;
+  text-align: right;
+}
+
+.usage-info-turn {
+  padding: 10px 0;
+}
+
+.usage-info-turn-head,
+.usage-info-turn-metrics {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.usage-info-turn-head {
+  justify-content: space-between;
+}
+
+.usage-info-turn-head strong {
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.usage-info-turn-head span,
+.usage-info-turn-model,
+.usage-info-turn-metrics,
+.usage-info-turn-source {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.usage-info-turn-model {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.usage-info-turn-metrics {
+  margin-top: 5px;
+  color: var(--color-text);
+}
+
+.usage-info-turn-source {
+  margin-top: 3px;
+}
+
+@media (max-width: 390px) {
+  .usage-info-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .usage-info-stat {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 10px;
+    align-items: baseline;
+  }
+
+  .usage-info-stat strong {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    margin: 0;
+  }
+
+  .usage-info-stat small {
+    grid-column: 1;
+  }
+}
+
 .feedback-image-row .feedback-image-name {
   min-width: 0;
   overflow: hidden;

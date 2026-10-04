@@ -30,6 +30,7 @@ import {
   saveModelHistory,
   isActionNarrationEnabled,
   saveActionNarrationEnabled,
+  getAllLocalContextUsageTurns,
   type AIGender,
   type ModelSettings,
   type Provider,
@@ -62,11 +63,12 @@ import {
   resolveRolePersona,
   roleInitial,
 } from '../lib/sessionProfile'
+import { estimateUsageTurnCost, formatUsageMoney, formatUsageTokens, summarizeUsageTurns } from '../lib/usageCost'
 
 type TestState = 'idle' | 'testing' | 'success' | 'error'
 
 /** 设置页子页：使用指南已抽成 App 独立 view（guide），不再嵌在这里 */
-export type SettingsPage = 'main' | 'ai' | 'provider' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary' | 'profile' | 'privacy' | 'reply'
+export type SettingsPage = 'main' | 'ai' | 'provider' | 'usage' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary' | 'profile' | 'privacy' | 'reply'
 
 interface Props {
   onGoWelcome?: () => void
@@ -144,6 +146,9 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
   if (page === 'profile') {
     return <MyProfileDetail onBack={() => backFrom('profile')} />
   }
+  if (page === 'usage') {
+    return <UsageInfoDetail onBack={() => backFrom('usage')} />
+  }
   if (page === 'privacy') {
     return <PrivacyDetail onBack={() => backFrom('privacy')} />
   }
@@ -176,6 +181,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenAccount={() => openSubpage('account')}
       onOpenPrivacy={() => openSubpage('privacy')}
       onOpenProvider={() => openSubpage('provider')}
+      onOpenUsage={() => openSubpage('usage')}
       onOpenGuide={() => onGoGuide?.()}
       onOpenAbout={() => openSubpage('about')}
       onOpenAppearance={() => openSubpage('appearance')}
@@ -225,6 +231,7 @@ function MainCenter({
   onOpenAccount,
   onOpenPrivacy,
   onOpenProvider,
+  onOpenUsage,
   onOpenGuide,
   onOpenAbout,
   onOpenAppearance,
@@ -242,6 +249,7 @@ function MainCenter({
   onOpenAccount: () => void
   onOpenPrivacy: () => void
   onOpenProvider: () => void
+  onOpenUsage: () => void
   onOpenGuide: () => void
   onOpenAbout: () => void
   onOpenAppearance: () => void
@@ -294,6 +302,7 @@ function MainCenter({
       <ProfileGroup title="使用与支持">
         <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
         <EntryRow icon={<KeyIcon />} label="API 设置" status={`${providerLabel} · ${modelLabel}`} onClick={onOpenProvider} />
+        <EntryRow icon={<UsageIcon />} label="用量信息" onClick={onOpenUsage} />
         <EntryRow icon={<NotificationIcon />} label="消息与通知" onClick={onOpenNotifications} unread={hasUnreadNotifications} />
         <EntryRow icon={<FeedbackIcon />} label="反馈与建议" onClick={onOpenFeedback} />
       </ProfileGroup>
@@ -339,6 +348,156 @@ function MainCenter({
         <button type="button" className="btn logout-btn" onClick={handleLogout}>
           退出登录
         </button>
+      )}
+    </div>
+  )
+}
+
+function UsageInfoDetail({ onBack }: { onBack: () => void }) {
+  const sessions = getSessionsCache()
+  const [turns] = useState(() => getAllLocalContextUsageTurns(sessions.map((session) => session.id)))
+  const summary = summarizeUsageTurns(turns)
+  const globalName = loadAIProfile().nickname
+  const maxDayTokens = Math.max(
+    1,
+    ...summary.days.map((day) => day.inputTokens + day.outputTokens),
+  )
+  const recent = turns.slice(0, 50)
+  const todayTokens = summary.today.inputTokens + summary.today.outputTokens
+  const cacheLabel = summary.cacheHitRate == null
+    ? '不可测'
+    : `${(summary.cacheHitRate * 100).toFixed(1)}%`
+
+  const sessionName = (sessionId: string) =>
+    resolveRoleName(sessionId, sessions, globalName)
+
+  return (
+    <div className="page settings-page usage-info-page">
+      <DetailHeader title="用量信息" onBack={onBack} />
+
+      <p className="usage-info-local-note">
+        这里只统计这台设备上的模型调用，不上传逐轮明细。服务商没有返回的项目会标为估算或未知。
+      </p>
+
+      {turns.length === 0 ? (
+        <div className="usage-info-empty">
+          <strong>还没有可显示的用量</strong>
+          <span>和 TA 聊几轮后，这里会开始记录。</span>
+        </div>
+      ) : (
+        <>
+          <section className="usage-info-summary" aria-label="今日用量">
+            <div className="usage-info-stat">
+              <span>今日用量</span>
+              <strong>{formatUsageTokens(todayTokens)}</strong>
+              <small>
+                输入 {formatUsageTokens(summary.today.inputTokens)} · 输出 {formatUsageTokens(summary.today.outputTokens)}
+              </small>
+            </div>
+            <div className="usage-info-stat">
+              <span>今日花费</span>
+              <strong>{formatUsageMoney(summary.today.cost)}</strong>
+              <small>
+                {summary.today.cost.unknownTurns > 0
+                  ? `${summary.today.cost.unknownTurns} 轮价格未知`
+                  : '按公开价估算'}
+              </small>
+            </div>
+            <div className="usage-info-stat">
+              <span>缓存命中率</span>
+              <strong>{cacheLabel}</strong>
+              <small>
+                {summary.cacheHitRate == null
+                  ? '服务商未返回缓存用量'
+                  : summary.cacheUnknownTurns > 0
+                    ? `另有 ${summary.cacheUnknownTurns} 轮不可测`
+                    : '按服务商返回值计算'}
+              </small>
+            </div>
+          </section>
+
+          <section className="usage-info-section">
+            <h3>近 7 天</h3>
+            <div className="usage-info-days">
+              {summary.days.map((day) => {
+                const total = day.inputTokens + day.outputTokens
+                const width = total > 0 ? Math.max(4, (total / maxDayTokens) * 100) : 0
+                return (
+                  <div className="usage-info-day" key={day.key}>
+                    <span className="usage-info-day-label">{day.label}</span>
+                    <span className="usage-info-day-track" aria-hidden="true">
+                      <span className="usage-info-day-bar" style={{ width: `${width}%` }} />
+                    </span>
+                    <span className="usage-info-day-value">{formatUsageTokens(total)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          <section className="usage-info-section">
+            <h3>按 TA</h3>
+            <div className="usage-info-role-list">
+              {summary.sessions.map((item) => (
+                <div className="usage-info-role" key={item.sessionId}>
+                  <div>
+                    <strong>{sessionName(item.sessionId)}</strong>
+                    <span>{item.turns} 轮</span>
+                  </div>
+                  <div className="usage-info-role-value">
+                    <strong>{formatUsageTokens(item.inputTokens + item.outputTokens)}</strong>
+                    <span>{formatUsageMoney(item.cost)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="usage-info-section">
+            <h3>每轮明细</h3>
+            <div className="usage-info-turn-list">
+              {recent.map((turn) => {
+                const cost = estimateUsageTurnCost(turn)
+                const time = new Date(turn.createdAt).toLocaleString(undefined, {
+                  month: 'numeric',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+                return (
+                  <div className="usage-info-turn" key={turn.id}>
+                    <div className="usage-info-turn-head">
+                      <strong>{sessionName(turn.sessionId)}</strong>
+                      <span>{time}</span>
+                    </div>
+                    <div className="usage-info-turn-model">
+                      {PROVIDER_NAMES[turn.provider] ?? turn.provider} · {turn.model || '模型未知'}
+                    </div>
+                    <div className="usage-info-turn-metrics">
+                      <span>输入 {formatUsageTokens(turn.inputTokens)}</span>
+                      <span>输出 {turn.outputTokens == null ? '未知' : formatUsageTokens(turn.outputTokens)}</span>
+                      <span>缓存 {turn.cachedTokens == null ? '未知' : formatUsageTokens(turn.cachedTokens)}</span>
+                      <span>花费 {cost ? formatUsageMoney({
+                        CNY: cost.currency === 'CNY' ? cost.amount : 0,
+                        USD: cost.currency === 'USD' ? cost.amount : 0,
+                        unknownTurns: 0,
+                        cacheEstimatedTurns: cost.cacheKnown ? 0 : 1,
+                      }) : '未知'}</span>
+                    </div>
+                    <div className="usage-info-turn-source">
+                      {turn.source === 'actual' ? '服务商返回' : '本地估算'}
+                      {cost && !cost.cacheKnown ? ' · 缓存项按未命中估算' : ''}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          <p className="usage-info-footnote">
+            花费只按忆文内置的公开价格表估算，服务商最终账单为准；无法确认价格的模型不会硬算。
+          </p>
+        </>
       )}
     </div>
   )
@@ -580,6 +739,15 @@ const KeyIcon = () => (
     <path d="M10 13L21 2" />
     <path d="M15.5 7.5l3 3" />
     <path d="M18.5 4.5l3 3" />
+  </svg>
+)
+
+const UsageIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M5 19V9" />
+    <path d="M12 19V5" />
+    <path d="M19 19v-7" />
+    <path d="M3 19h18" />
   </svg>
 )
 

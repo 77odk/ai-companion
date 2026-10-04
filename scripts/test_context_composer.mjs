@@ -217,7 +217,7 @@ assert.match(chatSource, /getContextUsage\(activeSessionId\)/, '进入会话从 
 assert.match(chatSource, /setContextUsage\(estimatedContextState, activeSessionId\)/, '发送时估算 Meter 持久化')
 assert.match(chatSource, /used: sessionContentTokens,[\s\S]*source: 'estimate',[\s\S]*inputTokens: composed\.totalTokens/, '发送前：总量按会话累计估算，明细保留本轮输入估算')
 assert.match(chatSource, /used: contentTokensOf\(usageMessages\(roundVisibleMessages, userMsg\), nextFactor\)[\s\S]*source: 'actual'/, 'provider usage 返回后总量按当前 active round 上下文段写入（校准系数由真实 usage 反推）')
-assert.match(chatSource, /setContextUsage\(actualContextState, activeSessionId\)/, '真实 usage 结果写回 session 持久化')
+assert.match(chatSource, /if \(mountedRef\.current\) setContextMeter\(completedContextState\)[\s\S]*if \(roundSessionId\) setContextUsage\(completedContextState, roundSessionId\)/, '真实/估算完成态无论 Chat 是否卸载都写回本轮 owner session；只有 React Meter 受 mounted 限制')
 assert.match(chatSource, /if \(composed\.overBudget\)/, '超过 64k 时在 provider 调用前停止')
 assert.match(chatSource, /buildSystemPrompt\(persona, nameForPrompt, undefined, getActiveSessionId\(\) \|\| undefined, lang, false\)/, '主聊天 core system 必须关闭动态时间前缀')
 assert.match(chatSource, /id: 'current-time'[\s\S]*buildTimeContext\(Date\.now\(\), lang\)/, '当前时间改走动态 ContextBlock')

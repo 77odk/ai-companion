@@ -320,6 +320,7 @@ export function setSessionStart(ts: number, sessionId?: string): void {
 // ---- Context Meter：按 session 持久化当前上下文占用 ----
 
 const CONTEXT_USAGE_KEY = 'ai_companion_context_usage'
+const CONTEXT_USAGE_TURN_LIMIT = 1000
 
 function contextUsageKey(sessionId?: string): string {
   return sessionId ? `${CONTEXT_USAGE_KEY}_sid_${sessionId}` : CONTEXT_USAGE_KEY
@@ -338,6 +339,29 @@ export interface ContextUsageState {
   outputTokens?: number
   cachedTokens?: number
   updatedAt: number
+}
+
+/**
+ * P0-C 本机逐轮用量。
+ * 与 Context Meter 共用既有 ai_companion_context_usage_sid_* key，不新增 localStorage key。
+ * 同步层 collectAllContextUsages 只拿 current；localTurns 永远不进入同步 payload。
+ */
+export interface ContextUsageTurn {
+  id: string
+  sessionId: string
+  createdAt: number
+  provider: Provider
+  model: string
+  baseUrlHost: string
+  source: 'actual' | 'estimate'
+  inputTokens: number
+  outputTokens?: number
+  cachedTokens?: number
+}
+
+interface ContextUsageEnvelope {
+  current: ContextUsageState | null
+  localTurns: ContextUsageTurn[]
 }
 
 function normalizeContextUsage(raw: unknown): ContextUsageState | null {
@@ -373,22 +397,120 @@ function normalizeContextUsage(raw: unknown): ContextUsageState | null {
   }
 }
 
-export function getContextUsage(sessionId?: string): ContextUsageState | null {
-  try {
-    const raw = localStorage.getItem(contextUsageKey(sessionId))
-    return raw ? normalizeContextUsage(JSON.parse(raw)) : null
-  } catch {
-    return null
+function normalizeContextUsageTurn(raw: unknown): ContextUsageTurn | null {
+  if (!raw || typeof raw !== 'object') return null
+  const value = raw as Partial<ContextUsageTurn>
+  const id = typeof value.id === 'string' ? value.id : ''
+  const sessionId = typeof value.sessionId === 'string' ? value.sessionId : ''
+  const createdAt = Number(value.createdAt)
+  const inputTokens = Number(value.inputTokens)
+  if (
+    !id || !sessionId ||
+    !Number.isFinite(createdAt) || createdAt <= 0 ||
+    !Number.isFinite(inputTokens) || inputTokens < 0 ||
+    !['deepseek', 'zhipu', 'openai', 'custom', 'volcengine', 'mimo'].includes(String(value.provider))
+  ) return null
+  const outputTokens = typeof value.outputTokens === 'number' && Number.isFinite(value.outputTokens) && value.outputTokens >= 0
+    ? value.outputTokens
+    : undefined
+  const cachedTokens = typeof value.cachedTokens === 'number' && Number.isFinite(value.cachedTokens) && value.cachedTokens >= 0
+    ? value.cachedTokens
+    : undefined
+  return {
+    id,
+    sessionId,
+    createdAt,
+    provider: value.provider as Provider,
+    model: typeof value.model === 'string' ? value.model : '',
+    baseUrlHost: typeof value.baseUrlHost === 'string' ? value.baseUrlHost : '',
+    source: value.source === 'actual' ? 'actual' : 'estimate',
+    inputTokens,
+    ...(outputTokens == null ? {} : { outputTokens }),
+    ...(cachedTokens == null ? {} : { cachedTokens }),
   }
 }
 
-function writeContextUsage(state: ContextUsageState, sessionId?: string, notify = false): void {
+function readContextUsageEnvelope(sessionId?: string): ContextUsageEnvelope {
   try {
-    localStorage.setItem(contextUsageKey(sessionId), JSON.stringify(state))
+    const raw = localStorage.getItem(contextUsageKey(sessionId))
+    if (!raw) return { current: null, localTurns: [] }
+    const parsed = JSON.parse(raw)
+    // 兼容已上线旧格式：key 里直接就是 ContextUsageState。
+    const legacy = normalizeContextUsage(parsed)
+    if (legacy) return { current: legacy, localTurns: [] }
+    if (!parsed || typeof parsed !== 'object') return { current: null, localTurns: [] }
+    const value = parsed as { current?: unknown; localTurns?: unknown }
+    const current = normalizeContextUsage(value.current)
+    const localTurns = Array.isArray(value.localTurns)
+      ? value.localTurns.map(normalizeContextUsageTurn).filter((item): item is ContextUsageTurn => item != null)
+      : []
+    return { current, localTurns: localTurns.slice(-CONTEXT_USAGE_TURN_LIMIT) }
+  } catch {
+    return { current: null, localTurns: [] }
+  }
+}
+
+function writeContextUsageEnvelope(envelope: ContextUsageEnvelope, sessionId?: string, notify = false): void {
+  try {
+    const localTurns = envelope.localTurns.slice(-CONTEXT_USAGE_TURN_LIMIT)
+    if (!envelope.current && localTurns.length === 0) {
+      localStorage.removeItem(contextUsageKey(sessionId))
+    } else {
+      localStorage.setItem(contextUsageKey(sessionId), JSON.stringify({
+        ...(envelope.current ? { current: envelope.current } : {}),
+        ...(localTurns.length > 0 ? { localTurns } : {}),
+      }))
+    }
     if (notify) notifyDataChanged()
   } catch {
     // 存不下不影响聊天
   }
+}
+
+function modelUsageHost(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+export function getContextUsage(sessionId?: string): ContextUsageState | null {
+  return readContextUsageEnvelope(sessionId).current
+}
+
+export function getContextUsageTurns(sessionId: string): ContextUsageTurn[] {
+  if (!sessionId) return []
+  return readContextUsageEnvelope(sessionId).localTurns
+}
+
+/**
+ * 只读取调用方明确传入的当前账号 session。
+ * 同一浏览器换账号时，本地旧 key 可以继续保留，但不会跨账号出现在「用量信息」里。
+ * session 列表尚未恢复时传空数组 → 返回空，宁可暂时不显示也不泄露旧账号用量。
+ */
+export function getAllLocalContextUsageTurns(sessionIds: Array<string | number>): ContextUsageTurn[] {
+  const allowed = new Set(
+    (Array.isArray(sessionIds) ? sessionIds : [])
+      .map((id) => String(id ?? '').trim())
+      .filter(Boolean),
+  )
+  if (allowed.size === 0) return []
+
+  const out: ContextUsageTurn[] = []
+  const prefix = `${CONTEXT_USAGE_KEY}_sid_`
+  forEachLocalStorageKey((key) => {
+    if (!key.startsWith(prefix)) return
+    const sid = key.slice(prefix.length)
+    if (!sid || !allowed.has(sid)) return
+    out.push(...getContextUsageTurns(sid))
+  })
+  return out.sort((a, b) => b.createdAt - a.createdAt)
+}
+
+function writeContextUsage(state: ContextUsageState, sessionId?: string, notify = false): void {
+  const envelope = readContextUsageEnvelope(sessionId)
+  writeContextUsageEnvelope({ ...envelope, current: state }, sessionId, notify)
 }
 
 export function setContextUsage(state: Omit<ContextUsageState, 'updatedAt'> & { updatedAt?: number }, sessionId?: string): void {
@@ -397,13 +519,43 @@ export function setContextUsage(state: Omit<ContextUsageState, 'updatedAt'> & { 
     updatedAt: Number.isFinite(state.updatedAt) && Number(state.updatedAt) > 0 ? Number(state.updatedAt) : Date.now(),
   })
   if (!normalized) return
-  writeContextUsage(normalized, sessionId, true)
+
+  const envelope = readContextUsageEnvelope(sessionId)
+  let localTurns = envelope.localTurns
+
+  // 发送前那次 estimate 只有 input、没有 output，只用于 Context Meter，不算实际发生的一轮。
+  // 请求结束后：provider 有 usage，或 fallback 已估出 output，才进入逐轮明细。
+  const shouldRecordTurn = Boolean(sessionId) && (
+    normalized.source === 'actual' ||
+    typeof normalized.outputTokens === 'number'
+  )
+  if (shouldRecordTurn && sessionId) {
+    const settings = loadSettings()
+    const provider = settings.provider
+    const cfg = settings.providers[provider]
+    const createdAt = normalized.updatedAt
+    const turn: ContextUsageTurn = {
+      id: `${sessionId}:${createdAt}:${localTurns.length}`,
+      sessionId,
+      createdAt,
+      provider,
+      model: cfg?.model?.trim() || settings.model.trim(),
+      baseUrlHost: modelUsageHost(cfg?.baseUrl || settings.baseUrl),
+      source: normalized.source,
+      inputTokens: normalized.inputTokens,
+      ...(normalized.outputTokens == null ? {} : { outputTokens: normalized.outputTokens }),
+      ...(normalized.cachedTokens == null ? {} : { cachedTokens: normalized.cachedTokens }),
+    }
+    localTurns = [...localTurns, turn].slice(-CONTEXT_USAGE_TURN_LIMIT)
+  }
+
+  writeContextUsageEnvelope({ current: normalized, localTurns }, sessionId, true)
 }
 
 export function clearContextUsage(sessionId?: string, notify = true): void {
   try {
-    localStorage.removeItem(contextUsageKey(sessionId))
-    if (notify) notifyDataChanged()
+    const envelope = readContextUsageEnvelope(sessionId)
+    writeContextUsageEnvelope({ current: null, localTurns: envelope.localTurns }, sessionId, notify)
   } catch {
     // ignore
   }
