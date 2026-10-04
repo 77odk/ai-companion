@@ -190,43 +190,54 @@ function normalizeOwner(value: string | undefined | null): string | null {
  * - Mimi's weight / weight of Mimi / 小夏的工资 → 对应实体
  * - 没有明确 owner → null（允许用户省略主语继续说同一件事）
  */
-function englishOwnerForEvidence(raw: string, evidence: string): string | null {
+function explicitEnglishOwner(raw: string, evidence: string): string | null {
   const word = escapeRegExp(evidence)
   if (new RegExp(`\\b(?:my|mine|myself|user(?:['’]s)?)\\s+${word}\\b`, 'i').test(raw)) {
     return SELF_OWNER
   }
 
-  const before = raw.match(new RegExp(`\\b([a-z][a-z'-]{1,30})(?:['’]s)?\\s+${word}\\b`, 'i'))
-  const beforeOwner = normalizeOwner(before?.[1])
-  if (beforeOwner) return beforeOwner
+  const possessive = raw.match(new RegExp(`\\b([a-z][a-z'-]{1,30})['’]s\\s+${word}\\b`, 'i'))
+  const possessiveOwner = normalizeOwner(possessive?.[1])
+  if (possessiveOwner) return possessiveOwner
 
   const after = raw.match(new RegExp(`\\b${word}\\s+of\\s+([a-z][a-z'-]{1,30})\\b`, 'i'))
   return normalizeOwner(after?.[1])
 }
 
-function chineseOwnerForEvidence(raw: string, evidence: string): string | null {
+function explicitChineseOwner(raw: string, evidence: string): string | null {
   const compact = String(raw ?? '').replace(/\\s+/g, '')
   const shared = escapeRegExp(evidence)
 
   if (new RegExp(`(?:我|本人|自己)(?:的)?${shared}`).test(compact)) return SELF_OWNER
 
-  // 优先“X 的属性”这种显式所有关系，避免把前面的整段句子吃进 owner。
   const possessive = compact.match(new RegExp(`([\\u4e00-\\u9fff]{1,6})的${shared}`))
   const possessiveOwner = normalizeOwner(possessive?.[1])
   if (possessiveOwner) return possessiveOwner
 
-  // 兼容“咪咪体重 / 小夏工资”这类省略“的”的口语；只取紧邻事实词的短实体。
-  const direct = compact.match(new RegExp(`([\\u4e00-\\u9fff]{1,4})${shared}`))
-  const directOwner = normalizeOwner(direct?.[1])
-  if (directOwner) return directOwner
-
-  // 少量后置所有关系，例如“工资是小夏的”。
   const after = compact.match(new RegExp(`${shared}(?:是|属于)?([\\u4e00-\\u9fff]{1,4})的`))
   return normalizeOwner(after?.[1])
 }
 
-function ownersCompatible(memoryOwner: string | null, userOwner: string | null): boolean {
-  // 用户本轮可省略 owner 继续说同一件事；只有双方都明确指向实体时才做冲突否决。
+function contextOwnerFromText(value: string, evidence: string): string | null {
+  const index = value.indexOf(evidence)
+  if (index < 0) return null
+  const before = value.slice(0, index)
+  const after = value.slice(index + evidence.length)
+  // 前缀更常表示“谁的事实”；没有前缀时再看后置实体。
+  return normalizeOwner(before.slice(-6)) || normalizeOwner(after.slice(0, 6))
+}
+
+function evidenceOwnersCompatible(
+  memoryExplicit: string | null,
+  userExplicit: string | null,
+  memoryContext: string | null,
+  userContext: string | null,
+): boolean {
+  // 显式 owner（我的 / X 的 / X's / of X）优先。
+  const memoryOwner = memoryExplicit || memoryContext
+  const userOwner = userExplicit || userContext
+
+  // 一边省略主语继续说同一件事时不做否决；双方都有 owner/context 才比较。
   if (!memoryOwner || !userOwner) return true
   return memoryOwner === userOwner
 }
@@ -238,11 +249,21 @@ function hasSpecificEnglishOverlap(
   userWords: string[],
 ): boolean {
   const userSet = new Set(userWords)
-  for (const word of memoryWords) {
+  for (let memoryIndex = 0; memoryIndex < memoryWords.length; memoryIndex++) {
+    const word = memoryWords[memoryIndex]
     if (!userSet.has(word)) continue
-    const memoryOwner = englishOwnerForEvidence(memoryRaw, word)
-    const userOwner = englishOwnerForEvidence(userRaw, word)
-    if (!ownersCompatible(memoryOwner, userOwner)) continue
+    const userIndex = userWords.indexOf(word)
+
+    const memoryExplicit = explicitEnglishOwner(memoryRaw, word)
+    const userExplicit = explicitEnglishOwner(userRaw, word)
+    const memoryContext =
+      normalizeOwner(memoryWords[memoryIndex - 1]) ||
+      normalizeOwner(memoryWords[memoryIndex + 1])
+    const userContext =
+      normalizeOwner(userWords[userIndex - 1]) ||
+      normalizeOwner(userWords[userIndex + 1])
+
+    if (!evidenceOwnersCompatible(memoryExplicit, userExplicit, memoryContext, userContext)) continue
     return true
   }
   return false
@@ -260,12 +281,16 @@ function hasSpecificChineseOverlap(
       const longer = memory.length <= user.length ? user : memory
       if (shorter.length < 2 || !longer.includes(shorter)) continue
 
-      const memoryOwner = chineseOwnerForEvidence(memoryRaw, shorter)
-      const userOwner = chineseOwnerForEvidence(userRaw, shorter)
-      if (!ownersCompatible(memoryOwner, userOwner)) continue
+      const memoryExplicit = explicitChineseOwner(memoryRaw, shorter)
+      const userExplicit = explicitChineseOwner(userRaw, shorter)
+      const memoryContext = contextOwnerFromText(memory, shorter)
+      const userContext = contextOwnerFromText(user, shorter)
+      if (!evidenceOwnersCompatible(memoryExplicit, userExplicit, memoryContext, userContext)) continue
 
       // 裸属性词本身不是事实实体；只有双方都明确绑定到同一 owner 才足以 exact。
       if (GENERIC_ATTRIBUTE_SEGMENTS.has(shorter)) {
+        const memoryOwner = memoryExplicit || memoryContext
+        const userOwner = userExplicit || userContext
         if (memoryOwner && userOwner && memoryOwner === userOwner) return true
         continue
       }
