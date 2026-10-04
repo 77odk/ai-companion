@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getAccount } from '../lib/sync'
 import { getActiveSessionId, getSessionsCache } from '../lib/sessionStore'
 import { displaySessionName } from '../lib/sessionFlow'
-import { setSessionStart } from '../lib/storage'
+import { getInitiativePreference, saveInitiativePreference, setSessionStart } from '../lib/storage'
 import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
 import {
   getGlobalReplyLength,
@@ -35,11 +35,14 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
   const [preference, setPreference] = useState<ReplyLengthPreference>(() => getReplyLengthPreference(accountId, sessionId))
   const [error, setError] = useState('')
   const [confirmRefresh, setConfirmRefresh] = useState(false)
+  const [initiativeEnabled, setInitiativeEnabled] = useState(() => getInitiativePreference(sessionId).enabled)
+  const [confirmInitiative, setConfirmInitiative] = useState(false)
 
   useEffect(() => {
     const refresh = () => {
       setGlobalValue(getGlobalReplyLength(accountId))
       setPreference(getReplyLengthPreference(accountId, sessionId))
+      setInitiativeEnabled(getInitiativePreference(sessionId).enabled)
     }
     window.addEventListener(ELUVIN_DATA_CHANGE, refresh)
     return () => window.removeEventListener(ELUVIN_DATA_CHANGE, refresh)
@@ -70,6 +73,32 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
       return
     }
     setPreference((current) => ({ ...current, mode: option.value }))
+    setError('')
+  }
+
+  const toggleInitiative = () => {
+    if (!sessionId) return
+    if (!initiativeEnabled) {
+      setConfirmInitiative(true)
+      return
+    }
+    if (!saveInitiativePreference(sessionId, { enabled: false })) {
+      setError('没有保存成功，稍后再试一下')
+      return
+    }
+    setInitiativeEnabled(false)
+    setConfirmInitiative(false)
+    setError('')
+  }
+
+  const enableInitiative = () => {
+    if (!sessionId) return
+    if (!saveInitiativePreference(sessionId, { enabled: true })) {
+      setError('没有保存成功，稍后再试一下')
+      return
+    }
+    setInitiativeEnabled(true)
+    setConfirmInitiative(false)
     setError('')
   }
 
@@ -159,6 +188,43 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
         </div>
 
         {error ? <p className="reply-length-error" role="status">{error}</p> : null}
+      </section>
+
+      <section className="chat-settings-section">
+        <div className="chat-settings-section-head">
+          <h2>主动消息</h2>
+          <p>只有有真实理由时，TA 才会主动找你。</p>
+        </div>
+        <div className="chat-settings-card">
+          <div className="chat-follow-row">
+            <div className="chat-follow-copy">
+              <strong>让 TA 主动找你</strong>
+              <small>默认关闭 · 每天最多 2 次 · 23:00–08:00 不打扰</small>
+            </div>
+            <button
+              type="button"
+              className={`chat-follow-switch${initiativeEnabled ? ' is-on' : ''}`}
+              role="switch"
+              aria-checked={initiativeEnabled}
+              aria-label={`主动消息，当前${initiativeEnabled ? '已开启' : '已关闭'}`}
+              onClick={toggleInitiative}
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
+          {confirmInitiative ? (
+            <div className="chat-settings-refresh-confirm">
+              <p>
+                开启后，只有未完约定、真实事件、重要日子等有依据的情况才会触发。
+                你回到忆文时，最多用当前设备上的模型 Key 做一次短生成；Key 不上传服务器。无理由时不会调用模型。
+              </p>
+              <div className="chat-settings-refresh-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setConfirmInitiative(false)}>先不开</button>
+                <button type="button" className="btn btn-primary" onClick={enableInitiative}>确认开启</button>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </section>
 
       <section className="chat-settings-section">
