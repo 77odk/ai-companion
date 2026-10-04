@@ -64,6 +64,7 @@ export interface InitiativePreference {
   deliveredCount: number
   ignoredStreak: number
   lastCandidateKey: string
+  lastBackgroundAt: number
 }
 
 const DEFAULT_INITIATIVE_PREFERENCE: InitiativePreference = {
@@ -76,6 +77,7 @@ const DEFAULT_INITIATIVE_PREFERENCE: InitiativePreference = {
   deliveredCount: 0,
   ignoredStreak: 0,
   lastCandidateKey: '',
+  lastBackgroundAt: 0,
 }
 
 function normalizeInitiativePreference(raw: unknown): InitiativePreference {
@@ -100,6 +102,9 @@ function normalizeInitiativePreference(raw: unknown): InitiativePreference {
     deliveredCount: Number.isInteger(value.deliveredCount) && Number(value.deliveredCount) >= 0 ? Number(value.deliveredCount) : 0,
     ignoredStreak: Number.isInteger(value.ignoredStreak) && Number(value.ignoredStreak) >= 0 ? Number(value.ignoredStreak) : 0,
     lastCandidateKey: typeof value.lastCandidateKey === 'string' ? value.lastCandidateKey : '',
+    lastBackgroundAt: typeof value.lastBackgroundAt === 'number' && Number.isFinite(value.lastBackgroundAt) && value.lastBackgroundAt > 0
+      ? value.lastBackgroundAt
+      : 0,
   }
 }
 
