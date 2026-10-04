@@ -37,12 +37,16 @@ const STOP_CHARS = new Set(
 const GENERIC_ZH_PHRASES = [
   '特别喜欢', '非常喜欢', '比较喜欢', '有点喜欢',
   '今天', '昨天', '明天', '前天', '后天', '最近', '现在', '刚才', '刚刚',
-  '今年', '本月', '这个月', '每天', '每日', '天天', '每周', '每星期',
+  '今年', '本月', '这个月', '每天', '每日', '天天', '每年', '每月', '每周', '每星期',
   '周末', '工作日', '平时', '经常', '总是', '有时', '偶尔',
   '凌晨', '早晨', '早上', '上午', '中午', '下午', '傍晚', '晚上', '深夜', '今早', '今晚',
   '感觉', '觉得', '喜欢', '真的', '还是', '可以', '需要', '可能',
   '就是', '这个', '那个', '其实', '然后', '但是', '因为', '所以',
 ].sort((a, b) => b.length - a.length)
+
+const GENERIC_TOPIC_SEGMENTS = new Set([
+  '工作', '饮食', '宠物', '家人', '健康', '日子', '其他',
+])
 
 const COMMON_ENGLISH = new Set([
   'the', 'a', 'an', 'and', 'or', 'but', 'to', 'of', 'in', 'on', 'at', 'for', 'with', 'from',
@@ -52,7 +56,7 @@ const COMMON_ENGLISH = new Set([
   'know', 'knows', 'today', 'yesterday', 'tomorrow', 'now', 'recently', 'really', 'very',
 ])
 
-const ZH_NUM = '〇零一二三四五六七八九十百千廿卅'
+const ZH_NUM = '〇零一二三四五六七八九十百千两廿卅'
 
 /**
  * 统一剥离“何时”而不是靠枚举单词补洞。
@@ -65,6 +69,7 @@ function stripChineseTimeExpressions(text: string): string {
     .replace(new RegExp(`(?:上|下|这|本)?(?:周|星期|礼拜)[一二三四五六日天]`, 'g'), ' ')
     .replace(/(?:上|下|这|本)?周末/g, ' ')
     .replace(/(?:上|下|这|本)(?:周|星期|礼拜|个月|月)/g, ' ')
+    .replace(/每(?:年|月|周|星期|天|日)/g, ' ')
     // 阿拉伯数字日期：2026年10月4日、10月4号、2026-10-04、10/04。
     .replace(/\d{2,4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*[日号]?/g, ' ')
     .replace(/\d{1,2}\s*月\s*\d{1,2}\s*[日号]?/g, ' ')
@@ -75,7 +80,7 @@ function stripChineseTimeExpressions(text: string): string {
     .replace(new RegExp(`每(?:个)?月\\s*(?:\\d{1,2}|[${zh}]{1,3})\\s*[日号]`, 'g'), ' ')
     .replace(new RegExp(`[${zh}]{1,3}\\s*月\\s*[${zh}]{1,3}\\s*[日号]`, 'g'), ' ')
     // 纯时长不是事实实体：半小时、30分钟、三天等。
-    .replace(new RegExp(`(?:半|\\d+(?:\\.\\d+)?|[${zh}]{1,4})\\s*(?:分钟|小时|天|周|个月|月|年)`, 'g'), ' ')
+    .replace(new RegExp(`(?:半|\\d+(?:\\.\\d+)?|[${zh}]{1,6})\\s*(?:个)?\\s*(?:秒|分钟|小时|刻钟|天|周|月|年)(?:后|前|内|左右)?`, 'g'), ' ')
     // 钟点：8点、8:30、上午8点半、晚上九点。
     .replace(new RegExp(`(?:凌晨|早上|上午|中午|下午|傍晚|晚上|深夜)?\\s*(?:\\d{1,2}|[${zh}]{1,3})\\s*(?::|：)\\s*\\d{1,2}`, 'g'), ' ')
     .replace(new RegExp(`(?:凌晨|早上|上午|中午|下午|傍晚|晚上|深夜)?\\s*(?:\\d{1,2}|[${zh}]{1,3})\\s*(?:点|时)(?:半|\\d{1,2}\\s*分)?`, 'g'), ' ')
@@ -86,8 +91,9 @@ function stripChineseTimeExpressions(text: string): string {
  * 例如“咪咪今年3岁”会留下“咪咪”，使 3→4 岁的纠正仍能凭实体命中。
  */
 function stripNumericUnits(text: string): string {
+  const zh = ZH_NUM
   return text.replace(
-    /\d+(?:\.\d+)?\s*(?:岁|元|块钱?|只|个|公斤|千克|斤|厘米|毫米|公里|次)/g,
+    new RegExp(`(?:\\d+(?:\\.\\d+)?|[${zh}]{1,6})\\s*(?:岁|元|块钱?|只|个|公斤|千克|斤|厘米|毫米|公里|次)`, 'g'),
     ' ',
   )
 }
@@ -112,15 +118,16 @@ function chineseSpecificSegments(text: string): string[] {
   return normalized
     .split(/\s+/)
     .map((part) => part.trim())
-    .filter(Boolean)
+    .filter((part) => Boolean(part) && !GENERIC_TOPIC_SEGMENTS.has(part))
 }
 
 function numberUnitAnchors(text: string): Set<string> {
-  // 先去掉日期/钟点/时长，防止“10月4日”自己成为数字事实锚点。
+  // 先去掉日期/钟点/时长，防止时间数字自己成为事实锚点。
   const raw = stripChineseTimeExpressions(String(text ?? '').toLowerCase())
   const anchors = new Set<string>()
+  const zh = ZH_NUM
   const matches = raw.match(
-    /\d+(?:\.\d+)?\s*(?:岁|元|块钱?|只|个|公斤|千克|斤|厘米|毫米|公里|次)/g,
+    new RegExp(`(?:\\d+(?:\\.\\d+)?|[${zh}]{1,6})\\s*(?:岁|元|块钱?|只|个|公斤|千克|斤|厘米|毫米|公里|次)`, 'g'),
   ) ?? []
   for (const match of matches) anchors.add(match.replace(/\s+/g, ''))
   return anchors
