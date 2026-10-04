@@ -95,8 +95,17 @@ check('详细模式正文不丢', detailedParts[0]?.content === detailedText)
 console.log('[6c] 分支中的半截回复保留 branch membership')
 reset()
 saveMessagesCache(SID, [{ role: 'user', content: '继续', ts: T - 1000 }, { role: 'assistant', content: '', ts: T, conversationBranchId: 'branch-x' }])
-const branchParts = commitPartialReply(SID, T, '分支半截', true, 'natural', 'branch-x')
+const branchParts = commitPartialReply(
+  SID,
+  T,
+  '分支半截',
+  true,
+  'natural',
+  'branch-x',
+  { state: 'interrupted', reason: 'pagehide' },
+)
 check('落库消息带 branchId', branchParts.every((m) => m.conversationBranchId === 'branch-x'))
+check('最后一泡标记 interrupted', branchParts.at(-1)?.replyState === 'interrupted' && branchParts.at(-1)?.replyInterruptedReason === 'pagehide')
 check('缓存消息带 branchId', getMessagesCache(SID).filter((m) => m.ts === T).every((m) => m.conversationBranchId === 'branch-x'))
 const branchOps = getPendingOps()
 check('待上传项带 branchId', branchOps.length > 0 && branchOps.every((op) => op.type !== 'message' || op.conversationBranchId === 'branch-x'))
@@ -106,7 +115,8 @@ const fs = await import('node:fs')
 const chatSrc = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
 check('注册 pagehide', /addEventListener\('pagehide'/.test(chatSrc))
 check('注册 visibilitychange', /addEventListener\('visibilitychange'/.test(chatSrc))
-check('调用 commitPartialReply（带当前回复长度 + live branch）', /commitPartialReply\(sid, ts, text, leaving, partialReplyLength, partialBranchId\)/.test(chatSrc))
+check('调用 commitPartialReply（带当前回复长度 + live branch + lifecycle）', /commitPartialReply\([\s\S]*?partialReplyLength,[\s\S]*?partialBranchId,[\s\S]*?state: 'interrupted'/.test(chatSrc))
+check('pagehide 明确标记 interrupted', /replyInterruptionReasonRef\.current = 'pagehide'/.test(chatSrc))
 check('生成开始时记下 ts（partialTsRef）', /partialTsRef\.current = assistantTs/.test(chatSrc))
 check('正常结束时清掉标记（commitFinal 内）', /partialTsRef\.current = null/.test(chatSrc))
 
