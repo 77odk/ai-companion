@@ -48,6 +48,11 @@ const GENERIC_TOPIC_SEGMENTS = new Set([
   '工作', '饮食', '宠物', '家人', '健康', '日子', '其他',
 ])
 
+/** 这些词描述“属性槽位”而不是所属实体；单独重合不足以证明是同一条事实。 */
+const GENERIC_ATTRIBUTE_SEGMENTS = new Set([
+  '体重', '身高', '年龄', '岁数', '血压', '体温',
+])
+
 const COMMON_ENGLISH = new Set([
   'the', 'a', 'an', 'and', 'or', 'but', 'to', 'of', 'in', 'on', 'at', 'for', 'with', 'from',
   'that', 'this', 'it', 'its', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
@@ -138,6 +143,7 @@ function lexicalSignals(text: string): {
   english: Set<string>
   chinese: string[]
   numberAnchors: Set<string>
+  selfOwned: boolean
 } {
   const raw = String(text ?? '').toLowerCase()
   return {
@@ -147,14 +153,26 @@ function lexicalSignals(text: string): {
     ),
     chinese: chineseSpecificSegments(raw),
     numberAnchors: numberUnitAnchors(raw),
+    selfOwned: /(?:^|[^\u4e00-\u9fff])(?:我|本人|自己)(?:的)?|^(?:我|本人|自己)/.test(raw) || raw.includes('我的'),
   }
 }
 
-function hasSpecificChineseOverlap(memorySegments: string[], userSegments: string[]): boolean {
+function hasSpecificChineseOverlap(
+  memorySegments: string[],
+  userSegments: string[],
+  memorySelfOwned: boolean,
+  userSelfOwned: boolean,
+): boolean {
   for (const memory of memorySegments) {
     for (const user of userSegments) {
       const shorter = memory.length <= user.length ? memory : user
       const longer = memory.length <= user.length ? user : memory
+      // “体重/身高/年龄”等裸属性词不能跨所属实体匹配。
+      // 双方都明确指向“我”时允许同一属性槽位用于纠正；“我的体重”不能命中“咪咪体重”。
+      if (GENERIC_ATTRIBUTE_SEGMENTS.has(shorter)) {
+        if (memorySelfOwned && userSelfOwned && memory === user) return true
+        continue
+      }
       // 两字以上的具体连续片段才足以构成事实级证据；不再用任意二元窗口。
       if (shorter.length >= 2 && longer.includes(shorter)) return true
     }
@@ -189,7 +207,12 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
     sharedEnglish = true
     break
   }
-  const sharedChinese = hasSpecificChineseOverlap(mem.chinese, usr.chinese)
+  const sharedChinese = hasSpecificChineseOverlap(
+    mem.chinese,
+    usr.chinese,
+    mem.selfOwned,
+    usr.selfOwned,
+  )
 
   // 数字变化不提前否决：若仍有“咪咪”等具体实体证据，纠正旧事实必须能命中。
   return sharedNumberAnchor || sharedEnglish || sharedChinese
