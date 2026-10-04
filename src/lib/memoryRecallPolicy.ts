@@ -36,7 +36,9 @@ const STOP_CHARS = new Set(
 
 const GENERIC_ZH_PHRASES = [
   '特别喜欢', '非常喜欢', '比较喜欢', '有点喜欢',
-  '今天', '昨天', '明天', '最近', '现在', '刚才', '刚刚',
+  '今天', '昨天', '明天', '最近', '现在', '刚才', '刚刚', '今年', '本月', '这个月',
+  '每天', '每日', '天天', '每周', '每星期', '周末', '工作日', '平时', '经常', '总是', '有时', '偶尔',
+  '凌晨', '早晨', '早上', '上午', '中午', '下午', '傍晚', '晚上', '深夜', '今早', '今晚',
   '感觉', '觉得', '喜欢', '真的', '还是', '可以', '需要', '可能',
   '就是', '这个', '那个', '其实', '然后', '但是', '因为', '所以',
 ].sort((a, b) => b.length - a.length)
@@ -115,9 +117,24 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
   const mem = lexicalSignals(memoryText)
   const usr = lexicalSignals(user)
 
-  for (const word of mem.english) if (usr.english.has(word)) return true
-  for (const number of mem.numbers) if (usr.numbers.has(number)) return true
-  return hasSpecificChineseOverlap(mem.chinese, usr.chinese)
+  let sharedEnglish = false
+  for (const word of mem.english) {
+    if (!usr.english.has(word)) continue
+    sharedEnglish = true
+    break
+  }
+  const sharedChinese = hasSpecificChineseOverlap(mem.chinese, usr.chinese)
+  if (sharedEnglish || sharedChinese) return true
+
+  // 数字只能作为“具体事实”的辅助证据，不能单独把 30岁 与 30元 判成同一事实。
+  // 没有具体词/实体重合时，即使数字相同也不算 exact/touch。
+  let sharedNumber = false
+  for (const number of mem.numbers) {
+    if (!usr.numbers.has(number)) continue
+    sharedNumber = true
+    break
+  }
+  return sharedNumber && (sharedEnglish || sharedChinese)
 }
 
 function roughSelectionTokens(items: MemoryItem[]): number {
@@ -159,13 +176,18 @@ export function selectMemoryWorkingSet(
   }
 
   const indexed = list.map((item, index) => ({ item, index }))
+  const pinned = indexed.filter(({ item }) => item.pinned === true)
+  const pinnedIndexes = new Set(pinned.map(({ index }) => index))
   const exact = options.userText
-    ? indexed.filter(({ item }) => isSpecificMemoryMatch(item, options.userText ?? ''))
+    ? indexed.filter(({ item, index }) =>
+        !pinnedIndexes.has(index) && isSpecificMemoryMatch(item, options.userText ?? ''),
+      )
     : []
   const exactIndexes = new Set(exact.map(({ index }) => index))
   const admissionOrder = [
+    ...pinned,
     ...exact,
-    ...indexed.filter(({ index }) => !exactIndexes.has(index)),
+    ...indexed.filter(({ index }) => !pinnedIndexes.has(index) && !exactIndexes.has(index)),
   ]
 
   const selectedIndexes = new Set<number>()
