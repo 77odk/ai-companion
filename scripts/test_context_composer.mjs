@@ -95,6 +95,35 @@ assert.equal(
   'budget',
   'Ledger records active-history budget drop',
 )
+
+const gapHistory = [
+  ...Array.from({ length: 3 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: `archive-${i}` })),
+  { role: 'assistant', content: '堵'.repeat(200) },
+  ...Array.from({ length: 9 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: `recent-${i}` })),
+  { role: 'user', content: 'latest-gap-check' },
+]
+const recentSuffixTokens = gapHistory
+  .slice(-10, -1)
+  .reduce((sum, message) => sum + estimateToken(message.content), 0)
+const gapBudget =
+  estimateToken('core') +
+  estimateToken('latest-gap-check') +
+  recentSuffixTokens +
+  5
+const contiguous = composeContext(
+  [{ role: 'system', content: 'core' }],
+  gapHistory,
+  [],
+  [],
+  gapBudget,
+)
+assert.ok(contiguous.messages.some((m) => m.content === 'recent-8'), 'recent suffix is retained')
+assert.ok(!contiguous.messages.some((m) => m.content === 'archive-0'), 'archive must not fill a gap when active window is incomplete')
+assert.equal(
+  contiguous.ledger.find((entry) => entry.source === 'history:archive')?.included,
+  false,
+  'Ledger confirms archive was not admitted across an active-history gap',
+)
 assert.equal(
   blocks.ledger.find((entry) => entry.source === 'irrelevant')?.reason,
   'irrelevant',
