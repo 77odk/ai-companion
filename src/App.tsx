@@ -21,6 +21,10 @@ import {
   saveAIRemark,
   saveAIGender,
   savePersona,
+  getInitiativePreference,
+  saveInitiativePreference,
+  loadSettings,
+  recordLocalModelUsageTurn,
 } from './lib/storage'
 import { getToken, isLoggedIn, isPublicView, logout } from './lib/auth'
 import { createSession, listSessions } from './lib/sessionApi'
@@ -29,6 +33,7 @@ import {
   getBusyState,
   getSessionLang,
   getSessionsCache,
+  getMessagesCache,
   setActiveSessionId,
   setSessionsCache,
 } from './lib/sessionStore'
@@ -54,7 +59,16 @@ import { hydrateCloudState, initCloudStateSync, syncCloudState } from './lib/clo
 import { queueLegacyCloudStateBackfill } from './lib/cloudStateResources'
 import { closeOldestCandidateWindowOnStartup } from './lib/eventDetector'
 import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from './lib/taRuntime'
-import { loadConversationState } from './lib/conversationState'
+import { branchIdForNewMessage, loadConversationState, resolveConversationMessages } from './lib/conversationState'
+import { futureTopicsFromMessages } from './lib/chatTopics'
+import { getEvents } from './lib/eventStore'
+import { getAnniversaries } from './lib/anniversary'
+import { evaluateInitiativeResponse } from './lib/initiativePolicy'
+import { runInitiativeCatchUp } from './lib/initiativeRuntime'
+import { commitInitiativeMessage } from './lib/initiativeCommit'
+import { chatCompletion } from './lib/api'
+import { estimateToken } from './lib/token'
+import { resolveIdentityMode } from './lib/companionPolicy'
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
 const RolePicker = lazy(() => import('./components/RolePicker'))
@@ -77,6 +91,12 @@ const NotificationsPage = lazy(() => import('./components/NotificationsPage'))
 const FeedbackPage = lazy(() => import('./components/FeedbackPage'))
 
 type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'notifications' | 'feedback' | 'loading'
+
+interface InitiativeNotice {
+  sessionId: string
+  taName: string
+  content: string
+}
 
 const emptyFeedbackDraft = (): FeedbackDraft => ({ type: 'bug', content: '', images: [] })
 
