@@ -2,6 +2,7 @@ import { getAccount } from './sync.ts'
 import { postMessage } from './sessionApi.ts'
 import { getMessagesCache, getSessionsCache, saveMessagesCache } from './sessionStore.ts'
 import type { StoredMessage } from './storage.ts'
+import { appendConfirmedMessageToBranch } from './conversationState.ts'
 
 export interface InitiativeCommitInput {
   sessionId: string
@@ -57,6 +58,9 @@ export async function commitInitiativeMessage(input: InitiativeCommitInput): Pro
       [...current, message].sort((a, b) => a.ts - b.ts),
       false,
     )
+  }
+  if (input.conversationBranchId) {
+    appendConfirmedMessageToBranch(sessionId, input.conversationBranchId, response.data.id)
   }
 
   if (typeof window !== 'undefined') {
