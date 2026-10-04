@@ -41,13 +41,17 @@ export function commitPartialReply(
     ? rawParts.map((part) => ({ ...part, conversationBranchId }))
     : rawParts
   const parts = lifecycle
-    ? branchParts.map((part) => ({
-        ...part,
-        replyState: lifecycle.state,
-        ...(lifecycle.state === 'interrupted' && lifecycle.reason
-          ? { replyInterruptedReason: lifecycle.reason }
-          : {}),
-      }))
+    ? branchParts.map((part, index) => (
+        index === branchParts.length - 1
+          ? {
+              ...part,
+              replyState: lifecycle.state,
+              ...(lifecycle.state === 'interrupted' && lifecycle.reason
+                ? { replyInterruptedReason: lifecycle.reason }
+                : {}),
+            }
+          : part
+      ))
     : branchParts
   if (!parts.length) return []
   const base = sessionId ? getMessagesCache(sessionId) : loadMessages()
