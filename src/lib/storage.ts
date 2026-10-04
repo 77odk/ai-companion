@@ -54,6 +54,101 @@ export function saveActionNarrationEnabled(enabled: boolean): boolean {
   }
 }
 
+export interface InitiativePreference {
+  enabled: boolean
+  dailyLimit: number
+  quietStartHour: number
+  quietEndHour: number
+  lastDeliveredAt: number
+  deliveredDay: string
+  deliveredCount: number
+  ignoredStreak: number
+  lastCandidateKey: string
+  lastBackgroundAt: number
+}
+
+const DEFAULT_INITIATIVE_PREFERENCE: InitiativePreference = {
+  enabled: false,
+  dailyLimit: 2,
+  quietStartHour: 23,
+  quietEndHour: 8,
+  lastDeliveredAt: 0,
+  deliveredDay: '',
+  deliveredCount: 0,
+  ignoredStreak: 0,
+  lastCandidateKey: '',
+  lastBackgroundAt: 0,
+}
+
+function normalizeInitiativePreference(raw: unknown): InitiativePreference {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_INITIATIVE_PREFERENCE }
+  const value = raw as Partial<InitiativePreference>
+  const dailyLimit = Number.isInteger(value.dailyLimit) && Number(value.dailyLimit) >= 1 && Number(value.dailyLimit) <= 5
+    ? Number(value.dailyLimit)
+    : DEFAULT_INITIATIVE_PREFERENCE.dailyLimit
+  const quietStartHour = Number.isInteger(value.quietStartHour) && Number(value.quietStartHour) >= 0 && Number(value.quietStartHour) <= 23
+    ? Number(value.quietStartHour)
+    : DEFAULT_INITIATIVE_PREFERENCE.quietStartHour
+  const quietEndHour = Number.isInteger(value.quietEndHour) && Number(value.quietEndHour) >= 0 && Number(value.quietEndHour) <= 23
+    ? Number(value.quietEndHour)
+    : DEFAULT_INITIATIVE_PREFERENCE.quietEndHour
+  return {
+    enabled: value.enabled === true,
+    dailyLimit,
+    quietStartHour,
+    quietEndHour,
+    lastDeliveredAt: typeof value.lastDeliveredAt === 'number' && Number.isFinite(value.lastDeliveredAt) && value.lastDeliveredAt > 0 ? value.lastDeliveredAt : 0,
+    deliveredDay: typeof value.deliveredDay === 'string' ? value.deliveredDay : '',
+    deliveredCount: Number.isInteger(value.deliveredCount) && Number(value.deliveredCount) >= 0 ? Number(value.deliveredCount) : 0,
+    ignoredStreak: Number.isInteger(value.ignoredStreak) && Number(value.ignoredStreak) >= 0 ? Number(value.ignoredStreak) : 0,
+    lastCandidateKey: typeof value.lastCandidateKey === 'string' ? value.lastCandidateKey : '',
+    lastBackgroundAt: typeof value.lastBackgroundAt === 'number' && Number.isFinite(value.lastBackgroundAt) && value.lastBackgroundAt > 0
+      ? value.lastBackgroundAt
+      : 0,
+  }
+}
+
+/** P3 A2：主动性偏好复用现有 settings key，按 session 隔离，不新建 localStorage key。 */
+export function getInitiativePreference(sessionId?: string): InitiativePreference {
+  const sid = String(sessionId ?? '').trim()
+  if (!sid) return { ...DEFAULT_INITIATIVE_PREFERENCE }
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    if (!raw) return { ...DEFAULT_INITIATIVE_PREFERENCE }
+    const parsed = JSON.parse(raw) as { initiativeBySession?: unknown }
+    const map = parsed?.initiativeBySession
+    if (!map || typeof map !== 'object' || Array.isArray(map)) return { ...DEFAULT_INITIATIVE_PREFERENCE }
+    return normalizeInitiativePreference((map as Record<string, unknown>)[sid])
+  } catch {
+    return { ...DEFAULT_INITIATIVE_PREFERENCE }
+  }
+}
+
+export function saveInitiativePreference(sessionId: string, patch: Partial<InitiativePreference>): boolean {
+  const sid = String(sessionId ?? '').trim()
+  if (!sid) return false
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    const base = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {}
+    const currentMap = base.initiativeBySession && typeof base.initiativeBySession === 'object' && !Array.isArray(base.initiativeBySession)
+      ? base.initiativeBySession as Record<string, unknown>
+      : {}
+    const current = normalizeInitiativePreference(currentMap[sid])
+    const nextPreference = normalizeInitiativePreference({ ...current, ...patch })
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+      ...base,
+      initiativeBySession: { ...currentMap, [sid]: nextPreference },
+    }))
+    notifyDataChanged()
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** 各服务商默认 base_url 与模型 */
 export const DEFAULT_SETTINGS: Record<Provider, { baseUrl: string; model: string }> = {
   deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' },
@@ -199,12 +294,23 @@ export function saveSettings(settings: ModelSettings): void {
     model: settings.model.trim() || DEFAULT_SETTINGS[settings.provider].model,
   }
   const actionNarrationEnabled = isActionNarrationEnabled()
+  let initiativeBySession: unknown
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    const parsed = raw ? JSON.parse(raw) as { initiativeBySession?: unknown } : null
+    initiativeBySession = parsed?.initiativeBySession
+  } catch {
+    initiativeBySession = undefined
+  }
   localStorage.setItem(
     SETTINGS_KEY,
     JSON.stringify({
       provider: settings.provider,
       providers,
       ...(actionNarrationEnabled ? { actionNarrationEnabled: true } : {}),
+      ...(initiativeBySession && typeof initiativeBySession === 'object' && !Array.isArray(initiativeBySession)
+        ? { initiativeBySession }
+        : {}),
     }),
   )
   notifyDataChanged()
