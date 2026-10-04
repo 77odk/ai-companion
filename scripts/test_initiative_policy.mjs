@@ -37,6 +37,7 @@ const basePref = {
   deliveredCount: 0,
   ignoredStreak: 0,
   lastCandidateKey: '',
+  lastBackgroundAt: 0,
 }
 
 console.log('[initiative] 默认关闭、按 TA 隔离、复用 settings key')
@@ -54,7 +55,7 @@ assert.equal(getInitiativePreference('1').enabled, true)
 console.log('[initiative] disabled / quiet / 无理由 = 零候选')
 assert.equal(chooseInitiativeCandidate({
   preference: { ...basePref, enabled: false },
-  lastActiveAt: twoHoursAgo,
+  leftAt: twoHoursAgo,
   now,
   futureTopics: [],
   events: [],
@@ -64,7 +65,7 @@ const quietNow = new Date(2026, 9, 8, 23, 30, 0).getTime()
 assert.equal(isInitiativeQuietHour(quietNow, 23, 8), true)
 assert.equal(chooseInitiativeCandidate({
   preference: basePref,
-  lastActiveAt: quietNow - 3 * 60 * 60 * 1000,
+  leftAt: quietNow - 3 * 60 * 60 * 1000,
   now: quietNow,
   futureTopics: [{ t: '今晚一起看电影', ts: quietNow - 86400000, futureDay: '2026-10-08' }],
   events: [],
@@ -72,7 +73,7 @@ assert.equal(chooseInitiativeCandidate({
 }), null)
 assert.equal(chooseInitiativeCandidate({
   preference: basePref,
-  lastActiveAt: twoHoursAgo,
+  leftAt: twoHoursAgo,
   now,
   futureTopics: [],
   events: [],
@@ -81,7 +82,7 @@ assert.equal(chooseInitiativeCandidate({
 
 assert.equal(chooseInitiativeCandidate({
   preference: basePref,
-  lastActiveAt: now - 10 * 60 * 1000,
+  leftAt: now - 10 * 60 * 1000,
   now,
   futureTopics: [],
   events: [{
@@ -101,7 +102,7 @@ assert.equal(chooseInitiativeCandidate({
 console.log('[initiative] FutureIntent 到期才候选，未来计划不提前')
 const future = chooseInitiativeCandidate({
   preference: basePref,
-  lastActiveAt: twoHoursAgo,
+  leftAt: twoHoursAgo,
   now,
   futureTopics: [
     { t: '今天一起看电影', ts: now - 86400000, futureDay: '2026-10-08' },
@@ -116,7 +117,7 @@ assert.match(future?.evidence ?? '', /看电影/)
 console.log('[initiative] 跨天补算覆盖到期计划')
 const crossDay = chooseInitiativeCandidate({
   preference: basePref,
-  lastActiveAt: new Date(2026, 9, 7, 22, 0, 0).getTime(),
+  leftAt: new Date(2026, 9, 7, 22, 0, 0).getTime(),
   now: new Date(2026, 9, 8, 9, 0, 0).getTime(),
   futureTopics: [{ t: '8号一起去看展', ts: now - 3 * 86400000, futureDay: '2026-10-08' }],
   events: [],
@@ -126,7 +127,7 @@ assert.equal(crossDay?.reason, 'future-intent')
 
 const departureDayDue = chooseInitiativeCandidate({
   preference: basePref,
-  lastActiveAt: new Date(2026, 9, 7, 9, 0, 0).getTime(),
+  leftAt: new Date(2026, 9, 7, 9, 0, 0).getTime(),
   now: new Date(2026, 9, 8, 9, 0, 0).getTime(),
   futureTopics: [{ t: '7号晚上一起吃饭', ts: now - 3 * 86400000, futureDay: '2026-10-07' }],
   events: [],
@@ -148,7 +149,7 @@ const event = {
 }
 const eventCandidate = chooseInitiativeCandidate({
   preference: basePref,
-  lastActiveAt: twoHoursAgo,
+  leftAt: twoHoursAgo,
   now,
   futureTopics: [],
   events: [event],
@@ -158,7 +159,7 @@ assert.equal(eventCandidate?.reason, 'event')
 
 const annCandidate = chooseInitiativeCandidate({
   preference: basePref,
-  lastActiveAt: twoHoursAgo,
+  leftAt: twoHoursAgo,
   now,
   futureTopics: [],
   events: [],
@@ -169,7 +170,7 @@ assert.equal(annCandidate?.reason, 'anniversary')
 console.log('[initiative] 同时有理由时优先 FutureIntent；同一候选不重复')
 const priority = chooseInitiativeCandidate({
   preference: basePref,
-  lastActiveAt: twoHoursAgo,
+  leftAt: twoHoursAgo,
   now,
   futureTopics: [{ t: '今天一起看电影', ts: now - 86400000, futureDay: '2026-10-08' }],
   events: [event],
@@ -179,7 +180,7 @@ assert.equal(priority?.reason, 'future-intent')
 assert.ok(priority)
 assert.equal(chooseInitiativeCandidate({
   preference: { ...basePref, lastCandidateKey: priority.key },
-  lastActiveAt: twoHoursAgo,
+  leftAt: twoHoursAgo,
   now,
   futureTopics: [{ t: '今天一起看电影', ts: now - 86400000, futureDay: '2026-10-08' }],
   events: [],
@@ -189,7 +190,7 @@ assert.equal(chooseInitiativeCandidate({
 console.log('[initiative] 每日上限与连续不回应降频')
 assert.equal(chooseInitiativeCandidate({
   preference: { ...basePref, deliveredDay: '2026-10-08', deliveredCount: 2 },
-  lastActiveAt: twoHoursAgo,
+  leftAt: twoHoursAgo,
   now,
   futureTopics: [{ t: '今天一起看电影', ts: now - 86400000, futureDay: '2026-10-08' }],
   events: [],
@@ -200,7 +201,7 @@ assert.equal(initiativeCooldownMs(1), 12 * 60 * 60 * 1000)
 assert.equal(initiativeCooldownMs(4), 48 * 60 * 60 * 1000)
 assert.equal(chooseInitiativeCandidate({
   preference: { ...basePref, lastDeliveredAt: now - 7 * 60 * 60 * 1000, ignoredStreak: 1 },
-  lastActiveAt: twoHoursAgo,
+  leftAt: twoHoursAgo,
   now,
   futureTopics: [{ t: '今天一起看电影', ts: now - 86400000, futureDay: '2026-10-08' }],
   events: [],
