@@ -120,6 +120,23 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
   return hasSpecificChineseOverlap(mem.chinese, usr.chinese)
 }
 
+function roughSelectionTokens(items: MemoryItem[]): number {
+  if (items.length === 0) return 0
+  return MEMORY_BLOCK_RESERVE_TOKENS + items.reduce(
+    (sum, item) => sum + estimateToken(item.text) + MEMORY_LINE_OVERHEAD_TOKENS,
+    0,
+  )
+}
+
+function selectionTokens(
+  items: MemoryItem[],
+  renderBlock?: (items: MemoryItem[]) => string | null,
+): number {
+  if (items.length === 0) return 0
+  if (!renderBlock) return roughSelectionTokens(items)
+  return estimateToken(renderBlock(items) ?? '')
+}
+
 /**
  * 二段式召回的“选择层”：
  * - 候选排序仍沿用现有 recallRelevantMemories（pinned / explicit / recency 等规则不重写）
