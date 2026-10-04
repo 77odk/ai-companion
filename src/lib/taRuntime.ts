@@ -661,15 +661,24 @@ export function detectTaRuntimeDecision(text: string, currentActivityId?: string
   return null
 }
 
+function withContinuity(
+  state: TaRuntimeState,
+  continuity?: TaContinuityState | null,
+): TaRuntimeState {
+  const { continuity: _previous, ...base } = state
+  return continuity ? { ...base, continuity } : base
+}
+
 function createChatOverrideState(
   activity: RuntimeActivity,
   now: number,
   recentIds: readonly string[],
   display: { text: string; lang: Lang } | null,
+  continuity?: TaContinuityState | null,
 ): TaRuntimeState {
   const maxMinutes = Math.max(activity.minMin, Math.min(activity.maxMin, CHAT_OVERRIDE_MAX_MS / 60000))
   const recentActivityIds = [activity.id, ...recentIds.filter((id) => id !== activity.id)].slice(0, 3)
-  return {
+  return withContinuity({
     activityId: activity.id,
     label: activity.label,
     startedAt: now,
@@ -678,7 +687,7 @@ function createChatOverrideState(
     source: 'chat',
     recentActivityIds,
     ...(display ? { displayText: display.text, displayLang: display.lang } : {}),
-  }
+  }, continuity)
 }
 
 /**
@@ -698,42 +707,55 @@ export function syncTaRuntimeFromAssistantText(
   const key = sessionId || GUEST_KEY
   const map = loadAll()
   const cur = map[key]
+  const nextContinuity = detectTaContinuityFromAssistantText(text, now, cur?.continuity)
+  const continuityChanged = !continuityEqual(cur?.continuity, nextContinuity)
   const decision = detectTaRuntimeDecision(text, cur?.activityId)
-  if (!decision) return null
 
   const recentIds = Array.isArray(cur?.recentActivityIds) && cur.recentActivityIds.length > 0
     ? cur.recentActivityIds
-    : cur?.activityId
+    : cur?.activityId && cur.activityId !== TA_RUNTIME_IDLE_ID
       ? [cur.activityId]
       : []
 
-  if (decision.type === 'start') {
+  if (decision?.type === 'start') {
     const activity = ACTIVITIES.find((item) => item.id === decision.activityId)
-    if (!activity) return null
     const mode = resolveIdentityMode(sessionId)
-    if (!activityAllowedForMode(activity, mode)) return null
-    const display = findRuntimeDisplayCandidate(text, activity.id)
-    if (cur?.activityId === activity.id && now < cur.plannedUntil) {
-      if (!display || (cur.displayText === display.text && cur.displayLang === display.lang)) return cur
-      // 同一活动可以用 TA 后续更具体的原话刷新展示，但绝不延长 plannedUntil。
-      const next = {
-        ...cur,
-        displayText: display.text,
-        displayLang: display.lang,
-        updatedAt: now,
+    if (activity && activityAllowedForMode(activity, mode)) {
+      const display = findRuntimeDisplayCandidate(text, activity.id)
+      if (cur?.activityId === activity.id && now < cur.plannedUntil) {
+        const displayChanged = Boolean(
+          display && (cur.displayText !== display.text || cur.displayLang !== display.lang),
+        )
+        if (!displayChanged && !continuityChanged) return cur
+        const next = withContinuity({
+          ...cur,
+          ...(display ? { displayText: display.text, displayLang: display.lang } : {}),
+          updatedAt: now,
+        }, nextContinuity)
+        map[key] = next
+        saveAll(map)
+        return next
       }
+      const next = createChatOverrideState(activity, now, recentIds, display, nextContinuity)
       map[key] = next
       saveAll(map)
       return next
     }
-    const next = createChatOverrideState(activity, now, recentIds, display)
+    // 当前动作若因身份模式不允许，只忽略“活动”这一维；可信连续性 evidence 仍可独立写回。
+  }
+
+  if (decision?.type === 'finish' && cur) {
+    const next = createIdleState(now, recentIds, nextContinuity)
     map[key] = next
     saveAll(map)
     return next
   }
 
-  if (!cur) return null
-  const next = createIdleState(now, recentIds)
+  if (!continuityChanged) return null
+
+  const next = cur
+    ? withContinuity({ ...cur, updatedAt: now }, nextContinuity)
+    : createIdleState(now, recentIds, nextContinuity)
   map[key] = next
   saveAll(map)
   return next
