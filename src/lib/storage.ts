@@ -484,14 +484,25 @@ export function getContextUsageTurns(sessionId: string): ContextUsageTurn[] {
   return readContextUsageEnvelope(sessionId).localTurns
 }
 
-/** 只扫描本机现有 Context Meter keys；不触发网络，也不读/上传聊天正文。 */
-export function getAllLocalContextUsageTurns(): ContextUsageTurn[] {
+/**
+ * 只读取调用方明确传入的当前账号 session。
+ * 同一浏览器换账号时，本地旧 key 可以继续保留，但不会跨账号出现在「用量信息」里。
+ * session 列表尚未恢复时传空数组 → 返回空，宁可暂时不显示也不泄露旧账号用量。
+ */
+export function getAllLocalContextUsageTurns(sessionIds: Array<string | number>): ContextUsageTurn[] {
+  const allowed = new Set(
+    (Array.isArray(sessionIds) ? sessionIds : [])
+      .map((id) => String(id ?? '').trim())
+      .filter(Boolean),
+  )
+  if (allowed.size === 0) return []
+
   const out: ContextUsageTurn[] = []
   const prefix = `${CONTEXT_USAGE_KEY}_sid_`
   forEachLocalStorageKey((key) => {
     if (!key.startsWith(prefix)) return
     const sid = key.slice(prefix.length)
-    if (!sid) return
+    if (!sid || !allowed.has(sid)) return
     out.push(...getContextUsageTurns(sid))
   })
   return out.sort((a, b) => b.createdAt - a.createdAt)
