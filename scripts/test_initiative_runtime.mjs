@@ -6,10 +6,7 @@ import {
   resetInitiativeRuntimeForTests,
   runInitiativeCatchUp,
 } from '../src/lib/initiativeRuntime.ts'
-import {
-  evaluateInitiativeResponse,
-  type InitiativeCandidate,
-} from '../src/lib/initiativePolicy.ts'
+import { evaluateInitiativeResponse } from '../src/lib/initiativePolicy.ts'
 
 const NOW = new Date(2026, 9, 8, 15, 0, 0).getTime()
 
