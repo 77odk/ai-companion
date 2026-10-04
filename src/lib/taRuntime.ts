@@ -693,9 +693,10 @@ function createChatOverrideState(
 /**
  * TA 最终回复落库后调用：
  * - 明确说自己“正在/马上去做 X” → X 写回同一 Runtime；
- * - 明确说当前 X 已结束 → 立即回 idle；
- * - 最长 2 小时没有后续 → plannedUntil 到期后回 idle。
- * 返回 null = 本轮没有可信动作，不写任何状态。
+ * - 明确说当前 X 已结束 → 当前活动立即回 idle；
+ * - 最终回复留下真实问题 / 明确说以后还想继续 → 同一 Runtime 写 continuity evidence；
+ * - 当前活动最长 2 小时；连续性线索各自按 TTL 失效，互不把对方变成“已发生事实”。
+ * 返回 null = 本轮活动与连续性都没有变化。
  */
 export function syncTaRuntimeFromAssistantText(
   sessionId: string | undefined,
@@ -776,7 +777,7 @@ export function applyCloudTaRuntime(cloud: Record<string, TaRuntimeState> | unde
   const map = loadAll()
   let changed = false
   for (const [sid, cs] of Object.entries(cloud)) {
-    if (!cs || typeof cs.activityId !== 'string' || typeof cs.plannedUntil !== 'number') continue
+    if (!isTaRuntimeState(cs)) continue
     const local = map[sid]
     if (!local || cs.updatedAt > local.updatedAt) {
       map[sid] = cs
@@ -806,6 +807,32 @@ export function deleteTaRuntimeFromCloud(sessionId: string): void {
   saveAll(map, true)
 }
 
+function isContinuityEvidence(
+  value: unknown,
+  expectedKind: TaContinuityKind,
+): value is TaContinuityEvidence {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const evidence = value as Partial<TaContinuityEvidence>
+  return evidence.kind === expectedKind
+    && typeof evidence.text === 'string'
+    && evidence.text.trim().length > 0
+    && Array.from(evidence.text).length <= CONTINUITY_EVIDENCE_MAX_CHARS + 1
+    && typeof evidence.evidenceAt === 'number'
+    && Number.isFinite(evidence.evidenceAt)
+    && evidence.evidenceAt > 0
+    && typeof evidence.expiresAt === 'number'
+    && Number.isFinite(evidence.expiresAt)
+    && evidence.expiresAt >= evidence.evidenceAt
+}
+
+function isContinuityState(value: unknown): value is TaContinuityState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const continuity = value as Partial<TaContinuityState>
+  if (continuity.openThread == null && continuity.selfIntent == null) return false
+  return (continuity.openThread == null || isContinuityEvidence(continuity.openThread, 'open-question'))
+    && (continuity.selfIntent == null || isContinuityEvidence(continuity.selfIntent, 'self-intent'))
+}
+
 /** 单条 Runtime payload 的严格边界校验，供 Cloud State adapter 防御 malformed entity。 */
 export function isTaRuntimeState(value: unknown): value is TaRuntimeState {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -823,6 +850,7 @@ export function isTaRuntimeState(value: unknown): value is TaRuntimeState {
     ))
     && (state.displayText == null || typeof state.displayText === 'string')
     && (state.displayLang == null || state.displayLang === 'zh' || state.displayLang === 'en')
+    && (state.continuity == null || isContinuityState(state.continuity))
 }
 
 /**
