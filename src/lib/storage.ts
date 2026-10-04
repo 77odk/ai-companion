@@ -116,39 +116,58 @@ function normalizeInitiativePreference(raw: unknown): InitiativePreference {
   }
 }
 
-/** P3 A2：主动性偏好复用现有 settings key，按 session 隔离，不新建 localStorage key。 */
-export function getInitiativePreference(sessionId?: string): InitiativePreference {
+/** P3 A2：主动性偏好复用现有 settings key，按「账号 + session」双隔离，不新建 localStorage key。 */
+export function getInitiativePreference(accountId?: string, sessionId?: string): InitiativePreference {
+  const account = String(accountId ?? '').trim()
   const sid = String(sessionId ?? '').trim()
-  if (!sid) return { ...DEFAULT_INITIATIVE_PREFERENCE }
+  if (!account || !sid) return { ...DEFAULT_INITIATIVE_PREFERENCE }
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (!raw) return { ...DEFAULT_INITIATIVE_PREFERENCE }
-    const parsed = JSON.parse(raw) as { initiativeBySession?: unknown }
-    const map = parsed?.initiativeBySession
-    if (!map || typeof map !== 'object' || Array.isArray(map)) return { ...DEFAULT_INITIATIVE_PREFERENCE }
-    return normalizeInitiativePreference((map as Record<string, unknown>)[sid])
+    const parsed = JSON.parse(raw) as { initiativeByAccount?: unknown }
+    const byAccount = parsed?.initiativeByAccount
+    if (!byAccount || typeof byAccount !== 'object' || Array.isArray(byAccount)) {
+      return { ...DEFAULT_INITIATIVE_PREFERENCE }
+    }
+    const accountMap = (byAccount as Record<string, unknown>)[account]
+    if (!accountMap || typeof accountMap !== 'object' || Array.isArray(accountMap)) {
+      return { ...DEFAULT_INITIATIVE_PREFERENCE }
+    }
+    return normalizeInitiativePreference((accountMap as Record<string, unknown>)[sid])
   } catch {
     return { ...DEFAULT_INITIATIVE_PREFERENCE }
   }
 }
 
-export function saveInitiativePreference(sessionId: string, patch: Partial<InitiativePreference>): boolean {
+export function saveInitiativePreference(
+  accountId: string,
+  sessionId: string,
+  patch: Partial<InitiativePreference>,
+): boolean {
+  const account = String(accountId ?? '').trim()
   const sid = String(sessionId ?? '').trim()
-  if (!sid) return false
+  if (!account || !sid) return false
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     const parsed = raw ? JSON.parse(raw) : {}
     const base = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? parsed as Record<string, unknown>
       : {}
-    const currentMap = base.initiativeBySession && typeof base.initiativeBySession === 'object' && !Array.isArray(base.initiativeBySession)
-      ? base.initiativeBySession as Record<string, unknown>
+    const byAccount = base.initiativeByAccount && typeof base.initiativeByAccount === 'object' && !Array.isArray(base.initiativeByAccount)
+      ? base.initiativeByAccount as Record<string, unknown>
       : {}
-    const current = normalizeInitiativePreference(currentMap[sid])
+    const rawAccountMap = byAccount[account]
+    const accountMap = rawAccountMap && typeof rawAccountMap === 'object' && !Array.isArray(rawAccountMap)
+      ? rawAccountMap as Record<string, unknown>
+      : {}
+    const current = normalizeInitiativePreference(accountMap[sid])
     const nextPreference = normalizeInitiativePreference({ ...current, ...patch })
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({
       ...base,
-      initiativeBySession: { ...currentMap, [sid]: nextPreference },
+      initiativeByAccount: {
+        ...byAccount,
+        [account]: { ...accountMap, [sid]: nextPreference },
+      },
     }))
     notifyDataChanged()
     return true
@@ -302,13 +321,13 @@ export function saveSettings(settings: ModelSettings): void {
     model: settings.model.trim() || DEFAULT_SETTINGS[settings.provider].model,
   }
   const actionNarrationEnabled = isActionNarrationEnabled()
-  let initiativeBySession: unknown
+  let initiativeByAccount: unknown
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
-    const parsed = raw ? JSON.parse(raw) as { initiativeBySession?: unknown } : null
-    initiativeBySession = parsed?.initiativeBySession
+    const parsed = raw ? JSON.parse(raw) as { initiativeByAccount?: unknown } : null
+    initiativeByAccount = parsed?.initiativeByAccount
   } catch {
-    initiativeBySession = undefined
+    initiativeByAccount = undefined
   }
   localStorage.setItem(
     SETTINGS_KEY,
@@ -316,8 +335,8 @@ export function saveSettings(settings: ModelSettings): void {
       provider: settings.provider,
       providers,
       ...(actionNarrationEnabled ? { actionNarrationEnabled: true } : {}),
-      ...(initiativeBySession && typeof initiativeBySession === 'object' && !Array.isArray(initiativeBySession)
-        ? { initiativeBySession }
+      ...(initiativeByAccount && typeof initiativeByAccount === 'object' && !Array.isArray(initiativeByAccount)
+        ? { initiativeByAccount }
         : {}),
     }),
   )
