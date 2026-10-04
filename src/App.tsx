@@ -482,19 +482,23 @@ export default function App() {
           }
 
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            const notification = new Notification(taName, {
-              body: content,
-              tag: 'eluvin-initiative-' + sessionId,
-            })
-            notification.onclick = () => {
-              notification.close()
-              window.focus()
-              if (getAccount()?.account !== accountId) return
-              if (!getSessionsCache().some((item) => String(item.id) === sessionId)) return
-              setActiveSessionId(sessionId)
-              setInitiativeNotice(null)
-              setInitiativeChatRevision((value) => value + 1)
-              replaceView('chat')
+            try {
+              const notification = new Notification(taName, {
+                body: content,
+                tag: 'eluvin-initiative-' + sessionId,
+              })
+              notification.onclick = () => {
+                notification.close()
+                window.focus()
+                if (getAccount()?.account !== accountId) return
+                if (!getSessionsCache().some((item) => String(item.id) === sessionId)) return
+                setActiveSessionId(sessionId)
+                setInitiativeNotice(null)
+                setInitiativeChatRevision((value) => value + 1)
+                replaceView('chat')
+              }
+            } catch {
+              // 部分移动浏览器不允许页面直接构造 Notification；应用内提示仍已正常显示。
             }
           }
         },
