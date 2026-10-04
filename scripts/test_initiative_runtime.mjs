@@ -207,6 +207,25 @@ console.log('[initiative-runtime] 被护栏拒绝时不落聊天，但真实模�
   assert.equal(usageCalls, 1)
 }
 
+console.log('[initiative-runtime] 已落库后展示层失败不能把成功降级')
+{
+  resetInitiativeRuntimeForTests()
+  const outcome = await runInitiativeCatchUp(
+    policyInput(),
+    context(),
+    {
+      estimateTokens: (text) => Math.max(1, Math.ceil(text.length / 4)),
+      generate: async () => ({ text: '今天那个电影约定，我还记着。' }),
+      commit: async () => true,
+      recordUsage: () => {},
+      savePreference: () => true,
+      now: () => NOW,
+      onDelivered: () => { throw new Error('notification constructor failed') },
+    },
+  )
+  assert.equal(outcome, 'delivered')
+}
+
 console.log('[initiative-runtime] 生成失败也不会重复用同一理由再次请求')
 {
   resetInitiativeRuntimeForTests()
@@ -284,6 +303,7 @@ console.log('[initiative-runtime] App 只在 hidden/pagehide 记离开，visible
   assert.match(app, /branchIdForNewMessage\(latestState\) !== conversationBranchId/)
   assert.match(app, /recordLocalModelUsageTurn/)
   assert.match(app, /Notification\.permission === 'granted'/)
+  assert.match(app, /new Notification\(taName,[\s\S]*catch \{/)
   assert.doesNotMatch(app, /Notification\.requestPermission\(/)
   assert.match(settings, /Notification\.requestPermission\(\)/)
   assert.match(settings, /Key 不上传服务器/)
