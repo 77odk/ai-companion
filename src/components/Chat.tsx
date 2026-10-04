@@ -1843,51 +1843,50 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         onDone: (reasoning, usage) => {
           if (runId !== runIdRef.current) return
           // 会话总量始终来自本轮 composeContext 的累计上下文；provider usage 只描述这一轮请求。
-          if (mountedRef.current) {
-            const estimatedOutput = estimateToken(assistantText.current)
-            if (usage && Number.isFinite(usage.promptTokens)) {
-              const reportedCompletion = typeof usage.completionTokens === 'number' && Number.isFinite(usage.completionTokens)
-                ? usage.completionTokens
-                : undefined
-              const reportedTotal = typeof usage.totalTokens === 'number' && Number.isFinite(usage.totalTokens)
-                ? usage.totalTokens
-                : undefined
-              const cachedTokens = typeof usage.cachedPromptTokens === 'number' && Number.isFinite(usage.cachedPromptTokens)
-                ? usage.cachedPromptTokens
-                : undefined
-              const outputTokens = reportedCompletion ?? (
-                reportedTotal == null ? undefined : Math.max(0, reportedTotal - usage.promptTokens)
-              )
-              // 用本轮真实 prompt 与同段本地估算反推校准系数，供会话总量换算使用（只在本机保存）。
-              const nextFactor = calibrateContextFactor(loadContextFactor(), composed.totalTokens, usage.promptTokens)
-              saveContextFactor(nextFactor)
-              const actualContextState: ContextUsageState = {
-                sessionStart,
-                // 上下文总量 = 刷新之后这一段（sessionStart 起）所有内容的 provider 口径估算；只随这一段增长。
-                used: contentTokensOf(usageMessages(roundVisibleMessages, userMsg), nextFactor),
-                budget: composed.hardBudget,
-                source: 'actual',
-                inputTokens: usage.promptTokens,
-                ...(outputTokens == null ? {} : { outputTokens }),
-                ...(cachedTokens == null ? {} : { cachedTokens }),
-                updatedAt: Date.now(),
-              }
-              setContextMeter(actualContextState)
-              if (activeSessionId) setContextUsage(actualContextState, activeSessionId)
-            } else {
-              const estimatedContextState: ContextUsageState = {
-                sessionStart,
-                used: composed.totalTokens + estimatedOutput,
-                budget: composed.hardBudget,
-                source: 'estimate',
-                inputTokens: composed.totalTokens,
-                outputTokens: estimatedOutput,
-                updatedAt: Date.now(),
-              }
-              setContextMeter(estimatedContextState)
-              if (activeSessionId) setContextUsage(estimatedContextState, activeSessionId)
+          // 请求在 Chat 卸载后仍可能正常完成并产生费用：本机用量必须继续落到本轮 owner session；
+          // 只有 React meter 更新受 mountedRef 限制，避免卸载后 setState。
+          const estimatedOutput = estimateToken(assistantText.current)
+          let completedContextState: ContextUsageState
+          if (usage && Number.isFinite(usage.promptTokens)) {
+            const reportedCompletion = typeof usage.completionTokens === 'number' && Number.isFinite(usage.completionTokens)
+              ? usage.completionTokens
+              : undefined
+            const reportedTotal = typeof usage.totalTokens === 'number' && Number.isFinite(usage.totalTokens)
+              ? usage.totalTokens
+              : undefined
+            const cachedTokens = typeof usage.cachedPromptTokens === 'number' && Number.isFinite(usage.cachedPromptTokens)
+              ? usage.cachedPromptTokens
+              : undefined
+            const outputTokens = reportedCompletion ?? (
+              reportedTotal == null ? undefined : Math.max(0, reportedTotal - usage.promptTokens)
+            )
+            // 用本轮真实 prompt 与同段本地估算反推校准系数，供会话总量换算使用（只在本机保存）。
+            const nextFactor = calibrateContextFactor(loadContextFactor(), composed.totalTokens, usage.promptTokens)
+            saveContextFactor(nextFactor)
+            completedContextState = {
+              sessionStart,
+              // 上下文总量 = 刷新之后这一段（sessionStart 起）所有内容的 provider 口径估算；只随这一段增长。
+              used: contentTokensOf(usageMessages(roundVisibleMessages, userMsg), nextFactor),
+              budget: composed.hardBudget,
+              source: 'actual',
+              inputTokens: usage.promptTokens,
+              ...(outputTokens == null ? {} : { outputTokens }),
+              ...(cachedTokens == null ? {} : { cachedTokens }),
+              updatedAt: Date.now(),
+            }
+          } else {
+            completedContextState = {
+              sessionStart,
+              used: composed.totalTokens + estimatedOutput,
+              budget: composed.hardBudget,
+              source: 'estimate',
+              inputTokens: composed.totalTokens,
+              outputTokens: estimatedOutput,
+              updatedAt: Date.now(),
             }
           }
+          if (mountedRef.current) setContextMeter(completedContextState)
+          if (roundSessionId) setContextUsage(completedContextState, roundSessionId)
           // 第27条：收集模型独立思考字段 reasoning_content，finalize 时合并到 thinking
           if (reasoning) reasoningRef.current = reasoning
           streamEndedRef.current = true
