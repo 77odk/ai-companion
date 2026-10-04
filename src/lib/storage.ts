@@ -63,6 +63,7 @@ export interface InitiativePreference {
   deliveredDay: string
   deliveredCount: number
   ignoredStreak: number
+  lastCandidateKey: string
 }
 
 const DEFAULT_INITIATIVE_PREFERENCE: InitiativePreference = {
@@ -74,6 +75,7 @@ const DEFAULT_INITIATIVE_PREFERENCE: InitiativePreference = {
   deliveredDay: '',
   deliveredCount: 0,
   ignoredStreak: 0,
+  lastCandidateKey: '',
 }
 
 function normalizeInitiativePreference(raw: unknown): InitiativePreference {
@@ -97,6 +99,7 @@ function normalizeInitiativePreference(raw: unknown): InitiativePreference {
     deliveredDay: typeof value.deliveredDay === 'string' ? value.deliveredDay : '',
     deliveredCount: Number.isInteger(value.deliveredCount) && Number(value.deliveredCount) >= 0 ? Number(value.deliveredCount) : 0,
     ignoredStreak: Number.isInteger(value.ignoredStreak) && Number(value.ignoredStreak) >= 0 ? Number(value.ignoredStreak) : 0,
+    lastCandidateKey: typeof value.lastCandidateKey === 'string' ? value.lastCandidateKey : '',
   }
 }
 
