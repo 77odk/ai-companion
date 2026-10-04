@@ -96,6 +96,28 @@ assert.equal(shouldTouchMemoryFromUser(project, '今天要开会'), false, '只�
 const cat = M('cat', '养了一只橘猫', { topic: '宠物' })
 assert.equal(shouldTouchMemoryFromUser(cat, '猫'), true, '明确短词重新出现也算真实提及')
 
+const dailyWork = M('daily-work', '每天上班都很累', { topic: '工作' })
+assert.equal(shouldTouchMemoryFromUser(dailyWork, '每天跑步半小时'), false, '“每天”只是时间骨架，不能构成 exact/touch')
+
+const weekendSleep = M('weekend-sleep', '周末喜欢睡懒觉', { topic: '日子' })
+assert.equal(shouldTouchMemoryFromUser(weekendSleep, '周末要去加班'), false, '“周末”只是时间骨架，不能构成 exact/touch')
+
+const age30 = M('age30', '我今年30岁')
+assert.equal(shouldTouchMemoryFromUser(age30, '这个月花了30元'), false, '相同数字 30 不能单独构成事实级命中')
+assert.equal(shouldTouchMemoryFromUser(age30, '我今年31岁'), false, '数字冲突时即使单位相同也不能 exact/touch')
+assert.equal(shouldTouchMemoryFromUser(age30, '我30岁了'), true, '相同数字 + 相同具体单位可以视为同一事实')
+
+console.log('\n[memory recall 2] pinned 入场优先级高于 exact 洪水')
+const pinnedCore = M('pinned-core', '严重过敏事实', { pinned: true })
+const catFlood = Array.from({ length: 10 }, (_, i) => M(`cat-${i}`, `第${i}只猫的具体信息`, { explicit: true }))
+const pinnedProtected = selectMemoryWorkingSet([pinnedCore, ...catFlood], {
+  userText: '猫',
+  tokenBudget: 5000,
+  maxItems: 10,
+})
+assert.ok(pinnedProtected.items.some((m) => m.id === 'pinned-core'), 'pinned 必须先于 exact 候选获得入场资格')
+assert.equal(pinnedProtected.items.length, 10, '仍遵守 maxItems，不额外扩容')
+
 console.log('\n[memory recall 2] Chat 生产挂载必须传 current user text + 最终 block renderer')
 const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
 assert.match(chatSource, /selectMemoryWorkingSet\(recalledMemory, \{[\s\S]*userText: text,[\s\S]*renderBlock: \(items\) => buildMemoryBlock\(/)
