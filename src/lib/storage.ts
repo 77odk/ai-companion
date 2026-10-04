@@ -65,6 +65,7 @@ export interface InitiativePreference {
   ignoredStreak: number
   lastCandidateKey: string
   lastBackgroundAt: number
+  lastResponseEvaluatedAt: number
 }
 
 const DEFAULT_INITIATIVE_PREFERENCE: InitiativePreference = {
@@ -78,6 +79,7 @@ const DEFAULT_INITIATIVE_PREFERENCE: InitiativePreference = {
   ignoredStreak: 0,
   lastCandidateKey: '',
   lastBackgroundAt: 0,
+  lastResponseEvaluatedAt: 0,
 }
 
 function normalizeInitiativePreference(raw: unknown): InitiativePreference {
@@ -105,6 +107,12 @@ function normalizeInitiativePreference(raw: unknown): InitiativePreference {
     lastBackgroundAt: typeof value.lastBackgroundAt === 'number' && Number.isFinite(value.lastBackgroundAt) && value.lastBackgroundAt > 0
       ? value.lastBackgroundAt
       : 0,
+    lastResponseEvaluatedAt:
+      typeof value.lastResponseEvaluatedAt === 'number' &&
+      Number.isFinite(value.lastResponseEvaluatedAt) &&
+      value.lastResponseEvaluatedAt > 0
+        ? value.lastResponseEvaluatedAt
+        : 0,
   }
 }
 
@@ -612,6 +620,48 @@ export function getAllLocalContextUsageTurns(sessionIds: Array<string | number>)
     out.push(...getContextUsageTurns(sid))
   })
   return out.sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export function recordLocalModelUsageTurn(
+  sessionId: string,
+  usage: {
+    source: 'actual' | 'estimate'
+    inputTokens: number
+    outputTokens?: number
+    cachedTokens?: number
+    createdAt?: number
+  },
+  settings: ModelSettings,
+): void {
+  const sid = String(sessionId ?? '').trim()
+  const inputTokens = Number(usage.inputTokens)
+  if (!sid || !Number.isFinite(inputTokens) || inputTokens < 0) return
+  const createdAt = Number.isFinite(usage.createdAt) && Number(usage.createdAt) > 0
+    ? Number(usage.createdAt)
+    : Date.now()
+  const outputTokens = typeof usage.outputTokens === 'number' && Number.isFinite(usage.outputTokens) && usage.outputTokens >= 0
+    ? usage.outputTokens
+    : undefined
+  const cachedTokens = typeof usage.cachedTokens === 'number' && Number.isFinite(usage.cachedTokens) && usage.cachedTokens >= 0
+    ? usage.cachedTokens
+    : undefined
+  const envelope = readContextUsageEnvelope(sid)
+  const turn: ContextUsageTurn = {
+    id: `${sid}:${createdAt}:${envelope.localTurns.length}`,
+    sessionId: sid,
+    createdAt,
+    provider: settings.provider,
+    model: settings.model.trim(),
+    baseUrlHost: modelUsageHost(settings.baseUrl),
+    source: usage.source,
+    inputTokens,
+    ...(outputTokens == null ? {} : { outputTokens }),
+    ...(cachedTokens == null ? {} : { cachedTokens }),
+  }
+  writeContextUsageEnvelope({
+    current: envelope.current,
+    localTurns: [...envelope.localTurns, turn].slice(-CONTEXT_USAGE_TURN_LIMIT),
+  }, sid, false)
 }
 
 function writeContextUsage(state: ContextUsageState, sessionId?: string, notify = false): void {
