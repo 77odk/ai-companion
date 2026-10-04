@@ -232,6 +232,6 @@ assert.match(chatSource, /const sameSession = \(getActiveSessionId\(\) \|\| null
 assert.match(chatSource, /const sameSegment = !activeSessionId \|\| getSessionStart\(activeSessionId\) === sessionStart/, '刷新对话后旧重试失效')
 assert.ok(!chatSource.includes('send(failedText)'), '失败重试不能把旧文本重新塞回 send')
 assert.ok(chatSource.includes('新消息开始即废弃上一轮的失败重试'), '发新消息后旧重试失效')
-assert.match(chatSource, /setFailedReplyRetryAvailable\(false\)\s*setError\(null\)\s*setFailedText\(null\)/, '切会话/刷新上下文同时清掉旧失败提示')
+assert.match(chatSource, /setFailedReplyRetryAvailable\(false\)[\s\S]*?setRecoveryDismissedTs\(null\)[\s\S]*?setError\(null\)\s*setFailedText\(null\)/, '切会话/刷新上下文同时清掉旧失败提示与恢复提示')
 
 console.log('\n身份模式 #13：全部通过')
