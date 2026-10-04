@@ -185,14 +185,14 @@ const blockItems = [
 ]
 const zhBlock = buildMemoryBlock(blockItems, 'zh')
 ok(!!zhBlock && zhBlock.includes('9月18日'), '每条带上记录日期（按本地时区显示到日）')
-ok(!!zhBlock && zhBlock.includes('越靠后越新'), '块首有一行“越靠后越新”的数据说明')
-ok(!!zhBlock && zhBlock.includes('以后者为准') || zhBlock.includes('以更新的为准'), '说明里点明冲突时以更新的为准')
+ok(!!zhBlock && zhBlock.includes('每条附记录/最近提及日期'), '块首只说明日期证据，不再声称位置代表新旧')
+ok(!!zhBlock && zhBlock.includes('日期更新') && zhBlock.includes('来源更明确'), '说明里点明冲突时看日期与来源证据')
 ok(!!zhBlock && zhBlock.includes('- 9月18日 [source=USER] USER 已婚') && zhBlock.includes('未婚'), '两条都在，统一 USER 来源且顺序按传入顺序（召回层已排序）')
 ok(!zhBlock.includes('【') && !zhBlock.includes('你是'), '注入块里没有人设/规则口吻')
 const undefinedDateBlock = buildMemoryBlock([{ id: 'c', text: '没有时间戳的记忆' }], 'zh')
 ok(undefinedDateBlock.includes('（日期未知）'), '没有时间戳就写日期未知，不编日期')
 const enBlock = buildMemoryBlock([{ id: 'd', text: 'they like tea', createdAt: Date.parse('2026-09-17T17:29:23.000Z') }], 'en')
-ok(enBlock.includes('2026-09-18') && enBlock.includes('trust the newer one'), '英文模式下日期与说明也是英文（日期按本地时区）')
+ok(enBlock.includes('2026-09-18') && enBlock.includes('prefer the newer date'), '英文模式下日期与说明也是英文（日期按本地时区）')
 ok(buildMemoryBlock([], 'zh') === null && buildMemoryBlock(null, 'zh') === null, '空列表不产出注入块')
 ok(buildMemoryBlock([{ id: 'e', text: '   ' }], 'zh') === null, '全空白记忆不产出注入块')
 

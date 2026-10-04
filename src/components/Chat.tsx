@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import MessageBubble from './MessageBubble'
 import { buildActionNarrationInstruction, buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
 import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
+import { selectMemoryWorkingSet, shouldTouchMemoryFromUser } from '../lib/memoryRecallPolicy'
 import { getSessionStart, isActionNarrationEnabled, loadMessages, loadPersona, loadSettings, loadAIProfile, loadUserProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, clearContextBridge, getContextUsage, setContextUsage, clearContextUsage, type ContextUsageState, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
 import { getToken } from '../lib/auth'
@@ -1206,7 +1207,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(m.content)), lang), lang)
         : m.content))
       .join('\n')
-    const memory = recallSessionMemories(activeSessionId, contextText)
+    const recalledMemory = recallSessionMemories(activeSessionId, contextText)
+    const memory = selectMemoryWorkingSet(recalledMemory, {
+      userText: text,
+      // correction ref 只会让最终字符串更长；用同长度的 s:<id> 做预算上界，避免真实渲染后超出 working-set budget。
+      renderBlock: (items) => buildMemoryBlock(
+        items,
+        lang,
+        correctionIntent ? (item) => `s:${item.id}` : undefined,
+      ),
+    }).items
     if (memory.length > 0) {
       const refByItem = new Map<object, string>()
       if (correctionIntent) {
@@ -1243,7 +1253,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       const now = Date.now()
       for (const m of memory) {
-        if (m.pinned) continue
+        if (m.pinned || !shouldTouchMemoryFromUser(m, text)) continue
         if (activeSessionId) touchMemoryCache(activeSessionId, m.id, now)
         touchMemory(m.id, now)
       }
