@@ -155,71 +155,121 @@ function englishSpecificWords(text: string): string[] {
 }
 
 function lexicalSignals(text: string): {
+  raw: string
   english: string[]
   chinese: string[]
   numberAnchors: Set<string>
-  selfOwned: boolean
 } {
   const raw = String(text ?? '').toLowerCase()
   return {
+    raw,
     english: englishSpecificWords(raw),
     chinese: chineseSpecificSegments(raw),
     numberAnchors: numberUnitAnchors(raw),
-    selfOwned:
-      raw.includes('用户') ||
-      raw.includes('我的') ||
-      /(?:^|[^\u4e00-\u9fff])(?:我|本人|自己)(?:的)?|^(?:我|本人|自己)/.test(raw) ||
-      /\b(?:i|me|my|mine|myself|user)\b/.test(raw),
   }
 }
 
+const SELF_OWNER = '__self__'
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^{}()|[\]\\]/g, '\\$&')
+}
+
+function normalizeOwner(value: string | undefined | null): string | null {
+  const owner = String(value ?? '').trim().toLowerCase().replace(/[’']/g, '')
+  if (!owner) return null
+  if (COMMON_ENGLISH.has(owner) || GENERIC_ENGLISH_UNITS.has(owner)) return null
+  if (GENERIC_TOPIC_SEGMENTS.has(owner) || GENERIC_ATTRIBUTE_SEGMENTS.has(owner)) return null
+  if (GENERIC_ZH_PHRASES.includes(owner)) return null
+  return owner
+}
+
+/**
+ * owner 只在共享事实附近抽取，不把整句压成 self/non-self。
+ * - my weight / 我的工资 → __self__
+ * - Mimi's weight / weight of Mimi / 小夏的工资 → 对应实体
+ * - 没有明确 owner → null（允许用户省略主语继续说同一件事）
+ */
+function englishOwnerForEvidence(raw: string, evidence: string): string | null {
+  const word = escapeRegExp(evidence)
+  if (new RegExp(`\\b(?:my|mine|myself|user(?:['’]s)?)\\s+${word}\\b`, 'i').test(raw)) {
+    return SELF_OWNER
+  }
+
+  const before = raw.match(new RegExp(`\\b([a-z][a-z'-]{1,30})(?:['’]s)?\\s+${word}\\b`, 'i'))
+  const beforeOwner = normalizeOwner(before?.[1])
+  if (beforeOwner) return beforeOwner
+
+  const after = raw.match(new RegExp(`\\b${word}\\s+of\\s+([a-z][a-z'-]{1,30})\\b`, 'i'))
+  return normalizeOwner(after?.[1])
+}
+
+function chineseOwnerForEvidence(raw: string, evidence: string): string | null {
+  const compact = String(raw ?? '').replace(/\\s+/g, '')
+  const shared = escapeRegExp(evidence)
+
+  if (new RegExp(`(?:我|本人|自己)(?:的)?${shared}`).test(compact)) return SELF_OWNER
+
+  // 优先“X 的属性”这种显式所有关系，避免把前面的整段句子吃进 owner。
+  const possessive = compact.match(new RegExp(`([\\u4e00-\\u9fff]{1,6})的${shared}`))
+  const possessiveOwner = normalizeOwner(possessive?.[1])
+  if (possessiveOwner) return possessiveOwner
+
+  // 兼容“咪咪体重 / 小夏工资”这类省略“的”的口语；只取紧邻事实词的短实体。
+  const direct = compact.match(new RegExp(`([\\u4e00-\\u9fff]{1,4})${shared}`))
+  const directOwner = normalizeOwner(direct?.[1])
+  if (directOwner) return directOwner
+
+  // 少量后置所有关系，例如“工资是小夏的”。
+  const after = compact.match(new RegExp(`${shared}(?:是|属于)?([\\u4e00-\\u9fff]{1,4})的`))
+  return normalizeOwner(after?.[1])
+}
+
+function ownersCompatible(memoryOwner: string | null, userOwner: string | null): boolean {
+  // 用户本轮可省略 owner 继续说同一件事；只有双方都明确指向实体时才做冲突否决。
+  if (!memoryOwner || !userOwner) return true
+  return memoryOwner === userOwner
+}
+
 function hasSpecificEnglishOverlap(
+  memoryRaw: string,
+  userRaw: string,
   memoryWords: string[],
   userWords: string[],
-  memorySelfOwned: boolean,
-  userSelfOwned: boolean,
 ): boolean {
   const userSet = new Set(userWords)
   for (const word of memoryWords) {
     if (!userSet.has(word)) continue
-
-    // 一边明确是“我”，另一边在共享事实词前还有额外实体（如 Mimi's weight）时，
-    // 不能仅凭 weight/salary 等共享词把别人的属性算到用户自己身上。
-    if (memorySelfOwned !== userSelfOwned) {
-      if (memorySelfOwned && !userSelfOwned && userWords.indexOf(word) > 0) continue
-      if (userSelfOwned && !memorySelfOwned && memoryWords.indexOf(word) > 0) continue
-    }
+    const memoryOwner = englishOwnerForEvidence(memoryRaw, word)
+    const userOwner = englishOwnerForEvidence(userRaw, word)
+    if (!ownersCompatible(memoryOwner, userOwner)) continue
     return true
   }
   return false
 }
 
 function hasSpecificChineseOverlap(
+  memoryRaw: string,
+  userRaw: string,
   memorySegments: string[],
   userSegments: string[],
-  memorySelfOwned: boolean,
-  userSelfOwned: boolean,
 ): boolean {
   for (const memory of memorySegments) {
     for (const user of userSegments) {
       const shorter = memory.length <= user.length ? memory : user
       const longer = memory.length <= user.length ? user : memory
+      if (shorter.length < 2 || !longer.includes(shorter)) continue
 
-      // 一边明确属于“我”，另一边在共享片段前还有额外实体名时，先判为 owner 不兼容。
-      // 例如 “我的工资” vs “小夏工资”、 “我喜欢咖啡” vs “小夏也喜欢咖啡”。
-      if (memorySelfOwned !== userSelfOwned) {
-        if (memorySelfOwned && !userSelfOwned && user.indexOf(memory) > 0) continue
-        if (userSelfOwned && !memorySelfOwned && memory.indexOf(user) > 0) continue
-      }
+      const memoryOwner = chineseOwnerForEvidence(memoryRaw, shorter)
+      const userOwner = chineseOwnerForEvidence(userRaw, shorter)
+      if (!ownersCompatible(memoryOwner, userOwner)) continue
 
-      // “体重/身高/年龄”等裸属性词不能跨所属实体匹配。
-      // 双方都明确指向“我”时允许同一属性槽位用于纠正；“我的体重”不能命中“咪咪体重”。
+      // 裸属性词本身不是事实实体；只有双方都明确绑定到同一 owner 才足以 exact。
       if (GENERIC_ATTRIBUTE_SEGMENTS.has(shorter)) {
-        if (memorySelfOwned && userSelfOwned && memory === user) return true
+        if (memoryOwner && userOwner && memoryOwner === userOwner) return true
         continue
       }
-      // 两字以上的具体连续片段才足以构成事实级证据；不再用任意二元窗口。
-      if (shorter.length >= 2 && longer.includes(shorter)) return true
+      return true
     }
   }
 
@@ -247,19 +297,18 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
   const sharedNumberAnchor = [...mem.numberAnchors].some((anchor) => usr.numberAnchors.has(anchor))
 
   const sharedEnglish = hasSpecificEnglishOverlap(
+    mem.raw,
+    usr.raw,
     mem.english,
     usr.english,
-    mem.selfOwned,
-    usr.selfOwned,
   )
   const sharedChinese = hasSpecificChineseOverlap(
+    mem.raw,
+    usr.raw,
     mem.chinese,
     usr.chinese,
-    mem.selfOwned,
-    usr.selfOwned,
   )
   const numberAnchorCompatible = sharedNumberAnchor && (
-    (mem.selfOwned && usr.selfOwned) ||
     sharedChinese ||
     (mem.chinese.length === 0 && usr.chinese.length === 0)
   )
