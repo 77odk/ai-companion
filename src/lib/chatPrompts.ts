@@ -24,8 +24,8 @@ export function buildMemoryBlock(
   const valid = (Array.isArray(items) ? items : []).filter((m) => m && typeof m.text === 'string' && m.text.trim())
   if (valid.length === 0) return null
   const header = lang === 'en'
-    ? 'Memories about them that are still relevant now (later lines are newer; if two lines contradict each other, trust the newer one):'
-    : '关于对方，以下是当前仍可参考的记忆（越靠后越新；同一件事前后说法不一致时，以更新的为准）：'
+    ? 'Memories about them that are still relevant now (each line includes its recorded/recently-mentioned date; if two lines conflict, prefer the newer date and clearer user-grounded source):'
+    : '关于对方，以下是当前仍可参考的记忆（每条附记录/最近提及日期；同一件事前后说法不一致时，优先参考日期更新且来源更明确的条目）：'
   const lines = valid.map((m) => {
     const ref = correctionRef?.(m)
     const tag = ref ? `[M:${ref}] ` : ''
