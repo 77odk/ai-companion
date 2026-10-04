@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { composeContext, CONTEXT_HARD_BUDGET, COMPACT_INPUT_BUDGET, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT } from '../src/lib/contextComposer.ts'
+import { composeContext, CONTEXT_HARD_BUDGET, CONTEXT_ACTIVE_THREAD_MESSAGES, COMPACT_INPUT_BUDGET, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT } from '../src/lib/contextComposer.ts'
 import { estimateToken } from '../src/lib/token.ts'
 
 const core = [{ role: 'system', content: 'core persona' }]
@@ -44,6 +44,64 @@ const blocks = composeContext(core, [], [
 ], [], CONTEXT_HARD_BUDGET)
 assert.deepEqual(blocks.includedBlockIds, ['memory', 'ambient'])
 assert.ok(!blocks.messages.some((m) => m.content === 'skip me'))
+
+
+// ── P0-C：Context Ledger + Token Budgeter ──
+assert.equal(CONTEXT_ACTIVE_THREAD_MESSAGES, 12, 'active thread 窗口固定保留最近 12 条（含最新消息）')
+
+const continuityCore = [{ role: 'system', content: 'core' }]
+const continuityHistory = [
+  { role: 'user', content: 'older active turn' },
+  { role: 'assistant', content: 'recent active '.repeat(20) },
+  { role: 'user', content: 'latest' },
+]
+const activeTokens =
+  estimateToken(continuityHistory[0].content) +
+  estimateToken(continuityHistory[1].content)
+const fixedContinuityTokens =
+  estimateToken(continuityCore[0].content) +
+  estimateToken(continuityHistory[2].content)
+const continuity = composeContext(
+  continuityCore,
+  continuityHistory,
+  [{ id: 'ambient-heavy', content: 'ambient '.repeat(100), priority: 'ambient' }],
+  [],
+  fixedContinuityTokens + activeTokens + 5,
+)
+assert.ok(continuity.messages.some((m) => m.content === continuityHistory[1].content), 'active thread must survive before ambient/background')
+assert.ok(!continuity.includedBlockIds.includes('ambient-heavy'), 'ambient block must yield to active thread under pressure')
+assert.equal(continuity.ledger.find((entry) => entry.source === 'ambient-heavy')?.reason, 'budget', 'Ledger records why ambient was dropped')
+assert.equal(
+  continuity.ledger.reduce((sum, entry) => sum + entry.includedTokens, 0),
+  continuity.totalTokens,
+  'Ledger includedTokens must reconcile with final payload',
+)
+
+const oversizedOptionalHistory = composeContext(
+  [{ role: 'system', content: 'core' }],
+  [
+    { role: 'assistant', content: '超'.repeat(2000) },
+    { role: 'user', content: 'latest' },
+  ],
+  [],
+  [],
+  100,
+)
+assert.equal(oversizedOptionalHistory.overBudget, false, 'oversized optional history must be dropped instead of blocking a valid latest message')
+assert.ok(oversizedOptionalHistory.totalTokens <= 100, 'optional history can never push the final payload past hard budget')
+assert.ok(!oversizedOptionalHistory.messages.some((m) => m.content === '超'.repeat(2000)), 'oversized optional history is not injected')
+assert.equal(
+  oversizedOptionalHistory.ledger.find((entry) => entry.source === 'history:active')?.reason,
+  'budget',
+  'Ledger records active-history budget drop',
+)
+assert.equal(
+  blocks.ledger.find((entry) => entry.source === 'irrelevant')?.reason,
+  'irrelevant',
+  'Ledger records relevance filtering',
+)
+
+console.log('\ncontext_composer P0-C：9/9')
 
 console.log('\ncontext_composer 基础：5/5')
 
