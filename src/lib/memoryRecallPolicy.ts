@@ -61,6 +61,12 @@ function stripChineseTimeExpressions(text: string): string {
     .replace(/\d{1,2}\s*月\s*\d{1,2}\s*[日号]?/g, ' ')
     .replace(/\d{2,4}[-/.]\d{1,2}[-/.]\d{1,2}/g, ' ')
     .replace(/\d{1,2}[-/.]\d{1,2}/g, ' ')
+    // 中文数字日期：十月四日、二〇二六年十月四日、每月一号。
+    .replace(/[〇零一二三四五六七八九十百千]{2,4}\s*年\s*[〇零一二三四五六七八九十廿卅]{1,3}\s*月\s*[〇零一二三四五六七八九十廿卅]{1,3}\s*[日号]?/g, ' ')
+    .replace(/每月\s*(?:\d{1,2}|[〇零一二三四五六七八九十廿卅]{1,3})\s*[日号]/g, ' ')
+    .replace(/[〇零一二三四五六七八九十廿卅]{1,3}\s*月\s*[〇零一二三四五六七八九十廿卅]{1,3}\s*[日号]/g, ' ')
+    // 纯时长不是事实实体：半小时、30分钟、三天等先剥离；真正动作/对象仍留在文本里。
+    .replace(/(?:半|\d+(?:\.\d+)?|[一二三四五六七八九十百]{1,4})\s*(?:分钟|小时|天|周|个月|月|年)/g, ' ')
     // 钟点：8点、8:30、上午8点半、晚上九点（中文数字钟点也覆盖）。
     .replace(/(?:凌晨|早上|上午|中午|下午|傍晚|晚上|深夜)?\s*(?:\d{1,2}|[一二三四五六七八九十]{1,3})\s*(?::|：)\s*\d{1,2}/g, ' ')
     .replace(/(?:凌晨|早上|上午|中午|下午|傍晚|晚上|深夜)?\s*(?:\d{1,2}|[一二三四五六七八九十]{1,3})\s*(?:点|时)(?:半|\d{1,2}\s*分)?/g, ' ')
@@ -90,7 +96,7 @@ function chineseSpecificSegments(text: string): string[] {
 function lexicalSignals(text: string): {
   english: Set<string>
   chinese: string[]
-  numbers: Set<string>
+  numberAnchors: Set<string>
 } {
   const raw = String(text ?? '').toLowerCase()
   return {
@@ -134,9 +140,7 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
   const mem = lexicalSignals(memoryText)
   const usr = lexicalSignals(user)
 
-  const sharedNumber = [...mem.numbers].some((number) => usr.numbers.has(number))
-  // 两边都带数字但数字不一致时，先否决：避免“30岁”与“31岁”只因共享“岁”被视为同一事实。
-  if (mem.numbers.size > 0 && usr.numbers.size > 0 && !sharedNumber) return false
+  const sharedNumberAnchor = [...mem.numberAnchors].some((anchor) => usr.numberAnchors.has(anchor))
 
   let sharedEnglish = false
   for (const word of mem.english) {
@@ -146,8 +150,9 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
   }
   const sharedChinese = hasSpecificChineseOverlap(mem.chinese, usr.chinese)
 
-  // 数字永远不能单独构成事实级证据；必须同时有具体实体/动作/单位等文本证据。
-  return sharedEnglish || sharedChinese
+  // 裸数字永远不能单独构成事实级证据；“数字+单位”可作为一个完整事实锚点。
+  // 数字发生变化也不提前否决：若仍有“咪咪”等具体实体证据，纠正旧事实必须能命中。
+  return sharedNumberAnchor || sharedEnglish || sharedChinese
 }
 
 function roughSelectionTokens(items: MemoryItem[]): number {
