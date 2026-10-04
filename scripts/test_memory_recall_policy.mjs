@@ -107,12 +107,18 @@ assert.equal(shouldTouchMemoryFromUser(mondayWork, '星期一跑步半小时'), 
 assert.equal(shouldTouchMemoryFromUser(M('zhouyi-work', '周一上班很累'), '周一跑步半小时'), false, '“周一”时间骨架不能 exact/touch')
 assert.equal(shouldTouchMemoryFromUser(M('dated-work', '10月4日上班很累'), '10月4日跑步半小时'), false, '具体月日不能单独构成 exact/touch')
 assert.equal(shouldTouchMemoryFromUser(M('iso-date', '2026-10-04上班很累'), '2026-10-04跑步半小时'), false, '数字日期骨架不能 exact/touch')
+assert.equal(shouldTouchMemoryFromUser(M('zh-date', '十月四日上班很累'), '十月四日跑步半小时'), false, '中文数字月日不能 exact/touch')
+assert.equal(shouldTouchMemoryFromUser(M('zh-full-date', '二〇二六年十月四日上班很累'), '二〇二六年十月四日跑步半小时'), false, '中文数字完整日期不能 exact/touch')
+assert.equal(shouldTouchMemoryFromUser(M('monthly-date', '每月一号上班很累'), '每月一号跑步半小时'), false, '每月一号这类周期日期不能 exact/touch')
 assert.equal(shouldTouchMemoryFromUser(M('monday-hospital', '周一去医院看病'), '周一医院看病排队好久'), true, '剥离时间后仍有具体“医院看病”事实证据时应匹配')
 
 const age30 = M('age30', '我今年30岁')
 assert.equal(shouldTouchMemoryFromUser(age30, '这个月花了30元'), false, '相同数字 30 不能单独构成事实级命中')
 assert.equal(shouldTouchMemoryFromUser(age30, '我今年31岁'), false, '数字冲突时即使单位相同也不能 exact/touch')
 assert.equal(shouldTouchMemoryFromUser(age30, '我30岁了'), true, '相同数字 + 相同具体单位可以视为同一事实')
+
+const mimiAge = M('mimi-age', '我有2只猫，咪咪今年3岁', { topic: '宠物' })
+assert.equal(shouldTouchMemoryFromUser(mimiAge, '咪咪今年4岁'), true, '数字变化不能否决“咪咪”实体证据，纠正旧事实仍要能命中')
 
 console.log('\n[memory recall 2] pinned 入场优先级高于 exact 洪水')
 const pinnedCore = M('pinned-core', '严重过敏事实', { pinned: true })
