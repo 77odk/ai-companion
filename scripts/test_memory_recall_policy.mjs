@@ -142,6 +142,14 @@ assert.equal(shouldTouchMemoryFromUser(mySalary, '工资最近涨了'), true, '�
 const englishMyWeight = M('english-my-weight', 'my weight is 60 kilograms')
 assert.equal(shouldTouchMemoryFromUser(englishMyWeight, "Mimi's weight is 60 kilograms"), false, '英文共享属性词也必须经过 owner 兼容判断')
 assert.equal(shouldTouchMemoryFromUser(englishMyWeight, 'weight changed again'), true, '英文没有额外实体前缀时仍可继续命中自己的事实')
+const xiaSalary = M('xia-salary', '小夏的工资五千元', { topic: '工作' })
+assert.equal(shouldTouchMemoryFromUser(xiaSalary, '小明的工资五千元'), false, '两个不同非用户实体不能因共享工资与数值 exact')
+assert.equal(shouldTouchMemoryFromUser(xiaSalary, '小夏工资涨了'), true, '同一中文实体省略“的”后仍应命中')
+
+const mimiWeightEn = M('mimi-weight-en', "Mimi's weight is 60 kilograms")
+assert.equal(shouldTouchMemoryFromUser(mimiWeightEn, "Fido's weight is 60 kilograms"), false, '不同英文实体不能因共享 weight 与数值 exact')
+assert.equal(shouldTouchMemoryFromUser(M('mimi-weight-postfix', 'weight of Mimi is 60 kilograms'), 'weight of Fido is 60 kilograms'), false, '英文后置 owner 也必须参与兼容判断')
+assert.equal(shouldTouchMemoryFromUser(mimiWeightEn, 'Mimi weight changed again'), true, '同一英文实体不同所有格写法仍应命中')
 
 console.log('\n[memory recall 2] 孤立主题标签不能充当事实级 exact')
 assert.equal(shouldTouchMemoryFromUser(M('work-topic', '工作，最近很忙', { topic: '工作' }), '工作，今天很顺利'), false, '孤立“工作”只能代表主题，不能 exact/touch')
