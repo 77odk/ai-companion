@@ -14,6 +14,25 @@ assert.deepEqual(result.messages.at(-1), tail[0], 'time tail must stay last and 
 assert.equal(result.totalTokens, result.messages.reduce((sum, m) => sum + estimateToken(m.content), 0))
 assert.equal(result.overBudget, false, 'normal payload is not over budget')
 
+// P0-B：稳定前缀顺序。块仍按优先级先抢预算，但输出必须落在旧历史之后、最新消息之前。
+const ordered = composeContext(
+  core,
+  [
+    { role: 'user', content: '[2026-10-04 19:10] older-user' },
+    { role: 'assistant', content: '[2026-10-04 19:11] older-assistant' },
+    { role: 'user', content: '[2026-10-04 19:12] newest-user' },
+  ],
+  [
+    { id: 'memory', content: 'dynamic-memory', priority: 'memory' },
+    { id: 'current-time', content: 'dynamic-now', priority: 'core' },
+  ],
+)
+assert.deepEqual(
+  ordered.messages.map((m) => m.content),
+  ['core persona', '[2026-10-04 19:10] older-user', '[2026-10-04 19:11] older-assistant', 'dynamic-now', 'dynamic-memory', '[2026-10-04 19:12] newest-user'],
+  '最终 payload 必须是稳定 core/history 前缀，再动态块，最后最新消息',
+)
+
 const hugeNewest = composeContext(core, [{ role: 'user', content: '超'.repeat(2000) }], [], tail, 500)
 assert.equal(hugeNewest.overBudget, true, 'single oversized newest message must be rejected instead of breaking hard cap')
 assert.ok(hugeNewest.totalTokens <= 500, 'over-budget marker must still keep composed payload under hard cap')
@@ -113,8 +132,9 @@ assert.match(chatSource, /used: sessionContentTokens,[\s\S]*source: 'estimate',[
 assert.match(chatSource, /used: contentTokensOf\(usageMessages\(roundVisibleMessages, userMsg\), nextFactor\)[\s\S]*source: 'actual'/, 'provider usage 返回后总量按当前 active round 上下文段写入（校准系数由真实 usage 反推）')
 assert.match(chatSource, /setContextUsage\(actualContextState, activeSessionId\)/, '真实 usage 结果写回 session 持久化')
 assert.match(chatSource, /if \(composed\.overBudget\)/, '超过 64k 时在 provider 调用前停止')
-assert.doesNotMatch(chatSource, /buildTimeContext\(Date\.now\(\), lang\)/, 'Chat 不再重复追加第二份当前时间')
-assert.match(promptSource, /【此刻时间】/, 'System Prompt 仍保留当前时间注入')
+assert.match(chatSource, /buildSystemPrompt\(persona, nameForPrompt, undefined, getActiveSessionId\(\) \|\| undefined, lang, false\)/, '主聊天 core system 必须关闭动态时间前缀')
+assert.match(chatSource, /id: 'current-time'[\s\S]*buildTimeContext\(Date\.now\(\), lang\)/, '当前时间改走动态 ContextBlock')
+assert.match(promptSource, /includeCurrentTime \?/, 'buildSystemPrompt 保留兼容默认：其它调用仍可包含当前时间')
 // Compact：用户主动触发 + 1 次模型生成 summary + summary/recent raw 注入 + 不删原记录
 assert.match(chatSource, /buildCompactedHistory\(compactSummary, history, COMPACT_KEEP_RECENT\)/, '已压缩后注入 = summary + 最近原始消息')
 assert.match(chatSource, /setContextCompactSummary\(trimmed, activeSessionId\)/, '模型生成的摘要持久化')
