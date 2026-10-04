@@ -29,16 +29,37 @@ function isOfficialHost(provider: Provider, host: string): boolean {
   return false
 }
 
-function deepSeekFlashRate(createdAt: number): TokenRate {
+const CHINA_PUBLIC_HOLIDAYS_2026 = new Set([
+  '2026-01-01', '2026-01-02', '2026-01-03',
+  '2026-02-15', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23',
+  '2026-04-04', '2026-04-05', '2026-04-06',
+  '2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04', '2026-05-05',
+  '2026-06-19', '2026-06-20', '2026-06-21',
+  '2026-09-25', '2026-09-26', '2026-09-27',
+  '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07',
+])
+
+function utcDayKey(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+
+function deepSeekFlashRate(createdAt: number): TokenRate | null {
   const d = new Date(createdAt)
   const day = d.getUTCDay()
   const hour = d.getUTCHours()
   const weekday = day >= 1 && day <= 5
-  const peak = weekday && ((hour >= 1 && hour < 4) || (hour >= 6 && hour < 10))
-  // DeepSeek 官方 2026-10：Flash；legacy deepseek-v4-flash 仍按 Flash 计价。
-  return peak
-    ? { currency: 'USD', input: 0.3, cached: 0.006, output: 1.2 }
-    : { currency: 'USD', input: 0.15, cached: 0.003, output: 0.6 }
+  const inPeakWindow = weekday && ((hour >= 1 && hour < 4) || (hour >= 6 && hour < 10))
+  if (!inPeakWindow) {
+    return { currency: 'USD', input: 0.15, cached: 0.003, output: 0.6 }
+  }
+
+  // DeepSeek 官方规则：周一到周五两个 UTC 高峰窗收费更高，但中国法定节假日全日仍按闲时价。
+  // 当前内置 2026 国务院节假日；未来年份的“高峰窗”若无法确认是否法定假日，宁可不估价。
+  if (d.getUTCFullYear() !== 2026) return null
+  if (CHINA_PUBLIC_HOLIDAYS_2026.has(utcDayKey(d))) {
+    return { currency: 'USD', input: 0.15, cached: 0.003, output: 0.6 }
+  }
+  return { currency: 'USD', input: 0.3, cached: 0.006, output: 1.2 }
 }
 
 function rateForTurn(turn: ContextUsageTurn): TokenRate | null {
