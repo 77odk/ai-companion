@@ -72,12 +72,15 @@ function futureIntentCandidates(
   const today = localDayKey(now)
   const lastDay = lastActiveAt > 0 ? localDayKey(lastActiveAt) : ''
   const longEnough = now - lastActiveAt >= INITIATIVE_MIN_AWAY_MS
+  const returnedOnLaterDay = Boolean(lastDay && lastDay !== today)
   const out: InitiativeCandidate[] = []
   for (const topic of Array.isArray(topics) ? topics : []) {
     if (!topic?.futureDay || !/^\d{4}-\d{2}-\d{2}$/.test(topic.futureDay)) continue
     if (topic.futureDay > today) continue
-    const crossedDay = Boolean(lastDay && topic.futureDay > lastDay)
-    if (!crossedDay && !(topic.futureDay === today && longEnough)) continue
+    // 只知道“哪一天”，不知道约定具体几点：跨天回来时把 lastActive 当天也算在离开窗口内，
+    // 避免 10/7 上午离开、10/7 晚上约定到期、10/8 回来却漏掉。
+    const dueDuringAway = returnedOnLaterDay && topic.futureDay >= lastDay && topic.futureDay <= today
+    if (!dueDuringAway && !(topic.futureDay === today && longEnough)) continue
     const evidence = String(topic.t ?? '').trim()
     if (!evidence) continue
     out.push({
