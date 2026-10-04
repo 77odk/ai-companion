@@ -173,8 +173,13 @@ export function getSessionPersona(sessionId?: string): string {
   }
 }
 
-/** idle 不是一条“活动事实”，只是展示层的无证据状态。 */
-function createIdleState(now: number, recentIds: readonly string[] = []): TaRuntimeState {
+/** idle 不是一条“活动事实”，只是展示层的无当前活动状态；连续性 evidence 可独立保留。 */
+function createIdleState(
+  now: number,
+  recentIds: readonly string[] = [],
+  continuity?: TaContinuityState | null,
+): TaRuntimeState {
+  const prunedContinuity = pruneTaContinuity(continuity, now)
   return {
     activityId: TA_RUNTIME_IDLE_ID,
     label: '',
@@ -183,6 +188,7 @@ function createIdleState(now: number, recentIds: readonly string[] = []): TaRunt
     updatedAt: now,
     source: 'idle',
     recentActivityIds: recentIds.filter((id) => id && id !== TA_RUNTIME_IDLE_ID).slice(0, 3),
+    ...(prunedContinuity ? { continuity: prunedContinuity } : {}),
   }
 }
 
@@ -217,7 +223,12 @@ export function getOrAdvanceTaRuntime(
     return idle
   }
 
-  if (cur.activityId === TA_RUNTIME_IDLE_ID) return cur
+  if (cur.activityId === TA_RUNTIME_IDLE_ID) {
+    const continuity = pruneTaContinuity(cur.continuity, now)
+    return continuityEqual(cur.continuity, continuity)
+      ? cur
+      : { ...cur, ...(continuity ? { continuity } : { continuity: undefined }) }
+  }
 
   const currentActivity = ACTIVITIES.find((item) => item.id === cur.activityId)
   const trusted = cur.source === 'chat'
@@ -233,7 +244,7 @@ export function getOrAdvanceTaRuntime(
   const recentIds = Array.isArray(cur.recentActivityIds) && cur.recentActivityIds.length > 0
     ? cur.recentActivityIds
     : [cur.activityId]
-  const idle = createIdleState(now, recentIds)
+  const idle = createIdleState(now, recentIds, cur.continuity)
   map[key] = idle
   saveAll(map)
   return idle
