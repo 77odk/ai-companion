@@ -110,6 +110,10 @@ assert.equal(shouldTouchMemoryFromUser(M('iso-date', '2026-10-04上班很累'), 
 assert.equal(shouldTouchMemoryFromUser(M('zh-date', '十月四日上班很累'), '十月四日跑步半小时'), false, '中文数字月日不能 exact/touch')
 assert.equal(shouldTouchMemoryFromUser(M('zh-full-date', '二〇二六年十月四日上班很累'), '二〇二六年十月四日跑步半小时'), false, '中文数字完整日期不能 exact/touch')
 assert.equal(shouldTouchMemoryFromUser(M('monthly-date', '每月一号上班很累'), '每月一号跑步半小时'), false, '每月一号这类周期日期不能 exact/touch')
+assert.equal(shouldTouchMemoryFromUser(M('yearly-date', '每年十月四日上班很累'), '每年十月四日跑步很开心'), false, '每年+中文日期整段时间骨架不能 exact/touch')
+assert.equal(shouldTouchMemoryFromUser(M('two-hours', '两个小时后上班很累'), '两个小时后跑步很开心'), false, '“两个小时后”不能单独 exact/touch')
+assert.equal(shouldTouchMemoryFromUser(M('quarter-hour', '一刻钟后上班很累'), '一刻钟后跑步很开心'), false, '“一刻钟后”不能单独 exact/touch')
+assert.equal(shouldTouchMemoryFromUser(M('seconds', '三十秒后上班很累'), '三十秒后跑步很开心'), false, '中文秒级时长不能单独 exact/touch')
 assert.equal(shouldTouchMemoryFromUser(M('monday-hospital', '周一去医院看病'), '周一医院看病排队好久'), true, '剥离时间后仍有具体“医院看病”事实证据时应匹配')
 
 const age30 = M('age30', '我今年30岁')
@@ -119,6 +123,15 @@ assert.equal(shouldTouchMemoryFromUser(age30, '我30岁了'), true, '相同数�
 
 const mimiAge = M('mimi-age', '我有2只猫，咪咪今年3岁', { topic: '宠物' })
 assert.equal(shouldTouchMemoryFromUser(mimiAge, '咪咪今年4岁'), true, '数字变化不能否决“咪咪”实体证据，纠正旧事实仍要能命中')
+
+const mimiWeight = M('mimi-weight', '咪咪体重三公斤', { topic: '宠物' })
+assert.equal(shouldTouchMemoryFromUser(mimiWeight, '咪咪体重四公斤'), true, '中文数值单位变化后仍保留“咪咪体重”实体证据')
+assert.equal(shouldTouchMemoryFromUser(M('weight-three', '体重三公斤'), '三公斤'), true, '相同中文数字+单位可作为完整事实锚点')
+
+console.log('\n[memory recall 2] 孤立主题标签不能充当事实级 exact')
+assert.equal(shouldTouchMemoryFromUser(M('work-topic', '工作，最近很忙', { topic: '工作' }), '工作，今天很顺利'), false, '孤立“工作”只能代表主题，不能 exact/touch')
+assert.equal(shouldTouchMemoryFromUser(M('pet-topic', '宠物，最近很闹', { topic: '宠物' }), '宠物，今天很安静'), false, '孤立“宠物”不能 exact/touch')
+assert.equal(shouldTouchMemoryFromUser(M('work-project', '工作，星河项目延期', { topic: '工作' }), '星河项目又延期了'), true, '主题词剥离后仍有“星河项目”具体证据时应匹配')
 
 console.log('\n[memory recall 2] pinned 入场优先级高于 exact 洪水')
 const pinnedCore = M('pinned-core', '严重过敏事实', { pinned: true })
