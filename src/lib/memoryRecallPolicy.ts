@@ -34,124 +34,90 @@ const STOP_CHARS = new Set(
   '的了是在有和与跟也都就不很好吧吗呢啊呀哦嗯我你他她它们这那个谁什么要会能可去来到上下着过被让把对又再还只才最更太真却向从为因于以及'.split(''),
 )
 
-const COMMON_ZH_PHRASES = new Set([
-  '喜欢', '今天', '最近', '现在', '觉得', '真的', '还是', '可以', '需要', '可能', '就是', '这个', '那个',
-])
-
-const COMMON_ZH_CHARS = new Set(
-  '喜欢今天最近现在觉得真的还是可以需要可能就是这个那个'.split(''),
-)
+const GENERIC_ZH_PHRASES = [
+  '特别喜欢', '非常喜欢', '比较喜欢', '有点喜欢',
+  '今天', '昨天', '明天', '最近', '现在', '刚才', '刚刚',
+  '感觉', '觉得', '喜欢', '真的', '还是', '可以', '需要', '可能',
+  '就是', '这个', '那个', '其实', '然后', '但是', '因为', '所以',
+].sort((a, b) => b.length - a.length)
 
 const COMMON_ENGLISH = new Set([
   'the', 'a', 'an', 'and', 'or', 'but', 'to', 'of', 'in', 'on', 'at', 'for', 'with', 'from',
   'that', 'this', 'it', 'its', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
   'i', 'me', 'my', 'mine', 'you', 'your', 'yours', 'we', 'our', 'ours', 'they', 'their', 'them',
   'user', 'self', 'like', 'likes', 'liked', 'want', 'wants', 'wanted', 'think', 'thinks',
-  'know', 'knows', 'today', 'now', 'really', 'very',
+  'know', 'knows', 'today', 'yesterday', 'tomorrow', 'now', 'recently', 'really', 'very',
 ])
 
-function normalize(text: string): string {
-  return String(text ?? '')
+function chineseSpecificSegments(text: string): string[] {
+  let raw = String(text ?? '')
     .toLowerCase()
-    .replace(/用户|对方|ta/g, '')
-    .replace(/[\s\p{P}\p{S}]+/gu, '')
+    .replace(/用户|对方|ta/g, ' ')
+
+  for (const phrase of GENERIC_ZH_PHRASES) raw = raw.split(phrase).join(' ')
+
+  let normalized = ''
+  for (const char of raw) {
+    if (/[\u4e00-\u9fff]/.test(char) && !STOP_CHARS.has(char)) normalized += char
+    else normalized += ' '
+  }
+
+  return normalized
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
 }
 
 function lexicalSignals(text: string): {
   english: Set<string>
-  chineseBigrams: Set<string>
-  chineseSingles: Set<string>
+  chinese: string[]
+  numbers: Set<string>
 } {
   const raw = String(text ?? '').toLowerCase()
-  const english = new Set(
-    (raw.match(/[a-z]+/g) ?? [])
-      .filter((word) => word.length >= 3 && !COMMON_ENGLISH.has(word)),
-  )
-  const chineseSingles = new Set<string>()
-  const chineseBigrams = new Set<string>()
+  return {
+    english: new Set(
+      (raw.match(/[a-z]+/g) ?? [])
+        .filter((word) => word.length >= 3 && !COMMON_ENGLISH.has(word)),
+    ),
+    chinese: chineseSpecificSegments(raw),
+    numbers: new Set(raw.match(/\d+(?:\.\d+)?/g) ?? []),
+  }
+}
 
-  for (const run of raw.match(/[\u4e00-\u9fff]+/g) ?? []) {
-    for (const char of run) {
-      if (!STOP_CHARS.has(char) && !COMMON_ZH_CHARS.has(char)) chineseSingles.add(char)
-    }
-    for (let i = 0; i < run.length - 1; i++) {
-      const pair = run.slice(i, i + 2)
-      if (
-        [...pair].every((char) => !STOP_CHARS.has(char)) &&
-        !COMMON_ZH_PHRASES.has(pair)
-      ) {
-        chineseBigrams.add(pair)
-      }
+function hasSpecificChineseOverlap(memorySegments: string[], userSegments: string[]): boolean {
+  for (const memory of memorySegments) {
+    for (const user of userSegments) {
+      const shorter = memory.length <= user.length ? memory : user
+      const longer = memory.length <= user.length ? user : memory
+      // 两字以上的具体连续片段才足以构成事实级证据；不再用任意二元窗口。
+      if (shorter.length >= 2 && longer.includes(shorter)) return true
     }
   }
 
-  return { english, chineseBigrams, chineseSingles }
+  // 单字实体只在用户本轮真正只点了这一个具体字时放行，例如“猫”。
+  const userSingle = userSegments.length === 1 && userSegments[0].length === 1
+    ? userSegments[0]
+    : null
+  if (!userSingle) return false
+  return memorySegments.some((segment) => segment.includes(userSingle))
 }
 
 /**
  * 判断“当前用户原话”是否确实点到这条记忆。
- * 这里故意比候选召回更严格：topic 相同、通用词相同都不够，必须有能标识具体事实的词汇证据。
+ * topic 相同、通用词相同、任意中文二元窗口相同都不够；
+ * 必须有具体中文片段、具体英文词或明确数字证据。
  */
 export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boolean {
   const memoryText = String(item?.text ?? '').trim()
   const user = String(userText ?? '').trim()
   if (!memoryText || !user) return false
 
-  const a = normalize(memoryText)
-  const b = normalize(user)
-  if (!a || !b) return false
-
-  const shorter = a.length <= b.length ? a : b
-  const longer = a.length <= b.length ? b : a
-  if (
-    shorter.length >= 2 &&
-    !COMMON_ZH_PHRASES.has(shorter) &&
-    longer.includes(shorter)
-  ) {
-    return true
-  }
-  if (
-    shorter.length === 1 &&
-    !STOP_CHARS.has(shorter) &&
-    !COMMON_ZH_CHARS.has(shorter) &&
-    longer.includes(shorter)
-  ) {
-    return true
-  }
-
   const mem = lexicalSignals(memoryText)
   const usr = lexicalSignals(user)
 
   for (const word of mem.english) if (usr.english.has(word)) return true
-  for (const pair of mem.chineseBigrams) if (usr.chineseBigrams.has(pair)) return true
-
-  let sharedSpecificSingles = 0
-  for (const char of mem.chineseSingles) {
-    if (!usr.chineseSingles.has(char)) continue
-    sharedSpecificSingles++
-    if (sharedSpecificSingles >= 2) return true
-  }
-
-  // 单个泛化字符（如“吃”“忙”）不够证明用户重提了这条具体事实；
-  // topic 只属于候选召回层，不参与“精确命中 / touch”资格。
-  return false
-}
-
-function roughSelectionTokens(items: MemoryItem[]): number {
-  if (items.length === 0) return 0
-  return MEMORY_BLOCK_RESERVE_TOKENS + items.reduce(
-    (sum, item) => sum + estimateToken(item.text) + MEMORY_LINE_OVERHEAD_TOKENS,
-    0,
-  )
-}
-
-function selectionTokens(
-  items: MemoryItem[],
-  renderBlock?: (items: MemoryItem[]) => string | null,
-): number {
-  if (items.length === 0) return 0
-  if (!renderBlock) return roughSelectionTokens(items)
-  return estimateToken(renderBlock(items) ?? '')
+  for (const number of mem.numbers) if (usr.numbers.has(number)) return true
+  return hasSpecificChineseOverlap(mem.chinese, usr.chinese)
 }
 
 /**
