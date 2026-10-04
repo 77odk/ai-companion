@@ -35,14 +35,17 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
   const [preference, setPreference] = useState<ReplyLengthPreference>(() => getReplyLengthPreference(accountId, sessionId))
   const [error, setError] = useState('')
   const [confirmRefresh, setConfirmRefresh] = useState(false)
-  const [initiativeEnabled, setInitiativeEnabled] = useState(() => getInitiativePreference(sessionId).enabled)
+  const [initiativeEnabled, setInitiativeEnabled] = useState(() => getInitiativePreference(accountId, sessionId).enabled)
   const [confirmInitiative, setConfirmInitiative] = useState(false)
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(() =>
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
+  )
 
   useEffect(() => {
     const refresh = () => {
       setGlobalValue(getGlobalReplyLength(accountId))
       setPreference(getReplyLengthPreference(accountId, sessionId))
-      setInitiativeEnabled(getInitiativePreference(sessionId).enabled)
+      setInitiativeEnabled(getInitiativePreference(accountId, sessionId).enabled)
     }
     window.addEventListener(ELUVIN_DATA_CHANGE, refresh)
     return () => window.removeEventListener(ELUVIN_DATA_CHANGE, refresh)
@@ -82,7 +85,7 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
       setConfirmInitiative(true)
       return
     }
-    if (!saveInitiativePreference(sessionId, { enabled: false })) {
+    if (!saveInitiativePreference(accountId, sessionId, { enabled: false, lastBackgroundAt: 0 })) {
       setError('没有保存成功，稍后再试一下')
       return
     }
@@ -93,13 +96,23 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
 
   const enableInitiative = () => {
     if (!sessionId) return
-    if (!saveInitiativePreference(sessionId, { enabled: true })) {
+    if (!saveInitiativePreference(accountId, sessionId, { enabled: true, lastBackgroundAt: 0 })) {
       setError('没有保存成功，稍后再试一下')
       return
     }
     setInitiativeEnabled(true)
     setConfirmInitiative(false)
     setError('')
+  }
+
+  const requestSystemNotificationPermission = async () => {
+    if (typeof Notification === 'undefined' || notificationPermission !== 'default') return
+    try {
+      const permission = await Notification.requestPermission()
+      setNotificationPermission(permission)
+    } catch {
+      setNotificationPermission(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission)
+    }
   }
 
   const refreshConversation = () => {
@@ -212,6 +225,27 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
               <span aria-hidden="true" />
             </button>
           </div>
+          {initiativeEnabled ? (
+            <div className="initiative-notification-setting">
+              <div>
+                <strong>系统通知</strong>
+                <small>
+                  {notificationPermission === 'granted'
+                    ? '已允许；页面开着时也可以显示系统通知'
+                    : notificationPermission === 'denied'
+                      ? '浏览器已关闭通知；应用内提示仍会正常显示'
+                      : notificationPermission === 'unsupported'
+                        ? '当前浏览器不支持系统通知；应用内提示仍会正常显示'
+                        : '可选；只有你点“允许”才会向浏览器申请权限'}
+                </small>
+              </div>
+              {notificationPermission === 'default' ? (
+                <button type="button" className="btn btn-ghost" onClick={() => void requestSystemNotificationPermission()}>
+                  允许
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {confirmInitiative ? (
             <div className="chat-settings-refresh-confirm">
               <p>

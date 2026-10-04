@@ -105,3 +105,70 @@
   font-size: 12px;
   line-height: 1.45;
 }
+
+
+/* P3-A2 · TA 主动消息前台提示：只在真实消息已落库后出现。 */
+.initiative-notice {
+  flex-shrink: 0;
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 18%, var(--color-border));
+  background: color-mix(in srgb, var(--color-card) 96%, var(--color-primary-soft));
+  box-shadow: 0 1px 8px rgba(61, 44, 41, 0.05);
+  position: relative;
+  z-index: 79;
+}
+
+.initiative-notice-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 8px 9px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.initiative-notice-main strong {
+  flex: none;
+  max-width: 28%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.initiative-notice-main span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.initiative-notice-close {
+  width: 38px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.initiative-notice-close svg {
+  width: 15px;
+  height: 15px;
+}

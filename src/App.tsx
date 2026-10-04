@@ -21,6 +21,10 @@ import {
   saveAIRemark,
   saveAIGender,
   savePersona,
+  getInitiativePreference,
+  saveInitiativePreference,
+  loadSettings,
+  recordLocalModelUsageTurn,
 } from './lib/storage'
 import { getToken, isLoggedIn, isPublicView, logout } from './lib/auth'
 import { createSession, listSessions } from './lib/sessionApi'
@@ -29,6 +33,7 @@ import {
   getBusyState,
   getSessionLang,
   getSessionsCache,
+  getMessagesCache,
   setActiveSessionId,
   setSessionsCache,
 } from './lib/sessionStore'
@@ -54,7 +59,16 @@ import { hydrateCloudState, initCloudStateSync, syncCloudState } from './lib/clo
 import { queueLegacyCloudStateBackfill } from './lib/cloudStateResources'
 import { closeOldestCandidateWindowOnStartup } from './lib/eventDetector'
 import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from './lib/taRuntime'
-import { loadConversationState } from './lib/conversationState'
+import { branchIdForNewMessage, loadConversationState, resolveConversationMessages } from './lib/conversationState'
+import { futureTopicsFromMessages } from './lib/chatTopics'
+import { getEvents } from './lib/eventStore'
+import { getAnniversaries } from './lib/anniversary'
+import { evaluateInitiativeResponse } from './lib/initiativePolicy'
+import { runInitiativeCatchUp } from './lib/initiativeRuntime'
+import { commitInitiativeMessage } from './lib/initiativeCommit'
+import { chatCompletion, type ModelUsage } from './lib/api'
+import { estimateToken } from './lib/token'
+import { resolveIdentityMode } from './lib/companionPolicy'
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
 const RolePicker = lazy(() => import('./components/RolePicker'))
@@ -77,6 +91,13 @@ const NotificationsPage = lazy(() => import('./components/NotificationsPage'))
 const FeedbackPage = lazy(() => import('./components/FeedbackPage'))
 
 type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'notifications' | 'feedback' | 'loading'
+
+interface InitiativeNotice {
+  accountId: string
+  sessionId: string
+  taName: string
+  content: string
+}
 
 const emptyFeedbackDraft = (): FeedbackDraft => ({ type: 'bug', content: '', images: [] })
 
@@ -326,6 +347,8 @@ export default function App() {
   // visibility / online 可能同时发起多个 GET；只允许较新的请求结果覆盖状态。
   const notificationRefreshGuardRef = useRef({ next: 0, applied: 0 })
   const hasUnreadNotifications = loggedIn && (notificationServerUnread || notificationRevision > notificationReadRevision)
+  const [initiativeNotice, setInitiativeNotice] = useState<InitiativeNotice | null>(null)
+  const [initiativeChatRevision, setInitiativeChatRevision] = useState(0)
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
@@ -342,6 +365,191 @@ export default function App() {
   const [pendingNaturalError, setPendingNaturalError] = useState<string | null>(null)
   // 使用指南独立 view：返回时回到来源（欢迎页 / 我的 / 登录墙）
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate' | 'chat'>('welcome')
+
+  const recordInitiativeBackground = useCallback(() => {
+    if (!loggedIn) return
+    const sessionId = getActiveSessionId()
+    if (!sessionId) return
+    if (!getSessionsCache().some((session) => String(session.id) === sessionId)) return
+
+    const accountId = getAccount()?.account ?? ''
+    if (!accountId) return
+    const preference = getInitiativePreference(accountId, sessionId)
+    if (!preference.enabled) return
+
+    const latestUserMessageAt = getMessagesCache(sessionId)
+      .filter((message) => message.role === 'user' && Number.isFinite(message.ts))
+      .reduce((latest, message) => Math.max(latest, message.ts), 0)
+    const evaluated = evaluateInitiativeResponse(preference, latestUserMessageAt)
+    const leftAt = evaluated.lastBackgroundAt > 0 ? evaluated.lastBackgroundAt : Date.now()
+    saveInitiativePreference(accountId, sessionId, {
+      ...evaluated,
+      lastBackgroundAt: leftAt,
+    })
+  }, [loggedIn])
+
+  const runInitiativeCatchUpNow = useCallback(async () => {
+    if (!loggedIn || document.visibilityState !== 'visible') return
+    const sessionId = getActiveSessionId()
+    if (!sessionId) return
+    const sessions = getSessionsCache()
+    const session = sessions.find((item) => String(item.id) === sessionId)
+    if (!session) return
+
+    const account = getAccount()
+    const token = getToken()
+    if (!account?.account || !token) return
+
+    const preference = getInitiativePreference(account.account, sessionId)
+    if (!preference.enabled || preference.lastBackgroundAt <= 0) return
+
+    const settings = loadSettings()
+    if (!settings.apiKey || !settings.baseUrl || !settings.model) return
+
+    const conversationState = loadConversationState(sessionId)
+    const rawMessages = getMessagesCache(sessionId)
+    const activeMessages = resolveConversationMessages(conversationState, rawMessages)
+    const conversationBranchId = branchIdForNewMessage(conversationState)
+    const now = Date.now()
+    if (activeMessages.some((message) => message.replyState === 'pending' || message.replyState === 'streaming')) return
+    const busy = getBusyState(sessionId)
+    if (busy.status === 'busy' && busy.busyUntil > now) return
+    const taName = displaySessionName(session)
+    const accountId = account.account
+
+    await runInitiativeCatchUp(
+      {
+        preference,
+        leftAt: preference.lastBackgroundAt,
+        now,
+        futureTopics: futureTopicsFromMessages(activeMessages),
+        events: getEvents(sessionId),
+        anniversaries: getAnniversaries(sessionId),
+      },
+      {
+        sessionId,
+        taName,
+        persona: session.persona ?? '',
+        lang: getSessionLang(sessionId),
+        identityMode: resolveIdentityMode(sessionId),
+      },
+      {
+        estimateTokens: estimateToken,
+        generate: async (messages) => {
+          let usage: ModelUsage | undefined
+          const text = await chatCompletion(settings, messages, {
+            maxTokens: 100,
+            temperature: 0.85,
+            timeoutMs: 20_000,
+            onUsage: (value) => { usage = value },
+          })
+          return { text, ...(usage ? { usage } : {}) }
+        },
+        commit: async (content) => {
+          if (getAccount()?.account !== accountId || getToken() !== token) return false
+          if (getActiveSessionId() !== sessionId) return false
+          const latestState = loadConversationState(sessionId)
+          if (branchIdForNewMessage(latestState) !== conversationBranchId) return false
+          const latestMessages = resolveConversationMessages(latestState, getMessagesCache(sessionId))
+          if (latestMessages.some((message) => message.replyState === 'pending' || message.replyState === 'streaming')) return false
+          if (latestMessages.some((message) => Number.isFinite(message.ts) && message.ts > now)) return false
+
+          const message = await commitInitiativeMessage({
+            sessionId,
+            content,
+            token,
+            accountId,
+            ...(conversationBranchId ? { conversationBranchId } : {}),
+          })
+          return message != null
+        },
+        recordUsage: (usage) => {
+          if (getAccount()?.account !== accountId || getToken() !== token) return
+          recordLocalModelUsageTurn(sessionId, usage, settings)
+        },
+        savePreference: (next) => {
+          if (getAccount()?.account !== accountId || getToken() !== token) return false
+          return saveInitiativePreference(accountId, sessionId, next)
+        },
+        onDelivered: (content) => {
+          // 只触达原账号 / 原 TA；生成途中切账号时 commit 已经会拒绝。
+          if (getAccount()?.account !== accountId) return
+          if (!getSessionsCache().some((item) => String(item.id) === sessionId)) return
+
+          setInitiativeNotice({ accountId, sessionId, taName, content })
+          if (getActiveSessionId() === sessionId && viewRef.current === 'chat') {
+            setInitiativeChatRevision((value) => value + 1)
+          }
+
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            try {
+              const notification = new Notification(taName, {
+                body: content,
+                tag: 'eluvin-initiative-' + sessionId,
+              })
+              notification.onclick = () => {
+                notification.close()
+                window.focus()
+                if (getAccount()?.account !== accountId) return
+                if (!getSessionsCache().some((item) => String(item.id) === sessionId)) return
+                setActiveSessionId(sessionId)
+                setInitiativeNotice(null)
+                setInitiativeChatRevision((value) => value + 1)
+                replaceView('chat')
+              }
+            } catch {
+              // 部分移动浏览器不允许页面直接构造 Notification；应用内提示仍已正常显示。
+            }
+          }
+        },
+      },
+    )
+  }, [loggedIn, replaceView])
+
+  useEffect(() => {
+    if (!loggedIn) {
+      setInitiativeNotice(null)
+      return
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        recordInitiativeBackground()
+      } else if (document.visibilityState === 'visible') {
+        void runInitiativeCatchUpNow()
+      }
+    }
+    const onPageHide = () => recordInitiativeBackground()
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', onPageHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', onPageHide)
+    }
+  }, [loggedIn, recordInitiativeBackground, runInitiativeCatchUpNow])
+
+  // 登录恢复 / 会话初始化完成后也补一次：真正离开时间来自 lastBackgroundAt，不拿“进 App 时间”冒充。
+  useEffect(() => {
+    if (!loggedIn || view === 'loading' || document.visibilityState !== 'visible') return
+    void runInitiativeCatchUpNow()
+  }, [loggedIn, view, runInitiativeCatchUpNow])
+
+  const openInitiativeNotice = useCallback(() => {
+    if (!initiativeNotice) return
+    const sessionId = initiativeNotice.sessionId
+    if (getAccount()?.account !== initiativeNotice.accountId) {
+      setInitiativeNotice(null)
+      return
+    }
+    if (!getSessionsCache().some((session) => String(session.id) === sessionId)) {
+      setInitiativeNotice(null)
+      return
+    }
+    setActiveSessionId(sessionId)
+    setInitiativeNotice(null)
+    setInitiativeChatRevision((value) => value + 1)
+    goView('chat')
+  }, [initiativeNotice, goView])
+
   // 选角色页的用途：first=首次/游客新建；current=换个TA·当前会话换人设；new=换个TA·开新会话换TA
   const [roleMode, setRoleMode] = useState<RolePickMode>('first')
   // 选角色页的返回去向：首次/游客/无会话回欢迎页，「换个 TA」回「我的」，角色列表页新建回角色列表
@@ -892,6 +1100,25 @@ export default function App() {
           </div>
         </div>
       )}
+      {initiativeNotice && loggedIn && !gateShown && !needLightConsent && (
+        <div className="initiative-notice" role="status" aria-live="polite">
+          <button type="button" className="initiative-notice-main" onClick={openInitiativeNotice}>
+            <strong>{initiativeNotice.taName}</strong>
+            <span>{initiativeNotice.content}</span>
+          </button>
+          <button
+            type="button"
+            className="initiative-notice-close"
+            aria-label="收起"
+            onClick={() => setInitiativeNotice(null)}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12" />
+              <path d="M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+      )}
       <Suspense fallback={<div className="session-loading" />}>
       {loggedIn && needLightConsent ? (
         // ConsentGate V1：老用户/登录态无服务端 consent 记录 → 轻量补确认（同意后上报服务端留档）
@@ -1143,7 +1370,7 @@ export default function App() {
             {view === 'chat' && (
               <div className="chat-shell">
                 <Chat
-                  key={headerSession ? String(headerSession.id) : 'no-session'}
+                  key={headerSession ? `${String(headerSession.id)}-${initiativeChatRevision}` : 'no-session'}
                   // 空态「现在就去配置」直接进服务商配置页（原来落到「我的」主页，用户找不到配置在哪）
                   onGoSettings={() => openSettings('provider')}
                   // 「先看使用指南」从聊天页进入的，返回就回聊天页（原来返回落到「我的」）

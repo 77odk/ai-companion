@@ -231,6 +231,8 @@ export interface ChatCompletionOpts {
   maxTokens?: number
   temperature?: number
   timeoutMs?: number
+  /** 非流式调用若服务商返回 usage，透传给调用方；缺字段时回调 undefined，由调用方自行估算。 */
+  onUsage?: (usage?: ModelUsage) => void
 }
 
 /** 非流式补全：一次性拿完整回复。失败抛 ChatError。 */
@@ -284,6 +286,7 @@ export async function chatCompletion(
 
   try {
     const data = await resp.json()
+    opts.onUsage?.(parseModelUsage(data?.usage))
     const content = data?.choices?.[0]?.message?.content
     if (typeof content !== 'string' || !content.trim()) {
       throw new ChatError('bad-request', '服务商返回了异常数据')

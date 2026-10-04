@@ -679,6 +679,38 @@
   outline-offset: -2px;
 }
 
+.initiative-notification-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--el-space-3, 12px);
+  padding: 0 var(--el-space-4, 16px) var(--el-space-4, 16px);
+  border-top: 1px solid var(--el-border-soft, var(--color-border));
+}
+
+.initiative-notification-setting > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--el-space-1, 4px);
+}
+
+.initiative-notification-setting strong {
+  font-size: var(--el-font-support, 13px);
+  font-weight: var(--el-weight-semibold, 600);
+  color: var(--el-text-primary, var(--color-text));
+}
+
+.initiative-notification-setting small {
+  font-size: var(--el-font-caption, 12px);
+  line-height: var(--el-line-support, 1.6);
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.initiative-notification-setting .btn {
+  flex: none;
+}
+
 .chat-settings-refresh-confirm {
   display: flex;
   flex-direction: column;
