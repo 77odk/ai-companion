@@ -34,6 +34,7 @@ export interface InitiativeCatchUpDeps {
     cachedTokens?: number
   }) => void
   savePreference: (preference: InitiativePreference) => boolean
+  now?: () => number
   onDelivered?: (content: string, candidate: InitiativeCandidate) => void
 }
 
@@ -194,7 +195,8 @@ export async function runInitiativeCatchUp(
     const committed = await deps.commit(cleaned, candidate)
     if (!committed) return 'commit-failed'
 
-    const nextPreference = markInitiativeDelivered(policyInput.preference, candidate, policyInput.now)
+    const deliveredAt = deps.now?.() ?? Date.now()
+    const nextPreference = markInitiativeDelivered(policyInput.preference, candidate, deliveredAt)
     const saved = deps.savePreference({ ...nextPreference, lastBackgroundAt: 0 })
     if (!saved) return 'commit-failed'
 
