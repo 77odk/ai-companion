@@ -213,9 +213,15 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
     mem.selfOwned,
     usr.selfOwned,
   )
+  const numberAnchorCompatible = sharedNumberAnchor && (
+    (mem.selfOwned && usr.selfOwned) ||
+    sharedChinese ||
+    (mem.chinese.length === 0 && usr.chinese.length === 0)
+  )
 
   // 数字变化不提前否决：若仍有“咪咪”等具体实体证据，纠正旧事实必须能命中。
-  return sharedNumberAnchor || sharedEnglish || sharedChinese
+  // 相同数字+单位也不能绕过所属实体：跨实体必须另有实体证据。
+  return numberAnchorCompatible || sharedEnglish || sharedChinese
 }
 
 function roughSelectionTokens(items: MemoryItem[]): number {
