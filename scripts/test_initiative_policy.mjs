@@ -166,6 +166,21 @@ const annCandidate = chooseInitiativeCandidate({
   anniversaries: [{ id: 'a1', label: '认识 TA 的日子', date: '10-08', createdAt: 1 }],
 })
 assert.equal(annCandidate?.reason, 'anniversary')
+assert.equal(chooseInitiativeCandidate({
+  preference: basePref,
+  leftAt: twoHoursAgo,
+  now,
+  futureTopics: [],
+  events: [],
+  anniversaries: [{
+    id: 'period',
+    label: '生理期',
+    date: '10-08',
+    createdAt: 1,
+    periodDays: 28,
+    periodHistory: [{ start: '2026-10-08' }],
+  }],
+}), null, '生理期记录不能被当成主动纪念日话题')
 
 console.log('[initiative] 同时有理由时优先 FutureIntent；同一候选不重复')
 const priority = chooseInitiativeCandidate({
