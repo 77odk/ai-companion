@@ -258,8 +258,12 @@ export function composeContext(
       'priority-context',
     )
 
-    keptArchive = fitRecentHistory(archivedHistory, remaining)
-    remaining -= messageTokens(keptArchive)
+    // 只有 active window 全部保住时，才允许继续向更老历史扩展。
+    // 否则会形成“旧前缀 + 最近后缀、中间断层”的不连续上下文，破坏跟进语义。
+    if (keptActive.length === activeHistory.length) {
+      keptArchive = fitRecentHistory(archivedHistory, remaining)
+      remaining -= messageTokens(keptArchive)
+    }
 
     selectBlocks(relevant.filter(({ block }) => block.priority === 'ambient'), 'priority-ambient')
   }
