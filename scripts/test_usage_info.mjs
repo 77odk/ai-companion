@@ -121,6 +121,49 @@ assert.ok(offPeak)
 assert.equal(offPeak.currency, 'USD')
 assert.ok(Math.abs(offPeak.amount - 0.75) < 1e-9)
 
+const holidayPeakWindow = estimateUsageTurnCost({
+  id: 'd-holiday',
+  sessionId: 's1',
+  createdAt: Date.UTC(2026, 9, 5, 2), // 国庆法定假日，即使落在工作日峰值时段也按闲时
+  provider: 'deepseek',
+  model: 'deepseek-flash',
+  baseUrlHost: 'api.deepseek.com',
+  source: 'actual',
+  inputTokens: 1_000_000,
+  outputTokens: 1_000_000,
+  cachedTokens: 0,
+})
+assert.ok(holidayPeakWindow)
+assert.ok(Math.abs(holidayPeakWindow.amount - 0.75) < 1e-9)
+
+const normalPeakWindow = estimateUsageTurnCost({
+  id: 'd-peak',
+  sessionId: 's1',
+  createdAt: Date.UTC(2026, 9, 8, 2),
+  provider: 'deepseek',
+  model: 'deepseek-flash',
+  baseUrlHost: 'api.deepseek.com',
+  source: 'actual',
+  inputTokens: 1_000_000,
+  outputTokens: 1_000_000,
+  cachedTokens: 0,
+})
+assert.ok(normalPeakWindow)
+assert.ok(Math.abs(normalPeakWindow.amount - 1.5) < 1e-9)
+
+const futureUnknownPeak = estimateUsageTurnCost({
+  id: 'd-future',
+  sessionId: 's1',
+  createdAt: Date.UTC(2027, 9, 7, 2),
+  provider: 'deepseek',
+  model: 'deepseek-flash',
+  baseUrlHost: 'api.deepseek.com',
+  source: 'actual',
+  inputTokens: 1000,
+  outputTokens: 100,
+})
+assert.equal(futureUnknownPeak, null, '未来年份高峰窗无法确认法定假日时不硬算')
+
 const unknown = estimateUsageTurnCost({
   id: 'u1',
   sessionId: 's1',
