@@ -56,9 +56,15 @@ const GENERIC_ATTRIBUTE_SEGMENTS = new Set([
 const COMMON_ENGLISH = new Set([
   'the', 'a', 'an', 'and', 'or', 'but', 'to', 'of', 'in', 'on', 'at', 'for', 'with', 'from',
   'that', 'this', 'it', 'its', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'i', 'me', 'my', 'mine', 'you', 'your', 'yours', 'we', 'our', 'ours', 'they', 'their', 'them',
+  'i', 'me', 'my', 'mine', 'myself', 'you', 'your', 'yours', 'we', 'our', 'ours', 'they', 'their', 'them',
   'user', 'self', 'like', 'likes', 'liked', 'want', 'wants', 'wanted', 'think', 'thinks',
   'know', 'knows', 'today', 'yesterday', 'tomorrow', 'now', 'recently', 'really', 'very',
+])
+
+const GENERIC_ENGLISH_UNITS = new Set([
+  'kg', 'kgs', 'kilogram', 'kilograms', 'lb', 'lbs', 'pound', 'pounds',
+  'cm', 'centimeter', 'centimeters', 'meter', 'meters', 'yuan', 'dollar', 'dollars',
+  'year', 'years', 'month', 'months', 'day', 'days', 'hour', 'hours', 'minute', 'minutes',
 ])
 
 const ZH_NUM = '〇零一二三四五六七八九十百千两廿卅'
@@ -139,22 +145,53 @@ function numberUnitAnchors(text: string): Set<string> {
   return anchors
 }
 
+function englishSpecificWords(text: string): string[] {
+  return (String(text ?? '').toLowerCase().match(/[a-z]+/g) ?? [])
+    .filter((word) =>
+      word.length >= 3 &&
+      !COMMON_ENGLISH.has(word) &&
+      !GENERIC_ENGLISH_UNITS.has(word),
+    )
+}
+
 function lexicalSignals(text: string): {
-  english: Set<string>
+  english: string[]
   chinese: string[]
   numberAnchors: Set<string>
   selfOwned: boolean
 } {
   const raw = String(text ?? '').toLowerCase()
   return {
-    english: new Set(
-      (raw.match(/[a-z]+/g) ?? [])
-        .filter((word) => word.length >= 3 && !COMMON_ENGLISH.has(word)),
-    ),
+    english: englishSpecificWords(raw),
     chinese: chineseSpecificSegments(raw),
     numberAnchors: numberUnitAnchors(raw),
-    selfOwned: /(?:^|[^\u4e00-\u9fff])(?:我|本人|自己)(?:的)?|^(?:我|本人|自己)/.test(raw) || raw.includes('我的'),
+    selfOwned:
+      raw.includes('用户') ||
+      raw.includes('我的') ||
+      /(?:^|[^\u4e00-\u9fff])(?:我|本人|自己)(?:的)?|^(?:我|本人|自己)/.test(raw) ||
+      /\b(?:i|me|my|mine|myself|user)\b/.test(raw),
   }
+}
+
+function hasSpecificEnglishOverlap(
+  memoryWords: string[],
+  userWords: string[],
+  memorySelfOwned: boolean,
+  userSelfOwned: boolean,
+): boolean {
+  const userSet = new Set(userWords)
+  for (const word of memoryWords) {
+    if (!userSet.has(word)) continue
+
+    // 一边明确是“我”，另一边在共享事实词前还有额外实体（如 Mimi's weight）时，
+    // 不能仅凭 weight/salary 等共享词把别人的属性算到用户自己身上。
+    if (memorySelfOwned !== userSelfOwned) {
+      if (memorySelfOwned && !userSelfOwned && userWords.indexOf(word) > 0) continue
+      if (userSelfOwned && !memorySelfOwned && memoryWords.indexOf(word) > 0) continue
+    }
+    return true
+  }
+  return false
 }
 
 function hasSpecificChineseOverlap(
@@ -167,6 +204,14 @@ function hasSpecificChineseOverlap(
     for (const user of userSegments) {
       const shorter = memory.length <= user.length ? memory : user
       const longer = memory.length <= user.length ? user : memory
+
+      // 一边明确属于“我”，另一边在共享片段前还有额外实体名时，先判为 owner 不兼容。
+      // 例如 “我的工资” vs “小夏工资”、 “我喜欢咖啡” vs “小夏也喜欢咖啡”。
+      if (memorySelfOwned !== userSelfOwned) {
+        if (memorySelfOwned && !userSelfOwned && user.indexOf(memory) > 0) continue
+        if (userSelfOwned && !memorySelfOwned && memory.indexOf(user) > 0) continue
+      }
+
       // “体重/身高/年龄”等裸属性词不能跨所属实体匹配。
       // 双方都明确指向“我”时允许同一属性槽位用于纠正；“我的体重”不能命中“咪咪体重”。
       if (GENERIC_ATTRIBUTE_SEGMENTS.has(shorter)) {
@@ -201,12 +246,12 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
 
   const sharedNumberAnchor = [...mem.numberAnchors].some((anchor) => usr.numberAnchors.has(anchor))
 
-  let sharedEnglish = false
-  for (const word of mem.english) {
-    if (!usr.english.has(word)) continue
-    sharedEnglish = true
-    break
-  }
+  const sharedEnglish = hasSpecificEnglishOverlap(
+    mem.english,
+    usr.english,
+    mem.selfOwned,
+    usr.selfOwned,
+  )
   const sharedChinese = hasSpecificChineseOverlap(
     mem.chinese,
     usr.chinese,
