@@ -1,5 +1,5 @@
-import { looksFabricated, stripActionMarkers, stripEmoji, stripThinkBlocks } from './chatPrompts.ts'
-import { stripMemoryMarkers } from './memory.ts'
+import { looksFabricated, stripActionMarkers, stripEmoji } from './chatPrompts.ts'
+import { stripMemoryMarkers, stripThinkBlocks } from './memory.ts'
 import { chooseInitiativeCandidate, markInitiativeDelivered, type InitiativeCandidate, type InitiativePolicyInput } from './initiativePolicy.ts'
 import type { ApiMessage } from './chatPrompts.ts'
 import type { IdentityMode } from './companionPolicy.ts'
