@@ -51,10 +51,27 @@ const COMMON_ENGLISH = new Set([
   'know', 'knows', 'today', 'yesterday', 'tomorrow', 'now', 'recently', 'really', 'very',
 ])
 
+function stripChineseTimeExpressions(text: string): string {
+  return text
+    // 星期骨架：周一 / 星期一 / 礼拜一，以及“本周一 / 下星期三”等。
+    .replace(/(?:上|下|这|本)?(?:周|星期|礼拜)[一二三四五六日天]/g, ' ')
+    .replace(/(?:上|下|这|本)?周末/g, ' ')
+    // 数字日期：2026年10月4日、10月4号、2026-10-04、10/04。
+    .replace(/\d{2,4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*[日号]?/g, ' ')
+    .replace(/\d{1,2}\s*月\s*\d{1,2}\s*[日号]?/g, ' ')
+    .replace(/\d{2,4}[-/.]\d{1,2}[-/.]\d{1,2}/g, ' ')
+    .replace(/\d{1,2}[-/.]\d{1,2}/g, ' ')
+    // 钟点：8点、8:30、上午8点半、晚上九点（中文数字钟点也覆盖）。
+    .replace(/(?:凌晨|早上|上午|中午|下午|傍晚|晚上|深夜)?\s*(?:\d{1,2}|[一二三四五六七八九十]{1,3})\s*(?::|：)\s*\d{1,2}/g, ' ')
+    .replace(/(?:凌晨|早上|上午|中午|下午|傍晚|晚上|深夜)?\s*(?:\d{1,2}|[一二三四五六七八九十]{1,3})\s*(?:点|时)(?:半|\d{1,2}\s*分)?/g, ' ')
+}
+
 function chineseSpecificSegments(text: string): string[] {
-  let raw = String(text ?? '')
-    .toLowerCase()
-    .replace(/用户|对方|ta/g, ' ')
+  let raw = stripChineseTimeExpressions(
+    String(text ?? '')
+      .toLowerCase()
+      .replace(/用户|对方|ta/g, ' '),
+  )
 
   for (const phrase of GENERIC_ZH_PHRASES) raw = raw.split(phrase).join(' ')
 
