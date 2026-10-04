@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { composeContext } from '../src/lib/contextComposer.ts'
 import { buildSystemPrompt } from '../src/lib/chatPrompts.ts'
+import { stripTimeLabels } from '../src/lib/timeLabels.ts'
 import { estimateToken } from '../src/lib/token.ts'
 
 const store = new Map()
@@ -25,7 +26,9 @@ assert.match(prompt, /【此刻时间】2026年9月23日/)
 assert.match(prompt, /今天是你们认识的第 30 天/)
 assert.match(prompt, /这只是日期和天数事实，不代表关系阶段、亲密程度或相处边界/)
 assert.match(prompt, /不要根据天数自行推断该亲近还是疏远/)
-assert.equal((prompt.match(/【此刻时间】/g) || []).length, 1, '当前时间在 system prompt 内只出现一次')
+assert.equal((prompt.match(/【此刻时间】/g) || []).length, 1, '默认调用仍只含一份当前时间')
+const stablePrompt = buildSystemPrompt('', '饺子', now, sid, 'zh', false)
+assert.doesNotMatch(stablePrompt, /【此刻时间】/, '主聊天可关闭动态时间前缀，保持 core system 稳定')
 
 console.log('\n[2] 最近对话仍原样在最终 payload，弱模型能看到“刚才说过什么”')
 const history = [
@@ -55,5 +58,14 @@ assert.match(chatSource, /buildSpacePostsBlock\(loadCurrentPosts\(activeSessionI
 assert.match(chatSource, /const journalRelevant = /, '周记仅在本轮相关时取')
 assert.match(chatSource, /shouldShareMoment && !personaHasLifeAnchors\(persona\)/, '生活基线只在需要分享 TA 近况时注入')
 assert.match(chatSource, /composeContext\(apiMessages, historyForModel, \[\.\.\.contextBlocks, \.\.\.bridgeBlocks\]\)/, '功能上下文统一走现有 ContextBlock')
+assert.match(chatSource, /buildSystemPrompt\(persona, nameForPrompt, undefined, getActiveSessionId\(\) \|\| undefined, lang, false\)/, '主聊天 system 关闭每轮变化的当前时间')
+assert.match(chatSource, /id: 'current-time'[\s\S]*buildTimeContext\(Date\.now\(\), lang\)/, '当前时间作为动态块后置')
+const timeMarkStart = chatSource.indexOf('function msgTimeMark')
+const timeMarkEnd = chatSource.indexOf("import { detectLang", timeMarkStart)
+const timeMarkSource = chatSource.slice(timeMarkStart, timeMarkEnd)
+assert.ok(timeMarkStart >= 0 && timeMarkEnd > timeMarkStart, '找到历史时间锚实现')
+assert.ok(!timeMarkSource.includes('Date.now()'), '历史时间锚不得依赖当前时间重新计算')
+assert.match(timeMarkSource, /new Date\(ts\)/, '历史时间锚必须只由消息自身 ts 决定')
+assert.equal(stripTimeLabels('[2026-10-04 19:12] 还在吗'), '还在吗', '固定绝对时间锚若被模型抄出，展示层仍会物理剥离')
 
 console.log('\nprompt/context slim：全部通过')

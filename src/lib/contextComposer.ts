@@ -118,31 +118,39 @@ export function composeContext(
     .filter((block) => block.relevant !== false && block.content.trim())
     .sort((a, b) => PRIORITY[a.priority] - PRIORITY[b.priority])
 
-  const fixed = [...core, ...tail]
+  // Prefix-cache order: stable core -> stable history -> dynamic blocks -> newest message -> tail.
+  // Selection priority is unchanged: optional blocks still get budget before older history, so this is an ordering
+  // optimization rather than a semantic expansion of the prompt.
+  const newest = history.at(-1)
+  const olderHistory = newest ? history.slice(0, -1) : history
+  const fixed = [...core, ...(newest ? [newest] : []), ...tail]
   const fixedTokens = fixed.reduce((sum, message) => sum + estimateToken(message.content), 0)
   let remaining = Math.max(0, hardBudget - fixedTokens)
 
-  // 当前用户消息优先于任何可选 block。若 fixed + newest 本身就放不下，直接标记 overBudget，
-  // 不允许 truncateByToken 为了“至少保留一条”把最终 payload 顶破 hard cap。
-  const newest = history.at(-1)
-  const newestTokens = newest ? estimateToken(newest.content) : 0
-  const newestFits = newestTokens <= remaining
+  // 当前最新消息优先于任何可选 block。若 core + newest + tail 本身就放不下，直接标记 overBudget。
+  const newestFits = fixedTokens <= hardBudget
 
   const included: ApiMessage[] = []
   const includedBlockIds: string[] = []
   if (newestFits) {
     for (const block of relevant) {
       const tokens = estimateToken(block.content)
-      // 永远为当前最新消息预留空间；可选上下文不准挤掉用户本轮输入。
-      if (tokens > remaining - newestTokens) continue
+      if (tokens > remaining) continue
       included.push({ role: 'system', content: block.content })
       includedBlockIds.push(block.id)
       remaining -= tokens
     }
   }
 
-  const keptHistory = newestFits ? truncateByToken(history, remaining) : []
-  const messages = [...core, ...included, ...keptHistory, ...tail]
+  // 可选块仍按既有优先级抢预算；真正输出时把稳定历史放在动态块之前，延长 provider 可复用前缀。
+  const keptHistory = newestFits ? truncateByToken(olderHistory, remaining) : []
+  const messages = [
+    ...core,
+    ...keptHistory,
+    ...included,
+    ...(newestFits && newest ? [newest] : []),
+    ...tail,
+  ]
   const totalTokens = messages.reduce((sum, message) => sum + estimateToken(message.content), 0)
   const overBudget = fixedTokens > hardBudget || !newestFits || totalTokens > hardBudget
 

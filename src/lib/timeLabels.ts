@@ -1,6 +1,7 @@
 /** Model-visible time labels are context metadata, never assistant prose. */
 const TIME_LABEL =
   '[\\[［【]\\s*(?:' +
+  '(?:\\d{4}-\\d{2}-\\d{2}\\s+(?:[01]?\\d|2[0-3]):[0-5]\\d)|' +
   '(?:(?:[01]?\\d|2[0-3]):[0-5]\\d)|' +
   '刚刚|此刻|当前|现在|刚才|昨晚|今晚|上周|本周|这周|上个月|这个月|' +
   '(?:今天|昨天|前天)(?:早上|上午|中午|下午|晚上)?|' +
@@ -10,7 +11,7 @@ const TIME_LABEL =
 
 /**
  * Strip bracketed time metadata wherever a weak model copied it into prose.
- * Examples: [9:21] / [09:21] / [21:05] / [昨晚] / [今天早上] / [3 分钟前].
+ * Examples: [2026-10-04 19:12] / [9:21] / [昨晚] / [今天早上] / [3 分钟前].
  */
 export function stripTimeLabels(text: string): string {
   if (!text) return ''
