@@ -2308,7 +2308,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     send(body, parsed.quote, {
       userMessage: sourceUser,
       visibleHistory: visibleMessages.slice(0, sourceIndex + 1),
-      branchId: sourceUser.conversationBranchId ?? currentConversationBranchId,
+      branchId: sourceUser.conversationBranchId ?? currentConversationBranchId ?? 'root',
     })
   }
 
