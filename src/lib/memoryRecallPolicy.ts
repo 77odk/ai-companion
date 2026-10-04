@@ -155,13 +155,16 @@ function englishSpecificWords(text: string): string[] {
 }
 
 function lexicalSignals(text: string): {
+  source: string
   raw: string
   english: string[]
   chinese: string[]
   numberAnchors: Set<string>
 } {
-  const raw = String(text ?? '').toLowerCase()
+  const source = String(text ?? '')
+  const raw = source.toLowerCase()
   return {
+    source,
     raw,
     english: englishSpecificWords(raw),
     chinese: chineseSpecificSegments(raw),
@@ -204,6 +207,15 @@ function explicitEnglishOwner(raw: string, evidence: string): string | null {
   return normalizeOwner(after?.[1])
 }
 
+function capitalizedEnglishContextOwner(source: string, evidence: string): string | null {
+  const word = escapeRegExp(evidence)
+  const before = source.match(new RegExp(`\\b([A-Z][A-Za-z'-]{1,30})\\s+${word}\\b`))
+  const beforeOwner = normalizeOwner(before?.[1])
+  if (beforeOwner) return beforeOwner
+  const after = source.match(new RegExp(`\\b${word}\\s+(?:of\\s+)?([A-Z][A-Za-z'-]{1,30})\\b`))
+  return normalizeOwner(after?.[1])
+}
+
 function explicitChineseOwner(raw: string, evidence: string): string | null {
   const compact = String(raw ?? '').replace(/\\s+/g, '')
   const shared = escapeRegExp(evidence)
@@ -243,25 +255,23 @@ function evidenceOwnersCompatible(
 }
 
 function hasSpecificEnglishOverlap(
+  memorySource: string,
+  userSource: string,
   memoryRaw: string,
   userRaw: string,
   memoryWords: string[],
   userWords: string[],
 ): boolean {
   const userSet = new Set(userWords)
-  for (let memoryIndex = 0; memoryIndex < memoryWords.length; memoryIndex++) {
-    const word = memoryWords[memoryIndex]
+  for (const word of memoryWords) {
     if (!userSet.has(word)) continue
-    const userIndex = userWords.indexOf(word)
 
     const memoryExplicit = explicitEnglishOwner(memoryRaw, word)
     const userExplicit = explicitEnglishOwner(userRaw, word)
-    const memoryContext =
-      normalizeOwner(memoryWords[memoryIndex - 1]) ||
-      normalizeOwner(memoryWords[memoryIndex + 1])
-    const userContext =
-      normalizeOwner(userWords[userIndex - 1]) ||
-      normalizeOwner(userWords[userIndex + 1])
+    // 英文普通相邻动词/形容词（weight changed）不是 owner；
+    // 省略所有格时只把保留大小写的专名（Mimi weight）当实体上下文。
+    const memoryContext = capitalizedEnglishContextOwner(memorySource, word)
+    const userContext = capitalizedEnglishContextOwner(userSource, word)
 
     if (!evidenceOwnersCompatible(memoryExplicit, userExplicit, memoryContext, userContext)) continue
     return true
@@ -322,6 +332,8 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
   const sharedNumberAnchor = [...mem.numberAnchors].some((anchor) => usr.numberAnchors.has(anchor))
 
   const sharedEnglish = hasSpecificEnglishOverlap(
+    mem.source,
+    usr.source,
     mem.raw,
     usr.raw,
     mem.english,
