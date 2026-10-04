@@ -35,7 +35,7 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
   const [preference, setPreference] = useState<ReplyLengthPreference>(() => getReplyLengthPreference(accountId, sessionId))
   const [error, setError] = useState('')
   const [confirmRefresh, setConfirmRefresh] = useState(false)
-  const [initiativeEnabled, setInitiativeEnabled] = useState(() => getInitiativePreference(sessionId).enabled)
+  const [initiativeEnabled, setInitiativeEnabled] = useState(() => getInitiativePreference(accountId, sessionId).enabled)
   const [confirmInitiative, setConfirmInitiative] = useState(false)
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(() =>
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
@@ -45,7 +45,7 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
     const refresh = () => {
       setGlobalValue(getGlobalReplyLength(accountId))
       setPreference(getReplyLengthPreference(accountId, sessionId))
-      setInitiativeEnabled(getInitiativePreference(sessionId).enabled)
+      setInitiativeEnabled(getInitiativePreference(accountId, sessionId).enabled)
     }
     window.addEventListener(ELUVIN_DATA_CHANGE, refresh)
     return () => window.removeEventListener(ELUVIN_DATA_CHANGE, refresh)
@@ -85,7 +85,7 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
       setConfirmInitiative(true)
       return
     }
-    if (!saveInitiativePreference(sessionId, { enabled: false, lastBackgroundAt: 0 })) {
+    if (!saveInitiativePreference(accountId, sessionId, { enabled: false, lastBackgroundAt: 0 })) {
       setError('没有保存成功，稍后再试一下')
       return
     }
@@ -96,7 +96,7 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
 
   const enableInitiative = () => {
     if (!sessionId) return
-    if (!saveInitiativePreference(sessionId, { enabled: true, lastBackgroundAt: 0 })) {
+    if (!saveInitiativePreference(accountId, sessionId, { enabled: true, lastBackgroundAt: 0 })) {
       setError('没有保存成功，稍后再试一下')
       return
     }
