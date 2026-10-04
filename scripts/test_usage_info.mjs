@@ -166,6 +166,12 @@ assert.equal(summary.cacheHitRate, 0.5)
 assert.equal(summary.cacheUnknownTurns, 1)
 assert.match(formatUsageMoney(summary.today.cost), /未知|\$|¥/)
 
+console.log('[usage info] Chat 卸载后仍按本轮 owner session 落用量，React meter 才受 mounted 限制')
+const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+assert.match(chatSource, /if \(mountedRef\.current\) setContextMeter\(completedContextState\)/)
+assert.match(chatSource, /if \(roundSessionId\) setContextUsage\(completedContextState, roundSessionId\)/)
+assert.doesNotMatch(chatSource, /if \(activeSessionId\) setContextUsage\(actualContextState, activeSessionId\)/)
+
 console.log('[usage info] 页面名和入口位置固定为“使用与支持 → 用量信息”')
 const settingsSource = readFileSync(new URL('../src/components/Settings.tsx', import.meta.url), 'utf8')
 const supportStart = settingsSource.indexOf('<ProfileGroup title="使用与支持">')
