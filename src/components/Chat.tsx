@@ -647,7 +647,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
   useEffect(() => {
     runIdRef.current += 1
-    controllerRef.current?.abort()
+    if (partialUserTsRef.current != null && !finishedRef.current) {
+      replyInterruptionReasonRef.current = 'session-switch'
+      if (displayCleanRef.current) assistantText.current = displayCleanRef.current
+      spacePairEligibleRef.current = false
+      controllerRef.current?.abort()
+      finalizeRef.current()
+    } else {
+      controllerRef.current?.abort()
+    }
     if (thinkTimerRef.current !== null) {
       clearTimeout(thinkTimerRef.current)
       thinkTimerRef.current = null
@@ -1523,7 +1531,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         .map((m) => m.content)
         .join('\n')
         .trim()
-      if (committedAssistantText) {
+      if (committedAssistantText && !interruptionReason) {
         syncTaRuntimeFromAssistantText(roundSessionId || undefined, committedAssistantText, Date.now())
         // Space-N1 唯一 Chat 例外（产品已冻结“完整 USER+TA 对话对”为硬要求）：
         // 只在正常最终可见回复真实落库后补 pair；Stop / 切模型 / stream error 已把 eligible 置 false。
@@ -1581,6 +1589,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         const busyText = cut > 0 && cut < raw.length ? raw.slice(0, cut) : raw
         // TASK-MEM-DISTILL：忙碌截断前先把本轮候选/已到 marker 归并落库（模型给完整回复前 = 无对应 marker → fallback）
         flushMemoryWrites(raw)
+        unregisterActiveReplyRun(roundSessionId, userMsg.ts)
         enterBusyRef.current(roundSessionId, busyText, availability, roundVisibleMessages)
         return
       }
@@ -1824,7 +1833,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             // 停流：abort 后 catch 里会直接 return，不会触发 onError
             controllerRef.current?.abort()
             streamEndedRef.current = true
-            // 进入忙碌状态（用 ref 避免闭包）
+            // 进入忙碌状态（用 ref 避免闭包）；这一轮已经由 Busy 接管，不再保持“正在生成”注册。
+            unregisterActiveReplyRun(roundSessionId, userMsg.ts)
             enterBusyRef.current(roundSessionId, assistantText.current, availability, roundVisibleMessages)
           }
         },
