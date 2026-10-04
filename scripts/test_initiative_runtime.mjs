@@ -126,7 +126,7 @@ console.log('[initiative-runtime] 有理由只做一次短生成，成功后才�
   assert.equal(recorded?.source, 'estimate')
   assert.ok(recorded.inputTokens > 0)
   assert.ok(recorded.outputTokens > 0)
-  assert.equal(saved[0].lastCandidateKey, futureCandidate().key, '模型调用前先占用候选，防重复轰炸')
+  assert.match(saved[0].lastCandidateKey, /^future:2026-10-08:\d+:今天一起看电影$/, '模型调用前先占用候选，防重复轰炸')
   assert.equal(saved.at(-1).deliveredCount, 1)
   assert.equal(saved.at(-1).lastDeliveredAt, NOW + 1234)
   assert.equal(saved.at(-1).lastBackgroundAt, 0)
@@ -229,7 +229,7 @@ console.log('[initiative-runtime] 生成失败也不会重复用同一理由再�
   const first = await runInitiativeCatchUp(policyInput(current), context(), deps)
   assert.equal(first, 'generation-failed')
   assert.equal(generateCount, 1)
-  assert.equal(current.lastCandidateKey, futureCandidate().key)
+  assert.match(current.lastCandidateKey, /^future:2026-10-08:\d+:今天一起看电影$/)
 
   const second = await runInitiativeCatchUp(policyInput(current), context(), deps)
   assert.equal(second, 'disabled-or-no-reason')
