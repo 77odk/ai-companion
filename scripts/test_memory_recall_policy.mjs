@@ -126,12 +126,15 @@ assert.equal(shouldTouchMemoryFromUser(mimiAge, '咪咪今年4岁'), true, '数�
 
 const mimiWeight = M('mimi-weight', '咪咪体重三公斤', { topic: '宠物' })
 assert.equal(shouldTouchMemoryFromUser(mimiWeight, '咪咪体重四公斤'), true, '中文数值单位变化后仍保留“咪咪体重”实体证据')
-assert.equal(shouldTouchMemoryFromUser(M('weight-three', '体重三公斤'), '三公斤'), true, '相同中文数字+单位可作为完整事实锚点')
+assert.equal(shouldTouchMemoryFromUser(M('weight-three', '体重三公斤'), '三公斤'), false, '属性归属不明确时，数字+单位不能绕过 owner 证据')
+assert.equal(shouldTouchMemoryFromUser(M('pure-weight', '三公斤'), '三公斤'), true, '双方都只有同一数字+单位时可作为完整事实锚点')
 const myWeight = M('my-weight', '我的体重六十公斤', { topic: '健康' })
 assert.equal(shouldTouchMemoryFromUser(myWeight, '咪咪体重四公斤'), false, '裸属性“体重”不能跨所属实体误命中')
+assert.equal(shouldTouchMemoryFromUser(myWeight, '咪咪体重六十公斤'), false, '即使数值完全相同，数字+单位也不能跨所属实体误命中')
 assert.equal(shouldTouchMemoryFromUser(myWeight, '我的体重六十一公斤'), true, '双方都明确指向“我”时，体重变化仍应命中纠正')
 const myHeight = M('my-height', '我的身高一百七十厘米', { topic: '健康' })
 assert.equal(shouldTouchMemoryFromUser(myHeight, '小夏身高一百六十厘米'), false, '裸属性“身高”不能跨所属实体误命中')
+assert.equal(shouldTouchMemoryFromUser(myHeight, '小夏身高一百七十厘米'), false, '相同身高数值也不能绕过 owner 判断')
 
 console.log('\n[memory recall 2] 孤立主题标签不能充当事实级 exact')
 assert.equal(shouldTouchMemoryFromUser(M('work-topic', '工作，最近很忙', { topic: '工作' }), '工作，今天很顺利'), false, '孤立“工作”只能代表主题，不能 exact/touch')
