@@ -1,5 +1,4 @@
 import type { MemoryItem } from './memory.ts'
-import { inferTopic } from './memory.ts'
 import { estimateToken } from './token.ts'
 
 /**
@@ -133,10 +132,9 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
     if (sharedSpecificSingles >= 2) return true
   }
 
-  // topic 只允许辅助一个“具体字符”证据，绝不单独触发整组 touch。
-  const memoryTopic = item.topic?.trim() || inferTopic(memoryText)
-  const userTopic = inferTopic(user)
-  return memoryTopic !== '其他' && memoryTopic === userTopic && sharedSpecificSingles >= 1
+  // 单个泛化字符（如“吃”“忙”）不够证明用户重提了这条具体事实；
+  // topic 只属于候选召回层，不参与“精确命中 / touch”资格。
+  return false
 }
 
 function roughSelectionTokens(items: MemoryItem[]): number {
