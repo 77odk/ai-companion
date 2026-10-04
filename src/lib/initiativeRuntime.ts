@@ -149,6 +149,11 @@ export async function runInitiativeCatchUp(
   }
 
   if (inFlight.has(context.sessionId)) return 'in-flight'
+  // 主动消息宁可漏一次也不能因为网络/响应不确定而重复轰用户：
+  // 在模型调用前先记“这条理由已经尝试过”，daily count 仍只在真正投递成功后增加。
+  if (!deps.savePreference({ ...policyInput.preference, lastCandidateKey: candidate.key })) {
+    return 'generation-failed'
+  }
   inFlight.add(context.sessionId)
   try {
     const messages = buildInitiativeMessages(context, candidate)
@@ -189,7 +194,7 @@ export async function runInitiativeCatchUp(
     const committed = await deps.commit(cleaned, candidate)
     if (!committed) return 'commit-failed'
 
-    const nextPreference = markInitiativeDelivered(policyInput.preference, candidate, Date.now())
+    const nextPreference = markInitiativeDelivered(policyInput.preference, candidate, policyInput.now)
     const saved = deps.savePreference({ ...nextPreference, lastBackgroundAt: 0 })
     if (!saved) return 'commit-failed'
 
