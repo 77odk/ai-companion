@@ -38,6 +38,7 @@ const basePref = {
   ignoredStreak: 0,
   lastCandidateKey: '',
   lastBackgroundAt: 0,
+  lastResponseEvaluatedAt: 0,
 }
 
 console.log('[initiative] 默认关闭、按 TA 隔离、复用 settings key')
