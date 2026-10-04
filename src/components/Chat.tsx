@@ -1208,7 +1208,15 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         : m.content))
       .join('\n')
     const recalledMemory = recallSessionMemories(activeSessionId, contextText)
-    const memory = selectMemoryWorkingSet(recalledMemory).items
+    const memory = selectMemoryWorkingSet(recalledMemory, {
+      userText: text,
+      // correction ref 只会让最终字符串更长；用同长度的 s:<id> 做预算上界，避免真实渲染后超出 working-set budget。
+      renderBlock: (items) => buildMemoryBlock(
+        items,
+        lang,
+        correctionIntent ? (item) => `s:${item.id}` : undefined,
+      ),
+    }).items
     if (memory.length > 0) {
       const refByItem = new Map<object, string>()
       if (correctionIntent) {
