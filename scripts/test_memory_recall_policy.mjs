@@ -81,6 +81,14 @@ assert.equal(shouldTouchMemoryFromUser(coffee, '我喜欢今天的天气'), fals
 const englishCoffee = M('english-coffee', 'the user drinks coffee every morning')
 assert.equal(shouldTouchMemoryFromUser(englishCoffee, 'the weather is nice today'), false, '英文通用词 the/today 重合不能 touch')
 
+const stomach = M('stomach', '最近总感觉胃不舒服', { topic: '健康' })
+assert.equal(shouldTouchMemoryFromUser(stomach, '今天感觉天气不错'), false, '泛化二字词“感觉”不能构成具体重提')
+assert.equal(shouldTouchMemoryFromUser(stomach, '我的胃还是不舒服'), true, '具体“胃/不舒服”事实重合仍应 touch')
+
+const hospital = M('hospital', '今天去医院看病', { topic: '健康' })
+assert.equal(shouldTouchMemoryFromUser(hospital, '今天去公园散步'), false, '共享时间/动作骨架不能构成具体重提')
+assert.equal(shouldTouchMemoryFromUser(hospital, '医院看病排队好久'), true, '具体“医院看病”片段重合应 touch')
+
 const project = M('project', '最近在赶项目', { topic: '工作' })
 assert.equal(shouldTouchMemoryFromUser(project, '今天加班赶项目'), true, '直接相关工作内容允许 touch')
 assert.equal(shouldTouchMemoryFromUser(project, '今天要开会'), false, '只有同属工作主题但没有具体重合时不应整组 touch')
