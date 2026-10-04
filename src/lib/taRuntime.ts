@@ -372,7 +372,7 @@ function compactContinuityEvidence(text: string): string {
     : cleaned
 }
 
-const ZH_SERVICE_QUESTION_RE = /(?:还有什么|有什么)(?:问题|需要|想问)|(?:还|有)?需要我(?:帮|做)|我还能(?:帮|为你)|要不要我(?:帮|替你)|还有别的(?:问题|需要)|需要(?:帮忙|帮助)吗/
+const ZH_SERVICE_QUESTION_RE = /(?:还有什么|有什么)(?:问题|需要|想问)|还有什么我(?:能|可以)?(?:帮|做)|(?:还|有)?需要我(?:帮|做)|我还能(?:帮|为你)|要不要我(?:帮|替你)|还有别的(?:问题|需要)|需要(?:帮忙|帮助)吗/
 const EN_SERVICE_QUESTION_RE = /\b(?:anything else|any questions?|need (?:any )?help|anything i can (?:help|do)|how can i help|want me to help)\b/i
 
 function detectOpenQuestionEvidence(text: string, now: number): TaContinuityEvidence | undefined {
