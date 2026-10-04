@@ -200,7 +200,11 @@ export async function runInitiativeCatchUp(
     const saved = deps.savePreference({ ...nextPreference, lastBackgroundAt: 0 })
     if (!saved) return 'commit-failed'
 
-    deps.onDelivered?.(cleaned, candidate)
+    try {
+      deps.onDelivered?.(cleaned, candidate)
+    } catch {
+      // 已落库是不可逆提交点：展示层回调失败不能把成功投递降级或触发重试。
+    }
     return 'delivered'
   } finally {
     inFlight.delete(context.sessionId)
