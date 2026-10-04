@@ -37,8 +37,9 @@ function withLifecycle(
   return {
     ...message,
     replyState: state,
-    ...(state === 'interrupted' && reason ? { replyInterruptedReason: reason } : {}),
-    ...(state === 'interrupted' && !reason ? {} : { replyInterruptedReason: undefined }),
+    ...(state === 'interrupted'
+      ? (reason ? { replyInterruptedReason: reason } : {})
+      : { replyInterruptedReason: undefined }),
   }
 }
 
