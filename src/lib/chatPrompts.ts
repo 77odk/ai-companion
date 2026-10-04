@@ -324,10 +324,10 @@ export function buildRelationshipBlock(now: number = Date.now(), sessionId?: str
 }
 
 /**
- * 组装系统提示词：此刻时间 + 认识天数 + 纪念日 + 用户专属人设 + 默认人设 + AI 昵称 + 聊天规矩 + 记忆规则。
+ * 组装系统提示词。普通调用默认包含此刻时间；主聊天链路可关闭时间前缀，把它作为动态 ContextBlock 后置以提高前缀缓存命中。
  * lang 参数：默认 zh，不传=zh，老调用零改动。
  */
-export function buildSystemPrompt(persona?: string, aiName?: string, now?: number, sessionId?: string, lang: Lang = 'zh'): string {
+export function buildSystemPrompt(persona?: string, aiName?: string, now?: number, sessionId?: string, lang: Lang = 'zh', includeCurrentTime = true): string {
   const isEn = lang === 'en'
   const policy = resolveCompanionPolicy(sessionId)
   const companionCore = buildCompanionCore(lang)
@@ -359,7 +359,8 @@ export function buildSystemPrompt(persona?: string, aiName?: string, now?: numbe
   else if (relationshipBlock) body = `${relationshipBlock}\n\n${prompt}`
   else if (anniversaryBlock) body = `${anniversaryBlock}\n\n${prompt}`
   else body = prompt
-  return `${buildTimeContext(now, lang)}\n${buildAttributionLegend(lang)}\n\n${body}\n\n${memoryInstr}`
+  const stableBody = `${buildAttributionLegend(lang)}\n\n${body}\n\n${memoryInstr}`
+  return includeCurrentTime ? `${buildTimeContext(now, lang)}\n${stableBody}` : stableBody
 }
 
 /**
