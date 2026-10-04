@@ -79,6 +79,25 @@ assert.equal(chooseInitiativeCandidate({
   anniversaries: [],
 }), null)
 
+assert.equal(chooseInitiativeCandidate({
+  preference: basePref,
+  lastActiveAt: now - 10 * 60 * 1000,
+  now,
+  futureTopics: [],
+  events: [{
+    id: 'short-away-event',
+    sessionId: '1',
+    type: 'activity',
+    title: '刚发生的真实事件',
+    occurredAt: now - 5 * 60 * 1000,
+    createdAt: now - 5 * 60 * 1000,
+    updatedAt: now - 5 * 60 * 1000,
+    confidence: 1,
+    source: 'manual',
+  }],
+  anniversaries: [],
+}), null, '同日只离开几分钟不能主动触发')
+
 console.log('[initiative] FutureIntent 到期才候选，未来计划不提前')
 const future = chooseInitiativeCandidate({
   preference: basePref,
