@@ -354,9 +354,9 @@ function MainCenter({
 }
 
 function UsageInfoDetail({ onBack }: { onBack: () => void }) {
-  const [turns] = useState(() => getAllLocalContextUsageTurns())
-  const summary = summarizeUsageTurns(turns)
   const sessions = getSessionsCache()
+  const [turns] = useState(() => getAllLocalContextUsageTurns(sessions.map((session) => session.id)))
+  const summary = summarizeUsageTurns(turns)
   const globalName = loadAIProfile().nickname
   const maxDayTokens = Math.max(
     1,
