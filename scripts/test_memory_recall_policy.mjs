@@ -135,6 +135,13 @@ assert.equal(shouldTouchMemoryFromUser(myWeight, '我的体重六十一公斤'),
 const myHeight = M('my-height', '我的身高一百七十厘米', { topic: '健康' })
 assert.equal(shouldTouchMemoryFromUser(myHeight, '小夏身高一百六十厘米'), false, '裸属性“身高”不能跨所属实体误命中')
 assert.equal(shouldTouchMemoryFromUser(myHeight, '小夏身高一百七十厘米'), false, '相同身高数值也不能绕过 owner 判断')
+const mySalary = M('my-salary', '我的工资五千元', { topic: '工作' })
+assert.equal(shouldTouchMemoryFromUser(mySalary, '小夏工资五千元'), false, '任意中文属性都必须经过 owner 兼容判断，不能只覆盖属性白名单')
+assert.equal(shouldTouchMemoryFromUser(mySalary, '工资最近涨了'), true, '没有额外实体前缀时，用户隐式继续谈自己的工资仍可命中')
+
+const englishMyWeight = M('english-my-weight', 'my weight is 60 kilograms')
+assert.equal(shouldTouchMemoryFromUser(englishMyWeight, "Mimi's weight is 60 kilograms"), false, '英文共享属性词也必须经过 owner 兼容判断')
+assert.equal(shouldTouchMemoryFromUser(englishMyWeight, 'weight changed again'), true, '英文没有额外实体前缀时仍可继续命中自己的事实')
 
 console.log('\n[memory recall 2] 孤立主题标签不能充当事实级 exact')
 assert.equal(shouldTouchMemoryFromUser(M('work-topic', '工作，最近很忙', { topic: '工作' }), '工作，今天很顺利'), false, '孤立“工作”只能代表主题，不能 exact/touch')
