@@ -77,7 +77,7 @@ function futureIntentCandidates(
   for (const topic of Array.isArray(topics) ? topics : []) {
     if (!topic?.futureDay || !/^\d{4}-\d{2}-\d{2}$/.test(topic.futureDay)) continue
     if (topic.futureDay > today) continue
-    // 只知道“哪一天”，不知道约定具体几点：跨天回来时把 lastActive 当天也算在离开窗口内，
+    // 只知道“哪一天”，不知道约定具体几点：跨天回来时把离开当天也算在离开窗口内，
     // 避免 10/7 上午离开、10/7 晚上约定到期、10/8 回来却漏掉。
     const dueDuringAway = returnedOnLaterDay && topic.futureDay >= lastDay && topic.futureDay <= today
     if (!dueDuringAway && !(topic.futureDay === today && longEnough)) continue
@@ -131,6 +131,8 @@ function anniversaryCandidates(
 
   const out: InitiativeCandidate[] = []
   for (const anniversary of Array.isArray(anniversaries) ? anniversaries : []) {
+    // 生理期记录虽然复用 Anniversary 结构，但不是“特别日子”主动话题，避免敏感误触达。
+    if (anniversary.periodDays != null || (anniversary.periodHistory?.length ?? 0) > 0) continue
     const day = anniversaryDayKey(anniversary, now)
     if (day !== today) continue
     const label = String(anniversary.label ?? '').trim()
