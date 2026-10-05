@@ -145,6 +145,9 @@ assert.equal(shouldTouchMemoryFromUser(englishMyWeight, 'weight changed again'),
 const xiaSalary = M('xia-salary', '小夏的工资五千元', { topic: '工作' })
 assert.equal(shouldTouchMemoryFromUser(xiaSalary, '小明的工资五千元'), false, '两个不同非用户实体不能因共享工资与数值 exact')
 assert.equal(shouldTouchMemoryFromUser(xiaSalary, '小夏工资涨了'), true, '同一中文实体省略“的”后仍应命中')
+const xiaRecentSalary = M('xia-recent-salary', '小夏最近工资五千元', { topic: '工作' })
+assert.equal(shouldTouchMemoryFromUser(xiaRecentSalary, '小明最近工资五千元'), false, '属性词本身作为 evidence 时也必须绑定前面的主体')
+assert.equal(shouldTouchMemoryFromUser(xiaRecentSalary, '小夏现在工资六千元'), true, '同一主体的工资变化仍应命中纠正')
 
 const mimiWeightEn = M('mimi-weight-en', "Mimi's weight is 60 kilograms")
 assert.equal(shouldTouchMemoryFromUser(mimiWeightEn, "Fido's weight is 60 kilograms"), false, '不同英文实体不能因共享 weight 与数值 exact')
