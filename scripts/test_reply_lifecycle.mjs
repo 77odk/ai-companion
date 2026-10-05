@@ -75,6 +75,17 @@ assert.equal(preserved[0].ts, 101)
 assert.equal(preserved[0].replyState, 'interrupted')
 assert.equal(preserved[0].replyInterruptedReason, 'network')
 
+console.log('[reply lifecycle] 重复正文不能靠 content 猜 lifecycle 身份')
+const repeatedLocal = [
+  { role: 'user', content: '一样的话', ts: 100, replyState: 'interrupted', replyInterruptedReason: 'timeout' },
+  { role: 'user', content: '一样的话', ts: 200 },
+]
+const repeatedMerged = [
+  { id: 9, role: 'user', content: '一样的话', ts: 300 },
+]
+const repeatedPreserved = preserveReplyLifecycle(repeatedLocal, repeatedMerged)
+assert.equal(repeatedPreserved[0].replyState, undefined, '没有 id / 精确 ts 时宁可不贴，也不能把旧中断复制给另一条同文消息')
+
 console.log('[reply lifecycle] 429 / timeout / network 分类')
 assert.equal(interruptionReasonFromError({ message: '请求失败（HTTP 429）' }), 'rate-limit')
 assert.equal(interruptionReasonFromError({ message: 'request timeout' }), 'timeout')
@@ -89,8 +100,18 @@ assert.match(chatSrc, /replyInterruptionReasonRef\.current = 'session-switch'/)
 assert.match(chatSrc, /replyInterruptionReasonRef\.current = 'pagehide'/)
 assert.match(chatSrc, /replyInterruptionReasonRef\.current = interruptionReasonFromError\(err\)/)
 assert.match(chatSrc, /assistantTs = Math\.max\(Date\.now\(\), assistantTs \+ 1\)/)
-assert.match(chatSrc, /if \(!replayExistingUser\) uploadMessage\(roundSessionId, userMsg\)/)
+assert.match(chatSrc, /void uploadMessage\(roundSessionId, userMsg, \(confirmed\) =>/)
 assert.match(chatSrc, /visibleHistory: visibleMessages\.slice\(0, sourceIndex \+ 1\)/)
 assert.match(chatSrc, /只重试 TA/)
+assert.match(chatSrc, /if \(event\.persisted\) return/, 'BFCache pagehide 不得终止仍存活的 Chat 实例')
+assert.match(chatSrc, /replyState === 'pending' \|\| latestLocalUser\.replyState === 'streaming'/, '只有仍运行的回复可以暂缓 cloud pull')
+assert.match(chatSrc, /const interruptedLifecycle = local\.filter\(\(message\) => message\.replyState === 'interrupted'\)/)
+assert.match(chatSrc, /preserveReplyLifecycle\(interruptedLifecycle, mergeSessionMessages\(local, cloud\)\)/, 'interrupted 要先正常合并 cloud，再只恢复精确本地 lifecycle')
+assert.doesNotMatch(chatSrc, /replyState === 'pending'[\s\S]{0,160}replyState === 'interrupted'/, 'interrupted 不得和 active run 一起永久阻断 cloud merge')
+assert.match(chatSrc, /const pendingSnapshot = getPendingOps\(\)[\s\S]*enqueueSessionMessageCommits\([\s\S]*\(\) => flushPendingOpsSnapshot\(token, pendingSnapshot\)/, 'pending replay 必须先快照，再经过同一 session commit gate；等待期间新增 op 不能被 recovery 偷吃')
+assert.match(chatSrc, /let lifecycleUserTs = userMsg\.ts/)
+assert.match(chatSrc, /partialUserTsRef\.current = confirmed\.ts/)
+assert.match(chatSrc, /initialConfirmedAssistantIds\.has\(message\.id\)/, '并发确认消息用 server id 判断是否为本轮开始前已存在')
+assert.doesNotMatch(chatSrc, /initialAssistantSignatures/, '新 server id 不能因正文与旧 assistant 相同而被过滤')
 
 console.log('reply lifecycle tests passed')

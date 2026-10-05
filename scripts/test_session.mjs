@@ -120,9 +120,12 @@ const recoveryBlock = recoveryStart >= 0 && recoveryEnd > recoveryStart
   : ''
 ok(recoveryStart >= 0, '存在单一 session recovery 路径')
 ok(
-  recoveryBlock.indexOf('await flushPendingOps(token)') >= 0 &&
-  recoveryBlock.indexOf('await refreshSessionMessages(activeSessionId)') > recoveryBlock.indexOf('await flushPendingOps(token)'),
-  '恢复顺序固定为先补传 pending、再拉当前 session',
+  recoveryBlock.indexOf('const pendingSnapshot = getPendingOps()') >= 0 &&
+  recoveryBlock.indexOf('() => flushPendingOpsSnapshot(token, pendingSnapshot)') >
+    recoveryBlock.indexOf('const pendingSnapshot = getPendingOps()') &&
+  recoveryBlock.indexOf('await refreshSessionMessages(activeSessionId)') >
+    recoveryBlock.indexOf('() => flushPendingOpsSnapshot(token, pendingSnapshot)'),
+  '恢复顺序固定为先快照 pending、经 commit gate 只补传快照项、再拉当前 session',
 )
 ok(
   chatSrc.includes("document.addEventListener('visibilitychange', onVisible)") &&

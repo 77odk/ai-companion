@@ -11,11 +11,11 @@ import { getSession, listMemories, postMemory, postMessage, type Session } from 
 import {
   addPendingOp,
   confirmMessageInCache,
-  flushPendingOps,
   getActiveSessionId,
   getBusyState,
   getMemoriesCache,
   getMessagesCache,
+  getPendingOps,
   getSessionsCache,
   markRead,
   mergeSessionMemories,
@@ -58,6 +58,8 @@ import { buildUserWeatherContext, readUserWeatherContext } from '../lib/homeWeat
 import { clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, savePendingMemoryCorrection, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 import { formatQuotedMessage, messageEvidenceText, parseQuotedMessage, type MessageQuote, type MessageQuoteSpeaker } from '../lib/messageQuote'
 import { CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState } from '../lib/conversationState'
+import { enqueueSessionMessageCommit, enqueueSessionMessageCommits } from '../lib/sessionMessageQueue'
+import { flushPendingOpsSnapshot } from '../lib/pendingReplay'
 
 /**
  * 历史时间锚必须稳定：同一条历史消息无论过几分钟再次发送，前缀都完全一致，
@@ -403,7 +405,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
   }, [])
 
-  const uploadMessage = useCallback((sid: string | null, msg: StoredMessage): Promise<void> => {
+  const uploadMessage = useCallback((
+    sid: string | null,
+    msg: StoredMessage,
+    onConfirmed?: (confirmed: { id: number; ts: number }) => void,
+  ): Promise<void> => {
     const token = getToken()
     if (!sid || !token) return Promise.resolve()
     const op: PendingOp = {
@@ -415,11 +421,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       ts: msg.ts,
     }
     addPendingOp(op)
-    return postMessage(token, sid, { role: msg.role, content: msg.content, thinking: msg.thinking }).then((res) => {
-      if (res.ok) {
-        removePendingOp(op.id)
-        confirmMessageInCache(sid, op, res.data)
-      }
+    return enqueueSessionMessageCommit(sid, () =>
+      postMessage(token, sid, { role: msg.role, content: msg.content, thinking: msg.thinking }),
+    ).then((res) => {
+      if (!res.ok) return
+      removePendingOp(op.id)
+      confirmMessageInCache(sid, op, res.data)
+      const confirmedTs = Date.parse(res.data.createdAt)
+      if (Number.isFinite(confirmedTs)) onConfirmed?.({ id: res.data.id, ts: confirmedTs })
     })
   }, [])
 
@@ -530,7 +539,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             payload: { role: msg.role, content: msg.content, thinking: '' }, ts: msg.ts,
           }
           addPendingOp(op)
-          const response = await postMessage(token, targetSid, { role: msg.role, content: msg.content })
+          const response = await enqueueSessionMessageCommit(targetSid, async () => {
+            // 等待同 session 前序提交期间状态可能已变化；不可逆 POST 前再做一次 stale check。
+            if (targetSid !== getActiveSessionId() || getBusyState(targetSid).status !== 'busy') return null
+            return postMessage(token, targetSid, { role: msg.role, content: msg.content })
+          })
+          if (!response) {
+            removePendingOp(op.id)
+            saveMessagesCache(targetSid, getMessagesCache(targetSid).filter((item) => !(item.ts === msg.ts && item.role === msg.role && item.content === msg.content)))
+            return 'cancelled-before-commit'
+          }
           if (!response.ok) {
             saveMessagesCache(targetSid, getMessagesCache(targetSid).filter((item) => !(item.ts === msg.ts && item.role === msg.role && item.content === msg.content)))
             return 'failed'
@@ -738,7 +756,22 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       .map((m) => ({ id: m.id, role: m.role, content: m.content, ts: Date.parse(m.createdAt), thinking: m.thinking }))
       .filter((m) => Number.isFinite(m.ts))
     const local = getMessagesCache(sessionId)
-    const merged = preserveReplyLifecycle(local, mergeSessionMessages(local, cloud))
+    const latestLocalUser = [...local].reverse().find((message) => message.role === 'user')
+    const hasActiveLocalReply = Boolean(
+      latestLocalUser &&
+      (latestLocalUser.replyState === 'pending' || latestLocalUser.replyState === 'streaming'),
+    )
+    // pending / streaming 仍属于正在运行的本机 BYOK 请求，暂缓 pull，避免中途改写本轮基线。
+    if (hasActiveLocalReply) {
+      setActiveSession(res.data.session)
+      setMessages(local)
+      markRead(sessionId)
+      return
+    }
+    // interrupted 已经收口，不能永久阻断 cloud refresh。先正常合并权威历史，
+    // 再只按 id 或精确 role+ts+content 恢复本机中断标记；绝不按“唯一正文”猜身份。
+    const interruptedLifecycle = local.filter((message) => message.replyState === 'interrupted')
+    const merged = preserveReplyLifecycle(interruptedLifecycle, mergeSessionMessages(local, cloud))
     saveMessagesCache(sessionId, merged)
     setActiveSession(res.data.session)
     if (merged.length > 0) {
@@ -845,7 +878,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     if (typeof prevPage === 'function') window.removeEventListener('pagehide', prevPage as EventListener)
     const prevVis = w.__yiwemVisCommit
     if (typeof prevVis === 'function') document.removeEventListener('visibilitychange', prevVis as EventListener)
-    const onPageHide = () => commitPartialOnHide(true)
+    const onPageHide = (event: PageTransitionEvent) => {
+      // BFCache 只是冻结同一个页面实例，返回时不会 remount；不能把仍在运行的回复永久锁成 finished。
+      if (event.persisted) return
+      commitPartialOnHide(true)
+    }
     const onVisible = () => {
       // 只是切到后台：先把已生成的内容落本地兜住（不排队列、不打断正在跑的流）
       if (document.visibilityState === 'hidden') commitPartialOnHide(false)
@@ -880,7 +917,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       if (!token || sessionRecoveryInFlightRef.current.has(activeSessionId)) return
       sessionRecoveryInFlightRef.current.add(activeSessionId)
       try {
-        await flushPendingOps(token)
+        const pendingSnapshot = getPendingOps()
+        const pendingMessageSessionIds = pendingSnapshot.flatMap((op) =>
+          op.type === 'message' && typeof op.sessionId === 'string' ? [op.sessionId] : [],
+        )
+        await enqueueSessionMessageCommits(
+          [activeSessionId, ...pendingMessageSessionIds],
+          () => flushPendingOpsSnapshot(token, pendingSnapshot),
+        )
         if (!streamingRef.current) await refreshSessionMessages(activeSessionId)
       } finally {
         sessionRecoveryInFlightRef.current.delete(activeSessionId)
@@ -1053,6 +1097,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       ? setReplyLifecycle(messages, userMsg.ts, null, 'pending')
       : [...messages, userMsg]
     let replyBaseMessages = rawWithUser
+    let lifecycleUserTs = userMsg.ts
+    const initialConfirmedAssistantIds = new Set(
+      rawWithUser
+        .filter((message) => message.role === 'assistant' && typeof message.id === 'number')
+        .map((message) => message.id as number),
+    )
     const tagCurrentBranch = (message: StoredMessage): StoredMessage =>
       roundBranchId
         ? { ...message, conversationBranchId: roundBranchId }
@@ -1198,16 +1248,31 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     setStreaming(true)
     setRecoveryDismissedTs(null)
     partialTsRef.current = assistantTs
-    partialUserTsRef.current = userMsg.ts
+    partialUserTsRef.current = lifecycleUserTs
     partialSessionIdRef.current = roundSessionId
     replyInterruptionReasonRef.current = null
     streamingRef.current = true
-    registerActiveReplyRun(roundSessionId, userMsg.ts)
+    registerActiveReplyRun(roundSessionId, lifecycleUserTs)
 
     if (roundSessionId) {
       // retry / reload recovery 只更新本地生命周期，不重复上传 user。
       persistMessages(roundSessionId, rawWithUser)
-      if (!replayExistingUser) uploadMessage(roundSessionId, userMsg)
+      if (!replayExistingUser) {
+        void uploadMessage(roundSessionId, userMsg, (confirmed) => {
+          const previousTs = lifecycleUserTs
+          lifecycleUserTs = confirmed.ts
+          // user POST 的 server createdAt 是后续 lifecycle 的稳定身份；只更新本轮闭包与缓存镜像，
+          // 不改 sessionStore / merge / dedupe 链。
+          replyBaseMessages = replyBaseMessages.map((message) =>
+            message.role === 'user' && message.ts === previousTs && message.content === userMsg.content
+              ? { ...message, id: confirmed.id, ts: confirmed.ts }
+              : message
+          )
+          if (partialUserTsRef.current === previousTs) partialUserTsRef.current = confirmed.ts
+          unregisterActiveReplyRun(roundSessionId, previousTs)
+          if (!finishedRef.current) registerActiveReplyRun(roundSessionId, confirmed.ts)
+        })
+      }
     }
 
     // Event Candidate Window：只带最近 6 条聊天里最多 2 条历史 user 原话 + 真实 ts；TA 文本永不作为 Event 证据。
@@ -1489,12 +1554,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 当前用户消息 / 核心 system 本身已经放不进 64k：不静默裁用户原话，也不把超限请求发给 provider。
       // 用户消息已经正常落历史；这里只撤掉空 assistant 占位并结束本轮流式状态。
       replyInterruptionReasonRef.current = 'context-limit'
-      const interrupted = setReplyLifecycle(replyBaseMessages, userMsg.ts, assistantTs, 'interrupted', 'context-limit')
+      const interrupted = setReplyLifecycle(replyBaseMessages, lifecycleUserTs, assistantTs, 'interrupted', 'context-limit')
       persistMessages(roundSessionId, interrupted)
       setMessages(interrupted)
       setStreaming(false)
       streamingRef.current = false
-      unregisterActiveReplyRun(roundSessionId, userMsg.ts)
+      unregisterActiveReplyRun(roundSessionId, lifecycleUserTs)
       partialTsRef.current = null
       partialUserTsRef.current = null
       partialSessionIdRef.current = null
@@ -1511,9 +1576,31 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
     const commitFinal = (final: StoredMessage[]) => {
       const interruptionReason = replyInterruptionReasonRef.current
+      let finalWithConcurrent = final
+      if (roundSessionId) {
+        const finalIds = new Set(
+          final
+            .filter((message) => message.role === 'assistant' && typeof message.id === 'number')
+            .map((message) => message.id as number),
+        )
+        const concurrentConfirmed = getMessagesCache(roundSessionId).filter((message) => {
+          if (message.role !== 'assistant' || typeof message.id !== 'number') return false
+          if (initialConfirmedAssistantIds.has(message.id) || finalIds.has(message.id)) return false
+          if (roundBranchId && message.conversationBranchId && message.conversationBranchId !== roundBranchId) return false
+          return true
+        })
+        if (concurrentConfirmed.length > 0) {
+          const currentReply = final.filter((message) => message.role === 'assistant' && message.ts === assistantTs)
+          const prior = final.filter((message) => !(message.role === 'assistant' && message.ts === assistantTs))
+          finalWithConcurrent = [
+            ...prior,
+            ...concurrentConfirmed,
+          ].sort((a, b) => a.ts - b.ts).concat(currentReply)
+        }
+      }
       const lifecycleFinal = setReplyLifecycle(
-        final,
-        userMsg.ts,
+        finalWithConcurrent,
+        lifecycleUserTs,
         assistantTs,
         interruptionReason ? 'interrupted' : 'complete',
         interruptionReason ?? undefined,
@@ -1565,7 +1652,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       if (!mountedRef.current) {
         window.dispatchEvent(new CustomEvent('yiwem:ai-reply-committed', { detail: { sid: roundSessionId } }))
       }
-      unregisterActiveReplyRun(roundSessionId, userMsg.ts)
+      unregisterActiveReplyRun(roundSessionId, lifecycleUserTs)
       partialTsRef.current = null
       partialUserTsRef.current = null
       partialSessionIdRef.current = null
@@ -1591,7 +1678,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         const busyText = cut > 0 && cut < raw.length ? raw.slice(0, cut) : raw
         // TASK-MEM-DISTILL：忙碌截断前先把本轮候选/已到 marker 归并落库（模型给完整回复前 = 无对应 marker → fallback）
         flushMemoryWrites(raw)
-        unregisterActiveReplyRun(roundSessionId, userMsg.ts)
+        unregisterActiveReplyRun(roundSessionId, lifecycleUserTs)
         enterBusyRef.current(roundSessionId, busyText, availability, roundVisibleMessages)
         return
       }
@@ -1808,7 +1895,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const startStream = () => {
       if (runId !== runIdRef.current) return
       const currentStored = roundSessionId ? getMessagesCache(roundSessionId) : loadMessages()
-      const streamingStored = setReplyLifecycle(currentStored, userMsg.ts, assistantTs, 'streaming')
+      const streamingStored = setReplyLifecycle(currentStored, lifecycleUserTs, assistantTs, 'streaming')
       persistMessages(roundSessionId, streamingStored)
       streamEndedRef.current = false
       streamErrorRef.current = null
@@ -1836,7 +1923,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             controllerRef.current?.abort()
             streamEndedRef.current = true
             // 进入忙碌状态（用 ref 避免闭包）；这一轮已经由 Busy 接管，不再保持“正在生成”注册。
-            unregisterActiveReplyRun(roundSessionId, userMsg.ts)
+            unregisterActiveReplyRun(roundSessionId, lifecycleUserTs)
             enterBusyRef.current(roundSessionId, assistantText.current, availability, roundVisibleMessages)
           }
         },
@@ -1886,7 +1973,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             }
           }
           if (mountedRef.current) setContextMeter(completedContextState)
-          if (roundSessionId) setContextUsage(completedContextState, roundSessionId)
+          if (roundSessionId) setContextUsage(completedContextState, roundSessionId, settings)
           // 第27条：收集模型独立思考字段 reasoning_content，finalize 时合并到 thinking
           if (reasoning) reasoningRef.current = reasoning
           streamEndedRef.current = true
@@ -1930,11 +2017,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 每次 TA-only retry 使用新的 assistant ts：保留上一段 interrupted partial，同时绝不把它再次上传。
       assistantTs = Math.max(Date.now(), assistantTs + 1)
       replyBaseMessages = roundSessionId ? getMessagesCache(roundSessionId) : loadMessages()
-      replyBaseMessages = setReplyLifecycle(replyBaseMessages, userMsg.ts, assistantTs, 'pending')
+      replyBaseMessages = setReplyLifecycle(replyBaseMessages, lifecycleUserTs, assistantTs, 'pending')
       persistMessages(roundSessionId, replyBaseMessages)
-      registerActiveReplyRun(roundSessionId, userMsg.ts)
+      registerActiveReplyRun(roundSessionId, lifecycleUserTs)
       partialTsRef.current = assistantTs
-      partialUserTsRef.current = userMsg.ts
+      partialUserTsRef.current = lifecycleUserTs
       partialSessionIdRef.current = roundSessionId
       if (mountedRef.current) {
         setFailedReplyRetryAvailable(false)

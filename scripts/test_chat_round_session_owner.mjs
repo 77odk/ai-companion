@@ -12,7 +12,7 @@ assert.match(
 )
 assert.match(
   chat,
-  /const uploadMessage = useCallback\(\(sid: string \| null, msg: StoredMessage\)/,
+  /const uploadMessage = useCallback\(\([\s\S]*sid: string \| null,[\s\S]*msg: StoredMessage,/ ,
   'message upload requires an explicit session owner',
 )
 assert.match(

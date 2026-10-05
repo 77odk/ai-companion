@@ -66,6 +66,30 @@ assert.equal(turns[0].model, 'deepseek-v4-flash')
 assert.equal(turns[0].baseUrlHost, 'api.deepseek.com')
 assert.equal(turns[0].cachedTokens, 600)
 
+console.log('[usage info] 请求完成后切模型也必须按请求开始时的 settings 记账')
+const requestSettings = {
+  provider: 'deepseek',
+  apiKey: 'x',
+  baseUrl: 'https://api.deepseek.com/v1',
+  model: 'deepseek-v4-flash',
+  providers,
+}
+localStorage.setItem('ai_companion_settings', JSON.stringify({ provider: 'openai', providers }))
+setContextUsage({
+  sessionStart: 0,
+  used: 80,
+  budget: 64000,
+  source: 'actual',
+  inputTokens: 80,
+  outputTokens: 20,
+  updatedAt: 2200,
+}, 'request-snapshot', requestSettings)
+const snapshotTurn = getContextUsageTurns('request-snapshot')[0]
+assert.equal(snapshotTurn.provider, 'deepseek')
+assert.equal(snapshotTurn.model, 'deepseek-v4-flash')
+assert.equal(snapshotTurn.baseUrlHost, 'api.deepseek.com')
+localStorage.setItem('ai_companion_settings', JSON.stringify({ provider: 'deepseek', providers }))
+
 console.log('[usage info] 展示扫描必须按当前账号 session 白名单隔离')
 setContextUsage({
   sessionStart: 0,
@@ -212,7 +236,7 @@ assert.match(formatUsageMoney(summary.today.cost), /未知|\$|¥/)
 console.log('[usage info] Chat 卸载后仍按本轮 owner session 落用量，React meter 才受 mounted 限制')
 const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
 assert.match(chatSource, /if \(mountedRef\.current\) setContextMeter\(completedContextState\)/)
-assert.match(chatSource, /if \(roundSessionId\) setContextUsage\(completedContextState, roundSessionId\)/)
+assert.match(chatSource, /if \(roundSessionId\) setContextUsage\(completedContextState, roundSessionId, settings\)/)
 assert.doesNotMatch(chatSource, /if \(activeSessionId\) setContextUsage\(actualContextState, activeSessionId\)/)
 
 console.log('[usage info] 页面名和入口位置固定为“使用与支持 → 用量信息”')

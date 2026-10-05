@@ -50,7 +50,7 @@ const GENERIC_TOPIC_SEGMENTS = new Set([
 
 /** 这些词描述“属性槽位”而不是所属实体；单独重合不足以证明是同一条事实。 */
 const GENERIC_ATTRIBUTE_SEGMENTS = new Set([
-  '体重', '身高', '年龄', '岁数', '血压', '体温',
+  '工资', '体重', '身高', '年龄', '岁数', '血压', '体温',
 ])
 
 const COMMON_ENGLISH = new Set([
@@ -216,6 +216,19 @@ function capitalizedEnglishContextOwner(source: string, evidence: string): strin
   return normalizeOwner(after?.[1])
 }
 
+/** 主谓句里的实体也属于事实 owner；不能只认紧贴属性词的所有格。 */
+function grammaticalEnglishOwner(source: string, evidence: string): string | null {
+  const word = escapeRegExp(evidence)
+  const subject = source.match(
+    new RegExp(
+      `\\b(I|[A-Z][A-Za-z'-]{1,30})\\s+(?:(?:am|is|are|was|were|has|have|had|does|do|did|can|could|will|would|feels?|gets?)\\s+)?(?:[a-z]+\\s+){0,2}${word}\\b`,
+    ),
+  )
+  if (!subject?.[1]) return null
+  if (/^i$/i.test(subject[1])) return SELF_OWNER
+  return normalizeOwner(subject[1])
+}
+
 function explicitChineseOwner(raw: string, evidence: string): string | null {
   const compact = String(raw ?? '').replace(/\\s+/g, '')
   const shared = escapeRegExp(evidence)
@@ -230,13 +243,50 @@ function explicitChineseOwner(raw: string, evidence: string): string | null {
   return normalizeOwner(after?.[1])
 }
 
+function normalizeChineseSubject(value: string | undefined): string | null {
+  const subject = String(value ?? '').trim()
+  if (!subject) return null
+  if (subject === '我' || subject === '本人' || subject === '自己' || subject === '用户') return SELF_OWNER
+  if (subject === '我的' || subject === '本人的' || subject === '自己的') return SELF_OWNER
+  return normalizeOwner(subject)
+}
+
+/** “我妹妹喜欢咖啡 / 小夏工资…”这类主谓结构的主体必须参与 owner 校验。 */
+function grammaticalChineseOwner(raw: string, evidence: string): string | null {
+  const compact = String(raw ?? '').replace(/\\s+/g, '')
+  const index = compact.lastIndexOf(evidence)
+  if (index < 0) return null
+  const clause = compact.slice(0, index).split(/[，。！？；]/).at(-1) ?? ''
+
+  // 证据本身就是“工资/体重/年龄”等属性槽位时，谓词已被 slice 掉。
+  // 此时直接从属性前缀里去掉时间/语气词，剩下的就是主体（小夏最近工资 → 小夏）。
+  if (GENERIC_ATTRIBUTE_SEGMENTS.has(evidence)) {
+    let ownerPrefix = stripChineseTimeExpressions(clause)
+    for (const phrase of GENERIC_ZH_PHRASES) ownerPrefix = ownerPrefix.replaceAll(phrase, '')
+    ownerPrefix = ownerPrefix.replace(/(?:最近|目前|现在|还是|又|刚|刚刚|大概|大约|差不多)+$/g, '')
+    const owner = normalizeChineseSubject(ownerPrefix)
+    if (owner) return owner
+  }
+
+  const match = clause.match(
+    /^([\u4e00-\u9fff]{1,8}?)(?:特别|非常|比较|有点)?(?:喜欢|爱吃|爱喝|爱|讨厌|害怕|怕|过敏|工资|体重|身高|年龄|岁数|血压|体温|是|有|养|喝|吃)/,
+  )
+  return normalizeChineseSubject(match?.[1])
+}
+
 function contextOwnerFromText(value: string, evidence: string): string | null {
   const index = value.indexOf(evidence)
   if (index < 0) return null
-  const before = value.slice(0, index)
-  const after = value.slice(index + evidence.length)
-  // 前缀更常表示“谁的事实”；没有前缀时再看后置实体。
-  return normalizeOwner(before.slice(-6)) || normalizeOwner(after.slice(0, 6))
+  const before = value.slice(0, index).trim()
+  const after = value.slice(index + evidence.length).trim()
+  // 这里只是无“的”的实体兜底（咪咪体重 / 小夏工资）。
+  // 单字前后缀更常是“想/要/又/涨”等动作或语气，不能当 owner，否则会把正常续聊误判成跨实体。
+  const beforeOwner = before.length >= 2 ? normalizeOwner(before.slice(-6)) : null
+  // 属性词后的内容是“涨了/变了/六千元”等谓语或值，不是 owner。
+  // 用户只说“工资最近涨了”时应视为省略主体继续上一事实，而不是把“最近涨了”当实体。
+  if (GENERIC_ATTRIBUTE_SEGMENTS.has(evidence)) return beforeOwner
+  const afterOwner = after.length >= 2 ? normalizeOwner(after.slice(0, 6)) : null
+  return beforeOwner || afterOwner
 }
 
 function evidenceOwnersCompatible(
@@ -270,8 +320,8 @@ function hasSpecificEnglishOverlap(
     const userExplicit = explicitEnglishOwner(userRaw, word)
     // 英文普通相邻动词/形容词（weight changed）不是 owner；
     // 省略所有格时只把保留大小写的专名（Mimi weight）当实体上下文。
-    const memoryContext = capitalizedEnglishContextOwner(memorySource, word)
-    const userContext = capitalizedEnglishContextOwner(userSource, word)
+    const memoryContext = grammaticalEnglishOwner(memorySource, word) || capitalizedEnglishContextOwner(memorySource, word)
+    const userContext = grammaticalEnglishOwner(userSource, word) || capitalizedEnglishContextOwner(userSource, word)
 
     if (!evidenceOwnersCompatible(memoryExplicit, userExplicit, memoryContext, userContext)) continue
     return true
@@ -293,8 +343,8 @@ function hasSpecificChineseOverlap(
 
       const memoryExplicit = explicitChineseOwner(memoryRaw, shorter)
       const userExplicit = explicitChineseOwner(userRaw, shorter)
-      const memoryContext = contextOwnerFromText(memory, shorter)
-      const userContext = contextOwnerFromText(user, shorter)
+      const memoryContext = grammaticalChineseOwner(memoryRaw, shorter) || contextOwnerFromText(memory, shorter)
+      const userContext = grammaticalChineseOwner(userRaw, shorter) || contextOwnerFromText(user, shorter)
       if (!evidenceOwnersCompatible(memoryExplicit, userExplicit, memoryContext, userContext)) continue
 
       // 裸属性词本身不是事实实体；只有双方都明确绑定到同一 owner 才足以 exact。
@@ -302,6 +352,9 @@ function hasSpecificChineseOverlap(
         const memoryOwner = memoryExplicit || memoryContext
         const userOwner = userExplicit || userContext
         if (memoryOwner && userOwner && memoryOwner === userOwner) return true
+        // 用户自己的属性事实允许省略主语继续说（“我的工资…” → “工资最近涨了”）。
+        // 仅对 self 放行；第三方实体省略 owner 时保持保守，避免一条“工资涨了”同时 touch 多个人。
+        if (memoryOwner === SELF_OWNER && !userOwner) return true
         continue
       }
       return true
@@ -345,10 +398,12 @@ export function isSpecificMemoryMatch(item: MemoryItem, userText: string): boole
     mem.chinese,
     usr.chinese,
   )
-  const numberAnchorCompatible = sharedNumberAnchor && (
-    sharedChinese ||
-    (mem.chinese.length === 0 && usr.chinese.length === 0)
-  )
+  const anchorOnly =
+    mem.english.length === 0 &&
+    usr.english.length === 0 &&
+    mem.chinese.length === 0 &&
+    usr.chinese.length === 0
+  const numberAnchorCompatible = sharedNumberAnchor && (sharedChinese || sharedEnglish || anchorOnly)
 
   // 数字变化不提前否决：若仍有“咪咪”等具体实体证据，纠正旧事实必须能命中。
   // 相同数字+单位也不能绕过所属实体：跨实体必须另有实体证据。
@@ -389,8 +444,8 @@ export function selectMemoryWorkingSet(
   const tokenBudget = Math.max(0, Math.floor(options.tokenBudget ?? MEMORY_WORKING_SET_TOKEN_BUDGET))
   const maxItems = Math.max(0, Math.floor(options.maxItems ?? MEMORY_WORKING_SET_MAX_ITEMS))
 
-  if (list.length === 0 || tokenBudget <= 0 || maxItems === 0) {
-    return { items: [], estimatedTokens: 0, truncated: list.length > 0 }
+  if (list.length === 0) {
+    return { items: [], estimatedTokens: 0, truncated: false }
   }
 
   const indexed = list.map((item, index) => ({ item, index }))
@@ -408,15 +463,20 @@ export function selectMemoryWorkingSet(
     ...indexed.filter(({ index }) => !pinnedIndexes.has(index) && !exactIndexes.has(index)),
   ]
 
-  const selectedIndexes = new Set<number>()
+  // pinned 是用户明确要求“恒带”的事实：普通 working-set 数量 / token 上限只能裁普通候选，
+  // 不能静默淘汰 pinned。若 pinned 自身超过预算，宁可让 reported tokens 超预算，也不丢事实。
+  const selectedIndexes = new Set<number>(pinnedIndexes)
 
-  for (const candidate of admissionOrder) {
-    if (selectedIndexes.size >= maxItems) break
+  if (tokenBudget > 0 && maxItems > 0) {
+    for (const candidate of admissionOrder) {
+      if (pinnedIndexes.has(candidate.index)) continue
+      if (selectedIndexes.size >= maxItems) break
 
-    const trialIndexes = [...selectedIndexes, candidate.index].sort((a, b) => a - b)
-    const trial = trialIndexes.map((index) => list[index])
-    if (selectionTokens(trial, options.renderBlock) > tokenBudget) continue
-    selectedIndexes.add(candidate.index)
+      const trialIndexes = [...selectedIndexes, candidate.index].sort((a, b) => a - b)
+      const trial = trialIndexes.map((index) => list[index])
+      if (selectionTokens(trial, options.renderBlock) > tokenBudget) continue
+      selectedIndexes.add(candidate.index)
+    }
   }
 
   const items = [...selectedIndexes]

@@ -34,6 +34,8 @@ export interface InitiativeCatchUpDeps {
     cachedTokens?: number
   }) => void
   savePreference: (preference: InitiativePreference) => boolean
+  /** 生产路径读取此刻偏好，避免生成期间的 opt-out 被旧快照覆盖。 */
+  getPreference?: () => InitiativePreference
   now?: () => number
   onDelivered?: (content: string, candidate: InitiativeCandidate) => void
 }
@@ -204,11 +206,19 @@ export async function runInitiativeCatchUp(
     const cleaned = cleanInitiativeReply(generated.text, candidate, context.lang)
     if (!cleaned) return 'rejected'
 
+    // 模型生成期间用户可能刚刚关闭主动消息。提交前必须读“此刻”开关，
+    // 不能拿请求开始时的 preference 快照继续落库。
+    const beforeCommitPreference = deps.getPreference?.() ?? policyInput.preference
+    if (!beforeCommitPreference.enabled) return 'disabled-or-no-reason'
+
     const committed = await deps.commit(cleaned, candidate)
     if (!committed) return 'commit-failed'
 
     const deliveredAt = deps.now?.() ?? Date.now()
-    const nextPreference = markInitiativeDelivered(policyInput.preference, candidate, deliveredAt)
+    // commit 后再次基于最新偏好结算：即使用户恰好在 POST 期间 opt-out，
+    // 也只更新投递计数，不会用旧快照把 enabled / quiet / limit 覆盖回去。
+    const latestPreference = deps.getPreference?.() ?? beforeCommitPreference
+    const nextPreference = markInitiativeDelivered(latestPreference, candidate, deliveredAt)
     const saved = deps.savePreference({ ...nextPreference, lastBackgroundAt: 0 })
     if (!saved) return 'commit-failed'
 

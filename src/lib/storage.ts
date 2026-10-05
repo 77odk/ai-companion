@@ -688,7 +688,11 @@ function writeContextUsage(state: ContextUsageState, sessionId?: string, notify 
   writeContextUsageEnvelope({ ...envelope, current: state }, sessionId, notify)
 }
 
-export function setContextUsage(state: Omit<ContextUsageState, 'updatedAt'> & { updatedAt?: number }, sessionId?: string): void {
+export function setContextUsage(
+  state: Omit<ContextUsageState, 'updatedAt'> & { updatedAt?: number },
+  sessionId?: string,
+  requestSettings?: ModelSettings & { providers: Record<Provider, ProviderConfig> },
+): void {
   const normalized = normalizeContextUsage({
     ...state,
     updatedAt: Number.isFinite(state.updatedAt) && Number(state.updatedAt) > 0 ? Number(state.updatedAt) : Date.now(),
@@ -705,7 +709,9 @@ export function setContextUsage(state: Omit<ContextUsageState, 'updatedAt'> & { 
     typeof normalized.outputTokens === 'number'
   )
   if (shouldRecordTurn && sessionId) {
-    const settings = loadSettings()
+    // 完成态用量必须绑定“发起这轮请求时”的 provider/model/host。
+    // Chat 卸载后请求仍可能完成；此时全局 settings 可能已切模型甚至换账号，不能重读最新值冒充本轮元数据。
+    const settings = requestSettings ?? loadSettings()
     const provider = settings.provider
     const cfg = settings.providers[provider]
     const createdAt = normalized.updatedAt
