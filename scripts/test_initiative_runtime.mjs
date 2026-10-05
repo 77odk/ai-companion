@@ -37,6 +37,26 @@ function futureCandidate() {
   }
 }
 
+function openThreadCandidate() {
+  return {
+    key: 'runtime:open-thread:1:你后来怎么样了？',
+    reason: 'open-thread',
+    evidence: '你后来怎么样了？',
+    evidenceAt: NOW - 86400000,
+    priority: 290,
+  }
+}
+
+function selfIntentCandidate() {
+  return {
+    key: 'runtime:self-intent:1:下次我还想继续听你讲。',
+    reason: 'self-intent',
+    evidence: '下次我还想继续听你讲。',
+    evidenceAt: NOW - 86400000,
+    priority: 270,
+  }
+}
+
 function policyInput(preference = pref()) {
   return {
     preference,
@@ -286,6 +306,18 @@ console.log('[initiative-runtime] Prompt 只带角色与真实理由，不带整
   assert.match(joined, /阿文/)
   assert.match(joined, /今天一起看电影/)
   assert.doesNotMatch(joined, /用户完整聊天记录/)
+
+  const openThread = buildInitiativeMessages(context(), openThreadCandidate())
+    .map((message) => message.content)
+    .join('\n')
+  assert.match(openThread, /尚未等到用户回答/)
+  assert.match(openThread, /你后来怎么样了/)
+
+  const selfIntent = buildInitiativeMessages(context(), selfIntentCandidate())
+    .map((message) => message.content)
+    .join('\n')
+  assert.match(selfIntent, /明确说过之后还想继续/)
+  assert.match(selfIntent, /继续听你讲/)
 }
 
 console.log('[initiative-runtime] App 只在 hidden/pagehide 记离开，visible 时补算；权限只由按钮请求')
@@ -302,6 +334,7 @@ console.log('[initiative-runtime] App 只在 hidden/pagehide 记离开，visible
   assert.match(app, /replyState === 'pending'.*replyState === 'streaming'/s)
   assert.match(app, /branchIdForNewMessage\(latestState\) !== conversationBranchId/)
   assert.match(app, /recordLocalModelUsageTurn/)
+  assert.match(app, /continuity:\s*getTaContinuity\(sessionId, now\)/, 'A2 必须只读 taRuntime continuity 作为主动 evidence')
   assert.match(app, /Notification\.permission === 'granted'/)
   assert.match(app, /new Notification\(taName,[\s\S]*catch \{/)
   assert.doesNotMatch(app, /Notification\.requestPermission\(/)
