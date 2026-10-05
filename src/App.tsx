@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import Welcome from './components/Welcome'
 import type { NaturalSetup } from './components/RolePicker'
 import type { FeedbackDraft } from './components/FeedbackPage'
@@ -112,6 +113,52 @@ function isNavView(v: View): boolean {
   return v === 'home' || v === 'aispace' || v === 'settings' || v === 'memory'
 }
 
+type EluvinViewTransitionDocument = Document & {
+  startViewTransition?: (update: () => void) => unknown
+}
+
+/**
+ * P5-E Carry: only the four persistent primary views participate.
+ * Chat / auth / setup / detail flows keep their existing instant navigation.
+ */
+function commitPrimaryViewWithCarry(from: View, to: View, commit: () => void): void {
+  let committed = false
+  const commitOnce = () => {
+    if (committed) return
+    committed = true
+    commit()
+  }
+
+  if (!isNavView(from) || !isNavView(to)) {
+    commitOnce()
+    return
+  }
+  if (typeof document === 'undefined' || document.visibilityState !== 'visible') {
+    commitOnce()
+    return
+  }
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    commitOnce()
+    return
+  }
+
+  const doc = document as EluvinViewTransitionDocument
+  if (typeof doc.startViewTransition !== 'function') {
+    commitOnce()
+    return
+  }
+
+  try {
+    doc.startViewTransition(() => {
+      // React must commit the new primary view inside the native transition capture.
+      flushSync(commitOnce)
+    })
+  } catch {
+    // Unsupported / interrupted transitions must never block or double-commit navigation.
+    commitOnce()
+  }
+}
+
 // 四 tab 高亮：TA=首页/聊天，空间=AI Space，记忆=独立 Memory，我的=设置。
 function navTabActive(v: View, tab: 'ta' | 'space' | 'memory' | 'mine'): boolean {
   if (tab === 'ta') return v === 'home' || v === 'chat' || v === 'spacelife'
@@ -202,6 +249,22 @@ export default function App() {
     initCloudStateSync()
   }, [])
 
+  // P5-E performance closure: continuous visual ambience pauses explicitly while the page is hidden.
+  // This DOM-only marker stores no user state and does not participate in sync.
+  useEffect(() => {
+    const root = document.documentElement
+    const syncVisibility = () => {
+      if (document.visibilityState === 'hidden') root.setAttribute('data-el-page-hidden', 'true')
+      else root.removeAttribute('data-el-page-hidden')
+    }
+    syncVisibility()
+    document.addEventListener('visibilitychange', syncVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', syncVisibility)
+      root.removeAttribute('data-el-page-hidden')
+    }
+  }, [])
+
   useEffect(() => {
     if (!loggedIn) return
     const preloadPrimaryViews = () => {
@@ -224,6 +287,7 @@ export default function App() {
   // 所有页面统一恢复离开时的滚动位置（切 view 时捕获，回来时还原）。
   const viewRef = useRef<View>(view)
   viewRef.current = view
+  const carryRevisionRef = useRef(0)
   const viewStackRef = useRef<View[]>([])
   const scrollPosRef = useRef<Map<string, { cls: string; idx: number; top: number }[]>>(new Map())
   const captureScroll = useCallback((v: View) => {
@@ -268,12 +332,18 @@ export default function App() {
   /** 用户主动导航：入历史栈（可后退） */
   const goView = useCallback(
     (v: View) => {
-      if (viewRef.current === v) return
-      captureScroll(viewRef.current)
-      viewStackRef.current.push(viewRef.current)
+      const from = viewRef.current
+      if (from === v) return
+      captureScroll(from)
+      viewStackRef.current.push(from)
       window.history.pushState({ v }, '')
+      const carryRevision = ++carryRevisionRef.current
+      // Preserve the old navigation invariant immediately; the DOM commit may wait for a native snapshot.
       viewRef.current = v
-      setView(v)
+      commitPrimaryViewWithCarry(from, v, () => {
+        if (carryRevisionRef.current !== carryRevision) return
+        setView(v)
+      })
     },
     [captureScroll],
   )
@@ -283,6 +353,7 @@ export default function App() {
     (v: View) => {
       if (viewRef.current === v) return
       captureScroll(viewRef.current)
+      carryRevisionRef.current += 1
       viewRef.current = v
       setView(v)
     },
@@ -295,8 +366,13 @@ export default function App() {
     const onPop = () => {
       const prev = viewStackRef.current.pop()
       const target = prev ?? 'home'
+      const from = viewRef.current
+      const carryRevision = ++carryRevisionRef.current
       viewRef.current = target
-      setView(target)
+      commitPrimaryViewWithCarry(from, target, () => {
+        if (carryRevisionRef.current !== carryRevision) return
+        setView(target)
+      })
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)

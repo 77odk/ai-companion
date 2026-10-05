@@ -38,7 +38,14 @@ assert.ok(ui2.includes('@media (hover: hover) and (pointer: fine)'))
 assert.ok(primitives.includes('.btn:hover:not(:disabled)'))
 assert.ok(ui2.includes('.app-nav .nav-btn:hover'))
 assert.equal(primitives.includes('@media (pointer: coarse)'), false)
-assert.equal(ui2.includes('@media (pointer: coarse)'), false)
+const p5aNavStart = ui2.indexOf('.app-nav .nav-btn {')
+const p5aNavEnd = ui2.indexOf('/* 4. active', p5aNavStart)
+assert.ok(p5aNavStart >= 0 && p5aNavEnd > p5aNavStart)
+assert.equal(
+  ui2.slice(p5aNavStart, p5aNavEnd).includes('@media (pointer: coarse)'),
+  false,
+  'P5-A nav feedback itself must not depend on coarse hover; later P5-E Carry may use coarse media',
+)
 
 console.log('[P5-A] Press 必须覆盖 fine-pointer hover / focus Lift')
 const btnActiveIndex = primitives.indexOf('.btn:active:not(:disabled)')
