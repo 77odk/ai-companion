@@ -46,6 +46,19 @@ assert.ok(css.includes('.memory-book-open:active'))
 assert.ok(css.includes('.memory-book-turn:active:not(:disabled)'))
 assert.ok(css.includes('@media (hover: hover) and (pointer: fine)'))
 
+console.log('[P5-C] Press must override focus / hover Lift on fine pointers')
+for (const [activeSelector, hoverSelector, focusSelector] of [
+  ['.memory-entry:active', '.memory-entry:hover', '.memory-entry:focus-visible'],
+  ['.memory-book-portal:active .mbp-cover', '.memory-book-portal:hover .mbp-cover', '.memory-book-portal:focus-visible .mbp-cover'],
+  ['.memory-book-open:active', '.memory-book-open:hover', '.memory-book-open:focus-visible'],
+  ['.memory-book-turn:active:not(:disabled)', '.memory-book-turn:hover:not(:disabled)', '.memory-book-turn:focus-visible:not(:disabled)'],
+]) {
+  const activeIndex = css.indexOf(activeSelector)
+  const hoverIndex = css.indexOf(hoverSelector)
+  const focusIndex = css.indexOf(focusSelector)
+  assert.ok(activeIndex > hoverIndex && activeIndex > focusIndex, activeSelector + ' must win the cascade over Lift')
+}
+
 console.log('[P5-C] coarse pointer does not retain desktop lift')
 const coarseStart=css.indexOf('@media (pointer: coarse)')
 assert.ok(coarseStart>=0)

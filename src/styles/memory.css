@@ -119,11 +119,6 @@
     background var(--el-motion-fast, 120ms) ease;
 }
 
-.memory-entry:active {
-  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
-  box-shadow: var(--el-shadow-surface, none);
-}
-
 .memory-entry:focus-visible {
   transform: var(--el-feedback-lift-transform, translateY(-1px));
   box-shadow: 0 7px 18px -16px color-mix(in srgb, var(--memory-ink) 42%, transparent);
@@ -134,6 +129,11 @@
     transform: var(--el-feedback-lift-transform, translateY(-1px));
     box-shadow: 0 7px 18px -16px color-mix(in srgb, var(--memory-ink) 42%, transparent);
   }
+}
+
+.memory-entry:active {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
+  box-shadow: var(--el-shadow-surface, none);
 }
 
 .memory-entry-text {
@@ -356,10 +356,6 @@
     background var(--el-motion-fast, 120ms) ease;
 }
 
-.memory-book-portal:active .mbp-cover {
-  transform: translateZ(1px) rotateX(.6deg) rotateZ(-.35deg) translateY(1px) scale(.996);
-}
-
 .memory-book-portal:focus-visible .mbp-cover {
   transform: translateZ(5px) rotateX(.55deg) rotateZ(-.35deg) translateY(-1px);
   box-shadow:
@@ -374,6 +370,10 @@
       0 2px 3px rgba(51, 43, 40, .11),
       var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, .07));
   }
+}
+
+.memory-book-portal:active .mbp-cover {
+  transform: translateZ(1px) rotateX(.6deg) rotateZ(-.35deg) translateY(1px) scale(.996);
 }
 
 /* Body flip keeps the existing component state machine; CSS only makes the two
@@ -407,10 +407,6 @@
     background var(--el-motion-fast, 120ms) ease;
 }
 
-.memory-book-open:active {
-  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
-}
-
 .memory-book-close,
 .memory-book-exit {
   min-height: var(--el-hit-target-min, 44px);
@@ -427,10 +423,6 @@
     transform var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1)),
     box-shadow var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1)),
     border-color var(--el-motion-fast, 120ms) ease;
-}
-
-.memory-book-turn:active:not(:disabled) {
-  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
 }
 
 .memory-book-count {
@@ -460,6 +452,14 @@
     transform: var(--el-feedback-lift-transform, translateY(-1px));
     box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, .07));
   }
+}
+
+.memory-book-open:active {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
+}
+
+.memory-book-turn:active:not(:disabled) {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
 }
 
 @media (pointer: coarse) {
