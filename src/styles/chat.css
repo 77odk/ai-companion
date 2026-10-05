@@ -1,0 +1,239 @@
+/* ==========================================================================
+   Eluvin P5-F — Chat Visual Closure
+   --------------------------------------------------------------------------
+   Final visual-only integration for Chat. This file intentionally touches no
+   message/state/upload/merge logic. Existing compact bubbles stay compact;
+   depth is reserved for controls, composer focus, avatars and true popovers.
+   ========================================================================== */
+
+/* ---- Surface / depth --------------------------------------------------- */
+.chat-page .bubble-user,
+.chat-page .bubble-assistant {
+  box-shadow: var(--el-shadow-surface, none);
+}
+
+.chat-page .chat-composer-panel {
+  box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, .07));
+  transition:
+    border-color var(--el-motion-fast, 120ms) ease,
+    box-shadow var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1));
+}
+
+.chat-page .chat-composer-panel:focus-within {
+  border-color: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 24%, var(--el-border, var(--color-border)));
+  box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, .07));
+}
+
+.chat-page .chat-control-menu,
+.chat-page .context-meter-popover,
+.chat-page .message-actions-menu {
+  box-shadow: var(--el-shadow-floating, 0 8px 24px rgba(38, 31, 28, .08));
+}
+
+/* ---- Shared Chat feedback grammar ------------------------------------- */
+.chat-page .msg-avatar-btn,
+.chat-page .think-bar,
+.chat-page .message-actions-trigger,
+.chat-page .message-actions-menu button,
+.chat-page .message-edit-actions button,
+.chat-page .chat-quote-draft > button,
+.chat-page .chat-control-capsule,
+.chat-page .chat-control-menu button,
+.chat-page .context-meter-circle,
+.chat-page .context-meter-actions button,
+.chat-page .memory-correction-consent-actions button,
+.chat-page .btn-action-narration,
+.chat-page .btn-send,
+.chat-page .btn-stop {
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition:
+    transform var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1)),
+    box-shadow var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1)),
+    border-color var(--el-motion-fast, 120ms) ease,
+    background var(--el-motion-fast, 120ms) ease,
+    opacity var(--el-motion-fast, 120ms) ease;
+}
+
+.chat-page .msg-avatar-btn:focus-visible,
+.chat-page .think-bar:focus-visible,
+.chat-page .message-actions-trigger:focus-visible,
+.chat-page .message-actions-menu button:focus-visible,
+.chat-page .message-edit-actions button:focus-visible,
+.chat-page .chat-quote-draft > button:focus-visible,
+.chat-page .chat-control-menu button:focus-visible,
+.chat-page .context-meter-actions button:focus-visible,
+.chat-page .memory-correction-consent-actions button:focus-visible,
+.chat-page .btn-action-narration:focus-visible,
+.chat-page .btn-stop:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 38%, var(--el-static-white));
+  outline-offset: 2px;
+}
+
+/* Capsule / context meter / send already had focus rings; only add Lift. */
+.chat-page .chat-control-capsule:focus-visible,
+.chat-page .context-meter-circle:focus-visible,
+.chat-page .btn-send:focus-visible,
+.chat-page .msg-avatar-btn:focus-visible,
+.chat-page .think-bar:focus-visible,
+.chat-page .message-actions-trigger:focus-visible,
+.chat-page .message-actions-menu button:focus-visible,
+.chat-page .message-edit-actions button:focus-visible,
+.chat-page .chat-quote-draft > button:focus-visible,
+.chat-page .chat-control-menu button:focus-visible,
+.chat-page .context-meter-actions button:focus-visible,
+.chat-page .memory-correction-consent-actions button:focus-visible,
+.chat-page .btn-action-narration:focus-visible,
+.chat-page .btn-stop:focus-visible {
+  transform: var(--el-feedback-lift-transform, translateY(-1px));
+}
+
+.chat-page .msg-avatar-btn:focus-visible .msg-avatar {
+  box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, .07));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chat-page .msg-avatar-btn:hover,
+  .chat-page .think-bar:hover,
+  .chat-page .message-actions-trigger:hover,
+  .chat-page .message-actions-menu button:hover,
+  .chat-page .message-edit-actions button:hover:not(:disabled),
+  .chat-page .chat-quote-draft > button:hover,
+  .chat-page .chat-control-capsule:hover,
+  .chat-page .chat-control-menu button:hover,
+  .chat-page .context-meter-circle:hover,
+  .chat-page .context-meter-actions button:hover:not(:disabled),
+  .chat-page .memory-correction-consent-actions button:hover:not(:disabled),
+  .chat-page .btn-action-narration:hover:not(:disabled),
+  .chat-page .btn-send:hover:not(:disabled),
+  .chat-page .btn-stop:hover:not(:disabled) {
+    transform: var(--el-feedback-lift-transform, translateY(-1px));
+  }
+
+  .chat-page .msg-avatar-btn:hover .msg-avatar {
+    box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, .07));
+  }
+}
+
+/* Press stays after focus / hover so mouse-down cannot remain lifted. */
+.chat-page .msg-avatar-btn:active,
+.chat-page .think-bar:active,
+.chat-page .message-actions-trigger:active,
+.chat-page .message-actions-menu button:active,
+.chat-page .message-edit-actions button:active:not(:disabled),
+.chat-page .chat-quote-draft > button:active,
+.chat-page .chat-control-capsule:active,
+.chat-page .chat-control-menu button:active,
+.chat-page .context-meter-circle:active,
+.chat-page .context-meter-actions button:active:not(:disabled),
+.chat-page .memory-correction-consent-actions button:active:not(:disabled),
+.chat-page .btn-action-narration:active:not(:disabled),
+.chat-page .btn-send:active:not(:disabled),
+.chat-page .btn-stop:active:not(:disabled) {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
+  box-shadow: var(--el-shadow-surface, none);
+}
+
+/* Message bubbles remain content, not buttons: static spatial hierarchy only. */
+.chat-page .msg-avatar {
+  box-shadow: var(--el-shadow-surface, none);
+  transition: box-shadow var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1));
+}
+
+.chat-page .think-content {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--el-static-white) 36%, transparent);
+}
+
+/* ---- Continuous motion safety ----------------------------------------- */
+html[data-el-page-hidden='true'] .chat-page .typing i {
+  animation-play-state: paused !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-page .chat-composer-panel,
+  .chat-page .msg-avatar,
+  .chat-page .msg-avatar-btn,
+  .chat-page .think-bar,
+  .chat-page .message-actions-trigger,
+  .chat-page .message-actions-menu button,
+  .chat-page .message-edit-actions button,
+  .chat-page .chat-quote-draft > button,
+  .chat-page .chat-control-capsule,
+  .chat-page .chat-control-menu button,
+  .chat-page .context-meter-circle,
+  .chat-page .context-meter-actions button,
+  .chat-page .memory-correction-consent-actions button,
+  .chat-page .btn-action-narration,
+  .chat-page .btn-send,
+  .chat-page .btn-stop {
+    transition: none;
+  }
+
+  .chat-page .msg-avatar-btn:hover,
+  .chat-page .msg-avatar-btn:focus-visible,
+  .chat-page .msg-avatar-btn:active,
+  .chat-page .think-bar:hover,
+  .chat-page .think-bar:focus-visible,
+  .chat-page .think-bar:active,
+  .chat-page .message-actions-trigger:hover,
+  .chat-page .message-actions-trigger:focus-visible,
+  .chat-page .message-actions-trigger:active,
+  .chat-page .message-actions-menu button:hover,
+  .chat-page .message-actions-menu button:focus-visible,
+  .chat-page .message-actions-menu button:active,
+  .chat-page .message-edit-actions button:hover,
+  .chat-page .message-edit-actions button:focus-visible,
+  .chat-page .message-edit-actions button:active,
+  .chat-page .chat-quote-draft > button:hover,
+  .chat-page .chat-quote-draft > button:focus-visible,
+  .chat-page .chat-quote-draft > button:active,
+  .chat-page .chat-control-capsule:hover,
+  .chat-page .chat-control-capsule:focus-visible,
+  .chat-page .chat-control-capsule:active,
+  .chat-page .chat-control-menu button:hover,
+  .chat-page .chat-control-menu button:focus-visible,
+  .chat-page .chat-control-menu button:active,
+  .chat-page .context-meter-circle:hover,
+  .chat-page .context-meter-circle:focus-visible,
+  .chat-page .context-meter-circle:active,
+  .chat-page .context-meter-actions button:hover,
+  .chat-page .context-meter-actions button:focus-visible,
+  .chat-page .context-meter-actions button:active,
+  .chat-page .memory-correction-consent-actions button:hover,
+  .chat-page .memory-correction-consent-actions button:focus-visible,
+  .chat-page .memory-correction-consent-actions button:active,
+  .chat-page .btn-action-narration:hover,
+  .chat-page .btn-action-narration:focus-visible,
+  .chat-page .btn-action-narration:active,
+  .chat-page .btn-send:hover,
+  .chat-page .btn-send:focus-visible,
+  .chat-page .btn-send:active,
+  .chat-page .btn-stop:hover,
+  .chat-page .btn-stop:focus-visible,
+  .chat-page .btn-stop:active {
+    transform: none;
+  }
+
+  .chat-page .typing i {
+    animation: none !important;
+    opacity: .62;
+    transform: none;
+  }
+
+  .chat-page .msg-avatar-btn:active,
+  .chat-page .think-bar:active,
+  .chat-page .message-actions-trigger:active,
+  .chat-page .message-actions-menu button:active,
+  .chat-page .message-edit-actions button:active:not(:disabled),
+  .chat-page .chat-quote-draft > button:active,
+  .chat-page .chat-control-capsule:active,
+  .chat-page .chat-control-menu button:active,
+  .chat-page .context-meter-circle:active,
+  .chat-page .context-meter-actions button:active:not(:disabled),
+  .chat-page .memory-correction-consent-actions button:active:not(:disabled),
+  .chat-page .btn-action-narration:active:not(:disabled),
+  .chat-page .btn-send:active:not(:disabled),
+  .chat-page .btn-stop:active:not(:disabled) {
+    opacity: .9;
+  }
+}
