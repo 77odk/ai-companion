@@ -1638,7 +1638,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         }
       }
       const token = getToken()
-      if (sid && token) {
+      // messages API 没有 interrupted 生命周期字段；中断 partial 只保本机，
+      // 不能作为普通 assistant 消息上传后在其它设备冒充完整回复。
+      if (sid && token && !interruptionReason) {
         let chain: Promise<void> = Promise.resolve()
         for (const m of branchFinal) {
           if (m.role !== 'assistant' || m.ts !== assistantTs) continue
