@@ -64,11 +64,16 @@
   --el-icon-small-size: 16px;
   --el-icon-stroke: 1.6;
 
-  /* Motion */
+  /* Motion — P5-A feedback grammar: press → release → settle. */
+  --el-motion-press: 90ms;
   --el-motion-fast: 120ms;
+  --el-motion-settle: 180ms;
   --el-motion-base: 200ms;
   --el-motion-slow: 300ms;
   --el-ease-standard: cubic-bezier(.2, .8, .2, 1);
+  --el-ease-settle: cubic-bezier(.16, 1, .3, 1);
+  --el-feedback-press-transform: translateY(1px) scale(.992);
+  --el-feedback-lift-transform: translateY(-1px);
 
   /* Z-index */
   --el-z-content: 0;
@@ -111,7 +116,11 @@
   --el-static-white: #ffffff;
   --el-overlay-scrim: rgba(38, 31, 28, 0.30);
 
-  /* Shadow: only two supported elevation tiers. */
+  /* Depth — one canonical three-step spatial ladder for page controls/cards. */
+  --el-shadow-surface: none;
+  --el-shadow-raised: 0 4px 16px rgba(38, 31, 28, 0.07);
   --el-shadow-float: 0 8px 24px rgba(38, 31, 28, 0.08);
+  --el-shadow-floating: var(--el-shadow-float);
+  /* Modal remains a separate overlay tier, not part of normal surface/raised/floating interaction depth. */
   --el-shadow-modal: 0 18px 48px rgba(38, 31, 28, 0.14);
 }
