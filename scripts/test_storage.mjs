@@ -4,7 +4,7 @@
 // 覆盖：无设置 → 默认智谱 / 已有设置保持原选择（deepseek、zhipu、custom、openai）/
 //       非法 provider 值兜底智谱 / 损坏 JSON 兜底智谱 / v1 单 key 迁移
 
-import { isSlowLetterMode, loadSettings, setSlowLetterMode, DEFAULT_SETTINGS } from '../src/lib/storage.ts'
+import { isSlowLetterMode, loadMessages, loadSettings, saveMessages, setSlowLetterMode, DEFAULT_SETTINGS } from '../src/lib/storage.ts'
 
 let passed = 0
 let failed = 0
@@ -42,6 +42,8 @@ const FOUR_PROVIDERS = {
   zhipu: { apiKey: '', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4.7-flash' },
   openai: { apiKey: '', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   custom: { apiKey: '', baseUrl: '', model: 'gpt-4o-mini' },
+  volcengine: { apiKey: '', baseUrl: DEFAULT_SETTINGS.volcengine.baseUrl, model: DEFAULT_SETTINGS.volcengine.model },
+  mimo: { apiKey: 'sk-mimo', baseUrl: DEFAULT_SETTINGS.mimo.baseUrl, model: DEFAULT_SETTINGS.mimo.model },
 }
 
 function putSettings(provider, providers) {
@@ -78,6 +80,12 @@ putSettings('openai', { ...FOUR_PROVIDERS, openai: { apiKey: 'sk-openai', baseUr
 const openaiLoaded = loadSettings()
 eq(openaiLoaded.provider, 'openai', '选过 OpenAI → 保持 openai')
 eq(openaiLoaded.apiKey, 'sk-openai', 'openai 的 key 原样保留')
+
+resetStore()
+putSettings('mimo', FOUR_PROVIDERS)
+const mimoLoaded = loadSettings()
+eq(mimoLoaded.provider, 'mimo', '选过 MiMo → 保持 mimo')
+eq(mimoLoaded.apiKey, 'sk-mimo', 'MiMo 的 key 原样保留')
 
 console.log('\n[3] 非法 provider 值 → 兜底智谱')
 resetStore()
@@ -118,6 +126,20 @@ localStorage.setItem(
 const migrated = loadSettings()
 eq(migrated.provider, 'deepseek', 'v1 选的是 deepseek → 保持')
 eq(migrated.apiKey, 'sk-old', 'v1 的 apiKey 归到 deepseek 名下')
+
+console.log('\n[6] 原始聊天记录不按时间或条数静默裁剪')
+resetStore()
+const oldTs = Date.now() - 365 * 24 * 60 * 60 * 1000
+const manyMessages = Array.from({ length: 8005 }, (_, i) => ({
+  role: i % 2 === 0 ? 'user' : 'assistant',
+  content: `m-${i}`,
+  ts: oldTs + i,
+}))
+saveMessages(manyMessages)
+const preservedMessages = loadMessages()
+eq(preservedMessages.length, manyMessages.length, '超过旧 8000 条上限仍完整保留')
+eq(preservedMessages[0]?.content, 'm-0', '超过旧 60 天窗口的最老原话仍保留')
+eq(preservedMessages.at(-1)?.content, 'm-8004', '最新消息仍保留')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

@@ -289,7 +289,8 @@ export function loadSettings(): ModelSettings & { providers: Record<Provider, Pr
       parsed.provider === 'openai' ||
       parsed.provider === 'custom' ||
       parsed.provider === 'deepseek' ||
-      parsed.provider === 'volcengine'
+      parsed.provider === 'volcengine' ||
+      parsed.provider === 'mimo'
         ? parsed.provider
         : 'zhipu'
     const providers = normalizeProviders(parsed.providers)
@@ -383,16 +384,7 @@ export function shouldShowMemorySaved(m: StoredMessage): boolean {
 
 const MESSAGES_KEY = 'ai_companion_messages'
 
-/**
- * 历史消息保留窗口（免费版）：60 天。
- * 商业化钩子：超过窗口的旧聊天记录会被裁剪，付费会员（9月云端同步上线后）=长期记忆+聊天记录永久保存。
- * 现在纯前端本地存储，所以只做时间窗口裁剪，不删本地已有数据（换设备/清缓存会丢，那是云同步的付费点）。
- */
-export const MESSAGE_WINDOW_DAYS = 60
-
-/** 历史消息条数硬上限，防止 localStorage 被撑爆（60天窗口内正常聊不到这个量） */
-export const MESSAGE_LIMIT = 8000
-
+/** 聊天原始记录不做产品级时间/条数裁剪；容量压力只能通过上下文选择解决，不能删历史。 */
 export function loadMessages(): StoredMessage[] {
   try {
     const raw = localStorage.getItem(MESSAGES_KEY)
@@ -411,11 +403,14 @@ export function loadMessages(): StoredMessage[] {
 }
 
 export function saveMessages(messages: StoredMessage[]): void {
-  // 时间窗口裁剪：只保留最近 60 天的消息；超上限再丢最旧（双保险，防止 localStorage 撑爆）
-  const cutoff = Date.now() - MESSAGE_WINDOW_DAYS * 24 * 60 * 60 * 1000
-  const kept = messages.filter((m) => m.ts >= cutoff)
-  localStorage.setItem(MESSAGES_KEY, JSON.stringify(kept.slice(-MESSAGE_LIMIT)))
-  notifyDataChanged()
+  try {
+    // 原始聊天记录只允许完整写回；存储不足时宁可保留旧值并让本次写入失败，
+    // 也绝不通过时间窗口 / 条数上限静默删历史。
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(Array.isArray(messages) ? messages : []))
+    notifyDataChanged()
+  } catch {
+    // localStorage setItem 失败不会先删除旧值；保持已有历史原样。
+  }
 }
 
 // ---- 会话起点（刷新对话：TA 忘了之前聊的，聊天记录还在） ----

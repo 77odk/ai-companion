@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import {
   findRecoverableReply,
   interruptionReasonFromError,
+  markInterruptedAssistantContent,
   normalizeStaleReplyLifecycle,
   preserveReplyLifecycle,
   registerActiveReplyRun,
@@ -35,6 +36,9 @@ assert.equal(interrupted[0].replyInterruptedReason, 'network')
 assert.equal(interrupted[1].replyState, undefined, '多泡只在最后一泡挂中断标记')
 assert.equal(interrupted[2].replyState, 'interrupted')
 assert.equal(interrupted[2].replyInterruptedReason, 'network')
+assert.match(interrupted[2].content, /回复中断/, '中断态必须编码进 assistant 正文，跨设备没有 lifecycle 字段也不能冒充完整回复')
+assert.equal(markInterruptedAssistantContent(interrupted[2].content), interrupted[2].content, '中断标记必须幂等')
+assert.equal(markInterruptedAssistantContent('This reply stopped').endsWith('(Reply interrupted)'), true, '英文 partial 使用英文中断标记')
 
 const completed = setReplyLifecycle(interrupted, userTs, 300, 'complete')
 assert.equal(completed[0].replyState, 'complete')
@@ -112,6 +116,8 @@ assert.match(chatSrc, /const pendingSnapshot = getPendingOps\(\)[\s\S]*enqueueSe
 assert.match(chatSrc, /let lifecycleUserTs = userMsg\.ts/)
 assert.match(chatSrc, /partialUserTsRef\.current = confirmed\.ts/)
 assert.match(chatSrc, /initialConfirmedAssistantIds\.has\(message\.id\)/, '并发确认消息用 server id 判断是否为本轮开始前已存在')
+assert.doesNotMatch(chatSrc, /sid && token && !interruptionReason/, '不得通过 interruptionReason 条件旁路受保护 Chat 上传链')
+assert.match(chatSrc, /if \(sid && token\) \{[\s\S]*uploadMessage\(roundSessionId, m\)/, '完整与中断回复都继续走既有 Chat 上传链；中断语义由正文标记承载')
 assert.doesNotMatch(chatSrc, /initialAssistantSignatures/, '新 server id 不能因正文与旧 assistant 相同而被过滤')
 
 console.log('reply lifecycle tests passed')

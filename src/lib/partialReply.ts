@@ -4,9 +4,10 @@
 // 用户生成到一半就退出/关页面时，fetch 被浏览器掐断，finalize 永远跑不到 ——
 // 半截回复既不在本地、也没排队上传，回来就是一片空白，看起来像「TA 没回」。
 //
-// 做法：关页面/切后台时把已经生成出来的那部分落库，并排进 pendingOps（同步写 localStorage，
-// 不需要网络）；下次打开聊天页时的 flushPendingOps 会把它补传到后端。
+// 做法：关页面/切后台时把已经生成出来的那部分落库；真正 interrupted 时在最后一泡正文
+// 加明确“回复中断”标记，再沿用既有 pendingOps 上传链。后端即使没有生命周期字段，跨设备也不会把半截冒充完整回复。
 import { loadMessages, saveMessages, type ReplyInterruptionReason, type ReplyLifecycleState, type StoredMessage } from './storage.ts'
+import { markInterruptedAssistantContent } from './replyLifecycle.ts'
 import { splitDetailedAssistantReply, type ReplyLength } from './replyLength.ts'
 import {
   addPendingOp,
@@ -17,12 +18,12 @@ import {
 } from './sessionStore.ts'
 
 /**
- * 把半截回复提交落库（并把每条排进待上传队列）。
+ * 把半截回复提交落库；真正 interrupted 时把最后一泡显式标成“回复中断”，并继续沿用既有待上传队列。
  * @param sessionId 当前会话；null = 游客/无会话，只本地落库不上传
  * @param ts 本轮 assistant 占位消息的 ts（同 ts 的旧内容会被替换，不重复堆）
  * @param cleanedText 已经清洗过的正文（stripThinkBlocks / stripMemoryMarkers / stripEmoji …）
  * @param queue 是否排进待上传队列。关页面（pagehide）要排；只是切到后台（visibilitychange hidden）
- *              不排 —— 那种情况流还在跑，等正常结束走原有上传，别把半截抢先传上去。
+ *              不排 —— 那种情况流还在跑，等正常结束走原有上传。
  * @returns 落库的 assistant 分条（没内容返回空数组，调用方据此判断是否真的提交了）
  */
 export function commitPartialReply(
@@ -45,6 +46,9 @@ export function commitPartialReply(
         index === branchParts.length - 1
           ? {
               ...part,
+              ...(lifecycle.state === 'interrupted'
+                ? { content: markInterruptedAssistantContent(part.content) }
+                : {}),
               replyState: lifecycle.state,
               ...(lifecycle.state === 'interrupted' && lifecycle.reason
                 ? { replyInterruptedReason: lifecycle.reason }
