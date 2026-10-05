@@ -917,9 +917,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       if (!token || sessionRecoveryInFlightRef.current.has(activeSessionId)) return
       sessionRecoveryInFlightRef.current.add(activeSessionId)
       try {
-        const pendingMessageSessionIds = getPendingOps()
-          .filter((op) => op.type === 'message')
-          .map((op) => op.sessionId)
+        const pendingMessageSessionIds = getPendingOps().flatMap((op) =>
+          op.type === 'message' && typeof op.sessionId === 'string' ? [op.sessionId] : [],
+        )
         await enqueueSessionMessageCommits(
           [activeSessionId, ...pendingMessageSessionIds],
           () => flushPendingOps(token),
