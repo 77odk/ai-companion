@@ -152,6 +152,38 @@ console.log('[initiative-runtime] 有理由只做一次短生成，成功后才�
   assert.equal(saved.at(-1).lastBackgroundAt, 0)
 }
 
+console.log('[initiative-runtime] 生成期间关闭主动消息：提交前必须读最新偏好并停止落库')
+{
+  resetInitiativeRuntimeForTests()
+  let current = pref()
+  let commits = 0
+  const outcome = await runInitiativeCatchUp(
+    policyInput(current),
+    context(),
+    {
+      estimateTokens: (text) => Math.max(1, Math.ceil(text.length / 4)),
+      generate: async () => {
+        current = { ...current, enabled: false }
+        return { text: '今天那个电影约定，我还记着。' }
+      },
+      commit: async () => {
+        commits += 1
+        return true
+      },
+      recordUsage: () => {},
+      savePreference: (value) => {
+        current = value
+        return true
+      },
+      getPreference: () => current,
+      now: () => NOW,
+    },
+  )
+  assert.equal(outcome, 'disabled-or-no-reason')
+  assert.equal(commits, 0, 'opt-out 后绝不能继续提交主动消息')
+  assert.equal(current.enabled, false, '旧 preference 快照不能把用户刚关闭的开关写回 true')
+}
+
 console.log('[initiative-runtime] provider usage 有则记录真实值')
 {
   resetInitiativeRuntimeForTests()
@@ -328,6 +360,9 @@ console.log('[initiative-runtime] App 只在 hidden/pagehide 记离开，visible
   assert.match(app, /document\.visibilityState === 'visible'[\s\S]*runInitiativeCatchUpNow\(\)/)
   assert.match(app, /pagehide/)
   assert.match(app, /commitInitiativeMessage/)
+  assert.match(app, /shouldCommit: stillCommittable/)
+  assert.match(app, /getPreference: \(\) => getInitiativePreference\(accountId, sessionId\)/)
+  assert.doesNotMatch(app, /initiativeChatRevision/, '主动消息到达不能靠 remount Chat 刷新，否则会丢输入草稿')
   assert.match(app, /getInitiativePreference\(account\.account, sessionId\)/)
   assert.match(app, /getAccount\(\)\?\.account !== accountId/)
   assert.match(app, /getActiveSessionId\(\) !== sessionId/)
