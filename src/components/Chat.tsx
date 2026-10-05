@@ -1102,11 +1102,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         .filter((message) => message.role === 'assistant' && typeof message.id === 'number')
         .map((message) => message.id as number),
     )
-    const initialAssistantSignatures = new Set(
-      rawWithUser
-        .filter((message) => message.role === 'assistant')
-        .map((message) => `${message.conversationBranchId ?? ''}\\u0000${message.content}`),
-    )
     const tagCurrentBranch = (message: StoredMessage): StoredMessage =>
       roundBranchId
         ? { ...message, conversationBranchId: roundBranchId }
@@ -1590,8 +1585,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         const concurrentConfirmed = getMessagesCache(roundSessionId).filter((message) => {
           if (message.role !== 'assistant' || typeof message.id !== 'number') return false
           if (initialConfirmedAssistantIds.has(message.id) || finalIds.has(message.id)) return false
-          const signature = `${message.conversationBranchId ?? ''}\\u0000${message.content}`
-          if (initialAssistantSignatures.has(signature)) return false
           if (roundBranchId && message.conversationBranchId && message.conversationBranchId !== roundBranchId) return false
           return true
         })
