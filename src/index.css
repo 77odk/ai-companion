@@ -4283,6 +4283,21 @@ button.account-list-row:active { background: color-mix(in srgb, var(--color-prim
   opacity: 0.8;
 }
 
+/* 构建版本号：让用户在手机上就能自查跑的是哪一版（排障用，不喧哗） */
+.about-build {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  padding: 0 16px 10px;
+  opacity: 0.55;
+  letter-spacing: 0.02em;
+}
+
+.about-build-sha {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  user-select: text;
+}
+
 /* ========== 使用指南 ========== */
 .guide-page {
   --guide-hairline: color-mix(in srgb, var(--color-border) 78%, transparent);

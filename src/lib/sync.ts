@@ -97,7 +97,9 @@ const SESSION_START_KEY = 'ai_companion_session_start'
 const ANNIVERSARIES_KEY = 'ai_companion_anniversaries'
 const MAIN_ANNIVERSARY_KEY = 'ai_companion_main_anniversary'
 const SPACE_POSTS_KEY = 'ai_space_posts'
-const ALL_PROVIDERS: Provider[] = ['deepseek', 'zhipu', 'openai', 'custom', 'volcengine']
+// ★新增服务商时这里和 storage.ts 的读取白名单都要加（2026-10-04：MiMo 漏过两处，
+// 用户表现是「测试连接通过 → 保存 → 退出再进 key 空了」。src/lib/providerWhitelist.test.ts 会盯着。）
+export const ALL_PROVIDERS: Provider[] = ['deepseek', 'zhipu', 'openai', 'custom', 'volcengine', 'mimo']
 // ---- 账号（localStorage key 'ai_companion_account'） ----
 export function getAccount(): Account | null {
   try {
