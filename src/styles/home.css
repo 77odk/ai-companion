@@ -438,12 +438,7 @@
     transition: none;
   }
 
-  .ta-orb,
-  .ta-orb::before,
-  .ta-orb::after,
-  .ta-orb svg,
-  .ta-orb > span,
-  .home-moment-copy,
+  /* Orb 的固定 3D 构图不是 motion；保留静态层级，只停掉所有持续动画。 */
   .home-talk:hover,
   .home-talk:focus-visible,
   .home-talk:active {
