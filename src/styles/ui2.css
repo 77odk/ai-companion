@@ -112,7 +112,42 @@
   color: var(--ui2-text-secondary);
   font-size: 14px;
   font-weight: 500;
-  transition: color 0.15s;
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition:
+    color var(--el-motion-fast, 120ms) ease,
+    transform var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1));
+}
+
+.app-nav .nav-btn:active {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
+}
+
+.app-nav .nav-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ta-accent) 40%, var(--el-static-white));
+  outline-offset: -2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .app-nav .nav-btn:hover {
+    transform: var(--el-feedback-lift-transform, translateY(-1px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-nav .nav-btn {
+    transition: color var(--el-motion-fast, 120ms) ease;
+  }
+
+  .app-nav .nav-btn:hover,
+  .app-nav .nav-btn:focus-visible,
+  .app-nav .nav-btn:active {
+    transform: none;
+  }
+
+  .app-nav .nav-btn:active {
+    opacity: 0.9;
+  }
 }
 
 /* 4. active：TA Accent 克制强调 */
