@@ -202,15 +202,17 @@
   height: var(--el-icon-small-size, 16px);
 }
 
-.ai-space-refresh:hover {
-  color: var(--el-accent-deep, var(--color-primary-deep));
-  border-color: transparent;
-  background: transparent;
-}
+@media (hover: hover) and (pointer: fine) {
+  .ai-space-refresh:hover {
+    color: var(--el-accent-deep, var(--color-primary-deep));
+    border-color: transparent;
+    background: transparent;
+  }
 
-.ai-space-refresh:hover::before {
-  border-color: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, transparent);
-  background: color-mix(in srgb, var(--el-accent-soft, var(--color-primary-soft)) 30%, var(--el-surface-card, var(--color-card)));
+  .ai-space-refresh:hover::before {
+    border-color: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 34%, transparent);
+    background: color-mix(in srgb, var(--el-accent-soft, var(--color-primary-soft)) 30%, var(--el-surface-card, var(--color-card)));
+  }
 }
 
 .ai-space-guide {
@@ -421,6 +423,130 @@
   .ai-space-refresh,
   .space-archive-home .ai-space-v2-all {
     transition: none;
+  }
+}
+
+/* ---- P5-D · Space / archive physical feedback ------------------------- */
+/* Keep Space as a content flow. Depth belongs to the existing objects, not to
+   a new dashboard/card shell. */
+.space-letter-envelope {
+  perspective: 720px;
+  transform-style: preserve-3d;
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition: transform var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1));
+}
+
+.space-letter-envelope-back {
+  transform: translateZ(-6px);
+}
+
+.space-letter-envelope-paper {
+  transform: translateZ(2px);
+}
+
+.space-letter-envelope-flap {
+  transform: translateZ(4px);
+}
+
+.space-letter-wax {
+  transform: translateX(-50%) translateZ(8px);
+}
+
+.event-archive-preview-item,
+.event-archive-empty,
+.space-archive-home .ai-space-v2-all,
+.photo-archive-add-inline,
+.event-archive-add-inline,
+.ai-space-refresh {
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition:
+    transform var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1)),
+    opacity var(--el-motion-fast, 120ms) ease;
+}
+
+.space-letter-envelope:focus-visible,
+.event-archive-preview-item:focus-visible,
+.event-archive-empty:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 36%, var(--el-static-white));
+  outline-offset: 2px;
+  transform: var(--el-feedback-lift-transform, translateY(-1px));
+}
+
+.space-archive-home .ai-space-v2-all:focus-visible,
+.photo-archive-add-inline:focus-visible,
+.event-archive-add-inline:focus-visible,
+.ai-space-refresh:focus-visible {
+  transform: var(--el-feedback-lift-transform, translateY(-1px));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .space-letter-envelope:hover,
+  .event-archive-preview-item:hover,
+  .event-archive-empty:hover,
+  .space-archive-home .ai-space-v2-all:hover,
+  .photo-archive-add-inline:hover,
+  .event-archive-add-inline:hover,
+  .ai-space-refresh:hover {
+    transform: var(--el-feedback-lift-transform, translateY(-1px));
+  }
+}
+
+/* Press is deliberately after focus/hover Lift so mouse-down cannot remain lifted. */
+.space-letter-envelope:active,
+.event-archive-preview-item:active,
+.event-archive-empty:active,
+.space-archive-home .ai-space-v2-all:active,
+.photo-archive-add-inline:active,
+.event-archive-add-inline:active,
+.ai-space-refresh:active {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-letter-envelope,
+  .event-archive-preview-item,
+  .event-archive-empty,
+  .space-archive-home .ai-space-v2-all,
+  .photo-archive-add-inline,
+  .event-archive-add-inline,
+  .ai-space-refresh {
+    transition: none;
+  }
+
+  .space-letter-envelope:hover,
+  .space-letter-envelope:focus-visible,
+  .space-letter-envelope:active,
+  .event-archive-preview-item:hover,
+  .event-archive-preview-item:focus-visible,
+  .event-archive-preview-item:active,
+  .event-archive-empty:hover,
+  .event-archive-empty:focus-visible,
+  .event-archive-empty:active,
+  .space-archive-home .ai-space-v2-all:hover,
+  .space-archive-home .ai-space-v2-all:focus-visible,
+  .space-archive-home .ai-space-v2-all:active,
+  .photo-archive-add-inline:hover,
+  .photo-archive-add-inline:focus-visible,
+  .photo-archive-add-inline:active,
+  .event-archive-add-inline:hover,
+  .event-archive-add-inline:focus-visible,
+  .event-archive-add-inline:active,
+  .ai-space-refresh:hover,
+  .ai-space-refresh:focus-visible,
+  .ai-space-refresh:active {
+    transform: none;
+  }
+
+  .space-letter-envelope:active,
+  .event-archive-preview-item:active,
+  .event-archive-empty:active,
+  .space-archive-home .ai-space-v2-all:active,
+  .photo-archive-add-inline:active,
+  .event-archive-add-inline:active,
+  .ai-space-refresh:active {
+    opacity: .9;
   }
 }
 
