@@ -3,6 +3,7 @@ import type {
   ReplyLifecycleState,
   StoredMessage,
 } from './storage.ts'
+import { detectLang } from './langDetect.ts'
 
 export interface RecoverableReply {
   userIndex: number
@@ -12,6 +13,17 @@ export interface RecoverableReply {
 }
 
 const activeReplyRuns = new Set<string>()
+
+const INTERRUPTED_MARKER_ZH = '（回复中断）'
+const INTERRUPTED_MARKER_EN = '(Reply interrupted)'
+
+export function markInterruptedAssistantContent(content: string): string {
+  const text = String(content ?? '').trimEnd()
+  if (!text) return text
+  if (text.endsWith(INTERRUPTED_MARKER_ZH) || text.endsWith(INTERRUPTED_MARKER_EN)) return text
+  const marker = detectLang(text) === 'en' ? INTERRUPTED_MARKER_EN : INTERRUPTED_MARKER_ZH
+  return `${text}\n\n${marker}`
+}
 
 function runKey(sessionId: string | null | undefined, userTs: number): string {
   return `${sessionId || '__guest__'}:${userTs}`
@@ -36,6 +48,9 @@ function withLifecycle(
 ): StoredMessage {
   return {
     ...message,
+    ...(state === 'interrupted' && message.role === 'assistant'
+      ? { content: markInterruptedAssistantContent(message.content) }
+      : {}),
     replyState: state,
     ...(state === 'interrupted'
       ? (reason ? { replyInterruptedReason: reason } : {})
