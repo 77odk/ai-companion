@@ -428,6 +428,38 @@
   .ta-orb-core {
     animation-duration: 11s;
   }
+
+  /* 天气保留“有天气”的感觉，但砍掉最远一层雨丝并放慢环境漂移。 */
+  .home-weather-rain-drop.layer-2 {
+    display: none;
+  }
+
+  .home-weather-fx-cloud,
+  .home-weather-fx-fog {
+    animation-duration: 28s;
+  }
+
+  .home-weather-state-clear .home-weather-atmosphere::before {
+    animation-duration: 14s;
+  }
+
+  .home-weather-state-snow .home-weather-fx-particles {
+    animation-duration: 11s;
+  }
+
+  .home-weather-state-thunder .home-weather-fx-flash {
+    animation-duration: 12s;
+  }
+}
+
+/* P5-E: browsers throttle background tabs differently; pause our continuous
+   ambience explicitly when App marks the document hidden. */
+html[data-el-page-hidden='true'] .ta-orb-track,
+html[data-el-page-hidden='true'] .ta-orb-dot,
+html[data-el-page-hidden='true'] .ta-orb-core,
+html[data-el-page-hidden='true'] .home-weather-atmosphere *,
+html[data-el-page-hidden='true'] .home-weather-atmosphere::before {
+  animation-play-state: paused !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
