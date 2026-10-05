@@ -190,9 +190,14 @@ if (process.env.CI === 'true') {
 
       this.ready = new Promise((resolve, reject) => {
         let settled = false
+        const handshakeTimer = setTimeout(() => {
+          finish(reject, new Error('CDP websocket handshake timed out'))
+          try { this.ws.close() } catch {}
+        }, 10_000)
         const finish = (fn, value) => {
           if (settled) return
           settled = true
+          clearTimeout(handshakeTimer)
           fn(value)
         }
         this.ws.addEventListener('open', () => finish(resolve), { once: true })
