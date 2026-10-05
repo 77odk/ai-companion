@@ -11,7 +11,6 @@ import { getSession, listMemories, postMemory, postMessage, type Session } from 
 import {
   addPendingOp,
   confirmMessageInCache,
-  flushPendingOps,
   getActiveSessionId,
   getBusyState,
   getMemoriesCache,
@@ -60,6 +59,7 @@ import { clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectio
 import { formatQuotedMessage, messageEvidenceText, parseQuotedMessage, type MessageQuote, type MessageQuoteSpeaker } from '../lib/messageQuote'
 import { CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState } from '../lib/conversationState'
 import { enqueueSessionMessageCommit, enqueueSessionMessageCommits } from '../lib/sessionMessageQueue'
+import { flushPendingOpsSnapshot } from '../lib/pendingReplay'
 
 /**
  * 历史时间锚必须稳定：同一条历史消息无论过几分钟再次发送，前缀都完全一致，
@@ -917,12 +917,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       if (!token || sessionRecoveryInFlightRef.current.has(activeSessionId)) return
       sessionRecoveryInFlightRef.current.add(activeSessionId)
       try {
-        const pendingMessageSessionIds = getPendingOps().flatMap((op) =>
+        const pendingSnapshot = getPendingOps()
+        const pendingMessageSessionIds = pendingSnapshot.flatMap((op) =>
           op.type === 'message' && typeof op.sessionId === 'string' ? [op.sessionId] : [],
         )
         await enqueueSessionMessageCommits(
           [activeSessionId, ...pendingMessageSessionIds],
-          () => flushPendingOps(token),
+          () => flushPendingOpsSnapshot(token, pendingSnapshot),
         )
         if (!streamingRef.current) await refreshSessionMessages(activeSessionId)
       } finally {
