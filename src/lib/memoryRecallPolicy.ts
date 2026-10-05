@@ -352,6 +352,9 @@ function hasSpecificChineseOverlap(
         const memoryOwner = memoryExplicit || memoryContext
         const userOwner = userExplicit || userContext
         if (memoryOwner && userOwner && memoryOwner === userOwner) return true
+        // 用户自己的属性事实允许省略主语继续说（“我的工资…” → “工资最近涨了”）。
+        // 仅对 self 放行；第三方实体省略 owner 时保持保守，避免一条“工资涨了”同时 touch 多个人。
+        if (memoryOwner === SELF_OWNER && !userOwner) return true
         continue
       }
       return true
