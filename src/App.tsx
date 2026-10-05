@@ -411,6 +411,9 @@ export default function App() {
     const activeMessages = resolveConversationMessages(conversationState, rawMessages)
     const conversationBranchId = branchIdForNewMessage(conversationState)
     const now = Date.now()
+    const latestUserMessageAt = activeMessages
+      .filter((message) => message.role === 'user' && Number.isFinite(message.ts))
+      .reduce((latest, message) => Math.max(latest, message.ts), 0)
     if (activeMessages.some((message) => message.replyState === 'pending' || message.replyState === 'streaming')) return
     const busy = getBusyState(sessionId)
     if (busy.status === 'busy' && busy.busyUntil > now) return
@@ -426,6 +429,7 @@ export default function App() {
         events: getEvents(sessionId),
         anniversaries: getAnniversaries(sessionId),
         continuity: getTaContinuity(sessionId, now),
+        latestUserMessageAt,
       },
       {
         sessionId,
