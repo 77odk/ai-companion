@@ -2,12 +2,13 @@ import type { Anniversary } from './anniversary.ts'
 import type { ChatTopic } from './chatTopics.ts'
 import type { CompanionEvent } from './eventStore.ts'
 import type { InitiativePreference } from './storage.ts'
+import type { TaContinuityState } from './taRuntime.ts'
 
 export const INITIATIVE_MIN_AWAY_MS = 2 * 60 * 60 * 1000
 export const INITIATIVE_BASE_COOLDOWN_MS = 6 * 60 * 60 * 1000
 export const INITIATIVE_MAX_COOLDOWN_MS = 48 * 60 * 60 * 1000
 
-export type InitiativeReason = 'future-intent' | 'event' | 'anniversary'
+export type InitiativeReason = 'future-intent' | 'open-thread' | 'anniversary' | 'self-intent' | 'event'
 
 export interface InitiativeCandidate {
   key: string
@@ -24,6 +25,10 @@ export interface InitiativePolicyInput {
   futureTopics: ChatTopic[]
   events: CompanionEvent[]
   anniversaries: Anniversary[]
+  /** 只读 taRuntime continuity；主动层绝不反写 Runtime。 */
+  continuity?: TaContinuityState | null
+  /** continuity evidence 之后若用户已经再次开口，该 evidence 不再作为主动理由。 */
+  latestUserMessageAt?: number
 }
 
 function localDayKey(ts: number): string {
@@ -91,6 +96,43 @@ function futureIntentCandidates(
       priority: 300,
     })
   }
+  return out
+}
+
+function continuityCandidates(
+  continuity: TaContinuityState | null | undefined,
+  leftAt: number,
+  now: number,
+  latestUserMessageAt: number,
+): InitiativeCandidate[] {
+  if (!continuity) return []
+  const out: InitiativeCandidate[] = []
+
+  const add = (
+    kind: 'open-thread' | 'self-intent',
+    evidence: TaContinuityState['openThread'] | TaContinuityState['selfIntent'],
+    priority: number,
+  ) => {
+    if (!evidence) return
+    if (!Number.isFinite(evidence.evidenceAt) || !Number.isFinite(evidence.expiresAt)) return
+    if (evidence.evidenceAt <= 0 || evidence.expiresAt <= now) return
+    // 用户离开后才生成出来的 TA 消息，本身就是未读新消息；不能再据此额外生成一条主动消息。
+    if (evidence.evidenceAt > leftAt) return
+    // TA 留下这条 continuity 后用户已经继续说过话，就不再把旧 evidence 当“未完理由”重复主动。
+    if (Number.isFinite(latestUserMessageAt) && latestUserMessageAt > evidence.evidenceAt) return
+    const text = String(evidence.text ?? '').trim()
+    if (!text) return
+    out.push({
+      key: `runtime:${kind}:${evidence.evidenceAt}:${text.slice(0, 32)}`,
+      reason: kind,
+      evidence: text,
+      evidenceAt: evidence.evidenceAt,
+      priority,
+    })
+  }
+
+  add('open-thread', continuity.openThread, 290)
+  add('self-intent', continuity.selfIntent, 270)
   return out
 }
 
@@ -177,6 +219,7 @@ export function chooseInitiativeCandidate(input: InitiativePolicyInput): Initiat
 
   const candidates = [
     ...futureIntentCandidates(input.futureTopics, leftAt, now),
+    ...continuityCandidates(input.continuity, leftAt, now, Number(input.latestUserMessageAt ?? 0)),
     ...anniversaryCandidates(input.anniversaries, leftAt, now),
     ...eventCandidates(input.events, leftAt, now),
   ]
