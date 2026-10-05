@@ -187,7 +187,79 @@ assert.equal(chooseInitiativeCandidate({
   }],
 }), null, '生理期记录不能被当成主动纪念日话题')
 
-console.log('[initiative] 同时有理由时优先 FutureIntent；同一候选不重复')
+console.log('[initiative] Runtime continuity 只读真实 evidence，过期/离开后新生成都不触发')
+const openThreadCandidate = chooseInitiativeCandidate({
+  preference: basePref,
+  leftAt: twoHoursAgo,
+  now,
+  futureTopics: [],
+  events: [],
+  anniversaries: [],
+  continuity: {
+    openThread: {
+      kind: 'open-question',
+      text: '你刚刚说那次面试最难受的是哪一段？',
+      evidenceAt: twoHoursAgo - 60_000,
+      expiresAt: now + 60 * 60 * 1000,
+    },
+  },
+})
+assert.equal(openThreadCandidate?.reason, 'open-thread')
+assert.match(openThreadCandidate?.evidence ?? '', /面试/)
+
+const selfIntentCandidate = chooseInitiativeCandidate({
+  preference: basePref,
+  leftAt: twoHoursAgo,
+  now,
+  futureTopics: [],
+  events: [],
+  anniversaries: [],
+  continuity: {
+    selfIntent: {
+      kind: 'self-intent',
+      text: '下次我还想继续听你讲那件事。',
+      evidenceAt: twoHoursAgo - 60_000,
+      expiresAt: now + 24 * 60 * 60 * 1000,
+    },
+  },
+})
+assert.equal(selfIntentCandidate?.reason, 'self-intent')
+
+assert.equal(chooseInitiativeCandidate({
+  preference: basePref,
+  leftAt: twoHoursAgo,
+  now,
+  futureTopics: [],
+  events: [],
+  anniversaries: [],
+  continuity: {
+    openThread: {
+      kind: 'open-question',
+      text: '这条已经过期？',
+      evidenceAt: twoHoursAgo - 60_000,
+      expiresAt: now - 1,
+    },
+  },
+}), null, '过期 Runtime evidence 不能主动触发')
+
+assert.equal(chooseInitiativeCandidate({
+  preference: basePref,
+  leftAt: twoHoursAgo,
+  now,
+  futureTopics: [],
+  events: [],
+  anniversaries: [],
+  continuity: {
+    openThread: {
+      kind: 'open-question',
+      text: '用户离开后才生成的未读问题？',
+      evidenceAt: twoHoursAgo + 60_000,
+      expiresAt: now + 60 * 60 * 1000,
+    },
+  },
+}), null, '用户离开后才生成的 TA 消息本身就是未读消息，不能再额外主动一次')
+
+console.log('[initiative] 同时有理由时优先 FutureIntent；Runtime 未完问题优先于纪念日')
 const priority = chooseInitiativeCandidate({
   preference: basePref,
   leftAt: twoHoursAgo,
@@ -195,9 +267,35 @@ const priority = chooseInitiativeCandidate({
   futureTopics: [{ t: '今天一起看电影', ts: now - 86400000, futureDay: '2026-10-08' }],
   events: [event],
   anniversaries: [{ id: 'a1', label: '认识 TA 的日子', date: '10-08', createdAt: 1 }],
+  continuity: {
+    openThread: {
+      kind: 'open-question',
+      text: '你还想继续说刚才那件事吗？',
+      evidenceAt: twoHoursAgo - 60_000,
+      expiresAt: now + 60 * 60 * 1000,
+    },
+  },
 })
 assert.equal(priority?.reason, 'future-intent')
 assert.ok(priority)
+
+const runtimeVsAnniversary = chooseInitiativeCandidate({
+  preference: basePref,
+  leftAt: twoHoursAgo,
+  now,
+  futureTopics: [],
+  events: [],
+  anniversaries: [{ id: 'a1', label: '认识 TA 的日子', date: '10-08', createdAt: 1 }],
+  continuity: {
+    openThread: {
+      kind: 'open-question',
+      text: '你愿意告诉我后来怎么样了吗？',
+      evidenceAt: twoHoursAgo - 60_000,
+      expiresAt: now + 60 * 60 * 1000,
+    },
+  },
+})
+assert.equal(runtimeVsAnniversary?.reason, 'open-thread')
 assert.equal(chooseInitiativeCandidate({
   preference: { ...basePref, lastCandidateKey: priority.key },
   leftAt: twoHoursAgo,
