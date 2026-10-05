@@ -50,7 +50,7 @@ const GENERIC_TOPIC_SEGMENTS = new Set([
 
 /** 这些词描述“属性槽位”而不是所属实体；单独重合不足以证明是同一条事实。 */
 const GENERIC_ATTRIBUTE_SEGMENTS = new Set([
-  '体重', '身高', '年龄', '岁数', '血压', '体温',
+  '工资', '体重', '身高', '年龄', '岁数', '血压', '体温',
 ])
 
 const COMMON_ENGLISH = new Set([
@@ -257,6 +257,17 @@ function grammaticalChineseOwner(raw: string, evidence: string): string | null {
   const index = compact.lastIndexOf(evidence)
   if (index < 0) return null
   const clause = compact.slice(0, index).split(/[，。！？；]/).at(-1) ?? ''
+
+  // 证据本身就是“工资/体重/年龄”等属性槽位时，谓词已被 slice 掉。
+  // 此时直接从属性前缀里去掉时间/语气词，剩下的就是主体（小夏最近工资 → 小夏）。
+  if (GENERIC_ATTRIBUTE_SEGMENTS.has(evidence)) {
+    let ownerPrefix = stripChineseTimeExpressions(clause)
+    for (const phrase of GENERIC_ZH_PHRASES) ownerPrefix = ownerPrefix.replaceAll(phrase, '')
+    ownerPrefix = ownerPrefix.replace(/(?:最近|目前|现在|还是|又|刚|刚刚|大概|大约|差不多)+$/g, '')
+    const owner = normalizeChineseSubject(ownerPrefix)
+    if (owner) return owner
+  }
+
   const match = clause.match(
     /^([\u4e00-\u9fff]{1,8}?)(?:特别|非常|比较|有点)?(?:喜欢|爱吃|爱喝|爱|讨厌|害怕|怕|过敏|工资|体重|身高|年龄|岁数|血压|体温|是|有|养|喝|吃)/,
   )
