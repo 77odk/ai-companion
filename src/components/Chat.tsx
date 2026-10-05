@@ -16,6 +16,7 @@ import {
   getBusyState,
   getMemoriesCache,
   getMessagesCache,
+  getPendingOps,
   getSessionsCache,
   markRead,
   mergeSessionMemories,
@@ -39,7 +40,7 @@ import { busyReturnFallback, classifyAvailability, isGroundedBusyReturn, type Av
 import { loadCurrentPosts } from '../lib/aiSpace'
 import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELINE_EN } from '../lib/spaceChatInject'
 import { commitPartialReply } from '../lib/partialReply'
-import { findRecoverableReply, interruptionReasonFromError, normalizeStaleReplyLifecycle, registerActiveReplyRun, setReplyLifecycle, unregisterActiveReplyRun } from '../lib/replyLifecycle'
+import { findRecoverableReply, interruptionReasonFromError, normalizeStaleReplyLifecycle, preserveReplyLifecycle, registerActiveReplyRun, setReplyLifecycle, unregisterActiveReplyRun } from '../lib/replyLifecycle'
 import { buildFutureAgendaBlock } from '../lib/futureAgenda'
 import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYourMoment } from '../lib/yourMoment'
 import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, shouldInjectTaRuntimeContext, syncTaRuntimeFromAssistantText } from '../lib/taRuntime'
@@ -58,7 +59,7 @@ import { buildUserWeatherContext, readUserWeatherContext } from '../lib/homeWeat
 import { clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, savePendingMemoryCorrection, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 import { formatQuotedMessage, messageEvidenceText, parseQuotedMessage, type MessageQuote, type MessageQuoteSpeaker } from '../lib/messageQuote'
 import { CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState } from '../lib/conversationState'
-import { enqueueSessionMessageCommit } from '../lib/sessionMessageQueue'
+import { enqueueSessionMessageCommit, enqueueSessionMessageCommits } from '../lib/sessionMessageQueue'
 
 /**
  * 历史时间锚必须稳定：同一条历史消息无论过几分钟再次发送，前缀都完全一致，
@@ -756,21 +757,21 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       .filter((m) => Number.isFinite(m.ts))
     const local = getMessagesCache(sessionId)
     const latestLocalUser = [...local].reverse().find((message) => message.role === 'user')
-    const hasLocalReplyLifecycle = Boolean(
+    const hasActiveLocalReply = Boolean(
       latestLocalUser &&
-      (latestLocalUser.replyState === 'pending' ||
-        latestLocalUser.replyState === 'streaming' ||
-        latestLocalUser.replyState === 'interrupted'),
+      (latestLocalUser.replyState === 'pending' || latestLocalUser.replyState === 'streaming'),
     )
-    // lifecycle 是本机 BYOK 请求态，不进入权威 cloud merge。
-    // 当前轮尚未收口时宁可暂缓这次 pull，也不能把本地状态写回 merge 结果或按正文猜身份。
-    if (hasLocalReplyLifecycle) {
+    // pending / streaming 仍属于正在运行的本机 BYOK 请求，暂缓 pull，避免中途改写本轮基线。
+    if (hasActiveLocalReply) {
       setActiveSession(res.data.session)
       setMessages(local)
       markRead(sessionId)
       return
     }
-    const merged = mergeSessionMessages(local, cloud)
+    // interrupted 已经收口，不能永久阻断 cloud refresh。先正常合并权威历史，
+    // 再只按 id 或精确 role+ts+content 恢复本机中断标记；绝不按“唯一正文”猜身份。
+    const interruptedLifecycle = local.filter((message) => message.replyState === 'interrupted')
+    const merged = preserveReplyLifecycle(interruptedLifecycle, mergeSessionMessages(local, cloud))
     saveMessagesCache(sessionId, merged)
     setActiveSession(res.data.session)
     if (merged.length > 0) {
@@ -916,7 +917,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       if (!token || sessionRecoveryInFlightRef.current.has(activeSessionId)) return
       sessionRecoveryInFlightRef.current.add(activeSessionId)
       try {
-        await flushPendingOps(token)
+        const pendingMessageSessionIds = getPendingOps()
+          .filter((op) => op.type === 'message')
+          .map((op) => op.sessionId)
+        await enqueueSessionMessageCommits(
+          [activeSessionId, ...pendingMessageSessionIds],
+          () => flushPendingOps(token),
+        )
         if (!streamingRef.current) await refreshSessionMessages(activeSessionId)
       } finally {
         sessionRecoveryInFlightRef.current.delete(activeSessionId)
