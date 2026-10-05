@@ -162,12 +162,8 @@ export function preserveReplyLifecycle(
         candidate.content === message.content,
       )
     }
-    if (!match) {
-      const contentMatches = source.filter((candidate) =>
-        candidate.role === message.role && candidate.content === message.content,
-      )
-      if (contentMatches.length === 1) match = contentMatches[0]
-    }
+    // 不再按“唯一 role + content”猜身份：重复原话时会把一个 lifecycle 标记复制到另一条消息。
+    // 没有 id 或精确本地身份就宁可不贴状态，权威消息正文/身份保持原样。
     return match ? { ...message, ...lifecycleFields(match) } : message
   })
 }
