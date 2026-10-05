@@ -112,6 +112,7 @@ assert.match(chatSrc, /const pendingSnapshot = getPendingOps\(\)[\s\S]*enqueueSe
 assert.match(chatSrc, /let lifecycleUserTs = userMsg\.ts/)
 assert.match(chatSrc, /partialUserTsRef\.current = confirmed\.ts/)
 assert.match(chatSrc, /initialConfirmedAssistantIds\.has\(message\.id\)/, '并发确认消息用 server id 判断是否为本轮开始前已存在')
+assert.match(chatSrc, /if \(sid && token && !interruptionReason\)/, 'interrupted assistant partial 不得作为普通完整消息上传云端')
 assert.doesNotMatch(chatSrc, /initialAssistantSignatures/, '新 server id 不能因正文与旧 assistant 相同而被过滤')
 
 console.log('reply lifecycle tests passed')
