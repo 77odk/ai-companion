@@ -108,7 +108,7 @@ assert.match(chatSrc, /replyState === 'pending' \|\| latestLocalUser\.replyState
 assert.match(chatSrc, /const interruptedLifecycle = local\.filter\(\(message\) => message\.replyState === 'interrupted'\)/)
 assert.match(chatSrc, /preserveReplyLifecycle\(interruptedLifecycle, mergeSessionMessages\(local, cloud\)\)/, 'interrupted 要先正常合并 cloud，再只恢复精确本地 lifecycle')
 assert.doesNotMatch(chatSrc, /replyState === 'pending'[\s\S]{0,160}replyState === 'interrupted'/, 'interrupted 不得和 active run 一起永久阻断 cloud merge')
-assert.match(chatSrc, /enqueueSessionMessageCommits\([\s\S]*\(\) => flushPendingOps\(token\)/, 'pending message replay 必须经过同一 session commit gate')
+assert.match(chatSrc, /const pendingSnapshot = getPendingOps\(\)[\s\S]*enqueueSessionMessageCommits\([\s\S]*\(\) => flushPendingOpsSnapshot\(token, pendingSnapshot\)/, 'pending replay 必须先快照，再经过同一 session commit gate；等待期间新增 op 不能被 recovery 偷吃')
 assert.match(chatSrc, /let lifecycleUserTs = userMsg\.ts/)
 assert.match(chatSrc, /partialUserTsRef\.current = confirmed\.ts/)
 assert.match(chatSrc, /initialConfirmedAssistantIds\.has\(message\.id\)/, '并发确认消息用 server id 判断是否为本轮开始前已存在')
