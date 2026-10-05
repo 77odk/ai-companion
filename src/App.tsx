@@ -280,6 +280,7 @@ export default function App() {
   // 所有页面统一恢复离开时的滚动位置（切 view 时捕获，回来时还原）。
   const viewRef = useRef<View>(view)
   viewRef.current = view
+  const carryRevisionRef = useRef(0)
   const viewStackRef = useRef<View[]>([])
   const scrollPosRef = useRef<Map<string, { cls: string; idx: number; top: number }[]>>(new Map())
   const captureScroll = useCallback((v: View) => {
@@ -329,8 +330,11 @@ export default function App() {
       captureScroll(from)
       viewStackRef.current.push(from)
       window.history.pushState({ v }, '')
+      const carryRevision = ++carryRevisionRef.current
+      // Preserve the old navigation invariant immediately; the DOM commit may wait for a native snapshot.
+      viewRef.current = v
       commitPrimaryViewWithCarry(from, v, () => {
-        viewRef.current = v
+        if (carryRevisionRef.current !== carryRevision) return
         setView(v)
       })
     },
@@ -342,6 +346,7 @@ export default function App() {
     (v: View) => {
       if (viewRef.current === v) return
       captureScroll(viewRef.current)
+      carryRevisionRef.current += 1
       viewRef.current = v
       setView(v)
     },
@@ -355,8 +360,10 @@ export default function App() {
       const prev = viewStackRef.current.pop()
       const target = prev ?? 'home'
       const from = viewRef.current
+      const carryRevision = ++carryRevisionRef.current
+      viewRef.current = target
       commitPrimaryViewWithCarry(from, target, () => {
-        viewRef.current = target
+        if (carryRevisionRef.current !== carryRevision) return
         setView(target)
       })
     }
