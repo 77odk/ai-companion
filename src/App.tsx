@@ -122,33 +122,40 @@ type EluvinViewTransitionDocument = Document & {
  * Chat / auth / setup / detail flows keep their existing instant navigation.
  */
 function commitPrimaryViewWithCarry(from: View, to: View, commit: () => void): void {
-  if (!isNavView(from) || !isNavView(to)) {
+  let committed = false
+  const commitOnce = () => {
+    if (committed) return
+    committed = true
     commit()
+  }
+
+  if (!isNavView(from) || !isNavView(to)) {
+    commitOnce()
     return
   }
   if (typeof document === 'undefined' || document.visibilityState !== 'visible') {
-    commit()
+    commitOnce()
     return
   }
   if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-    commit()
+    commitOnce()
     return
   }
 
   const doc = document as EluvinViewTransitionDocument
   if (typeof doc.startViewTransition !== 'function') {
-    commit()
+    commitOnce()
     return
   }
 
   try {
     doc.startViewTransition(() => {
       // React must commit the new primary view inside the native transition capture.
-      flushSync(commit)
+      flushSync(commitOnce)
     })
   } catch {
-    // Unsupported / interrupted transitions must never block navigation.
-    commit()
+    // Unsupported / interrupted transitions must never block or double-commit navigation.
+    commitOnce()
   }
 }
 
