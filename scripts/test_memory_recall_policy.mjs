@@ -151,6 +151,13 @@ assert.equal(shouldTouchMemoryFromUser(mimiWeightEn, "Fido's weight is 60 kilogr
 assert.equal(shouldTouchMemoryFromUser(M('mimi-weight-postfix', 'weight of Mimi is 60 kilograms'), 'weight of Fido is 60 kilograms'), false, '英文后置 owner 也必须参与兼容判断')
 assert.equal(shouldTouchMemoryFromUser(mimiWeightEn, 'Mimi weight changed again'), true, '同一英文实体不同所有格写法仍应命中')
 
+const siblingCoffee = M('sibling-coffee', '我妹妹喜欢咖啡', { topic: '家人' })
+assert.equal(shouldTouchMemoryFromUser(siblingCoffee, '我弟弟喜欢咖啡'), false, '主谓句里的不同中文主体不能因共享咖啡误命中')
+assert.equal(shouldTouchMemoryFromUser(siblingCoffee, '我妹妹最近还是喜欢咖啡'), true, '同一中文主体的主谓事实仍应命中')
+const mimiAllergy = M('mimi-allergy', 'Mimi is allergic to peanuts')
+assert.equal(shouldTouchMemoryFromUser(mimiAllergy, 'Fido is allergic to fish'), false, '英文主谓句里的不同实体不能因共享 allergic 误命中')
+assert.equal(shouldTouchMemoryFromUser(mimiAllergy, 'Mimi is allergic to fish'), true, '同一英文主体变化宾语时仍应命中纠正')
+
 console.log('\n[memory recall 2] 孤立主题标签不能充当事实级 exact')
 assert.equal(shouldTouchMemoryFromUser(M('work-topic', '工作，最近很忙', { topic: '工作' }), '工作，今天很顺利'), false, '孤立“工作”只能代表主题，不能 exact/touch')
 assert.equal(shouldTouchMemoryFromUser(M('pet-topic', '宠物，最近很闹', { topic: '宠物' }), '宠物，今天很安静'), false, '孤立“宠物”不能 exact/touch')
@@ -165,7 +172,19 @@ const pinnedProtected = selectMemoryWorkingSet([pinnedCore, ...catFlood], {
   maxItems: 10,
 })
 assert.ok(pinnedProtected.items.some((m) => m.id === 'pinned-core'), 'pinned 必须先于 exact 候选获得入场资格')
-assert.equal(pinnedProtected.items.length, 10, '仍遵守 maxItems，不额外扩容')
+assert.equal(pinnedProtected.items.length, 10, 'pinned 未超过普通上限时仍保持原 working-set 尺寸')
+
+console.log('\n[memory recall 2] pinned 恒带：数量 / token 上限不能静默淘汰用户钉住的事实')
+const manyPinned = Array.from({ length: 12 }, (_, i) => M(`pinned-${i}`, `用户钉住的重要事实 ${i}`, { pinned: true }))
+const allPinned = selectMemoryWorkingSet(manyPinned, { tokenBudget: 120, maxItems: 10 })
+assert.equal(allPinned.items.length, 12, 'pinned 超过 maxItems 时也必须全部保留')
+assert.equal(allPinned.truncated, false, '全是 pinned 且全部保留时不应报告裁剪')
+const hugePinned = selectMemoryWorkingSet([
+  M('huge-pinned', '极重要'.repeat(1000), { pinned: true }),
+  M('ordinary', '普通候选'),
+], { tokenBudget: 80, maxItems: 10 })
+assert.deepEqual(hugePinned.items.map((m) => m.id), ['huge-pinned'], '单条 pinned 超预算也不能被静默跳过，普通候选继续受预算约束')
+assert.ok(hugePinned.estimatedTokens > 80, 'pinned 自身超预算时要如实报告 token，而不是假装在预算内')
 
 console.log('\n[memory recall 2] Chat 生产挂载必须传 current user text + 最终 block renderer')
 const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
