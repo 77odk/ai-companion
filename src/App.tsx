@@ -58,7 +58,7 @@ import Home from './components/Home'
 import { hydrateCloudState, initCloudStateSync, syncCloudState } from './lib/cloudState'
 import { queueLegacyCloudStateBackfill } from './lib/cloudStateResources'
 import { closeOldestCandidateWindowOnStartup } from './lib/eventDetector'
-import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from './lib/taRuntime'
+import { getOrAdvanceTaRuntime, getSessionPersona, getTaContinuity, runtimeDisplayLabel } from './lib/taRuntime'
 import { branchIdForNewMessage, loadConversationState, resolveConversationMessages } from './lib/conversationState'
 import { futureTopicsFromMessages } from './lib/chatTopics'
 import { getEvents } from './lib/eventStore'
@@ -425,6 +425,7 @@ export default function App() {
         futureTopics: futureTopicsFromMessages(activeMessages),
         events: getEvents(sessionId),
         anniversaries: getAnniversaries(sessionId),
+        continuity: getTaContinuity(sessionId, now),
       },
       {
         sessionId,
