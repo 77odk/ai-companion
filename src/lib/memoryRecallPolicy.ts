@@ -266,10 +266,13 @@ function grammaticalChineseOwner(raw: string, evidence: string): string | null {
 function contextOwnerFromText(value: string, evidence: string): string | null {
   const index = value.indexOf(evidence)
   if (index < 0) return null
-  const before = value.slice(0, index)
-  const after = value.slice(index + evidence.length)
-  // 前缀更常表示“谁的事实”；没有前缀时再看后置实体。
-  return normalizeOwner(before.slice(-6)) || normalizeOwner(after.slice(0, 6))
+  const before = value.slice(0, index).trim()
+  const after = value.slice(index + evidence.length).trim()
+  // 这里只是无“的”的实体兜底（咪咪体重 / 小夏工资）。
+  // 单字前后缀更常是“想/要/又/涨”等动作或语气，不能当 owner，否则会把正常续聊误判成跨实体。
+  const beforeOwner = before.length >= 2 ? normalizeOwner(before.slice(-6)) : null
+  const afterOwner = after.length >= 2 ? normalizeOwner(after.slice(0, 6)) : null
+  return beforeOwner || afterOwner
 }
 
 function evidenceOwnersCompatible(
