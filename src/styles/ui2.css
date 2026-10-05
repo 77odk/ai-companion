@@ -4264,3 +4264,82 @@
   cursor: default;
 }
 
+
+
+/* ==========================================================================
+   P5-E · Carry
+   --------------------------------------------------------------------------
+   Native View Transition only animates .app-main. The persistent app shell /
+   bottom navigation remains physically continuous between primary tabs.
+   ========================================================================== */
+.app-main {
+  view-transition-name: el-main;
+}
+
+::view-transition-old(root) {
+  animation: none;
+  opacity: 0;
+}
+
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-group(el-main) {
+  animation-duration: var(--el-motion-base, 200ms);
+  animation-timing-function: var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1));
+}
+
+::view-transition-old(el-main) {
+  animation: el-carry-out var(--el-motion-fast, 120ms) ease both;
+}
+
+::view-transition-new(el-main) {
+  animation: el-carry-in var(--el-motion-base, 200ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1)) both;
+}
+
+@keyframes el-carry-out {
+  to {
+    opacity: 0;
+    transform: translateY(-2px) scale(.998);
+  }
+}
+
+@keyframes el-carry-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(.998);
+  }
+}
+
+/* Coarse pointers keep continuity but drop transform work: opacity-only Carry. */
+@media (pointer: coarse) {
+  ::view-transition-old(el-main) {
+    animation: el-carry-fade-out var(--el-motion-fast, 120ms) ease both;
+  }
+
+  ::view-transition-new(el-main) {
+    animation: el-carry-fade-in var(--el-motion-fast, 120ms) ease both;
+  }
+}
+
+@keyframes el-carry-fade-out {
+  to { opacity: 0; }
+}
+
+@keyframes el-carry-fade-in {
+  from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-main {
+    view-transition-name: none;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-old(el-main),
+  ::view-transition-new(el-main) {
+    animation: none !important;
+  }
+}
