@@ -348,7 +348,6 @@ export default function App() {
   const notificationRefreshGuardRef = useRef({ next: 0, applied: 0 })
   const hasUnreadNotifications = loggedIn && (notificationServerUnread || notificationRevision > notificationReadRevision)
   const [initiativeNotice, setInitiativeNotice] = useState<InitiativeNotice | null>(null)
-  const [initiativeChatRevision, setInitiativeChatRevision] = useState(0)
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
@@ -451,13 +450,18 @@ export default function App() {
           return { text, ...(usage ? { usage } : {}) }
         },
         commit: async (content) => {
-          if (getAccount()?.account !== accountId || getToken() !== token) return false
-          if (getActiveSessionId() !== sessionId) return false
-          const latestState = loadConversationState(sessionId)
-          if (branchIdForNewMessage(latestState) !== conversationBranchId) return false
-          const latestMessages = resolveConversationMessages(latestState, getMessagesCache(sessionId))
-          if (latestMessages.some((message) => message.replyState === 'pending' || message.replyState === 'streaming')) return false
-          if (latestMessages.some((message) => Number.isFinite(message.ts) && message.ts > now)) return false
+          const stillCommittable = () => {
+            if (getAccount()?.account !== accountId || getToken() !== token) return false
+            if (getActiveSessionId() !== sessionId) return false
+            if (!getInitiativePreference(accountId, sessionId).enabled) return false
+            const latestState = loadConversationState(sessionId)
+            if (branchIdForNewMessage(latestState) !== conversationBranchId) return false
+            const latestMessages = resolveConversationMessages(latestState, getMessagesCache(sessionId))
+            if (latestMessages.some((message) => message.replyState === 'pending' || message.replyState === 'streaming')) return false
+            if (latestMessages.some((message) => Number.isFinite(message.ts) && message.ts > now)) return false
+            return true
+          }
+          if (!stillCommittable()) return false
 
           const message = await commitInitiativeMessage({
             sessionId,
@@ -465,6 +469,7 @@ export default function App() {
             token,
             accountId,
             ...(conversationBranchId ? { conversationBranchId } : {}),
+            shouldCommit: stillCommittable,
           })
           return message != null
         },
@@ -476,15 +481,13 @@ export default function App() {
           if (getAccount()?.account !== accountId || getToken() !== token) return false
           return saveInitiativePreference(accountId, sessionId, next)
         },
+        getPreference: () => getInitiativePreference(accountId, sessionId),
         onDelivered: (content) => {
           // 只触达原账号 / 原 TA；生成途中切账号时 commit 已经会拒绝。
           if (getAccount()?.account !== accountId) return
           if (!getSessionsCache().some((item) => String(item.id) === sessionId)) return
 
           setInitiativeNotice({ accountId, sessionId, taName, content })
-          if (getActiveSessionId() === sessionId && viewRef.current === 'chat') {
-            setInitiativeChatRevision((value) => value + 1)
-          }
 
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             try {
@@ -499,7 +502,6 @@ export default function App() {
                 if (!getSessionsCache().some((item) => String(item.id) === sessionId)) return
                 setActiveSessionId(sessionId)
                 setInitiativeNotice(null)
-                setInitiativeChatRevision((value) => value + 1)
                 replaceView('chat')
               }
             } catch {
@@ -551,7 +553,6 @@ export default function App() {
     }
     setActiveSessionId(sessionId)
     setInitiativeNotice(null)
-    setInitiativeChatRevision((value) => value + 1)
     goView('chat')
   }, [initiativeNotice, goView])
 
@@ -1375,7 +1376,7 @@ export default function App() {
             {view === 'chat' && (
               <div className="chat-shell">
                 <Chat
-                  key={headerSession ? `${String(headerSession.id)}-${initiativeChatRevision}` : 'no-session'}
+                  key={headerSession ? String(headerSession.id) : 'no-session'}
                   // 空态「现在就去配置」直接进服务商配置页（原来落到「我的」主页，用户找不到配置在哪）
                   onGoSettings={() => openSettings('provider')}
                   // 「先看使用指南」从聊天页进入的，返回就回聊天页（原来返回落到「我的」）
