@@ -45,11 +45,23 @@ function reasonLine(candidate: InitiativeCandidate, lang: Lang): string {
     if (candidate.reason === 'future-intent') {
       return 'A real plan the user previously made with you is due now. Due does NOT mean it happened: ' + candidate.evidence
     }
+    if (candidate.reason === 'open-thread') {
+      return 'Your own last visible reply left this real question unfinished. Resume it naturally without claiming the user answered: ' + candidate.evidence
+    }
+    if (candidate.reason === 'self-intent') {
+      return 'In your own prior visible reply, you explicitly said you wanted to continue this later. You may now pick it up naturally: ' + candidate.evidence
+    }
     if (candidate.reason === 'event') return 'A real recorded event happened: ' + candidate.evidence
     return 'Today is a real important date: ' + candidate.evidence
   }
   if (candidate.reason === 'future-intent') {
     return '用户之前真实说过的约定今天已到期。到期不代表已经发生：' + candidate.evidence
+  }
+  if (candidate.reason === 'open-thread') {
+    return '你上一条真实可见回复里留下了这个尚未等到用户回答的问题。可以自然接回来，但绝不能假装用户已经回答过：' + candidate.evidence
+  }
+  if (candidate.reason === 'self-intent') {
+    return '你之前真实可见回复里明确说过之后还想继续这件事。现在可以自然接回来：' + candidate.evidence
   }
   if (candidate.reason === 'event') return '已经记录的真实 Event：' + candidate.evidence
   return '今天是真实的重要日子：' + candidate.evidence
