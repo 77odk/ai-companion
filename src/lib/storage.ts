@@ -691,7 +691,7 @@ function writeContextUsage(state: ContextUsageState, sessionId?: string, notify 
 export function setContextUsage(
   state: Omit<ContextUsageState, 'updatedAt'> & { updatedAt?: number },
   sessionId?: string,
-  requestSettings?: ModelSettings,
+  requestSettings?: ModelSettings & { providers: Record<Provider, ProviderConfig> },
 ): void {
   const normalized = normalizeContextUsage({
     ...state,
