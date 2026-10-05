@@ -12,14 +12,19 @@
   border-radius: var(--el-radius-md, 16px);
   font-size: var(--el-font-body, 15px);
   font-weight: var(--el-weight-semibold, 600);
+  box-shadow: var(--el-shadow-surface, none);
+  transform: translateY(0) scale(1);
+  transform-origin: center;
   transition:
-    transform var(--el-motion-fast, 120ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1)),
+    transform var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1)),
+    box-shadow var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1)),
     background var(--el-motion-fast, 120ms) ease,
     opacity var(--el-motion-fast, 120ms) ease;
 }
 
 .btn:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
+  box-shadow: var(--el-shadow-surface, none);
 }
 
 .btn-primary {
@@ -35,6 +40,22 @@
 .btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 42%, var(--el-static-white));
   outline-offset: 2px;
+  transform: var(--el-feedback-lift-transform, translateY(-1px));
+  box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, 0.07));
+}
+
+.btn[aria-pressed='true'],
+.btn[aria-selected='true'],
+.btn.is-selected {
+  transform: var(--el-feedback-lift-transform, translateY(-1px));
+  box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, 0.07));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover:not(:disabled) {
+    transform: var(--el-feedback-lift-transform, translateY(-1px));
+    box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, 0.07));
+  }
 }
 
 /* ---- Form controls ----------------------------------------------------- */
@@ -83,7 +104,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  transition: color var(--el-motion-fast, 120ms) ease;
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition:
+    color var(--el-motion-fast, 120ms) ease,
+    transform var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1));
+}
+
+.detail-back:active {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
 }
 
 .detail-back svg {
@@ -135,7 +164,15 @@
   height: var(--el-switch-height, 26px);
   margin-top: 0;
   border-radius: var(--el-radius-pill, 999px);
-  transition: background var(--el-motion-base, 200ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1));
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition:
+    background var(--el-motion-base, 200ms) var(--el-ease-standard, cubic-bezier(.2, .8, .2, 1)),
+    transform var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1));
+}
+
+.settings-switch:active {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
 }
 
 .settings-switch.on {
@@ -188,6 +225,16 @@
   height: var(--el-icon-button-size, 40px);
   border-radius: var(--el-radius-round, 50%);
   color: var(--el-text-secondary, var(--color-text-muted));
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition:
+    transform var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1)),
+    background var(--el-motion-fast, 120ms) ease,
+    color var(--el-motion-fast, 120ms) ease;
+}
+
+.switch-role-close:active {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
 }
 
 .switch-role-option {
@@ -196,18 +243,78 @@
   border-color: var(--el-border, var(--color-border));
   border-radius: var(--el-radius-md, 16px);
   background: var(--el-surface-card, var(--color-card));
+  box-shadow: var(--el-shadow-surface, none);
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition:
+    transform var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1)),
+    box-shadow var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1)),
+    border-color var(--el-motion-fast, 120ms) ease,
+    background var(--el-motion-fast, 120ms) ease;
 }
 
-.switch-role-option:hover {
-  border-color: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 44%, var(--el-border, var(--color-border)));
-  background: color-mix(in srgb, var(--el-accent-soft, var(--color-primary-soft)) 34%, var(--el-surface-card, var(--color-card)));
+.switch-role-option:active {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
+  box-shadow: var(--el-shadow-surface, none);
+}
+
+.switch-role-option:focus-visible {
+  transform: var(--el-feedback-lift-transform, translateY(-1px));
+  box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, 0.07));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .switch-role-option:hover {
+    transform: var(--el-feedback-lift-transform, translateY(-1px));
+    box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, 0.07));
+    border-color: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 44%, var(--el-border, var(--color-border)));
+    background: color-mix(in srgb, var(--el-accent-soft, var(--color-primary-soft)) 34%, var(--el-surface-card, var(--color-card)));
+  }
+}
+
+/* ---- P5-A canonical depth helpers ------------------------------------- */
+.el-depth-surface {
+  box-shadow: var(--el-shadow-surface, none);
+}
+
+.el-depth-raised {
+  box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, 0.07));
+}
+
+.el-depth-floating {
+  box-shadow: var(--el-shadow-floating, var(--el-shadow-float, 0 8px 24px rgba(38, 31, 28, 0.08)));
 }
 
 @media (prefers-reduced-motion: reduce) {
   .btn,
   .detail-back,
   .settings-switch,
-  .settings-switch-thumb {
+  .settings-switch-thumb,
+  .switch-role-close,
+  .switch-role-option {
     transition: none;
+  }
+
+  .btn:hover:not(:disabled),
+  .btn:focus-visible,
+  .btn:active:not(:disabled),
+  .btn[aria-pressed='true'],
+  .btn[aria-selected='true'],
+  .btn.is-selected,
+  .detail-back:active,
+  .settings-switch:active,
+  .switch-role-close:active,
+  .switch-role-option:hover,
+  .switch-role-option:focus-visible,
+  .switch-role-option:active {
+    transform: none;
+  }
+
+  .btn:active:not(:disabled),
+  .detail-back:active,
+  .settings-switch:active,
+  .switch-role-close:active,
+  .switch-role-option:active {
+    opacity: 0.9;
   }
 }
