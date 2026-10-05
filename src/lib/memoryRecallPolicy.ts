@@ -230,7 +230,7 @@ function grammaticalEnglishOwner(source: string, evidence: string): string | nul
 }
 
 function explicitChineseOwner(raw: string, evidence: string): string | null {
-  const compact = String(raw ?? '').replace(/\\s+/g, '')
+  const compact = String(raw ?? '').replace(/\s+/g, '')
   const shared = escapeRegExp(evidence)
 
   if (new RegExp(`(?:我|本人|自己)(?:的)?${shared}`).test(compact)) return SELF_OWNER
@@ -253,7 +253,7 @@ function normalizeChineseSubject(value: string | undefined): string | null {
 
 /** “我妹妹喜欢咖啡 / 小夏工资…”这类主谓结构的主体必须参与 owner 校验。 */
 function grammaticalChineseOwner(raw: string, evidence: string): string | null {
-  const compact = String(raw ?? '').replace(/\\s+/g, '')
+  const compact = String(raw ?? '').replace(/\s+/g, '')
   const index = compact.lastIndexOf(evidence)
   if (index < 0) return null
   const clause = compact.slice(0, index).split(/[，。！？；]/).at(-1) ?? ''

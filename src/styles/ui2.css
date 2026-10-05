@@ -119,10 +119,6 @@
     transform var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1));
 }
 
-.app-nav .nav-btn:active {
-  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
-}
-
 .app-nav .nav-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--ta-accent) 40%, var(--el-static-white));
   outline-offset: -2px;
@@ -132,6 +128,10 @@
   .app-nav .nav-btn:hover {
     transform: var(--el-feedback-lift-transform, translateY(-1px));
   }
+}
+
+.app-nav .nav-btn:active {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
 }
 
 @media (prefers-reduced-motion: reduce) {

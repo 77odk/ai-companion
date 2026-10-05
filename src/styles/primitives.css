@@ -22,11 +22,6 @@
     opacity var(--el-motion-fast, 120ms) ease;
 }
 
-.btn:active:not(:disabled) {
-  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
-  box-shadow: var(--el-shadow-surface, none);
-}
-
 .btn-primary {
   background: var(--el-accent-primary, var(--color-primary));
   color: var(--el-text-on-accent, var(--color-on-primary));
@@ -56,6 +51,11 @@
     transform: var(--el-feedback-lift-transform, translateY(-1px));
     box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, 0.07));
   }
+}
+
+.btn:active:not(:disabled) {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
+  box-shadow: var(--el-shadow-surface, none);
 }
 
 /* ---- Form controls ----------------------------------------------------- */
@@ -253,11 +253,6 @@
     background var(--el-motion-fast, 120ms) ease;
 }
 
-.switch-role-option:active {
-  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
-  box-shadow: var(--el-shadow-surface, none);
-}
-
 .switch-role-option:focus-visible {
   transform: var(--el-feedback-lift-transform, translateY(-1px));
   box-shadow: var(--el-shadow-raised, 0 4px 16px rgba(38, 31, 28, 0.07));
@@ -270,6 +265,11 @@
     border-color: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 44%, var(--el-border, var(--color-border)));
     background: color-mix(in srgb, var(--el-accent-soft, var(--color-primary-soft)) 34%, var(--el-surface-card, var(--color-card)));
   }
+}
+
+.switch-role-option:active {
+  transform: var(--el-feedback-press-transform, translateY(1px) scale(.992));
+  box-shadow: var(--el-shadow-surface, none);
 }
 
 /* ---- P5-A canonical depth helpers ------------------------------------- */
