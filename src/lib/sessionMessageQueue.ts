@@ -44,11 +44,28 @@ export async function enqueueSessionMessageCommits<T>(
       .map((id) => String(id ?? '').trim())
       .filter(Boolean),
   )].sort()
+  if (ids.length === 0) return task()
 
-  const run = (index: number): Promise<T> => {
-    if (index >= ids.length) return task()
-    return enqueueSessionMessageCommit(ids[index], () => run(index + 1))
+  // 同步预占所有 session 的“下一席”，再等待各自前序结束。
+  // 这样 recovery flush 等 A 时，B 的新提交也不能从旁边插队。
+  const reservations = ids.map((sid) => {
+    const previous = sessionMessageTails.get(sid) ?? Promise.resolve()
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const tail = previous.catch(() => undefined).then(() => gate)
+    sessionMessageTails.set(sid, tail)
+    return { sid, previous, gate, tail, release }
+  })
+
+  await Promise.all(reservations.map(({ previous }) => previous.catch(() => undefined)))
+  try {
+    return await task()
+  } finally {
+    for (const { sid, tail, release } of reservations) {
+      release()
+      if (sessionMessageTails.get(sid) === tail) sessionMessageTails.delete(sid)
+    }
   }
-
-  return run(0)
 }
