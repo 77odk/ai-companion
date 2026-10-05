@@ -184,10 +184,36 @@ if (process.env.CI === 'true') {
       this.nextId = 1
       this.pending = new Map()
       this.handlers = new Map()
+      this.closedError = null
+      this.commandTimeoutMs = 10_000
       this.ws = new WebSocket(url)
+
       this.ready = new Promise((resolve, reject) => {
-        this.ws.addEventListener('open', resolve, { once: true })
-        this.ws.addEventListener('error', reject, { once: true })
+        let settled = false
+        const finish = (fn, value) => {
+          if (settled) return
+          settled = true
+          fn(value)
+        }
+        this.ws.addEventListener('open', () => finish(resolve), { once: true })
+        this.ws.addEventListener('error', () => finish(reject, new Error('CDP websocket failed before open')), { once: true })
+        this.ws.addEventListener('close', () => finish(reject, new Error('CDP websocket closed before open')), { once: true })
+      })
+
+      const rejectPending = (error) => {
+        if (!this.closedError) this.closedError = error
+        for (const [id, waiter] of this.pending) {
+          this.pending.delete(id)
+          clearTimeout(waiter.timer)
+          waiter.reject(error)
+        }
+      }
+
+      this.ws.addEventListener('error', () => {
+        rejectPending(new Error('CDP websocket error'))
+      })
+      this.ws.addEventListener('close', (event) => {
+        rejectPending(new Error('CDP websocket closed (' + event.code + ')'))
       })
       this.ws.addEventListener('message', (event) => {
         const message = JSON.parse(String(event.data))
@@ -195,6 +221,7 @@ if (process.env.CI === 'true') {
           const waiter = this.pending.get(message.id)
           if (!waiter) return
           this.pending.delete(message.id)
+          clearTimeout(waiter.timer)
           if (message.error) waiter.reject(new Error(message.error.message || 'CDP error'))
           else waiter.resolve(message.result)
           return
@@ -210,9 +237,26 @@ if (process.env.CI === 'true') {
 
     async send(method, params = {}) {
       await this.ready
+      if (this.closedError) throw this.closedError
       const id = this.nextId++
-      const promise = new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }))
-      this.ws.send(JSON.stringify({ id, method, params }))
+      const promise = new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          if (!this.pending.has(id)) return
+          this.pending.delete(id)
+          reject(new Error('CDP command timed out: ' + method))
+        }, this.commandTimeoutMs)
+        this.pending.set(id, { resolve, reject, timer })
+      })
+      try {
+        this.ws.send(JSON.stringify({ id, method, params }))
+      } catch (error) {
+        const waiter = this.pending.get(id)
+        if (waiter) {
+          this.pending.delete(id)
+          clearTimeout(waiter.timer)
+          waiter.reject(error instanceof Error ? error : new Error(String(error)))
+        }
+      }
       return promise
     }
 
@@ -223,6 +267,13 @@ if (process.env.CI === 'true') {
     }
 
     close() {
+      const error = new Error('CDP client closed')
+      if (!this.closedError) this.closedError = error
+      for (const [id, waiter] of this.pending) {
+        this.pending.delete(id)
+        clearTimeout(waiter.timer)
+        waiter.reject(error)
+      }
       try { this.ws.close() } catch {}
     }
   }
@@ -403,6 +454,7 @@ if (process.env.CI === 'true') {
 
     const runtimeExceptions = []
     const consoleErrors = []
+    const browserLogErrors = []
     cdp.on('Runtime.exceptionThrown', ({ exceptionDetails }) => {
       runtimeExceptions.push(exceptionDetails?.exception?.description || exceptionDetails?.text || 'Unknown page exception')
     })
@@ -411,9 +463,12 @@ if (process.env.CI === 'true') {
       consoleErrors.push((args ?? []).map((arg) => arg.value ?? arg.description ?? arg.type).join(' '))
     })
     cdp.on('Log.entryAdded', ({ entry }) => {
-      if (entry?.level === 'error' && entry?.source === 'javascript') {
-        consoleErrors.push(entry.text || 'javascript log error')
-      }
+      if (entry?.level !== 'error') return
+      browserLogErrors.push({
+        source: entry.source || 'unknown',
+        text: entry.text || 'browser log error',
+        url: entry.url || '',
+      })
     })
 
     const corsHeaders = [
@@ -609,7 +664,8 @@ if (process.env.CI === 'true') {
     await assertNoHorizontalOverflow('Chat reduced-motion')
 
     assert.deepEqual(runtimeExceptions, [], '390x844 run must have 0 page errors')
-    assert.deepEqual(consoleErrors, [], '390x844 run must have 0 console errors')
+    assert.deepEqual(consoleErrors, [], '390x844 run must have 0 console API errors')
+    assert.deepEqual(browserLogErrors, [], '390x844 run must have 0 error-level browser logs')
     console.log('[P5-F runtime] 390x844 Home / Space / PhotoWall / Memory / Mine / Chat 全通过')
   } catch (error) {
     console.error('P5 runtime QA failed')
