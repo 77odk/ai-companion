@@ -1551,7 +1551,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       // 当前用户消息 / 核心 system 本身已经放不进 64k：不静默裁用户原话，也不把超限请求发给 provider。
       // 用户消息已经正常落历史；这里只撤掉空 assistant 占位并结束本轮流式状态。
       replyInterruptionReasonRef.current = 'context-limit'
-      const interrupted = setReplyLifecycle(replyBaseMessages, userMsg.ts, assistantTs, 'interrupted', 'context-limit')
+      const interrupted = setReplyLifecycle(replyBaseMessages, lifecycleUserTs, assistantTs, 'interrupted', 'context-limit')
       persistMessages(roundSessionId, interrupted)
       setMessages(interrupted)
       setStreaming(false)
