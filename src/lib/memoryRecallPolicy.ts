@@ -258,7 +258,7 @@ function grammaticalChineseOwner(raw: string, evidence: string): string | null {
   if (index < 0) return null
   const clause = compact.slice(0, index).split(/[，。！？；]/).at(-1) ?? ''
   const match = clause.match(
-    /^([\\u4e00-\\u9fff]{1,8}?)(?:特别|非常|比较|有点)?(?:喜欢|爱吃|爱喝|爱|讨厌|害怕|怕|过敏|工资|体重|身高|年龄|岁数|血压|体温|是|有|养|喝|吃)/,
+    /^([\u4e00-\u9fff]{1,8}?)(?:特别|非常|比较|有点)?(?:喜欢|爱吃|爱喝|爱|讨厌|害怕|怕|过敏|工资|体重|身高|年龄|岁数|血压|体温|是|有|养|喝|吃)/,
   )
   return normalizeChineseSubject(match?.[1])
 }
