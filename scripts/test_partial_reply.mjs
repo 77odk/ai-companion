@@ -2,7 +2,7 @@
 // 覆盖：
 //   1. 半截回复落库：同 ts 的空占位被替换成真实内容，不是堆两条
 //   2. 同 ts 重复提交不产生重复（只保留最后一次）
-//   3. interrupted 半截回复只保本机，不进入 pendingOps（避免云端把半截冒充完整回复）
+//   3. interrupted 半截回复沿用 pendingOps，但最后一泡正文带明确中断标记（跨设备不冒充完整）
 //   4. 无会话（游客）只走全局消息缓存，不排上传队列
 //   5. 空白内容不落库、不排队列
 //   6. 落库顺序按 ts 升序
@@ -52,10 +52,10 @@ commitPartialReply(SID, T, '只剩这一句')
 cache = getMessagesCache(SID)
 check('同 ts 只保留最后一次', cache.filter((m) => m.ts === T).length === 1 && cache.filter((m) => m.ts === T)[0].content === '只剩这一句', JSON.stringify(cache.map((m) => m.content)))
 
-console.log('[3] interrupted 半截回复只保本机，不进入待上传队列')
+console.log('[3] interrupted 半截回复沿用待上传队列，并在正文编码中断状态')
 reset()
 saveMessagesCache(SID, [{ role: 'user', content: '你好', ts: T - 1000 }, { role: 'assistant', content: '', ts: T }])
-commitPartialReply(
+const interruptedParts = commitPartialReply(
   SID,
   T,
   '第一句\n第二句',
@@ -65,8 +65,10 @@ commitPartialReply(
   { state: 'interrupted', reason: 'pagehide' },
 )
 let ops = getPendingOps()
-check('中断 partial 不排上传', ops.length === 0, JSON.stringify(ops))
-check('中断 partial 仍保留本地', getMessagesCache(SID).filter((m) => m.ts === T).length === 2)
+check('仍沿用原 pending 上传链', ops.length === interruptedParts.length, JSON.stringify(ops.map((o) => o.payload.content)))
+check('最后一泡正文明确标记中断', interruptedParts.at(-1)?.content.endsWith('（回复中断）') === true, JSON.stringify(interruptedParts))
+check('pending payload 同样携带中断标记', String(ops.at(-1)?.payload.content ?? '').endsWith('（回复中断）'))
+check('用户原话没被动', getMessagesCache(SID)[0]?.content === '你好')
 
 console.log('[4] 游客（无会话）只落本地，不排队列')
 reset()
@@ -115,7 +117,8 @@ check('落库消息带 branchId', branchParts.every((m) => m.conversationBranchI
 check('最后一泡标记 interrupted', branchParts.at(-1)?.replyState === 'interrupted' && branchParts.at(-1)?.replyInterruptedReason === 'pagehide')
 check('缓存消息带 branchId', getMessagesCache(SID).filter((m) => m.ts === T).every((m) => m.conversationBranchId === 'branch-x'))
 const branchOps = getPendingOps()
-check('interrupted 分支 partial 不进入待上传队列', branchOps.length === 0, JSON.stringify(branchOps))
+check('待上传项继续带 branchId', branchOps.length > 0 && branchOps.every((op) => op.type !== 'message' || op.conversationBranchId === 'branch-x'))
+check('分支 interrupted payload 明确带中断标记', String(branchOps.at(-1)?.payload.content ?? '').endsWith('（回复中断）'))
 
 console.log('[7] 静态检查：Chat.tsx 真的挂了兜底')
 const fs = await import('node:fs')
