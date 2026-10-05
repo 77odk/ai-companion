@@ -232,6 +232,24 @@ assert.equal(chooseInitiativeCandidate({
   futureTopics: [],
   events: [],
   anniversaries: [],
+  latestUserMessageAt: twoHoursAgo - 30_000,
+  continuity: {
+    selfIntent: {
+      kind: 'self-intent',
+      text: '下次我还想继续听你讲那件事。',
+      evidenceAt: twoHoursAgo - 60_000,
+      expiresAt: now + 24 * 60 * 60 * 1000,
+    },
+  },
+}), null, 'continuity evidence 之后用户已经再次开口，就不能重复主动')
+
+assert.equal(chooseInitiativeCandidate({
+  preference: basePref,
+  leftAt: twoHoursAgo,
+  now,
+  futureTopics: [],
+  events: [],
+  anniversaries: [],
   continuity: {
     openThread: {
       kind: 'open-question',
