@@ -28,3 +28,27 @@ export async function enqueueSessionMessageCommit<T>(
     if (sessionMessageTails.get(sid) === tail) sessionMessageTails.delete(sid)
   }
 }
+
+
+/**
+ * pending-op replay may contain messages from multiple sessions.
+ * Acquire every affected session gate in stable order before replaying, so a recovery flush
+ * cannot bypass an already queued foreground / busy / initiative commit.
+ */
+export async function enqueueSessionMessageCommits<T>(
+  sessionIds: string[],
+  task: () => Promise<T>,
+): Promise<T> {
+  const ids = [...new Set(
+    (Array.isArray(sessionIds) ? sessionIds : [])
+      .map((id) => String(id ?? '').trim())
+      .filter(Boolean),
+  )].sort()
+
+  const run = (index: number): Promise<T> => {
+    if (index >= ids.length) return task()
+    return enqueueSessionMessageCommit(ids[index], () => run(index + 1))
+  }
+
+  return run(0)
+}
