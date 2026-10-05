@@ -11,5 +11,8 @@ assert.match(css, /\.row-assistant \.message-actions \{[\s\S]*align-self: flex-s
 assert.match(css, /\.row-user \.message-actions \{[\s\S]*align-self: flex-end/, '用户操作入口贴气泡右下')
 assert.match(css, /\.message-actions-menu \{[\s\S]*max-width: calc\(100vw - 24px\)[\s\S]*display: flex/, '操作菜单横排且受视口宽度约束')
 assert.match(css, /animation: message-actions-in/, '操作菜单有轻量开启动效')
+assert.match(settings, /getCurrentBuildVersion\(\)/, '关于页读构建版本号（2026-10-04：用户要能在手机上自查跑的是哪一版）')
+assert.match(settings, /className="about-build"[\s\S]{0,120}buildVersion\.slice\(0, 8\)/, '关于页展示构建号前 8 位（完整值放 title）')
+assert.match(fs.readFileSync(new URL('../src/index.css', import.meta.url), 'utf8'), /\.about-build \{/, '构建号有独立样式，不挤在版本号那一行')
 
 console.log('feedback batch chat UI: PASS')

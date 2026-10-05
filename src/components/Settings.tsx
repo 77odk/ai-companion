@@ -55,7 +55,7 @@ import {
 import { listSessions, patchSession, type Session } from '../lib/sessionApi'
 import { getActiveSessionId, getSessionsCache, setSessionsCache } from '../lib/sessionStore'
 import { forceRefresh } from '../lib/forceRefresh'
-import { checkDeployedBuild } from '../lib/appVersion'
+import { checkDeployedBuild, getCurrentBuildVersion } from '../lib/appVersion'
 import { getGlobalReplyLength, replyLengthLabel, saveGlobalReplyLength, type ReplyLength } from '../lib/replyLength'
 import {
   patchSessionInList,
@@ -1707,6 +1707,7 @@ function ProviderDetail({ onBack }: { onBack: () => void; onGoGuide?: () => void
 /* ---------------- 详情页：关于忆文 ---------------- */
 
 function AboutDetail({ onBack }: { onBack: () => void }) {
+  const buildVersion = getCurrentBuildVersion()
   return (
     <div className="page settings-page">
       <DetailHeader title="关于忆文" onBack={onBack} />
@@ -1727,6 +1728,11 @@ function AboutDetail({ onBack }: { onBack: () => void }) {
           <a href="/privacy.html">隐私政策</a>
         </p>
         <p className="about-version">忆文 Eluvin v1.2.3 · 内测版</p>
+        {buildVersion && (
+          <p className="about-build" title={buildVersion}>
+            当前构建 <span className="about-build-sha">{buildVersion.slice(0, 8)}</span>
+          </p>
+        )}
       </div>
       <UpdateControls standalone />
     </div>
