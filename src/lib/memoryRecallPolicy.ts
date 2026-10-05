@@ -282,6 +282,9 @@ function contextOwnerFromText(value: string, evidence: string): string | null {
   // 这里只是无“的”的实体兜底（咪咪体重 / 小夏工资）。
   // 单字前后缀更常是“想/要/又/涨”等动作或语气，不能当 owner，否则会把正常续聊误判成跨实体。
   const beforeOwner = before.length >= 2 ? normalizeOwner(before.slice(-6)) : null
+  // 属性词后的内容是“涨了/变了/六千元”等谓语或值，不是 owner。
+  // 用户只说“工资最近涨了”时应视为省略主体继续上一事实，而不是把“最近涨了”当实体。
+  if (GENERIC_ATTRIBUTE_SEGMENTS.has(evidence)) return beforeOwner
   const afterOwner = after.length >= 2 ? normalizeOwner(after.slice(0, 6)) : null
   return beforeOwner || afterOwner
 }
