@@ -48,7 +48,7 @@ console.log('[message regenerate] one reply pipeline, no duplicate user side eff
 assert.match(chat, /existingRound\?: \{[\s\S]*userMessage: StoredMessage[\s\S]*visibleHistory: StoredMessage\[\][\s\S]*branchId: string/)
 assert.match(chat, /const replayExistingUser = Boolean\(existingRound\)/)
 assert.match(chat, /const rawWithUser = replayExistingUser[\s\S]*setReplyLifecycle\(messages, userMsg\.ts, null, 'pending'\)[\s\S]*: \[\.\.\.messages, userMsg\]/)
-assert.match(chat, /if \(roundSessionId\) \{[\s\S]*persistMessages\(roundSessionId, rawWithUser\)[\s\S]*if \(!replayExistingUser\) uploadMessage\(roundSessionId, userMsg\)/)
+assert.match(chat, /if \(roundSessionId\) \{[\s\S]*persistMessages\(roundSessionId, rawWithUser\)[\s\S]*if \(!replayExistingUser\) \{[\s\S]*void uploadMessage\(roundSessionId, userMsg,/)
 assert.match(
   chat,
   /if \(!replayExistingUser\) \{[\s\S]*?recordChatTopic\([\s\S]*?roundBranchId \?\? conversationState\?\.activeBranchId \?\? 'root'[\s\S]*?\)[\s\S]*?\}/,
