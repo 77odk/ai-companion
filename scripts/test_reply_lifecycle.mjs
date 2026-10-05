@@ -104,8 +104,11 @@ assert.match(chatSrc, /void uploadMessage\(roundSessionId, userMsg, \(confirmed\
 assert.match(chatSrc, /visibleHistory: visibleMessages\.slice\(0, sourceIndex \+ 1\)/)
 assert.match(chatSrc, /只重试 TA/)
 assert.match(chatSrc, /if \(event\.persisted\) return/, 'BFCache pagehide 不得终止仍存活的 Chat 实例')
-assert.match(chatSrc, /const merged = mergeSessionMessages\(local, cloud\)/)
-assert.doesNotMatch(chatSrc, /preserveReplyLifecycle\(local, mergeSessionMessages/, 'lifecycle 不能再侵入权威 merge 路径')
+assert.match(chatSrc, /replyState === 'pending' \|\| latestLocalUser\.replyState === 'streaming'/, '只有仍运行的回复可以暂缓 cloud pull')
+assert.match(chatSrc, /const interruptedLifecycle = local\.filter\(\(message\) => message\.replyState === 'interrupted'\)/)
+assert.match(chatSrc, /preserveReplyLifecycle\(interruptedLifecycle, mergeSessionMessages\(local, cloud\)\)/, 'interrupted 要先正常合并 cloud，再只恢复精确本地 lifecycle')
+assert.doesNotMatch(chatSrc, /replyState === 'pending'[\s\S]{0,160}replyState === 'interrupted'/, 'interrupted 不得和 active run 一起永久阻断 cloud merge')
+assert.match(chatSrc, /enqueueSessionMessageCommits\([\s\S]*\(\) => flushPendingOps\(token\)/, 'pending message replay 必须经过同一 session commit gate')
 assert.match(chatSrc, /let lifecycleUserTs = userMsg\.ts/)
 assert.match(chatSrc, /partialUserTsRef\.current = confirmed\.ts/)
 
