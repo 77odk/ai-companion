@@ -254,43 +254,45 @@ export default function AISpace({ onOpenWeekly }: Props) {
         </section>
 
         {/*
-          S1 only swaps the Space landing visual shell. Keep the existing archives
-          mounted-but-hidden so Photo/Weekly/Event data and their proven flows stay
-          untouched until their own approved batches move to the new object entry points.
+          S1 keeps the approved artwork visually untouched while preserving the
+          existing Space capabilities. Transparent hit areas sit on the objects
+          already present in the confirmed composition; S2 replaces these temporary
+          compatibility entry points with the final CSS/SVG object interactions.
         */}
-        <div className="space-scene-legacy" hidden>
-          <div className="ai-space-v2 space-archive-home">
-            <p className="space-archive-intro">那些发生过的事，慢慢留在这里。</p>
+        <div className="space-scene-hotspots">
+          <button
+            type="button"
+            className="space-scene-hotspot is-photo-wall"
+            aria-label="打开照片墙"
+            onClick={() => {
+              document
+                .querySelector<HTMLButtonElement>('.ai-space-page .photo-stack-preview, .ai-space-page .photo-archive-empty')
+                ?.click()
+            }}
+          />
+          <button
+            type="button"
+            className="space-scene-hotspot is-moments"
+            aria-label="打开一起经历过"
+            onClick={() => {
+              document
+                .querySelector<HTMLButtonElement>(
+                  '.ai-space-page .event-archive-preview .ai-space-v2-all, .ai-space-page .event-archive-preview-item, .ai-space-page .event-archive-empty',
+                )
+                ?.click()
+            }}
+          />
+          <button
+            type="button"
+            className="space-scene-hotspot is-weekly-letter"
+            aria-label="打开一周情书"
+            onClick={onOpenWeekly}
+          />
+        </div>
 
-            <section className="ai-space-v2-section space-archive-section space-letter-section">
-              <div className="ai-space-v2-head">
-                <span className="ai-space-v2-title">一周情书</span>
-                <span className="ai-space-v2-en">WEEKLY LETTER</span>
-                <button type="button" className="ai-space-v2-all" onClick={onOpenWeekly}>
-                  查看全部 ›
-                </button>
-              </div>
-
-              <button type="button" className="space-letter-envelope" onClick={onOpenWeekly}>
-                <span className="space-letter-envelope-back" aria-hidden="true" />
-                <span className="space-letter-envelope-paper">
-                  {weekly ? (
-                    <>
-                      <span className="space-letter-date">{weekly.weekLabel}</span>
-                      <span className="space-letter-preview">{weeklyPreview(weekly)}</span>
-                    </>
-                  ) : (
-                    <span className="space-letter-empty">第一封信，会在这一周结束后写给你。</span>
-                  )}
-                </span>
-                <span className="space-letter-envelope-flap" aria-hidden="true" />
-                <span className="space-letter-wax" aria-hidden="true">♡</span>
-              </button>
-            </section>
-
-            {renderPhotoWall()}
-            <EventArchive sessionId={sid} />
-          </div>
+        <div className="space-scene-service-host" aria-hidden="true">
+          {renderPhotoWall()}
+          <EventArchive sessionId={sid} />
         </div>
       </>
     )
