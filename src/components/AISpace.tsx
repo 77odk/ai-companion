@@ -257,24 +257,55 @@ export default function AISpace({ onOpenWeekly }: Props) {
                 ?.click()
             }}
           />
+
           <button
             type="button"
-            className="space-scene-hotspot is-moments"
-            aria-label="打开一起经历过"
-            onClick={() => {
-              document
-                .querySelector<HTMLButtonElement>(
-                  '.ai-space-page .event-archive-preview .ai-space-v2-all, .ai-space-page .event-archive-preview-item, .ai-space-page .event-archive-empty',
-                )
-                ?.click()
-            }}
-          />
+            className="space-scene-object is-star-jar"
+            aria-label="抽一颗记忆星星"
+            onClick={onOpenMemory}
+          >
+            <svg className="space-object-feedback" viewBox="0 0 100 100" aria-hidden="true">
+              <path d="M25 18h50l-4 10v55c0 7-7 12-16 12H45c-9 0-16-5-16-12V28z" />
+              <path d="M31 27h38" />
+            </svg>
+          </button>
+
           <button
             type="button"
-            className="space-scene-hotspot is-weekly-letter"
-            aria-label="打开一周情书"
+            className="space-scene-object is-thought-book"
+            aria-label="打开思绪"
+            onClick={onOpenThoughts}
+          >
+            <svg className="space-object-feedback" viewBox="0 0 100 100" aria-hidden="true">
+              <path d="M7 27c20-8 35-7 43 1v57c-11-9-27-10-43-4z" />
+              <path d="M93 27c-20-8-35-7-43 1v57c11-9 27-10 43-4z" />
+              <path d="M50 28v57" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            className="space-scene-object is-listening-player"
+            aria-label="打开一起听歌"
+            onClick={onOpenListening}
+          >
+            <svg className="space-object-feedback" viewBox="0 0 100 100" aria-hidden="true">
+              <rect x="7" y="12" width="86" height="67" rx="8" />
+              <path d="M35 91c10-9 18-9 28 0M71 82c8 1 13 5 16 12" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            className="space-scene-object is-weekly-drawer"
+            aria-label="拉开一周情书抽屉"
             onClick={onOpenWeekly}
-          />
+          >
+            <svg className="space-object-feedback" viewBox="0 0 100 100" aria-hidden="true">
+              <path d="M4 18h92v58H4z" />
+              <path d="M39 29h22" />
+            </svg>
+          </button>
         </div>
 
         <div className="space-scene-service-host">
