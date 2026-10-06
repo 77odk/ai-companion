@@ -1351,7 +1351,7 @@ export default function App() {
         <>
           {/* UI2-03 Visual Closure V2 / BUG-B：Memory 页删除旧全局品牌题头「忆文 / 忆过往，成文思」——
               不渲染、不占位（Home 本就无 header；memory 与 notifications 独立全屏页不再渲染，其余视图品牌展示不受影响） */}
-          {view === 'home' || view === 'memory' || view === 'notifications' ? null : (
+          {view === 'home' || view === 'aispace' || view === 'memory' || view === 'notifications' ? null : (
             <header className="app-header">
               {view === 'chat' && loggedIn && (
                 <button
