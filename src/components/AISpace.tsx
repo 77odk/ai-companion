@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
 import EventArchive from './EventArchive'
 import { getActiveSessionId } from '../lib/sessionStore'
-import { getWeeklyReviews, type WeeklyReview } from '../lib/weeklyReview'
 import {
   loadLocalPhotos,
   saveLocalPhotoMetadata,
@@ -22,13 +21,6 @@ import { getToken } from '../lib/auth'
 interface Props {
   /** 一周情书由 App 顶层 view 承载，不在 Space 内嵌子页。 */
   onOpenWeekly: () => void
-}
-
-/** 首页信封只露一小段正文，不把一周情书直接摊开。 */
-function weeklyPreview(review: WeeklyReview): string {
-  const clean = review.content.replace(/\s+/g, ' ').trim()
-  if (!clean) return review.title
-  return clean.length > 48 ? `${clean.slice(0, 48)}…` : clean
 }
 
 function normalizePhotoCreatedAt(value: unknown): number {
@@ -62,11 +54,6 @@ const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，
 export default function AISpace({ onOpenWeekly }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
-
-  const weekly = useMemo<WeeklyReview | null>(
-    () => getWeeklyReviews(sid)[0] ?? null,
-    [sid],
-  )
 
   /* ---- 照片墙：上传/数据源沿用旧实现，展示交给稳定长墙组件。 ---- */
   const [photos, setPhotos] = useState<PhotoMeta[]>(() => loadLocalPhotos(sid))
@@ -290,7 +277,7 @@ export default function AISpace({ onOpenWeekly }: Props) {
           />
         </div>
 
-        <div className="space-scene-service-host" aria-hidden="true">
+        <div className="space-scene-service-host">
           {renderPhotoWall()}
           <EventArchive sessionId={sid} />
         </div>
