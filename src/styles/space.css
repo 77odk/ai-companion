@@ -610,7 +610,58 @@
   animation: space-scene-breathe 14s ease-in-out infinite alternate;
 }
 
-.space-scene-legacy[hidden] {
+.space-scene-hotspots {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.space-scene-hotspot {
+  position: absolute;
+  display: block;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.space-scene-hotspot.is-photo-wall {
+  left: 31%;
+  top: 9%;
+  width: 65%;
+  height: 43%;
+}
+
+.space-scene-hotspot.is-moments {
+  left: 23%;
+  top: 59%;
+  width: 74%;
+  height: 22%;
+}
+
+.space-scene-hotspot.is-weekly-letter {
+  left: 49%;
+  top: 84%;
+  width: 50%;
+  height: 16%;
+}
+
+.space-scene-hotspot:focus-visible {
+  outline: 2px solid rgba(255, 250, 239, .92);
+  outline-offset: -4px;
+  border-radius: 12px;
+}
+
+.space-scene-service-host {
+  display: contents;
+}
+
+.space-scene-service-host > .photo-archive-preview-section,
+.space-scene-service-host > .event-archive-preview {
   display: none !important;
 }
 
