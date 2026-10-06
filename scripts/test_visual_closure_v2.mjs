@@ -29,8 +29,8 @@ check('Memory.tsx 不含「忆过往」', !memoryTsx.includes('忆过往'))
 check('Memory.tsx 不含「成文思」', !memoryTsx.includes('成文思'))
 check(
   'App.tsx memory/notifications 视图不渲染 app-header（独立全屏页不继承全局品牌头）',
-  /view === 'home' \|\| view === 'memory' \|\| view === 'notifications' \? null :/.test(appTsx),
-  appTsx.includes("view === 'home' || view === 'memory' || view === 'notifications'") ? 'ok' : 'missing',
+  /view === 'home' \|\| view === 'aispace' \|\| view === 'memory' \|\| view === 'notifications' \? null :/.test(appTsx),
+  appTsx.includes("view === 'home' || view === 'aispace' || view === 'memory' || view === 'notifications'") ? 'ok' : 'missing',
 )
 
 console.log('\n[BUG-C] Refresh 与「记忆书」同 head 行内、独立 hit area')
