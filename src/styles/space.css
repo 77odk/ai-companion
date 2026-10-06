@@ -636,18 +636,117 @@
   height: 43%;
 }
 
-.space-scene-hotspot.is-moments {
-  left: 23%;
-  top: 59%;
-  width: 74%;
-  height: 22%;
+.space-scene-object {
+  position: absolute;
+  z-index: 2;
+  display: block;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: manipulation;
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition: transform var(--el-motion-settle, 180ms) var(--el-ease-settle, cubic-bezier(.16, 1, .3, 1));
 }
 
-.space-scene-hotspot.is-weekly-letter {
-  left: 49%;
-  top: 84%;
-  width: 50%;
-  height: 16%;
+.space-scene-object::after {
+  content: '';
+  position: absolute;
+  inset: 4%;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(118deg, transparent 18%, rgba(255, 248, 229, .28) 48%, transparent 76%);
+  transition: opacity var(--el-motion-fast, 120ms) ease;
+}
+
+.space-object-feedback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: rgba(255, 246, 225, 0);
+  stroke: rgba(255, 250, 236, 0);
+  stroke-width: 1.35;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+  transition:
+    fill var(--el-motion-fast, 120ms) ease,
+    stroke var(--el-motion-fast, 120ms) ease,
+    filter var(--el-motion-fast, 120ms) ease;
+}
+
+.space-scene-object.is-star-jar {
+  left: 17%;
+  top: 46.5%;
+  width: 33%;
+  height: 20.5%;
+  border-radius: 42% 42% 34% 34%;
+}
+
+.space-scene-object.is-thought-book {
+  left: 22%;
+  top: 64.5%;
+  width: 75%;
+  height: 18.5%;
+  clip-path: polygon(1% 14%, 49% 2%, 99% 20%, 96% 88%, 52% 98%, 2% 83%);
+}
+
+.space-scene-object.is-listening-player {
+  left: 54%;
+  top: 52%;
+  width: 34%;
+  height: 14%;
+  border-radius: 12%;
+}
+
+.space-scene-object.is-weekly-drawer {
+  left: 48.5%;
+  top: 84.1%;
+  width: 50.5%;
+  height: 12.5%;
+  border-radius: 3%;
+}
+
+.space-scene-object:focus-visible {
+  outline: 2px solid rgba(255, 250, 239, .94);
+  outline-offset: -3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .space-scene-object:hover {
+    transform: translateY(-1px) scale(1.004);
+  }
+
+  .space-scene-object:hover::after {
+    opacity: .18;
+  }
+
+  .space-scene-object:hover .space-object-feedback {
+    fill: rgba(255, 244, 219, .025);
+    stroke: rgba(255, 249, 233, .16);
+    filter: drop-shadow(0 5px 7px rgba(92, 50, 23, .08));
+  }
+}
+
+.space-scene-object:active {
+  transform: translateY(1.5px) scale(.992);
+  transition-duration: var(--el-motion-fast, 120ms);
+}
+
+.space-scene-object:active::after {
+  opacity: .24;
+}
+
+.space-scene-object:active .space-object-feedback {
+  fill: rgba(255, 239, 206, .04);
+  stroke: rgba(255, 248, 229, .2);
+  filter: drop-shadow(0 2px 3px rgba(74, 39, 19, .1));
 }
 
 .space-scene-hotspot:focus-visible {
@@ -682,5 +781,21 @@
     animation: none;
     opacity: .12;
     transform: none;
+  }
+
+  .space-scene-object,
+  .space-object-feedback,
+  .space-scene-object::after {
+    transition: none;
+  }
+
+  .space-scene-object:hover,
+  .space-scene-object:focus-visible,
+  .space-scene-object:active {
+    transform: none;
+  }
+
+  .space-scene-object:active::after {
+    opacity: .12;
   }
 }
