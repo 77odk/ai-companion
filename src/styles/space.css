@@ -557,3 +557,79 @@
     margin-inline: auto;
   }
 }
+
+
+/* ---- Direction v6 · S1 Space scene composition lock -------------------
+   The confirmed Space artwork is the visual coordinate system. Responsive
+   behavior may crop/scale this fixed view, never rearrange the room. */
+.ai-space-page {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: #d79b69;
+}
+
+.space-scene-shell {
+  position: absolute;
+  inset: 0;
+  width: min(100%, calc(100dvh * 0.5628));
+  height: 100%;
+  margin-inline: auto;
+  overflow: hidden;
+  isolation: isolate;
+  background: #d79b69;
+}
+
+.space-scene-backplate {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: 50% 50%;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.space-scene-ambient {
+  position: absolute;
+  inset: -6%;
+  z-index: 1;
+  pointer-events: none;
+  opacity: .13;
+  background:
+    radial-gradient(circle at 74% 28%, rgba(255, 237, 191, .34), transparent 31%),
+    linear-gradient(118deg, transparent 33%, rgba(255, 229, 170, .17) 50%, transparent 68%);
+  mix-blend-mode: screen;
+  transform: translate3d(-.45%, 0, 0);
+  animation: space-scene-breathe 14s ease-in-out infinite alternate;
+}
+
+.space-scene-legacy[hidden] {
+  display: none !important;
+}
+
+@keyframes space-scene-breathe {
+  from {
+    opacity: .10;
+    transform: translate3d(-.45%, 0, 0);
+  }
+
+  to {
+    opacity: .16;
+    transform: translate3d(.45%, -.18%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-scene-ambient {
+    animation: none;
+    opacity: .12;
+    transform: none;
+  }
+}
