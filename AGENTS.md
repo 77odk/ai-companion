@@ -1,7 +1,8 @@
 # 忆文 Eluvin · AI 编码助手红线与提交规范
 
-版本 v1（公开安全版），文档建立时的参考基线 main = ae44308b（2026-09-12）
+版本 v2（公开安全版，2026-10-06 按《方向定论清单 v6》调整保护分级）
 适用范围：豆包 / Codex / Claude / 任何外部或内部 AI 编码助手在本仓库工作时的强制规范。
+★ 与 v1 的差别：不再把「空间页 / 记忆 / 聊天 / 同步」整类文件当成绝对禁区，改成 A 级（任何情况不许动）与 B 级（可按当轮已拍板清单改，一次一批、先说范围）。原先收紧的条款一条没删，只是把「按批次授权可动」的部分单独列出来。
 
 ---
 
@@ -19,24 +20,30 @@
 
 ---
 
-## 一、绝对不能动的文件 / 模块
+## 一、文件保护分级
 
-- src/lib/memory.ts（记忆读写与数据结构）
-- src/lib/sessionStore.ts（会话数据层）
-- src/lib/sessionApi.ts（后端接口封装，401 会触发 logout）
-- src/lib/sync.ts（同步协议与 account/token 存储）
-- src/lib/migrateLocal.ts（老数据迁移）
-- src/lib/memoryWall.ts（记忆墙只读映射）
-- src/lib/weeklyReview.ts（周记）
-- src/lib/eventStore.ts 与 src/lib/eventDetector.ts（Event 数据层与识别）
+### A 级：任何情况下都不许动
+
+- backend/ 整个目录（后端代码不在本仓库），以及任何服务部署与运维配置
+- 任何 .env / key / token / 凭据文件
+- src/components/ConsentGate.tsx、src/components/LoginGate.tsx（同意门与登录墙）
+- src/lib/consentState.ts（同意版本记录）、src/lib/auth.ts、src/lib/token.ts（登录态）
+- 删除、裁剪、清空用户聊天记录的任何动作（含上传 / 合并 / 去重链路）
+- public/ 下【已有的】图片资产：不许重新生成、裁切、压缩、改色、改尺寸，只许原样新增文件
+- gh-pages 分支（历史遗留，已弃用）
+- npm 依赖清单（不许新增或升级依赖）
+
+### B 级：可按当轮已拍板清单改，一次一批、先说范围
+
+- src/lib/memory.ts（记忆读写与数据结构）：结构与隔离规则不变，注入 / 召回 / 展示相关可按清单改
+- src/lib/memoryWall.ts、src/lib/sessionStore.ts（仅新增字段与展示；上传 / 合并 / 去重链路仍按 A 级禁改）
+- src/lib/sync.ts（只在现有 Cloud State kind 体系内注册新 kind，不许开第二套同步接口）
+- src/lib/sessionApi.ts（后端接口封装；401 触发 logout 的行为不许改）
+- src/lib/migrateLocal.ts（老数据迁移：只许加兼容分支，不许改既有迁移语义）
+- src/lib/weeklyReview.ts、src/lib/eventStore.ts、src/lib/eventDetector.ts（Event 与周记）
 - src/components/AISpace.tsx（空间页）
-- src/components/Chat.tsx（聊天页，只有明确列出的挂载点允许改，见第四节）
-- src/components/ConsentGate.tsx、src/components/LoginGate.tsx（合规与登录墙）
-- src/lib/consentState.ts、src/lib/auth.ts、src/lib/token.ts（登录态与同意版本）
-- Event 相关文件整体
-- public/ 下已有的图片资产（不许重新生成、裁切、压缩、改色、改尺寸，只许原样新增）
-- backend/ 整个目录（后端代码不在本仓库）
-- 任何 .env / key / token / 凭据文件、任何服务部署与运维配置
+- src/components/Chat.tsx（聊天页，允许的挂载点见第四节）
+- public/ 下【新增】的场景 / 素材文件（只许本地打包，不许网络图片）
 
 ---
 
@@ -72,12 +79,14 @@
 
 ## 四、各模块保护边界
 
+> 本节的「允许动」都以「当轮任务书 + 已拍板清单」为前提；清单没写的一律不动，拿不准先问。
+
 - Chat：允许动「Event 候选识别挂载」「记忆注入旁挂载」，以及「身份边界护栏」的限定薄挂载：身份模式可决定 Space 是否作为 SELF 事实注入、Busy 是否允许进入/恢复/Return，以及 finalization/retry 最终落库前的 detector + 一次 repair retry + 安全 fallback。**真人 Busy 只属于 immersive**；natural / ai 不得进入、恢复或补发 Busy Return，模型若输出“等我/稍后回来”只允许走身份 repair。用户主动 Stop 时不得为修复额外发模型请求，若 partial 已越过身份边界则不落该 assistant partial。上传/合并/去重链路不许改，分条与显示顺序不许改。
-- Memory：展示层可改；注入逻辑、隔离规则、生成逻辑不许改。
+- Memory：展示层、召回与注入（按当轮清单：手动存记忆、回滚 / 审计留痕、关键词激活、承诺建档）可改；**隔离规则不许动**——「关于我」是全局 explicit、聊天中说的只属当前角色、绝不互相注入。
 - Event：独立对象、按 sessionId 隔离、软删、走全量同步——这四点不变；识别必须「共同主体 + 已发生动作」双命中，未来时间硬拒；每 session 每本地日最多 3 次 LLM 精判；不许从 Memory 聚类生成，不许从旧数据回填。
 - Session / Role：数据按 sessionId 隔离；「关于我」是全局 explicit（所有角色共享），聊天中记下的内容只属于当前角色，绝不互相注入；切换角色只覆写 persona，聊天记录与记忆绝不动。
 - Anniversary：按会话隔离，默认「认识 TA 的日子」，可增删改、可设首页展示；不许改成本地全局单例。
-- 展示层（Home / TaOrb / HomeScene）：可改，但场景图只按 `/home-scenes/{morning|day|night}.webp` 取，不许改路径与文件名，缺图用 gradient fallback，不许引入网络图片或生成占位图。
+- 展示层（Home / TaOrb / HomeScene / Space 场景）：可改。首页场景图仍只按 `/home-scenes/{morning|day|night}.webp` 取，不许改路径与文件名，缺图用 gradient fallback。新增场景素材（如空间页书桌）走新目录、只许本地打包：不许网络图片、不许生成占位图充数、单张建议 ≤300KB、优先 webp，且不许覆盖 A 级里的既有文件。
 
 ---
 
@@ -123,7 +132,7 @@
 
 ## 九、推 main 前必须跑的测试
 
-1. `npm test`，必须全绿（当前基线：202 通过、0 失败）。
+1. `npm test`，必须全绿（当前基线：248 通过、0 失败）。★ 仓库已挂 GitHub Actions CI（push 自动跑 test / lint / build）；main 有 required status check「verify」，因此所有改动一律走「分支 + PR + 等 CI 绿 + 合并」，不许直推 main。
 2. 按改动模块额外跑对应脚本：
    - 改 Event：`node scripts/test_event_detector.mjs`、`test_event_store.mjs`、`test_event_e3.mjs`
    - 改记忆：`node scripts/test_memory_recall.mjs`、`test_memory_recency.mjs`、`test_memory_saved.mjs`、`test_memory_summary.mjs`、`test_memorywall.mjs`
@@ -201,8 +210,8 @@
 
 ## 十五、其它项目级红线
 
-- 产品主线是单角色，多角色是进阶能力（入口在「我的 → 角色管理」），不要再往主界面加多角色入口。
-- 能力长在人格上，不做独立的工具/工作台干活入口。
+- 产品主线是单角色，多角色是进阶能力（入口在「我的 → 角色管理」），不要再往主界面加多角色入口；多角色的最终形态是「同一个 TA 的多条故事线」，不是多个 TA。
+- 能力长在人格上，不做「干活入口」式的独立工具页。工作台已拍板：它是「TA 能接触什么能力的地方」（能力清单 + 接入口 + 每项的授权状态），排在最末，动手前仍需当轮任务书。
 - 聊天体验是命根子，任何改动不能牺牲对话连贯与记忆准确。
 - 记不住宁可空着，不许编造共同经历、不许造假数据填满界面。
 - 缺资源宁可降级（gradient fallback），绝不引入网络图片。
