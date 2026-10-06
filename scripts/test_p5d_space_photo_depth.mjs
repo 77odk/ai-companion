@@ -65,7 +65,9 @@ expectPressAfterLift(photos, '.photo-archive-empty:active', '.photo-archive-empt
 assert.ok(photos.includes('translateX(var(--photo-shift)) translateY(1px) rotate(var(--photo-rotate)) scale(.985)'))
 
 console.log('[P5-D] reduced motion and coarse pointer do not depend on desktop hover')
-const spaceReducedStart = space.lastIndexOf('@media (prefers-reduced-motion: reduce)')
+const p5dSpaceStart = space.indexOf('/* ---- P5-D')
+assert.ok(p5dSpaceStart >= 0)
+const spaceReducedStart = space.indexOf('@media (prefers-reduced-motion: reduce)', p5dSpaceStart)
 assert.ok(spaceReducedStart >= 0)
 const spaceReduced = space.slice(spaceReducedStart, space.indexOf('/* Responsive Space', spaceReducedStart))
 assert.ok(spaceReduced.includes('transition: none;'))
