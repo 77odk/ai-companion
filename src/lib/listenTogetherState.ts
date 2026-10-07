@@ -224,12 +224,13 @@ export async function toggleListenTogether(sessionId: string): Promise<void> {
 export async function stepListenTogether(
   sessionId: string,
   direction: 1 | -1,
-  autoplay = true,
+  autoplay?: boolean,
 ): Promise<void> {
   const sid = sessionKey(sessionId)
   const state = sid ? states.get(sid) : null
   if (!sid || !state || state.tracks.length === 0) return
-  await loadIndex(sid, nextIndex(state, direction), autoplay)
+  const shouldPlay = autoplay ?? Boolean(state.player && !state.player.paused && !state.player.ended)
+  await loadIndex(sid, nextIndex(state, direction), shouldPlay)
 }
 
 export function seekListenTogether(sessionId: string, seconds: number): void {
