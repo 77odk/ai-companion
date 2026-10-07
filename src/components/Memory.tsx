@@ -617,12 +617,6 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
             lastMentionedAt: entry.before.lastMentionedAt,
           }
           const saved = saveMemoriesCache(sessionId, [restored, ...cache.filter((item) => item.id !== restored.id)])
-          if (!saved) {
-            setMemories((current) => [
-              { item: restored, kind: 'session' as const },
-              ...current.filter((memory) => !(memory.kind === 'session' && memory.item.id === restored.id)),
-            ])
-          }
           appendMemoryAudit({
             sessionId,
             memoryKind: 'session',
@@ -632,6 +626,15 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
             source: 'rollback',
             parentAuditId: entry.id,
           })
+          if (!saved) {
+            setMemories((current) => [
+              { item: restored, kind: 'session' as const },
+              ...current.filter((memory) => !(memory.kind === 'session' && memory.item.id === restored.id)),
+            ])
+            refreshAudit()
+            setRollbackNotice('已经恢复到云端；本机缓存暂时没写进去，刷新后会重新拉回。')
+            return
+          }
         }
       } else {
         const current = getMemoriesCache(sessionId).find((item) => item.id === entry.memoryId)
