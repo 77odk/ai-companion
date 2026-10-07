@@ -239,7 +239,6 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
         item.source ?? '',
         item.topic ?? '',
         ...deriveMemoryTriggerWords(item.text, item.topic),
-        ...(Array.isArray(item.triggerWords) ? item.triggerWords : []),
       ].join(' ').toLowerCase()
       return haystack.includes(q)
     })
@@ -612,8 +611,6 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
             topic: entry.before.topic,
             explicit: entry.before.explicit,
             pinned: entry.before.pinned,
-            triggerWords: entry.before.triggerWords,
-            moodSnapshot: entry.before.moodSnapshot,
             lastMentionedAt: entry.before.lastMentionedAt,
           }
           const saved = saveMemoriesCache(sessionId, [restored, ...cache.filter((item) => item.id !== restored.id)])
@@ -1014,10 +1011,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
                   <div className="memory-trigger-row" aria-label="记忆触发词">
                     <span>触发词</span>
                     <div>
-                      {(selected.item.triggerWords?.length
-                        ? selected.item.triggerWords
-                        : deriveMemoryTriggerWords(selected.item.text, selected.item.topic)
-                      ).slice(0, 8).map((word) => (
+                      {deriveMemoryTriggerWords(selected.item.text, selected.item.topic).slice(0, 8).map((word) => (
                         <span key={word} className="memory-trigger-chip">{word}</span>
                       ))}
                     </div>
