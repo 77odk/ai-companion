@@ -31,8 +31,6 @@ import {
   isActionNarrationEnabled,
   saveActionNarrationEnabled,
   getAllLocalContextUsageTurns,
-  getInitiativePreference,
-  saveInitiativePreference,
   isSystemNotificationEnabled,
   saveSystemNotificationEnabled,
   type AIGender,
@@ -79,7 +77,7 @@ import {
 type TestState = 'idle' | 'testing' | 'success' | 'error'
 
 /** 设置页子页：使用指南已抽成 App 独立 view（guide），不再嵌在这里 */
-export type SettingsPage = 'main' | 'ai' | 'provider' | 'usage' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary' | 'profile' | 'privacy' | 'reply' | 'initiative'
+export type SettingsPage = 'main' | 'ai' | 'provider' | 'usage' | 'about' | 'account' | 'work' | 'appearance' | 'anniversary' | 'profile' | 'privacy' | 'reply'
 
 interface Props {
   onGoWelcome?: () => void
@@ -164,9 +162,6 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
   if (page === 'reply') {
     return <ReplyLengthDetail onBack={() => backFrom('reply')} />
   }
-  if (page === 'initiative') {
-    return <InitiativeDetail onBack={() => backFrom('initiative')} />
-  }
   if (page === 'about') {
     return <AboutDetail onBack={() => backFrom('about')} />
   }
@@ -199,7 +194,6 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenAppearance={() => openSubpage('appearance')}
       onOpenAnniversary={() => openSubpage('anniversary')}
       onOpenReply={() => openSubpage('reply')}
-      onOpenInitiative={() => openSubpage('initiative')}
       onOpenFeedback={() => onGoFeedback?.()}
       onGoRoles={() => onGoRoles?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
@@ -248,7 +242,6 @@ function MainCenter({
   onOpenAppearance,
   onOpenAnniversary,
   onOpenReply,
-  onOpenInitiative,
   onOpenFeedback,
   onGoRoles,
   onGoAboutMe,
@@ -265,7 +258,6 @@ function MainCenter({
   onOpenAppearance: () => void
   onOpenAnniversary: () => void
   onOpenReply: () => void
-  onOpenInitiative: () => void
   onOpenFeedback: () => void
   onGoRoles?: () => void
   onGoAboutMe?: () => void
@@ -280,8 +272,6 @@ function MainCenter({
   const accountLabel = getAccount()?.account ?? null
   const loggedIn = isLoggedIn()
   const replyLength = getGlobalReplyLength(accountLabel ?? '')
-  const activeSessionId = getActiveSessionId()
-  const initiative = getInitiativePreference(accountLabel ?? '', activeSessionId ?? '')
   const [systemNotifications, setSystemNotifications] = useState(() => isSystemNotificationEnabled())
   const [systemNotificationHint, setSystemNotificationHint] = useState('')
 
@@ -367,13 +357,6 @@ function MainCenter({
           label="聊天设置"
           status={replyLengthLabel(replyLength)}
           onClick={onOpenReply}
-        />
-        <EntryRow
-          icon={<NotificationIcon />}
-          label="主动消息"
-          status={initiative.enabled ? '已开启' : '已关闭'}
-          onClick={onOpenInitiative}
-          disabled={!loggedIn || !activeSessionId}
         />
         {onGoRoles && <EntryRow icon={<RolesIcon />} label="角色管理" status="进阶" onClick={onGoRoles} />}
       </ProfileGroup>
@@ -657,105 +640,6 @@ function ReplyLengthDetail({ onBack }: { onBack: () => void }) {
       </section>
 
       {error ? <p className="reply-length-error" role="status">{error}</p> : null}
-    </div>
-  )
-}
-
-function InitiativeDetail({ onBack }: { onBack: () => void }) {
-  const accountId = getAccount()?.account ?? ''
-  const sessionId = getActiveSessionId() ?? ''
-  const [preference, setPreference] = useState(() => getInitiativePreference(accountId, sessionId))
-  const [notice, setNotice] = useState('')
-
-  const persist = (patch: Partial<typeof preference>) => {
-    if (!accountId || !sessionId) return
-    const next = { ...preference, ...patch }
-    if (!saveInitiativePreference(accountId, sessionId, next)) {
-      setNotice('这次没有保存上，稍后再试。')
-      return
-    }
-    setPreference(getInitiativePreference(accountId, sessionId))
-    setNotice('已保存')
-    window.setTimeout(() => setNotice(''), 1200)
-  }
-
-  const hourOptions = Array.from({ length: 24 }, (_, hour) => ({
-    value: hour,
-    label: `${String(hour).padStart(2, '0')}:00`,
-  }))
-
-  return (
-    <div className="page settings-page initiative-settings-page">
-      <DetailHeader title="主动消息" onBack={onBack} />
-
-      <div className="settings-card initiative-settings-card">
-        <div className="initiative-setting-row">
-          <div>
-            <strong>允许 TA 主动来找你</strong>
-            <p>只有有真实理由时才会发，不会为了凑频率硬聊。</p>
-          </div>
-          <button
-            type="button"
-            className={`settings-switch${preference.enabled ? ' on' : ''}`}
-            role="switch"
-            aria-checked={preference.enabled}
-            aria-label="允许 TA 主动来找你"
-            onClick={() => persist({ enabled: !preference.enabled })}
-          >
-            <span className="settings-switch-thumb" />
-          </button>
-        </div>
-
-        <div className="field initiative-field">
-          <label htmlFor="initiative-frequency">频率</label>
-          <select
-            id="initiative-frequency"
-            className="input"
-            value={Math.min(3, preference.dailyLimit)}
-            onChange={(event) => persist({ dailyLimit: Number(event.target.value) })}
-            disabled={!preference.enabled}
-          >
-            <option value={1}>少一点 · 每天最多 1 次</option>
-            <option value={2}>适中 · 每天最多 2 次</option>
-            <option value={3}>多一点 · 每天最多 3 次</option>
-          </select>
-          <p className="hint">如果你没有回应，下一次主动消息会自动隔得更久。</p>
-        </div>
-
-        <div className="initiative-quiet">
-          <div>
-            <strong>静默时段</strong>
-            <p>这段时间 TA 不会主动发消息。</p>
-          </div>
-          <div className="initiative-quiet-inputs">
-            <label>
-              <span>开始</span>
-              <select
-                className="input"
-                value={preference.quietStartHour}
-                onChange={(event) => persist({ quietStartHour: Number(event.target.value) })}
-                disabled={!preference.enabled}
-              >
-                {hourOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </label>
-            <span aria-hidden="true">—</span>
-            <label>
-              <span>结束</span>
-              <select
-                className="input"
-                value={preference.quietEndHour}
-                onChange={(event) => persist({ quietEndHour: Number(event.target.value) })}
-                disabled={!preference.enabled}
-              >
-                {hourOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {notice ? <p className="settings-inline-notice" role="status">{notice}</p> : null}
     </div>
   )
 }
