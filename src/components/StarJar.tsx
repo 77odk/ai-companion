@@ -4,6 +4,7 @@ import { loadMemory, MEMORY_UPDATED_EVENT, type MemoryItem } from '../lib/memory
 import {
   backfillMemoryPapers,
   canGenerateMemoryPaper,
+  getMemoryPaper,
   getMemoryPaperForItem,
   type MemoryPaperKind,
   type MemoryPaperTarget,
@@ -74,9 +75,15 @@ export default function StarJar({ onBack }: Props) {
   // 视觉上维持 30–45 颗的丰满度；真实记忆仍是一条对应一个编号星星。
   // 记忆少于 30 时其余只是无语义填充光点，绝不参与抽取。
   const visibleStarCount = Math.max(30, Math.min(45, numberedMemories.length))
+  const selectedRecord = selected && sessionId
+    ? getMemoryPaper(sessionId, selected.kind, selected.item.id)
+    : null
   const selectedPaper = selected && sessionId
     ? getMemoryPaperForItem(sessionId, selected.kind, selected.item)
     : null
+  const selectedMood = selectedRecord?.sourceText.trim() === selected?.item.text.trim()
+    ? selectedRecord.mood
+    : undefined
 
   useEffect(() => {
     const refresh = () => setVersion((value) => value + 1)
@@ -228,13 +235,17 @@ export default function StarJar({ onBack }: Props) {
               <p className="star-memory-text">
                 {selectedPaper?.sentence ?? selected.item.text}
               </p>
-              {selectedPaper?.mood ? (
+              {selectedMood ? (
                 <p className="star-memory-mood">
-                  那时我的心情 · <strong>{selectedPaper.mood.mood}</strong>
+                  那时我的心情 · <strong>{selectedMood.mood}</strong>
                 </p>
               ) : null}
               {!selectedPaper ? (
-                <p className="star-memory-paper-missing">这是一条旧记忆，还没有补写成纸条；没有当时心情的数据。</p>
+                <p className="star-memory-paper-missing">
+                  {selectedMood
+                    ? '这条记忆的当时心情已经保存，纸条正文还没有生成成功，可以稍后补写。'
+                    : '这是一条旧记忆，还没有补写成纸条；没有当时心情的数据。'}
+                </p>
               ) : null}
 
               {phase === 'paper' && (
