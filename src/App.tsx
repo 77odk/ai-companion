@@ -52,7 +52,7 @@ import {
   resolveActiveSession,
   type RolePickMode,
 } from './lib/sessionFlow'
-import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
+import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE } from './lib/dataChange'
 import { forceRefresh, refreshToLatest } from './lib/forceRefresh'
 import { checkDeployedBuild, getCurrentBuildVersion, subscribeDeployedBuild } from './lib/appVersion'
 import Home from './components/Home'
@@ -70,7 +70,7 @@ import { commitInitiativeMessage } from './lib/initiativeCommit'
 import { chatCompletion, type ModelUsage } from './lib/api'
 import { estimateToken } from './lib/token'
 import { resolveIdentityMode } from './lib/companionPolicy'
-import { captureLatestTaCommitment, collectDueTaCommitments, markCommitmentReminded, type TaCommitment } from './lib/commitmentStore'
+import { captureLatestTaCommitment, collectDueTaCommitments, markCommitmentReminded, nextTaCommitmentCheckAt, type TaCommitment } from './lib/commitmentStore'
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
 const RolePicker = lazy(() => import('./components/RolePicker'))
@@ -464,21 +464,45 @@ export default function App() {
       return
     }
 
+    let dueTimer: number | null = null
+    const clearDueTimer = () => {
+      if (dueTimer !== null) window.clearTimeout(dueTimer)
+      dueTimer = null
+    }
+    const armDueTimer = () => {
+      clearDueTimer()
+      const nextAt = nextTaCommitmentCheckAt(Date.now())
+      if (nextAt == null) return
+      const delay = Math.min(Math.max(0, nextAt - Date.now()), 2_147_000_000)
+      dueTimer = window.setTimeout(() => {
+        checkDueCommitment()
+        armDueTimer()
+      }, delay)
+    }
+
     const onReplyCommitted = (event: Event) => {
       const sid = String((event as CustomEvent<{ sid?: string }>).detail?.sid ?? '')
       if (sid) captureLatestTaCommitment(sid)
       checkDueCommitment()
+      armDueTimer()
     }
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible') checkDueCommitment()
+      armDueTimer()
     }
 
+    const onDataChange = () => armDueTimer()
+
     window.addEventListener('yiwem:ai-reply-committed', onReplyCommitted)
+    window.addEventListener(ELUVIN_DATA_CHANGE, onDataChange)
     document.addEventListener('visibilitychange', onVisibility)
     checkDueCommitment()
+    armDueTimer()
     return () => {
+      clearDueTimer()
       window.removeEventListener('yiwem:ai-reply-committed', onReplyCommitted)
+      window.removeEventListener(ELUVIN_DATA_CHANGE, onDataChange)
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [loggedIn, checkDueCommitment])
