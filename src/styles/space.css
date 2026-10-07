@@ -2182,3 +2182,129 @@ html.eluvin-page-hidden .thought-book-page * {
     transform: translate3d(0, 48%, 0);
   }
 }
+
+
+/* ---- S7 · generated object assets and carry --------------------------- */
+.space-object-asset {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.space-object-asset.is-photo-board {
+  inset: 1% 1% 2%;
+  width: 98%;
+  height: 97%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 7px rgba(68, 40, 27, .13));
+}
+
+.space-object-asset.is-jar {
+  left: 10%;
+  top: 1%;
+  width: 80%;
+  height: 98%;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 7px rgba(70, 42, 29, .16));
+}
+
+/* Keep the generated physical asset visible; live data layers only occupy the
+   material's usable surface instead of repainting a different object. */
+.space-scene-hotspot.is-photo-wall .space-live-photo-board {
+  z-index: 2;
+  inset: 10% 10% 10%;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.space-scene-hotspot.is-star-jar .space-live-jar {
+  z-index: 2;
+  inset: 11% 18% 8%;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.space-scene-hotspot.is-star-jar .space-live-jar::before {
+  display: none;
+}
+
+.space-scene-hotspot.is-star-jar .space-live-jar-glint {
+  left: 13%;
+  top: 10%;
+  height: 61%;
+}
+
+.space-scene-hotspot.is-photo-wall,
+.space-scene-hotspot.is-star-jar,
+.space-scene-hotspot.is-thought-book,
+.space-scene-hotspot.is-player {
+  perspective: 700px;
+}
+
+.space-scene-hotspot.is-lifting {
+  z-index: 8;
+  pointer-events: none;
+}
+
+.space-scene-hotspot.is-lifting .space-object-asset,
+.space-scene-hotspot.is-lifting .space-live-photo-board,
+.space-scene-hotspot.is-lifting .space-live-jar,
+.space-scene-hotspot.is-lifting .space-live-book,
+.space-scene-hotspot.is-lifting .space-live-player,
+.space-scene-hotspot.is-lifting .space-live-earphone-wire {
+  animation: space-object-lift .31s cubic-bezier(.2,.78,.2,1) both;
+}
+
+@keyframes space-object-lift {
+  0% {
+    transform: translate3d(0,0,0) rotateX(0) scale(1);
+    filter: brightness(1);
+  }
+  62% {
+    transform: translate3d(0,-7%,36px) rotateX(-2deg) scale(1.055);
+    filter: brightness(1.035);
+  }
+  100% {
+    transform: translate3d(0,-15%,70px) rotateX(-3deg) scale(1.12);
+    filter: brightness(1.05);
+  }
+}
+
+/* AISpace remounts after the detail page returns. The same physical object
+   settles from the lifted position back onto its original desk coordinate. */
+.ai-space-page.is-placing-objects .space-scene-hotspot.is-photo-wall > *,
+.ai-space-page.is-placing-objects .space-scene-hotspot.is-star-jar > *,
+.ai-space-page.is-placing-objects .space-scene-hotspot.is-thought-book > *,
+.ai-space-page.is-placing-objects .space-scene-hotspot.is-player > * {
+  animation: space-object-place-back .42s cubic-bezier(.16,1,.3,1) both;
+}
+
+@keyframes space-object-place-back {
+  from {
+    transform: translate3d(0,-10%,44px) scale(1.07);
+    opacity: .86;
+  }
+  to {
+    transform: translate3d(0,0,0) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-scene-hotspot.is-lifting .space-object-asset,
+  .space-scene-hotspot.is-lifting .space-live-photo-board,
+  .space-scene-hotspot.is-lifting .space-live-jar,
+  .space-scene-hotspot.is-lifting .space-live-book,
+  .space-scene-hotspot.is-lifting .space-live-player,
+  .space-scene-hotspot.is-lifting .space-live-earphone-wire,
+  .ai-space-page.is-placing-objects .space-scene-hotspot > * {
+    animation: none !important;
+    transform: none !important;
+  }
+}
