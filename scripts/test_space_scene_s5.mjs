@@ -66,6 +66,8 @@ assert.match(systemNotification, /registration\.showNotification/)
 assert.doesNotMatch(systemNotification, /fetch\(|Bark|bark|webhook|pushplus|server酱/i)
 assert.match(app, /showSystemNotification/)
 assert.match(app, /有一条新消息，打开忆文看看。/)
+assert.match(app, /有一件答应你的事到时间了，打开忆文看看。/)
+assert.match(app, /eluvin-promise-/)
 assert.doesNotMatch(app, /body:\s*content/)
 assert.doesNotMatch(chatSettings, /系统通知/)
 
