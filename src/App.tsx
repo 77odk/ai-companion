@@ -70,6 +70,7 @@ import { commitInitiativeMessage } from './lib/initiativeCommit'
 import { chatCompletion, type ModelUsage } from './lib/api'
 import { estimateToken } from './lib/token'
 import { resolveIdentityMode } from './lib/companionPolicy'
+import { captureLatestTaCommitment, collectDueTaCommitments, markCommitmentReminded, type TaCommitment } from './lib/commitmentStore'
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
 const RolePicker = lazy(() => import('./components/RolePicker'))
@@ -85,6 +86,7 @@ const AboutMe = lazy(() => import('./components/AboutMe'))
 const WeeklyPage = lazy(() => import('./components/WeeklyPage'))
 const ThoughtBook = lazy(() => import('./components/ThoughtBook'))
 const ListenTogether = lazy(() => import('./components/ListenTogether'))
+const StarJar = lazy(() => import('./components/StarJar'))
 const GuideDetail = lazy(() => import('./components/Guide'))
 const ProductIntro = lazy(() => import('./components/ProductIntro'))
 const RolesPage = lazy(() => import('./components/RolesPage'))
@@ -93,7 +95,7 @@ const Memory = lazy(loadMemoryView)
 const NotificationsPage = lazy(() => import('./components/NotificationsPage'))
 const FeedbackPage = lazy(() => import('./components/FeedbackPage'))
 
-type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'thoughts' | 'listen' | 'spacelife' | 'guide' | 'notifications' | 'feedback' | 'loading'
+type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'thoughts' | 'listen' | 'starjar' | 'spacelife' | 'guide' | 'notifications' | 'feedback' | 'loading'
 
 interface InitiativeNotice {
   accountId: string
@@ -426,6 +428,7 @@ export default function App() {
   const notificationRefreshGuardRef = useRef({ next: 0, applied: 0 })
   const hasUnreadNotifications = loggedIn && (notificationServerUnread || notificationRevision > notificationReadRevision)
   const [initiativeNotice, setInitiativeNotice] = useState<InitiativeNotice | null>(null)
+  const [commitmentReminder, setCommitmentReminder] = useState<TaCommitment | null>(null)
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
@@ -442,6 +445,39 @@ export default function App() {
   const [pendingNaturalError, setPendingNaturalError] = useState<string | null>(null)
   // 使用指南独立 view：返回时回到来源（欢迎页 / 我的 / 登录墙）
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate' | 'chat'>('welcome')
+
+  useEffect(() => {
+    if (!loggedIn) {
+      setCommitmentReminder(null)
+      return
+    }
+
+    const checkDue = () => {
+      if (document.visibilityState !== 'visible') return
+      const next = collectDueTaCommitments(Date.now())[0]
+      if (!next) return
+      const marked = markCommitmentReminded(next.id)
+      if (marked) setCommitmentReminder(marked)
+    }
+
+    const onReplyCommitted = (event: Event) => {
+      const sid = String((event as CustomEvent<{ sid?: string }>).detail?.sid ?? '')
+      if (sid) captureLatestTaCommitment(sid)
+      checkDue()
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') checkDue()
+    }
+
+    window.addEventListener('yiwem:ai-reply-committed', onReplyCommitted)
+    document.addEventListener('visibilitychange', onVisibility)
+    checkDue()
+    return () => {
+      window.removeEventListener('yiwem:ai-reply-committed', onReplyCommitted)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [loggedIn])
 
   const recordInitiativeBackground = useCallback(() => {
     if (!loggedIn) return
@@ -1184,6 +1220,15 @@ export default function App() {
           </div>
         </div>
       )}
+      {commitmentReminder && loggedIn && !gateShown && !needLightConsent && (
+        <div className="commitment-reminder" role="status" aria-live="polite">
+          <div>
+            <strong>{loadAIProfile(commitmentReminder.sessionId).nickname || 'TA'} 答应你的事</strong>
+            <span>{commitmentReminder.text}</span>
+          </div>
+          <button type="button" onClick={() => setCommitmentReminder(null)} aria-label="收起">×</button>
+        </div>
+      )}
       {initiativeNotice && loggedIn && !gateShown && !needLightConsent && (
         <div className="initiative-notice" role="status" aria-live="polite">
           <button type="button" className="initiative-notice-main" onClick={openInitiativeNotice}>
@@ -1298,6 +1343,8 @@ export default function App() {
         <ThoughtBook onBack={() => window.history.back()} />
       ) : view === 'listen' ? (
         <ListenTogether onBack={() => window.history.back()} />
+      ) : view === 'starjar' ? (
+        <StarJar onBack={() => window.history.back()} />
       ) : view === 'spacelife' ? (
         <SpaceLife
           aiNickname={loadAIProfile(getActiveSessionId() || undefined).nickname}
@@ -1508,7 +1555,7 @@ export default function App() {
             {view === 'aispace' && (
               <AISpace
                 key={spaceRootKey}
-                onOpenMemory={() => navigate('memory')}
+                onOpenStarJar={() => navigate('starjar')}
                 onOpenThoughts={() => navigate('thoughts')}
                 onOpenListen={() => navigate('listen')}
                 onOpenWeekly={() => {
