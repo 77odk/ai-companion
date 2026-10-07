@@ -2376,7 +2376,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       ...sessionMemoryToItem(res.data),
       topic: inferTopic(clean),
       ...(role === 'user' ? { explicit: true } : {}),
-      triggerWords: deriveMemoryTriggerWords(clean, inferTopic(clean)),
     }
     const next = [item, ...current.filter((memory) => memory.id !== item.id)]
     if (!saveMemoriesCache(sid, next)) return false
