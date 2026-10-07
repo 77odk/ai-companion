@@ -802,17 +802,14 @@ export interface RecallOptions {
 }
 
 /**
- * 按需召回：对话注入时只带与当前话题相关的记忆 + 重要记忆，其余省略。
- * 匹配规则（简单可靠）：
- * 0. 先过滤已过期的临时记忆；pinned / explicit 都不能绕过时效。
- * 1. pinned 在仍有效的记忆中全量包含
- * 2. 主题命中：contextText 出现某个主题词（吃/猫/家人…）→ 该主题全部记忆带上
- *    （旧数据无 topic 字段的按 inferTopic 推断，避免「养猫」这类记忆落空）
- * 3. 关键词命中：记忆 text 与 contextText 有 ≥1 个共同实词（长度 ≥2 的字/词，单独的单字实词也算）
- * 4. 其余（不相关的非 pinned）不注入
- * 兜底：一条都没命中（context 太短/太泛）→ 退化为最活跃的前 fallbackCount 条（含全部 pinned）
- * 返回排序（双源信任）：pinned 恒最前 → 用户明说的（explicit）次之 → 其余按活跃度。
- * 纯函数，不修改输入数组。
+ * B19 关键词激活召回：
+ * 0. 先过滤已过期条目；
+ * 1. 每条记忆使用显式 triggerWords；旧数据没有时从 text/topic 本地派生；
+ * 2. 本轮上下文命中至少一个触发词，才允许进入模型上下文；
+ * 3. pinned / explicit 不能绕过激活门，只用于命中后的排序；
+ * 4. 无命中、空上下文都返回空数组，不再做“塞几条进去”的兜底。
+ * 返回排序：pinned → 用户明说 explicit → 其余按活跃度。
+ * 纯函数，不修改输入数组，不额外调用模型。
  */
 export function recallRelevantMemories(
   items: MemoryItem[],
