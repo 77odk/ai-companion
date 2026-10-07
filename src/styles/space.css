@@ -1671,7 +1671,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .star-jar-star.is-moving {
-    animation: none;
+    animation: none !important;
   }
 
   .star-jar-star {
