@@ -24,10 +24,6 @@ export interface MemoryItem {
   lastMentionedAt?: number
   /** 双源信任：true=用户亲口明说的（手动添加），注入排序时优先；缺省/缺失=TA 从聊天里推断的、或旧数据（优先级低） */
   explicit?: boolean
-  /** 记忆激活词：只有命中本轮上下文才允许进入模型上下文。旧数据缺失时由 text/topic 本地派生。 */
-  triggerWords?: string[]
-  /** 当时状态/心情快照；只有真实写入过才展示，旧数据没有就保持空。 */
-  moodSnapshot?: string
   /**
    * 本机专用标记（不上传、不进云端）：这条是刚在本机写的、还没确认上传成功。
    * 拉云端列表做合并时用它区分两件事——带标记 = 还没传成功的新记忆，必须保留；
@@ -132,11 +128,7 @@ export function removeMemoryItem(id: string): MemoryItem[] {
 export function updateMemoryItemContent(id: string, text: string): MemoryItem[] {
   const t = text.trim()
   if (!t) return loadMemory()
-  const next = loadMemory().map((m) => (
-    m.id === id
-      ? { ...m, text: t, triggerWords: deriveMemoryTriggerWords(t, m.topic) }
-      : m
-  ))
+  const next = loadMemory().map((m) => (m.id === id ? { ...m, text: t } : m))
   saveMemory(next)
   notifyMemoryUpdated()
   return next
@@ -764,10 +756,9 @@ export function deriveMemoryTriggerWords(text: string, topic?: string): string[]
 }
 
 function memoryTriggers(memory: MemoryItem): string[] {
-  const explicit = Array.isArray(memory.triggerWords)
-    ? memory.triggerWords.map((word) => String(word ?? '').trim().toLowerCase()).filter(Boolean)
-    : []
-  return explicit.length > 0 ? [...new Set(explicit)].slice(0, 12) : deriveMemoryTriggerWords(memory.text, memory.topic)
+  // AGENTS v2 禁止扩 MemoryItem schema：触发词永远从现有 text/topic 本地派生，
+  // 不写入 MemoryItem，也不建立第二套记忆数据层。
+  return deriveMemoryTriggerWords(memory.text, memory.topic)
 }
 
 function triggerMatchesContext(trigger: string, raw: string, multi: Set<string>, singles: Set<string>): boolean {
