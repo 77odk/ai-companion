@@ -71,7 +71,11 @@ export default function ThoughtBook({ onBack }: Props) {
     }, 440)
   }
 
-  const underIndex = turn === 'next' ? nextIndex : turn === 'prev' ? prevIndex : currentIndex
+  // 翻页时底层不能整幅提前跳到下一 spread：
+  // next = 左页保持 current、右页先露出 next-right；翻起页的背面才是 next-left。
+  // prev = 右页保持 current、左页先露出 prev-left；翻起页的背面才是 prev-right。
+  const baseLeft = turn === 'prev' ? prevIndex : currentIndex
+  const baseRight = turn === 'next' ? nextIndex + 1 : currentIndex + 1
 
   return (
     <div className="page space-object-page thought-book-page">
@@ -106,10 +110,10 @@ export default function ThoughtBook({ onBack }: Props) {
             ) : (
               <>
                 <div className="thought-book-page-side is-left">
-                  <PageContent thought={pages[underIndex]} pageNumber={underIndex + 1} />
+                  <PageContent thought={pages[baseLeft]} pageNumber={baseLeft + 1} />
                 </div>
                 <div className="thought-book-page-side is-right">
-                  <PageContent thought={pages[underIndex + 1]} pageNumber={underIndex + 2} />
+                  <PageContent thought={pages[baseRight]} pageNumber={baseRight + 1} />
                 </div>
 
                 {turn === 'next' && (
