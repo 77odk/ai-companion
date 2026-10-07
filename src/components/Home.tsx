@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getActiveSessionId, getBusyState, getSessionsCache, getSessionLang } from '../lib/sessionStore'
-import { getFirstSeen, loadAIProfile, loadSettings, loadUserProfile, saveUserProfile } from '../lib/storage'
+import { getActiveSessionId, getSessionsCache } from '../lib/sessionStore'
+import { getFirstSeen, loadAIProfile, loadUserProfile, saveUserProfile } from '../lib/storage'
 import { isHomeWeatherEnabled, loadHomeWeather, setHomeWeatherEnabled, setUserWeatherChatEnabled, type HomeWeather } from '../lib/homeWeather'
 import { computeDaysKnown } from '../lib/aiSpaceDetail'
 import {
@@ -27,7 +27,6 @@ import { getMilestoneProgress } from '../lib/homeBigDay'
 import { getKnownDays } from '../lib/milestone'
 import { MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { loadCurrentPosts } from '../lib/aiSpace'
-import { getOrAdvanceTaRuntime, getSessionPersona, isTaRuntimeIdle, runtimeDisplayLabel } from '../lib/taRuntime'
 import { displaySessionName } from '../lib/sessionFlow'
 import {
   clampCycleDays,
@@ -174,37 +173,6 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary, onGoNotifica
   const taAvatar = useMemo(() => loadAIProfile(sid).avatar, [sid])
   // QA2：TA 的生活 preview = 最新一条真实 Space Post（posts 最新在前；无则 null，走空态，不编造）
   const lifePreview = useMemo(() => posts[0] ?? null, [posts])
-
-  // TA 此刻只展示可信状态：Chat 明确自述写入后保持；过期回 idle，绝不按时间/persona 随机编活动。
-  const personaText = useMemo(() => getSessionPersona(sid), [sid])
-  const [runtimeNow, setRuntimeNow] = useState(() => Date.now())
-  const runtime = useMemo(
-    () => getOrAdvanceTaRuntime(sid, personaText, runtimeNow),
-    [sid, personaText, runtimeNow],
-  )
-  // 可信状态到期时只刷新这一小块；idle 不挂 timer，保持到下一条 TA 自述证据。
-  useEffect(() => {
-    if (isTaRuntimeIdle(runtime)) return
-    const delay = Math.max(50, runtime.plannedUntil - Date.now() + 50)
-    const timer = window.setTimeout(() => setRuntimeNow(Date.now()), Math.min(delay, 2_147_483_647))
-    return () => window.clearTimeout(timer)
-  }, [runtime.activityId, runtime.plannedUntil, sid])
-  // PATCH-LANG：显示语言走项目现有语言来源 getSessionLang(sid)（Chat 存会话语言）；英文会话显示英文 label
-  const homeLang = useMemo(() => getSessionLang(sid), [sid])
-  // Busy（仅展示优先级最高；只读现有 getBusyState，不写、不影响 Busy 数据层）
-  const busyNow = useMemo(() => {
-    if (!sid) return null
-    const b = getBusyState(sid)
-    return b.status === 'busy' && b.busyUntil > Date.now() && b.busyReason ? b.busyReason : null
-  }, [sid])
-  // 表现优先级：active Busy → 有证据的 Runtime → idle 文案。
-  // idle 不是“TA 正在做某件事”的事实：有模型时只说在场陪伴；没接模型时只说在等你。
-  const hasModelKey = Boolean(loadSettings().apiKey?.trim())
-  const runtimeText = isTaRuntimeIdle(runtime) ? '' : runtimeDisplayLabel(runtime, homeLang)
-  const idleText = hasModelKey
-    ? (homeLang === 'en' ? 'Quietly here with you' : '正安静地陪着你')
-    : (homeLang === 'en' ? 'Waiting for you' : '在等你')
-  const momentText = busyNow ?? (runtimeText || idleText)
 
   // FINAL-CLOSURE：我的时间 = 生日 + 生理期（personal 全局资料，所有角色共享）。
   // 废弃 Home 单一 bigDay 展示；数据源仍是 getAnniversaries（全局 personal + 当前角色 couple 并集），
@@ -545,13 +513,9 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary, onGoNotifica
           </div>
         </section>
 
-        {/* UI2-02：TA Presence —— TaOrb 视觉中心，Accent 最明显处 */}
-        <section className="home-companion" aria-labelledby="home-moment-title">
+        {/* S4：Home 只保留 TA Presence；“TA 此刻”已升级为朝暮里的「状态」，不在首页重复展示。 */}
+        <section className="home-companion" aria-label={`${taName} Presence`}>
           <TaOrb label={taName} scene={scene.id} avatar={taAvatar} />
-          <div className="home-moment-copy">
-            <h2 id="home-moment-title">{taName} 此刻</h2>
-            <p>{momentText}</p>
-          </div>
         </section>
 
         {/* QA2：CTA 紧跟 TA Presence，成为 Presence 后第一主交互（390px 首屏完整可见） */}
