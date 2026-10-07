@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { getActiveSessionId } from '../lib/sessionStore'
 import {
   chooseListenTogetherTrack,
   getListenTogetherSnapshot,
@@ -18,17 +19,21 @@ function fmt(seconds: number): string {
 }
 
 export default function ListenTogether({ onBack }: Props) {
+  const sessionId = getActiveSessionId()
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const [snapshot, setSnapshot] = useState(getListenTogetherSnapshot)
+  const [snapshot, setSnapshot] = useState(() => getListenTogetherSnapshot(sessionId))
 
-  useEffect(() => subscribeListenTogether(setSnapshot), [])
+  useEffect(() => {
+    setSnapshot(getListenTogetherSnapshot(sessionId))
+    return subscribeListenTogether(sessionId, setSnapshot)
+  }, [sessionId])
 
   const toggle = async () => {
     if (!snapshot.hasTrack) {
       inputRef.current?.click()
       return
     }
-    await toggleListenTogether()
+    await toggleListenTogether(sessionId)
   }
 
   return (
@@ -61,7 +66,7 @@ export default function ListenTogether({ onBack }: Props) {
                     max={Math.max(1, snapshot.duration)}
                     step="0.1"
                     value={Math.min(snapshot.current, Math.max(1, snapshot.duration))}
-                    onChange={(event) => seekListenTogether(Number(event.target.value))}
+                    onChange={(event) => seekListenTogether(sessionId, Number(event.target.value))}
                     aria-label="播放进度"
                   />
                   <span>{fmt(snapshot.duration)}</span>
@@ -88,7 +93,7 @@ export default function ListenTogether({ onBack }: Props) {
             accept="audio/*"
             onChange={(event) => {
               const file = event.target.files?.[0]
-              if (file) chooseListenTogetherTrack(file)
+              if (file) chooseListenTogetherTrack(sessionId, file)
               event.target.value = ''
             }}
           />
