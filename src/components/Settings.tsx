@@ -103,13 +103,11 @@ interface Props {
   onAnniversaryBack?: () => void
   /** 全屏设置二级页（隐私 / 聊天设置）：通知 App 隐藏底部导航。 */
   onPrivacyOpenChange?: (open: boolean) => void
-  onGoNotifications?: () => void
   /** 「反馈与建议」入口：由 App 切到独立 feedback view（与通知页同一套全屏页） */
   onGoFeedback?: () => void
-  hasUnreadNotifications?: boolean
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onInitialPageBack, onAnniversaryBack, onPrivacyOpenChange, onGoNotifications, onGoFeedback, hasUnreadNotifications = false }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onInitialPageBack, onAnniversaryBack, onPrivacyOpenChange, onGoFeedback }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
   const mainScrollTopRef = useRef(0)
   const restoreMainScrollRef = useRef(false)
@@ -203,7 +201,6 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenReply={() => openSubpage('reply')}
       onOpenInitiative={() => openSubpage('initiative')}
       onOpenFeedback={() => onGoFeedback?.()}
-      hasUnreadNotifications={hasUnreadNotifications}
       onGoRoles={() => onGoRoles?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
       onGoProfile={() => onGoProfile?.()}
@@ -253,7 +250,6 @@ function MainCenter({
   onOpenReply,
   onOpenInitiative,
   onOpenFeedback,
-  hasUnreadNotifications,
   onGoRoles,
   onGoAboutMe,
   onGoProfile,
@@ -271,7 +267,6 @@ function MainCenter({
   onOpenReply: () => void
   onOpenInitiative: () => void
   onOpenFeedback: () => void
-  hasUnreadNotifications: boolean
   onGoRoles?: () => void
   onGoAboutMe?: () => void
   onGoProfile?: () => void
