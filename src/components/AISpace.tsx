@@ -424,6 +424,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label="打开 TA 的思绪"
             onClick={() => openDeskObject('book', onOpenThoughts)}
           >
+            <img className="space-object-asset is-book" src="/space/generated/book.svg" alt="" aria-hidden="true" draggable={false} />
             <span className="space-live-book" aria-hidden="true">
               {latestThought ? <span>{latestThought.text}</span> : null}
             </span>
