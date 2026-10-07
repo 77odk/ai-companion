@@ -25,19 +25,14 @@ export default function ListenTogether({ onBack }: Props) {
   const sessionId = getActiveSessionId()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [snapshot, setSnapshot] = useState(() => getListenTogetherSnapshot(sessionId))
-  const [connectOpen, setConnectOpen] = useState(false)
 
   useEffect(() => {
     setSnapshot(getListenTogetherSnapshot(sessionId))
-    setConnectOpen(false)
     return subscribeListenTogether(sessionId, setSnapshot)
   }, [sessionId])
 
   const toggle = async () => {
-    if (!snapshot.hasTrack) {
-      setConnectOpen(true)
-      return
-    }
+    if (!snapshot.hasTrack) return
     await toggleListenTogether(sessionId)
   }
 
@@ -87,17 +82,8 @@ export default function ListenTogether({ onBack }: Props) {
 
                 {!snapshot.hasTrack && (
                   <div className="listen-connect">
-                    <button type="button" onClick={() => setConnectOpen(true)}>
-                      去接音乐
-                    </button>
-                  </div>
-                )}
-
-                {connectOpen && !snapshot.hasTrack && (
-                  <div className="listen-connect-panel" role="status">
-                    <p>音乐接入会从工作台开放，这里先留入口。</p>
                     <button type="button" onClick={() => inputRef.current?.click()}>
-                      先选本地音乐
+                      去接音乐
                     </button>
                   </div>
                 )}
@@ -140,20 +126,22 @@ export default function ListenTogether({ onBack }: Props) {
                   />
                 </label>
 
-                <div className="listen-actions">
-                  <button
-                    type="button"
-                    onClick={() => setListenTogetherMode(
-                      sessionId,
-                      snapshot.mode === 'sequence' ? 'shuffle' : 'sequence',
-                    )}
-                  >
-                    {snapshot.mode === 'sequence' ? '顺序播放' : '随机播放'}
-                  </button>
-                  <button type="button" onClick={() => inputRef.current?.click()}>
-                    {snapshot.hasTrack ? '换一组音乐' : '本地音乐'}
-                  </button>
-                </div>
+                {snapshot.hasTrack && (
+                  <div className="listen-actions">
+                    <button
+                      type="button"
+                      onClick={() => setListenTogetherMode(
+                        sessionId,
+                        snapshot.mode === 'sequence' ? 'shuffle' : 'sequence',
+                      )}
+                    >
+                      {snapshot.mode === 'sequence' ? '顺序播放' : '随机播放'}
+                    </button>
+                    <button type="button" onClick={() => inputRef.current?.click()}>
+                      换一组音乐
+                    </button>
+                  </div>
+                )}
               </div>
               <span className="listen-tablet-port" aria-hidden="true" />
             </div>
@@ -173,7 +161,6 @@ export default function ListenTogether({ onBack }: Props) {
             onChange={(event) => {
               if (event.target.files?.length) {
                 chooseListenTogetherTracks(sessionId, event.target.files)
-                setConnectOpen(false)
               }
               event.target.value = ''
             }}
