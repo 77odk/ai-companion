@@ -64,10 +64,11 @@ assert.match(bubble, /Save to memory|存为记忆/)
 assert.match(chat, /handleSaveMessageAsMemory/)
 assert.match(chat, /postMemory\(token, sid/)
 assert.match(chat, /appendMemoryAudit/)
-assert.match(chat, /deriveMemoryTriggerWords/)
+assert.match(memoryLib, /deriveMemoryTriggerWords/)
 
 console.log('[S3] 记忆编辑/删除留痕并可回退')
 store.clear()
+login()
 const before = { id: 'm1', text: '旧版本', createdAt: 1 }
 const audit = appendMemoryAudit({
   sessionId: '7',
@@ -91,6 +92,7 @@ assert.match(cloudResources, /registerCloudStateAdapter\('memory_audit'/)
 
 console.log('[S3] TA 承诺单独建档；只有真实承诺才进入，明确到点时可生成 dueAt')
 store.clear()
+login()
 const sourceTs = new Date(2026, 9, 7, 10, 0).getTime()
 const promise = detectTaCommitment('我答应你明天晚上8点提醒你喝水。', '7', sourceTs, 42)
 assert.ok(promise)
