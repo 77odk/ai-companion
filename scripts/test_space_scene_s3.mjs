@@ -16,6 +16,8 @@ import {
 const app = readFileSync('src/App.tsx', 'utf8')
 const aiSpace = readFileSync('src/components/AISpace.tsx', 'utf8')
 const memory = readFileSync('src/components/Memory.tsx', 'utf8')
+const chaomuState = readFileSync('src/components/ChaomuState.tsx', 'utf8')
+const taState = readFileSync('src/lib/taState.ts', 'utf8')
 const bubble = readFileSync('src/components/MessageBubble.tsx', 'utf8')
 const chat = readFileSync('src/components/Chat.tsx', 'utf8')
 const memoryCss = readFileSync('src/styles/memory.css', 'utf8')
@@ -50,7 +52,7 @@ assert.match(spaceCss, /steps\(6, end\)/)
 
 console.log('[S3] 朝暮只以状态 / 记忆长河 / 一起经历过为根层级')
 assert.match(memory, /className="memory-title">朝暮</)
-assert.match(memory, /STATUS/)
+assert.match(memory, /<ChaomuState dashboard=\{stateDashboard\} \/>/)
 assert.match(memory, /MEMORY RIVER/)
 assert.match(memory, /<EventArchive sessionId=\{sessionId \|\| undefined\} \/>/)
 assert.doesNotMatch(aiSpace, /space-scene-hotspot is-moments/)
@@ -140,9 +142,17 @@ assert.match(app, /const onDataChange = \(\) => \{[\s\S]{0,220}checkDueCommitmen
 assert.match(app, /setTimeout\(\(\) => \{[\s\S]*checkDueCommitment\(\)/)
 assert.match(chat, /window\.dispatchEvent\(new CustomEvent\('yiwem:ai-reply-committed'/)
 
-console.log('[S3] 隐私边界：状态页只读取现有可信展示文本，不写底层数值到 UI')
-assert.match(memory, /runtimeDisplayLabel/)
-assert.doesNotMatch(memory, /valence|arousal|attachment|moodScore|stateScore/)
+console.log('[S3] 朝暮状态由同一份真实 2 轴 + 7 倾向数据驱动，不造装饰数值')
+assert.match(memory, /getTaStateDashboard/)
+assert.match(chaomuState, /dashboard\.score/)
+for (const key of ['relaxedTense','quietActive','connection','expression','exploration','involvement','reminiscence','space','energy']) {
+  assert.match(chaomuState + taState, new RegExp('\\\\b' + key + '\\\\b'))
+}
+assert.match(taState, /function stateScore/)
+assert.match(taState, /history\?: TaStateHistoryPoint\[\]/)
+assert.match(chaomuState, /dashboard\.history/)
+assert.match(chaomuState, /pulsePath\(dashboard\.score\)/)
+assert.doesNotMatch(chaomuState, /Math\.random/)
 assert.match(memoryCss, /S3 · 朝暮/)
 
 console.log('[Space S3] 星星罐 / 朝暮 / 手动存记忆 / 审计回退 / 关键词激活 / 承诺建档 全通过')
