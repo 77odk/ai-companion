@@ -2480,6 +2480,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         setMemoryCorrectionNotice(result.message)
         return
       }
+      if (result.changed) {
+        appendMemoryAudit({
+          sessionId: freshTarget.kind === 'session' ? freshTarget.sessionId : '',
+          memoryKind: freshTarget.kind,
+          memoryId: result.item.id,
+          action: 'edit',
+          before: freshTarget.item,
+          after: result.item,
+          source: 'detail',
+        })
+      }
       notifyMemoryUpdated()
       setPendingMemoryCorrection(null)
       if (activeSessionId) clearPendingMemoryCorrection(activeSessionId)
