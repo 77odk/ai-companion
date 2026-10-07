@@ -229,7 +229,7 @@ function positiveCommitmentClauses(text: string, sourceTs: number): CommitmentCl
           previous.length <= 48
           && hasFutureAnchor(previous, sourceTs)
           && !isPositiveSelfCommitmentClause(previous)
-          && !/(?:你|他|她|they|he|she)\b/i.test(previous)
+          && !/(?:你|他|她|TA|对方|别人)|\b(?:you|they|he|she)\b/i.test(previous)
         ) {
           scoped = `${previous}, ${clause}`
         }
