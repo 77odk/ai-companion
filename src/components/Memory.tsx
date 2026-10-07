@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { deriveMemoryTriggerWords, isSimilarMemory, loadMemory, saveMemory, type MemoryItem } from '../lib/memory'
-import { getActiveSessionId, getBusyState, getMemoriesCache, getSessionLang, mergeSessionMemories, saveMemoriesCache, sessionMemoryToItem } from '../lib/sessionStore'
+import { getActiveSessionId, getMemoriesCache, mergeSessionMemories, saveMemoriesCache, sessionMemoryToItem } from '../lib/sessionStore'
 import { listMemories, postMemory } from '../lib/sessionApi'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
 import { getToken } from '../lib/auth'
@@ -9,7 +9,6 @@ import { findChatRecordJumpTargetHydrated, type ChatJumpTarget, type MemoryRetur
 import { alignPendingMemoriesForRefresh } from '../lib/memoryRefreshReconcile'
 import { recordMemoryIdAlias, resolveMemoryIdAlias, subscribeMemoryIdAliases } from '../lib/memoryIdAliases'
 import EventArchive from './EventArchive'
-import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from '../lib/taRuntime'
 import { appendMemoryAudit, loadMemoryAudit, type MemoryAuditEntry } from '../lib/memoryAudit'
 import ChaomuStatePanel from './ChaomuStatePanel'
 
@@ -146,39 +145,6 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const [auditVersion, setAuditVersion] = useState(0)
   const [rollbackBusyId, setRollbackBusyId] = useState<string | null>(null)
   const [rollbackNotice, setRollbackNotice] = useState('')
-  const [statusNow, setStatusNow] = useState(() => Date.now())
-  const audits = useMemo(() => loadMemoryAudit(sessionId), [sessionId, auditVersion])
-
-  useEffect(() => {
-    if (!sessionId) return
-    const refresh = () => setStatusNow(Date.now())
-    const timer = window.setInterval(refresh, 30_000)
-    const onReply = (event: Event) => {
-      const sid = (event as CustomEvent<{ sid?: string }>).detail?.sid
-      if (!sid || String(sid) === sessionId) refresh()
-    }
-    window.addEventListener('yiwem:ai-reply-committed', onReply)
-    return () => {
-      window.clearInterval(timer)
-      window.removeEventListener('yiwem:ai-reply-committed', onReply)
-    }
-  }, [sessionId])
-
-  const statusLabel = useMemo(() => {
-    if (!sessionId) return ''
-    const busy = getBusyState(sessionId)
-    if (busy.status === 'busy' && busy.busyUntil > statusNow && busy.busyReason) return busy.busyReason
-    return runtimeDisplayLabel(
-      getOrAdvanceTaRuntime(sessionId, getSessionPersona(sessionId), statusNow),
-      getSessionLang(sessionId),
-    )
-  }, [sessionId, statusNow])
-
-  const stateView = useMemo(
-    () => sessionId ? getTaStateView(sessionId, statusNow) : null,
-    [sessionId, statusNow],
-  )
-
   const refreshAudit = () => setAuditVersion((value) => value + 1)
 
   // #19：进入记忆页主动拉当前会话云端记忆。页内一旦发生改/删，本次旧 GET 结果作废，避免回写过期状态。
