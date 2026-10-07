@@ -60,6 +60,7 @@ import { formatQuotedMessage, messageEvidenceText, parseQuotedMessage, type Mess
 import { CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState } from '../lib/conversationState'
 import { enqueueSessionMessageCommit, enqueueSessionMessageCommits } from '../lib/sessionMessageQueue'
 import { flushPendingOpsSnapshot } from '../lib/pendingReplay'
+import { appendMemoryAudit } from '../lib/memoryAudit'
 
 /**
  * 历史时间锚必须稳定：同一条历史消息无论过几分钟再次发送，前缀都完全一致，
@@ -1647,11 +1648,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       if (mountedRef.current) setStreaming(false)
       controllerRef.current = null
-      // 卸载期间回复完成落库（2026-09-05 夜乔修：返回主界面后 TA 的回复"消失"，发下一条才一起冒出）
-      // ——广播事件，重新进入的聊天页实例收到后刷新缓存，让这条回复立即显示
-      if (!mountedRef.current) {
-        window.dispatchEvent(new CustomEvent('yiwem:ai-reply-committed', { detail: { sid: roundSessionId } }))
-      }
+      // 最终可见回复真实落库后统一广播：前台用于承诺建档 / 状态刷新，
+      // 卸载场景仍用于重新进入聊天时刷新缓存。事件只描述“已 commit”，不改上传/合并/去重链。
+      window.dispatchEvent(new CustomEvent('yiwem:ai-reply-committed', { detail: { sid: roundSessionId } }))
       unregisterActiveReplyRun(roundSessionId, lifecycleUserTs)
       partialTsRef.current = null
       partialUserTsRef.current = null
@@ -2355,6 +2354,40 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     })
   }
 
+
+  const handleSaveMessageAsMemory = async (text: string): Promise<boolean> => {
+    const sid = activeSessionId
+    const token = getToken()
+    // USER 引用块只是上下文，不是本轮新断言；手动存记忆只保存 message body/evidence。
+    const clean = messageEvidenceText(String(text ?? '')).trim()
+    if (!sid || !token || !clean) return false
+
+    const current = getMemoriesCache(sid)
+    if (isSimilarMemory(current, clean)) return true
+
+    const res = await postMemory(token, sid, { content: clean, source: clean })
+    if (!res.ok) return false
+
+    const item = {
+      ...sessionMemoryToItem(res.data),
+      topic: inferTopic(clean),
+      explicit: true,
+    }
+    const next = [item, ...current.filter((memory) => memory.id !== item.id)]
+    if (!saveMemoriesCache(sid, next)) return false
+
+    appendMemoryAudit({
+      sessionId: sid,
+      memoryKind: 'session',
+      memoryId: item.id,
+      action: 'create',
+      after: item,
+      source: 'manual-message',
+    })
+    notifyMemoryUpdated()
+    return true
+  }
+
   const insertActionNarration = () => {
     const el = inputRef.current
     const start = el?.selectionStart ?? input.length
@@ -2445,6 +2478,17 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         setMemoryCorrectionNotice(result.message)
         return
       }
+      if (result.changed) {
+        appendMemoryAudit({
+          sessionId: freshTarget.kind === 'session' ? freshTarget.sessionId : '',
+          memoryKind: freshTarget.kind,
+          memoryId: result.item.id,
+          action: 'edit',
+          before: freshTarget.item,
+          after: result.item,
+          source: 'detail',
+        })
+      }
       notifyMemoryUpdated()
       setPendingMemoryCorrection(null)
       if (activeSessionId) clearPendingMemoryCorrection(activeSessionId)
@@ -2495,6 +2539,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 typing={streaming && i === displayMessages.length - 1 && m.role === 'assistant' && m.content === ''}
                 onAvatarClick={onOpenProfile}
                 onQuote={handleQuoteMessage}
+                onSaveMemory={!streaming && !contextBusy && m.role === 'user'
+                  ? () => handleSaveMessageAsMemory(m.content)
+                  : undefined}
                 onEdit={!streaming && !contextBusy && !isBusy && m.role === 'user' && typeof m.id === 'number'
                   ? (nextText) => commitConversationEdit(m, nextText)
                   : undefined}

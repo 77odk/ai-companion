@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { loadMemory, type MemoryItem } from '../lib/memory'
-import { getActiveSessionId, getMemoriesCache, mergeSessionMemories, saveMemoriesCache, sessionMemoryToItem } from '../lib/sessionStore'
-import { listMemories } from '../lib/sessionApi'
+import { deriveMemoryTriggerWords, isSimilarMemory, loadMemory, saveMemory, type MemoryItem } from '../lib/memory'
+import { getActiveSessionId, getBusyState, getMemoriesCache, getSessionLang, mergeSessionMemories, saveMemoriesCache, sessionMemoryToItem } from '../lib/sessionStore'
+import { listMemories, postMemory } from '../lib/sessionApi'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
 import { getToken } from '../lib/auth'
 import { correctMemoryText, removeMemory, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 import { findChatRecordJumpTargetHydrated, type ChatJumpTarget, type MemoryReturnTarget } from '../lib/chatJump'
 import { alignPendingMemoriesForRefresh } from '../lib/memoryRefreshReconcile'
 import { recordMemoryIdAlias, resolveMemoryIdAlias, subscribeMemoryIdAliases } from '../lib/memoryIdAliases'
+import EventArchive from './EventArchive'
+import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from '../lib/taRuntime'
+import { appendMemoryAudit, loadMemoryAudit, type MemoryAuditEntry } from '../lib/memoryAudit'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
 // 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
@@ -137,6 +140,41 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
     ]
   }
   const [memories, setMemories] = useState(readMemories)
+  const [query, setQuery] = useState('')
+  const [auditOpen, setAuditOpen] = useState(false)
+  const [auditVersion, setAuditVersion] = useState(0)
+  const [rollbackBusyId, setRollbackBusyId] = useState<string | null>(null)
+  const [rollbackNotice, setRollbackNotice] = useState('')
+  const [statusNow, setStatusNow] = useState(() => Date.now())
+  const audits = useMemo(() => loadMemoryAudit(sessionId), [sessionId, auditVersion])
+
+  useEffect(() => {
+    if (!sessionId) return
+    const refresh = () => setStatusNow(Date.now())
+    const timer = window.setInterval(refresh, 30_000)
+    const onReply = (event: Event) => {
+      const sid = (event as CustomEvent<{ sid?: string }>).detail?.sid
+      if (!sid || String(sid) === sessionId) refresh()
+    }
+    window.addEventListener('yiwem:ai-reply-committed', onReply)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('yiwem:ai-reply-committed', onReply)
+    }
+  }, [sessionId])
+
+  const statusLabel = useMemo(() => {
+    if (!sessionId) return ''
+    const busy = getBusyState(sessionId)
+    if (busy.status === 'busy' && busy.busyUntil > statusNow && busy.busyReason) return busy.busyReason
+    return runtimeDisplayLabel(
+      getOrAdvanceTaRuntime(sessionId, getSessionPersona(sessionId), statusNow),
+      getSessionLang(sessionId),
+    )
+  }, [sessionId, statusNow])
+
+  const refreshAudit = () => setAuditVersion((value) => value + 1)
+
   // #19：进入记忆页主动拉当前会话云端记忆。页内一旦发生改/删，本次旧 GET 结果作废，避免回写过期状态。
   const memoryMutationVersionRef = useRef(0)
   useEffect(() => {
@@ -192,7 +230,21 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       })
   }, [memories])
 
-  const riverItems = useMemo(() => [...chronological].reverse(), [chronological])
+  const filteredChronological = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return chronological
+    return chronological.filter(({ item }) => {
+      const haystack = [
+        item.text,
+        item.source ?? '',
+        item.topic ?? '',
+        ...deriveMemoryTriggerWords(item.text, item.topic),
+      ].join(' ').toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [chronological, query])
+
+  const riverItems = useMemo(() => [...filteredChronological].reverse(), [filteredChronological])
   const years = useMemo(() => groupMemories(riverItems), [riverItems])
   const earliest = chronological.find((memory) => memory.timestamp != null)?.timestamp ?? null
 
@@ -406,6 +458,15 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       setDeleteError(result.message)
       return
     }
+    appendMemoryAudit({
+      sessionId: selected.kind === 'session' ? sessionId : '',
+      memoryKind: selected.kind,
+      memoryId: selected.item.id,
+      action: 'delete',
+      before: selected.item,
+      source: 'detail',
+    })
+    refreshAudit()
     setMemories((items) => items.filter((memory) => (
       !(memory.kind === selected.kind && memory.item.id === selected.item.id)
     )))
@@ -434,6 +495,16 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       return
     }
     if (result.changed) {
+      appendMemoryAudit({
+        sessionId: selected.kind === 'session' ? sessionId : '',
+        memoryKind: selected.kind,
+        memoryId: selected.item.id,
+        action: 'edit',
+        before: selected.item,
+        after: result.item,
+        source: 'detail',
+      })
+      refreshAudit()
       setMemories((items) => items.map((memory) => (
         memory.kind === selected.kind && memory.item.id === selected.item.id
           ? { ...memory, item: result.item }
@@ -442,6 +513,158 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
     }
     setEditing(false)
   }
+  const rollbackAuditEntry = async (entry: MemoryAuditEntry) => {
+    if (
+      rollbackBusyId ||
+      !entry.before ||
+      (entry.action !== 'edit' && entry.action !== 'delete') ||
+      audits.some((item) => item.parentAuditId === entry.id)
+    ) return
+    setRollbackBusyId(entry.id)
+    setRollbackNotice('')
+    try {
+      if (entry.memoryKind === 'global') {
+        if (entry.action === 'delete') {
+          const current = loadMemory()
+          if (!current.some((item) => item.id === entry.before?.id)) {
+            const restored = { ...entry.before }
+            if (!saveMemory([restored, ...current])) {
+              setRollbackNotice('这次回退没有保存成功。')
+              return
+            }
+            appendMemoryAudit({
+              sessionId: '',
+              memoryKind: 'global',
+              memoryId: restored.id,
+              action: 'rollback',
+              after: restored,
+              source: 'rollback',
+              parentAuditId: entry.id,
+            })
+          }
+        } else {
+          const current = loadMemory().find((item) => item.id === entry.memoryId)
+          if (!current) {
+            setRollbackNotice('这段记忆已经不存在，不能按这一版回退。')
+            return
+          }
+          const result = await correctMemoryText({ kind: 'global', item: current }, entry.before.text)
+          if (!result.ok) {
+            setRollbackNotice(result.message)
+            return
+          }
+          appendMemoryAudit({
+            sessionId: '',
+            memoryKind: 'global',
+            memoryId: result.item.id,
+            action: 'rollback',
+            before: current,
+            after: result.item,
+            source: 'rollback',
+            parentAuditId: entry.id,
+          })
+        }
+        setMemories(readMemories())
+        refreshAudit()
+        setRollbackNotice('已经回退到这次变更之前。')
+        return
+      }
+
+      if (!sessionId || entry.sessionId !== sessionId) {
+        setRollbackNotice('这条记录不属于当前 TA。')
+        return
+      }
+      const token = getToken()
+      if (!token) {
+        setRollbackNotice('登录状态已失效，请重新登录后再试。')
+        return
+      }
+
+      if (entry.action === 'delete') {
+        const cache = getMemoriesCache(sessionId)
+        const alreadyRestored = cache.find((item) => item.id === entry.memoryId)
+          ?? cache.find((item) => isSimilarMemory([item], entry.before?.text ?? ''))
+        if (alreadyRestored) {
+          appendMemoryAudit({
+            sessionId,
+            memoryKind: 'session',
+            memoryId: alreadyRestored.id,
+            action: 'rollback',
+            after: alreadyRestored,
+            source: 'rollback',
+            parentAuditId: entry.id,
+          })
+        } else {
+          const res = await postMemory(token, sessionId, {
+            content: entry.before.text,
+            ...(entry.before.source?.trim() ? { source: entry.before.source } : {}),
+            ...(entry.before.taReply?.trim() ? { taReply: entry.before.taReply } : {}),
+          })
+          if (!res.ok) {
+            setRollbackNotice(res.message || '恢复失败，请稍后再试。')
+            return
+          }
+          const restored: MemoryItem = {
+            ...sessionMemoryToItem(res.data),
+            topic: entry.before.topic,
+            explicit: entry.before.explicit,
+            pinned: entry.before.pinned,
+            lastMentionedAt: entry.before.lastMentionedAt,
+          }
+          const saved = saveMemoriesCache(sessionId, [restored, ...cache.filter((item) => item.id !== restored.id)])
+          appendMemoryAudit({
+            sessionId,
+            memoryKind: 'session',
+            memoryId: restored.id,
+            action: 'rollback',
+            after: restored,
+            source: 'rollback',
+            parentAuditId: entry.id,
+          })
+          if (!saved) {
+            setMemories((current) => [
+              { item: restored, kind: 'session' as const },
+              ...current.filter((memory) => !(memory.kind === 'session' && memory.item.id === restored.id)),
+            ])
+            refreshAudit()
+            setRollbackNotice('已经恢复到云端；本机缓存暂时没写进去，刷新后会重新拉回。')
+            return
+          }
+        }
+      } else {
+        const current = getMemoriesCache(sessionId).find((item) => item.id === entry.memoryId)
+        if (!current) {
+          setRollbackNotice('这段记忆已经不存在，不能按这一版回退。')
+          return
+        }
+        const result = await correctMemoryText(
+          { kind: 'session', sessionId, item: current, token },
+          entry.before.text,
+        )
+        if (!result.ok) {
+          setRollbackNotice(result.message)
+          return
+        }
+        appendMemoryAudit({
+          sessionId,
+          memoryKind: 'session',
+          memoryId: result.item.id,
+          action: 'rollback',
+          before: current,
+          after: result.item,
+          source: 'rollback',
+          parentAuditId: entry.id,
+        })
+      }
+
+      setMemories(readMemories())
+      refreshAudit()
+      setRollbackNotice('已经回退到这次变更之前。')
+    } finally {
+      setRollbackBusyId(null)
+    }
+  }
+
   useEffect(() => {
     if (view !== 'river') return
     const target = riverScrollRef.current
@@ -459,12 +682,6 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const touchX = useRef<number | null>(null)
   const prefersReduced =
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-
-  const openBookCover = () => {
-    setBookStage('cover')
-    setBookFrom('cover')
-    setView('book')
-  }
 
   const openBookHere = () => {
     const idx = bookPages.findIndex((p) => p.type === 'memory' && p.index === selectedIndex)
@@ -520,7 +737,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
           <div className="memory-book-cover-veil" aria-hidden="true" />
           <div className="memory-book-cover-content">
             <p className="memory-book-cover-en">E L U V I N</p>
-            <h2 className="memory-book-cover-title">TA 记得的你</h2>
+            <h2 className="memory-book-cover-title">记忆书</h2>
             <p className="memory-book-cover-name">MEMORY BOOK</p>
             {yearRange ? <p className="memory-book-cover-years">{yearRange}</p> : null}
             <p className="memory-book-cover-line">那些被记住的小事，</p>
@@ -786,7 +1003,19 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
                 </div>
               </div>
             ) : (
-              <p className="memory-detail-text">{selected.item.text}</p>
+              <>
+                <p className="memory-detail-text">{selected.item.text}</p>
+                {deriveMemoryTriggerWords(selected.item.text, selected.item.topic).length > 0 ? (
+                  <div className="memory-trigger-row" aria-label="记忆触发词">
+                    <span>触发词</span>
+                    <div>
+                      {deriveMemoryTriggerWords(selected.item.text, selected.item.topic).slice(0, 8).map((word) => (
+                        <span key={word} className="memory-trigger-chip">{word}</span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
             )}
           </div>
           {pinned ? (
@@ -807,13 +1036,14 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
     )
   }
 
-  // ---- River ----
+  // ---- 朝暮 · Status / Memory River / Events ----
   return (
-    <div className="page memory-page" ref={pageRef}>
-      {/* UI2-03 Visual Closure V2 / BUG-C：Refresh 与「记忆书」同处 head actions 行内并排，
-          各自独立 hit area，bounding rect 不相交（不再 absolute 浮在右上与 book-tag 重叠） */}
-      <header className="memory-head">
-        <span className="memory-title">TA 记得的你</span>
+    <div className="page memory-page chaomu-page" ref={pageRef}>
+      <header className="memory-head chaomu-head">
+        <span>
+          <span className="memory-title">朝暮</span>
+          <span className="chaomu-subtitle">状态 · 记忆长河 · 一起经历过</span>
+        </span>
         <span className="memory-head-actions">
           <button
             type="button"
@@ -829,157 +1059,198 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
           </button>
         </span>
       </header>
-      {heroMeta ? <p className="memory-head-meta">{heroMeta}</p> : null}
 
-      {memories.length === 0 ? (
-        <div className="memory-empty">
-          <span className="memory-empty-trace" aria-hidden="true">
-            <span className="memory-empty-node" />
-            <span className="memory-empty-line" />
-            <span className="memory-empty-node" />
-          </span>
-          <h3 className="memory-empty-title">TA 还在慢慢认识你。</h3>
-          <p className="memory-empty-copy">以后被记住的那些小事，会慢慢留在这里。</p>
+      <section className="chaomu-status" aria-labelledby="chaomu-status-title">
+        <div className="chaomu-section-head">
+          <div>
+            <span className="chaomu-section-kicker">STATUS</span>
+            <h2 id="chaomu-status-title">状态</h2>
+          </div>
         </div>
-      ) : (
-        <>
-          {/* UI2-03-POLISH-05：Memory Book Portal —— 相册/纪念册气质收敛（保持比例与交互，只调整装帧语言）。
-              母版式：布脊装订 + 封面植物花枝（中部偏右）+ 右侧竖排装帧字 + 小相纸位 + 纸页自然错落。 */}
-          <button type="button" className="memory-book-portal" onClick={openBookCover} aria-label="翻开记忆书">
-            <span className="mbp-back" aria-hidden="true" />
-            <span className="mbp-paper mbp-paper-1" aria-hidden="true" />
-            <span className="mbp-paper mbp-paper-2" aria-hidden="true" />
-            <span className="mbp-cover">
-              <span className="mbp-spine" aria-hidden="true">
-                <span className="mbp-spine-brand">ELUVIN</span>
-                <span className="mbp-spine-mark" aria-hidden="true">
-                  <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-                    <path d="M6 0l1.4 3.6L11 5 7.4 6.4 6 10 4.6 6.4 1 5l3.6-1.4Z" />
-                  </svg>
-                </span>
-              </span>
-              <span className="mbp-botanical" aria-hidden="true">
-                <svg viewBox="0 0 64 96" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
-                  <path d="M32 92 C 30 70, 34 48, 30 14" />
-                  <path d="M31 62 C 20 58, 12 50, 8 38" />
-                  <path d="M8 38 C 14 40, 22 46, 28 52" />
-                  <path d="M33 46 C 44 42, 52 34, 56 22" />
-                  <path d="M56 22 C 49 24, 41 30, 36 36" />
-                  <path d="M34 72 C 46 68, 54 60, 58 48" />
-                  <path d="M58 48 C 51 50, 43 56, 38 62" />
-                  <circle cx="30" cy="13" r="3.1" fill="currentColor" stroke="none" opacity="0.85" />
-                  <circle cx="30" cy="13" r="1.1" fill="var(--ui2-canvas)" stroke="none" />
-                  <circle cx="8" cy="36" r="2.2" fill="currentColor" stroke="none" opacity="0.6" />
-                  <path d="M55 18 q 4 -2 3 -6" />
-                </svg>
-              </span>
-              <span className="mbp-main">
-                <span className="mbp-kicker">MEMORY BOOK</span>
-                <span className="mbp-title">记忆书</span>
-                <span className="mbp-copy">
-                  <span>有些记忆，</span>
-                  <span>适合重新翻开。</span>
-                </span>
-              </span>
-              <span className="mbp-side">
-                <span className="mbp-side-vertical" aria-hidden="true">MEMORY BOOK</span>
-                <span className="mbp-photo-slot" aria-hidden="true">
-                  <span className="mbp-photo-slot-corner" />
-                </span>
-                <span className="mbp-open">
-                  翻开
-                  <span aria-hidden="true">→</span>
-                </span>
-              </span>
-            </span>
+        <p className={`chaomu-status-text${statusLabel ? '' : ' is-empty'}`}>
+          {statusLabel || '现在没有明确留下的状态。'}
+        </p>
+      </section>
+
+      <section className="memory-river chaomu-memory-river" aria-label="记忆长河">
+        <div className="chaomu-section-head">
+          <div>
+            <span className="chaomu-section-kicker">MEMORY RIVER</span>
+            <h2>记忆长河</h2>
+            {heroMeta ? <p className="memory-head-meta">{heroMeta}</p> : null}
+          </div>
+          <button
+            type="button"
+            className={`memory-audit-toggle${auditOpen ? ' is-open' : ''}`}
+            onClick={() => {
+              setAuditOpen((value) => !value)
+              setRollbackNotice('')
+            }}
+            aria-expanded={auditOpen}
+          >
+            变更记录
           </button>
+        </div>
 
-          <section className="memory-river" aria-label="记忆长河">
-          {years.length >= 2 ? (
-            <nav className="memory-year-nav" aria-label="年份导航">
-              {years
-                .filter((year) => year.key !== 'unknown')
-                .map((year) => (
-                  <button
-                    key={year.key}
-                    type="button"
-                    className={`memory-year-nav-btn${year === years[0] ? ' is-current' : ''}`}
-                    onClick={() => scrollToYear(year.key)}
-                  >
-                    {year.label}
-                  </button>
-                ))}
-            </nav>
+        <label className="memory-search">
+          <span className="sr-only">搜索记忆长河</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="M16 16l4 4" />
+          </svg>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索记忆"
+            autoComplete="off"
+          />
+          {query ? (
+            <button type="button" onClick={() => setQuery('')} aria-label="清空搜索">×</button>
           ) : null}
+        </label>
 
-          <div className="memory-river-flow">
-            {years.map((year) => (
-              <section key={year.key} className="memory-year-chapter" aria-labelledby={`memory-year-${year.key}`}>
-                <h4 id={`memory-year-${year.key}`} className="memory-year-chapter-label">
-                  <span className="memory-year-chapter-num">{year.label}</span>
-                </h4>
-                {year.months.map((month) => (
-                  <div key={month.key} className="memory-month-chapter">
-                    <h5 className="memory-month-chapter-label">
-                      <span className="memory-month-name">{month.label}</span>
-                      <span className="memory-month-count">{month.items.length} 段记忆</span>
-                    </h5>
-                    <div className="memory-month-entries">
-                      {month.items
-                        .filter((memory) => (itemOrder.get(memory) ?? Infinity) < visibleCount)
-                        .map((memory, index) => {
-                          const { item, timestamp } = memory
-                          const explicit = item.explicit === true
-                          const pinned = item.pinned === true
-                          const entryClass = [
-                            'memory-entry',
-                            pinned ? 'is-pinned' : '',
-                            explicit ? 'is-explicit' : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')
-                          return (
-                            <button
-                              key={`${item.id}-${index}`}
-                              type="button"
-                              className={entryClass}
-                              onClick={() => openDetail(memory)}
-                            >
-                              <span className="memory-entry-dot" aria-hidden="true">
-                                {pinned ? (
-                                  <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true">
-                                    <path d="M12 0l2.6 7.4L22 10l-7.4 2.6L12 20l-2.6-7.4L2 10l7.4-2.6Z" />
-                                  </svg>
-                                ) : null}
-                              </span>
-                              <span className="memory-entry-body">
-                                {/* UI2-03-POLISH-03：River 条目主体容器（Image-ready seam）。
-                                    未来真实 Media 接入后，在 content 内追加 .memory-entry-media
-                                    （thumb 约 72–88px、object-fit:cover、小圆角、无 Card shadow）。
-                                    当前数据层无 media 字段：不渲染任何空容器/占位。 */}
-                                <span className="memory-entry-content">
-                                  <span className="memory-entry-text">{item.text}</span>
+        {auditOpen ? (
+          <div className="memory-audit-panel">
+            {rollbackNotice ? <p className="memory-audit-notice" role="status">{rollbackNotice}</p> : null}
+            {audits.length === 0 ? (
+              <p className="memory-audit-empty">还没有修改或删除记录。</p>
+            ) : (
+              <div className="memory-audit-list">
+                {audits.slice(0, 24).map((entry) => {
+                  const actionLabel = entry.action === 'edit'
+                    ? '修改'
+                    : entry.action === 'delete'
+                      ? '删除'
+                      : entry.action === 'rollback'
+                        ? '回退'
+                        : '存入'
+                  const preview = entry.after?.text || entry.before?.text || ''
+                  const rolledBack = audits.some((item) => item.parentAuditId === entry.id)
+                  const canRollback = (entry.action === 'edit' || entry.action === 'delete') && Boolean(entry.before) && !rolledBack
+                  return (
+                    <article key={entry.id} className="memory-audit-item">
+                      <div>
+                        <span>{actionLabel}</span>
+                        <time>{new Date(entry.at).toLocaleString()}</time>
+                      </div>
+                      <p>{preview}</p>
+                      {canRollback ? (
+                        <button
+                          type="button"
+                          disabled={rollbackBusyId !== null}
+                          onClick={() => void rollbackAuditEntry(entry)}
+                        >
+                          {rollbackBusyId === entry.id ? '回退中…' : '回退到之前'}
+                        </button>
+                      ) : rolledBack ? <span className="memory-audit-done">已回退</span> : null}
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {memories.length === 0 ? (
+          <div className="memory-empty">
+            <span className="memory-empty-trace" aria-hidden="true">
+              <span className="memory-empty-node" />
+              <span className="memory-empty-line" />
+              <span className="memory-empty-node" />
+            </span>
+            <h3 className="memory-empty-title">TA 还在慢慢认识你。</h3>
+            <p className="memory-empty-copy">以后被记住的那些小事，会慢慢留在这里。</p>
+          </div>
+        ) : years.length === 0 ? (
+          <p className="memory-search-empty">没有找到和「{query.trim()}」有关的记忆。</p>
+        ) : (
+          <>
+            {years.length >= 2 ? (
+              <nav className="memory-year-nav" aria-label="年份导航">
+                {years
+                  .filter((year) => year.key !== 'unknown')
+                  .map((year) => (
+                    <button
+                      key={year.key}
+                      type="button"
+                      className={`memory-year-nav-btn${year === years[0] ? ' is-current' : ''}`}
+                      onClick={() => scrollToYear(year.key)}
+                    >
+                      {year.label}
+                    </button>
+                  ))}
+              </nav>
+            ) : null}
+
+            <div className="memory-river-flow">
+              {years.map((year) => (
+                <section key={year.key} className="memory-year-chapter" aria-labelledby={`memory-year-${year.key}`}>
+                  <h4 id={`memory-year-${year.key}`} className="memory-year-chapter-label">
+                    <span className="memory-year-chapter-num">{year.label}</span>
+                  </h4>
+                  {year.months.map((month) => (
+                    <div key={month.key} className="memory-month-chapter">
+                      <h5 className="memory-month-chapter-label">
+                        <span className="memory-month-name">{month.label}</span>
+                        <span className="memory-month-count">{month.items.length} 段记忆</span>
+                      </h5>
+                      <div className="memory-month-entries">
+                        {month.items
+                          .filter((memory) => (itemOrder.get(memory) ?? Infinity) < visibleCount)
+                          .map((memory, index) => {
+                            const { item, timestamp } = memory
+                            const explicit = item.explicit === true
+                            const pinned = item.pinned === true
+                            const entryClass = [
+                              'memory-entry',
+                              pinned ? 'is-pinned' : '',
+                              explicit ? 'is-explicit' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')
+                            return (
+                              <button
+                                key={`${item.id}-${index}`}
+                                type="button"
+                                className={entryClass}
+                                onClick={() => openDetail(memory)}
+                              >
+                                <span className="memory-entry-dot" aria-hidden="true">
+                                  {pinned ? (
+                                    <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true">
+                                      <path d="M12 0l2.6 7.4L22 10l-7.4 2.6L12 20l-2.6-7.4L2 10l7.4-2.6Z" />
+                                    </svg>
+                                  ) : null}
                                 </span>
-                                <span className="memory-entry-date">{shortDate(timestamp)}</span>
-                              </span>
-                            </button>
-                          )
-                        })}
+                                <span className="memory-entry-body">
+                                  <span className="memory-entry-content">
+                                    <span className="memory-entry-text">{item.text}</span>
+                                  </span>
+                                  <span className="memory-entry-date">{shortDate(timestamp)}</span>
+                                </span>
+                              </button>
+                            )
+                          })}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </section>
-            ))}
-          </div>
-          {needsWindowing && visibleCount < riverItems.length ? (
-            <div className="memory-river-sentinel" ref={sentinelRef} aria-hidden="true" />
-          ) : null}
-          <div className="memory-river-end" aria-hidden="true">
-            <span className="memory-river-end-dot" />
-          </div>
-          </section>
-        </>
-      )}
+                  ))}
+                </section>
+              ))}
+            </div>
+            {needsWindowing && visibleCount < riverItems.length ? (
+              <div className="memory-river-sentinel" ref={sentinelRef} aria-hidden="true" />
+            ) : null}
+            <div className="memory-river-end" aria-hidden="true">
+              <span className="memory-river-end-dot" />
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="chaomu-events" aria-label="一起经历过">
+        <EventArchive sessionId={sessionId || undefined} />
+      </section>
     </div>
   )
 }

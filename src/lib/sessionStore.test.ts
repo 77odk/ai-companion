@@ -382,12 +382,14 @@ localStorage.setItem('ai_companion_memory', JSON.stringify([
   { id: 'chatOld', text: '对方喜欢红烧肉', createdAt: 0, topic: '饮食' },
 ]))
 const withoutSession = recallSessionMemories('', '这家店好辣', { now: 1000 })
-eq(withoutSession.some((m) => m.id === 'loc'), true, '无会话：兜底关于我（explicit 全局记忆）')
+eq(withoutSession.some((m) => m.id === 'loc'), true, '无会话：明确命中关于我（explicit 全局记忆）')
 eq(withoutSession.some((m) => m.id === 'chatOld'), false, '无会话：不读全局里的聊天记忆（explicit=false 旧存档）')
 const otherSession = recallSessionMemories('8', '我家的猫好可爱', { now: 1000 })
 eq(otherSession.some((m) => m.id === '1'), false, '会话 8 读不到会话 7 的记忆（严禁串读）')
-eq(otherSession.some((m) => m.id === 'loc'), true, '会话 8 能看到关于我（explicit 全局记忆）')
+eq(otherSession.some((m) => m.id === 'loc'), false, 'B19：关于我 explicit 未命中也不注入')
 eq(otherSession.some((m) => m.id === 'chatOld'), false, '会话 8 不读全局里的聊天记忆（explicit=false 旧存档）')
+const otherSessionGlobalHit = recallSessionMemories('8', '这家店的辣度怎么样', { now: 1000 })
+eq(otherSessionGlobalHit.some((m) => m.id === 'loc'), true, '会话 8 在明确命中时仍共享关于我 explicit 记忆')
 
 console.log('\n[13] 未读红点（S1）：getLastRead / markRead / getUnreadCount')
 resetStore()

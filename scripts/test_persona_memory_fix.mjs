@@ -37,7 +37,7 @@ eq(stripActionMarkers('(开心) 好的'), '好的', '半角括号删')
 eq(stripActionMarkers('没有括号的话'), '没有括号的话', '无括号原样')
 eq(stripActionMarkers(''), '', '空串')
 
-console.log('\n[3] recallRelevantMemories 无上下文兜底：pinned + explicit 全量 + 活跃补足')
+console.log('\n[3] recallRelevantMemories B19：无上下文不注入，命中后 pinned / explicit 再参与排序')
 const items = [
   { id: 'a', text: '喜欢奶茶', createdAt: 100, explicit: false },
   { id: 'b', text: '我老公是李贝贝', createdAt: 200, explicit: true },
@@ -46,13 +46,13 @@ const items = [
   { id: 'e', text: '工作是客服', createdAt: 500 },
   { id: 'f', text: '养了一只仓鼠叫豆豆', createdAt: 600 },
 ]
-const res = recallRelevantMemories(items, '', { now: 1000 })
+eq(recallRelevantMemories(items, '', { now: 1000 }), [], '空上下文不再做 pinned / explicit 兜底')
+const res = recallRelevantMemories(items, '怕黑，周杰伦和李贝贝', { now: 1000 })
 const texts = res.map((m) => m.text)
-ok(res.length >= 4, `无上下文兜底至少带 4 条（pinned1+explicit2+活跃补，实际 ${res.length}）`)
-ok(texts.includes('怕黑'), 'pinned 全量带上')
-ok(texts.includes('我老公是李贝贝'), 'explicit 全量带上（用户明说）')
-ok(texts.includes('喜欢周杰伦'), 'explicit 全量带上')
-ok(res[0].text === '怕黑', 'pinned 恒排最前')
+ok(texts.includes('怕黑'), '命中 pinned 后可召回')
+ok(texts.includes('我老公是李贝贝'), '命中 explicit 后可召回')
+ok(texts.includes('喜欢周杰伦'), '命中 explicit 后可召回')
+ok(res[0].text === '怕黑', '多条命中后 pinned 仍排最前')
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)
 if (failed > 0) process.exit(1)

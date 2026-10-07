@@ -189,13 +189,13 @@ localStorage.setItem('ai_companion_memory', JSON.stringify([
 ]))
 saveMemoriesCache('7', [{ id: 's7', text: '对方喜欢猫', createdAt: 2, topic: '宠物' }])
 saveMemoriesCache('8', [{ id: 's8', text: '对方在公司加班', createdAt: 3, topic: '工作' }])
-// 语境同时命中 饮食/宠物/工作 三个主题：关于我（explicit）+ 各自会话记忆都能召回，串读与否才看得清
-const r7 = recallSessionMemories('7', '猫吃辣加班吗', { now: 1000 })
+// B19：语境明确点到猫 / 香菜 / 加班；关于我 explicit 与当前会话条目只有命中才进入，仍严禁串读别的会话。
+const r7 = recallSessionMemories('7', '猫香菜加班吗', { now: 1000 })
 eq(r7.some((m) => m.id === 's7'), true, '会话 7 召回自己的记忆')
 eq(r7.some((m) => m.id === 's8'), false, '会话 7 绝不读会话 8 的记忆')
 eq(r7.some((m) => m.id === 'g1'), true, '会话 7 共享关于我（explicit 全局记忆）')
 eq(r7.some((m) => m.id === 'g0'), false, '会话 7 不读全局里的聊天记忆（explicit=false 旧存档）')
-const r8 = recallSessionMemories('8', '猫吃辣加班吗', { now: 1000 })
+const r8 = recallSessionMemories('8', '猫香菜加班吗', { now: 1000 })
 eq(r8.some((m) => m.id === 's8'), true, '会话 8 召回自己的记忆')
 eq(r8.some((m) => m.id === 's7'), false, '会话 8 绝不读会话 7 的记忆')
 eq(r8.some((m) => m.id === 'g1'), true, '会话 8 共享关于我（explicit 全局记忆）')

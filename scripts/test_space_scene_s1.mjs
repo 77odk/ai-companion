@@ -10,11 +10,9 @@ const asset = 'public/space/space-desk.webp'
 assert.match(aiSpace, /className="space-scene-shell"/)
 assert.match(aiSpace, /src="\/space\/space-desk\.webp"/)
 assert.match(aiSpace, /className="space-scene-hotspot is-photo-wall"/)
-assert.match(aiSpace, /className="space-scene-hotspot is-moments"/)
 assert.match(aiSpace, /className="space-scene-hotspot is-weekly-letter"/)
 assert.match(aiSpace, /className="space-scene-service-host"/)
 assert.match(aiSpace, /\{renderPhotoWall\(\)\}/)
-assert.match(aiSpace, /<EventArchive sessionId=\{sid\} \/>/)
 
 assert.match(
   app,
@@ -33,4 +31,4 @@ const bytes = statSync(asset).size
 assert.ok(bytes > 20_000, 'confirmed scene artwork should not be an empty placeholder')
 assert.ok(bytes < 300_000, 'scene artwork must stay inside the v2 asset budget')
 
-console.log('[Space S1] fixed scene shell / artwork / legacy-flow guard 全通过')
+console.log('[Space S1] fixed scene shell / artwork / photo archive guard 全通过')

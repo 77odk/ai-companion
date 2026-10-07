@@ -4270,6 +4270,65 @@
 
 
 
+/* ---- S3 · TA commitment due reminder -------------------------------- */
+.commitment-reminder {
+  position: fixed;
+  z-index: var(--el-z-toast, 60);
+  left: 50%;
+  top: calc(14px + env(safe-area-inset-top));
+  width: min(calc(100% - 28px), 430px);
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: 1fr 32px;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-card) 94%, transparent);
+  color: var(--color-text);
+  box-shadow: 0 16px 40px rgba(38,31,28,.12);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.commitment-reminder > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.commitment-reminder strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.commitment-reminder span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.55;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.commitment-reminder button {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 19px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .commitment-reminder {
+    transition: none;
+  }
+}
+
 /* ==========================================================================
    P5-E · Carry
    --------------------------------------------------------------------------

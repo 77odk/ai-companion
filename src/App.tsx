@@ -52,7 +52,7 @@ import {
   resolveActiveSession,
   type RolePickMode,
 } from './lib/sessionFlow'
-import { ELUVIN_AUTH_CHANGE } from './lib/dataChange'
+import { ELUVIN_AUTH_CHANGE, ELUVIN_DATA_CHANGE } from './lib/dataChange'
 import { forceRefresh, refreshToLatest } from './lib/forceRefresh'
 import { checkDeployedBuild, getCurrentBuildVersion, subscribeDeployedBuild } from './lib/appVersion'
 import Home from './components/Home'
@@ -70,6 +70,7 @@ import { commitInitiativeMessage } from './lib/initiativeCommit'
 import { chatCompletion, type ModelUsage } from './lib/api'
 import { estimateToken } from './lib/token'
 import { resolveIdentityMode } from './lib/companionPolicy'
+import { captureLatestTaCommitment, collectDueTaCommitments, markCommitmentReminded, nextTaCommitmentCheckAt, type TaCommitment } from './lib/commitmentStore'
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
 const RolePicker = lazy(() => import('./components/RolePicker'))
@@ -85,6 +86,7 @@ const AboutMe = lazy(() => import('./components/AboutMe'))
 const WeeklyPage = lazy(() => import('./components/WeeklyPage'))
 const ThoughtBook = lazy(() => import('./components/ThoughtBook'))
 const ListenTogether = lazy(() => import('./components/ListenTogether'))
+const StarJar = lazy(() => import('./components/StarJar'))
 const GuideDetail = lazy(() => import('./components/Guide'))
 const ProductIntro = lazy(() => import('./components/ProductIntro'))
 const RolesPage = lazy(() => import('./components/RolesPage'))
@@ -93,7 +95,7 @@ const Memory = lazy(loadMemoryView)
 const NotificationsPage = lazy(() => import('./components/NotificationsPage'))
 const FeedbackPage = lazy(() => import('./components/FeedbackPage'))
 
-type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'thoughts' | 'listen' | 'spacelife' | 'guide' | 'notifications' | 'feedback' | 'loading'
+type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'thoughts' | 'listen' | 'starjar' | 'spacelife' | 'guide' | 'notifications' | 'feedback' | 'loading'
 
 interface InitiativeNotice {
   accountId: string
@@ -426,6 +428,8 @@ export default function App() {
   const notificationRefreshGuardRef = useRef({ next: 0, applied: 0 })
   const hasUnreadNotifications = loggedIn && (notificationServerUnread || notificationRevision > notificationReadRevision)
   const [initiativeNotice, setInitiativeNotice] = useState<InitiativeNotice | null>(null)
+  const [commitmentReminder, setCommitmentReminder] = useState<TaCommitment | null>(null)
+  const commitmentReminderRef = useRef<TaCommitment | null>(null)
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
@@ -442,6 +446,71 @@ export default function App() {
   const [pendingNaturalError, setPendingNaturalError] = useState<string | null>(null)
   // 使用指南独立 view：返回时回到来源（欢迎页 / 我的 / 登录墙）
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate' | 'chat'>('welcome')
+
+  const checkDueCommitment = useCallback(() => {
+    if (!loggedIn || document.visibilityState !== 'visible' || commitmentReminderRef.current) return
+    const next = collectDueTaCommitments(Date.now())[0]
+    if (!next) return
+    const marked = markCommitmentReminded(next.id)
+    if (!marked) return
+    commitmentReminderRef.current = marked
+    setCommitmentReminder(marked)
+  }, [loggedIn])
+
+  useEffect(() => {
+    if (!loggedIn) {
+      commitmentReminderRef.current = null
+      setCommitmentReminder(null)
+      return
+    }
+
+    let dueTimer: number | null = null
+    const clearDueTimer = () => {
+      if (dueTimer !== null) window.clearTimeout(dueTimer)
+      dueTimer = null
+    }
+    const armDueTimer = () => {
+      clearDueTimer()
+      const nextAt = nextTaCommitmentCheckAt(Date.now())
+      if (nextAt == null) return
+      const delay = Math.min(Math.max(0, nextAt - Date.now()), 2_147_000_000)
+      dueTimer = window.setTimeout(() => {
+        checkDueCommitment()
+        armDueTimer()
+      }, delay)
+    }
+
+    const onReplyCommitted = (event: Event) => {
+      const sid = String((event as CustomEvent<{ sid?: string }>).detail?.sid ?? '')
+      if (sid) captureLatestTaCommitment(sid)
+      checkDueCommitment()
+      armDueTimer()
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') checkDueCommitment()
+      armDueTimer()
+    }
+
+    const onDataChange = () => {
+      // Cloud State 可能在启动 hydration 时拉回“已经到期”的承诺。
+      // 先立即检查 overdue，再重排未来 timer；否则 nextTaCommitmentCheckAt 会跳过已过期时间点。
+      checkDueCommitment()
+      armDueTimer()
+    }
+
+    window.addEventListener('yiwem:ai-reply-committed', onReplyCommitted)
+    window.addEventListener(ELUVIN_DATA_CHANGE, onDataChange)
+    document.addEventListener('visibilitychange', onVisibility)
+    checkDueCommitment()
+    armDueTimer()
+    return () => {
+      clearDueTimer()
+      window.removeEventListener('yiwem:ai-reply-committed', onReplyCommitted)
+      window.removeEventListener(ELUVIN_DATA_CHANGE, onDataChange)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [loggedIn, checkDueCommitment])
 
   const recordInitiativeBackground = useCallback(() => {
     if (!loggedIn) return
@@ -1184,6 +1253,25 @@ export default function App() {
           </div>
         </div>
       )}
+      {commitmentReminder && loggedIn && !gateShown && !needLightConsent && (
+        <div className="commitment-reminder" role="status" aria-live="polite">
+          <div>
+            <strong>{loadAIProfile(commitmentReminder.sessionId).nickname || 'TA'} 答应你的事</strong>
+            <span>{commitmentReminder.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              commitmentReminderRef.current = null
+              setCommitmentReminder(null)
+              window.setTimeout(checkDueCommitment, 0)
+            }}
+            aria-label="收起"
+          >
+            ×
+          </button>
+        </div>
+      )}
       {initiativeNotice && loggedIn && !gateShown && !needLightConsent && (
         <div className="initiative-notice" role="status" aria-live="polite">
           <button type="button" className="initiative-notice-main" onClick={openInitiativeNotice}>
@@ -1298,6 +1386,8 @@ export default function App() {
         <ThoughtBook onBack={() => window.history.back()} />
       ) : view === 'listen' ? (
         <ListenTogether onBack={() => window.history.back()} />
+      ) : view === 'starjar' ? (
+        <StarJar onBack={() => window.history.back()} />
       ) : view === 'spacelife' ? (
         <SpaceLife
           aiNickname={loadAIProfile(getActiveSessionId() || undefined).nickname}
@@ -1508,7 +1598,7 @@ export default function App() {
             {view === 'aispace' && (
               <AISpace
                 key={spaceRootKey}
-                onOpenMemory={() => navigate('memory')}
+                onOpenStarJar={() => navigate('starjar')}
                 onOpenThoughts={() => navigate('thoughts')}
                 onOpenListen={() => navigate('listen')}
                 onOpenWeekly={() => {

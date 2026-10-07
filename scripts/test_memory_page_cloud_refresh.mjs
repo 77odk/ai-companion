@@ -133,7 +133,7 @@ assert.equal(resolveMemoryIdAlias(callbackFirstSession, selectedBeforeGet), '903
 
 console.log('\n[8] 页面挂载明确先 align pending/cloud，再走既有 mergeSessionMemories')
 const source = fs.readFileSync(path.join(process.cwd(), 'src/components/Memory.tsx'), 'utf8')
-assert.match(source, /import \{ listMemories \} from '\.\.\/lib\/sessionApi'/)
+assert.match(source, /import \{[^}]*listMemories[^}]*\} from '\.\.\/lib\/sessionApi'/)
 assert.match(source, /import \{ alignPendingMemoriesForRefresh \} from '\.\.\/lib\/memoryRefreshReconcile'/)
 assert.match(source, /res\.data\.memories\.map\(sessionMemoryToItem\)/)
 assert.match(source, /const alignment = alignPendingMemoriesForRefresh\(getMemoriesCache\(sessionId\), cloudMemories\)/)

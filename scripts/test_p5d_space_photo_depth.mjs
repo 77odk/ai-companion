@@ -4,6 +4,7 @@ import fs from 'node:fs'
 const space = fs.readFileSync(new URL('../src/styles/space.css', import.meta.url), 'utf8')
 const photos = fs.readFileSync(new URL('../src/styles/photoWallArchive.css', import.meta.url), 'utf8')
 const aiSpace = fs.readFileSync(new URL('../src/components/AISpace.tsx', import.meta.url), 'utf8')
+const memory = fs.readFileSync(new URL('../src/components/Memory.tsx', import.meta.url), 'utf8')
 const photoWall = fs.readFileSync(new URL('../src/components/PhotoWallArchive.tsx', import.meta.url), 'utf8')
 
 function expectPressAfterLift(css, activeSelector, hoverSelector, focusSelector) {
@@ -91,7 +92,8 @@ assert.equal(photoWall.includes('requestAnimationFrame'), false)
 assert.equal(photoWall.includes('pointermove'), false)
 assert.equal(p5d.includes('@keyframes'), false)
 assert.ok(aiSpace.includes('<PhotoWallArchive'))
-assert.ok(aiSpace.includes('<EventArchive'))
+assert.equal(aiSpace.includes('<EventArchive'), false)
+assert.ok(memory.includes('<EventArchive'), 'approved S3 destination: shared experiences live in Chaomu')
 assert.ok(photoWall.includes('const preview = sorted.slice(0, 12)'))
 
 console.log('P5-D Space / Photo Wall depth tests passed')

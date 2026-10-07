@@ -139,6 +139,14 @@ function detectWhen(text: string, now: Date): { when: string; dayOffset: number 
   return null
 }
 
+/** 只解析时间锚，不判断是不是共同计划。供承诺/提醒等本地规则复用。 */
+export function parseFutureTime(
+  text: string,
+  now: Date = new Date(),
+): { when: string; dayOffset: number | null } | null {
+  return detectWhen(String(text ?? ''), now)
+}
+
 /**
  * 主入口：从一句话里认「未来共同计划」。
  * @returns 认不出/不是计划 → null

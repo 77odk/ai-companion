@@ -730,6 +730,52 @@ function extractKeywords(text: string): { multi: Set<string>; singles: Set<strin
   return { multi, singles }
 }
 
+/**
+ * 为旧记忆/自动记忆派生轻量触发词，不调模型、不建向量库。
+ * 只从既有 text/topic 派生，不写回 MemoryItem；旧数据天然兼容。
+ */
+export function deriveMemoryTriggerWords(text: string, topic?: string): string[] {
+  const kw = extractKeywords(text)
+  const out: string[] = []
+  const push = (value: string) => {
+    const v = value.trim().toLowerCase()
+    if (!v || STOP_CHARS.has(v) || out.includes(v)) return
+    out.push(v)
+  }
+  const inferred = topic?.trim() || inferTopic(text)
+  if (inferred && inferred !== '其他') push(inferred)
+  // Set 保留源文本出现顺序；不做 locale 排序，也不截断候选。
+  // 触发词只在本地匹配，不进入模型上下文，因此没必要用 cap 换正确性。
+  // UI 若只想展示少量 chip，应在展示层 slice，而不能让召回因此丢掉句尾的关键实体。
+  for (const word of kw.multi) {
+    if (word.length >= 2 && word.length <= 8) push(word)
+  }
+  for (const word of kw.singles) push(word)
+  return out
+}
+
+function memoryTriggers(memory: MemoryItem): string[] {
+  // AGENTS v2 禁止扩 MemoryItem schema：触发词永远从现有 text/topic 本地派生，
+  // 不写入 MemoryItem，也不建立第二套记忆数据层。
+  return deriveMemoryTriggerWords(memory.text, memory.topic)
+}
+
+function triggerMatchesContext(trigger: string, raw: string, multi: Set<string>, singles: Set<string>): boolean {
+  const t = trigger.trim().toLowerCase()
+  if (!t) return false
+  const lower = raw.toLowerCase()
+  if (lower.includes(t)) return true
+
+  // topic 本身也是合法触发词，但用户通常说“猫/咖啡/加班”而不会说“宠物/饮食/工作”。
+  // 用既有 TOPIC_RULES 判本轮是否命中该主题，仍是纯本地规则，不扩大到无关记忆。
+  const topicRule = TOPIC_RULES.find(([, topic]) => topic.toLowerCase() === t)
+  if (topicRule?.[0].test(raw)) return true
+
+  if (t.length === 1) return singles.has(t) || raw.includes(t)
+  if (multi.has(t)) return true
+  return hasCommonKeyword(t, raw, multi, singles)
+}
+
 /** 记忆 text 与 contextText 是否有共同实词：2 字以上词有交集，或任一侧的单字实词出现在另一侧文本里 */
 function hasCommonKeyword(
   memText: string,
@@ -745,24 +791,21 @@ function hasCommonKeyword(
 }
 
 export interface RecallOptions {
-  /** 兜底条数：无任何命中时取最活跃的前 N 条，默认 5 */
+  /** 兼容旧调用签名；B19 起无命中不再兜底注入。 */
   fallbackCount?: number
   /** 排序基准时间（测试可传固定值），默认 Date.now() */
   now?: number
 }
 
 /**
- * 按需召回：对话注入时只带与当前话题相关的记忆 + 重要记忆，其余省略。
- * 匹配规则（简单可靠）：
- * 0. 先过滤已过期的临时记忆；pinned / explicit 都不能绕过时效。
- * 1. pinned 在仍有效的记忆中全量包含
- * 2. 主题命中：contextText 出现某个主题词（吃/猫/家人…）→ 该主题全部记忆带上
- *    （旧数据无 topic 字段的按 inferTopic 推断，避免「养猫」这类记忆落空）
- * 3. 关键词命中：记忆 text 与 contextText 有 ≥1 个共同实词（长度 ≥2 的字/词，单独的单字实词也算）
- * 4. 其余（不相关的非 pinned）不注入
- * 兜底：一条都没命中（context 太短/太泛）→ 退化为最活跃的前 fallbackCount 条（含全部 pinned）
- * 返回排序（双源信任）：pinned 恒最前 → 用户明说的（explicit）次之 → 其余按活跃度。
- * 纯函数，不修改输入数组。
+ * B19 关键词激活召回：
+ * 0. 先过滤已过期条目；
+ * 1. 每条记忆从现有 text/topic 本地派生触发词；
+ * 2. 本轮上下文命中至少一个触发词，才允许进入模型上下文；
+ * 3. pinned / explicit 不能绕过激活门，只用于命中后的排序；
+ * 4. 无命中、空上下文都返回空数组，不再做“塞几条进去”的兜底。
+ * 返回排序：pinned → 用户明说 explicit → 其余按活跃度。
+ * 纯函数，不修改输入数组，不额外调用模型。
  */
 export function recallRelevantMemories(
   items: MemoryItem[],
@@ -770,51 +813,21 @@ export function recallRelevantMemories(
   opts: RecallOptions = {},
 ): MemoryItem[] {
   const now = opts.now ?? Date.now()
-  const fallbackCount = opts.fallbackCount ?? 10
   const valid = (Array.isArray(items) ? items : []).filter(
     (m): m is MemoryItem =>
       m != null && typeof m.text === 'string' && isMemoryActive(m, now),
   )
   if (valid.length === 0) return []
 
-  const pinned = valid.filter((m) => m.pinned === true)
-  const rest = valid.filter((m) => m.pinned !== true)
-
-  const ctxRaw = String(contextText ?? '')
+  const ctxRaw = String(contextText ?? '').trim()
+  if (!ctxRaw) return []
   const ctxKw = extractKeywords(ctxRaw)
 
-  // 主题命中：context 里出现主题词表里的词 → 该主题全部记忆带上
-  const hitTopics = new Set<string>()
-  for (const [re, topic] of TOPIC_RULES) {
-    if (re.test(ctxRaw)) hitTopics.add(topic)
-  }
+  // B19：条目只有触发词命中才进入上下文。pinned / explicit 只参与命中后的排序，
+  // 不能绕过激活门；也不再用“无命中时塞几条”的兜底把整库带进每一轮。
+  const matched = valid.filter((memory) => (
+    memoryTriggers(memory).some((trigger) => triggerMatchesContext(trigger, ctxRaw, ctxKw.multi, ctxKw.singles))
+  ))
 
-  const matched: MemoryItem[] = []
-  const seen = new Set<string>()
-  for (const m of rest) {
-    const topic = m.topic?.trim() || inferTopic(m.text)
-    if (hitTopics.has(topic)) {
-      seen.add(m.id)
-      matched.push(m)
-      continue
-    }
-    if (seen.has(m.id)) continue
-    if (hasCommonKeyword(m.text, ctxRaw, ctxKw.multi, ctxKw.singles)) {
-      seen.add(m.id)
-      matched.push(m)
-    }
-  }
-
-  // 一条都没命中 → 兜底：pinned 全量 + explicit（用户明说）全量 + 其余按活跃度补到 fallbackCount。
-  // 刷新对话/无上下文时走这里：保证关键事实（置顶的、用户亲口说的）永远在 TA 的脑子里。
-  if (matched.length === 0) {
-    const ranked = rankDualSource(valid, now)
-    const pin = ranked.filter((m) => m.pinned === true)
-    const explicit = ranked.filter((m) => m.explicit === true && m.pinned !== true)
-    const others = ranked.filter((m) => m.pinned !== true && m.explicit !== true)
-    const restCount = Math.max(0, fallbackCount - pin.length - explicit.length)
-    return [...pin, ...explicit, ...others.slice(0, restCount)]
-  }
-
-  return rankDualSource([...pinned, ...matched], now)
+  return rankDualSource(matched, now)
 }
