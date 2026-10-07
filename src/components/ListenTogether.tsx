@@ -56,12 +56,48 @@ export default function ListenTogether({ onBack }: Props) {
       </header>
       <main className="listen-stage">
         <section className="listen-player" aria-label="一起听歌播放器">
-          <div className="listen-cover" aria-hidden="true">
-            <span />
-          </div>
-          <div className="listen-meta">
-            <strong>{title}</strong>
-            <span>{src ? '本地音乐' : '只读取你自己选择的音乐'}</span>
+          <div className="listen-device-wrap">
+            <div className="listen-tablet">
+              <div className="listen-tablet-screen">
+                <div className="listen-cover" aria-hidden="true">
+                  <span />
+                </div>
+                <div className="listen-meta">
+                  <strong>{title}</strong>
+                  <span>{src ? '本地音乐' : '只读取你自己选择的音乐'}</span>
+                </div>
+                <div className="listen-progress-row">
+                  <span>{fmt(current)}</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max={Math.max(1, duration)}
+                    step="0.1"
+                    value={Math.min(current, Math.max(1, duration))}
+                    onChange={(event) => {
+                      const audio = audioRef.current
+                      if (!audio) return
+                      audio.currentTime = Number(event.target.value)
+                      setCurrent(audio.currentTime)
+                    }}
+                    aria-label="播放进度"
+                  />
+                  <span>{fmt(duration)}</span>
+                </div>
+                <div className="listen-actions">
+                  <button type="button" onClick={() => inputRef.current?.click()}>选择歌曲</button>
+                  <button type="button" className="listen-play" onClick={() => void toggle()}>
+                    {playing ? '暂停' : '播放'}
+                  </button>
+                </div>
+              </div>
+              <span className="listen-tablet-port" aria-hidden="true" />
+            </div>
+            <span className="listen-stand" aria-hidden="true" />
+            <span className="listen-earphones" aria-hidden="true">
+              <i />
+              <i />
+            </span>
           </div>
           <input
             ref={inputRef}
@@ -82,30 +118,6 @@ export default function ListenTogether({ onBack }: Props) {
             onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
             onEnded={() => setPlaying(false)}
           />
-          <div className="listen-progress-row">
-            <span>{fmt(current)}</span>
-            <input
-              type="range"
-              min="0"
-              max={Math.max(1, duration)}
-              step="0.1"
-              value={Math.min(current, Math.max(1, duration))}
-              onChange={(event) => {
-                const audio = audioRef.current
-                if (!audio) return
-                audio.currentTime = Number(event.target.value)
-                setCurrent(audio.currentTime)
-              }}
-              aria-label="播放进度"
-            />
-            <span>{fmt(duration)}</span>
-          </div>
-          <div className="listen-actions">
-            <button type="button" onClick={() => inputRef.current?.click()}>选择歌曲</button>
-            <button type="button" className="listen-play" onClick={() => void toggle()}>
-              {playing ? '暂停' : '播放'}
-            </button>
-          </div>
         </section>
       </main>
     </div>
