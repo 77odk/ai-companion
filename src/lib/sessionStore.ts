@@ -11,7 +11,6 @@ import { recordMemoryIdAlias } from './memoryIdAliases.ts'
 import { stripTimeLabels } from './timeLabels.ts'
 
 const ACTIVE_SESSION_KEY = 'ai_companion_active_session_id'
-export const ACTIVE_SESSION_CHANGED_EVENT = 'yiwem:active-session-changed'
 const SESSIONS_CACHE_KEY = 'ai_companion_sessions_cache'
 const PENDING_OPS_KEY = 'ai_companion_pending_ops'
 const msgsKey = (sessionId: string) => `ai_companion_msgs_${sessionId}`
@@ -63,26 +62,11 @@ export function getActiveSessionId(): string {
 
 /** 设置当前会话 id（空串 = 清掉） */
 export function setActiveSessionId(id: string): void {
-  const nextId = String(id ?? '')
-  let previousId = ''
   try {
-    previousId = localStorage.getItem(ACTIVE_SESSION_KEY) ?? ''
-    if (nextId) localStorage.setItem(ACTIVE_SESSION_KEY, nextId)
+    if (id) localStorage.setItem(ACTIVE_SESSION_KEY, String(id))
     else localStorage.removeItem(ACTIVE_SESSION_KEY)
   } catch {
     // 存不下不影响功能
-    return
-  }
-
-  if (
-    previousId !== nextId
-    && typeof window !== 'undefined'
-    && typeof window.dispatchEvent === 'function'
-    && typeof CustomEvent !== 'undefined'
-  ) {
-    window.dispatchEvent(new CustomEvent(ACTIVE_SESSION_CHANGED_EVENT, {
-      detail: { previousSessionId: previousId, sessionId: nextId },
-    }))
   }
 }
 
