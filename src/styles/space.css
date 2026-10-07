@@ -793,11 +793,11 @@
 }
 
 .space-scene-hotspot.is-weekly-letter:active .space-drawer-peek {
-  transform: translateY(3px);
+  transform: translate3d(0, 8%, 0);
 }
 
 .space-scene-hotspot.is-weekly-letter.is-opening .space-drawer-peek {
-  transform: translateY(11px);
+  transform: translate3d(0, 48%, 0);
 }
 
 @keyframes space-object-glass-glint {
