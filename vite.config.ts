@@ -112,6 +112,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,ico,png}'],
         navigateFallback: 'index.html',
+        importScripts: ['notification-click.js'],
       },
     }),
   ],
