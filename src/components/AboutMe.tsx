@@ -31,6 +31,8 @@ import {
   type MemoryItem,
 } from '../lib/memory'
 import { loadUserProfile } from '../lib/storage'
+import { captureMemoryPaperMood, deleteMemoryPapersForMemory, generateMemoryPaper } from '../lib/memoryPaper'
+import { getActiveSessionId } from '../lib/sessionStore'
 
 interface Props {
   /** 返回忆览页 */
@@ -155,7 +157,16 @@ export default function AboutMe({ onBack }: Props) {
     if (!t) return
     // 关于我 = 个人档案，所有角色共享：永远写全局库（2026-08-26 修复：之前有会话时误写进会话缓存，
     // 导致提交后关于我页面不显示）
-    setMemories(addMemoryItem(t, '其他', true).filter((m) => m.explicit === true))
+    const before = loadMemory()
+    const sid = getActiveSessionId()
+    const paperMood = sid ? captureMemoryPaperMood(sid) : undefined
+    const next = addMemoryItem(t, '其他', true)
+    setMemories(next.filter((m) => m.explicit === true))
+    const added = next.find((item) => !before.some((previous) => previous.id === item.id))
+    if (sid && added) {
+      // 全局“关于我”事实共享，但纸条属于当前 TA：每个 TA 各自留自己的口吻与当时状态。
+      void generateMemoryPaper(sid, { kind: 'global', item: added }, { mood: paperMood }).catch(() => {})
+    }
     setText('')
   }
 
@@ -164,6 +175,8 @@ export default function AboutMe({ onBack }: Props) {
     // 删除永远操作全局库，绝不碰会话缓存（那是 TA所忆，按角色隔离）。
     // 修 review3 新-13：之前有会话时误删「会话缓存」里的条目，全局记忆根本没动 → 删了个寂寞。
     setMemories(removeMemoryItem(id).filter((m) => m.explicit === true))
+    // 全局事实删除后，各 TA 下面对应的星星纸条也必须一起消失。
+    deleteMemoryPapersForMemory('global', id)
   }
 
   return (
