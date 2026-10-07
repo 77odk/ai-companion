@@ -11,21 +11,16 @@ console.log('[Space S2] four approved desk objects are real entry points')
 for (const klass of ['is-star-jar', 'is-thought-book', 'is-player', 'is-weekly-letter']) {
   assert.match(aiSpace, new RegExp(`space-scene-hotspot ${klass}`))
 }
-assert.match(aiSpace, /onClick=\{onOpenMemory\}/)
+assert.match(aiSpace, /onClick=\\{onOpenStarJar\\}/)
 assert.match(aiSpace, /onClick=\{onOpenThoughts\}/)
 assert.match(aiSpace, /onClick=\{onOpenListen\}/)
 assert.match(aiSpace, /onClick=\{onOpenWeekly\}/)
 
-console.log('[Space S2] S1 photo/event compatibility entries remain reachable')
+console.log('[Space S2] photo archive compatibility entry remains reachable; S3 moves shared experiences to Chaomu')
 assert.match(aiSpace, /space-scene-hotspot is-photo-wall/)
-assert.match(aiSpace, /space-scene-hotspot is-moments/)
 assert.match(aiSpace, /\{renderPhotoWall\(\)\}/)
-assert.match(aiSpace, /<EventArchive sessionId=\{sid\} \/>/)
-assert.match(
-  css,
-  /\.space-scene-hotspot\.is-moments\s*\{[\s\S]*left:\s*64%;[\s\S]*top:\s*23%;[\s\S]*width:\s*15%;[\s\S]*height:\s*15%;/,
-  '一起经历过 compatibility hotspot must stay on the visible keepsake note, not under the desk objects',
-)
+assert.doesNotMatch(aiSpace, /space-scene-hotspot is-moments/)
+assert.doesNotMatch(aiSpace, /<EventArchive/)
 
 console.log('[Space S2] secondary destinations are routed without changing primary navigation')
 assert.match(app, /lazy\(\(\) => import\('\.\/components\/ThoughtBook'\)\)/)
