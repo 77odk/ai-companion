@@ -1648,11 +1648,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
       if (mountedRef.current) setStreaming(false)
       controllerRef.current = null
-      // 卸载期间回复完成落库（2026-09-05 夜乔修：返回主界面后 TA 的回复"消失"，发下一条才一起冒出）
-      // ——广播事件，重新进入的聊天页实例收到后刷新缓存，让这条回复立即显示
-      if (!mountedRef.current) {
-        window.dispatchEvent(new CustomEvent('yiwem:ai-reply-committed', { detail: { sid: roundSessionId } }))
-      }
+      // 最终可见回复真实落库后统一广播：前台用于承诺建档 / 状态刷新，
+      // 卸载场景仍用于重新进入聊天时刷新缓存。事件只描述“已 commit”，不改上传/合并/去重链。
+      window.dispatchEvent(new CustomEvent('yiwem:ai-reply-committed', { detail: { sid: roundSessionId } }))
       unregisterActiveReplyRun(roundSessionId, lifecycleUserTs)
       partialTsRef.current = null
       partialUserTsRef.current = null
