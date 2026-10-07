@@ -637,10 +637,13 @@
 }
 
 .space-scene-hotspot.is-moments {
-  left: 23%;
-  top: 59%;
-  width: 74%;
-  height: 22%;
+  /* S2: 「一起经历过」暂挂在照片墙里那张压花纸签上。
+     这是画面中独立可辨识的小物件，也避开书 / 播放器 / 星星罐；
+     S3 按既定方向把正式入口迁到「朝暮」。 */
+  left: 64%;
+  top: 23%;
+  width: 15%;
+  height: 15%;
 }
 
 .space-scene-hotspot.is-weekly-letter {
@@ -682,5 +685,372 @@
     animation: none;
     opacity: .12;
     transform: none;
+  }
+}
+
+
+/* ---- Direction v6 · S2 desk object interaction ------------------------
+   The approved backplate stays untouched. Interactive motion is a thin
+   CSS/SVG layer aligned to the same fixed coordinate system. */
+.space-scene-hotspot.is-star-jar {
+  left: 18%;
+  top: 47%;
+  width: 32%;
+  height: 20%;
+}
+
+.space-scene-hotspot.is-thought-book {
+  left: 19%;
+  top: 66%;
+  width: 73%;
+  height: 18%;
+}
+
+.space-scene-hotspot.is-player {
+  left: 54%;
+  top: 52%;
+  width: 37%;
+  height: 15%;
+}
+
+.space-scene-hotspot > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.space-object-glint,
+.space-object-rim,
+.space-object-paper-edge,
+.space-object-progress {
+  fill: none;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.space-object-glint {
+  stroke: rgba(255, 251, 235, .28);
+  stroke-width: 4;
+  filter: drop-shadow(0 0 3px rgba(255,255,255,.16));
+  animation: space-object-glass-glint 7.5s ease-in-out infinite;
+}
+
+.space-object-rim {
+  stroke: rgba(255, 232, 195, .16);
+  stroke-width: 2;
+}
+
+.space-object-paper-edge {
+  stroke: rgba(255, 239, 213, .22);
+  stroke-width: 2;
+  filter: drop-shadow(0 1px 1px rgba(103,60,34,.12));
+}
+
+.space-object-screen-glow {
+  fill: rgba(255, 211, 161, .035);
+  stroke: rgba(255, 229, 198, .10);
+  stroke-width: 1;
+  animation: space-object-screen-breathe 6.4s ease-in-out infinite;
+}
+
+.space-object-progress {
+  stroke: rgba(255, 236, 213, .28);
+  stroke-width: 2;
+}
+
+.space-drawer-peek {
+  position: absolute;
+  left: 11%;
+  right: 3%;
+  top: 28%;
+  height: 46%;
+  border-radius: 2px 2px 8px 8px;
+  box-shadow: inset 0 1px rgba(255, 239, 215, .08);
+  pointer-events: none;
+  transition: transform 220ms cubic-bezier(.16,1,.3,1);
+}
+
+.space-scene-hotspot.is-star-jar,
+.space-scene-hotspot.is-thought-book,
+.space-scene-hotspot.is-player,
+.space-scene-hotspot.is-weekly-letter {
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition:
+    transform 180ms cubic-bezier(.16,1,.3,1),
+    filter 180ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .space-scene-hotspot.is-star-jar:hover,
+  .space-scene-hotspot.is-thought-book:hover,
+  .space-scene-hotspot.is-player:hover,
+  .space-scene-hotspot.is-weekly-letter:hover {
+    filter: brightness(1.018);
+    transform: translateY(-1px);
+  }
+}
+
+.space-scene-hotspot.is-star-jar:active,
+.space-scene-hotspot.is-thought-book:active,
+.space-scene-hotspot.is-player:active,
+.space-scene-hotspot.is-weekly-letter:active {
+  transform: translateY(1px) scale(.994);
+}
+
+.space-scene-hotspot.is-weekly-letter:active .space-drawer-peek {
+  transform: translateY(3px);
+}
+
+@keyframes space-object-glass-glint {
+  0%, 100% { opacity: .28; transform: translateX(0); }
+  48% { opacity: .68; transform: translateX(2px); }
+  62% { opacity: .38; transform: translateX(1px); }
+}
+
+@keyframes space-object-screen-breathe {
+  0%, 100% { opacity: .32; }
+  50% { opacity: .72; }
+}
+
+/* Destination pages keep the scene's warm material language without turning
+   the desk itself into a dashboard. */
+.space-object-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(255, 224, 184, .34), transparent 48%),
+    #fff8ed;
+  color: #5b4030;
+}
+
+.space-object-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: 72px 1fr 72px;
+  align-items: center;
+  padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
+  background: rgba(255, 248, 237, .91);
+  border-bottom: 1px solid rgba(121, 83, 58, .1);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.space-object-topbar > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.space-object-topbar strong {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.space-object-topbar span {
+  font-size: 9px;
+  letter-spacing: .14em;
+  color: rgba(91, 64, 48, .52);
+}
+
+.space-object-back {
+  min-height: 40px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: rgba(91, 64, 48, .72);
+  text-align: left;
+  font-size: 13px;
+}
+
+.thought-book-stage,
+.listen-stage {
+  min-height: calc(100% - 64px);
+  display: grid;
+  place-items: center;
+  padding: 28px 20px calc(34px + env(safe-area-inset-bottom));
+}
+
+.thought-book-shell {
+  position: relative;
+  width: min(88vw, 380px);
+  aspect-ratio: 4 / 5;
+  perspective: 1100px;
+}
+
+.thought-book-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px 18px 18px 10px;
+  background:
+    linear-gradient(90deg, rgba(101, 64, 43, .22) 0 7%, transparent 7%),
+    linear-gradient(145deg, #c99467, #a86e48);
+  box-shadow: 0 18px 44px rgba(89, 54, 34, .22);
+  transform-origin: 5% 50%;
+  animation: thought-book-arrive .72s cubic-bezier(.16,1,.3,1) both;
+}
+
+.thought-book-spine {
+  position: absolute;
+  left: 7%;
+  top: 3%;
+  bottom: 3%;
+  width: 1px;
+  background: rgba(255,255,255,.2);
+}
+
+.thought-book-cover-title {
+  color: #fff5e8;
+  font-size: 28px;
+  letter-spacing: .22em;
+}
+
+.thought-book-cover-sub {
+  margin-top: 10px;
+  color: rgba(255,245,232,.72);
+  font-size: 12px;
+}
+
+.thought-book-empty {
+  position: absolute;
+  inset: 4% 2% 2% 5%;
+  border-radius: 8px 14px 14px 8px;
+  background:
+    repeating-linear-gradient(0deg, rgba(124,88,60,.055) 0 1px, transparent 1px 28px),
+    #fffdf6;
+  box-shadow: 0 12px 34px rgba(92, 56, 35, .14);
+  display: grid;
+  place-items: center;
+  padding: 36px;
+  color: rgba(91,64,48,.58);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.listen-player {
+  width: min(92vw, 420px);
+  padding: 24px;
+  border: 1px solid rgba(104, 69, 48, .11);
+  border-radius: 24px;
+  background: rgba(255, 252, 245, .76);
+  box-shadow: 0 20px 52px rgba(87, 52, 31, .13);
+}
+
+.listen-cover {
+  width: min(48vw, 188px);
+  aspect-ratio: 1;
+  margin: 0 auto 20px;
+  border-radius: 20px;
+  padding: 12px;
+  background: linear-gradient(145deg, #f2bd83, #c8794d);
+  box-shadow: 0 12px 30px rgba(101, 59, 34, .18);
+}
+
+.listen-cover span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 30% 28%, rgba(255,255,255,.55), transparent 21%),
+    linear-gradient(160deg, #f8d7aa, #df9467 48%, #8f5c49);
+}
+
+.listen-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.listen-meta strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+}
+
+.listen-meta span,
+.listen-progress-row span {
+  color: rgba(91,64,48,.55);
+  font-size: 11px;
+}
+
+.listen-progress-row {
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  gap: 8px;
+  align-items: center;
+  margin-top: 22px;
+}
+
+.listen-progress-row input {
+  width: 100%;
+  accent-color: #a96f4b;
+}
+
+.listen-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.listen-actions button {
+  min-width: 104px;
+  min-height: 42px;
+  border: 1px solid rgba(107, 72, 50, .14);
+  border-radius: 999px;
+  background: #fff9ef;
+  color: #6b4935;
+}
+
+.listen-actions .listen-play {
+  background: #a96f4b;
+  color: #fff8ee;
+  border-color: transparent;
+}
+
+@keyframes thought-book-arrive {
+  from { opacity: 0; transform: translateY(10px) rotateY(-7deg); }
+  to { opacity: 1; transform: translateY(0) rotateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-object-glint,
+  .space-object-screen-glow,
+  .thought-book-cover {
+    animation: none;
+  }
+
+  .space-scene-hotspot.is-star-jar,
+  .space-scene-hotspot.is-thought-book,
+  .space-scene-hotspot.is-player,
+  .space-scene-hotspot.is-weekly-letter,
+  .space-drawer-peek {
+    transition: none;
+  }
+
+  .space-scene-hotspot.is-star-jar:active,
+  .space-scene-hotspot.is-thought-book:active,
+  .space-scene-hotspot.is-player:active,
+  .space-scene-hotspot.is-weekly-letter:active {
+    transform: none;
+    opacity: .92;
   }
 }

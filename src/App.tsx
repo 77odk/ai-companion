@@ -83,6 +83,8 @@ const ChatProfile = lazy(() => import('./components/ChatProfile'))
 const ChatSettings = lazy(() => import('./components/ChatSettings'))
 const AboutMe = lazy(() => import('./components/AboutMe'))
 const WeeklyPage = lazy(() => import('./components/WeeklyPage'))
+const ThoughtBook = lazy(() => import('./components/ThoughtBook'))
+const ListenTogether = lazy(() => import('./components/ListenTogether'))
 const GuideDetail = lazy(() => import('./components/Guide'))
 const ProductIntro = lazy(() => import('./components/ProductIntro'))
 const RolesPage = lazy(() => import('./components/RolesPage'))
@@ -91,7 +93,7 @@ const Memory = lazy(loadMemoryView)
 const NotificationsPage = lazy(() => import('./components/NotificationsPage'))
 const FeedbackPage = lazy(() => import('./components/FeedbackPage'))
 
-type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'spacelife' | 'guide' | 'notifications' | 'feedback' | 'loading'
+type View = 'welcome' | 'productintro' | 'role' | 'roles' | 'home' | 'chat' | 'chatsettings' | 'settings' | 'memory' | 'aispace' | 'chatprofile' | 'aboutme' | 'weekly' | 'thoughts' | 'listen' | 'spacelife' | 'guide' | 'notifications' | 'feedback' | 'loading'
 
 interface InitiativeNotice {
   accountId: string
@@ -1292,6 +1294,10 @@ export default function App() {
         <AboutMe onBack={() => window.history.back()} />
       ) : view === 'weekly' ? (
         <WeeklyPage onBack={() => window.history.back()} onGoSettings={() => openSettings('provider')} />
+      ) : view === 'thoughts' ? (
+        <ThoughtBook onBack={() => window.history.back()} />
+      ) : view === 'listen' ? (
+        <ListenTogether onBack={() => window.history.back()} />
       ) : view === 'spacelife' ? (
         <SpaceLife
           aiNickname={loadAIProfile(getActiveSessionId() || undefined).nickname}
@@ -1502,6 +1508,9 @@ export default function App() {
             {view === 'aispace' && (
               <AISpace
                 key={spaceRootKey}
+                onOpenMemory={() => navigate('memory')}
+                onOpenThoughts={() => navigate('thoughts')}
+                onOpenListen={() => navigate('listen')}
                 onOpenWeekly={() => {
                   setDetailFrom('aispace')
                   navigate('weekly')
