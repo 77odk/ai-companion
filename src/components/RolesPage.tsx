@@ -28,6 +28,7 @@ import type { StoredMessage } from '../lib/storage'
 import { clearDefaultRoleId, getDefaultRoleId, setDefaultRoleId } from '../lib/defaultRole'
 import { clearReplyLengthOverride } from '../lib/replyLength'
 import { deleteTaCommitmentsForSession } from '../lib/commitmentStore'
+import { notifyDataChanged } from '../lib/dataChange'
 
 interface Props {
   /** 返回「我的」（角色管理页的返回落点） */
@@ -156,6 +157,8 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
       const remaining = list.filter((s) => String(s.id) !== String(id))
       setSessions(remaining)
       setSessionsCache(remaining)
+      // setSessionsCache 自身是静默缓存写；角色删除后显式广播，让提醒/其它只读视图立刻丢掉该 session。
+      notifyDataChanged()
 
       const resolution = resolveSessionAfterDelete(
         remaining,
