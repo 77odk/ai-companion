@@ -5,12 +5,12 @@ const homeCss = fs.readFileSync(new URL('../src/styles/home.css', import.meta.ur
 const homeTsx = fs.readFileSync(new URL('../src/components/Home.tsx', import.meta.url), 'utf8')
 const orbTsx = fs.readFileSync(new URL('../src/components/TaOrb.tsx', import.meta.url), 'utf8')
 
-console.log('[P5-B] Home 内容顺序 / 文案 / 数据挂载不变')
+console.log('[P5-B] Home Presence / CTA / 生活顺序保持；S4 状态文案移入朝暮')
 const companionIndex = homeTsx.indexOf('className="home-companion"')
 const talkIndex = homeTsx.indexOf('className="home-talk"')
 const lifeIndex = homeTsx.indexOf('className="home-life"')
 assert.ok(companionIndex >= 0 && talkIndex > companionIndex && lifeIndex > talkIndex)
-assert.ok(homeTsx.includes('{taName} 此刻'))
+assert.equal(homeTsx.includes('{taName} 此刻'), false, 'S4 不在 Home 重复展示 TA 此刻')
 assert.ok(homeTsx.includes('和 {taName} 说说话'))
 assert.ok(homeTsx.includes('<TaOrb label={taName} scene={scene.id} avatar={taAvatar} />'))
 
