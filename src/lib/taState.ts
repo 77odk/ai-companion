@@ -386,31 +386,43 @@ type EvidencePatch = {
   reason: string
 }
 
+function ownsEmotionPredicate(clause: string, predicate: RegExp): boolean {
+  const match = predicate.exec(clause)
+  if (!match || match.index == null) return false
+  const prefix = clause.slice(0, match.index)
+  const subjects = [...prefix.matchAll(/我|你们?|他|她|TA|ta|对方|别人/g)]
+  const lastSubject = subjects[subjects.length - 1]?.[0]
+  if (lastSubject !== '我') return false
+  // “你说我很难过”是对方在描述 TA，不是 TA 自己刚刚认领的情绪。
+  if (/你们?.{0,6}(?:说|觉得|认为|看出|发现).{0,4}我[^我你他她]*$/i.test(prefix)) return false
+  return true
+}
+
 function detectSelfEmotionEvidence(text: string): EvidencePatch | null {
   const clauses = String(text ?? '').split(/[。！？!?；;\n]+/).map((part) => part.trim()).filter(Boolean)
   for (const clause of clauses) {
-    if (/我.{0,8}(?:有点|有些|挺|很)?(?:烦|烦躁|心里乱|静不下来)/.test(clause)) {
+    if (ownsEmotionPredicate(clause, /(?:烦躁|心里乱|静不下来|烦)/)) {
       return { tension: .62, active: .28, reason: 'TA 刚刚明确说自己有些烦躁' }
     }
-    if (/我.{0,8}(?:有点|有些|挺|很)?(?:紧张|紧绷|绷着)/.test(clause)) {
+    if (ownsEmotionPredicate(clause, /(?:紧张|紧绷|绷着)/)) {
       return { tension: .66, active: .08, reason: 'TA 刚刚明确说自己有些紧绷' }
     }
-    if (/我.{0,8}(?:有点|有些|挺|很)?(?:低落|难过|心情不好)/.test(clause)) {
+    if (ownsEmotionPredicate(clause, /(?:低落|难过|心情不好)/)) {
       return { tension: .48, active: -.36, energy: .34, reason: 'TA 刚刚明确说自己有些低落' }
     }
-    if (/我.{0,8}(?:有点|有些|挺|很)?(?:闷|闷闷的)/.test(clause)) {
+    if (ownsEmotionPredicate(clause, /(?:闷闷的|闷)/)) {
       return { tension: .44, active: -.30, reason: 'TA 刚刚明确说自己心里有点闷' }
     }
-    if (/我.{0,8}(?:有点|有些|挺|很)?(?:累|疲惫|没精神)/.test(clause)) {
+    if (ownsEmotionPredicate(clause, /(?:疲惫|没精神|累)/)) {
       return { energy: .20, active: -.30, reason: 'TA 刚刚明确说自己有点累' }
     }
-    if (/我.{0,8}(?:挺|很|有点)?(?:期待|兴奋|开心)/.test(clause)) {
+    if (ownsEmotionPredicate(clause, /(?:期待|兴奋|开心)/)) {
       return { tension: -.32, active: .34, energy: .68, reason: 'TA 刚刚明确表达了期待或开心' }
     }
-    if (/我.{0,8}(?:挺|很|有点)?(?:安心|放松|惬意)/.test(clause)) {
+    if (ownsEmotionPredicate(clause, /(?:安心|放松|惬意)/)) {
       return { tension: -.42, active: -.04, reason: 'TA 刚刚明确说自己比较放松' }
     }
-    if (/我.{0,8}(?:在想|想了想|有点想不明白|若有所思)/.test(clause)) {
+    if (ownsEmotionPredicate(clause, /(?:在想|想了想|有点想不明白|若有所思)/)) {
       return { reminiscence: .72, exploration: .68, active: -.08, reason: 'TA 刚刚明确说自己还在想一件事' }
     }
   }
