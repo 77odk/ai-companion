@@ -390,7 +390,7 @@ function ownsEmotionPredicate(clause: string, predicate: RegExp): boolean {
   const match = predicate.exec(clause)
   if (!match || match.index == null) return false
   const prefix = clause.slice(0, match.index)
-  const subjects = [...prefix.matchAll(/我|你们?|他|她|TA|ta|对方|别人/g)]
+  const subjects = [...prefix.matchAll(/我(?!们)|你们?|他|她|TA|ta|对方|别人/g)]
   const lastSubject = subjects[subjects.length - 1]?.[0]
   if (lastSubject !== '我') return false
   // “你说我很难过”是对方在描述 TA，不是 TA 自己刚刚认领的情绪。
