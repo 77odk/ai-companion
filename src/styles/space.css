@@ -1512,14 +1512,28 @@
   position: absolute;
   left: var(--star-x);
   top: var(--star-y);
+  width: clamp(11px, 3.5vw, 17px);
+  aspect-ratio: 1;
   display: block;
-  color: #ffd88a;
-  font-size: clamp(9px, 3.1vw, 15px);
-  line-height: 1;
-  transform: translate(-50%, -50%) rotate(var(--star-r)) scale(.82);
-  filter: drop-shadow(0 0 4px rgba(255, 209, 114, .28));
+  transform: translate(-50%, -50%) rotate(var(--star-r));
+  filter: drop-shadow(0 2px 2px rgba(91, 55, 35, .18));
   animation: none;
 }
+.star-jar-star::before,
+.star-jar-star::after,
+.star-jar-star > i,
+.star-jar-star > b {
+  content: '';
+  position: absolute;
+  inset: 0;
+  display: block;
+  background: #f2c879;
+  clip-path: polygon(50% 0, 61% 35%, 100% 38%, 69% 59%, 80% 100%, 50% 75%, 20% 100%, 31% 59%, 0 38%, 39% 35%);
+}
+.star-jar-star::before { background: #f7d895; transform: translate(-1px,-1px); }
+.star-jar-star::after { clip-path: polygon(50% 0,61% 35%,50% 50%,39% 35%); background: rgba(255,250,220,.68); }
+.star-jar-star > i { clip-path: polygon(0 38%,39% 35%,50% 50%,31% 59%); background: rgba(199,139,76,.42); }
+.star-jar-star > b { clip-path: polygon(50% 50%,69% 59%,80% 100%,50% 75%); background: rgba(175,111,66,.28); }
 
 .star-jar-label {
   position: absolute;
@@ -1647,8 +1661,9 @@
 }
 
 @keyframes star-jar-twinkle {
-  0%, 100% { opacity: .48; transform: translate(-50%, -50%) rotate(var(--star-r)) scale(.78); }
-  50% { opacity: .95; transform: translate(-50%, -50%) rotate(var(--star-r)) scale(1); }
+  0%, 100% { transform: translate(-50%, -50%) translateY(0) rotate(var(--star-r)); }
+  45% { transform: translate(-50%, -50%) translateY(-4px) rotate(calc(var(--star-r) + 3deg)); }
+  70% { transform: translate(-50%, -50%) translateY(2px) rotate(calc(var(--star-r) - 2deg)); }
 }
 
 @keyframes star-paper-open {
@@ -1687,11 +1702,6 @@
 
 .star-jar-star.is-moving {
   animation: star-jar-twinkle 3.8s ease-in-out var(--star-d) infinite;
-}
-
-.star-jar-star.is-filler {
-  opacity: .34;
-  filter: none;
 }
 
 .star-memory-heading {

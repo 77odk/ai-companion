@@ -48,9 +48,6 @@ export default function StarJar({ onBack }: Props) {
   const [phase, setPhase] = useState<JarPhase>('jar')
   const [selected, setSelected] = useState<{ item: MemoryItem; number: number } | null>(null)
   const timers = useRef<number[]>([])
-  // 视觉上维持 30–45 颗的丰满度；真实记忆仍是一条对应一个编号星星。
-  // 记忆少于 30 时其余只是无语义填充光点，绝不参与抽取。
-  const visibleStarCount = Math.max(30, Math.min(45, numberedMemories.length))
 
   useEffect(() => {
     const refresh = () => setVersion((value) => value + 1)
@@ -108,13 +105,12 @@ export default function StarJar({ onBack }: Props) {
         >
           <span className="star-jar-lid" aria-hidden="true" />
           <span className="star-jar-glass" aria-hidden="true">
-            {Array.from({ length: visibleStarCount }, (_, index) => (
+            {numberedMemories.map(({ item }, index) => (
               <span
-                key={index}
+                key={item.id}
                 className={[
                   'star-jar-star',
-                  index < 6 ? 'is-moving' : '',
-                  index >= numberedMemories.length ? 'is-filler' : '',
+                  index % 4 === 0 ? 'is-moving' : '',
                 ].filter(Boolean).join(' ')}
                 style={{
                   '--star-x': `${8 + ((index * 37) % 83)}%`,
@@ -123,7 +119,8 @@ export default function StarJar({ onBack }: Props) {
                   '--star-d': `${(index % 7) * 0.17}s`,
                 } as React.CSSProperties}
               >
-                ★
+                <i aria-hidden="true" />
+                <b aria-hidden="true" />
               </span>
             ))}
           </span>
