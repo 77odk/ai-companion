@@ -146,7 +146,7 @@ console.log('[S3] 朝暮状态由同一份真实 2 轴 + 7 倾向数据驱动，
 assert.match(memory, /getTaStateDashboard/)
 assert.match(chaomuState, /dashboard\.score/)
 for (const key of ['relaxedTense','quietActive','connection','expression','exploration','involvement','reminiscence','space','energy']) {
-  assert.match(chaomuState + taState, new RegExp('\\\\b' + key + '\\\\b'))
+  assert.match(chaomuState + taState, new RegExp(`\\b${key}\\b`))
 }
 assert.match(taState, /function stateScore/)
 assert.match(taState, /history\?: TaStateHistoryPoint\[\]/)
