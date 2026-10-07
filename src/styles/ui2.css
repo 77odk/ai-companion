@@ -4406,3 +4406,61 @@
     animation: none !important;
   }
 }
+
+
+/* ---- S6 · Wellbeing compliance notices ------------------------------- */
+.wellbeing-notice {
+  position: fixed;
+  z-index: var(--el-z-toast, 60);
+  left: 50%;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  width: min(calc(100% - 28px), 430px);
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--el-border, var(--color-border)) 72%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--el-surface-card, var(--color-card)) 96%, transparent);
+  color: var(--el-text-primary, var(--color-text));
+  box-shadow: 0 18px 44px rgba(38,31,28,.14);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.wellbeing-notice > div {
+  min-width: 0;
+}
+
+.wellbeing-notice strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.wellbeing-notice p {
+  margin: 5px 0 0;
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.wellbeing-notice button {
+  min-height: 36px;
+  border: 0;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 12%, transparent);
+  color: var(--el-accent-deep, var(--color-primary-deep));
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wellbeing-notice {
+    transition: none;
+  }
+}
