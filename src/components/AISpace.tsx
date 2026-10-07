@@ -106,11 +106,36 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const failedPhotoIdsRef = useRef<Set<string>>(new Set())
   const drawerTimerRef = useRef<number | null>(null)
+  const objectTimerRef = useRef<number | null>(null)
   const [drawerOpening, setDrawerOpening] = useState(false)
+  const [openingObject, setOpeningObject] = useState<'photos' | 'jar' | 'book' | 'player' | null>(null)
+  const [placingObjects, setPlacingObjects] = useState(true)
+
+  useEffect(() => {
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const timer = window.setTimeout(() => setPlacingObjects(false), reduce ? 1 : 420)
+    return () => window.clearTimeout(timer)
+  }, [])
 
   useEffect(() => () => {
     if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
+    if (objectTimerRef.current !== null) window.clearTimeout(objectTimerRef.current)
   }, [])
+
+  const openDeskObject = (
+    kind: 'photos' | 'jar' | 'book' | 'player',
+    open: () => void,
+  ) => {
+    if (openingObject || drawerOpening) return
+    setOpeningObject(kind)
+    if (objectTimerRef.current !== null) window.clearTimeout(objectTimerRef.current)
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    objectTimerRef.current = window.setTimeout(() => {
+      objectTimerRef.current = null
+      open()
+      setOpeningObject(null)
+    }, reduce ? 1 : 310)
+  }
 
   const openWeeklyFromDrawer = () => {
     if (drawerOpening) return
@@ -321,10 +346,11 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
         <div className="space-scene-hotspots">
           <button
             type="button"
-            className="space-scene-hotspot is-photo-wall"
+            className={`space-scene-hotspot is-photo-wall${openingObject === 'photos' ? ' is-lifting' : ''}`}
             aria-label="打开照片墙"
-            onClick={openPhotoWall}
+            onClick={() => openDeskObject('photos', openPhotoWall)}
           >
+            <img className="space-object-asset is-photo-board" src="/space/generated/photo-board.svg" alt="" aria-hidden="true" draggable={false} />
             <span className="space-live-photo-board" aria-hidden="true">
               {scenePhotos.map((photo, index) => (
                 <span key={photo.id} className={`space-live-photo is-p${index}`}>
@@ -350,10 +376,11 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
 
           <button
             type="button"
-            className="space-scene-hotspot is-star-jar"
+            className={`space-scene-hotspot is-star-jar${openingObject === 'jar' ? ' is-lifting' : ''}`}
             aria-label={memoryCount > 0 ? `打开记忆星星罐，共 ${memoryCount} 颗星` : '打开空的记忆星星罐'}
-            onClick={onOpenStarJar}
+            onClick={() => openDeskObject('jar', onOpenStarJar)}
           >
+            <img className="space-object-asset is-jar" src="/space/generated/jar.svg" alt="" aria-hidden="true" draggable={false} />
             <span className="space-live-jar" aria-hidden="true">
               <span className="space-live-jar-glint" />
               <span className="space-live-star-field">
@@ -377,9 +404,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
 
           <button
             type="button"
-            className="space-scene-hotspot is-thought-book"
+            className={`space-scene-hotspot is-thought-book${openingObject === 'book' ? ' is-lifting' : ''}`}
             aria-label="打开 TA 的思绪"
-            onClick={onOpenThoughts}
+            onClick={() => openDeskObject('book', onOpenThoughts)}
           >
             <span className="space-live-book" aria-hidden="true">
               {latestThought ? <span>{latestThought.text}</span> : null}
@@ -388,9 +415,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
 
           <button
             type="button"
-            className={`space-scene-hotspot is-player${listenSnapshot.playing ? ' is-playing' : ''}`}
+            className={`space-scene-hotspot is-player${listenSnapshot.playing ? ' is-playing' : ''}${openingObject === 'player' ? ' is-lifting' : ''}`}
             aria-label={listenSnapshot.hasTrack ? `打开一起听歌，正在听 ${listenSnapshot.title}` : '打开一起听歌'}
-            onClick={onOpenListen}
+            onClick={() => openDeskObject('player', onOpenListen)}
           >
             <span className="space-live-player" aria-hidden="true">
               {listenSnapshot.hasTrack ? (
@@ -429,5 +456,5 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     )
   }
 
-  return <div className="page ai-space-page">{renderHomePage()}</div>
+  return <div className={`page ai-space-page${placingObjects ? ' is-placing-objects' : ''}`}>{renderHomePage()}</div>
 }
