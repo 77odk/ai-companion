@@ -366,6 +366,8 @@ export function mergeSessionMemories(
             taReply: local.taReply ?? cm.taReply,
             pinned: local.pinned,
             explicit: local.explicit,
+            triggerWords: local.triggerWords,
+            moodSnapshot: local.moodSnapshot,
             lastMentionedAt: local.lastMentionedAt,
           }
         : cm,
