@@ -28,6 +28,7 @@ import type { StoredMessage } from '../lib/storage'
 import { clearDefaultRoleId, getDefaultRoleId, setDefaultRoleId } from '../lib/defaultRole'
 import { clearReplyLengthOverride } from '../lib/replyLength'
 import { removeTaCommitmentsForSession } from '../lib/commitmentStore'
+import { pauseListenTogether } from '../lib/listenTogetherState'
 
 interface Props {
   /** 返回「我的」（角色管理页的返回落点） */
@@ -100,6 +101,12 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
   })
   const activeId = getActiveSessionId()
 
+  const switchActiveSession = (id: string) => {
+    const previous = getActiveSessionId()
+    if (previous && previous !== id) pauseListenTogether(previous)
+    switchActiveSession(id)
+  }
+
   // 点角色/角色详情：打开该角色资料卡（不切换当前会话；资料卡由 App 用临时角色参数渲染）
   const openRoleProfile = (id: string) => {
     setMenuFor(null)
@@ -171,7 +178,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
 
       // 只有删除当前角色时才改 active。没有有效默认角色就清空 active，并留在角色管理页等待用户自己选。
       if (getActiveSessionId() === String(id)) {
-        setActiveSessionId(resolution.nextActiveId)
+        switchActiveSession(resolution.nextActiveId)
         if (resolution.destination === 'home') onSwitch()
       }
     } finally {
