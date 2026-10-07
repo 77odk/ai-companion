@@ -104,5 +104,6 @@ assert.match(app, /classList\.toggle\('eluvin-page-hidden'/)
 assert.match(spaceCss, /@media \(pointer: coarse\)/)
 assert.match(spaceCss, /\.thought-turn-hit[\s\S]{0,100}width: 24%/)
 assert.match(spaceCss, /@media \(prefers-reduced-motion: reduce\)/)
+assert.match(spaceCss, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.star-jar-star\.is-moving[\s\S]*animation: none !important/)
 
 console.log('[Space S6] 清理 / 性能 / 本地提醒 / AI 身份 / 退出 / 年龄资格合同 全通过')
