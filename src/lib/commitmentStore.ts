@@ -18,7 +18,7 @@ export interface TaCommitment {
 
 const KEEP = 120
 const SIDECAR = 'ta_commitment_v1'
-const PROMISE_RE = /(?:我(?:会|一定会|保证|答应你|答应|记得|到时候会)|我.{0,14}(?:会|提醒你|叫你|陪你|告诉你|发给你)|放心.{0,8}我会|这事交给我|我不会忘|我记着)/i
+const PROMISE_RE = /(?:我(?:会|一定会|保证|答应你|答应|记得|到时候会)|我.{0,14}(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)|放心.{0,8}我会|这事交给我|我不会忘|我记着)/i
 
 function readAll(): TaCommitment[] {
   const saved = getCloudStateSidecar<TaCommitment[]>(SIDECAR)
