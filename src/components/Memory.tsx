@@ -12,6 +12,7 @@ import EventArchive from './EventArchive'
 import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from '../lib/taRuntime'
 import { appendMemoryAudit, loadMemoryAudit, type MemoryAuditEntry } from '../lib/memoryAudit'
 import { getTaStateView } from '../lib/taState'
+import { deleteMemoryPapersForMemory, refreshMemoryPaperAfterCorrection } from '../lib/memoryPaper'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
 // 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
@@ -464,6 +465,12 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       setDeleteError(result.message)
       return
     }
+    // Memory 删除是权威动作：先让对应纸条失效，星星罐不允许残留已删除的记忆。
+    deleteMemoryPapersForMemory(
+      selected.kind,
+      selected.item.id,
+      selected.kind === 'session' ? sessionId : undefined,
+    )
     appendMemoryAudit({
       sessionId: selected.kind === 'session' ? sessionId : '',
       memoryKind: selected.kind,
@@ -516,6 +523,13 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
           ? { ...memory, item: result.item }
           : memory
       )))
+      if (sessionId) {
+        // 纠正后纸条正文随 Memory 变更；已有“当时心情”保持原样，不能用当前心情覆盖。
+        void refreshMemoryPaperAfterCorrection(
+          sessionId,
+          { kind: selected.kind, item: result.item },
+        ).catch(() => {})
+      }
     }
     setEditing(false)
   }
@@ -569,6 +583,12 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
             source: 'rollback',
             parentAuditId: entry.id,
           })
+          if (sessionId) {
+            void refreshMemoryPaperAfterCorrection(
+              sessionId,
+              { kind: 'global', item: result.item },
+            ).catch(() => {})
+          }
         }
         setMemories(readMemories())
         refreshAudit()
@@ -661,6 +681,10 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
           source: 'rollback',
           parentAuditId: entry.id,
         })
+        void refreshMemoryPaperAfterCorrection(
+          sessionId,
+          { kind: 'session', item: result.item },
+        ).catch(() => {})
       }
 
       setMemories(readMemories())
@@ -688,15 +712,6 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const touchX = useRef<number | null>(null)
   const prefersReduced =
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-
-  const openBookHere = () => {
-    const idx = bookPages.findIndex((p) => p.type === 'memory' && p.index === selectedIndex)
-    setBookPageIdx(idx >= 0 ? idx : 0)
-    setFlip(null)
-    setBookStage('body')
-    setBookFrom('detail')
-    setView('book')
-  }
 
   const turnBook = (dir: 'next' | 'prev') => {
     if (flip) return
@@ -1034,10 +1049,6 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
             </p>
           ) : null}
         </article>
-        <button type="button" className="memory-book-entry" onClick={openBookHere}>
-          在记忆书里读这一页
-          <span aria-hidden="true">→</span>
-        </button>
       </div>
     )
   }
