@@ -129,7 +129,7 @@ function positivePromiseClause(clause: string): boolean {
 
 function splitPromiseClauses(text: string): string[] {
   const parts = String(text ?? '')
-    .split(/[。！？!?；;\n]+|[，,]+/)
+    .split(/[。！？!?；;\n]+|\.(?=\s|$)|[，,]+/)
     .map((part) => part.trim())
     .filter(Boolean)
   const out: string[] = []
@@ -185,7 +185,7 @@ export function detectTaCommitments(
   sourceTs: number,
   sourceMessageId?: number,
 ): TaCommitment[] {
-  const clean = String(text ?? '').replace(/\s+/g, ' ').trim()
+  const clean = String(text ?? '').replace(/[\t\f\v ]+/g, ' ').trim()
   if (!clean) return []
   const clauses = splitPromiseClauses(clean)
   if (clauses.length === 0) return []
