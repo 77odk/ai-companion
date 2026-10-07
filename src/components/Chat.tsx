@@ -61,7 +61,7 @@ import { CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdFo
 import { enqueueSessionMessageCommit, enqueueSessionMessageCommits } from '../lib/sessionMessageQueue'
 import { flushPendingOpsSnapshot } from '../lib/pendingReplay'
 import { appendMemoryAudit } from '../lib/memoryAudit'
-import { getTaStateView } from '../lib/taState'
+import { getTaStateView, taMoodLabelForPrompt } from '../lib/taState'
 import { getRelationshipRoleGuidanceForPrompt, getRelationshipSettingLabelForPrompt } from '../lib/relationshipState'
 
 /**
@@ -1418,12 +1418,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // S4：给模型只发当前轮需要的粗粒度状态摘要，不暴露双轴/七倾向/变化历史。
     if (activeSessionId) {
       const taState = getTaStateView(activeSessionId)
+      const promptMood = taMoodLabelForPrompt(taState.mood, lang)
       contextBlocks.push({
         id: 'ta-state',
         priority: 'ambient',
         content: lang === 'en'
-          ? `[Your current inner state]\nMood: ${taState.mood}. Let it affect tone subtly. Do not announce a cause unless chat history directly supports one.`
-          : `【你此刻的内在状态】\n心情：${taState.mood}。只让它轻微影响语气；除非聊天历史有直接证据，不要主动编原因。`,
+          ? `[Your current inner state]\nMood: ${promptMood}. Let it affect tone subtly. Do not announce a cause unless chat history directly supports one.`
+          : `【你此刻的内在状态】\n心情：${promptMood}。只让它轻微影响语气；除非聊天历史有直接证据，不要主动编原因。`,
       })
 
       const relationshipLabel = getRelationshipSettingLabelForPrompt(activeSessionId, lang)
