@@ -77,3 +77,16 @@ export function seekListenTogether(seconds: number): void {
   audio.currentTime = Math.max(0, Math.min(end, seconds))
   emit()
 }
+
+export function clearListenTogether(): void {
+  const audio = player
+  if (audio) {
+    audio.pause()
+    audio.removeAttribute('src')
+    audio.load()
+  }
+  if (objectUrl) URL.revokeObjectURL(objectUrl)
+  objectUrl = ''
+  title = ''
+  emit()
+}
