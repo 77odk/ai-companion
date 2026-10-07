@@ -25,6 +25,8 @@ export interface CloudStateEntity {
 export interface CloudStateApplyContext {
   source: 'cloud'
   silent: true
+  /** Server-returned canonical entity after a push conflict; adapters must accept it even if payload clocks are older. */
+  authoritative?: boolean
 }
 
 export interface CloudStateAdapter {
@@ -288,7 +290,11 @@ async function applyEntity(account: string, entity: CloudStateEntity, opts: { fo
     saveUnknownEntity(account, entity)
     return
   }
-  const context: CloudStateApplyContext = { source: 'cloud', silent: true }
+  const context: CloudStateApplyContext = {
+    source: 'cloud',
+    silent: true,
+    ...(opts.force ? { authoritative: true } : {}),
+  }
   if (entity.deleted) await adapter.delete(entity, context)
   else await adapter.apply(entity, context)
   saveVersion(account, entity)
