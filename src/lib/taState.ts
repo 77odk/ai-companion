@@ -10,6 +10,7 @@ import {
 import { notifyDataChanged } from './dataChange.ts'
 import { getMessagesCache } from './sessionStore.ts'
 import { getAccount } from './sync.ts'
+import { messageEvidenceText } from './messageQuote.ts'
 
 export const TA_MOOD_WORDS = [
   '雀跃', '期待', '安心', '惬意',
@@ -68,6 +69,7 @@ const KIND = 'ta_state'
 const SIDECAR = 'ta_state_v1'
 const SETTLE_MIN_MS = 15 * 60_000
 const MOOD_STABLE_MS = 45 * 60_000
+const INTERACTION_MOOD_DEBOUNCE_MS = 30 * 60_000
 const CLOUD_HEARTBEAT_MS = 90 * 60_000
 
 function clamp01(value: number): number {
@@ -224,12 +226,41 @@ function lerp(current: number, target: number, amount: number): number {
   return current + (target - current) * Math.max(0, Math.min(1, amount))
 }
 
+/** 02:00–07:00 完全冻结。懒补算时也必须扣掉这五小时，不能 07:01 一次性追算回来。 */
+function activeMinutesBetween(from: number, to: number): number {
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return 0
+  let cursor = from
+  let activeMs = 0
+  const hardEnd = Math.min(to, from + 7 * 24 * 60 * 60_000)
+  while (cursor < hardEnd) {
+    const d = new Date(cursor)
+    const nextHour = new Date(
+      d.getFullYear(),
+      d.getMonth(),
+      d.getDate(),
+      d.getHours() + 1,
+      0, 0, 0,
+    ).getTime()
+    const segmentEnd = Math.min(hardEnd, nextHour)
+    const hour = d.getHours()
+    if (!(hour >= 2 && hour < 7)) activeMs += Math.max(0, segmentEnd - cursor)
+    cursor = segmentEnd > cursor ? segmentEnd : cursor + 60_000
+  }
+  return activeMs / 60_000
+}
+
 function settlePrivate(state: PrivateTaState, now: number): PrivateTaState {
   if (!Number.isFinite(now) || now <= state.lastSettledAt) return state
   const elapsed = now - state.lastSettledAt
-  if (elapsed < SETTLE_MIN_MS || isFreezeWindow(now)) return state
+  if (elapsed < SETTLE_MIN_MS) return state
 
-  const minutes = Math.min(7 * 24 * 60, elapsed / 60_000)
+  // 冻结时段只推进“结算指针”，不改变任何轴/倾向，避免早上把 02–07 的时间一次性补算。
+  if (isFreezeWindow(now)) {
+    return { ...state, lastSettledAt: now, updatedAt: now }
+  }
+
+  const minutes = activeMinutesBetween(state.lastSettledAt, now)
+  if (minutes <= 0) return { ...state, lastSettledAt: now, updatedAt: now }
   const slow = nightSlowFactor(now)
   const drift = Math.min(.72, (minutes / 180) * .18 * slow)
   const shortEmotionDecay = 1 - Math.pow(.5, minutes / 120)
@@ -312,7 +343,8 @@ export function recordTaStateInteraction(sessionId: string, now = Date.now()): T
     updatedAt: now,
   }
   const candidate = chooseMood(next)
-  if (candidate !== state.mood) {
+  // 普通聊天只推动内部倾向；前台心情至少稳定 30 分钟，避免每轮对话都跳词。
+  if (candidate !== state.mood && now - state.lastChangedAt >= INTERACTION_MOOD_DEBOUNCE_MS) {
     next.mood = candidate
     next.description = moodDescription(candidate)
     next.lastChangedAt = now
@@ -379,7 +411,8 @@ export function captureTaStateEvidenceFromLatestReply(sessionId: string, now = D
   let state = getPrivate(sessionId, now)
   if (!batch || state.lastEvidenceBatchTs === batch.ts) return getTaStateView(sessionId, now)
 
-  const evidence = detectSelfEmotionEvidence(batch.text)
+  // quote block 只是上下文，不是 TA 自己的新自述；先剥掉再做证据判定。
+  const evidence = detectSelfEmotionEvidence(messageEvidenceText(batch.text))
   const base: PrivateTaState = {
     ...state,
     lastEvidenceBatchTs: batch.ts,
