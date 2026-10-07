@@ -558,7 +558,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           <button
             type="button"
             className={`space-scene-hotspot is-player${listenSnapshot.playing ? ' is-playing' : ''}${openingObject === 'player' ? ' is-lifting' : ''}`}
-            aria-label={listenSnapshot.hasTrack ? `打开一起听歌，正在听 ${listenSnapshot.title}` : '打开一起听歌'}
+            aria-label={listenSnapshot.hasTrack ? `打开一起听歌，正在听 ${listenSnapshot.title}` : '打开一起听歌，去接音乐'}
             onClick={() => openDeskObject('player', onOpenListen)}
           >
             <span className="space-live-player" aria-hidden="true">
@@ -569,7 +569,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                     <i style={{ transform: `scaleX(${progress})` }} />
                   </span>
                 </>
-              ) : null}
+              ) : (
+                <strong className="space-live-player-connect">接音乐</strong>
+              )}
             </span>
             <span className="space-live-earphone-wire" aria-hidden="true" />
           </button>
