@@ -1240,6 +1240,18 @@ export default function App() {
     void redirectBySessions()
   }, [loggedIn, view, redirectBySessions])
 
+  useEffect(() => {
+    const applyPageVisibilityClass = () => {
+      document.documentElement.classList.toggle('eluvin-page-hidden', document.visibilityState !== 'visible')
+    }
+    applyPageVisibilityClass()
+    document.addEventListener('visibilitychange', applyPageVisibilityClass)
+    return () => {
+      document.removeEventListener('visibilitychange', applyPageVisibilityClass)
+      document.documentElement.classList.remove('eluvin-page-hidden')
+    }
+  }, [])
+
   // 登录墙是否展示：正在请求需登录 view 且未登录；或已登录页退出后落在需登录 view
   const gateShown = (gateTarget !== null || !isPublicRoute(view)) && !loggedIn
 
