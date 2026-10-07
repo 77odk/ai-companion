@@ -583,9 +583,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       if (entry.action === 'delete') {
         const cache = getMemoriesCache(sessionId)
         const alreadyRestored = cache.find((item) => item.id === entry.memoryId)
-          ?? (isSimilarMemory(cache, entry.before.text)
-            ? cache.find((item) => item.text.trim() === entry.before?.text.trim())
-            : undefined)
+          ?? cache.find((item) => isSimilarMemory([item], entry.before?.text ?? ''))
         if (alreadyRestored) {
           appendMemoryAudit({
             sessionId,
