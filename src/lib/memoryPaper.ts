@@ -256,7 +256,9 @@ export function deleteMemoryPapersForMemory(
   kind: MemoryPaperKind,
   memoryId: string,
   sessionId?: string,
+  expectedAccountId = getAccount()?.account,
 ): void {
+  if (!expectedAccountId || getAccount()?.account !== expectedAccountId) return
   const sid = String(sessionId ?? '').trim()
   const map = readMap()
   const removed: MemoryPaperRecord[] = []
