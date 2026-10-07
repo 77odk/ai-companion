@@ -1140,11 +1140,14 @@ function applyTaCommitmentEntity(entity: CloudStateEntity): void {
   const item = validTaCommitment(entity.payload)
   if (!item || item.id !== entity.entityId || !entity.sessionId || item.sessionId !== entity.sessionId) return
   upsertTaCommitmentFromCloud(item)
+  // 先对齐 snapshot，再通知消费者：App 会重排 due timer；capture handler 看到相同 snapshot 不会回声上传。
   resetCommitmentSnapshot()
+  notifyDataChanged()
 }
 function deleteTaCommitmentEntity(entity: CloudStateEntity): void {
   deleteTaCommitmentFromCloud(entity.entityId)
   resetCommitmentSnapshot()
+  notifyDataChanged()
 }
 
 let initialized = false
