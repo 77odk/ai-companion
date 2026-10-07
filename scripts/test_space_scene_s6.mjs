@@ -24,6 +24,9 @@ const attribution = readFileSync('src/lib/promptAttribution.ts', 'utf8')
 const star = readFileSync('src/components/StarJar.tsx', 'utf8')
 const spaceCss = readFileSync('src/styles/space.css', 'utf8')
 const privacy = readFileSync('public/privacy.html', 'utf8')
+const aboutMeRendered = aboutMe
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '')
 
 console.log('[S6] 连续使用 2 小时提醒只走本机规则')
 assert.equal(CONTINUOUS_USE_REMINDER_MS, 2 * 60 * 60_000)
