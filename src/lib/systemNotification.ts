@@ -45,6 +45,7 @@ export async function showSystemNotification(
   title: string,
   body: string,
   tag: string,
+  targetUrl?: string,
 ): Promise<boolean> {
   if (!isSystemNotificationEnabled()) return false
   if (!canUseSystemNotifications() || Notification.permission !== 'granted') return false
@@ -60,6 +61,7 @@ export async function showSystemNotification(
         await registration.showNotification(cleanTitle, {
           body: cleanBody,
           tag: cleanTag,
+          ...(targetUrl ? { data: { url: targetUrl } } : {}),
         })
         return true
       }
@@ -73,6 +75,13 @@ export async function showSystemNotification(
       body: cleanBody,
       tag: cleanTag,
     })
+    if (targetUrl) {
+      notification.onclick = () => {
+        notification.close()
+        window.focus()
+        window.location.assign(targetUrl)
+      }
+    }
     window.setTimeout(() => notification.close(), 10_000)
     return true
   } catch {
