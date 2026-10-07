@@ -402,9 +402,19 @@ export function planMemoryWrites(
  * 新写入与展示 fallback 共用，避免把 USER / SELF / SHARED 暴露给用户。
  */
 export function cleanMemoryProtocolArtifacts(text: string): string {
-  let out = String(text ?? '')
-    .replace(/^\s*(?:\[\s*(?:source\s*=\s*)?(?:USER|SELF|SHARED)\s*\]|【\s*(?:USER|SELF|SHARED)\s*】)\s*/i, '')
-    .replace(/^\s*(?:【\s*来源说明\s*】|\[\s*Source Map\s*\]).*$/gim, '')
+  const raw = String(text ?? '')
+  const protocolPrefix = /^\s*(?:(?:\[\s*(?:source\s*=\s*)?(?:USER|SELF|SHARED)\s*\])|(?:【\s*(?:USER|SELF|SHARED)\s*】)|(?:(?:USER|SELF|SHARED)\s*[:：]))\s*/i
+  const sourceMapLine = /^\s*(?:【\s*来源说明\s*】|\[\s*Source Map\s*\]).*$/gim
+
+  // 只在确实看见内部来源协议时做 USER / SELF / SHARED 人称还原。
+  // 普通用户文本里可能真的出现英文 self / user / shared，不能为了清协议而改写真实记忆。
+  const hasProtocolArtifact = protocolPrefix.test(raw) || sourceMapLine.test(raw)
+  sourceMapLine.lastIndex = 0
+  if (!hasProtocolArtifact) return raw.trim()
+
+  let out = raw
+    .replace(protocolPrefix, '')
+    .replace(sourceMapLine, '')
 
   if (/[\u3400-\u9fff]/.test(out)) {
     out = out
