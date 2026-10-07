@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
-import { SPACE_SCENE_SRC } from './spaceSceneAsset'
 import { getActiveSessionId } from '../lib/sessionStore'
 import {
   loadLocalPhotos,
@@ -194,7 +193,7 @@ export default function AISpace({ onOpenWeekly }: Props) {
       <div className="space-scene" data-space-scene="golden-desk">
         <img
           className="space-scene-background"
-          src={SPACE_SCENE_SRC}
+          src="/space-scenes/golden-desk.webp"
           alt=""
           draggable={false}
           aria-hidden="true"
