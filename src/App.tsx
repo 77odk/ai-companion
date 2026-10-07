@@ -537,6 +537,14 @@ export default function App() {
     }
 
     const onDataChange = () => {
+      const currentReminder = commitmentReminderRef.current
+      if (
+        currentReminder
+        && !getSessionsCache().some((session) => String(session.id) === currentReminder.sessionId)
+      ) {
+        commitmentReminderRef.current = null
+        setCommitmentReminder(null)
+      }
       // Cloud State 可能在启动 hydration 时拉回“已经到期”的承诺。
       // 先立即检查 overdue，再重排未来 timer；否则 nextTaCommitmentCheckAt 会跳过已过期时间点。
       void checkDueCommitment().finally(armDueTimer)
