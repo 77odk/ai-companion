@@ -21,6 +21,11 @@ assert.match(aiSpace, /space-scene-hotspot is-photo-wall/)
 assert.match(aiSpace, /space-scene-hotspot is-moments/)
 assert.match(aiSpace, /\{renderPhotoWall\(\)\}/)
 assert.match(aiSpace, /<EventArchive sessionId=\{sid\} \/>/)
+assert.match(
+  css,
+  /\.space-scene-hotspot\.is-moments\s*\{[\s\S]*left:\s*64%;[\s\S]*top:\s*23%;[\s\S]*width:\s*15%;[\s\S]*height:\s*15%;/,
+  '一起经历过 compatibility hotspot must stay on the visible keepsake note, not under the desk objects',
+)
 
 console.log('[Space S2] secondary destinations are routed without changing primary navigation')
 assert.match(app, /lazy\(\(\) => import\('\.\/components\/ThoughtBook'\)\)/)
