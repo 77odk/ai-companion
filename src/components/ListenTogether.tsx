@@ -1,4 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import {
+  chooseListenTogetherTrack,
+  getListenTogetherSnapshot,
+  seekListenTogether,
+  subscribeListenTogether,
+  toggleListenTogether,
+} from '../lib/listenTogetherState'
 
 interface Props {
   onBack: () => void
@@ -11,37 +18,17 @@ function fmt(seconds: number): string {
 }
 
 export default function ListenTogether({ onBack }: Props) {
-  const audioRef = useRef<HTMLAudioElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const [src, setSrc] = useState('')
-  const [title, setTitle] = useState('还没有选择歌曲')
-  const [playing, setPlaying] = useState(false)
-  const [current, setCurrent] = useState(0)
-  const [duration, setDuration] = useState(0)
+  const [snapshot, setSnapshot] = useState(getListenTogetherSnapshot)
 
-  useEffect(() => () => {
-    if (src) URL.revokeObjectURL(src)
-  }, [src])
-
-  const choose = (file?: File) => {
-    if (!file) return
-    if (src) URL.revokeObjectURL(src)
-    const next = URL.createObjectURL(file)
-    setSrc(next)
-    setTitle(file.name.replace(/\.[^.]+$/, '') || file.name)
-    setCurrent(0)
-    setDuration(0)
-    setPlaying(false)
-  }
+  useEffect(() => subscribeListenTogether(setSnapshot), [])
 
   const toggle = async () => {
-    const audio = audioRef.current
-    if (!audio || !src) {
+    if (!snapshot.hasTrack) {
       inputRef.current?.click()
       return
     }
-    if (audio.paused) await audio.play()
-    else audio.pause()
+    await toggleListenTogether()
   }
 
   return (
@@ -63,31 +50,26 @@ export default function ListenTogether({ onBack }: Props) {
                   <span />
                 </div>
                 <div className="listen-meta">
-                  <strong>{title}</strong>
-                  <span>{src ? '本地音乐' : '只读取你自己选择的音乐'}</span>
+                  <strong>{snapshot.hasTrack ? snapshot.title : '还没有选择歌曲'}</strong>
+                  <span>{snapshot.hasTrack ? '本地音乐' : '只读取你自己选择的音乐'}</span>
                 </div>
                 <div className="listen-progress-row">
-                  <span>{fmt(current)}</span>
+                  <span>{fmt(snapshot.current)}</span>
                   <input
                     type="range"
                     min="0"
-                    max={Math.max(1, duration)}
+                    max={Math.max(1, snapshot.duration)}
                     step="0.1"
-                    value={Math.min(current, Math.max(1, duration))}
-                    onChange={(event) => {
-                      const audio = audioRef.current
-                      if (!audio) return
-                      audio.currentTime = Number(event.target.value)
-                      setCurrent(audio.currentTime)
-                    }}
+                    value={Math.min(snapshot.current, Math.max(1, snapshot.duration))}
+                    onChange={(event) => seekListenTogether(Number(event.target.value))}
                     aria-label="播放进度"
                   />
-                  <span>{fmt(duration)}</span>
+                  <span>{fmt(snapshot.duration)}</span>
                 </div>
                 <div className="listen-actions">
                   <button type="button" onClick={() => inputRef.current?.click()}>选择歌曲</button>
                   <button type="button" className="listen-play" onClick={() => void toggle()}>
-                    {playing ? '暂停' : '播放'}
+                    {snapshot.playing ? '暂停' : '播放'}
                   </button>
                 </div>
               </div>
@@ -105,18 +87,10 @@ export default function ListenTogether({ onBack }: Props) {
             type="file"
             accept="audio/*"
             onChange={(event) => {
-              choose(event.target.files?.[0])
+              const file = event.target.files?.[0]
+              if (file) chooseListenTogetherTrack(file)
               event.target.value = ''
             }}
-          />
-          <audio
-            ref={audioRef}
-            src={src || undefined}
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
-            onTimeUpdate={(event) => setCurrent(event.currentTarget.currentTime)}
-            onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
-            onEnded={() => setPlaying(false)}
           />
         </section>
       </main>
