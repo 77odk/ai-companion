@@ -226,13 +226,13 @@ export function getRelationshipView(sessionId: string, now = Date.now()): Relati
 
 export function initRelationshipCloudSync(): void {
   registerCloudStateAdapter(KIND, {
-    apply(entity: CloudStateEntity) {
+    apply(entity: CloudStateEntity, context) {
       if (!entity.sessionId || entity.entityId !== entity.sessionId) return
       const incoming = validSetting(entity.payload, entity.sessionId)
       if (!incoming) return
       const map = readMap()
       const current = validSetting(map[entity.sessionId], entity.sessionId)
-      if (current && current.updatedAt > incoming.updatedAt) return
+      if (!context.canonical && current && current.updatedAt > incoming.updatedAt) return
       map[entity.sessionId] = incoming
       setCloudStateSidecar(SIDECAR, map)
       notifyDataChanged()
