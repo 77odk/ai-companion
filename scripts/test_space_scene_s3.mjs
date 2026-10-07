@@ -18,6 +18,7 @@ const bubble = readFileSync('src/components/MessageBubble.tsx', 'utf8')
 const chat = readFileSync('src/components/Chat.tsx', 'utf8')
 const memoryCss = readFileSync('src/styles/memory.css', 'utf8')
 const spaceCss = readFileSync('src/styles/space.css', 'utf8')
+const cloudResources = readFileSync('src/lib/cloudStateResources.ts', 'utf8')
 
 const store = new Map()
 globalThis.localStorage = {
@@ -73,6 +74,7 @@ assert.equal(loadMemoryAudit('7')[0]?.before?.text, '旧版本')
 assert.match(memory, /rollbackAuditEntry/)
 assert.match(memory, /回退到之前/)
 assert.match(memory, /parentAuditId/)
+assert.match(cloudResources, /registerCloudStateAdapter\('memory_audit'/)
 
 console.log('[S3] TA 承诺单独建档；只有真实承诺才进入，明确到点时可生成 dueAt')
 store.clear()
@@ -88,6 +90,7 @@ assert.equal(saveTaCommitment(due), true)
 assert.equal(collectDueTaCommitments(sourceTs).length, 1)
 assert.ok(markCommitmentReminded(due.id, sourceTs))
 assert.equal(collectDueTaCommitments(sourceTs).length, 0)
+assert.match(cloudResources, /registerCloudStateAdapter\('ta_commitment'/)
 
 console.log('[S3] 隐私边界：状态页只读取现有可信展示文本，不写底层数值到 UI')
 assert.match(memory, /runtimeDisplayLabel/)
