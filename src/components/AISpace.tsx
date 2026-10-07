@@ -358,6 +358,27 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
         ?.click()
     }
 
+    const openPhotoWallFromScene = () => {
+      if (openingObject || drawerOpening) return
+
+      // iOS Safari/PWA requires file input activation to stay inside the
+      // original user gesture. For an empty wall, open the picker immediately
+      // and let only the visual lift state run asynchronously.
+      if (photos.length === 0) {
+        setOpeningObject('photos')
+        fileInputRef.current?.click()
+        if (objectTimerRef.current !== null) window.clearTimeout(objectTimerRef.current)
+        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        objectTimerRef.current = window.setTimeout(() => {
+          objectTimerRef.current = null
+          setOpeningObject(null)
+        }, reduce ? 1 : 310)
+        return
+      }
+
+      openDeskObject('photos', openPhotoWall)
+    }
+
     return (
       <>
         <section className="space-scene-shell" aria-label="TA 的空间">
@@ -390,7 +411,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             type="button"
             className={`space-scene-hotspot is-photo-wall${openingObject === 'photos' ? ' is-lifting' : ''}`}
             aria-label="打开照片墙"
-            onClick={() => openDeskObject('photos', openPhotoWall)}
+            onClick={openPhotoWallFromScene}
           >
             <img className="space-object-asset is-photo-board" src="/space/generated/photo-board.svg" alt="" aria-hidden="true" draggable={false} />
             <span className="space-live-photo-board" aria-hidden="true">
