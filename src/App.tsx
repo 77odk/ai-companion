@@ -1539,6 +1539,7 @@ export default function App() {
                 onGoLife={() => goView('spacelife')}
                 onGoAnniversary={() => openSettings('anniversary')}
                 onGoNotifications={() => openNotifications('home')}
+                hasUnreadNotifications={hasUnreadNotifications}
               />
             )}
             {view === 'roles' && (
