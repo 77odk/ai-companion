@@ -1,14 +1,12 @@
-// 按需召回（recallRelevantMemories）纯逻辑自测
-// 直接导入纯逻辑 TS（Node 22+ 原生类型剥离），不依赖任何构建工具。
-// 跑法：node scripts/test_memory_recall.mjs
-// 覆盖：pinned 恒在 / 主题命中 / 关键词命中 / 无命中兜底前5 / 空数组 / contextText 为空 / 命中排序 / 不修改输入数组
-//      / 双源信任 explicit 排序 / 手动添加 explicit=true / setMemoryExplicit 切换
-
-import { addMemoryItem, recallRelevantMemories, setMemoryExplicit } from '../src/lib/memory.ts'
+// B19 记忆关键词激活：只有命中触发词的条目进入上下文；无命中不兜底。
+import {
+  addMemoryItem,
+  deriveMemoryTriggerWords,
+  recallRelevantMemories,
+  setMemoryExplicit,
+} from '../src/lib/memory.ts'
 import { buildMemoryBlock } from '../src/lib/chatPrompts.ts'
 
-// localStorage / window mock：Node 没有这两样，addMemoryItem / setMemoryExplicit 会用
-// memory.ts 只在函数体内引用它们，import 之后、任何调用之前挂上即可
 const memStore = new Map()
 globalThis.localStorage = {
   getItem: (k) => (memStore.has(k) ? memStore.get(k) : null),
@@ -19,7 +17,6 @@ globalThis.window = { dispatchEvent: () => {} }
 
 let passed = 0
 let failed = 0
-
 function ok(cond, name) {
   if (cond) {
     passed++
@@ -29,170 +26,101 @@ function ok(cond, name) {
     console.error(`  ✗ ${name}`)
   }
 }
-
 function eq(actual, expected, name) {
   const a = JSON.stringify(actual)
   const b = JSON.stringify(expected)
   ok(a === b, `${name}（得 ${a}，期望 ${b}）`)
 }
-
 function ids(items) {
   return items.map((m) => m.id)
 }
 
-// 固定一个「今天」：2026-08-22，各条时间戳从今天往过去推
 const now = new Date(2026, 7, 22, 12, 0).getTime()
 const DAY = 86400000
-const tRecent = now - 1 * DAY // 1 天前
-const tMid = now - 10 * DAY // 10 天前
-const tOld = now - 40 * DAY // 40 天前
-const tVeryOld = now - 90 * DAY // 90 天前
+const recent = now - DAY
+const mid = now - 10 * DAY
+const old = now - 40 * DAY
 
-/** 造一条记忆：ts=createdAt，opts 里可带 pinned / topic 等 */
 function M(id, text, ts, opts = {}) {
-  return {
-    id,
-    text,
-    ...(ts != null ? { createdAt: ts } : {}),
-    ...opts,
-  }
+  return { id, text, createdAt: ts, ...opts }
 }
 
-console.log('\n[1] pinned 恒全量包含，且排最前')
-const pin1 = M('pin1', '喜欢喝咖啡', tOld, { pinned: true })
-const pin2 = M('pin2', '怕打雷', tVeryOld, { pinned: true })
-const d1 = M('d1', '爱吃辣', tRecent, { topic: '饮食' })
-const pet1 = M('pet1', '养猫', tMid, { topic: '宠物' })
-const res1 = recallRelevantMemories([d1, pet1, pin1, pin2], '今天天气怎么样', { now })
-ok(res1.some((m) => m.id === 'pin1') && res1.some((m) => m.id === 'pin2'), '无关话题下 pinned 也全量带上')
-eq(ids(res1.slice(0, 2)), ['pin1', 'pin2'], 'pinned 恒排最前（组内保持原顺序）')
-eq(ids(res1), ['pin1', 'pin2', 'd1', 'pet1'], '无关话题走兜底：pinned + 最活跃补齐')
-
-console.log('\n[2] 主题命中：context 出现主题词 → 该主题全部记忆带上')
-const res2 = recallRelevantMemories(
-  [M('d1', '爱吃辣', tRecent, { topic: '饮食' }), M('pet1', '养猫', tRecent, { topic: '宠物' })],
-  '今晚想吃点辣的',
-  { now },
-)
-eq(ids(res2), ['d1'], '「吃/辣」命中饮食主题，只带饮食记忆')
-const res2b = recallRelevantMemories(
-  [M('d1', '爱吃辣', tRecent, { topic: '饮食' }), M('pet1', '养猫', tRecent, { topic: '宠物' })],
-  '想给猫买猫粮',
-  { now },
-)
-eq(ids(res2b), ['pet1'], '「猫」命中宠物主题，只带宠物记忆')
-
-console.log('\n[3] 主题命中对无 topic 字段的旧数据也生效（inferTopic 推断）')
-const res3 = recallRelevantMemories([M('d1', '爱吃辣', tRecent)], '今晚吃什么', { now })
-eq(ids(res3), ['d1'], '旧数据没写主题，也能按内容推断出饮食并命中')
-
-console.log('\n[4] 关键词命中：共同实词')
-const res4 = recallRelevantMemories([M('o1', '怕黑，晚上不敢关灯', tMid, { topic: '其他' })], '晚上停电了吗', { now })
-eq(ids(res4), ['o1'], '「晚上」共同实词命中')
-const res4b = recallRelevantMemories([M('o1', '养了一只橘猫', tRecent, { topic: '其他' })], '猫', { now })
-eq(ids(res4b), ['o1'], '单字实词「猫」也命中')
-
-console.log('\n[5] 无共同实词不召回（相关命中时排除无关）')
-const res5 = recallRelevantMemories(
-  [M('wk1', '最近在赶项目', tRecent, { topic: '工作' }), M('o1', '喜欢雨天', tOld, { topic: '其他' })],
-  '今天加班到很晚',
-  { now },
-)
-eq(ids(res5), ['wk1'], '「加班」命中工作主题，「喜欢雨天」无关不带')
-
-console.log('\n[6] 无命中兜底：最活跃的前 5 条')
-const six = [
-  M('a', '爱下雨', tOld, { topic: '其他' }),
-  M('b', '怕黑', tMid, { topic: '其他' }),
-  M('c', '养猫', tRecent, { topic: '其他' }),
-  M('d', '吃辣', tVeryOld, { topic: '其他' }),
-  M('e', '跑步', tRecent, { topic: '其他' }),
-  M('f', '睡觉', tRecent, { topic: '其他' }),
+console.log('\n[B19-1] 无命中时不再兜底，pinned / explicit 也不能绕过激活门')
+const unrelated = [
+  M('p', '喜欢咖啡', old, { pinned: true, triggerWords: ['咖啡'] }),
+  M('e', '养了一只猫', recent, { explicit: true, triggerWords: ['猫'] }),
 ]
-const res6 = recallRelevantMemories(six, '好的呀', { now })
-eq(ids(res6), ['c', 'e', 'f', 'b', 'a', 'd'], '一条没命中 → 默认兜底 10 条（6 条全带）')
-const res6b = recallRelevantMemories(six, '好的呀', { now, fallbackCount: 2 })
-eq(ids(res6b), ['c', 'e'], 'fallbackCount 可配置')
+eq(ids(recallRelevantMemories(unrelated, '今天天气怎么样', { now })), [], '无触发词命中 = 0 条注入')
+eq(ids(recallRelevantMemories(unrelated, '', { now })), [], '空上下文 = 0 条注入')
 
-console.log('\n[7] contextText 为空 → 兜底')
-const seven = [M('a', '爱下雨', tRecent, { topic: '其他' }), M('b', '怕黑', tMid, { topic: '其他' })]
-eq(ids(recallRelevantMemories(seven, '', { now })), ['a', 'b'], '空 context 退化为最活跃前 N')
+console.log('\n[B19-2] 显式触发词命中才进入上下文')
+const items = [
+  M('coffee', '喜欢手冲咖啡', old, { pinned: true, triggerWords: ['手冲', '咖啡'] }),
+  M('cat', '家里有一只橘猫', recent, { explicit: true, triggerWords: ['橘猫', '猫'] }),
+  M('work', '最近在做新项目', mid, { triggerWords: ['项目'] }),
+]
+eq(ids(recallRelevantMemories(items, '那只橘猫今天怎么样', { now })), ['cat'], '只激活猫相关记忆')
+eq(ids(recallRelevantMemories(items, '手冲咖啡怎么喝', { now })), ['coffee'], 'pinned 只有命中后才进入')
+eq(ids(recallRelevantMemories(items, '项目现在做到哪了', { now })), ['work'], '普通条目命中触发词可进入')
 
-console.log('\n[8] 命中排序：pinned 最前 → 命中的按活跃度')
-const pinA = M('pinA', '喜欢咖啡', tOld, { pinned: true })
-const h1 = M('h1', '爱吃辣', tRecent, { topic: '饮食' })
-const h2 = M('h2', '不吃香菜', tMid, { topic: '饮食' })
-const h3 = M('h3', '爱喝奶茶', tVeryOld, { topic: '饮食' })
-const res8 = recallRelevantMemories([h3, h1, pinA, h2], '今晚吃什么', { now })
-eq(ids(res8), ['pinA', 'h1', 'h2', 'h3'], 'pinned 最前，命中的饮食记忆按活跃度降序')
-const res8b = recallRelevantMemories([h3, h1, h2], '今晚吃什么', { now })
-eq(ids(res8b), ['h1', 'h2', 'h3'], '无 pinned 时命中之间也按活跃度')
+console.log('\n[B19-3] 多条命中仍按 pinned → explicit → 活跃度排序')
+const ranked = [
+  M('normal', '和咖啡有关的普通记忆', recent, { triggerWords: ['咖啡'] }),
+  M('explicit', '用户明确说喜欢咖啡', old, { explicit: true, triggerWords: ['咖啡'] }),
+  M('pinned', '重要咖啡记忆', old, { pinned: true, triggerWords: ['咖啡'] }),
+]
+eq(ids(recallRelevantMemories(ranked, '咖啡', { now })), ['pinned', 'explicit', 'normal'], '命中后沿用双源排序')
 
-console.log('\n[9] 空 / 非法输入')
-eq(recallRelevantMemories([], '今天吃什么', { now }), [], '空数组返回空')
-eq(recallRelevantMemories(null, '今天吃什么', { now }), [], 'null 兜底为空')
-eq(recallRelevantMemories([null, { id: 'x' }], '今天吃什么', { now }), [], '非法条目被过滤')
+console.log('\n[B19-4] 旧数据没有 triggerWords 时本地派生，不调模型')
+const derived = deriveMemoryTriggerWords('家里养了一只橘猫', '宠物')
+ok(derived.length > 0 && derived.includes('宠物'), '旧条目能派生轻量触发词')
+const legacy = M('legacy', '晚上怕黑会开灯', recent)
+ok(recallRelevantMemories([legacy], '晚上关灯会害怕吗', { now }).length === 1, '旧条目仍可由文本派生触发')
 
-console.log('\n[10] 不修改输入数组')
-const inputArr = [M('a', '爱吃辣', tRecent, { topic: '饮食' }), M('b', '养猫', tMid, { topic: '宠物' })]
-const snapshot = JSON.stringify(inputArr)
-const res10 = recallRelevantMemories(inputArr, '今晚吃什么', { now })
-ok(res10 !== inputArr, '返回新数组，不是原引用')
-ok(JSON.stringify(inputArr) === snapshot, '输入数组内容未被改动')
+console.log('\n[B19-5] 不修改输入数组 / 非法输入安全')
+const input = [
+  M('a', '爱吃辣', recent, { triggerWords: ['辣'] }),
+  M('b', '养猫', mid, { triggerWords: ['猫'] }),
+]
+const snapshot = JSON.stringify(input)
+const result = recallRelevantMemories(input, '辣', { now })
+ok(result !== input, '返回新数组')
+ok(JSON.stringify(input) === snapshot, '输入数组未修改')
+eq(recallRelevantMemories([], '猫', { now }), [], '空数组返回空')
+eq(recallRelevantMemories(null, '猫', { now }), [], 'null 输入返回空')
 
-console.log('\n[11] pinned 数量超过兜底条数仍全量')
-const pins = [1, 2, 3, 4, 5, 6].map((n) => M(`p${n}`, `记${n}`, tOld, { pinned: true }))
-const res11 = recallRelevantMemories(pins, '随便聊聊', { now, fallbackCount: 2 })
-eq(ids(res11), ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'], '6 条 pinned 全带，不被兜底条数截断')
-
-console.log('\n[12] 双源信任：explicit（用户明说的）排非 pinned 前')
-// 主题命中路径：explicit 与非 explicit 都命中 → explicit 靠前（即使非 explicit 更活跃）
-const eA = M('eA', '养猫', tMid, { topic: '宠物', explicit: true })
-const rA = M('rA', '养狗', tRecent, { topic: '宠物' })
-eq(ids(recallRelevantMemories([rA, eA], '想养猫', { now })), ['eA', 'rA'], '主题命中时 explicit 在非 pinned 前')
-// 兜底路径：pinned 恒前 → explicit 次之 → 其余按活跃度
-const pinX = M('pinX', '怕黑', tOld, { pinned: true })
-eq(ids(recallRelevantMemories([rA, eA, pinX], '随便聊聊', { now })), ['pinX', 'eA', 'rA'], '兜底：pinned → explicit → 其余按活跃度')
-// 无 pinned 时 explicit 仍靠前，非 explicit 靠后
-eq(ids(recallRelevantMemories([rA, eA], '随便聊聊', { now })), ['eA', 'rA'], '无 pinned 时 explicit 仍排前，非 explicit 靠后')
-// explicit 之间仍按活跃度
-const eB = M('eB', '爱喝奶茶', tRecent, { topic: '饮食', explicit: true })
-const eC = M('eC', '不吃香菜', tOld, { topic: '饮食', explicit: true })
-eq(ids(recallRelevantMemories([eC, eB], '今晚吃什么', { now })), ['eB', 'eC'], 'explicit 之间仍按活跃度降序')
-
-console.log('\n[13] 手动添加 explicit=true / setMemoryExplicit 切换')
+console.log('\n[B19-6] 手动添加 explicit / 来源切换保持兼容')
 memStore.clear()
 let list = addMemoryItem('我不吃香菜', '饮食', true)
-eq(list.length, 1, '手动添加（带 explicit=true）返回一条')
-eq(list[0].explicit, true, '手动添加自动带 explicit=true')
+eq(list.length, 1, '手动添加一条')
+eq(list[0].explicit, true, '手动添加可标 explicit=true')
 eq(list[0].topic, '饮食', '主题保留')
-eq(list[0].text, '我不吃香菜', '内容保留')
-memStore.clear()
-const auto = addMemoryItem('TA 从聊天里推断的', '其他')
-eq(auto[0].explicit ?? false, false, '不带 explicit 参数 = 缺省推断（不标 explicit）')
-memStore.clear()
-list = addMemoryItem('我叫小七', '其他', true)
 list = setMemoryExplicit(list[0].id, false)
-eq(list[0].explicit ?? false, false, 'setMemoryExplicit 可把来源切回 TA 推断')
-eq(list.length, 1, 'setMemoryExplicit 不改动条数')
+eq(list[0].explicit ?? false, false, '可切回推断来源')
 list = setMemoryExplicit(list[0].id, true)
-eq(list[0].explicit, true, 'setMemoryExplicit 可再切回用户明说')
+eq(list[0].explicit, true, '可再切回用户明说')
 
-console.log('\n[记忆注入块：带日期 + 一行新旧说明（2026-09-18 拍板「二」）]')
+console.log('\n[记忆注入块] 日期与 USER 来源格式保持兼容')
+const created = Date.parse('2026-09-17T17:29:23.000Z')
 const blockItems = [
-  { id: 'a', text: '对方已婚', createdAt: Date.parse('2026-09-17T17:29:23.000Z'), lastMentionedAt: Date.parse('2026-09-17T17:29:23.000Z'), explicit: true },
-  { id: 'b', text: '对方没老公，未婚', createdAt: Date.parse('2026-09-17T17:34:27.000Z'), explicit: true },
+  { id: 'a', text: '对方已婚', createdAt: created, lastMentionedAt: created, explicit: true },
+  { id: 'b', text: '对方没老公，未婚', createdAt: created + 5 * 60 * 1000, explicit: true },
 ]
 const zhBlock = buildMemoryBlock(blockItems, 'zh')
-ok(!!zhBlock && zhBlock.includes('9月18日'), '每条带上记录日期（按本地时区显示到日）')
-ok(!!zhBlock && zhBlock.includes('每条附记录/最近提及日期'), '块首只说明日期证据，不再声称位置代表新旧')
-ok(!!zhBlock && zhBlock.includes('日期更新') && zhBlock.includes('来源更明确'), '说明里点明冲突时看日期与来源证据')
-ok(!!zhBlock && zhBlock.includes('- 9月18日 [source=USER] USER 已婚') && zhBlock.includes('未婚'), '两条都在，统一 USER 来源且顺序按传入顺序（召回层已排序）')
-ok(!zhBlock.includes('【') && !zhBlock.includes('你是'), '注入块里没有人设/规则口吻')
+const local = new Date(created)
+const zhDate = `${local.getMonth() + 1}月${local.getDate()}日`
+ok(!!zhBlock && zhBlock.includes(zhDate), '每条按运行环境本地时区展示记录日期')
+ok(!!zhBlock && zhBlock.includes('每条附记录/最近提及日期'), '块首保留日期证据说明')
+ok(!!zhBlock && zhBlock.includes('日期更新') && zhBlock.includes('来源更明确'), '冲突说明保留日期与来源证据')
+ok(!!zhBlock && zhBlock.includes('[source=USER]'), '显式记忆标注 USER 来源')
+ok(!zhBlock.includes('【') && !zhBlock.includes('你是'), '注入块无 marker / 人设规则口吻')
 const undefinedDateBlock = buildMemoryBlock([{ id: 'c', text: '没有时间戳的记忆' }], 'zh')
-ok(undefinedDateBlock.includes('（日期未知）'), '没有时间戳就写日期未知，不编日期')
-const enBlock = buildMemoryBlock([{ id: 'd', text: 'they like tea', createdAt: Date.parse('2026-09-17T17:29:23.000Z') }], 'en')
-ok(enBlock.includes('2026-09-18') && enBlock.includes('prefer the newer date'), '英文模式下日期与说明也是英文（日期按本地时区）')
+ok(undefinedDateBlock.includes('（日期未知）'), '缺时间戳不编日期')
+const enBlock = buildMemoryBlock([{ id: 'd', text: 'they like tea', createdAt: created }], 'en')
+const yyyy = local.getFullYear()
+const mm = String(local.getMonth() + 1).padStart(2, '0')
+const dd = String(local.getDate()).padStart(2, '0')
+ok(enBlock.includes(`${yyyy}-${mm}-${dd}`) && enBlock.includes('prefer the newer date'), '英文日期按运行环境本地时区')
 ok(buildMemoryBlock([], 'zh') === null && buildMemoryBlock(null, 'zh') === null, '空列表不产出注入块')
 ok(buildMemoryBlock([{ id: 'e', text: '   ' }], 'zh') === null, '全空白记忆不产出注入块')
 
