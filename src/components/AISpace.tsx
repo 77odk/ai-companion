@@ -19,7 +19,7 @@ import {
 import { getToken } from '../lib/auth'
 
 interface Props {
-  onOpenMemory: () => void
+  onOpenStarJar: () => void
   onOpenThoughts: () => void
   onOpenListen: () => void
   /** 一周情书由 App 顶层 view 承载，不在 Space 内嵌子页。 */
@@ -54,7 +54,7 @@ function isValidCloudPhotoRow(value: unknown): value is {
 
 const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，稍后再试。'
 
-export default function AISpace({ onOpenMemory, onOpenThoughts, onOpenListen, onOpenWeekly }: Props) {
+export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, onOpenWeekly }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
 
@@ -276,7 +276,7 @@ export default function AISpace({ onOpenMemory, onOpenThoughts, onOpenListen, on
             type="button"
             className="space-scene-hotspot is-star-jar"
             aria-label="打开记忆星星罐"
-            onClick={onOpenMemory}
+            onClick={onOpenStarJar}
           >
             <svg viewBox="0 0 100 100" aria-hidden="true">
               <path className="space-object-glint" d="M27 18c-7 16-8 37-3 54" />
