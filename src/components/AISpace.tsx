@@ -492,6 +492,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                       finishScenePhotoDrag()
                     }}
                     onPointerCancel={() => finishScenePhotoDrag()}
+                    onClick={(event) => event.stopPropagation()}
                   >
                     <img
                       src={photo.dataUrl ?? photoUrl(photo.id, token)}
