@@ -1639,7 +1639,7 @@ export default function App() {
                 className={`nav-btn${navActive('memory') ? ' active' : ''}`}
                 onClick={openMemoryRoot}
               >
-                朝暮
+                记忆
               </button>
               <button
                 className={`nav-btn${navActive('mine') ? ' active' : ''}`}
