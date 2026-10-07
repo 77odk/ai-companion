@@ -143,6 +143,8 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const [query, setQuery] = useState('')
   const [auditOpen, setAuditOpen] = useState(false)
   const [auditVersion, setAuditVersion] = useState(0)
+  const [rollbackBusyId, setRollbackBusyId] = useState<string | null>(null)
+  const [rollbackNotice, setRollbackNotice] = useState('')
   const [statusNow, setStatusNow] = useState(() => Date.now())
   const audits = useMemo(() => loadMemoryAudit(sessionId), [sessionId, auditVersion])
 
@@ -457,6 +459,15 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       setDeleteError(result.message)
       return
     }
+    appendMemoryAudit({
+      sessionId: selected.kind === 'session' ? sessionId : '',
+      memoryKind: selected.kind,
+      memoryId: selected.item.id,
+      action: 'delete',
+      before: selected.item,
+      source: 'detail',
+    })
+    refreshAudit()
     setMemories((items) => items.filter((memory) => (
       !(memory.kind === selected.kind && memory.item.id === selected.item.id)
     )))
@@ -485,6 +496,16 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       return
     }
     if (result.changed) {
+      appendMemoryAudit({
+        sessionId: selected.kind === 'session' ? sessionId : '',
+        memoryKind: selected.kind,
+        memoryId: selected.item.id,
+        action: 'edit',
+        before: selected.item,
+        after: result.item,
+        source: 'detail',
+      })
+      refreshAudit()
       setMemories((items) => items.map((memory) => (
         memory.kind === selected.kind && memory.item.id === selected.item.id
           ? { ...memory, item: result.item }
@@ -493,6 +514,132 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
     }
     setEditing(false)
   }
+  const rollbackAuditEntry = async (entry: MemoryAuditEntry) => {
+    if (rollbackBusyId || !entry.before || (entry.action !== 'edit' && entry.action !== 'delete')) return
+    setRollbackBusyId(entry.id)
+    setRollbackNotice('')
+    try {
+      if (entry.memoryKind === 'global') {
+        if (entry.action === 'delete') {
+          const current = loadMemory()
+          if (!current.some((item) => item.id === entry.before?.id)) {
+            const restored = { ...entry.before }
+            if (!saveMemory([restored, ...current])) {
+              setRollbackNotice('这次回退没有保存成功。')
+              return
+            }
+            appendMemoryAudit({
+              sessionId: '',
+              memoryKind: 'global',
+              memoryId: restored.id,
+              action: 'rollback',
+              after: restored,
+              source: 'rollback',
+              parentAuditId: entry.id,
+            })
+          }
+        } else {
+          const current = loadMemory().find((item) => item.id === entry.memoryId)
+          if (!current) {
+            setRollbackNotice('这段记忆已经不存在，不能按这一版回退。')
+            return
+          }
+          const result = await correctMemoryText({ kind: 'global', item: current }, entry.before.text)
+          if (!result.ok) {
+            setRollbackNotice(result.message)
+            return
+          }
+          appendMemoryAudit({
+            sessionId: '',
+            memoryKind: 'global',
+            memoryId: result.item.id,
+            action: 'rollback',
+            before: current,
+            after: result.item,
+            source: 'rollback',
+            parentAuditId: entry.id,
+          })
+        }
+        setMemories(readMemories())
+        refreshAudit()
+        setRollbackNotice('已经回退到这次变更之前。')
+        return
+      }
+
+      if (!sessionId || entry.sessionId !== sessionId) {
+        setRollbackNotice('这条记录不属于当前 TA。')
+        return
+      }
+      const token = getToken()
+      if (!token) {
+        setRollbackNotice('登录状态已失效，请重新登录后再试。')
+        return
+      }
+
+      if (entry.action === 'delete') {
+        const res = await postMemory(token, sessionId, {
+          content: entry.before.text,
+          ...(entry.before.source?.trim() ? { source: entry.before.source } : {}),
+          ...(entry.before.taReply?.trim() ? { taReply: entry.before.taReply } : {}),
+        })
+        if (!res.ok) {
+          setRollbackNotice(res.message || '恢复失败，请稍后再试。')
+          return
+        }
+        const restored: MemoryItem = {
+          ...sessionMemoryToItem(res.data),
+          topic: entry.before.topic,
+          explicit: entry.before.explicit,
+          pinned: entry.before.pinned,
+          triggerWords: entry.before.triggerWords,
+          moodSnapshot: entry.before.moodSnapshot,
+          lastMentionedAt: entry.before.lastMentionedAt,
+        }
+        const cache = getMemoriesCache(sessionId)
+        saveMemoriesCache(sessionId, [restored, ...cache.filter((item) => item.id !== restored.id)])
+        appendMemoryAudit({
+          sessionId,
+          memoryKind: 'session',
+          memoryId: restored.id,
+          action: 'rollback',
+          after: restored,
+          source: 'rollback',
+          parentAuditId: entry.id,
+        })
+      } else {
+        const current = getMemoriesCache(sessionId).find((item) => item.id === entry.memoryId)
+        if (!current) {
+          setRollbackNotice('这段记忆已经不存在，不能按这一版回退。')
+          return
+        }
+        const result = await correctMemoryText(
+          { kind: 'session', sessionId, item: current, token },
+          entry.before.text,
+        )
+        if (!result.ok) {
+          setRollbackNotice(result.message)
+          return
+        }
+        appendMemoryAudit({
+          sessionId,
+          memoryKind: 'session',
+          memoryId: result.item.id,
+          action: 'rollback',
+          before: current,
+          after: result.item,
+          source: 'rollback',
+          parentAuditId: entry.id,
+        })
+      }
+
+      setMemories(readMemories())
+      refreshAudit()
+      setRollbackNotice('已经回退到这次变更之前。')
+    } finally {
+      setRollbackBusyId(null)
+    }
+  }
+
   useEffect(() => {
     if (view !== 'river') return
     const target = riverScrollRef.current
