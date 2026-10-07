@@ -1,5 +1,4 @@
 import { ELUVIN_AUTH_CHANGE } from './dataChange.ts'
-import { ACTIVE_SESSION_CHANGED_EVENT } from './sessionStore.ts'
 
 export type ListenPlaybackMode = 'sequence' | 'shuffle'
 
@@ -297,8 +296,4 @@ export function pauseListenTogether(sessionId: string): void {
 
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   window.addEventListener(ELUVIN_AUTH_CHANGE, () => clearListenTogether())
-  window.addEventListener(ACTIVE_SESSION_CHANGED_EVENT, (event) => {
-    const previousSessionId = (event as CustomEvent<{ previousSessionId?: string }>).detail?.previousSessionId ?? ''
-    if (previousSessionId) pauseListenTogether(previousSessionId)
-  })
 }
