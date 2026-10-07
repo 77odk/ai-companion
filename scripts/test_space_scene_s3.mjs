@@ -1,0 +1,97 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import {
+  detectTaCommitment,
+  saveTaCommitment,
+  collectDueTaCommitments,
+  markCommitmentReminded,
+} from '../src/lib/commitmentStore.ts'
+import {
+  appendMemoryAudit,
+  loadMemoryAudit,
+} from '../src/lib/memoryAudit.ts'
+
+const app = readFileSync('src/App.tsx', 'utf8')
+const aiSpace = readFileSync('src/components/AISpace.tsx', 'utf8')
+const memory = readFileSync('src/components/Memory.tsx', 'utf8')
+const bubble = readFileSync('src/components/MessageBubble.tsx', 'utf8')
+const chat = readFileSync('src/components/Chat.tsx', 'utf8')
+const memoryCss = readFileSync('src/styles/memory.css', 'utf8')
+const spaceCss = readFileSync('src/styles/space.css', 'utf8')
+
+const store = new Map()
+globalThis.localStorage = {
+  getItem: (key) => store.has(key) ? store.get(key) : null,
+  setItem: (key, value) => store.set(key, String(value)),
+  removeItem: (key) => store.delete(key),
+  key: (index) => [...store.keys()][index] ?? null,
+  get length() { return store.size },
+}
+globalThis.window = { dispatchEvent: () => {} }
+
+console.log('[S3] 星星罐从空间页独立进入，不再把物件直接送进朝暮')
+assert.match(aiSpace, /onOpenStarJar/)
+assert.match(aiSpace, /onClick=\{onOpenStarJar\}/)
+assert.match(app, /view === 'starjar'/)
+assert.match(app, /<StarJar onBack=/)
+assert.match(spaceCss, /S3 · Star Jar/)
+assert.match(spaceCss, /star-paper-open/)
+assert.match(spaceCss, /steps\(6, end\)/)
+
+console.log('[S3] 朝暮只以状态 / 记忆长河 / 一起经历过为根层级')
+assert.match(memory, /className="memory-title">朝暮</)
+assert.match(memory, /STATUS/)
+assert.match(memory, /MEMORY RIVER/)
+assert.match(memory, /<EventArchive sessionId=\{sessionId \|\| undefined\} \/>/)
+assert.doesNotMatch(memory.slice(memory.indexOf('// ---- 朝暮')), /memory-book-portal/)
+assert.match(app, />\s*朝暮\s*<\/button>/)
+assert.match(memory, /type="search"/)
+assert.match(memoryCss, /memory-search/)
+assert.match(memoryCss, /memory-audit-panel/)
+
+console.log('[S3] 消息可手动存为记忆，写入链仍复用现有 memories API')
+assert.match(bubble, /Save to memory|存为记忆/)
+assert.match(chat, /handleSaveMessageAsMemory/)
+assert.match(chat, /postMemory\(token, sid/)
+assert.match(chat, /appendMemoryAudit/)
+assert.match(chat, /deriveMemoryTriggerWords/)
+
+console.log('[S3] 记忆编辑/删除留痕并可回退')
+store.clear()
+const before = { id: 'm1', text: '旧版本', createdAt: 1 }
+const audit = appendMemoryAudit({
+  sessionId: '7',
+  memoryKind: 'session',
+  memoryId: 'm1',
+  action: 'edit',
+  before,
+  after: { ...before, text: '新版本' },
+  source: 'detail',
+})
+assert.ok(audit)
+assert.equal(loadMemoryAudit('7')[0]?.before?.text, '旧版本')
+assert.match(memory, /rollbackAuditEntry/)
+assert.match(memory, /回退到之前/)
+assert.match(memory, /parentAuditId/)
+
+console.log('[S3] TA 承诺单独建档；只有真实承诺才进入，明确到点时可生成 dueAt')
+store.clear()
+const sourceTs = new Date(2026, 9, 7, 10, 0).getTime()
+const promise = detectTaCommitment('我答应你明天晚上8点提醒你喝水。', '7', sourceTs, 42)
+assert.ok(promise)
+assert.equal(promise.sessionId, '7')
+assert.ok(typeof promise.dueAt === 'number')
+assert.equal(detectTaCommitment('今天天气不错。', '7', sourceTs, 43), null)
+
+const due = { ...promise, dueAt: sourceTs - 1, createdAt: sourceTs - 1000 }
+assert.equal(saveTaCommitment(due), true)
+assert.equal(collectDueTaCommitments(sourceTs).length, 1)
+assert.ok(markCommitmentReminded(due.id, sourceTs))
+assert.equal(collectDueTaCommitments(sourceTs).length, 0)
+
+console.log('[S3] 隐私边界：状态页只读取现有可信展示文本，不写底层数值到 UI')
+assert.match(memory, /runtimeDisplayLabel/)
+assert.doesNotMatch(memory, /valence|arousal|attachment|moodScore|stateScore/)
+assert.match(memoryCss, /S3 · 朝暮/)
+
+console.log('[Space S3] 星星罐 / 朝暮 / 手动存记忆 / 审计回退 / 关键词激活 / 承诺建档 全通过')
