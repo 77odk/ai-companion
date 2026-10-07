@@ -174,8 +174,13 @@ export function collectAllTaCommitments(): TaCommitment[] {
 
 export function upsertTaCommitmentFromCloud(item: TaCommitment): void {
   if (!item?.id || !item.sessionId || !item.text) return
-  const all = readAll().filter((entry) => entry.id !== item.id)
-  writeAll([item, ...all], true)
+  const current = readAll()
+  const local = current.find((entry) => entry.id === item.id)
+  // pull 总在 push 前：本机刚标记“已提醒”但 pending 还没上传时，
+  // 旧云端 canonical 不能把 remindedAt 擦掉，否则同一承诺会再次弹。
+  const remindedAt = Math.max(local?.remindedAt ?? 0, item.remindedAt ?? 0) || undefined
+  const merged = remindedAt ? { ...item, remindedAt } : item
+  writeAll([merged, ...current.filter((entry) => entry.id !== item.id)], true)
 }
 
 export function deleteTaCommitmentFromCloud(id: string): void {
