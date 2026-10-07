@@ -62,7 +62,7 @@ import { enqueueSessionMessageCommit, enqueueSessionMessageCommits } from '../li
 import { flushPendingOpsSnapshot } from '../lib/pendingReplay'
 import { appendMemoryAudit } from '../lib/memoryAudit'
 import { getTaStateView } from '../lib/taState'
-import { getRelationshipSettingLabelForPrompt } from '../lib/relationshipState'
+import { getRelationshipRoleGuidanceForPrompt, getRelationshipSettingLabelForPrompt } from '../lib/relationshipState'
 
 /**
  * 历史时间锚必须稳定：同一条历史消息无论过几分钟再次发送，前缀都完全一致，
@@ -1428,12 +1428,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
       const relationshipLabel = getRelationshipSettingLabelForPrompt(activeSessionId, lang)
       if (relationshipLabel) {
+        const relationshipGuidance = getRelationshipRoleGuidanceForPrompt(activeSessionId, lang)
         contextBlocks.push({
           id: 'relationship-setting',
           priority: 'core',
           content: lang === 'en'
-            ? `[Relationship setting]\nUSER explicitly set your relationship as: ${relationshipLabel}. This setting controls role consistency only; never invent shared history from it.`
-            : `【关系设定】\n用户明确设定你们的关系是：${relationshipLabel}。它只约束关系口径，绝不能据此编造共同经历。`,
+            ? `[Relationship setting]\nUSER explicitly set your relationship as: ${relationshipLabel}. This setting controls role consistency only; never invent shared history from it.${relationshipGuidance ? ` ${relationshipGuidance}` : ''}`
+            : `【关系设定】\n用户明确设定你们的关系是：${relationshipLabel}。它只约束关系口径，绝不能据此编造共同经历。${relationshipGuidance ? ` ${relationshipGuidance}` : ''}`,
         })
       }
     }
