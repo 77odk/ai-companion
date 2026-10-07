@@ -159,9 +159,9 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
         </div>
 
         {sorted.length === 0 && uploading === 0 ? (
-          <button type="button" className="photo-archive-empty" onClick={onAdd}>
+          <button type="button" className="photo-archive-empty" onClick={() => setArchiveOpen(true)}>
             <span className="photo-archive-empty-plus" aria-hidden="true">＋</span>
-            <span>从第一张开始，慢慢留下我们的日子。</span>
+            <span>打开照片墙</span>
           </button>
         ) : (
           <button
