@@ -75,6 +75,7 @@ import { captureLatestTaCommitment, collectDueTaCommitments, markCommitmentRemin
 import { showSystemNotification } from './lib/systemNotification'
 import { captureTaStateEvidenceFromLatestReply, getTaStateView, recordTaStateInteraction } from './lib/taState'
 import { settleTaThoughts } from './lib/taThoughts'
+import { pauseListenTogether } from './lib/listenTogetherState'
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
 const RolePicker = lazy(() => import('./components/RolePicker'))
@@ -118,6 +119,13 @@ function systemNotificationTargetUrl(sessionId: string): string {
   const url = new URL(window.location.href)
   url.searchParams.set('notificationSession', sessionId)
   return url.toString()
+}
+
+function switchActiveSession(sessionId: string): void {
+  const next = String(sessionId ?? '')
+  const previous = getActiveSessionId()
+  if (previous && previous !== next) pauseListenTogether(previous)
+  setActiveSessionId(next)
 }
 
 // 底部四 tab 的常显范围：主视图（TA/空间/记忆/我的）带底部导航；Chat 等全屏页不带。
@@ -738,7 +746,7 @@ export default function App() {
       setInitiativeNotice(null)
       return
     }
-    setActiveSessionId(sessionId)
+    switchActiveSession(sessionId)
     setInitiativeNotice(null)
     goView('chat')
   }, [initiativeNotice, goView])
@@ -943,7 +951,7 @@ export default function App() {
       setMigration('failed')
       return
     }
-    setActiveSessionId(String(result.sessionId))
+    switchActiveSession(String(result.sessionId))
     setLocalMigratedFlag()
     setMigration('idle')
     replaceView('chat')
@@ -1014,18 +1022,18 @@ export default function App() {
         if (!await ensureStartupConversationReady(activeId)) return
         // 跨账号恢复只接受这次服务端返回的 session，并从 Home 干净进入；
         // 同账号正常启动仍恢复上次主视图。
-        setActiveSessionId(activeId)
+        switchActiveSession(activeId)
         setMigration('idle')
         replaceView(allowLegacyFallback ? (getLastPrimaryView() ?? 'home') : 'home')
       } else if (allowLegacyFallback && !hasMigratedFlag() && hasLocalLegacyData()) {
         // 无云端会话 + 本地有旧数据 + 没迁过 → 自动把本地数据搬成第一个会话
-        setActiveSessionId('')
+        switchActiveSession('')
         setRoleMode('first')
         setMigration('running')
         await runMigration(token)
       } else {
         // 无云端会话且无本地数据（或已迁过）→ 正常进选角色页新建
-        setActiveSessionId('')
+        switchActiveSession('')
         setMigration('idle')
         const target = decideLoginTarget(sessions)
         if (target === 'role') {
@@ -1037,7 +1045,7 @@ export default function App() {
     } else if (!allowLegacyFallback) {
       // 跨账号重登时，绝不读取全局 legacy persona/messages 兜底。
       // 云端 sessions 暂时不可验证，就停在干净的新建 TA 流程，避免把上一账号本地聊天暴露给新账号。
-      setActiveSessionId('')
+      switchActiveSession('')
       setSessionsCache([])
       setMigration('idle')
       setRoleMode('first')
@@ -1076,7 +1084,7 @@ export default function App() {
     if (!sessionId) return
     if (!getSessionsCache().some((session) => String(session.id) === sessionId)) return
 
-    setActiveSessionId(sessionId)
+    switchActiveSession(sessionId)
     url.searchParams.delete('notificationSession')
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
     replaceView('chat')
@@ -1154,7 +1162,7 @@ export default function App() {
     // 即使 listSessions 失败，也不能让 fallback 打开上一账号的本地缓存。
     if (expiredAccount && currentAccount !== expiredAccount) {
       setFeedbackDraft(emptyFeedbackDraft())
-      setActiveSessionId('')
+      switchActiveSession('')
       setSessionsCache([])
       setPendingChatLogJump(null)
       setPendingMemoryReturn(null)
@@ -1186,7 +1194,7 @@ export default function App() {
     const created = await createSession(getToken(), { persona: '', title: natural.nickname })
     if (!created.ok) {
       // 不动 activeSession；回 RolePicker 恢复原表单，用户可直接重试。
-      setActiveSessionId(activeBefore)
+      switchActiveSession(activeBefore)
       setPendingNaturalError(created.message)
       setRoleMode('first')
       setRoleBack('welcome')
@@ -1195,7 +1203,7 @@ export default function App() {
     }
 
     const sid = String(created.data.id)
-    setActiveSessionId(sid)
+    switchActiveSession(sid)
     saveAIProfile({ nickname: natural.nickname, avatar: natural.avatar }, sid)
     saveAIRemark(natural.remark, sid)
     saveAIGender(natural.gender, sid)
@@ -1438,7 +1446,7 @@ export default function App() {
           onChat={() => {
             // 资料卡「和 TA 聊天」：临时查看的角色先落成当前会话，再进聊天
             if (profileTarget) {
-              setActiveSessionId(profileTarget)
+              switchActiveSession(profileTarget)
               setProfileTarget(null)
             }
             goView('chat')
