@@ -61,6 +61,10 @@ function isValidCloudPhotoRow(value: unknown): value is {
 
 const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，稍后再试。'
 
+type DeskObjectKind = 'photos' | 'jar' | 'book' | 'player'
+let carriedDeskObject: Exclude<DeskObjectKind, 'photos'> | null = null
+let drawerNeedsReturn = false
+
 
 function sceneMemoryCount(sessionId: string): number {
   const global = loadMemory().filter((item) => item.explicit === true && item.text?.trim())
@@ -110,36 +114,44 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   const failedPhotoIdsRef = useRef<Set<string>>(new Set())
   const drawerTimerRef = useRef<number | null>(null)
   const objectTimerRef = useRef<number | null>(null)
-  const placeTimerRef = useRef<number | null>(null)
   const [drawerOpening, setDrawerOpening] = useState(false)
-  const [openingObject, setOpeningObject] = useState<'photos' | 'jar' | 'book' | 'player' | null>(null)
-  const [placingObjects, setPlacingObjects] = useState(true)
+  const [drawerReturning, setDrawerReturning] = useState(() => {
+    const returning = drawerNeedsReturn
+    drawerNeedsReturn = false
+    return returning
+  })
+  const [openingObject, setOpeningObject] = useState<DeskObjectKind | null>(null)
+  const [placingObject, setPlacingObject] = useState<DeskObjectKind | null>(() => {
+    const returning = carriedDeskObject
+    carriedDeskObject = null
+    return returning
+  })
 
-  const beginPlaceBack = () => {
-    if (placeTimerRef.current !== null) window.clearTimeout(placeTimerRef.current)
-    setPlacingObjects(true)
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    placeTimerRef.current = window.setTimeout(() => {
-      placeTimerRef.current = null
-      setPlacingObjects(false)
-    }, reduce ? 1 : 420)
+  const beginPlaceBack = (kind: DeskObjectKind) => {
+    setPlacingObject(kind)
   }
 
   useEffect(() => {
-    beginPlaceBack()
-    return () => {
-      if (placeTimerRef.current !== null) window.clearTimeout(placeTimerRef.current)
-    }
-  }, [])
+    if (!placingObject) return
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const timer = window.setTimeout(() => setPlacingObject(null), reduce ? 1 : 420)
+    return () => window.clearTimeout(timer)
+  }, [placingObject])
+
+  useEffect(() => {
+    if (!drawerReturning) return
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const timer = window.setTimeout(() => setDrawerReturning(false), reduce ? 1 : 460)
+    return () => window.clearTimeout(timer)
+  }, [drawerReturning])
 
   useEffect(() => () => {
     if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
     if (objectTimerRef.current !== null) window.clearTimeout(objectTimerRef.current)
-    if (placeTimerRef.current !== null) window.clearTimeout(placeTimerRef.current)
   }, [])
 
   const openDeskObject = (
-    kind: 'photos' | 'jar' | 'book' | 'player',
+    kind: DeskObjectKind,
     open: () => void,
   ) => {
     if (openingObject || drawerOpening) return
@@ -148,6 +160,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     objectTimerRef.current = window.setTimeout(() => {
       objectTimerRef.current = null
+      if (kind !== 'photos') carriedDeskObject = kind
       open()
       setOpeningObject(null)
     }, reduce ? 1 : 310)
@@ -157,9 +170,10 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     if (drawerOpening) return
     setDrawerOpening(true)
     if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
-    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 260
+    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 470
     drawerTimerRef.current = window.setTimeout(() => {
       drawerTimerRef.current = null
+      drawerNeedsReturn = true
       onOpenWeekly()
       setDrawerOpening(false)
     }, delay)
@@ -314,7 +328,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           onAdd={() => fileInputRef.current?.click()}
           onDelete={handleDeletePhoto}
           onOpenChange={(open) => {
-            if (!open) beginPlaceBack()
+            if (!open) beginPlaceBack('photos')
           }}
         />
         <input
@@ -463,7 +477,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
 
           <button
             type="button"
-            className={`space-scene-hotspot is-weekly-letter${drawerOpening ? ' is-opening' : ''}`}
+            className={`space-scene-hotspot is-weekly-letter${drawerOpening ? ' is-opening' : ''}${drawerReturning ? ' is-returning' : ''}`}
             aria-label="拉开抽屉，打开一周情书"
             onClick={openWeeklyFromDrawer}
             disabled={drawerOpening}
@@ -485,5 +499,5 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     )
   }
 
-  return <div className={`page ai-space-page${placingObjects ? ' is-placing-objects' : ''}`}>{renderHomePage()}</div>
+  return <div className={`page ai-space-page${placingObject ? ` is-placing-${placingObject}` : ''}`}>{renderHomePage()}</div>
 }
