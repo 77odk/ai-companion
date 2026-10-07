@@ -1455,6 +1455,41 @@
   font-weight: 600;
 }
 
+.listen-connect-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255,248,239,.12);
+  border-radius: 14px;
+  background: rgba(255,248,239,.045);
+  text-align: center;
+}
+
+.listen-connect-panel p {
+  margin: 0 0 10px;
+  color: rgba(255,248,239,.58);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.listen-connect-panel button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255,248,239,.15);
+  border-radius: 999px;
+  background: rgba(255,248,239,.07);
+  color: rgba(255,248,239,.86);
+}
+
+.listen-transport button:disabled,
+.listen-progress-row input:disabled {
+  opacity: .36;
+}
+
+.space-live-player-connect {
+  letter-spacing: .08em;
+  opacity: .78;
+}
+
 .listen-transport {
   display: grid;
   grid-template-columns: 1fr 1.15fr 1fr;
