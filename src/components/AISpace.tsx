@@ -18,6 +18,9 @@ import {
 import { getToken } from '../lib/auth'
 
 interface Props {
+  onOpenMemory: () => void
+  onOpenThoughts: () => void
+  onOpenListen: () => void
   /** 一周情书由 App 顶层 view 承载，不在 Space 内嵌子页。 */
   onOpenWeekly: () => void
 }
@@ -50,7 +53,7 @@ function isValidCloudPhotoRow(value: unknown): value is {
 
 const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，稍后再试。'
 
-export default function AISpace({ onOpenWeekly }: Props) {
+export default function AISpace({ onOpenMemory, onOpenThoughts, onOpenListen, onOpenWeekly }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
 
@@ -221,9 +224,24 @@ export default function AISpace({ onOpenWeekly }: Props) {
           />
         </div>
 
-        <span className="space-scene-object space-scene-star-jar" aria-hidden="true" />
-        <span className="space-scene-object space-scene-thought-book" aria-hidden="true" />
-        <span className="space-scene-object space-scene-player" aria-hidden="true" />
+        <button
+          type="button"
+          className="space-scene-object space-scene-star-jar"
+          onClick={onOpenMemory}
+          aria-label="打开记忆星星罐"
+        />
+        <button
+          type="button"
+          className="space-scene-object space-scene-thought-book"
+          onClick={onOpenThoughts}
+          aria-label="打开 TA 的思绪"
+        />
+        <button
+          type="button"
+          className="space-scene-object space-scene-player"
+          onClick={onOpenListen}
+          aria-label="打开一起听歌"
+        />
         <span className="space-scene-object space-scene-earphones" aria-hidden="true" />
 
         <button
