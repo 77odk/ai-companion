@@ -132,7 +132,11 @@ export function removeMemoryItem(id: string): MemoryItem[] {
 export function updateMemoryItemContent(id: string, text: string): MemoryItem[] {
   const t = text.trim()
   if (!t) return loadMemory()
-  const next = loadMemory().map((m) => (m.id === id ? { ...m, text: t } : m))
+  const next = loadMemory().map((m) => (
+    m.id === id
+      ? { ...m, text: t, triggerWords: deriveMemoryTriggerWords(t, m.topic) }
+      : m
+  ))
   saveMemory(next)
   notifyMemoryUpdated()
   return next
