@@ -120,6 +120,7 @@ assert.match(cloudResources, /registerCloudStateAdapter\('ta_commitment'/)
 assert.match(cloudResources, /resetCommitmentSnapshot\(\)[\s\S]{0,100}notifyDataChanged\(\)/)
 assert.match(commitmentSource, /message\.replyState !== 'interrupted'/)
 assert.match(app, /nextTaCommitmentCheckAt/)
+assert.match(app, /const onDataChange = \(\) => \{[\s\S]{0,220}checkDueCommitment\(\)[\s\S]{0,220}armDueTimer\(\)/)
 assert.match(app, /setTimeout\(\(\) => \{[\s\S]*checkDueCommitment\(\)/)
 assert.match(chat, /window\.dispatchEvent\(new CustomEvent\('yiwem:ai-reply-committed'/)
 
