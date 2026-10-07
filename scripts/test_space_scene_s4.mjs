@@ -27,6 +27,8 @@ assert.match(state, /02:00–07:00 权重 = 0/)
 assert.ok(state.includes('INTERACTION_MOOD_DEBOUNCE_MS = 30 * 60_000'))
 assert.ok(state.includes('MOOD_STABLE_MS = 45 * 60_000'))
 assert.match(state, /messageEvidenceText\(batch\.text\)/)
+assert.doesNotMatch(state, /我\\.\\{0,8\\}/, 'TA mood evidence must never cross from SELF to USER')
+assert.match(state, /split\\(\/\\[。！？!?；;，,\\\\n\\]\\+\\//)
 assert.doesNotMatch(state, /chatCompletion|streamChat/)
 assert.doesNotMatch(state, /from ['"].*(?:memory|eventStore|anniversary|futureIntent)/)
 
