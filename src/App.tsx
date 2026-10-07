@@ -368,6 +368,55 @@ export default function App() {
     [captureScroll],
   )
 
+  const openSystemNotificationTarget = useCallback((target: SystemNotificationTarget): boolean => {
+    if (!loggedIn) return false
+    const sid = String(target.sessionId ?? '').trim()
+    if (sid) {
+      // 通知只能把用户带回这个账号当前仍存在的 TA，绝不凭旧通知复活/切进已删除角色。
+      if (!getSessionsCache().some((session) => String(session.id) === sid)) return false
+      setActiveSessionId(sid)
+    }
+    if (target.commitmentId && sid) {
+      const commitment = loadTaCommitments(sid).find((item) => item.id === target.commitmentId)
+      if (commitment) {
+        commitmentReminderRef.current = commitment
+        setCommitmentReminder(commitment)
+      }
+    }
+    forceNotificationRouteRender((revision) => revision + 1)
+    replaceView(target.view === 'notifications' ? 'notifications' : 'chat')
+    return true
+  }, [loggedIn, replaceView])
+
+  useEffect(() => {
+    const tryOpen = (target: SystemNotificationTarget | null | undefined) => {
+      if (!target) return
+      if (openSystemNotificationTarget(target)) clearSystemNotificationLaunchTarget()
+    }
+    const onPageNotification = (event: Event) => {
+      tryOpen((event as CustomEvent<SystemNotificationTarget>).detail)
+    }
+    const onWorkerMessage = (event: MessageEvent) => {
+      const data = event.data as Partial<SystemNotificationTarget> & { type?: string } | null
+      if (!data || data.type !== SYSTEM_NOTIFICATION_SW_MESSAGE) return
+      tryOpen({
+        view: data.view === 'notifications' ? 'notifications' : 'chat',
+        ...(typeof data.sessionId === 'string' && data.sessionId ? { sessionId: data.sessionId } : {}),
+        ...(typeof data.commitmentId === 'string' && data.commitmentId ? { commitmentId: data.commitmentId } : {}),
+      })
+    }
+
+    window.addEventListener(SYSTEM_NOTIFICATION_CLICK_EVENT, onPageNotification)
+    navigator.serviceWorker?.addEventListener('message', onWorkerMessage)
+    // Service worker 没有已打开页面时会用带目标参数的 URL 开新窗口；sessions 尚未恢复时先保留参数，
+    // 等启动流程把会话缓存装好、view 改变后本 effect 会再次尝试。
+    tryOpen(readSystemNotificationLaunchTarget())
+    return () => {
+      window.removeEventListener(SYSTEM_NOTIFICATION_CLICK_EVENT, onPageNotification)
+      navigator.serviceWorker?.removeEventListener('message', onWorkerMessage)
+    }
+  }, [openSystemNotificationTarget, view])
+
   // 挂载时初始化历史 state；popstate = 浏览器后退/侧滑返回 → 弹出上一页，栈空回首页
   useEffect(() => {
     window.history.replaceState({ v: viewRef.current }, '')
@@ -435,6 +484,7 @@ export default function App() {
   const [commitmentReminder, setCommitmentReminder] = useState<TaCommitment | null>(null)
   const commitmentReminderRef = useRef<TaCommitment | null>(null)
   const commitmentDeliveryRef = useRef<string | null>(null)
+  const [, forceNotificationRouteRender] = useState(0)
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
@@ -468,9 +518,28 @@ export default function App() {
         'eluvin-promise-' + next.id,
         { view: 'chat', sessionId: next.sessionId, commitmentId: next.id },
       ).then((delivered) => {
-        if (delivered) markCommitmentReminded(next.id)
-      }).finally(() => {
         if (commitmentDeliveryRef.current === next.id) commitmentDeliveryRef.current = null
+        if (delivered) {
+          markCommitmentReminded(next.id)
+          return
+        }
+        // 发通知期间若刚好回到前台，失败结果也要立刻补成站内提醒，不能等下一次 visibility。
+        if (document.visibilityState === 'visible' && !commitmentReminderRef.current) {
+          const marked = markCommitmentReminded(next.id)
+          if (marked) {
+            commitmentReminderRef.current = marked
+            setCommitmentReminder(marked)
+          }
+        }
+      }).catch(() => {
+        if (commitmentDeliveryRef.current === next.id) commitmentDeliveryRef.current = null
+        if (document.visibilityState === 'visible' && !commitmentReminderRef.current) {
+          const marked = markCommitmentReminded(next.id)
+          if (marked) {
+            commitmentReminderRef.current = marked
+            setCommitmentReminder(marked)
+          }
+        }
       })
       return
     }
