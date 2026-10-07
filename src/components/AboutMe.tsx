@@ -31,7 +31,7 @@ import {
   type MemoryItem,
 } from '../lib/memory'
 import { loadUserProfile } from '../lib/storage'
-import { captureMemoryPaperMood, deleteMemoryPapersForMemory, generateMemoryPaper } from '../lib/memoryPaper'
+import { captureMemoryPaperMood, deleteMemoryPapersForMemory, generateMemoryPaper, seedMemoryPaperMood } from '../lib/memoryPaper'
 import { getActiveSessionId } from '../lib/sessionStore'
 
 interface Props {
@@ -164,8 +164,9 @@ export default function AboutMe({ onBack }: Props) {
     setMemories(next.filter((m) => m.explicit === true))
     const added = next.find((item) => !before.some((previous) => previous.id === item.id))
     if (sid && added) {
-      // 全局“关于我”事实共享，但纸条属于当前 TA：每个 TA 各自留自己的口吻与当时状态。
-      void generateMemoryPaper(sid, { kind: 'global', item: added }, { mood: paperMood }).catch(() => {})
+      // 全局“关于我”事实共享，但纸条属于当前 TA：先落当时状态，模型失败也不能把 mood 一起丢掉。
+      seedMemoryPaperMood(sid, { kind: 'global', item: added }, paperMood)
+      void generateMemoryPaper(sid, { kind: 'global', item: added }, { preserveExistingMood: true }).catch(() => {})
     }
     setText('')
   }
