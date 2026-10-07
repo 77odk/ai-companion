@@ -62,8 +62,9 @@ export default function LoginForm({ onSuccess, variant = 'default' }: Props) {
     setError(null)
     setInfo(null)
     try {
-      if (view === 'register' && !dobY && !dobM && !dobD) {
-        setError('请先选择出生日期（忆文仅面向 18 岁以上用户）')
+      if (view === 'register' && (!dobY || !dobM || !dobD)) {
+        // 前端只负责要求完整 DOB；是否满 18 岁由 /api/register 后端独立计算并决定是否接受。
+        setError('请完整选择出生日期（忆文仅面向 18 岁以上用户）')
         setSubmitting(false)
         return
       }
