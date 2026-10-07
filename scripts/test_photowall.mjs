@@ -152,6 +152,8 @@ ok(photoWallSource.includes('prev?.scenePlacement'), '云端照片刷新时保�
 ok(archiveSource.includes('onClick={() => setArchiveOpen(true)}'), '空照片墙先进入照片墙，不在空间页直接弹选择器')
 ok(aiSpaceSource.includes('scenePhotoDragRef'), '空间页照片支持拖动摆放')
 ok(aiSpaceSource.includes('persistScenePhotoPlacements'), '空间页照片摆放会持久化')
+ok(aiSpaceSource.includes('if (drag.moved) finishScenePhotoDrag()'), '拖动照片只做摆放')
+ok(aiSpaceSource.includes('openPhotoWallFromScene()'), '轻点空间页照片仍会进入照片墙')
 
 // ---- dataUrl 字节估算 ----
 ok(dataUrlBytes('data:image/jpeg;base64,AAAA') === 3, 'base64 长度 ×0.75 估算（4 字符 → 3 字节）')
