@@ -6,6 +6,11 @@ export type SystemNotificationRequestResult =
   | 'unsupported'
   | 'needs-home-screen'
 
+export interface SystemNotificationTarget {
+  sessionId?: string
+  view?: 'chat'
+}
+
 function isIos(): boolean {
   if (typeof navigator === 'undefined') return false
   const classic = /iphone|ipad|ipod/i.test(navigator.userAgent)
@@ -45,6 +50,7 @@ export async function showSystemNotification(
   title: string,
   body: string,
   tag: string,
+  target?: SystemNotificationTarget,
 ): Promise<boolean> {
   if (!isSystemNotificationEnabled()) return false
   if (!canUseSystemNotifications() || Notification.permission !== 'granted') return false
@@ -52,6 +58,23 @@ export async function showSystemNotification(
   const cleanTitle = String(title ?? '').trim() || '忆文'
   const cleanBody = String(body ?? '').trim()
   const cleanTag = String(tag ?? '').trim() || 'eluvin'
+  const cleanTarget: SystemNotificationTarget = {
+    ...(target?.sessionId ? { sessionId: String(target.sessionId) } : {}),
+    ...(target?.view === 'chat' ? { view: 'chat' as const } : {}),
+  }
+  const routeUrl = (() => {
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('eluvin_notification_session')
+      url.searchParams.delete('eluvin_notification_view')
+      if (cleanTarget.sessionId) url.searchParams.set('eluvin_notification_session', cleanTarget.sessionId)
+      if (cleanTarget.view) url.searchParams.set('eluvin_notification_view', cleanTarget.view)
+      url.hash = ''
+      return url.href
+    } catch {
+      return './'
+    }
+  })()
 
   try {
     if ('serviceWorker' in navigator) {
@@ -60,6 +83,7 @@ export async function showSystemNotification(
         await registration.showNotification(cleanTitle, {
           body: cleanBody,
           tag: cleanTag,
+          data: { ...cleanTarget, url: routeUrl },
         })
         return true
       }
@@ -72,7 +96,15 @@ export async function showSystemNotification(
     const notification = new Notification(cleanTitle, {
       body: cleanBody,
       tag: cleanTag,
+      data: { ...cleanTarget, url: routeUrl },
     })
+    notification.onclick = () => {
+      window.focus()
+      window.dispatchEvent(new CustomEvent('eluvin-system-notification-click', {
+        detail: cleanTarget,
+      }))
+      notification.close()
+    }
     window.setTimeout(() => notification.close(), 10_000)
     return true
   } catch {
