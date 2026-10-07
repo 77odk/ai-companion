@@ -352,7 +352,7 @@ function MainCenter({
             aria-label="系统通知"
             onClick={() => void toggleSystemNotifications()}
           >
-            <span />
+            <span className="settings-switch-thumb" />
           </button>
         </div>
         <p className="settings-inline-help">⚠️ios 用户：需要把忆文添加到主屏幕才能开启通知，safari 浏览器使用收不到哦</p>
@@ -702,7 +702,7 @@ function InitiativeDetail({ onBack }: { onBack: () => void }) {
             aria-label="允许 TA 主动来找你"
             onClick={() => persist({ enabled: !preference.enabled })}
           >
-            <span />
+            <span className="settings-switch-thumb" />
           </button>
         </div>
 
