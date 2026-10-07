@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { loadMemory, type MemoryItem } from '../lib/memory'
-import { getActiveSessionId, getMemoriesCache, mergeSessionMemories, saveMemoriesCache, sessionMemoryToItem } from '../lib/sessionStore'
-import { listMemories } from '../lib/sessionApi'
+import { deriveMemoryTriggerWords, loadMemory, saveMemory, type MemoryItem } from '../lib/memory'
+import { getActiveSessionId, getBusyState, getMemoriesCache, getSessionLang, mergeSessionMemories, saveMemoriesCache, sessionMemoryToItem } from '../lib/sessionStore'
+import { listMemories, postMemory } from '../lib/sessionApi'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
 import { getToken } from '../lib/auth'
 import { correctMemoryText, removeMemory, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 import { findChatRecordJumpTargetHydrated, type ChatJumpTarget, type MemoryReturnTarget } from '../lib/chatJump'
 import { alignPendingMemoriesForRefresh } from '../lib/memoryRefreshReconcile'
 import { recordMemoryIdAlias, resolveMemoryIdAlias, subscribeMemoryIdAliases } from '../lib/memoryIdAliases'
+import EventArchive from './EventArchive'
+import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from '../lib/taRuntime'
+import { appendMemoryAudit, loadMemoryAudit, type MemoryAuditEntry } from '../lib/memoryAudit'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
 // 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
