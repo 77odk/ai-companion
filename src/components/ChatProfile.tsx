@@ -217,7 +217,7 @@ export default function ChatProfile({
                     <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" />
                   </svg>
                 </span>
-                <span className="ta-profile-who-label">关系</span>
+                <span className="ta-profile-who-label">背景</span>
                 <span className="ta-profile-who-value">{who.background}</span>
               </div>
             )}
