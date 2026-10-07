@@ -92,8 +92,11 @@ assert.equal(
   '普通自然文本里的 self/shared 不得被协议清理误改',
 )
 
-console.log('[S6] Space 性能：30–45 可见星只让 6 颗动；隐藏页暂停；粗指针扩大触控区')
-assert.match(star, /index < 6 \? 'is-moving' : ''/)
+console.log('[S6] Space 性能：一条真实记忆一颗折纸星；隐藏页暂停；粗指针扩大触控区')
+assert.match(star, /const visibleStarCount = numberedMemories\.length/)
+assert.doesNotMatch(star, /is-filler/)
+assert.doesNotMatch(star, />\s*★\s*</)
+assert.match(star, /className="fold is-a"/)
 assert.match(spaceCss, /\.star-jar-star\.is-moving/)
 assert.match(spaceCss, /html\.eluvin-page-hidden \.ai-space-page \*/)
 assert.match(spaceCss, /animation-play-state: paused !important/)
