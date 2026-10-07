@@ -877,6 +877,28 @@
   perspective: 1500px;
 }
 
+.thought-book-shell::before,
+.thought-book-shell::after {
+  content: '';
+  position: absolute;
+  left: 2.5%;
+  right: 2.5%;
+  height: 5px;
+  bottom: 2.7%;
+  border-radius: 0 0 12px 12px;
+  background: rgba(130, 92, 62, .18);
+  transform: translateY(3px);
+  box-shadow: 0 3px 0 rgba(255,253,246,.72);
+  pointer-events: none;
+}
+
+.thought-book-shell::after {
+  left: 4%;
+  right: 4%;
+  bottom: 1.5%;
+  opacity: .7;
+}
+
 .thought-book-cover {
   position: absolute;
   z-index: 8;
@@ -947,6 +969,20 @@
   transform: translateY(0) scale(1);
 }
 
+.thought-book-pages::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  left: calc(50% - 5px);
+  bottom: -18px;
+  width: 10px;
+  height: 38px;
+  border-radius: 0 0 5px 5px;
+  background: linear-gradient(180deg, #b97858, #9b5d47);
+  box-shadow: 0 4px 10px rgba(89,54,34,.14);
+  pointer-events: none;
+}
+
 .thought-book-page-side,
 .thought-book-face,
 .thought-book-empty {
@@ -996,6 +1032,20 @@
 .thought-book-page-side.is-right::before {
   left: 0;
   background: linear-gradient(90deg, rgba(78,48,31,.10), transparent);
+}
+
+.thought-book-page-side.is-right::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 28px;
+  height: 28px;
+  background:
+    linear-gradient(225deg, rgba(228,214,190,.92) 0 48%, transparent 49%),
+    linear-gradient(45deg, rgba(119,82,57,.08), rgba(255,253,246,.95));
+  filter: drop-shadow(-2px 2px 2px rgba(78,48,31,.08));
+  pointer-events: none;
 }
 
 .thought-paper-content {
