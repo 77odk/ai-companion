@@ -39,10 +39,18 @@ export default function StarJar({ onBack }: Props) {
   const sessionId = getActiveSessionId()
   const [version, setVersion] = useState(0)
   const memories = useMemo(() => memoryPool(sessionId), [sessionId, version])
+  const numberedMemories = useMemo(
+    () => [...memories]
+      .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+      .map((item, index) => ({ item, number: index + 1 })),
+    [memories],
+  )
   const [phase, setPhase] = useState<JarPhase>('jar')
-  const [selected, setSelected] = useState<MemoryItem | null>(null)
+  const [selected, setSelected] = useState<{ item: MemoryItem; number: number } | null>(null)
   const timers = useRef<number[]>([])
-  const starCount = useMemo(() => 30 + Math.floor(Math.random() * 16), [sessionId])
+  // 视觉上维持 30–45 颗的丰满度；真实记忆仍是一条对应一个编号星星。
+  // 记忆少于 30 时其余只是无语义填充光点，绝不参与抽取。
+  const visibleStarCount = Math.max(30, Math.min(45, numberedMemories.length))
 
   useEffect(() => {
     const refresh = () => setVersion((value) => value + 1)
@@ -61,9 +69,9 @@ export default function StarJar({ onBack }: Props) {
   }
 
   const draw = () => {
-    if (memories.length === 0 || phase !== 'jar') return
+    if (numberedMemories.length === 0 || phase !== 'jar') return
     clearTimers()
-    const next = memories[Math.floor(Math.random() * memories.length)]
+    const next = numberedMemories[Math.floor(Math.random() * numberedMemories.length)]
     setSelected(next)
     setPhase('opening')
     timers.current.push(window.setTimeout(() => setPhase('detail'), 520))
@@ -95,15 +103,15 @@ export default function StarJar({ onBack }: Props) {
           type="button"
           className="star-jar-vessel"
           onClick={draw}
-          disabled={memories.length === 0 || phase !== 'jar'}
-          aria-label={memories.length > 0 ? '随机抽一颗记忆星星' : '还没有可以抽取的记忆'}
+          disabled={numberedMemories.length === 0 || phase !== 'jar'}
+          aria-label={numberedMemories.length > 0 ? '随机抽一颗记忆星星' : '还没有可以抽取的记忆'}
         >
           <span className="star-jar-lid" aria-hidden="true" />
           <span className="star-jar-glass" aria-hidden="true">
-            {Array.from({ length: starCount }, (_, index) => (
+            {Array.from({ length: visibleStarCount }, (_, index) => (
               <span
                 key={index}
-                className="star-jar-star"
+                className={`star-jar-star${index >= numberedMemories.length ? ' is-filler' : ''}`}
                 style={{
                   '--star-x': `${8 + ((index * 37) % 83)}%`,
                   '--star-y': `${12 + ((index * 53) % 76)}%`,
@@ -132,18 +140,21 @@ export default function StarJar({ onBack }: Props) {
               <span />
             </div>
             <article className="star-memory-content">
-              {fmtDate(selected.createdAt) ? <time>{fmtDate(selected.createdAt)}</time> : null}
-              <p className="star-memory-text">{selected.text}</p>
-              {selected.source?.trim() ? (
+              <div className="star-memory-heading">
+                <span>第 {selected.number} 颗星</span>
+                {fmtDate(selected.item.createdAt) ? <time>{fmtDate(selected.item.createdAt)}</time> : null}
+              </div>
+              <p className="star-memory-text">{selected.item.text}</p>
+              {selected.item.source?.trim() ? (
                 <div className="star-memory-source">
                   <span>当时你说</span>
-                  <p>「{selected.source.trim()}」</p>
+                  <p>「{selected.item.source.trim()}」</p>
                 </div>
               ) : null}
-              {selected.taReply?.trim() ? (
+              {selected.item.taReply?.trim() ? (
                 <div className="star-memory-source">
                   <span>TA 当时回应</span>
-                  <p>「{selected.taReply.trim()}」</p>
+                  <p>「{selected.item.taReply.trim()}」</p>
                 </div>
               ) : null}
               {phase === 'detail' && (
