@@ -1,4 +1,5 @@
 import { ELUVIN_AUTH_CHANGE } from './dataChange.ts'
+import { ACTIVE_SESSION_CHANGED_EVENT } from './sessionStore.ts'
 
 export interface ListenTogetherSnapshot {
   title: string
@@ -162,8 +163,22 @@ export function clearListenTogether(sessionId?: string): void {
   }
 }
 
+export function pauseListenTogether(sessionId: string): void {
+  const sid = sessionKey(sessionId)
+  const state = sid ? states.get(sid) : null
+  if (!state?.player || state.player.paused) return
+  state.player.pause()
+  emit(sid)
+}
+
+
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   // Audio/ObjectURLs are transient browser-session data. Auth transitions clear
-  // every role, while ordinary role switches stay isolated by session ID.
+  // every role. Leaving a role pauses its player immediately while retaining
+  // that role's local track and position for a later return.
   window.addEventListener(ELUVIN_AUTH_CHANGE, () => clearListenTogether())
+  window.addEventListener(ACTIVE_SESSION_CHANGED_EVENT, (event) => {
+    const previousSessionId = (event as CustomEvent<{ previousSessionId?: string }>).detail?.previousSessionId ?? ''
+    if (previousSessionId) pauseListenTogether(previousSessionId)
+  })
 }
