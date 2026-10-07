@@ -14,7 +14,9 @@ for (const klass of ['is-star-jar', 'is-thought-book', 'is-player', 'is-weekly-l
 assert.match(aiSpace, /onClick=\{onOpenStarJar\}/)
 assert.match(aiSpace, /onClick=\{onOpenThoughts\}/)
 assert.match(aiSpace, /onClick=\{onOpenListen\}/)
-assert.match(aiSpace, /onClick=\{onOpenWeekly\}/)
+assert.match(aiSpace, /const openWeeklyFromDrawer/)
+assert.match(aiSpace, /onClick=\{openWeeklyFromDrawer\}/)
+assert.match(aiSpace, /onOpenWeekly\(\)/)
 
 console.log('[Space S2] photo archive compatibility entry remains reachable; S3 moves shared experiences to Chaomu')
 assert.match(aiSpace, /space-scene-hotspot is-photo-wall/)
