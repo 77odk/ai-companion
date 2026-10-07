@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
+import EventArchive from './EventArchive'
 import { getActiveSessionId } from '../lib/sessionStore'
 import {
   loadLocalPhotos,
@@ -18,9 +19,6 @@ import {
 import { getToken } from '../lib/auth'
 
 interface Props {
-  onOpenMemory: () => void
-  onOpenThoughts: () => void
-  onOpenListen: () => void
   /** 一周情书由 App 顶层 view 承载，不在 Space 内嵌子页。 */
   onOpenWeekly: () => void
 }
@@ -53,7 +51,7 @@ function isValidCloudPhotoRow(value: unknown): value is {
 
 const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，稍后再试。'
 
-export default function AISpace({ onOpenMemory, onOpenThoughts, onOpenListen, onOpenWeekly }: Props) {
+export default function AISpace({ onOpenWeekly }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
 
@@ -191,68 +189,28 @@ export default function AISpace({ onOpenMemory, onOpenThoughts, onOpenListen, on
     setPhotoUploading(0)
   }
 
-  function renderHomePage() {
+  function renderPhotoWall() {
+    const token = getToken()
     return (
-      <div className="space-scene" data-space-scene="golden-desk">
-        <img
-          className="space-scene-background"
-          src="/space-scenes/golden-desk.webp"
-          alt=""
-          draggable={false}
-          aria-hidden="true"
+      <>
+        <PhotoWallArchive
+          photos={photos}
+          uploading={photoUploading}
+          error={photoError}
+          photoSrc={(photo) => photo.dataUrl ?? photoUrl(photo.id, token)}
+          onPhotoLoadError={(photo) => {
+            failedPhotoIdsRef.current.add(photo.id)
+            setPhotoError(PHOTO_IMAGE_LOAD_ERROR)
+          }}
+          onPhotoLoadSuccess={(photo) => {
+            failedPhotoIdsRef.current.delete(photo.id)
+            if (failedPhotoIdsRef.current.size === 0) {
+              setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? null : current)
+            }
+          }}
+          onAdd={() => fileInputRef.current?.click()}
+          onDelete={handleDeletePhoto}
         />
-
-        <div className="space-scene-photo-zone">
-          <PhotoWallArchive
-            scene
-            photos={photos}
-            uploading={photoUploading}
-            error={photoError}
-            photoSrc={(photo) => photo.dataUrl ?? photoUrl(photo.id, getToken())}
-            onPhotoLoadError={(photo) => {
-              failedPhotoIdsRef.current.add(photo.id)
-              setPhotoError(PHOTO_IMAGE_LOAD_ERROR)
-            }}
-            onPhotoLoadSuccess={(photo) => {
-              failedPhotoIdsRef.current.delete(photo.id)
-              if (failedPhotoIdsRef.current.size === 0) {
-                setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? null : current)
-              }
-            }}
-            onAdd={() => fileInputRef.current?.click()}
-            onDelete={handleDeletePhoto}
-          />
-        </div>
-
-        <button
-          type="button"
-          className="space-scene-object space-scene-star-jar"
-          onClick={onOpenMemory}
-          aria-label="打开记忆星星罐"
-        />
-        <button
-          type="button"
-          className="space-scene-object space-scene-thought-book"
-          onClick={onOpenThoughts}
-          aria-label="打开 TA 的思绪"
-        />
-        <button
-          type="button"
-          className="space-scene-object space-scene-player"
-          onClick={onOpenListen}
-          aria-label="打开一起听歌"
-        />
-        <span className="space-scene-object space-scene-earphones" aria-hidden="true" />
-
-        <button
-          type="button"
-          className="space-scene-drawer"
-          onClick={onOpenWeekly}
-          aria-label="打开一周情书"
-        >
-          <span className="space-scene-drawer-hit" aria-hidden="true" />
-        </button>
-
         <input
           ref={fileInputRef}
           type="file"
@@ -264,9 +222,68 @@ export default function AISpace({ onOpenMemory, onOpenThoughts, onOpenListen, on
             event.target.value = ''
           }}
         />
-      </div>
+      </>
     )
   }
 
-  return <div className="page ai-space-page ai-space-page--scene">{renderHomePage()}</div>
+  function renderHomePage() {
+    return (
+      <>
+        <section className="space-scene-shell" aria-label="TA 的空间">
+          <img
+            className="space-scene-backplate"
+            src="/space/space-desk.webp"
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />
+          <span className="space-scene-ambient" aria-hidden="true" />
+        </section>
+
+        {/*
+          S1 keeps the approved artwork visually untouched while preserving the
+          existing Space capabilities. Transparent hit areas sit on the objects
+          already present in the confirmed composition; S2 replaces these temporary
+          compatibility entry points with the final CSS/SVG object interactions.
+        */}
+        <div className="space-scene-hotspots">
+          <button
+            type="button"
+            className="space-scene-hotspot is-photo-wall"
+            aria-label="打开照片墙"
+            onClick={() => {
+              document
+                .querySelector<HTMLButtonElement>('.ai-space-page .photo-stack-preview, .ai-space-page .photo-archive-empty')
+                ?.click()
+            }}
+          />
+          <button
+            type="button"
+            className="space-scene-hotspot is-moments"
+            aria-label="打开一起经历过"
+            onClick={() => {
+              document
+                .querySelector<HTMLButtonElement>(
+                  '.ai-space-page .event-archive-preview .ai-space-v2-all, .ai-space-page .event-archive-preview-item, .ai-space-page .event-archive-empty',
+                )
+                ?.click()
+            }}
+          />
+          <button
+            type="button"
+            className="space-scene-hotspot is-weekly-letter"
+            aria-label="打开一周情书"
+            onClick={onOpenWeekly}
+          />
+        </div>
+
+        <div className="space-scene-service-host">
+          {renderPhotoWall()}
+          <EventArchive sessionId={sid} />
+        </div>
+      </>
+    )
+  }
+
+  return <div className="page ai-space-page">{renderHomePage()}</div>
 }
