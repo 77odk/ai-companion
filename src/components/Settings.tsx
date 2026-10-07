@@ -272,7 +272,9 @@ function MainCenter({
   const accountLabel = getAccount()?.account ?? null
   const loggedIn = isLoggedIn()
   const replyLength = getGlobalReplyLength(accountLabel ?? '')
-  const [systemNotifications, setSystemNotifications] = useState(() => isSystemNotificationEnabled())
+  const [systemNotifications, setSystemNotifications] = useState(
+    () => isSystemNotificationEnabled() && systemNotificationPermission() === 'granted',
+  )
   const [systemNotificationHint, setSystemNotificationHint] = useState('')
 
   const toggleSystemNotifications = async () => {
