@@ -451,13 +451,21 @@ export default function App() {
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate' | 'chat'>('welcome')
 
   const checkDueCommitment = useCallback(() => {
-    if (!loggedIn || document.visibilityState !== 'visible' || commitmentReminderRef.current) return
+    if (!loggedIn || commitmentReminderRef.current) return
     const next = collectDueTaCommitments(Date.now())[0]
     if (!next) return
     const marked = markCommitmentReminded(next.id)
     if (!marked) return
     commitmentReminderRef.current = marked
     setCommitmentReminder(marked)
+
+    // 页面仍在后台运行时也可以敲一下系统通知；内容保持通用，不把承诺正文放到锁屏。
+    const taName = loadAIProfile(marked.sessionId).nickname?.trim() || 'TA'
+    void showSystemNotification(
+      taName,
+      '有一件答应你的事到时间了，打开忆文看看。',
+      'eluvin-promise-' + marked.id,
+    )
   }, [loggedIn])
 
   useEffect(() => {
