@@ -154,6 +154,7 @@
     calc(var(--el-space-6, 32px) + env(safe-area-inset-bottom));
 }
 
+.ta-profile-now,
 .ta-profile-who,
 .ta-profile-menu,
 .ta-profile-refresh {
@@ -162,6 +163,18 @@
   border-radius: var(--el-radius-md, 16px);
   background: color-mix(in srgb, var(--el-surface-card, var(--color-card)) 96%, transparent);
   box-shadow: none;
+}
+
+/* ---- “我们现在” ------------------------------------------------------ */
+.ta-profile-now {
+  padding: var(--el-space-4, 16px);
+}
+
+.ta-profile-now p {
+  margin: 0;
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: var(--el-font-body, 15px);
+  line-height: 1.72;
 }
 
 /* ---- “TA 是谁” -------------------------------------------------------- */

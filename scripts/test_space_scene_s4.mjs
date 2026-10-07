@@ -1,0 +1,92 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+
+const state = readFileSync('src/lib/taState.ts', 'utf8')
+const thoughts = readFileSync('src/lib/taThoughts.ts', 'utf8')
+const relationship = readFileSync('src/lib/relationshipState.ts', 'utf8')
+const memory = readFileSync('src/components/Memory.tsx', 'utf8')
+const home = readFileSync('src/components/Home.tsx', 'utf8')
+const thoughtBook = readFileSync('src/components/ThoughtBook.tsx', 'utf8')
+const settings = readFileSync('src/components/Settings.tsx', 'utf8')
+const profile = readFileSync('src/components/ChatProfile.tsx', 'utf8')
+const chat = readFileSync('src/components/Chat.tsx', 'utf8')
+const cloudResources = readFileSync('src/lib/cloudStateResources.ts', 'utf8')
+const spaceCss = readFileSync('src/styles/space.css', 'utf8')
+
+console.log('[S4] 状态内部结构 / 对外隐私边界')
+for (const word of ['雀跃','期待','安心','惬意','烦躁','紧绷','低落','闷闷的','若有所思','惦记','有点累','发呆']) {
+  assert.match(state, new RegExp(`['"]${word}['"]`))
+}
+for (const key of ['relaxedTense','quietActive','connection','expression','exploration','involvement','reminiscence','space','energy']) {
+  assert.match(state, new RegExp(`\\b${key}\\b`))
+}
+assert.match(state, /weightedSettledMinutes/)
+assert.match(state, /hour >= 7 && hour < 22/)
+assert.match(state, /hour >= 22 \|\| hour < 2/)
+assert.match(state, /02:00–07:00 权重 = 0/)
+assert.ok(state.includes('INTERACTION_MOOD_DEBOUNCE_MS = 30 * 60_000'))
+assert.ok(state.includes('MOOD_STABLE_MS = 45 * 60_000'))
+assert.match(state, /messageEvidenceText\(batch\.text\)/)
+assert.doesNotMatch(state, /chatCompletion|streamChat/)
+assert.doesNotMatch(state, /from ['"].*(?:memory|eventStore|anniversary|futureIntent)/)
+
+assert.match(chat, /getTaStateView/)
+assert.match(chat, /taMoodLabelForPrompt/)
+assert.match(chat, /心情：\$\{promptMood\}/)
+assert.match(chat, /Mood: \$\{promptMood\}/)
+assert.doesNotMatch(chat, /taState\.(?:axes|tendencies|reason)/)
+assert.doesNotMatch(memory, /relaxedTense|quietActive|tendencies/)
+assert.match(memory, /stateView\.mood/)
+assert.match(memory, /stateView\.description/)
+assert.doesNotMatch(memory, /stateView\?\.mood \?\? '若有所思'/)
+
+console.log('[S4] TA 此刻从 Home 移到朝暮，Home 只留 Presence')
+assert.doesNotMatch(home, /\{taName\} 此刻/)
+assert.match(home, /<TaOrb label=\{taName\} scene=\{scene\.id\} avatar=\{taAvatar\} \/>/)
+assert.match(memory, /<h2 id="chaomu-status-title">状态<\/h2>/)
+assert.match(memory, /runtimeDisplayLabel/)
+
+console.log('[S4] 思绪只从 state signal 长出，书是物理翻页')
+assert.match(thoughts, /getTaThoughtSignal/)
+assert.match(thoughts, /HALF_LIFE_MS/)
+assert.match(thoughts, /strength/)
+assert.match(thoughts, /lastActivatedAt/)
+assert.match(thoughts, /getTaThoughtSignal\(sid, lastActivationAt \|\| null, now\)/)
+assert.doesNotMatch(thoughts, /Math\.random\(\).*THOUGHT_POOL/)
+assert.doesNotMatch(thoughts, /from ['"].*memory/)
+assert.match(thoughtBook, /thought-book-turning-page/)
+assert.match(thoughtBook, /thought-book-face is-front/)
+assert.match(thoughtBook, /thought-book-face is-back/)
+assert.match(thoughtBook, /setTimeout\(\(\) => \{[\s\S]*setSpread/)
+assert.match(spaceCss, /@keyframes thought-page-next/)
+assert.match(spaceCss, /rotateY\(-180deg\)/)
+assert.match(spaceCss, /backface-visibility: hidden/)
+assert.match(spaceCss, /prefers-reduced-motion: reduce/)
+
+console.log('[S4] 关系设定与真实事实分开')
+for (const option of ['恋人','兄妹','家人','偶像与粉丝','宿敌','主仆','师生','原作角色与你的 OC','自定义']) {
+  assert.ok(relationship.includes(`'${option}'`), `missing relationship preset: ${option}`)
+}
+assert.match(settings, />关系设定<\/label>/)
+assert.match(settings, />背景设定<\/label>/)
+assert.match(settings, /修改关系设定不会改写已经发生过的聊天和共同经历/)
+assert.match(profile, />我们现在<\/h3>/)
+assert.match(relationship, /getEvents\(sid\)/)
+assert.match(relationship, /created_at/)
+assert.doesNotMatch(relationship, /stageLabel|levelValue|progressPct|intimacyScore/)
+assert.doesNotMatch(profile, /关系阶段|亲密等级|关系进度/)
+assert.match(chat, /getRelationshipRoleGuidanceForPrompt/)
+assert.match(chat, /never invent shared history/)
+assert.match(chat, /绝不能据此编造共同经历/)
+
+console.log('[S4] 新私密对象复用现有 Cloud State，无新业务 localStorage key')
+assert.match(cloudResources, /initTaStateCloudSync\(\)/)
+assert.match(cloudResources, /initTaThoughtCloudSync\(\)/)
+assert.match(cloudResources, /initRelationshipCloudSync\(\)/)
+for (const source of [state, thoughts, relationship]) {
+  assert.doesNotMatch(source, /localStorage\.(?:getItem|setItem|removeItem)/)
+  assert.match(source, /getCloudStateSidecar/)
+  assert.match(source, /setCloudStateSidecar/)
+}
+
+console.log('[Space S4] 状态 / 思绪 / 关系合同通过')

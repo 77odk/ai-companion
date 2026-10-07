@@ -41,6 +41,9 @@ import {
   upsertTaCommitmentFromCloud,
   type TaCommitment,
 } from './commitmentStore.ts'
+import { initTaStateCloudSync } from './taState.ts'
+import { initTaThoughtCloudSync } from './taThoughts.ts'
+import { initRelationshipCloudSync } from './relationshipState.ts'
 
 const GLOBAL = 'global'
 const THEME_KEY = 'ai_companion_theme'
@@ -1154,6 +1157,11 @@ let initialized = false
 export function initCloudStateResourceAdapters(): void {
   if (initialized) return
   initialized = true
+  // S4 私密状态 / 思绪 / 关系设定各自在自己的 service 内注册 adapter，
+  // 数值状态不暴露给 UI / Chat / 其它业务层。
+  initTaStateCloudSync()
+  initTaThoughtCloudSync()
+  initRelationshipCloudSync()
   resetPersonalSnapshot()
   resetAnniversarySnapshot()
   resetSpaceSnapshot()

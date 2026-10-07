@@ -64,6 +64,12 @@ import {
   roleInitial,
 } from '../lib/sessionProfile'
 import { estimateUsageTurnCost, formatUsageMoney, formatUsageTokens, summarizeUsageTurns } from '../lib/usageCost'
+import {
+  RELATIONSHIP_PRESETS,
+  loadRelationshipSetting,
+  saveRelationshipSetting,
+  type RelationshipPreset,
+} from '../lib/relationshipState'
 
 type TestState = 'idle' | 'testing' | 'success' | 'error'
 
@@ -876,6 +882,9 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
   const [ai, setAI] = useState<AIProfile>(() => loadAIProfile(viewSessionId || undefined))
   const [globalPersona, setGlobalPersona] = useState(() => loadPersona())
   const [remark, setRemark] = useState(() => loadAIRemark(viewSessionId || undefined))
+  const initialRelationship = loadRelationshipSetting(viewSessionId || undefined)
+  const [relationshipPreset, setRelationshipPreset] = useState<RelationshipPreset | ''>(() => initialRelationship?.preset ?? '')
+  const [relationshipCustom, setRelationshipCustom] = useState(() => initialRelationship?.customLabel ?? '')
   // 性别：选一次锁定（2026-09-14 七七拍板）；locked = 已选定不再给改
   const [genderState, setGenderState] = useState(() => loadAIGenderState(viewSessionId || undefined))
   const gender = genderState.gender
@@ -988,6 +997,18 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
     setGenderState({ gender: g, locked: g !== 'unknown', own: true })
     dirtyRef.current = true
     flashSaved('gender')
+  }
+
+  const handleSaveRelationship = () => {
+    if (!activeSessionId) return
+    const saved = saveRelationshipSetting(
+      activeSessionId,
+      relationshipPreset || undefined,
+      relationshipPreset === '自定义' ? relationshipCustom : undefined,
+    )
+    if (!saved) return
+    dirtyRef.current = true
+    flashSaved('relationship')
   }
 
   // 改头像：写当前角色的会话 key（无会话回落全局），改 A 不影响 B
@@ -1133,6 +1154,44 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
         </div>
 
         <div className="field">
+          <label htmlFor="ai-relationship">关系设定</label>
+          <select
+            id="ai-relationship"
+            className="input"
+            value={relationshipPreset}
+            onChange={(event) => setRelationshipPreset(event.target.value as RelationshipPreset | '')}
+            disabled={!hasSession}
+          >
+            <option value="">不设定</option>
+            {RELATIONSHIP_PRESETS.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+          {relationshipPreset === '自定义' && (
+            <input
+              className="input"
+              type="text"
+              value={relationshipCustom}
+              onChange={(event) => setRelationshipCustom(event.target.value)}
+              maxLength={40}
+              placeholder="写下你们的关系"
+              autoComplete="off"
+            />
+          )}
+          <div className="ai-save-row ai-save-row-end">
+            <button
+              type="button"
+              className="btn btn-primary ai-save-btn"
+              onClick={handleSaveRelationship}
+              disabled={!hasSession || saving || (relationshipPreset === '自定义' && !relationshipCustom.trim())}
+            >
+              {savedField === 'relationship' ? '已保存' : '保存关系'}
+            </button>
+          </div>
+          <p className="hint">选填。修改关系设定不会改写已经发生过的聊天和共同经历。</p>
+        </div>
+
+        <div className="field">
           <label htmlFor="ai-personality">性格特质</label>
           <textarea
             id="ai-personality"
@@ -1155,12 +1214,12 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
         </div>
 
         <div className="field">
-          <label htmlFor="ai-background">关系&背景设定</label>
+          <label htmlFor="ai-background">背景设定</label>
           <textarea
             id="ai-background"
             className="input persona-input"
             rows={3}
-            placeholder="你们是什么关系，TA的经历、相处细节"
+            placeholder="TA 的经历、世界观、相处背景"
             value={backgroundValue}
             onChange={(e) => setBackgroundDraft(e.target.value)}
           />

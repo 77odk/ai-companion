@@ -71,6 +71,8 @@ import { chatCompletion, type ModelUsage } from './lib/api'
 import { estimateToken } from './lib/token'
 import { resolveIdentityMode } from './lib/companionPolicy'
 import { captureLatestTaCommitment, collectDueTaCommitments, markCommitmentReminded, nextTaCommitmentCheckAt, type TaCommitment } from './lib/commitmentStore'
+import { captureTaStateEvidenceFromLatestReply, getTaStateView, recordTaStateInteraction } from './lib/taState'
+import { settleTaThoughts } from './lib/taThoughts'
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
 const RolePicker = lazy(() => import('./components/RolePicker'))
@@ -480,15 +482,35 @@ export default function App() {
       }, delay)
     }
 
+    const settleCompanionContinuity = (sid: string) => {
+      if (!sid) return
+      // S4：一次真实对话先记作“发生过互动”，再读取 TA 最终自述作为情绪证据。
+      // 全程纯本地规则，不发模型请求；thought 只接收 state service 的粗粒度 signal。
+      recordTaStateInteraction(sid)
+      captureTaStateEvidenceFromLatestReply(sid)
+      settleTaThoughts(sid)
+    }
+
     const onReplyCommitted = (event: Event) => {
       const sid = String((event as CustomEvent<{ sid?: string }>).detail?.sid ?? '')
-      if (sid) captureLatestTaCommitment(sid)
+      if (sid) {
+        captureLatestTaCommitment(sid)
+        settleCompanionContinuity(sid)
+      }
       checkDueCommitment()
       armDueTimer()
     }
 
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') checkDueCommitment()
+      if (document.visibilityState === 'visible') {
+        checkDueCommitment()
+        const sid = getActiveSessionId()
+        if (sid) {
+          // 离开期间不轮询；回来按 lastSettledAt 懒补算，等价于规则时钟持续走。
+          getTaStateView(sid)
+          settleTaThoughts(sid)
+        }
+      }
       armDueTimer()
     }
 
