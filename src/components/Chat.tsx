@@ -61,7 +61,7 @@ import { CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdFo
 import { enqueueSessionMessageCommit, enqueueSessionMessageCommits } from '../lib/sessionMessageQueue'
 import { flushPendingOpsSnapshot } from '../lib/pendingReplay'
 import { appendMemoryAudit } from '../lib/memoryAudit'
-import { captureMemoryPaperMood, generateMemoryPaper, refreshMemoryPaperAfterCorrection } from '../lib/memoryPaper'
+import { captureMemoryPaperMood, deleteMemoryPapersForMemory, generateMemoryPaper, refreshMemoryPaperAfterCorrection, seedMemoryPaperMood } from '../lib/memoryPaper'
 import { getTaStateView, taMoodLabelForPrompt } from '../lib/taState'
 import { getRelationshipRoleGuidanceForPrompt, getRelationshipSettingLabelForPrompt } from '../lib/relationshipState'
 
@@ -1150,6 +1150,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         const item = upsertMemoryCache(activeSessionId, trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
         // 本地写失败（回读不一致）→ upsertMemoryCache 返回 null：不写云端、也不当作成功
         if (!item) return { ok: false, created: false }
+        // 即使后端或模型随后失败，当前 Memory 的“当时心情”也必须先保存下来。
+        seedMemoryPaperMood(activeSessionId, { kind: 'session', item }, paperMood)
         if (token) {
           postMemory(token, activeSessionId, {
             content: trimmed,
@@ -1158,9 +1160,19 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           }).then((res) => {
             if (!res.ok) return
             reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
-            const paperItem: MemoryItem = { ...item, id: String(res.data.id) }
+            const serverId = String(res.data.id)
+            const paperItem: MemoryItem = { ...item, id: serverId }
+            if (serverId !== item.id) {
+              // Memory id 被服务端对齐后，纸条也必须跟着换主键；旧本地 id 发 tombstone，避免孤儿记录上云。
+              deleteMemoryPapersForMemory('session', item.id, activeSessionId)
+              seedMemoryPaperMood(activeSessionId, { kind: 'session', item: paperItem }, paperMood)
+            }
             // Memory 是权威事实；纸条只是一次生成的展示副本。生成失败留到星星罐补写，不影响写入成功。
-            void generateMemoryPaper(activeSessionId, { kind: 'session', item: paperItem }, { mood: paperMood }).catch(() => {})
+            void generateMemoryPaper(
+              activeSessionId,
+              { kind: 'session', item: paperItem },
+              { preserveExistingMood: true },
+            ).catch(() => {})
           })
         }
         notifyMemoryUpdated()
@@ -2422,8 +2434,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       after: item,
       source: 'manual-message',
     })
-    // 造句失败不反向撤销真实 Memory；星星罐会把缺失纸条列为可补写，不编造内容或心情。
-    void generateMemoryPaper(sid, { kind: 'session', item }, { mood: paperMood }).catch(() => {})
+    // 先把“写入当时”的心情落盘，再异步造句；模型失败也不会把历史心情一起丢掉。
+    seedMemoryPaperMood(sid, { kind: 'session', item }, paperMood)
+    void generateMemoryPaper(sid, { kind: 'session', item }, { preserveExistingMood: true }).catch(() => {})
     notifyMemoryUpdated()
     return true
   }
