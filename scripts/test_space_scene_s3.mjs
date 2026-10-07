@@ -111,6 +111,7 @@ assert.equal(detectTaCommitment('我觉得你明天会好一点。', '7', source
 assert.equal(detectTaCommitment('我明天不能提醒你喝水。', '7', sourceTs, 46), null, '否定的 SELF 行为不能误当承诺')
 assert.equal(detectTaCommitment('我明天不会陪你去医院。', '7', sourceTs, 47), null, '不会做的事不能反转成承诺')
 assert.equal(detectTaCommitment('我觉得他明天会告诉你结果。', '7', sourceTs, 48), null, '第三方 actor 不能误当 SELF 承诺')
+assert.ok(detectTaCommitment('我答应你明天早点休息。', '7', sourceTs, 49), '明确“我答应你”即使不是提醒类动词也应建档')
 
 const batchTs = sourceTs + 1234
 saveMessagesCache('7', [
