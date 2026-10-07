@@ -203,72 +203,6 @@
   color: var(--el-danger, #b54f45);
 }
 
-.initiative-settings-card {
-  display: grid;
-  gap: 22px;
-}
-
-.initiative-setting-row,
-.initiative-quiet {
-  display: grid;
-  gap: 12px;
-}
-
-.initiative-setting-row {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-}
-
-.initiative-setting-row strong,
-.initiative-quiet strong {
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.45;
-}
-
-.initiative-setting-row p,
-.initiative-quiet p {
-  margin: 4px 0 0;
-  color: var(--el-text-secondary, var(--color-text-muted));
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.initiative-field {
-  padding-top: 18px;
-  border-top: 1px solid var(--el-border-soft, var(--color-border));
-}
-
-.initiative-quiet {
-  padding-top: 18px;
-  border-top: 1px solid var(--el-border-soft, var(--color-border));
-}
-
-.initiative-quiet-inputs {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: end;
-}
-
-.initiative-quiet-inputs > label {
-  display: grid;
-  gap: 6px;
-  color: var(--el-text-secondary, var(--color-text-muted));
-  font-size: 11px;
-}
-
-.initiative-quiet-inputs > span {
-  padding-bottom: 13px;
-  color: var(--el-text-secondary, var(--color-text-muted));
-}
-
-.settings-inline-notice {
-  margin: 0 16px 16px;
-  font-size: 12px;
-}
-
 /* ---- Expanded update controls remain part of the list ----------------- */
 .settings-page .update-controls-secondary {
   gap: var(--el-space-2, 8px);
@@ -776,36 +710,43 @@
   outline-offset: -2px;
 }
 
-.initiative-notification-setting {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.initiative-message-preferences {
+  display: grid;
   gap: var(--el-space-3, 12px);
-  padding: 0 var(--el-space-4, 16px) var(--el-space-4, 16px);
+  padding: var(--el-space-3, 12px) var(--el-space-4, 16px) var(--el-space-4, 16px);
   border-top: 1px solid var(--el-border-soft, var(--color-border));
 }
 
-.initiative-notification-setting > div {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--el-space-1, 4px);
+.initiative-message-preferences > label,
+.initiative-quiet-setting {
+  display: grid;
+  gap: 6px;
 }
 
-.initiative-notification-setting strong {
-  font-size: var(--el-font-support, 13px);
-  font-weight: var(--el-weight-semibold, 600);
-  color: var(--el-text-primary, var(--color-text));
+.initiative-message-preferences > label > span,
+.initiative-quiet-setting > span {
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: var(--el-font-caption, 12px);
+  line-height: 1.4;
 }
 
-.initiative-notification-setting small {
+.initiative-quiet-setting > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.initiative-quiet-setting > div > span {
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: 12px;
+}
+
+.initiative-message-hint {
+  margin: 0;
+  color: var(--el-text-secondary, var(--color-text-muted));
   font-size: var(--el-font-caption, 12px);
   line-height: var(--el-line-support, 1.6);
-  color: var(--el-text-secondary, var(--color-text-muted));
-}
-
-.initiative-notification-setting .btn {
-  flex: none;
 }
 
 .chat-settings-refresh-confirm {
