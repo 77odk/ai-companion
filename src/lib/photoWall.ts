@@ -4,12 +4,20 @@
 // - 未登录（游客）：无 token，图片 dataUrl 直接落本地缓存，渲染直接用，不上云（登录后列表合并云端）
 // 后端在乔手上（表 photos + 4 个接口），本文件只碰前端。
 
+export interface PhotoScenePlacement {
+  x: number
+  y: number
+  rotate: number
+}
+
 export interface PhotoMeta {
   id: string
   sessionId: string
   width: number
   height: number
   createdAt: number
+  /** 空间页照片墙的本机摆放；复用现有照片元数据缓存，不新增 storage key / API。 */
+  scenePlacement?: PhotoScenePlacement
   /** 仅未登录游客本地上传时存在：dataUrl 直接可渲染；登录用户走云端 URL，本地不存图 */
   dataUrl?: string
 }
@@ -125,6 +133,7 @@ export function saveLocalPhotoMetadata(photos: PhotoMeta[], sessionId?: string):
       width: photo.width,
       height: photo.height,
       createdAt: photo.createdAt,
+      ...(photo.scenePlacement ? { scenePlacement: photo.scenePlacement } : {}),
     })),
     sessionId,
   )
@@ -142,7 +151,11 @@ export function mergePhotos(local: PhotoMeta[], cloud: PhotoMeta[]): PhotoMeta[]
   for (const c of cloud ?? []) {
     if (c == null || !c.id) continue
     const prev = byId.get(c.id)
-    byId.set(c.id, prev && prev.dataUrl && !c.dataUrl ? { ...c, dataUrl: prev.dataUrl } : c)
+    byId.set(c.id, {
+      ...c,
+      ...(prev?.dataUrl && !c.dataUrl ? { dataUrl: prev.dataUrl } : {}),
+      ...(prev?.scenePlacement ? { scenePlacement: prev.scenePlacement } : {}),
+    })
   }
   return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt)
 }
