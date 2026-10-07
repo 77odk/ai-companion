@@ -71,6 +71,7 @@ import { chatCompletion, type ModelUsage } from './lib/api'
 import { estimateToken } from './lib/token'
 import { resolveIdentityMode } from './lib/companionPolicy'
 import { captureLatestTaCommitment, collectDueTaCommitments, markCommitmentReminded, nextTaCommitmentCheckAt, type TaCommitment } from './lib/commitmentStore'
+import { showSystemNotification } from './lib/systemNotification'
 import { captureTaStateEvidenceFromLatestReply, getTaStateView, recordTaStateInteraction } from './lib/taState'
 import { settleTaThoughts } from './lib/taThoughts'
 
@@ -658,25 +659,13 @@ export default function App() {
 
           setInitiativeNotice({ accountId, sessionId, taName, content })
 
-          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            try {
-              const notification = new Notification(taName, {
-                body: content,
-                tag: 'eluvin-initiative-' + sessionId,
-              })
-              notification.onclick = () => {
-                notification.close()
-                window.focus()
-                if (getAccount()?.account !== accountId) return
-                if (!getSessionsCache().some((item) => String(item.id) === sessionId)) return
-                setActiveSessionId(sessionId)
-                setInitiativeNotice(null)
-                replaceView('chat')
-              }
-            } catch {
-              // 部分移动浏览器不允许页面直接构造 Notification；应用内提示仍已正常显示。
-            }
-          }
+          // 系统通知和「TA 主动来找你」是两个独立开关。
+          // 系统层只显示通用敲门文案，不把聊天正文暴露在锁屏上；正文仍只在忆文里打开后看。
+          void showSystemNotification(
+            taName,
+            '有一条新消息，打开忆文看看。',
+            'eluvin-initiative-' + sessionId,
+          )
         },
       },
     )
@@ -1550,7 +1539,6 @@ export default function App() {
                 onGoLife={() => goView('spacelife')}
                 onGoAnniversary={() => openSettings('anniversary')}
                 onGoNotifications={() => openNotifications('home')}
-                hasUnreadNotifications={hasUnreadNotifications}
               />
             )}
             {view === 'roles' && (
@@ -1588,7 +1576,6 @@ export default function App() {
                 initialPage={settingsTarget}
                 onInitialPageBack={() => window.history.back()}
                 onPrivacyOpenChange={setSettingsPrivacyOpen}
-                onGoNotifications={() => openNotifications('settings')}
                 onGoFeedback={openFeedback}
                 hasUnreadNotifications={hasUnreadNotifications}
                 onGoWelcome={() => navigate('welcome')}
