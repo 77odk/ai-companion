@@ -761,6 +761,11 @@
   top: 52%;
   width: 37%;
   height: 15%;
+  z-index: 5;
+}
+
+.space-scene-hotspot.is-photo-wall {
+  z-index: 2;
 }
 
 /* Pointer geometry follows the visible object instead of accepting the whole
@@ -1905,13 +1910,24 @@ html.eluvin-page-hidden .thought-book-page * {
 
 .space-live-photo {
   position: absolute;
+  left: var(--scene-photo-x);
+  top: var(--scene-photo-y);
   width: 28%;
   aspect-ratio: .78;
   padding: 3px 3px 10px;
   background: #fff7ea;
   box-shadow: 0 3px 8px rgba(55,34,23,.22);
   transform-origin: 50% 3%;
-  animation: space-photo-breeze 11s ease-in-out infinite both;
+  transform: rotate(var(--scene-photo-r));
+  animation: space-photo-breeze var(--scene-photo-duration) ease-in-out var(--scene-photo-delay) infinite both;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+.space-live-photo:active {
+  cursor: grabbing;
+  z-index: 20;
 }
 
 .space-live-photo::before {
@@ -1936,20 +1952,11 @@ html.eluvin-page-hidden .thought-book-page * {
   background: transparent;
 }
 
-.space-live-photo.is-p0 { left: 7%; top: 8%; transform: rotate(-5deg); animation-delay: -2.1s; animation-duration: 13.6s; }
-.space-live-photo.is-p1 { left: 36%; top: 5%; transform: rotate(3deg); animation-delay: -7.3s; animation-duration: 15.1s; }
-.space-live-photo.is-p2 { left: 66%; top: 9%; transform: rotate(-2deg); animation-delay: -4.8s; animation-duration: 12.4s; }
-.space-live-photo.is-p3 { left: 13%; top: 42%; transform: rotate(4deg); animation-delay: -9.2s; animation-duration: 16.7s; }
-.space-live-photo.is-p4 { left: 43%; top: 38%; transform: rotate(-4deg); animation-delay: -1.4s; animation-duration: 14.2s; }
-.space-live-photo.is-p5 { left: 70%; top: 43%; transform: rotate(5deg); animation-delay: -11.8s; animation-duration: 17.9s; }
-.space-live-photo.is-p6 { left: 27%; top: 68%; transform: rotate(-2deg); animation-delay: -5.6s; animation-duration: 15.8s; }
-.space-live-photo.is-p7 { left: 57%; top: 67%; transform: rotate(2deg); animation-delay: -8.7s; animation-duration: 13.1s; }
-
 @keyframes space-photo-breeze {
-  0%, 68%, 100% { rotate: 0deg; translate: 0 0; }
-  76% { rotate: .7deg; translate: 0 -1px; }
-  84% { rotate: -.45deg; translate: 0 0; }
-  91% { rotate: .2deg; }
+  0%, 68%, 100% { transform: rotate(var(--scene-photo-r)) translate3d(0,0,0); }
+  76% { transform: rotate(calc(var(--scene-photo-r) + .7deg)) translate3d(0,-1px,0); }
+  84% { transform: rotate(calc(var(--scene-photo-r) - .45deg)) translate3d(0,0,0); }
+  91% { transform: rotate(calc(var(--scene-photo-r) + .2deg)); }
 }
 
 .space-scene-hotspot.is-photo-wall:active .space-live-photo-board {
