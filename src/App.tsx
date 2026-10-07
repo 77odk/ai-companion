@@ -114,6 +114,12 @@ const emptyFeedbackDraft = (): FeedbackDraft => ({ type: 'bug', content: '', ima
 // 「产品介绍页」的公开特例只留在 App 层，不写进 src/lib/auth.ts 的 PUBLIC_VIEWS。
 const isPublicRoute = (v: string) => v === 'productintro' || isPublicView(v)
 
+function systemNotificationTargetUrl(sessionId: string): string {
+  const url = new URL(window.location.href)
+  url.searchParams.set('notificationSession', sessionId)
+  return url.toString()
+}
+
 // 底部四 tab 的常显范围：主视图（TA/空间/记忆/我的）带底部导航；Chat 等全屏页不带。
 // UI2-02 NAV-03：Chat 是 Secondary 全屏 view，Bottom Nav 只属于 home/aispace/memory/settings。
 // 用函数判断避免 TS 对嵌套 view 比较做过度收窄（误报不可达比较）。
@@ -451,22 +457,35 @@ export default function App() {
   // 使用指南独立 view：返回时回到来源（欢迎页 / 我的 / 登录墙）
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate' | 'chat'>('welcome')
 
-  const checkDueCommitment = useCallback(() => {
+  const checkDueCommitment = useCallback(async () => {
     if (!loggedIn || commitmentReminderRef.current) return
-    const next = collectDueTaCommitments(Date.now())[0]
-    if (!next) return
-    const marked = markCommitmentReminded(next.id)
+    const due = collectDueTaCommitments(Date.now())[0]
+    if (!due) return
+
+    const taName = loadAIProfile(due.sessionId).nickname?.trim() || 'TA'
+    if (document.visibilityState !== 'visible') {
+      // 后台时只有系统通知真实送达才算“提醒过”；关闭通知/权限失败时保持 pending，
+      // 下次回前台或重新打开应用仍会出现应用内提醒，不吞掉承诺。
+      commitmentReminderRef.current = due
+      const delivered = await showSystemNotification(
+        taName,
+        '有一件答应你的事到时间了，打开忆文看看。',
+        'eluvin-promise-' + due.id,
+        systemNotificationTargetUrl(due.sessionId),
+      )
+      if (!delivered) {
+        if (commitmentReminderRef.current?.id === due.id) commitmentReminderRef.current = null
+        return
+      }
+      markCommitmentReminded(due.id)
+      if (commitmentReminderRef.current?.id === due.id) commitmentReminderRef.current = null
+      return
+    }
+
+    const marked = markCommitmentReminded(due.id)
     if (!marked) return
     commitmentReminderRef.current = marked
     setCommitmentReminder(marked)
-
-    // 页面仍在后台运行时也可以敲一下系统通知；内容保持通用，不把承诺正文放到锁屏。
-    const taName = loadAIProfile(marked.sessionId).nickname?.trim() || 'TA'
-    void showSystemNotification(
-      taName,
-      '有一件答应你的事到时间了，打开忆文看看。',
-      'eluvin-promise-' + marked.id,
-    )
   }, [loggedIn])
 
   useEffect(() => {
@@ -487,7 +506,7 @@ export default function App() {
       if (nextAt == null) return
       const delay = Math.min(Math.max(0, nextAt - Date.now()), 2_147_000_000)
       dueTimer = window.setTimeout(() => {
-        checkDueCommitment()
+        void checkDueCommitment()
         armDueTimer()
       }, delay)
     }
@@ -507,7 +526,7 @@ export default function App() {
         captureLatestTaCommitment(sid)
         settleCompanionContinuity(sid)
       }
-      checkDueCommitment()
+      void checkDueCommitment()
       armDueTimer()
     }
 
@@ -527,14 +546,14 @@ export default function App() {
     const onDataChange = () => {
       // Cloud State 可能在启动 hydration 时拉回“已经到期”的承诺。
       // 先立即检查 overdue，再重排未来 timer；否则 nextTaCommitmentCheckAt 会跳过已过期时间点。
-      checkDueCommitment()
+      void checkDueCommitment()
       armDueTimer()
     }
 
     window.addEventListener('yiwem:ai-reply-committed', onReplyCommitted)
     window.addEventListener(ELUVIN_DATA_CHANGE, onDataChange)
     document.addEventListener('visibilitychange', onVisibility)
-    checkDueCommitment()
+    void checkDueCommitment()
     armDueTimer()
     return () => {
       clearDueTimer()
@@ -674,6 +693,7 @@ export default function App() {
             taName,
             '有一条新消息，打开忆文看看。',
             'eluvin-initiative-' + sessionId,
+            systemNotificationTargetUrl(sessionId),
           )
         },
       },
@@ -1048,6 +1068,19 @@ export default function App() {
     }
     goView(v)
   }
+
+  useEffect(() => {
+    if (!loggedIn) return
+    const url = new URL(window.location.href)
+    const sessionId = url.searchParams.get('notificationSession')?.trim() || ''
+    if (!sessionId) return
+    if (!getSessionsCache().some((session) => String(session.id) === sessionId)) return
+
+    setActiveSessionId(sessionId)
+    url.searchParams.delete('notificationSession')
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+    replaceView('chat')
+  }, [loggedIn, view, replaceView])
 
   const openSettings = (target: SettingsPage) => {
     setSettingsTarget(target)
