@@ -351,6 +351,7 @@ export function saveSettings(settings: ModelSettings): void {
     model: settings.model.trim() || DEFAULT_SETTINGS[settings.provider].model,
   }
   const actionNarrationEnabled = isActionNarrationEnabled()
+  const systemNotificationEnabled = isSystemNotificationEnabled()
   let initiativeByAccount: unknown
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
@@ -365,6 +366,7 @@ export function saveSettings(settings: ModelSettings): void {
       provider: settings.provider,
       providers,
       ...(actionNarrationEnabled ? { actionNarrationEnabled: true } : {}),
+      ...(systemNotificationEnabled ? { systemNotificationEnabled: true } : {}),
       ...(initiativeByAccount && typeof initiativeByAccount === 'object' && !Array.isArray(initiativeByAccount)
         ? { initiativeByAccount }
         : {}),
