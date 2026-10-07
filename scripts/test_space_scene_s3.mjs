@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
   captureLatestTaCommitment,
+  deleteTaCommitmentsForSession,
   detectTaCommitment,
+  detectTaCommitments,
   saveTaCommitment,
   collectDueTaCommitments,
   markCommitmentReminded,
@@ -23,6 +25,7 @@ const spaceCss = readFileSync('src/styles/space.css', 'utf8')
 const cloudResources = readFileSync('src/lib/cloudStateResources.ts', 'utf8')
 const memoryLib = readFileSync('src/lib/memory.ts', 'utf8')
 const commitmentSource = readFileSync('src/lib/commitmentStore.ts', 'utf8')
+const rolesPage = readFileSync('src/components/RolesPage.tsx', 'utf8')
 
 const store = new Map()
 globalThis.localStorage = {
@@ -113,6 +116,20 @@ assert.equal(detectTaCommitment('我明天不会陪你去医院。', '7', source
 assert.equal(detectTaCommitment('我觉得他明天会告诉你结果。', '7', sourceTs, 48), null, '第三方 actor 不能误当 SELF 承诺')
 assert.ok(detectTaCommitment('我答应你明天早点休息。', '7', sourceTs, 49), '明确“我答应你”即使不是提醒类动词也应建档')
 
+const englishPromise = detectTaCommitment("I'll remind you tomorrow at 8.", '7', sourceTs, 50)
+assert.ok(englishPromise, 'English mode promise must be recognized')
+assert.ok(typeof englishPromise?.dueAt === 'number', 'English tomorrow + at 8 must resolve a due time')
+
+const clauseScoped = detectTaCommitment('你明天早上8点考试，后天我会提醒你复盘。', '7', sourceTs, 51)
+assert.equal(clauseScoped?.dueDay, '2026-10-09', 'deadline must come from the matched promise clause')
+assert.equal(clauseScoped?.dueAt, undefined, 'unrelated earlier clock must not leak into the promise')
+
+const multiplePromises = detectTaCommitments('明天晚上8点我会提醒你喝水，后天上午9点我会提醒你复盘。', '7', sourceTs, 52)
+assert.equal(multiplePromises.length, 2, 'two promises in one reply must be filed separately')
+assert.notEqual(multiplePromises[0]?.id, multiplePromises[1]?.id)
+assert.notEqual(multiplePromises[0]?.dueDay, multiplePromises[1]?.dueDay)
+
+
 const batchTs = sourceTs + 1234
 saveMessagesCache('7', [
   { role: 'assistant', content: '我明天晚上8点提醒你喝水。', ts: batchTs, replyState: 'complete' },
@@ -132,6 +149,13 @@ login('a@example.com')
 assert.equal(collectDueTaCommitments(sourceTs).length, 1)
 assert.ok(markCommitmentReminded(due.id, sourceTs))
 assert.equal(collectDueTaCommitments(sourceTs).length, 0)
+
+saveTaCommitment({ ...promise, id: 'session-7-promise', sessionId: '7' })
+saveTaCommitment({ ...promise, id: 'session-8-promise', sessionId: '8' })
+assert.equal(deleteTaCommitmentsForSession('7'), true)
+assert.equal(collectDueTaCommitments(sourceTs).some((item) => item.sessionId === '7'), false, '删除角色后不能再弹该 TA 的承诺')
+assert.match(rolesPage, /deleteTaCommitmentsForSession\(id\)/)
+
 assert.match(cloudResources, /registerCloudStateAdapter\('ta_commitment'/)
 assert.match(cloudResources, /resetCommitmentSnapshot\(\)[\s\S]{0,100}notifyDataChanged\(\)/)
 assert.match(commitmentSource, /message\.replyState !== 'interrupted'/)
