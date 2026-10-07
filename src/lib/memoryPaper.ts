@@ -248,7 +248,8 @@ export async function backfillMemoryPapers(
   for (let index = 0; index < missing.length; index += 1) {
     const target = missing[index]
     try {
-      const result = await generateMemoryPaper(sid, target)
+      // 旧数据没有 mood 时仍为空；若只是 Memory 被纠正导致纸条失配，则保留原来的“当时心情”。
+      const result = await generateMemoryPaper(sid, target, { preserveExistingMood: true })
       if (result) generated += 1
       else failed += 1
     } catch {
