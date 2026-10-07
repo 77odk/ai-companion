@@ -176,7 +176,7 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
                 聊天里一些重要的事情，会慢慢成为 TA 的记忆。你也可以主动告诉 TA，哪些事情值得留下。
               </p>
               <p>
-                记忆不是一成不变的。如果记错了，或者有些事情不再希望保留，可以去记忆里查看、修改或删除。
+                记忆不是一成不变的。如果记错了，或者有些事情不再希望保留，可以去「朝暮」里查看、修改、删除或回退。
               </p>
             </article>
 
@@ -215,9 +215,10 @@ export default function GuideDetail({ onBack, onGoProvider }: Props) {
               </p>
               <div className="guide-space-index" aria-label="空间内容">
                 <span>动态</span>
-                <span>一起经历过</span>
+                <span>星星罐</span>
+                <span>思绪书</span>
                 <span>照片</span>
-                <span>TA 记得的</span>
+                <span>一起听歌</span>
                 <span>一周情书</span>
               </div>
             </article>
