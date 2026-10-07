@@ -382,7 +382,7 @@ console.log('[initiative-runtime] App 只在 hidden/pagehide 记离开，visible
   assert.match(settings, /系统通知/)
   assert.match(settings, /⚠️ios 用户：需要把忆文添加到主屏幕才能开启通知，safari 浏览器使用收不到哦/)
   assert.match(systemNotification, /Notification\.requestPermission\(\)/)
-  assert.match(settings, /Key 不上传服务器/ )
+  assert.match(chatSettings, /Key 不上传服务器/)
 }
 
 console.log('initiative runtime tests passed')
