@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
-import EventArchive from './EventArchive'
 import { getActiveSessionId } from '../lib/sessionStore'
 import {
   loadLocalPhotos,
@@ -228,62 +227,65 @@ export default function AISpace({ onOpenWeekly }: Props) {
 
   function renderHomePage() {
     return (
-      <>
-        <section className="space-scene-shell" aria-label="TA 的空间">
-          <img
-            className="space-scene-backplate"
-            src="/space/space-desk.webp"
-            alt=""
-            aria-hidden="true"
-            draggable={false}
-          />
-          <span className="space-scene-ambient" aria-hidden="true" />
-        </section>
+      <div className="space-scene" data-space-scene="golden-desk">
+        <img
+          className="space-scene-background"
+          src="/space-scenes/golden-desk.webp"
+          alt=""
+          draggable={false}
+          aria-hidden="true"
+        />
 
-        {/*
-          S1 keeps the approved artwork visually untouched while preserving the
-          existing Space capabilities. Transparent hit areas sit on the objects
-          already present in the confirmed composition; S2 replaces these temporary
-          compatibility entry points with the final CSS/SVG object interactions.
-        */}
-        <div className="space-scene-hotspots">
-          <button
-            type="button"
-            className="space-scene-hotspot is-photo-wall"
-            aria-label="打开照片墙"
-            onClick={() => {
-              document
-                .querySelector<HTMLButtonElement>('.ai-space-page .photo-stack-preview, .ai-space-page .photo-archive-empty')
-                ?.click()
+        <div className="space-scene-photo-zone">
+          <PhotoWallArchive
+            scene
+            photos={photos}
+            uploading={photoUploading}
+            error={photoError}
+            photoSrc={(photo) => photo.dataUrl ?? photoUrl(photo.id, getToken())}
+            onPhotoLoadError={(photo) => {
+              failedPhotoIdsRef.current.add(photo.id)
+              setPhotoError(PHOTO_IMAGE_LOAD_ERROR)
             }}
-          />
-          <button
-            type="button"
-            className="space-scene-hotspot is-moments"
-            aria-label="打开一起经历过"
-            onClick={() => {
-              document
-                .querySelector<HTMLButtonElement>(
-                  '.ai-space-page .event-archive-preview .ai-space-v2-all, .ai-space-page .event-archive-preview-item, .ai-space-page .event-archive-empty',
-                )
-                ?.click()
+            onPhotoLoadSuccess={(photo) => {
+              failedPhotoIdsRef.current.delete(photo.id)
+              if (failedPhotoIdsRef.current.size === 0) {
+                setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? null : current)
+              }
             }}
-          />
-          <button
-            type="button"
-            className="space-scene-hotspot is-weekly-letter"
-            aria-label="打开一周情书"
-            onClick={onOpenWeekly}
+            onAdd={() => fileInputRef.current?.click()}
+            onDelete={handleDeletePhoto}
           />
         </div>
 
-        <div className="space-scene-service-host">
-          {renderPhotoWall()}
-          <EventArchive sessionId={sid} />
-        </div>
-      </>
+        <span className="space-scene-object space-scene-star-jar" aria-hidden="true" />
+        <span className="space-scene-object space-scene-thought-book" aria-hidden="true" />
+        <span className="space-scene-object space-scene-player" aria-hidden="true" />
+        <span className="space-scene-object space-scene-earphones" aria-hidden="true" />
+
+        <button
+          type="button"
+          className="space-scene-drawer"
+          onClick={onOpenWeekly}
+          aria-label="打开一周情书"
+        >
+          <span className="space-scene-drawer-hit" aria-hidden="true" />
+        </button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="ai-photo-file"
+          onChange={(event) => {
+            void handlePhotoFiles(event.target.files)
+            event.target.value = ''
+          }}
+        />
+      </div>
     )
   }
 
-  return <div className="page ai-space-page">{renderHomePage()}</div>
+  return <div className="page ai-space-page ai-space-page--scene">{renderHomePage()}</div>
 }
