@@ -21,6 +21,25 @@ export const TA_MOOD_WORDS = [
 export type TaMoodWord = (typeof TA_MOOD_WORDS)[number]
 export type TaThoughtTheme = 'connection' | 'reflection' | 'exploration' | 'rest'
 
+const TA_MOOD_EN: Record<TaMoodWord, string> = {
+  '雀跃': 'cheerful',
+  '期待': 'expectant',
+  '安心': 'at ease',
+  '惬意': 'content and relaxed',
+  '烦躁': 'irritated',
+  '紧绷': 'tense',
+  '低落': 'low',
+  '闷闷的': 'subdued',
+  '若有所思': 'thoughtful',
+  '惦记': 'keeping something in mind',
+  '有点累': 'a little tired',
+  '发呆': 'zoning out',
+}
+
+export function taMoodLabelForPrompt(mood: TaMoodWord, lang: 'zh' | 'en'): string {
+  return lang === 'en' ? TA_MOOD_EN[mood] : mood
+}
+
 export interface TaStateView {
   mood: TaMoodWord
   description: string
@@ -84,15 +103,7 @@ function localHour(ts: number): number {
   return new Date(ts).getHours()
 }
 
-function isFreezeWindow(ts: number): boolean {
-  const hour = localHour(ts)
-  return hour >= 2 && hour < 7
-}
 
-function nightSlowFactor(ts: number): number {
-  const hour = localHour(ts)
-  return hour >= 22 || hour < 7 ? .35 : 1
-}
 
 function energyTarget(ts: number): number {
   const hour = localHour(ts)
@@ -226,11 +237,12 @@ function lerp(current: number, target: number, amount: number): number {
   return current + (target - current) * Math.max(0, Math.min(1, amount))
 }
 
-/** 02:00–07:00 完全冻结。懒补算时也必须扣掉这五小时，不能 07:01 一次性追算回来。 */
-function activeMinutesBetween(from: number, to: number): number {
+/** 02:00–07:00 完全冻结；22:00–02:00 只按 35% 速度结算。
+ * 懒补算按每个小时段自己的权重算，不能拿“当前小时”的速度套整段离线时间。 */
+function weightedSettledMinutes(from: number, to: number): number {
   if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return 0
   let cursor = from
-  let activeMs = 0
+  let weightedMs = 0
   const hardEnd = Math.min(to, from + 7 * 24 * 60 * 60_000)
   while (cursor < hardEnd) {
     const d = new Date(cursor)
@@ -243,10 +255,13 @@ function activeMinutesBetween(from: number, to: number): number {
     ).getTime()
     const segmentEnd = Math.min(hardEnd, nextHour)
     const hour = d.getHours()
-    if (!(hour >= 2 && hour < 7)) activeMs += Math.max(0, segmentEnd - cursor)
+    const segment = Math.max(0, segmentEnd - cursor)
+    if (hour >= 7 && hour < 22) weightedMs += segment
+    else if (hour >= 22 || hour < 2) weightedMs += segment * .35
+    // 02:00–07:00 权重 = 0，完全冻结。
     cursor = segmentEnd > cursor ? segmentEnd : cursor + 60_000
   }
-  return activeMs / 60_000
+  return weightedMs / 60_000
 }
 
 function settlePrivate(state: PrivateTaState, now: number): PrivateTaState {
@@ -254,15 +269,9 @@ function settlePrivate(state: PrivateTaState, now: number): PrivateTaState {
   const elapsed = now - state.lastSettledAt
   if (elapsed < SETTLE_MIN_MS) return state
 
-  // 冻结时段只推进“结算指针”，不改变任何轴/倾向，避免早上把 02–07 的时间一次性补算。
-  if (isFreezeWindow(now)) {
-    return { ...state, lastSettledAt: now, updatedAt: now }
-  }
-
-  const minutes = activeMinutesBetween(state.lastSettledAt, now)
+  const minutes = weightedSettledMinutes(state.lastSettledAt, now)
   if (minutes <= 0) return { ...state, lastSettledAt: now, updatedAt: now }
-  const slow = nightSlowFactor(now)
-  const drift = Math.min(.72, (minutes / 180) * .18 * slow)
+  const drift = Math.min(.72, (minutes / 180) * .18)
   const shortEmotionDecay = 1 - Math.pow(.5, minutes / 120)
 
   const next: PrivateTaState = {
@@ -279,7 +288,7 @@ function settlePrivate(state: PrivateTaState, now: number): PrivateTaState {
     tendencies: {
       connection: clamp01(lerp(state.tendencies.connection, .46, drift * .18)),
       expression: clamp01(lerp(state.tendencies.expression, .42, drift * .16)),
-      exploration: clamp01(state.tendencies.exploration + .018 * Math.min(6, minutes / 60) * slow),
+      exploration: clamp01(state.tendencies.exploration + .018 * Math.min(6, minutes / 60) ),
       involvement: clamp01(lerp(state.tendencies.involvement, .48, drift * .12)),
       reminiscence: clamp01(state.tendencies.reminiscence + .014 * Math.min(6, minutes / 60) * (state.axes.quietActive < .05 ? 1 : .55)),
       space: clamp01(state.tendencies.space + .012 * Math.min(6, minutes / 60) * (state.tendencies.connection < .58 ? 1 : .5)),
@@ -344,12 +353,14 @@ export function recordTaStateInteraction(sessionId: string, now = Date.now()): T
   }
   const candidate = chooseMood(next)
   // 普通聊天只推动内部倾向；前台心情至少稳定 30 分钟，避免每轮对话都跳词。
-  if (candidate !== state.mood && now - state.lastChangedAt >= INTERACTION_MOOD_DEBOUNCE_MS) {
+  const moodChanged = candidate !== state.mood && now - state.lastChangedAt >= INTERACTION_MOOD_DEBOUNCE_MS
+  if (moodChanged) {
     next.mood = candidate
     next.description = moodDescription(candidate)
     next.lastChangedAt = now
   }
-  persist(next, { forceCloud: true })
+  // 普通互动只本地累积；只有可见心情变化或 90 分钟 heartbeat 才排一次 Cloud State。
+  persist(next, { forceCloud: moodChanged, notify: moodChanged })
   return getTaStateView(sessionId, now)
 }
 
