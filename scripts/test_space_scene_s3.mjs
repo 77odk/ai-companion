@@ -148,6 +148,11 @@ const englishPromise = detectTaCommitment("I'll remind you tomorrow at 8.", '7',
 assert.ok(englishPromise, 'English chat mode must archive SELF commitments')
 assert.equal(new Date(englishPromise.dueAt).getHours(), 8)
 
+const commaPromise = detectTaCommitment('我答应你，明天晚上8点提醒你喝水。', '7', sourceTs, 501)
+assert.ok(commaPromise, '承诺主句与逗号后的动作/时间必须保持为同一条')
+assert.ok(typeof commaPromise.dueAt === 'number')
+assert.equal(new Date(commaPromise.dueAt).getHours(), 20)
+
 const scopedPromise = detectTaCommitment('你明天早上8点考试，后天我会提醒你复盘。', '7', sourceTs, 51)
 assert.ok(scopedPromise)
 const dayAfterTomorrow = new Date(sourceTs)
