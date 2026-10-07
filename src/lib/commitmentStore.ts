@@ -1,7 +1,7 @@
 import { notifyDataChanged } from './dataChange.ts'
 import { parseFutureIntent, parseFutureTime, futureDayKey } from './futureIntent.ts'
 import { getMessagesCache } from './sessionStore.ts'
-import { getAccount } from './sync.ts'
+import { getCloudStateSidecar, setCloudStateSidecar } from './cloudState.ts'
 
 export interface TaCommitment {
   id: string
@@ -17,25 +17,18 @@ export interface TaCommitment {
 }
 
 const KEEP = 120
+const SIDECAR = 'ta_commitment_v1'
 const PROMISE_RE = /(?:我(?:会|一定会|保证|答应你|答应|记得|到时候会)|我.{0,14}(?:会|提醒你|叫你|陪你|告诉你|发给你)|放心.{0,8}我会|这事交给我|我不会忘|我记着)/i
-const byAccount = new Map<string, TaCommitment[]>()
-
-function accountId(): string {
-  return getAccount()?.account.trim() ?? ''
-}
 
 function readAll(): TaCommitment[] {
-  const account = accountId()
-  if (!account) return []
-  return [...(byAccount.get(account) ?? [])]
+  const saved = getCloudStateSidecar<TaCommitment[]>(SIDECAR)
+  return Array.isArray(saved) ? [...saved] : []
 }
 
 function writeAll(list: TaCommitment[], silent = false): boolean {
-  const account = accountId()
-  if (!account) return false
-  byAccount.set(account, list.slice(0, KEEP))
-  if (!silent) notifyDataChanged()
-  return true
+  const ok = setCloudStateSidecar(SIDECAR, list.slice(0, KEEP))
+  if (ok && !silent) notifyDataChanged()
+  return ok
 }
 
 function localDayKey(ts: number): string {
@@ -123,14 +116,14 @@ export function loadTaCommitments(sessionId?: string): TaCommitment[] {
 }
 
 export function saveTaCommitment(item: TaCommitment): boolean {
-  if (!item?.id || !item.sessionId || !item.text || !accountId()) return false
+  if (!item?.id || !item.sessionId || !item.text) return false
   const all = readAll().filter((entry) => entry.id !== item.id)
   return writeAll([item, ...all])
 }
 
 export function captureLatestTaCommitment(sessionId: string): TaCommitment | null {
   const sid = String(sessionId ?? '').trim()
-  if (!sid || !accountId()) return null
+  if (!sid) return null
   const latest = [...getMessagesCache(sid)].reverse().find((message) => message.role === 'assistant' && message.content.trim())
   if (!latest) return null
 
@@ -180,17 +173,13 @@ export function collectAllTaCommitments(): TaCommitment[] {
 }
 
 export function upsertTaCommitmentFromCloud(item: TaCommitment): void {
-  if (!item?.id || !item.sessionId || !item.text || !accountId()) return
+  if (!item?.id || !item.sessionId || !item.text) return
   const all = readAll().filter((entry) => entry.id !== item.id)
   writeAll([item, ...all], true)
 }
 
 export function deleteTaCommitmentFromCloud(id: string): void {
-  if (!id || !accountId()) return
+  if (!id) return
   writeAll(readAll().filter((entry) => entry.id !== id), true)
 }
 
-export function resetTaCommitmentRuntime(): void {
-  const account = accountId()
-  if (account) byAccount.delete(account)
-}
