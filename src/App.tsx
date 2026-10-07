@@ -492,7 +492,12 @@ export default function App() {
       armDueTimer()
     }
 
-    const onDataChange = () => armDueTimer()
+    const onDataChange = () => {
+      // Cloud State 可能在启动 hydration 时拉回“已经到期”的承诺。
+      // 先立即检查 overdue，再重排未来 timer；否则 nextTaCommitmentCheckAt 会跳过已过期时间点。
+      checkDueCommitment()
+      armDueTimer()
+    }
 
     window.addEventListener('yiwem:ai-reply-committed', onReplyCommitted)
     window.addEventListener(ELUVIN_DATA_CHANGE, onDataChange)
