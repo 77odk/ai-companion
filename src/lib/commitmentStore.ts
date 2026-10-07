@@ -159,7 +159,7 @@ export function detectTaCommitments(
   sourceTs: number,
   sourceMessageId?: number,
 ): TaCommitment[] {
-  const clean = String(text ?? '').replace(/\s+/g, ' ').trim()
+  const clean = String(text ?? '').replace(/[\t ]+/g, ' ').trim()
   if (!clean) return []
 
   const matched = splitCommitmentClauses(clean)
