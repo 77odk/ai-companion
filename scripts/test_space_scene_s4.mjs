@@ -11,6 +11,7 @@ const settings = readFileSync('src/components/Settings.tsx', 'utf8')
 const profile = readFileSync('src/components/ChatProfile.tsx', 'utf8')
 const chat = readFileSync('src/components/Chat.tsx', 'utf8')
 const cloudResources = readFileSync('src/lib/cloudStateResources.ts', 'utf8')
+const cloudState = readFileSync('src/lib/cloudState.ts', 'utf8')
 const spaceCss = readFileSync('src/styles/space.css', 'utf8')
 
 console.log('[S4] 状态内部结构 / 对外隐私边界')
@@ -27,6 +28,9 @@ assert.match(state, /02:00–07:00 权重 = 0/)
 assert.ok(state.includes('INTERACTION_MOOD_DEBOUNCE_MS = 30 * 60_000'))
 assert.ok(state.includes('MOOD_STABLE_MS = 45 * 60_000'))
 assert.match(state, /messageEvidenceText\(batch\.text\)/)
+assert.match(state, /ownsEmotionPredicate/)
+assert.match(state, /lastSubject !== '我'/)
+assert.doesNotMatch(state, /我\.\{0,8\}.*(?:难过|烦躁)/, 'user emotion must not be accepted by broad first-person span')
 assert.doesNotMatch(state, /chatCompletion|streamChat/)
 assert.doesNotMatch(state, /from ['"].*(?:memory|eventStore|anniversary|futureIntent)/)
 
@@ -87,6 +91,10 @@ for (const source of [state, thoughts, relationship]) {
   assert.doesNotMatch(source, /localStorage\.(?:getItem|setItem|removeItem)/)
   assert.match(source, /getCloudStateSidecar/)
   assert.match(source, /setCloudStateSidecar/)
+}
+assert.match(cloudState, /canonical\?: boolean/)
+for (const source of [state, thoughts, relationship]) {
+  assert.match(source, /!context\.canonical && current && current\.updatedAt > incoming\.updatedAt/)
 }
 
 console.log('[Space S4] 状态 / 思绪 / 关系合同通过')
