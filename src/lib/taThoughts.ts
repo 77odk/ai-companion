@@ -174,7 +174,7 @@ export function settleTaThoughts(sessionId: string, now = Date.now()): TaThought
       : item)
   } else {
     const thought: PrivateThought = {
-      id: `thought-${sid}-${now}-${Math.random().toString(36).slice(2, 7)}`,
+      id: `thought-${sid}-${now}-${hashString(`${sid}:${signal.theme}:${now}`).toString(36)}`,
       text: chooseText(sid, signal.theme, now),
       theme: signal.theme,
       createdAt: now,
