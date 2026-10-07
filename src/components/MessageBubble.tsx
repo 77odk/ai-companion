@@ -26,6 +26,8 @@ interface Props {
   onDelete?: () => void
   /** 从这一条消息回溯；旧后缀留在旧 branch，可恢复。 */
   onRollback?: () => void
+  /** 用户主动把当前可见消息存成一条记忆。 */
+  onSaveMemory?: (text: string) => Promise<boolean>
 }
 
 function Avatar({ value, kind, className }: { value: string; kind: 'user' | 'ai'; className: string }) {
@@ -86,7 +88,7 @@ async function copyVisibleText(text: string): Promise<boolean> {
   }
 }
 
-export default function MessageBubble({ message, typing = false, onAvatarClick, onQuote, onEdit, onRegenerate, onDelete, onRollback }: Props) {
+export default function MessageBubble({ message, typing = false, onAvatarClick, onQuote, onEdit, onRegenerate, onDelete, onRollback, onSaveMemory }: Props) {
   const isUser = message.role === 'user'
   // 模块三·内心戏：思考链展开/收起状态（Hooks 必须在所有条件返回之前调用，防 React Hooks 顺序崩溃）
   const [thinkOpen, setThinkOpen] = useState(false)
@@ -98,6 +100,7 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
   const [thinkTranslating, setThinkTranslating] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [memorySaveState, setMemorySaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const actionsRef = useRef<HTMLDivElement | null>(null)
   const [editing, setEditing] = useState(false)
   const [editDraft, setEditDraft] = useState('')
@@ -122,6 +125,12 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
     const timer = window.setTimeout(() => setCopyState('idle'), 1200)
     return () => window.clearTimeout(timer)
   }, [copyState])
+
+  useEffect(() => {
+    if (memorySaveState === 'idle' || memorySaveState === 'saving') return
+    const timer = window.setTimeout(() => setMemorySaveState('idle'), 1500)
+    return () => window.clearTimeout(timer)
+  }, [memorySaveState])
 
   // 模块三：纯思考链消息不渲染气泡（历史泄漏的英文推理段，没 `` 包裹的那种）
   // 注意：必须在 useState 之后再条件返回，否则列表重排时同一位置组件实例 Hooks 调用次数不一致会崩
@@ -357,6 +366,22 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
                 >
                   {sessionLang === 'en' ? 'Copy' : '复制'}
                 </button>
+                {onSaveMemory && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={memorySaveState === 'saving'}
+                    onClick={() => {
+                      setActionsOpen(false)
+                      setMemorySaveState('saving')
+                      void onSaveMemory(visibleCopyText).then((ok) => {
+                        setMemorySaveState(ok ? 'saved' : 'failed')
+                      }).catch(() => setMemorySaveState('failed'))
+                    }}
+                  >
+                    {sessionLang === 'en' ? 'Save to memory' : '存为记忆'}
+                  </button>
+                )}
                   {onQuote && (
                     <button
                       type="button"
@@ -428,6 +453,13 @@ export default function MessageBubble({ message, typing = false, onAvatarClick, 
             {copyState === 'copied'
               ? (sessionLang === 'en' ? 'Copied' : '已复制')
               : (sessionLang === 'en' ? 'Copy failed' : '复制失败')}
+          </span>
+        )}
+        {memorySaveState !== 'idle' && memorySaveState !== 'saving' && (
+          <span className={`message-copy-toast ${memorySaveState === 'saved' ? 'is-success' : 'is-error'}`} role="status">
+            {memorySaveState === 'saved'
+              ? (sessionLang === 'en' ? 'Saved to memory' : '已存进记忆')
+              : (sessionLang === 'en' ? 'Could not save' : '暂时没存上')}
           </span>
         )}
         {hasMemory && (
