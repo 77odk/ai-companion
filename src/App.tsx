@@ -71,8 +71,8 @@ import { commitInitiativeMessage } from './lib/initiativeCommit'
 import { chatCompletion, type ModelUsage } from './lib/api'
 import { estimateToken } from './lib/token'
 import { resolveIdentityMode } from './lib/companionPolicy'
-import { captureLatestTaCommitment, collectDueTaCommitments, markCommitmentReminded, nextTaCommitmentCheckAt, type TaCommitment } from './lib/commitmentStore'
-import { showSystemNotification } from './lib/systemNotification'
+import { captureLatestTaCommitment, collectDueTaCommitments, loadTaCommitments, markCommitmentReminded, nextTaCommitmentCheckAt, type TaCommitment } from './lib/commitmentStore'
+import { clearSystemNotificationLaunchTarget, readSystemNotificationLaunchTarget, showSystemNotification, SYSTEM_NOTIFICATION_CLICK_EVENT, SYSTEM_NOTIFICATION_SW_MESSAGE, type SystemNotificationTarget } from './lib/systemNotification'
 import { captureTaStateEvidenceFromLatestReply, getTaStateView, recordTaStateInteraction } from './lib/taState'
 import { settleTaThoughts } from './lib/taThoughts'
 
@@ -434,6 +434,7 @@ export default function App() {
   const [initiativeNotice, setInitiativeNotice] = useState<InitiativeNotice | null>(null)
   const [commitmentReminder, setCommitmentReminder] = useState<TaCommitment | null>(null)
   const commitmentReminderRef = useRef<TaCommitment | null>(null)
+  const commitmentDeliveryRef = useRef<string | null>(null)
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
@@ -452,21 +453,32 @@ export default function App() {
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate' | 'chat'>('welcome')
 
   const checkDueCommitment = useCallback(() => {
-    if (!loggedIn || commitmentReminderRef.current) return
+    if (!loggedIn || commitmentReminderRef.current || commitmentDeliveryRef.current) return
     const next = collectDueTaCommitments(Date.now())[0]
     if (!next) return
+
+    // 隐藏页只有“系统通知真的送达”后才算提醒过。通知未开启/不支持/发送失败时保持 pending，
+    // 等用户回到前台再弹站内提醒，不能在后台静默吞掉承诺。
+    if (document.visibilityState === 'hidden') {
+      commitmentDeliveryRef.current = next.id
+      const taName = loadAIProfile(next.sessionId).nickname?.trim() || 'TA'
+      void showSystemNotification(
+        taName,
+        '有一件答应你的事到时间了，打开忆文看看。',
+        'eluvin-promise-' + next.id,
+        { view: 'chat', sessionId: next.sessionId, commitmentId: next.id },
+      ).then((delivered) => {
+        if (delivered) markCommitmentReminded(next.id)
+      }).finally(() => {
+        if (commitmentDeliveryRef.current === next.id) commitmentDeliveryRef.current = null
+      })
+      return
+    }
+
     const marked = markCommitmentReminded(next.id)
     if (!marked) return
     commitmentReminderRef.current = marked
     setCommitmentReminder(marked)
-
-    // 页面仍在后台运行时也可以敲一下系统通知；内容保持通用，不把承诺正文放到锁屏。
-    const taName = loadAIProfile(marked.sessionId).nickname?.trim() || 'TA'
-    void showSystemNotification(
-      taName,
-      '有一件答应你的事到时间了，打开忆文看看。',
-      'eluvin-promise-' + marked.id,
-    )
   }, [loggedIn])
 
   useEffect(() => {
@@ -674,6 +686,7 @@ export default function App() {
             taName,
             '有一条新消息，打开忆文看看。',
             'eluvin-initiative-' + sessionId,
+            { view: 'chat', sessionId },
           )
         },
       },
