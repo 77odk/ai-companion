@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { deriveMemoryTriggerWords, loadMemory, saveMemory, type MemoryItem } from '../lib/memory'
+import { deriveMemoryTriggerWords, isSimilarMemory, loadMemory, saveMemory, type MemoryItem } from '../lib/memory'
 import { getActiveSessionId, getBusyState, getMemoriesCache, getSessionLang, mergeSessionMemories, saveMemoriesCache, sessionMemoryToItem } from '../lib/sessionStore'
 import { listMemories, postMemory } from '../lib/sessionApi'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
@@ -582,35 +582,57 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       }
 
       if (entry.action === 'delete') {
-        const res = await postMemory(token, sessionId, {
-          content: entry.before.text,
-          ...(entry.before.source?.trim() ? { source: entry.before.source } : {}),
-          ...(entry.before.taReply?.trim() ? { taReply: entry.before.taReply } : {}),
-        })
-        if (!res.ok) {
-          setRollbackNotice(res.message || '恢复失败，请稍后再试。')
-          return
-        }
-        const restored: MemoryItem = {
-          ...sessionMemoryToItem(res.data),
-          topic: entry.before.topic,
-          explicit: entry.before.explicit,
-          pinned: entry.before.pinned,
-          triggerWords: entry.before.triggerWords,
-          moodSnapshot: entry.before.moodSnapshot,
-          lastMentionedAt: entry.before.lastMentionedAt,
-        }
         const cache = getMemoriesCache(sessionId)
-        saveMemoriesCache(sessionId, [restored, ...cache.filter((item) => item.id !== restored.id)])
-        appendMemoryAudit({
-          sessionId,
-          memoryKind: 'session',
-          memoryId: restored.id,
-          action: 'rollback',
-          after: restored,
-          source: 'rollback',
-          parentAuditId: entry.id,
-        })
+        const alreadyRestored = cache.find((item) => item.id === entry.memoryId)
+          ?? (isSimilarMemory(cache, entry.before.text)
+            ? cache.find((item) => item.text.trim() === entry.before?.text.trim())
+            : undefined)
+        if (alreadyRestored) {
+          appendMemoryAudit({
+            sessionId,
+            memoryKind: 'session',
+            memoryId: alreadyRestored.id,
+            action: 'rollback',
+            after: alreadyRestored,
+            source: 'rollback',
+            parentAuditId: entry.id,
+          })
+        } else {
+          const res = await postMemory(token, sessionId, {
+            content: entry.before.text,
+            ...(entry.before.source?.trim() ? { source: entry.before.source } : {}),
+            ...(entry.before.taReply?.trim() ? { taReply: entry.before.taReply } : {}),
+          })
+          if (!res.ok) {
+            setRollbackNotice(res.message || '恢复失败，请稍后再试。')
+            return
+          }
+          const restored: MemoryItem = {
+            ...sessionMemoryToItem(res.data),
+            topic: entry.before.topic,
+            explicit: entry.before.explicit,
+            pinned: entry.before.pinned,
+            triggerWords: entry.before.triggerWords,
+            moodSnapshot: entry.before.moodSnapshot,
+            lastMentionedAt: entry.before.lastMentionedAt,
+          }
+          const saved = saveMemoriesCache(sessionId, [restored, ...cache.filter((item) => item.id !== restored.id)])
+          if (!saved) {
+            setMemories((current) => [
+              { item: restored, kind: 'session' as const },
+              ...current.filter((memory) => !(memory.kind === 'session' && memory.item.id === restored.id)),
+            ])
+          }
+          appendMemoryAudit({
+            sessionId,
+            memoryKind: 'session',
+            memoryId: restored.id,
+            action: 'rollback',
+            after: restored,
+            source: 'rollback',
+            parentAuditId: entry.id,
+          })
+        }
       } else {
         const current = getMemoriesCache(sessionId).find((item) => item.id === entry.memoryId)
         if (!current) {
