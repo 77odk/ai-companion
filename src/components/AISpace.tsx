@@ -107,19 +107,32 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   const failedPhotoIdsRef = useRef<Set<string>>(new Set())
   const drawerTimerRef = useRef<number | null>(null)
   const objectTimerRef = useRef<number | null>(null)
+  const placeTimerRef = useRef<number | null>(null)
   const [drawerOpening, setDrawerOpening] = useState(false)
   const [openingObject, setOpeningObject] = useState<'photos' | 'jar' | 'book' | 'player' | null>(null)
   const [placingObjects, setPlacingObjects] = useState(true)
 
-  useEffect(() => {
+  const beginPlaceBack = () => {
+    if (placeTimerRef.current !== null) window.clearTimeout(placeTimerRef.current)
+    setPlacingObjects(true)
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    const timer = window.setTimeout(() => setPlacingObjects(false), reduce ? 1 : 420)
-    return () => window.clearTimeout(timer)
+    placeTimerRef.current = window.setTimeout(() => {
+      placeTimerRef.current = null
+      setPlacingObjects(false)
+    }, reduce ? 1 : 420)
+  }
+
+  useEffect(() => {
+    beginPlaceBack()
+    return () => {
+      if (placeTimerRef.current !== null) window.clearTimeout(placeTimerRef.current)
+    }
   }, [])
 
   useEffect(() => () => {
     if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
     if (objectTimerRef.current !== null) window.clearTimeout(objectTimerRef.current)
+    if (placeTimerRef.current !== null) window.clearTimeout(placeTimerRef.current)
   }, [])
 
   const openDeskObject = (
@@ -297,6 +310,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           }}
           onAdd={() => fileInputRef.current?.click()}
           onDelete={handleDeletePhoto}
+          onOpenChange={(open) => {
+            if (!open) beginPlaceBack()
+          }}
         />
         <input
           ref={fileInputRef}
