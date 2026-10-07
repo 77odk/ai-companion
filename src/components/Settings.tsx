@@ -666,6 +666,105 @@ function ReplyLengthDetail({ onBack }: { onBack: () => void }) {
   )
 }
 
+function InitiativeDetail({ onBack }: { onBack: () => void }) {
+  const accountId = getAccount()?.account ?? ''
+  const sessionId = getActiveSessionId() ?? ''
+  const [preference, setPreference] = useState(() => getInitiativePreference(accountId, sessionId))
+  const [notice, setNotice] = useState('')
+
+  const persist = (patch: Partial<typeof preference>) => {
+    if (!accountId || !sessionId) return
+    const next = { ...preference, ...patch }
+    if (!saveInitiativePreference(accountId, sessionId, next)) {
+      setNotice('这次没有保存上，稍后再试。')
+      return
+    }
+    setPreference(getInitiativePreference(accountId, sessionId))
+    setNotice('已保存')
+    window.setTimeout(() => setNotice(''), 1200)
+  }
+
+  const hourOptions = Array.from({ length: 24 }, (_, hour) => ({
+    value: hour,
+    label: `${String(hour).padStart(2, '0')}:00`,
+  }))
+
+  return (
+    <div className="page settings-page initiative-settings-page">
+      <DetailHeader title="主动消息" onBack={onBack} />
+
+      <div className="settings-card initiative-settings-card">
+        <div className="initiative-setting-row">
+          <div>
+            <strong>允许 TA 主动来找你</strong>
+            <p>只有有真实理由时才会发，不会为了凑频率硬聊。</p>
+          </div>
+          <button
+            type="button"
+            className={`settings-switch${preference.enabled ? ' on' : ''}`}
+            role="switch"
+            aria-checked={preference.enabled}
+            aria-label="允许 TA 主动来找你"
+            onClick={() => persist({ enabled: !preference.enabled })}
+          >
+            <span />
+          </button>
+        </div>
+
+        <div className="field initiative-field">
+          <label htmlFor="initiative-frequency">频率</label>
+          <select
+            id="initiative-frequency"
+            className="input"
+            value={Math.min(3, preference.dailyLimit)}
+            onChange={(event) => persist({ dailyLimit: Number(event.target.value) })}
+            disabled={!preference.enabled}
+          >
+            <option value={1}>少一点 · 每天最多 1 次</option>
+            <option value={2}>适中 · 每天最多 2 次</option>
+            <option value={3}>多一点 · 每天最多 3 次</option>
+          </select>
+          <p className="hint">如果你没有回应，下一次主动消息会自动隔得更久。</p>
+        </div>
+
+        <div className="initiative-quiet">
+          <div>
+            <strong>静默时段</strong>
+            <p>这段时间 TA 不会主动发消息。</p>
+          </div>
+          <div className="initiative-quiet-inputs">
+            <label>
+              <span>开始</span>
+              <select
+                className="input"
+                value={preference.quietStartHour}
+                onChange={(event) => persist({ quietStartHour: Number(event.target.value) })}
+                disabled={!preference.enabled}
+              >
+                {hourOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <span aria-hidden="true">—</span>
+            <label>
+              <span>结束</span>
+              <select
+                className="input"
+                value={preference.quietEndHour}
+                onChange={(event) => persist({ quietEndHour: Number(event.target.value) })}
+                disabled={!preference.enabled}
+              >
+                {hourOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {notice ? <p className="settings-inline-notice" role="status">{notice}</p> : null}
+    </div>
+  )
+}
+
 function ProfileGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="profile-group">
