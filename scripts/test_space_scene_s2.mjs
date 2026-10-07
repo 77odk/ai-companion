@@ -11,7 +11,7 @@ console.log('[Space S2] four approved desk objects are real entry points')
 for (const klass of ['is-star-jar', 'is-thought-book', 'is-player', 'is-weekly-letter']) {
   assert.match(aiSpace, new RegExp(`space-scene-hotspot ${klass}`))
 }
-assert.match(aiSpace, /onClick=\\{onOpenStarJar\\}/)
+assert.match(aiSpace, /onClick=\{onOpenStarJar\}/)
 assert.match(aiSpace, /onClick=\{onOpenThoughts\}/)
 assert.match(aiSpace, /onClick=\{onOpenListen\}/)
 assert.match(aiSpace, /onClick=\{onOpenWeekly\}/)
