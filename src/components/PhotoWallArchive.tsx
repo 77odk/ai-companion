@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react'
 import type { PhotoMeta } from '../lib/photoWall'
 import { assignDayRows, boardHeightForPhotos, groupPhotosByMonth, layoutForPhoto } from '../lib/photoWallLayout'
 import '../styles/photoWallArchive.css'
@@ -12,6 +12,7 @@ interface Props {
   onPhotoLoadSuccess?: (photo: PhotoMeta) => void
   onAdd: () => void
   onDelete: (photo: PhotoMeta) => Promise<boolean>
+  onOpenChange?: (open: boolean) => void
 }
 
 type WallStyle = CSSProperties & {
@@ -77,11 +78,15 @@ function fmtMD(ts: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
-export default function PhotoWallArchive({ photos, uploading, error, photoSrc, onPhotoLoadError, onPhotoLoadSuccess, onAdd, onDelete }: Props) {
+export default function PhotoWallArchive({ photos, uploading, error, photoSrc, onPhotoLoadError, onPhotoLoadSuccess, onAdd, onDelete, onOpenChange }: Props) {
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const touchStartX = useRef<number | null>(null)
+
+  useEffect(() => {
+    onOpenChange?.(open)
+  }, [open, onOpenChange])
   const sorted = useMemo(() => [...photos].sort((a, b) => b.createdAt - a.createdAt), [photos])
   const preview = sorted.slice(0, 12)
   const groups = useMemo(() => groupPhotosByMonth(sorted), [sorted])
