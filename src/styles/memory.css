@@ -770,3 +770,10 @@
     transition: none;
   }
 }
+
+.memory-audit-done {
+  display: inline-block;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
