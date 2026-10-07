@@ -1,6 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
-import { getActiveSessionId } from '../lib/sessionStore'
+import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
+import { loadMemory, MEMORY_UPDATED_EVENT } from '../lib/memory'
+import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
+import { loadTaThoughts } from '../lib/taThoughts'
+import { getWeeklyReviews } from '../lib/weeklyReview'
+import {
+  getListenTogetherSnapshot,
+  subscribeListenTogether,
+} from '../lib/listenTogetherState'
 import {
   loadLocalPhotos,
   saveLocalPhotoMetadata,
@@ -53,9 +61,43 @@ function isValidCloudPhotoRow(value: unknown): value is {
 
 const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，稍后再试。'
 
+
+function sceneMemoryCount(sessionId: string): number {
+  const global = loadMemory().filter((item) => item.explicit === true && item.text?.trim())
+  const session = sessionId ? getMemoriesCache(sessionId).filter((item) => item.text?.trim()) : []
+  return global.length + session.length
+}
+
 export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, onOpenWeekly }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
+  const [sceneVersion, setSceneVersion] = useState(0)
+  const [listenSnapshot, setListenSnapshot] = useState(getListenTogetherSnapshot)
+
+  useEffect(() => subscribeListenTogether(setListenSnapshot), [])
+
+  useEffect(() => {
+    const refresh = () => setSceneVersion((value) => value + 1)
+    window.addEventListener(MEMORY_UPDATED_EVENT, refresh)
+    window.addEventListener(ELUVIN_DATA_CHANGE, refresh)
+    return () => {
+      window.removeEventListener(MEMORY_UPDATED_EVENT, refresh)
+      window.removeEventListener(ELUVIN_DATA_CHANGE, refresh)
+    }
+  }, [])
+
+  const memoryCount = useMemo(
+    () => sceneMemoryCount(sessionId),
+    [sessionId, sceneVersion],
+  )
+  const latestThought = useMemo(
+    () => sessionId ? loadTaThoughts(sessionId)[0] ?? null : null,
+    [sessionId, sceneVersion],
+  )
+  const weeklyCount = useMemo(
+    () => getWeeklyReviews(sid).length,
+    [sid, sceneVersion],
+  )
 
   /* ---- 照片墙：上传/数据源沿用旧实现，展示交给稳定长墙组件。 ---- */
   const [photos, setPhotos] = useState<PhotoMeta[]>(() => loadLocalPhotos(sid))
@@ -247,6 +289,17 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   }
 
   function renderHomePage() {
+    const token = getToken()
+    const scenePhotos = photos.slice(0, 8)
+    const progress = listenSnapshot.duration > 0
+      ? Math.max(0, Math.min(1, listenSnapshot.current / listenSnapshot.duration))
+      : 0
+    const openPhotoWall = () => {
+      document
+        .querySelector<HTMLButtonElement>('.ai-space-page .photo-stack-preview, .ai-space-page .photo-archive-empty')
+        ?.click()
+    }
+
     return (
       <>
         <section className="space-scene-shell" aria-label="TA 的空间">
@@ -270,44 +323,88 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             type="button"
             className="space-scene-hotspot is-photo-wall"
             aria-label="打开照片墙"
-            onClick={() => {
-              document
-                .querySelector<HTMLButtonElement>('.ai-space-page .photo-stack-preview, .ai-space-page .photo-archive-empty')
-                ?.click()
-            }}
-          />
+            onClick={openPhotoWall}
+          >
+            <span className="space-live-photo-board" aria-hidden="true">
+              {scenePhotos.map((photo, index) => (
+                <span key={photo.id} className={`space-live-photo is-p${index}`}>
+                  <img
+                    src={photo.dataUrl ?? photoUrl(photo.id, token)}
+                    alt=""
+                    draggable={false}
+                    onError={() => {
+                      failedPhotoIdsRef.current.add(photo.id)
+                      setPhotoError(PHOTO_IMAGE_LOAD_ERROR)
+                    }}
+                    onLoad={() => {
+                      failedPhotoIdsRef.current.delete(photo.id)
+                      if (failedPhotoIdsRef.current.size === 0) {
+                        setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? null : current)
+                      }
+                    }}
+                  />
+                </span>
+              ))}
+            </span>
+          </button>
+
           <button
             type="button"
             className="space-scene-hotspot is-star-jar"
-            aria-label="打开记忆星星罐"
+            aria-label={memoryCount > 0 ? `打开记忆星星罐，共 ${memoryCount} 颗星` : '打开空的记忆星星罐'}
             onClick={onOpenStarJar}
           >
-            <svg viewBox="0 0 100 100" aria-hidden="true">
-              <path className="space-object-glint" d="M27 18c-7 16-8 37-3 54" />
-              <path className="space-object-rim" d="M23 18h54" />
-            </svg>
+            <span className="space-live-jar" aria-hidden="true">
+              <span className="space-live-jar-glint" />
+              <span className="space-live-star-field">
+                {Array.from({ length: memoryCount }, (_, index) => (
+                  <i
+                    key={index}
+                    className="space-live-star"
+                    style={{
+                      '--live-star-x': `${8 + ((index * 41) % 84)}%`,
+                      '--live-star-y': `${18 + ((index * 29) % 69)}%`,
+                      '--live-star-r': `${-24 + ((index * 31) % 49)}deg`,
+                      '--live-star-d': `${-((index * 0.37) % 6.7)}s`,
+                      '--live-star-t': `${5.8 + ((index * 17) % 28) / 10}s`,
+                      '--live-star-h': `${(index * 47) % 360}`,
+                    } as React.CSSProperties}
+                  />
+                ))}
+              </span>
+            </span>
           </button>
+
           <button
             type="button"
             className="space-scene-hotspot is-thought-book"
             aria-label="打开 TA 的思绪"
             onClick={onOpenThoughts}
           >
-            <svg viewBox="0 0 100 100" aria-hidden="true">
-              <path className="space-object-paper-edge" d="M12 50c23-7 38-6 47 0 10-6 19-6 29-4" />
-            </svg>
+            <span className="space-live-book" aria-hidden="true">
+              {latestThought ? <span>{latestThought.text}</span> : null}
+            </span>
           </button>
+
           <button
             type="button"
-            className="space-scene-hotspot is-player"
-            aria-label="打开一起听歌"
+            className={`space-scene-hotspot is-player${listenSnapshot.playing ? ' is-playing' : ''}`}
+            aria-label={listenSnapshot.hasTrack ? `打开一起听歌，正在听 ${listenSnapshot.title}` : '打开一起听歌'}
             onClick={onOpenListen}
           >
-            <svg viewBox="0 0 100 100" aria-hidden="true">
-              <rect className="space-object-screen-glow" x="14" y="20" width="72" height="54" rx="8" />
-              <path className="space-object-progress" d="M24 63h37" />
-            </svg>
+            <span className="space-live-player" aria-hidden="true">
+              {listenSnapshot.hasTrack ? (
+                <>
+                  <strong>{listenSnapshot.title}</strong>
+                  <span className="space-live-player-track">
+                    <i style={{ transform: `scaleX(${progress})` }} />
+                  </span>
+                </>
+              ) : null}
+            </span>
+            <span className="space-live-earphone-wire" aria-hidden="true" />
           </button>
+
           <button
             type="button"
             className={`space-scene-hotspot is-weekly-letter${drawerOpening ? ' is-opening' : ''}`}
@@ -315,7 +412,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             onClick={openWeeklyFromDrawer}
             disabled={drawerOpening}
           >
-            <span className="space-drawer-peek" aria-hidden="true" />
+            <span className="space-drawer-peek" aria-hidden="true">
+              <span className="space-drawer-interior">
+                {Array.from({ length: Math.min(5, weeklyCount) }, (_, index) => (
+                  <i key={index} style={{ '--letter-i': index } as React.CSSProperties} />
+                ))}
+              </span>
+            </span>
           </button>
         </div>
 
