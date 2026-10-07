@@ -151,7 +151,8 @@ export function seedMemoryPaperMood(
     generatedAt: 0,
     updatedAt: now,
   }
-  return writeRecord(pending, true) ? pending : null
+  // mood seed 先只落本机 sidecar；完整纸条生成成功后再作为一个实体上云，避免同实体两个相同 baseVersion 的并发 op。
+  return writeRecord(pending, false) ? pending : null
 }
 
 export function captureMemoryPaperMood(sessionId: string): MemoryPaperMoodSnapshot | undefined {
@@ -260,7 +261,10 @@ export function deleteMemoryPapersForMemory(
   }
   if (removed.length === 0 || !setCloudStateSidecar(SIDECAR, map)) return
   notifyDataChanged()
-  for (const record of removed) queueDelete(record)
+  for (const record of removed) {
+    // generatedAt=0 代表只在本机落过 mood seed，从未创建云端实体，无需制造无意义 tombstone。
+    if (record.generatedAt > 0) queueDelete(record)
+  }
 }
 
 export async function backfillMemoryPapers(
