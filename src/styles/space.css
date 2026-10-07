@@ -636,15 +636,6 @@
   height: 43%;
 }
 
-.space-scene-hotspot.is-moments {
-  /* S2: 「一起经历过」暂挂在照片墙里那张压花纸签上。
-     这是画面中独立可辨识的小物件，也避开书 / 播放器 / 星星罐；
-     S3 按既定方向把正式入口迁到「朝暮」。 */
-  left: 64%;
-  top: 23%;
-  width: 15%;
-  height: 15%;
-}
 
 .space-scene-hotspot.is-weekly-letter {
   left: 49%;
