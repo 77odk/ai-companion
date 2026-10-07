@@ -1214,12 +1214,12 @@ export function AIDetail({ onBack, onOpenSpace, sessionId }: { onBack: () => voi
         </div>
 
         <div className="field">
-          <label htmlFor="ai-background">关系&背景设定</label>
+          <label htmlFor="ai-background">背景设定</label>
           <textarea
             id="ai-background"
             className="input persona-input"
             rows={3}
-            placeholder="你们是什么关系，TA的经历、相处细节"
+            placeholder="TA 的经历、世界观、相处背景"
             value={backgroundValue}
             onChange={(e) => setBackgroundDraft(e.target.value)}
           />
