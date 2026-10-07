@@ -8,7 +8,9 @@ export type SystemNotificationRequestResult =
 
 function isIos(): boolean {
   if (typeof navigator === 'undefined') return false
-  return /iphone|ipad|ipod/i.test(navigator.userAgent)
+  const classic = /iphone|ipad|ipod/i.test(navigator.userAgent)
+  const ipadDesktopUa = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
+  return classic || ipadDesktopUa
 }
 
 function isStandalone(): boolean {
@@ -53,12 +55,14 @@ export async function showSystemNotification(
 
   try {
     if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.ready
-      await registration.showNotification(cleanTitle, {
-        body: cleanBody,
-        tag: cleanTag,
-      })
-      return true
+      const registration = await navigator.serviceWorker.getRegistration()
+      if (registration) {
+        await registration.showNotification(cleanTitle, {
+          body: cleanBody,
+          tag: cleanTag,
+        })
+        return true
+      }
     }
   } catch {
     // Fallback to the page Notification API below.
