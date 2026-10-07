@@ -157,6 +157,7 @@ assert.equal(deleteTaCommitmentsForSession('7'), true)
 assert.equal(loadTaCommitments('7').length, 0, '删除角色后该 TA 的承诺必须从本地档案清掉')
 assert.equal(loadTaCommitments('8').some((item) => item.id === 'session-8-promise'), true, '删除一个角色不能误删其它角色承诺')
 assert.match(rolesPage, /deleteTaCommitmentsForSession\(id\)/)
+assert.match(app, /currentReminder[\s\S]{0,260}!getSessionsCache\(\)\.some[\s\S]{0,260}setCommitmentReminder\(null\)/)
 
 assert.match(cloudResources, /registerCloudStateAdapter\('ta_commitment'/)
 assert.match(cloudResources, /resetCommitmentSnapshot\(\)[\s\S]{0,100}notifyDataChanged\(\)/)
