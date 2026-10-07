@@ -1714,6 +1714,94 @@
 }
 
 
+.star-memory-mood {
+  margin: 10px 0 0;
+  color: rgba(111, 72, 55, .76);
+  font-size: 12px;
+  letter-spacing: .02em;
+}
+
+.star-memory-mood strong {
+  font-weight: 600;
+  color: rgba(93, 58, 44, .92);
+}
+
+.star-memory-paper-missing,
+.star-memory-detail-hint {
+  margin: 10px 0 0;
+  color: rgba(111, 72, 55, .62);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.star-memory-detail-hint {
+  text-align: center;
+}
+
+.star-memory-detail-bubble {
+  position: relative;
+  margin: 14px 0 8px;
+  padding: 12px 13px;
+  border: 1px solid rgba(112, 74, 56, .15);
+  border-radius: 15px 15px 15px 5px;
+  background: rgba(255, 248, 236, .78);
+  box-shadow: 0 8px 18px rgba(84, 49, 36, .12);
+}
+
+.star-memory-detail-bubble::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: -7px;
+  width: 12px;
+  height: 12px;
+  border-left: 1px solid rgba(112, 74, 56, .15);
+  border-top: 1px solid rgba(112, 74, 56, .15);
+  background: rgba(255, 248, 236, .96);
+  transform: rotate(45deg);
+}
+
+.star-memory-no-detail {
+  margin: 0;
+  color: rgba(111, 72, 55, .64);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.star-paper-backfill {
+  width: min(86%, 360px);
+  margin: 14px auto 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 245, 226, .18);
+  border-radius: 14px;
+  background: rgba(82, 48, 37, .34);
+  color: rgba(255, 246, 232, .84);
+  font-size: 11px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.star-paper-backfill p {
+  margin: 0;
+}
+
+.star-paper-backfill button {
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 246, 232, .24);
+  border-radius: 999px;
+  background: rgba(255, 246, 232, .10);
+  color: #fff6e8;
+}
+
+.star-paper-backfill > span {
+  display: block;
+  margin-top: 7px;
+  color: rgba(255, 246, 232, .72);
+}
+
+
 /* S6 performance: hidden pages do not keep ambient animation work alive. */
 html.eluvin-page-hidden .ai-space-page *,
 html.eluvin-page-hidden .star-jar-page *,
