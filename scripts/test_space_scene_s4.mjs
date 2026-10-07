@@ -22,8 +22,8 @@ for (const key of ['relaxedTense','quietActive','connection','expression','explo
 }
 assert.match(state, /hour >= 2 && hour < 7/)
 assert.match(state, /activeMinutesBetween/)
-assert.match(state, /INTERACTION_MOOD_DEBOUNCE_MS = 30 * 60_000/)
-assert.match(state, /MOOD_STABLE_MS = 45 * 60_000/)
+assert.match(state, /INTERACTION_MOOD_DEBOUNCE_MS = 30 \\* 60_000/)
+assert.match(state, /MOOD_STABLE_MS = 45 \\* 60_000/)
 assert.match(state, /messageEvidenceText\(batch\.text\)/)
 assert.doesNotMatch(state, /chatCompletion|streamChat/)
 assert.doesNotMatch(state, /from ['"].*(?:memory|eventStore|anniversary|futureIntent)/)
@@ -59,7 +59,7 @@ assert.match(spaceCss, /prefers-reduced-motion: reduce/)
 
 console.log('[S4] 关系设定与真实事实分开')
 for (const option of ['恋人','兄妹','家人','偶像与粉丝','宿敌','主仆','师生','原作角色与你的 OC','自定义']) {
-  assert.match(relationship, new RegExp(`['"]${option.replace(/[.*+?^$\\{}()|[\]\\]/g, '\\$&')}['"]`))
+  assert.ok(relationship.includes(`'${option}'`), `missing relationship preset: ${option}`)
 }
 assert.match(settings, />关系设定<\/label>/)
 assert.match(settings, />背景设定<\/label>/)
