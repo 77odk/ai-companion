@@ -47,6 +47,39 @@ export interface TaStateView {
   changedAt: number
 }
 
+export interface TaStateAxesView {
+  /** -1 舒展 → +1 紧绷 */
+  relaxedTense: number
+  /** -1 沉静 → +1 活跃 */
+  quietActive: number
+}
+
+export interface TaStateTendenciesView {
+  connection: number
+  expression: number
+  exploration: number
+  involvement: number
+  reminiscence: number
+  space: number
+  energy: number
+}
+
+export interface TaStateHistoryPoint {
+  at: number
+  score: number
+  axes: TaStateAxesView
+  tendencies: TaStateTendenciesView
+  reason: string
+  kind: 'time' | 'chat' | 'self-evidence' | 'story'
+}
+
+export interface TaStateDashboard {
+  score: number
+  axes: TaStateAxesView
+  tendencies: TaStateTendenciesView
+  history: TaStateHistoryPoint[]
+}
+
 interface PrivateAxes {
   /** -1 舒展 → +1 紧绷 */
   relaxedTense: number
@@ -82,6 +115,7 @@ interface PrivateTaState {
   updatedAt: number
   lastEvidenceBatchTs?: number
   lastCloudQueuedAt?: number
+  history?: TaStateHistoryPoint[]
 }
 
 const KIND = 'ta_state'
@@ -90,6 +124,7 @@ const SETTLE_MIN_MS = 15 * 60_000
 const MOOD_STABLE_MS = 45 * 60_000
 const INTERACTION_MOOD_DEBOUNCE_MS = 30 * 60_000
 const CLOUD_HEARTBEAT_MS = 90 * 60_000
+const STATE_HISTORY_LIMIT = 320
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(.9, Number.isFinite(value) ? value : 0))
@@ -97,6 +132,94 @@ function clamp01(value: number): number {
 
 function clampAxis(value: number): number {
   return Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0))
+}
+
+function stateScore(state: Pick<PrivateTaState, 'axes' | 'tendencies'>): number {
+  // 读法接近人的心率：平稳在中段，活跃/紧绷往上，低能量/低活跃往下。
+  // 九个输入全部来自同一份真实 TA state：2 个轴 + 7 条倾向。
+  const a = state.axes
+  const t = state.tendencies
+  const raw = 70
+    + a.quietActive * 15
+    + a.relaxedTense * 10
+    + (t.energy - .5) * 20
+    + (t.expression - .40) * 7
+    + (t.involvement - .48) * 5
+    + (t.connection - .46) * 4
+    + (t.exploration - .46) * 4
+    + (t.reminiscence - .30) * 3
+    - (t.space - .42) * 5
+  return Math.round(Math.max(48, Math.min(112, raw)))
+}
+
+function historyPoint(
+  state: Pick<PrivateTaState, 'axes' | 'tendencies'>,
+  reason: PrivateReason,
+): TaStateHistoryPoint {
+  return {
+    at: reason.at,
+    score: stateScore(state),
+    axes: { ...state.axes },
+    tendencies: { ...state.tendencies },
+    reason: reason.text,
+    kind: reason.kind,
+  }
+}
+
+function stateMetricsChanged(before: PrivateTaState, after: PrivateTaState): boolean {
+  if (Math.abs(before.axes.relaxedTense - after.axes.relaxedTense) > .0005) return true
+  if (Math.abs(before.axes.quietActive - after.axes.quietActive) > .0005) return true
+  return (Object.keys(before.tendencies) as Array<keyof PrivateTendencies>)
+    .some((key) => Math.abs(before.tendencies[key] - after.tendencies[key]) > .0005)
+}
+
+function appendStateHistory(
+  before: PrivateTaState,
+  after: PrivateTaState,
+  reason: PrivateReason,
+): PrivateTaState {
+  if (!stateMetricsChanged(before, after)) return after
+  const prior = Array.isArray(before.history) ? before.history : []
+  return {
+    ...after,
+    history: [...prior, historyPoint(after, reason)].slice(-STATE_HISTORY_LIMIT),
+  }
+}
+
+function normalizeHistory(value: unknown): TaStateHistoryPoint[] {
+  if (!Array.isArray(value)) return []
+  const out: TaStateHistoryPoint[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const row = item as Partial<TaStateHistoryPoint>
+    if (typeof row.at !== 'number' || !Number.isFinite(row.at)) continue
+    if (typeof row.score !== 'number' || !Number.isFinite(row.score)) continue
+    if (!row.axes || typeof row.axes.relaxedTense !== 'number' || typeof row.axes.quietActive !== 'number') continue
+    if (!row.tendencies || ['connection','expression','exploration','involvement','reminiscence','space','energy']
+      .some((key) => typeof (row.tendencies as unknown as Record<string, unknown>)[key] !== 'number')) continue
+    if (typeof row.reason !== 'string') continue
+    if (row.kind !== 'time' && row.kind !== 'chat' && row.kind !== 'self-evidence' && row.kind !== 'story') continue
+    out.push({
+      at: row.at,
+      score: Math.round(Math.max(48, Math.min(112, row.score))),
+      axes: {
+        relaxedTense: clampAxis(row.axes.relaxedTense),
+        quietActive: clampAxis(row.axes.quietActive),
+      },
+      tendencies: {
+        connection: clamp01(row.tendencies.connection),
+        expression: clamp01(row.tendencies.expression),
+        exploration: clamp01(row.tendencies.exploration),
+        involvement: clamp01(row.tendencies.involvement),
+        reminiscence: clamp01(row.tendencies.reminiscence),
+        space: clamp01(row.tendencies.space),
+        energy: clamp01(row.tendencies.energy),
+      },
+      reason: row.reason,
+      kind: row.kind,
+    })
+  }
+  return out.slice(-STATE_HISTORY_LIMIT)
 }
 
 function localHour(ts: number): number {
@@ -177,6 +300,7 @@ function initialState(sessionId: string, now: number): PrivateTaState {
   }
   state.mood = chooseMood(state)
   state.description = moodDescription(state.mood)
+  state.history = [historyPoint(state, state.reason)]
   return state
 }
 
@@ -195,7 +319,9 @@ function validPrivateState(value: unknown, sessionId?: string): PrivateTaState |
   if (!TA_MOOD_WORDS.includes(state.mood as TaMoodWord)) return null
   if (typeof state.description !== 'string' || !state.reason || typeof state.reason.text !== 'string') return null
   if (typeof state.lastSettledAt !== 'number' || typeof state.lastChangedAt !== 'number' || typeof state.updatedAt !== 'number') return null
-  return state as PrivateTaState
+  const normalized = state as PrivateTaState
+  normalized.history = normalizeHistory(state.history)
+  return normalized
 }
 
 function writeState(state: PrivateTaState, notify = true): boolean {
@@ -298,15 +424,16 @@ function settlePrivate(state: PrivateTaState, now: number): PrivateTaState {
     updatedAt: now,
   }
 
+  const settleReason: PrivateReason = { kind: 'time', text: '日常节律和时间经过让状态慢慢变化', at: now }
   const candidate = chooseMood(next)
   if (candidate !== state.mood && now - state.lastChangedAt >= MOOD_STABLE_MS) {
     next.mood = candidate
     next.description = moodDescription(candidate)
     next.lastChangedAt = now
-    next.reason = { kind: 'time', text: '日常节律和时间经过让状态慢慢变化', at: now }
+    next.reason = settleReason
   }
 
-  return next
+  return appendStateHistory(state, next, settleReason)
 }
 
 function getPrivate(sessionId: string, now = Date.now()): PrivateTaState {
@@ -327,6 +454,20 @@ export function getTaStateView(sessionId: string, now = Date.now()): TaStateView
     description: state.description,
     reason: state.reason.text,
     changedAt: state.lastChangedAt,
+  }
+}
+
+export function getTaStateDashboard(sessionId: string, now = Date.now()): TaStateDashboard {
+  const state = getPrivate(sessionId, now)
+  return {
+    score: stateScore(state),
+    axes: { ...state.axes },
+    tendencies: { ...state.tendencies },
+    history: (state.history ?? []).map((point) => ({
+      ...point,
+      axes: { ...point.axes },
+      tendencies: { ...point.tendencies },
+    })),
   }
 }
 
@@ -359,8 +500,9 @@ export function recordTaStateInteraction(sessionId: string, now = Date.now()): T
     next.description = moodDescription(candidate)
     next.lastChangedAt = now
   }
+  const logged = appendStateHistory(state, next, next.reason)
   // 普通互动只本地累积；只有可见心情变化或 90 分钟 heartbeat 才排一次 Cloud State。
-  persist(next, { forceCloud: moodChanged, notify: moodChanged })
+  persist(logged, { forceCloud: moodChanged, notify: moodChanged })
   return getTaStateView(sessionId, now)
 }
 
@@ -465,6 +607,7 @@ export function captureTaStateEvidenceFromLatestReply(sessionId: string, now = D
   state.mood = chooseMood(state)
   state.description = moodDescription(state.mood)
   state.lastChangedAt = now
+  state = appendStateHistory(base, state, state.reason)
   persist(state, { forceCloud: true })
   return getTaStateView(sessionId, now)
 }
