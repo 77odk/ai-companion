@@ -684,3 +684,201 @@
     transform: none;
   }
 }
+
+
+/* ==========================================================================
+   Space scene · Golden desk
+   The approved scene is a fixed-view composition. The background is treated
+   as a single photographic plate; live objects sit in stable percentage zones
+   so mobile resizing only crops/scales the composition instead of reflowing it.
+   ========================================================================== */
+
+.ai-space-page--scene {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: #bf7447;
+}
+
+.space-scene {
+  position: relative;
+  width: min(100%, 768px);
+  height: 100%;
+  min-height: 0;
+  margin-inline: auto;
+  overflow: hidden;
+  isolation: isolate;
+  background: #c98250;
+  touch-action: pan-y;
+}
+
+.space-scene-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 0%;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.space-scene-photo-zone {
+  position: absolute;
+  z-index: 4;
+  left: 34.5%;
+  top: 8.5%;
+  width: 60%;
+  height: 43%;
+  pointer-events: auto;
+}
+
+.space-scene-object,
+.space-scene-drawer {
+  position: absolute;
+  z-index: 5;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.space-scene-star-jar {
+  left: 18%;
+  top: 47.5%;
+  width: 31%;
+  height: 20%;
+}
+
+.space-scene-star-jar::after {
+  content: '';
+  position: absolute;
+  left: 19%;
+  top: 14%;
+  width: 16%;
+  height: 52%;
+  border-radius: 50%;
+  background: linear-gradient(105deg, rgba(255,255,255,.22), rgba(255,255,255,0));
+  filter: blur(.4px);
+  opacity: .7;
+  animation: space-glass-breathe 7s ease-in-out infinite;
+}
+
+.space-scene-thought-book {
+  left: 22%;
+  top: 66.5%;
+  width: 70%;
+  height: 18%;
+}
+
+.space-scene-thought-book::after {
+  content: '';
+  position: absolute;
+  left: 42%;
+  top: 13%;
+  width: 31%;
+  height: 3%;
+  border-radius: 999px;
+  background: rgba(255, 226, 188, .28);
+  transform: rotate(-4deg);
+  filter: blur(1px);
+  opacity: .48;
+}
+
+.space-scene-player {
+  left: 54.5%;
+  top: 53.2%;
+  width: 34%;
+  height: 13.5%;
+}
+
+.space-scene-player::after {
+  content: '';
+  position: absolute;
+  inset: 15% 10% 18%;
+  border-radius: 8px;
+  box-shadow: 0 0 18px rgba(255, 191, 132, .18);
+  opacity: .55;
+  animation: space-screen-breathe 6s ease-in-out infinite;
+}
+
+.space-scene-earphones {
+  left: 72%;
+  top: 62%;
+  width: 24%;
+  height: 8%;
+}
+
+.space-scene-drawer {
+  z-index: 7;
+  left: 43%;
+  right: 0;
+  bottom: 0;
+  height: 16.5%;
+  pointer-events: auto;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.space-scene-drawer-hit {
+  position: absolute;
+  inset: 18% 0 0;
+  display: block;
+}
+
+.space-scene-drawer:focus-visible {
+  outline: 2px solid rgba(255, 244, 226, .9);
+  outline-offset: -5px;
+}
+
+.space-scene-drawer:active {
+  transform: translateY(1px);
+}
+
+@keyframes space-glass-breathe {
+  0%, 100% { opacity: .42; transform: translateX(0); }
+  50% { opacity: .76; transform: translateX(2px); }
+}
+
+@keyframes space-screen-breathe {
+  0%, 100% { opacity: .38; }
+  50% { opacity: .62; }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .space-scene-drawer:hover {
+    filter: brightness(1.015);
+  }
+}
+
+@media (max-width: 430px) {
+  .space-scene {
+    width: 100%;
+  }
+}
+
+@media (min-width: 768px) {
+  .ai-space-page--scene {
+    display: grid;
+    place-items: stretch center;
+  }
+
+  .space-scene {
+    width: min(100%, 768px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-scene-star-jar::after,
+  .space-scene-player::after {
+    animation: none;
+  }
+
+  .space-scene-drawer {
+    transition: none;
+  }
+}
