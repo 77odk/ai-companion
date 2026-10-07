@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
+  captureLatestTaCommitment,
   detectTaCommitment,
   saveTaCommitment,
   collectDueTaCommitments,
   markCommitmentReminded,
 } from '../src/lib/commitmentStore.ts'
+import { saveMessagesCache } from '../src/lib/sessionStore.ts'
 import {
   appendMemoryAudit,
   loadMemoryAudit,
@@ -106,6 +108,19 @@ assert.ok(genericPromise)
 assert.ok(typeof genericPromise.dueAt === 'number')
 assert.equal(detectTaCommitment('今天天气不错。', '7', sourceTs, 44), null)
 assert.equal(detectTaCommitment('我觉得你明天会好一点。', '7', sourceTs, 45), null, 'TA 对用户的预测不能误当承诺')
+assert.equal(detectTaCommitment('我明天不能提醒你喝水。', '7', sourceTs, 46), null, '否定的 SELF 行为不能误当承诺')
+assert.equal(detectTaCommitment('我明天不会陪你去医院。', '7', sourceTs, 47), null, '不会做的事不能反转成承诺')
+assert.equal(detectTaCommitment('我觉得他明天会告诉你结果。', '7', sourceTs, 48), null, '第三方 actor 不能误当 SELF 承诺')
+
+const batchTs = sourceTs + 1234
+saveMessagesCache('7', [
+  { role: 'assistant', content: '我明天晚上8点提醒你喝水。', ts: batchTs, replyState: 'complete' },
+  { role: 'assistant', content: '晚安。', ts: batchTs, replyState: 'complete' },
+])
+const batchedPromise = captureLatestTaCommitment('7')
+assert.ok(batchedPromise, '同一轮多 assistant bubble 必须整批检查承诺')
+assert.match(batchedPromise?.text ?? '', /提醒你喝水/)
+
 
 const due = { ...promise, dueAt: sourceTs - 1, createdAt: sourceTs - 1000 }
 assert.equal(saveTaCommitment(due), true)
