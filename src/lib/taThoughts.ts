@@ -20,6 +20,8 @@ export interface TaThoughtView {
 
 interface PrivateThought extends TaThoughtView {
   strength: number
+  /** 最近一次真正“冒出来/被加强”的时间；纯衰减写盘不能重置它。 */
+  lastActivatedAt: number
   updatedAt: number
 }
 
@@ -74,6 +76,7 @@ function validBook(value: unknown, sessionId?: string): ThoughtBookState | null 
     && typeof item.createdAt === 'number'
     && typeof item.updatedAt === 'number'
     && typeof item.strength === 'number'
+    && (item.lastActivatedAt == null || typeof item.lastActivatedAt === 'number')
     && (item.theme === 'connection' || item.theme === 'reflection' || item.theme === 'exploration' || item.theme === 'rest')
   ))
   return { sessionId: book.sessionId, items, updatedAt: book.updatedAt }
@@ -140,9 +143,17 @@ export function settleTaThoughts(sessionId: string, now = Date.now()): TaThought
   if (!sid) return []
 
   const current = validBook(readMap()[sid], sid) ?? { sessionId: sid, items: [], updatedAt: now }
-  const decayed = current.items.map((item) => ({ ...item, strength: decayedStrength(item, now), updatedAt: now }))
-  const newest = [...decayed].sort((a, b) => b.createdAt - a.createdAt)[0]
-  const signal = getTaThoughtSignal(sid, newest?.createdAt ?? null, now)
+  const lastActivationAt = current.items.reduce(
+    (latest, item) => Math.max(latest, item.lastActivatedAt ?? item.createdAt),
+    0,
+  )
+  const decayed = current.items.map((item) => ({
+    ...item,
+    lastActivatedAt: item.lastActivatedAt ?? item.createdAt,
+    strength: decayedStrength(item, now),
+    updatedAt: now,
+  }))
+  const signal = getTaThoughtSignal(sid, lastActivationAt || null, now)
 
   if (!signal) {
     // 强弱在本地随时间衰减，但没有新念头时不触发云同步。
@@ -159,7 +170,7 @@ export function settleTaThoughts(sessionId: string, now = Date.now()): TaThought
   let items: PrivateThought[]
   if (recentSame) {
     items = decayed.map((item) => item.id === recentSame.id
-      ? { ...item, strength: Math.min(1, item.strength + .22), updatedAt: now }
+      ? { ...item, strength: Math.min(1, item.strength + .22), lastActivatedAt: now, updatedAt: now }
       : item)
   } else {
     const thought: PrivateThought = {
@@ -167,6 +178,7 @@ export function settleTaThoughts(sessionId: string, now = Date.now()): TaThought
       text: chooseText(sid, signal.theme, now),
       theme: signal.theme,
       createdAt: now,
+      lastActivatedAt: now,
       updatedAt: now,
       strength: .62,
     }
