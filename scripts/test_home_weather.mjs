@@ -35,10 +35,10 @@ test('non-clear scene requires overcast art and falls back without atmosphere', 
   assert.doesNotMatch(scene, /className="home-weather-cloud/)
 })
 
-test('home refresh shortcut is replaced by notifications while settings keeps update controls', () => {
+test('home refresh shortcut is replaced by inbox while settings keeps update controls', () => {
   assert.doesNotMatch(home, /检查页面更新/)
-  assert.match(home, /消息与通知/)
-  assert.match(settings, /label="消息与通知"/)
+  assert.match(home, /站内信/)
+  assert.doesNotMatch(settings, /label="消息与通知"/)
   assert.match(settings, /<UpdateControls \/>/)
 })
 
