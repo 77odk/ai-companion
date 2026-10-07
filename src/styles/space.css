@@ -796,6 +796,10 @@
   transform: translateY(3px);
 }
 
+.space-scene-hotspot.is-weekly-letter.is-opening .space-drawer-peek {
+  transform: translateY(11px);
+}
+
 @keyframes space-object-glass-glint {
   0%, 100% { opacity: .28; transform: translateX(0); }
   48% { opacity: .68; transform: translateX(2px); }
