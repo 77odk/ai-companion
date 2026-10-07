@@ -44,6 +44,7 @@ import {
 import { initTaStateCloudSync } from './taState.ts'
 import { initTaThoughtCloudSync } from './taThoughts.ts'
 import { initRelationshipCloudSync } from './relationshipState.ts'
+import { initMemoryPaperCloudSync } from './memoryPaper.ts'
 
 const GLOBAL = 'global'
 const THEME_KEY = 'ai_companion_theme'
@@ -1162,6 +1163,7 @@ export function initCloudStateResourceAdapters(): void {
   initTaStateCloudSync()
   initTaThoughtCloudSync()
   initRelationshipCloudSync()
+  initMemoryPaperCloudSync()
   resetPersonalSnapshot()
   resetAnniversarySnapshot()
   resetSpaceSnapshot()
