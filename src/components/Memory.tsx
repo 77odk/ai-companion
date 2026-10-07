@@ -1005,13 +1005,14 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
     )
   }
 
-  // ---- River ----
+  // ---- 朝暮 · Status / Memory River / Events ----
   return (
-    <div className="page memory-page" ref={pageRef}>
-      {/* UI2-03 Visual Closure V2 / BUG-C：Refresh 与「记忆书」同处 head actions 行内并排，
-          各自独立 hit area，bounding rect 不相交（不再 absolute 浮在右上与 book-tag 重叠） */}
-      <header className="memory-head">
-        <span className="memory-title">TA 记得的你</span>
+    <div className="page memory-page chaomu-page" ref={pageRef}>
+      <header className="memory-head chaomu-head">
+        <span>
+          <span className="memory-title">朝暮</span>
+          <span className="chaomu-subtitle">状态 · 记忆长河 · 一起经历过</span>
+        </span>
         <span className="memory-head-actions">
           <button
             type="button"
@@ -1027,157 +1028,197 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
           </button>
         </span>
       </header>
-      {heroMeta ? <p className="memory-head-meta">{heroMeta}</p> : null}
 
-      {memories.length === 0 ? (
-        <div className="memory-empty">
-          <span className="memory-empty-trace" aria-hidden="true">
-            <span className="memory-empty-node" />
-            <span className="memory-empty-line" />
-            <span className="memory-empty-node" />
-          </span>
-          <h3 className="memory-empty-title">TA 还在慢慢认识你。</h3>
-          <p className="memory-empty-copy">以后被记住的那些小事，会慢慢留在这里。</p>
+      <section className="chaomu-status" aria-labelledby="chaomu-status-title">
+        <div className="chaomu-section-head">
+          <div>
+            <span className="chaomu-section-kicker">STATUS</span>
+            <h2 id="chaomu-status-title">状态</h2>
+          </div>
         </div>
-      ) : (
-        <>
-          {/* UI2-03-POLISH-05：Memory Book Portal —— 相册/纪念册气质收敛（保持比例与交互，只调整装帧语言）。
-              母版式：布脊装订 + 封面植物花枝（中部偏右）+ 右侧竖排装帧字 + 小相纸位 + 纸页自然错落。 */}
-          <button type="button" className="memory-book-portal" onClick={openBookCover} aria-label="翻开记忆书">
-            <span className="mbp-back" aria-hidden="true" />
-            <span className="mbp-paper mbp-paper-1" aria-hidden="true" />
-            <span className="mbp-paper mbp-paper-2" aria-hidden="true" />
-            <span className="mbp-cover">
-              <span className="mbp-spine" aria-hidden="true">
-                <span className="mbp-spine-brand">ELUVIN</span>
-                <span className="mbp-spine-mark" aria-hidden="true">
-                  <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-                    <path d="M6 0l1.4 3.6L11 5 7.4 6.4 6 10 4.6 6.4 1 5l3.6-1.4Z" />
-                  </svg>
-                </span>
-              </span>
-              <span className="mbp-botanical" aria-hidden="true">
-                <svg viewBox="0 0 64 96" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
-                  <path d="M32 92 C 30 70, 34 48, 30 14" />
-                  <path d="M31 62 C 20 58, 12 50, 8 38" />
-                  <path d="M8 38 C 14 40, 22 46, 28 52" />
-                  <path d="M33 46 C 44 42, 52 34, 56 22" />
-                  <path d="M56 22 C 49 24, 41 30, 36 36" />
-                  <path d="M34 72 C 46 68, 54 60, 58 48" />
-                  <path d="M58 48 C 51 50, 43 56, 38 62" />
-                  <circle cx="30" cy="13" r="3.1" fill="currentColor" stroke="none" opacity="0.85" />
-                  <circle cx="30" cy="13" r="1.1" fill="var(--ui2-canvas)" stroke="none" />
-                  <circle cx="8" cy="36" r="2.2" fill="currentColor" stroke="none" opacity="0.6" />
-                  <path d="M55 18 q 4 -2 3 -6" />
-                </svg>
-              </span>
-              <span className="mbp-main">
-                <span className="mbp-kicker">MEMORY BOOK</span>
-                <span className="mbp-title">记忆书</span>
-                <span className="mbp-copy">
-                  <span>有些记忆，</span>
-                  <span>适合重新翻开。</span>
-                </span>
-              </span>
-              <span className="mbp-side">
-                <span className="mbp-side-vertical" aria-hidden="true">MEMORY BOOK</span>
-                <span className="mbp-photo-slot" aria-hidden="true">
-                  <span className="mbp-photo-slot-corner" />
-                </span>
-                <span className="mbp-open">
-                  翻开
-                  <span aria-hidden="true">→</span>
-                </span>
-              </span>
-            </span>
+        <p className={`chaomu-status-text${statusLabel ? '' : ' is-empty'}`}>
+          {statusLabel || '现在没有明确留下的状态。'}
+        </p>
+      </section>
+
+      <section className="memory-river chaomu-memory-river" aria-label="记忆长河">
+        <div className="chaomu-section-head">
+          <div>
+            <span className="chaomu-section-kicker">MEMORY RIVER</span>
+            <h2>记忆长河</h2>
+            {heroMeta ? <p className="memory-head-meta">{heroMeta}</p> : null}
+          </div>
+          <button
+            type="button"
+            className={`memory-audit-toggle${auditOpen ? ' is-open' : ''}`}
+            onClick={() => {
+              setAuditOpen((value) => !value)
+              setRollbackNotice('')
+            }}
+            aria-expanded={auditOpen}
+          >
+            变更记录
           </button>
+        </div>
 
-          <section className="memory-river" aria-label="记忆长河">
-          {years.length >= 2 ? (
-            <nav className="memory-year-nav" aria-label="年份导航">
-              {years
-                .filter((year) => year.key !== 'unknown')
-                .map((year) => (
-                  <button
-                    key={year.key}
-                    type="button"
-                    className={`memory-year-nav-btn${year === years[0] ? ' is-current' : ''}`}
-                    onClick={() => scrollToYear(year.key)}
-                  >
-                    {year.label}
-                  </button>
-                ))}
-            </nav>
+        <label className="memory-search">
+          <span className="sr-only">搜索记忆长河</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="M16 16l4 4" />
+          </svg>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索记忆"
+            autoComplete="off"
+          />
+          {query ? (
+            <button type="button" onClick={() => setQuery('')} aria-label="清空搜索">×</button>
           ) : null}
+        </label>
 
-          <div className="memory-river-flow">
-            {years.map((year) => (
-              <section key={year.key} className="memory-year-chapter" aria-labelledby={`memory-year-${year.key}`}>
-                <h4 id={`memory-year-${year.key}`} className="memory-year-chapter-label">
-                  <span className="memory-year-chapter-num">{year.label}</span>
-                </h4>
-                {year.months.map((month) => (
-                  <div key={month.key} className="memory-month-chapter">
-                    <h5 className="memory-month-chapter-label">
-                      <span className="memory-month-name">{month.label}</span>
-                      <span className="memory-month-count">{month.items.length} 段记忆</span>
-                    </h5>
-                    <div className="memory-month-entries">
-                      {month.items
-                        .filter((memory) => (itemOrder.get(memory) ?? Infinity) < visibleCount)
-                        .map((memory, index) => {
-                          const { item, timestamp } = memory
-                          const explicit = item.explicit === true
-                          const pinned = item.pinned === true
-                          const entryClass = [
-                            'memory-entry',
-                            pinned ? 'is-pinned' : '',
-                            explicit ? 'is-explicit' : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')
-                          return (
-                            <button
-                              key={`${item.id}-${index}`}
-                              type="button"
-                              className={entryClass}
-                              onClick={() => openDetail(memory)}
-                            >
-                              <span className="memory-entry-dot" aria-hidden="true">
-                                {pinned ? (
-                                  <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true">
-                                    <path d="M12 0l2.6 7.4L22 10l-7.4 2.6L12 20l-2.6-7.4L2 10l7.4-2.6Z" />
-                                  </svg>
-                                ) : null}
-                              </span>
-                              <span className="memory-entry-body">
-                                {/* UI2-03-POLISH-03：River 条目主体容器（Image-ready seam）。
-                                    未来真实 Media 接入后，在 content 内追加 .memory-entry-media
-                                    （thumb 约 72–88px、object-fit:cover、小圆角、无 Card shadow）。
-                                    当前数据层无 media 字段：不渲染任何空容器/占位。 */}
-                                <span className="memory-entry-content">
-                                  <span className="memory-entry-text">{item.text}</span>
+        {auditOpen ? (
+          <div className="memory-audit-panel">
+            {rollbackNotice ? <p className="memory-audit-notice" role="status">{rollbackNotice}</p> : null}
+            {audits.length === 0 ? (
+              <p className="memory-audit-empty">还没有修改或删除记录。</p>
+            ) : (
+              <div className="memory-audit-list">
+                {audits.slice(0, 24).map((entry) => {
+                  const actionLabel = entry.action === 'edit'
+                    ? '修改'
+                    : entry.action === 'delete'
+                      ? '删除'
+                      : entry.action === 'rollback'
+                        ? '回退'
+                        : '存入'
+                  const preview = entry.after?.text || entry.before?.text || ''
+                  const canRollback = (entry.action === 'edit' || entry.action === 'delete') && Boolean(entry.before)
+                  return (
+                    <article key={entry.id} className="memory-audit-item">
+                      <div>
+                        <span>{actionLabel}</span>
+                        <time>{new Date(entry.at).toLocaleString()}</time>
+                      </div>
+                      <p>{preview}</p>
+                      {canRollback ? (
+                        <button
+                          type="button"
+                          disabled={rollbackBusyId !== null}
+                          onClick={() => void rollbackAuditEntry(entry)}
+                        >
+                          {rollbackBusyId === entry.id ? '回退中…' : '回退到之前'}
+                        </button>
+                      ) : null}
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {memories.length === 0 ? (
+          <div className="memory-empty">
+            <span className="memory-empty-trace" aria-hidden="true">
+              <span className="memory-empty-node" />
+              <span className="memory-empty-line" />
+              <span className="memory-empty-node" />
+            </span>
+            <h3 className="memory-empty-title">TA 还在慢慢认识你。</h3>
+            <p className="memory-empty-copy">以后被记住的那些小事，会慢慢留在这里。</p>
+          </div>
+        ) : years.length === 0 ? (
+          <p className="memory-search-empty">没有找到和「{query.trim()}」有关的记忆。</p>
+        ) : (
+          <>
+            {years.length >= 2 ? (
+              <nav className="memory-year-nav" aria-label="年份导航">
+                {years
+                  .filter((year) => year.key !== 'unknown')
+                  .map((year) => (
+                    <button
+                      key={year.key}
+                      type="button"
+                      className={`memory-year-nav-btn${year === years[0] ? ' is-current' : ''}`}
+                      onClick={() => scrollToYear(year.key)}
+                    >
+                      {year.label}
+                    </button>
+                  ))}
+              </nav>
+            ) : null}
+
+            <div className="memory-river-flow">
+              {years.map((year) => (
+                <section key={year.key} className="memory-year-chapter" aria-labelledby={`memory-year-${year.key}`}>
+                  <h4 id={`memory-year-${year.key}`} className="memory-year-chapter-label">
+                    <span className="memory-year-chapter-num">{year.label}</span>
+                  </h4>
+                  {year.months.map((month) => (
+                    <div key={month.key} className="memory-month-chapter">
+                      <h5 className="memory-month-chapter-label">
+                        <span className="memory-month-name">{month.label}</span>
+                        <span className="memory-month-count">{month.items.length} 段记忆</span>
+                      </h5>
+                      <div className="memory-month-entries">
+                        {month.items
+                          .filter((memory) => (itemOrder.get(memory) ?? Infinity) < visibleCount)
+                          .map((memory, index) => {
+                            const { item, timestamp } = memory
+                            const explicit = item.explicit === true
+                            const pinned = item.pinned === true
+                            const entryClass = [
+                              'memory-entry',
+                              pinned ? 'is-pinned' : '',
+                              explicit ? 'is-explicit' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')
+                            return (
+                              <button
+                                key={`${item.id}-${index}`}
+                                type="button"
+                                className={entryClass}
+                                onClick={() => openDetail(memory)}
+                              >
+                                <span className="memory-entry-dot" aria-hidden="true">
+                                  {pinned ? (
+                                    <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true">
+                                      <path d="M12 0l2.6 7.4L22 10l-7.4 2.6L12 20l-2.6-7.4L2 10l7.4-2.6Z" />
+                                    </svg>
+                                  ) : null}
                                 </span>
-                                <span className="memory-entry-date">{shortDate(timestamp)}</span>
-                              </span>
-                            </button>
-                          )
-                        })}
+                                <span className="memory-entry-body">
+                                  <span className="memory-entry-content">
+                                    <span className="memory-entry-text">{item.text}</span>
+                                  </span>
+                                  <span className="memory-entry-date">{shortDate(timestamp)}</span>
+                                </span>
+                              </button>
+                            )
+                          })}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </section>
-            ))}
-          </div>
-          {needsWindowing && visibleCount < riverItems.length ? (
-            <div className="memory-river-sentinel" ref={sentinelRef} aria-hidden="true" />
-          ) : null}
-          <div className="memory-river-end" aria-hidden="true">
-            <span className="memory-river-end-dot" />
-          </div>
-          </section>
-        </>
-      )}
+                  ))}
+                </section>
+              ))}
+            </div>
+            {needsWindowing && visibleCount < riverItems.length ? (
+              <div className="memory-river-sentinel" ref={sentinelRef} aria-hidden="true" />
+            ) : null}
+            <div className="memory-river-end" aria-hidden="true">
+              <span className="memory-river-end-dot" />
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="chaomu-events" aria-label="一起经历过">
+        <EventArchive sessionId={sessionId || undefined} />
+      </section>
     </div>
   )
 }
