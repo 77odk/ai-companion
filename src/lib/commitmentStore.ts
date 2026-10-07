@@ -1,6 +1,6 @@
 import { notifyDataChanged } from './dataChange.ts'
 import { parseFutureIntent, parseFutureTime, futureDayKey } from './futureIntent.ts'
-import { getMessagesCache } from './sessionStore.ts'
+import { getMessagesCache, getSessionsCache } from './sessionStore.ts'
 import { getCloudStateSidecar, setCloudStateSidecar } from './cloudState.ts'
 
 export interface TaCommitment {
@@ -273,10 +273,15 @@ export function deleteTaCommitmentsForSession(sessionId: string): boolean {
 }
 
 
+function existingSessionIds(): Set<string> {
+  return new Set(getSessionsCache().map((session) => String(session.id)))
+}
+
 export function collectDueTaCommitments(now = Date.now()): TaCommitment[] {
   const today = localDayKey(now)
+  const sessions = existingSessionIds()
   return readAll().filter((item) => {
-    if (item.remindedAt) return false
+    if (!sessions.has(item.sessionId) || item.remindedAt) return false
     if (typeof item.dueAt === 'number') return item.dueAt <= now
     if (item.dueDay) return item.dueDay <= today
     return false
@@ -285,7 +290,9 @@ export function collectDueTaCommitments(now = Date.now()): TaCommitment[] {
 
 export function nextTaCommitmentCheckAt(now = Date.now()): number | null {
   let next: number | null = null
+  const sessions = existingSessionIds()
   for (const item of readAll()) {
+    if (!sessions.has(item.sessionId)) continue
     if (item.remindedAt) continue
     const candidate = typeof item.dueAt === 'number'
       ? item.dueAt
