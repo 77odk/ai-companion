@@ -140,6 +140,39 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
     ]
   }
   const [memories, setMemories] = useState(readMemories)
+  const [query, setQuery] = useState('')
+  const [auditOpen, setAuditOpen] = useState(false)
+  const [auditVersion, setAuditVersion] = useState(0)
+  const [statusNow, setStatusNow] = useState(() => Date.now())
+  const audits = useMemo(() => loadMemoryAudit(sessionId), [sessionId, auditVersion])
+
+  useEffect(() => {
+    if (!sessionId) return
+    const refresh = () => setStatusNow(Date.now())
+    const timer = window.setInterval(refresh, 30_000)
+    const onReply = (event: Event) => {
+      const sid = (event as CustomEvent<{ sid?: string }>).detail?.sid
+      if (!sid || String(sid) === sessionId) refresh()
+    }
+    window.addEventListener('yiwem:ai-reply-committed', onReply)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('yiwem:ai-reply-committed', onReply)
+    }
+  }, [sessionId])
+
+  const statusLabel = useMemo(() => {
+    if (!sessionId) return ''
+    const busy = getBusyState(sessionId)
+    if (busy.status === 'busy' && busy.busyUntil > statusNow && busy.busyReason) return busy.busyReason
+    return runtimeDisplayLabel(
+      getOrAdvanceTaRuntime(sessionId, getSessionPersona(sessionId), statusNow),
+      getSessionLang(sessionId),
+    )
+  }, [sessionId, statusNow])
+
+  const refreshAudit = () => setAuditVersion((value) => value + 1)
+
   // #19：进入记忆页主动拉当前会话云端记忆。页内一旦发生改/删，本次旧 GET 结果作废，避免回写过期状态。
   const memoryMutationVersionRef = useRef(0)
   useEffect(() => {
@@ -195,7 +228,22 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       })
   }, [memories])
 
-  const riverItems = useMemo(() => [...chronological].reverse(), [chronological])
+  const filteredChronological = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return chronological
+    return chronological.filter(({ item }) => {
+      const haystack = [
+        item.text,
+        item.source ?? '',
+        item.topic ?? '',
+        ...deriveMemoryTriggerWords(item.text, item.topic),
+        ...(Array.isArray(item.triggerWords) ? item.triggerWords : []),
+      ].join(' ').toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [chronological, query])
+
+  const riverItems = useMemo(() => [...filteredChronological].reverse(), [filteredChronological])
   const years = useMemo(() => groupMemories(riverItems), [riverItems])
   const earliest = chronological.find((memory) => memory.timestamp != null)?.timestamp ?? null
 
