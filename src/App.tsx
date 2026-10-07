@@ -1530,7 +1530,10 @@ export default function App() {
               )}
               {view === 'chat' ? (
                 <div className="chat-header-identity">
-                  <h1 className="app-title chat-header-name">{headerSession ? displaySessionName(headerSession) : ''}</h1>
+                  <div className="chat-header-name-row">
+                    <h1 className="app-title chat-header-name">{headerSession ? displaySessionName(headerSession) : ''}</h1>
+                    <span className="chat-header-ai-badge" title="AI 陪伴服务">AI</span>
+                  </div>
                   <ChatHeaderPresence sessionId={headerSession ? String(headerSession.id) : null} />
                 </div>
               ) : (
