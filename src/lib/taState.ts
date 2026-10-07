@@ -386,31 +386,43 @@ type EvidencePatch = {
   reason: string
 }
 
+function selfEmotionClauseMatch(clause: string, pattern: RegExp): boolean {
+  const hit = clause.match(pattern)
+  if (!hit || hit.index == null) return false
+  const before = clause.slice(0, hit.index)
+  const selfIndex = before.lastIndexOf('我')
+  if (selfIndex < 0) return false
+  const bridge = clause.slice(selfIndex + 1, hit.index)
+  // “我知道你很难过 / 我觉得他很烦躁”是在描述别人，不是 TA 自己的情绪。
+  if (/(?:你|您|他|她|它|TA|ta|对方|别人|用户)/.test(bridge)) return false
+  return true
+}
+
 function detectSelfEmotionEvidence(text: string): EvidencePatch | null {
   const clauses = String(text ?? '').split(/[。！？!?；;\n]+/).map((part) => part.trim()).filter(Boolean)
   for (const clause of clauses) {
-    if (/我.{0,8}(?:有点|有些|挺|很)?(?:烦|烦躁|心里乱|静不下来)/.test(clause)) {
+    if (selfEmotionClauseMatch(clause, /(?:有点|有些|挺|很)?(?:烦|烦躁|心里乱|静不下来)/)) {
       return { tension: .62, active: .28, reason: 'TA 刚刚明确说自己有些烦躁' }
     }
-    if (/我.{0,8}(?:有点|有些|挺|很)?(?:紧张|紧绷|绷着)/.test(clause)) {
+    if (selfEmotionClauseMatch(clause, /(?:有点|有些|挺|很)?(?:紧张|紧绷|绷着)/)) {
       return { tension: .66, active: .08, reason: 'TA 刚刚明确说自己有些紧绷' }
     }
-    if (/我.{0,8}(?:有点|有些|挺|很)?(?:低落|难过|心情不好)/.test(clause)) {
+    if (selfEmotionClauseMatch(clause, /(?:有点|有些|挺|很)?(?:低落|难过|心情不好)/)) {
       return { tension: .48, active: -.36, energy: .34, reason: 'TA 刚刚明确说自己有些低落' }
     }
-    if (/我.{0,8}(?:有点|有些|挺|很)?(?:闷|闷闷的)/.test(clause)) {
+    if (selfEmotionClauseMatch(clause, /(?:有点|有些|挺|很)?(?:闷|闷闷的)/)) {
       return { tension: .44, active: -.30, reason: 'TA 刚刚明确说自己心里有点闷' }
     }
-    if (/我.{0,8}(?:有点|有些|挺|很)?(?:累|疲惫|没精神)/.test(clause)) {
+    if (selfEmotionClauseMatch(clause, /(?:有点|有些|挺|很)?(?:累|疲惫|没精神)/)) {
       return { energy: .20, active: -.30, reason: 'TA 刚刚明确说自己有点累' }
     }
-    if (/我.{0,8}(?:挺|很|有点)?(?:期待|兴奋|开心)/.test(clause)) {
+    if (selfEmotionClauseMatch(clause, /(?:挺|很|有点)?(?:期待|兴奋|开心)/)) {
       return { tension: -.32, active: .34, energy: .68, reason: 'TA 刚刚明确表达了期待或开心' }
     }
-    if (/我.{0,8}(?:挺|很|有点)?(?:安心|放松|惬意)/.test(clause)) {
+    if (selfEmotionClauseMatch(clause, /(?:挺|很|有点)?(?:安心|放松|惬意)/)) {
       return { tension: -.42, active: -.04, reason: 'TA 刚刚明确说自己比较放松' }
     }
-    if (/我.{0,8}(?:在想|想了想|有点想不明白|若有所思)/.test(clause)) {
+    if (selfEmotionClauseMatch(clause, /(?:在想|想了想|有点想不明白|若有所思)/)) {
       return { reminiscence: .72, exploration: .68, active: -.08, reason: 'TA 刚刚明确说自己还在想一件事' }
     }
   }
