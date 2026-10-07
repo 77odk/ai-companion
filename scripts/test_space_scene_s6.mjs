@@ -8,6 +8,7 @@ import {
   shouldShowContinuousUseReminder,
   shouldShowRealityBoundaryReminder,
 } from '../src/lib/wellbeingPolicy.ts'
+import { cleanMemoryProtocolArtifacts } from '../src/lib/memory.ts'
 
 const app = readFileSync('src/App.tsx', 'utf8')
 const guard = readFileSync('src/components/WellbeingGuard.tsx', 'utf8')
@@ -80,6 +81,16 @@ assert.match(bubble, /cleanAttributionArtifacts/)
 assert.match(attribution, /回复里绝不能输出/)
 assert.match(attribution, /cleanStreamingAttributionArtifacts/)
 assert.match(attribution, /hasAttributionLeak/)
+assert.equal(
+  cleanMemoryProtocolArtifacts('[source=USER] USER的生日是10月7日'),
+  '我的生日是10月7日',
+  '确认来源协议后才还原 USER 视角',
+)
+assert.equal(
+  cleanMemoryProtocolArtifacts('I like self care and shared playlists'),
+  'I like self care and shared playlists',
+  '普通自然文本里的 self/shared 不得被协议清理误改',
+)
 
 console.log('[S6] Space 性能：30–45 可见星只让 6 颗动；隐藏页暂停；粗指针扩大触控区')
 assert.match(star, /index < 6 \? 'is-moving' : ''/)
