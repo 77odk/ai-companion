@@ -1074,9 +1074,15 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
           </div>
         </div>
         <div className="chaomu-status-now">
-          <strong>{stateView?.mood ?? '若有所思'}</strong>
-          <p>{stateView?.description ?? '现在没有足够的真实变化，先保持安静。'}</p>
-          {statusLabel ? <span>{statusLabel}</span> : null}
+          {stateView ? (
+            <>
+              <strong>{stateView.mood}</strong>
+              <p>{stateView.description}</p>
+              {statusLabel ? <span>{statusLabel}</span> : null}
+            </>
+          ) : (
+            <p className="is-empty">现在还没有状态记录。</p>
+          )}
         </div>
       </section>
 
