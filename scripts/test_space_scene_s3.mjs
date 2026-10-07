@@ -102,6 +102,7 @@ const genericPromise = detectTaCommitment('我明天晚上8点会提醒你喝水
 assert.ok(genericPromise)
 assert.ok(typeof genericPromise.dueAt === 'number')
 assert.equal(detectTaCommitment('今天天气不错。', '7', sourceTs, 44), null)
+assert.equal(detectTaCommitment('我觉得你明天会好一点。', '7', sourceTs, 45), null, 'TA 对用户的预测不能误当承诺')
 
 const due = { ...promise, dueAt: sourceTs - 1, createdAt: sourceTs - 1000 }
 assert.equal(saveTaCommitment(due), true)
