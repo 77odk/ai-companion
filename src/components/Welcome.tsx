@@ -58,6 +58,7 @@ export default function Welcome({ onGoGuide, onLogin, loggedIn = false, onGoHome
         <h1>忆文</h1>
         <p className="welcome-reference-en">ELUVIN</p>
         <p className="welcome-reference-slogan">忆过往，成文思</p>
+        <p className="welcome-reference-ai">AI 陪伴服务 · 由 AI 驱动</p>
 
         <span className="welcome-reference-divider" aria-hidden="true" />
 

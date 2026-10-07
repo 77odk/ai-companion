@@ -111,7 +111,11 @@ export default function StarJar({ onBack }: Props) {
             {Array.from({ length: visibleStarCount }, (_, index) => (
               <span
                 key={index}
-                className={`star-jar-star${index >= numberedMemories.length ? ' is-filler' : ''}`}
+                className={[
+                  'star-jar-star',
+                  index < 6 ? 'is-moving' : '',
+                  index >= numberedMemories.length ? 'is-filler' : '',
+                ].filter(Boolean).join(' ')}
                 style={{
                   '--star-x': `${8 + ((index * 37) % 83)}%`,
                   '--star-y': `${12 + ((index * 53) % 76)}%`,

@@ -1518,7 +1518,7 @@
   line-height: 1;
   transform: translate(-50%, -50%) rotate(var(--star-r)) scale(.82);
   filter: drop-shadow(0 0 4px rgba(255, 209, 114, .28));
-  animation: star-jar-twinkle 3.8s ease-in-out var(--star-d) infinite;
+  animation: none;
 }
 
 .star-jar-label {
@@ -1670,8 +1670,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .star-jar-star {
+  .star-jar-star.is-moving {
     animation: none;
+  }
+
+  .star-jar-star {
     opacity: .78;
   }
 
@@ -1680,6 +1683,10 @@
     animation-duration: 1ms;
     animation-timing-function: linear;
   }
+}
+
+.star-jar-star.is-moving {
+  animation: star-jar-twinkle 3.8s ease-in-out var(--star-d) infinite;
 }
 
 .star-jar-star.is-filler {
@@ -1704,4 +1711,32 @@
 
 .star-memory-heading time {
   margin: 0;
+}
+
+
+/* S6 performance: hidden pages do not keep ambient animation work alive. */
+html.eluvin-page-hidden .ai-space-page *,
+html.eluvin-page-hidden .star-jar-page *,
+html.eluvin-page-hidden .thought-book-page * {
+  animation-play-state: paused !important;
+}
+
+@media (pointer: coarse) {
+  .space-scene-hotspot,
+  .thought-turn-hit,
+  .space-object-back,
+  .listen-actions button,
+  .star-memory-fold-back {
+    touch-action: manipulation;
+  }
+
+  .thought-turn-hit {
+    width: 24%;
+  }
+
+  .space-object-back,
+  .listen-actions button,
+  .star-memory-fold-back {
+    min-height: 44px;
+  }
 }

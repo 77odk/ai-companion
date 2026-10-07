@@ -396,6 +396,47 @@ export function planMemoryWrites(
   return writes
 }
 
+/**
+ * 清理旧版本可能落进 Memory 正文的内部来源协议。
+ * 统一还原成 USER 视角自然文本：USER→我、SELF→你、SHARED→我们。
+ * 新写入与展示 fallback 共用，避免把 USER / SELF / SHARED 暴露给用户。
+ */
+export function cleanMemoryProtocolArtifacts(text: string): string {
+  const raw = String(text ?? '')
+  const protocolPrefix = /^\s*(?:(?:\[\s*(?:source\s*=\s*)?(?:USER|SELF|SHARED)\s*\])|(?:【\s*(?:USER|SELF|SHARED)\s*】)|(?:(?:USER|SELF|SHARED)\s*[:：]))\s*/i
+  const sourceMapLine = /^\s*(?:【\s*来源说明\s*】|\[\s*Source Map\s*\]).*$/gim
+
+  // 只在确实看见内部来源协议时做 USER / SELF / SHARED 人称还原。
+  // 普通用户文本里可能真的出现英文 self / user / shared，不能为了清协议而改写真实记忆。
+  const hasProtocolArtifact = protocolPrefix.test(raw) || sourceMapLine.test(raw)
+  sourceMapLine.lastIndex = 0
+  if (!hasProtocolArtifact) return raw.trim()
+
+  let out = raw
+    .replace(protocolPrefix, '')
+    .replace(sourceMapLine, '')
+
+  if (/[\u3400-\u9fff]/.test(out)) {
+    out = out
+      .replace(/SELF\s*的/g, '你的')
+      .replace(/USER\s*的/g, '我的')
+      .replace(/SHARED\s*的/g, '我们的')
+      .replace(/\bSELF\b/g, '你')
+      .replace(/\bUSER\b/g, '我')
+      .replace(/\bSHARED\b/g, '我们')
+  } else {
+    out = out
+      .replace(/\bSELF['’]s\b/gi, 'your')
+      .replace(/\bUSER['’]s\b/gi, 'my')
+      .replace(/\bSHARED['’]s\b/gi, 'our')
+      .replace(/\bSELF\b/gi, 'you')
+      .replace(/\bUSER\b/gi, 'I')
+      .replace(/\bSHARED\b/gi, 'we')
+  }
+
+  return out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
 /** 去掉回复里的记忆标记行（中文「【记忆】」和英文「[Memory:]」都剥，仅展示用；存储里保留原文） */
 export function stripMemoryMarkers(text: string): string {
   return text

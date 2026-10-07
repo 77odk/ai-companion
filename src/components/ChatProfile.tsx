@@ -173,6 +173,7 @@ export default function ChatProfile({
         </button>
 
         <h2 className="ta-profile-name">{profileSessionName || ai.nickname}</h2>
+        <span className="ta-profile-ai-badge">AI 陪伴</span>
 
         {(aiRemark || aiGender !== 'unknown') && (
           <p className="ta-profile-meta">

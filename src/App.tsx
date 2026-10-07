@@ -6,6 +6,7 @@ import type { FeedbackDraft } from './components/FeedbackPage'
 import Chat from './components/Chat'
 import type { SettingsPage } from './components/Settings'
 import LoginGate from './components/LoginGate'
+import WellbeingGuard from './components/WellbeingGuard'
 import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
 import { getAccount, API_BASE } from './lib/sync'
 import { pingSiteHit } from './lib/siteStats'
@@ -1239,6 +1240,18 @@ export default function App() {
     void redirectBySessions()
   }, [loggedIn, view, redirectBySessions])
 
+  useEffect(() => {
+    const applyPageVisibilityClass = () => {
+      document.documentElement.classList.toggle('eluvin-page-hidden', document.visibilityState !== 'visible')
+    }
+    applyPageVisibilityClass()
+    document.addEventListener('visibilitychange', applyPageVisibilityClass)
+    return () => {
+      document.removeEventListener('visibilitychange', applyPageVisibilityClass)
+      document.documentElement.classList.remove('eluvin-page-hidden')
+    }
+  }, [])
+
   // 登录墙是否展示：正在请求需登录 view 且未登录；或已登录页退出后落在需登录 view
   const gateShown = (gateTarget !== null || !isPublicRoute(view)) && !loggedIn
 
@@ -1272,7 +1285,8 @@ export default function App() {
           </div>
         </div>
       )}
-      {commitmentReminder && loggedIn && !gateShown && !needLightConsent && (
+      <WellbeingGuard enabled={loggedIn && !gateShown && !needLightConsent} />
+            {commitmentReminder && loggedIn && !gateShown && !needLightConsent && (
         <div className="commitment-reminder" role="status" aria-live="polite">
           <div>
             <strong>{loadAIProfile(commitmentReminder.sessionId).nickname || 'TA'} 答应你的事</strong>
@@ -1528,7 +1542,10 @@ export default function App() {
               )}
               {view === 'chat' ? (
                 <div className="chat-header-identity">
-                  <h1 className="app-title chat-header-name">{headerSession ? displaySessionName(headerSession) : ''}</h1>
+                  <div className="chat-header-name-row">
+                    <h1 className="app-title chat-header-name">{headerSession ? displaySessionName(headerSession) : ''}</h1>
+                    <span className="chat-header-ai-badge" title="AI 陪伴服务">AI</span>
+                  </div>
                   <ChatHeaderPresence sessionId={headerSession ? String(headerSession.id) : null} />
                 </div>
               ) : (

@@ -129,6 +129,21 @@
   color: var(--el-text-primary, var(--color-text));
 }
 
+.ta-profile-ai-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  margin-top: 6px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--el-text-secondary, var(--color-text-muted)) 22%, transparent);
+  border-radius: 999px;
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .08em;
+}
+
+
 .ta-profile-meta {
   gap: var(--el-space-2, 8px);
   margin-top: var(--el-space-2, 8px);

@@ -6,7 +6,7 @@
 //      自定义=名称+日期+正数/倒数。
 //   3) 想让 TA 记住你什么？（输入框 → explicit 记忆，=「我自己说的」，所有角色共享）
 //   4) 我自己说的列表（explicit 记忆，可删）
-// 与 TA 相关的（AI 提炼的记忆、你们的日子）一律不进这页——TA 记得的去 TA 空间 TA所忆。
+// 与 TA 相关的（AI 提炼的记忆、你们的日子）一律不进这页——聊天记忆统一去「朝暮 → 记忆长河」。
 
 import { useEffect, useState } from 'react'
 import {
@@ -278,7 +278,7 @@ export default function AboutMe({ onBack }: Props) {
           </div>
         )}
 
-        <p className="aboutme-footnote">TA 自己从聊天里记住的，在 TA 的空间 → TA所忆 里</p>
+        <p className="aboutme-footnote">TA 从聊天里记住的，在「朝暮 → 记忆长河」里</p>
       </div>
 
       {/* 添加我的日子表单（三类型） */}

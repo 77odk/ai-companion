@@ -1506,6 +1506,14 @@
   line-height: 1.2;
 }
 
+.welcome-reference-ai {
+  margin: 9px 0 0;
+  color: rgba(74, 63, 59, .54);
+  font-size: 10px;
+  letter-spacing: .08em;
+  line-height: 1.3;
+}
+
 /* 轻艺术字副标题：楷体气质、分两行（逗号后换行），不抢主标题 */
 .welcome-reference-lead {
   margin: 0 0 0;
@@ -3313,6 +3321,14 @@
   gap: 3px;
 }
 
+.chat-header-name-row {
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 .chat-header-name {
   max-width: 100%;
   overflow: hidden;
@@ -3323,6 +3339,21 @@
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 1.25;
+}
+
+.chat-header-ai-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 17px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--color-text-muted) 24%, transparent);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: .06em;
+  line-height: 1;
 }
 
 .chat-header-presence {
@@ -4404,5 +4435,63 @@
   ::view-transition-old(el-main),
   ::view-transition-new(el-main) {
     animation: none !important;
+  }
+}
+
+
+/* ---- S6 · Wellbeing compliance notices ------------------------------- */
+.wellbeing-notice {
+  position: fixed;
+  z-index: var(--el-z-toast, 60);
+  left: 50%;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  width: min(calc(100% - 28px), 430px);
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--el-border, var(--color-border)) 72%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--el-surface-card, var(--color-card)) 96%, transparent);
+  color: var(--el-text-primary, var(--color-text));
+  box-shadow: 0 18px 44px rgba(38,31,28,.14);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.wellbeing-notice > div {
+  min-width: 0;
+}
+
+.wellbeing-notice strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.wellbeing-notice p {
+  margin: 5px 0 0;
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.wellbeing-notice button {
+  min-height: 36px;
+  border: 0;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--el-accent-primary, var(--color-primary)) 12%, transparent);
+  color: var(--el-accent-deep, var(--color-primary-deep));
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wellbeing-notice {
+    transition: none;
   }
 }
