@@ -119,6 +119,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     board: DOMRect
     offsetX: number
     offsetY: number
+    startX: number
+    startY: number
+    moved: boolean
   } | null>(null)
   const drawerTimerRef = useRef<number | null>(null)
   const objectTimerRef = useRef<number | null>(null)
@@ -473,6 +476,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                         board,
                         offsetX: event.clientX - card.left,
                         offsetY: event.clientY - card.top,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        moved: false,
                       }
                       event.currentTarget.setPointerCapture?.(event.pointerId)
                     }}
@@ -480,6 +486,10 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                       const drag = scenePhotoDragRef.current
                       if (!drag || drag.id !== photo.id || drag.pointerId !== event.pointerId) return
                       event.stopPropagation()
+                      if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) {
+                        drag.moved = true
+                      }
+                      if (!drag.moved) return
                       const x = ((event.clientX - drag.board.left - drag.offsetX) / drag.board.width) * 100
                       const y = ((event.clientY - drag.board.top - drag.offsetY) / drag.board.height) * 100
                       moveScenePhoto(photo.id, x, y)
@@ -489,7 +499,11 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                       if (!drag || drag.id !== photo.id || drag.pointerId !== event.pointerId) return
                       event.stopPropagation()
                       event.currentTarget.releasePointerCapture?.(event.pointerId)
-                      finishScenePhotoDrag()
+                      if (drag.moved) finishScenePhotoDrag()
+                      else {
+                        scenePhotoDragRef.current = null
+                        openPhotoWallFromScene()
+                      }
                     }}
                     onPointerCancel={() => finishScenePhotoDrag()}
                     onClick={(event) => event.stopPropagation()}
