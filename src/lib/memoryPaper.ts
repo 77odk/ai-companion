@@ -62,7 +62,8 @@ function validRecord(value: unknown, expectedSessionId?: string): MemoryPaperRec
   if (item.memoryKind !== 'global' && item.memoryKind !== 'session') return null
   if (typeof item.memoryId !== 'string' || !item.memoryId) return null
   if (typeof item.sourceText !== 'string' || !item.sourceText.trim()) return null
-  if (typeof item.sentence !== 'string' || !item.sentence.trim()) return null
+  // sentence 允许暂时为空：新 Memory 写入时要先把“当时心情”落盘，即使模型生成随后失败也不能丢。
+  if (typeof item.sentence !== 'string') return null
   if (typeof item.memoryCreatedAt !== 'number' || typeof item.generatedAt !== 'number' || typeof item.updatedAt !== 'number') return null
   if (item.mood != null) {
     if (
@@ -122,8 +123,35 @@ export function getMemoryPaper(sessionId: string, kind: MemoryPaperKind, memoryI
 
 export function getMemoryPaperForItem(sessionId: string, kind: MemoryPaperKind, item: MemoryItem): MemoryPaperRecord | null {
   const record = getMemoryPaper(sessionId, kind, item.id)
-  if (!record || record.sourceText.trim() !== item.text.trim()) return null
+  if (!record || record.sourceText.trim() !== item.text.trim() || !record.sentence.trim()) return null
   return record
+}
+
+export function seedMemoryPaperMood(
+  sessionId: string,
+  target: MemoryPaperTarget,
+  mood?: MemoryPaperMoodSnapshot,
+): MemoryPaperRecord | null {
+  const sid = String(sessionId ?? '').trim()
+  const memoryId = String(target.item?.id ?? '').trim()
+  const text = String(target.item?.text ?? '').trim()
+  if (!sid || !memoryId || !text) return null
+
+  const existing = getMemoryPaper(sid, target.kind, memoryId)
+  if (existing && existing.sourceText.trim() === text) return existing
+  const now = Date.now()
+  const pending: MemoryPaperRecord = {
+    sessionId: sid,
+    memoryKind: target.kind,
+    memoryId,
+    sourceText: text,
+    sentence: '',
+    memoryCreatedAt: Number.isFinite(target.item.createdAt) ? target.item.createdAt : now,
+    ...(mood ? { mood } : {}),
+    generatedAt: 0,
+    updatedAt: now,
+  }
+  return writeRecord(pending, true) ? pending : null
 }
 
 export function captureMemoryPaperMood(sessionId: string): MemoryPaperMoodSnapshot | undefined {
