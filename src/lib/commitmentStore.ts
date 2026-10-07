@@ -1,5 +1,5 @@
 import { notifyDataChanged } from './dataChange.ts'
-import { parseFutureIntent, futureDayKey } from './futureIntent.ts'
+import { parseFutureIntent, parseFutureTime, futureDayKey } from './futureIntent.ts'
 import { getMessagesCache } from './sessionStore.ts'
 
 export interface TaCommitment {
@@ -19,7 +19,7 @@ const KEY = 'ai_companion_ta_commitments_v1'
 const CAPTURE_KEY = 'ai_companion_ta_commitment_last_seen_v1'
 const KEEP = 120
 
-const PROMISE_RE = /(?:我(?:会|一定会|保证|答应你|答应|记得|到时候会)|放心.{0,8}我会|这事交给我|我不会忘|我记着)/i
+const PROMISE_RE = /(?:我(?:会|一定会|保证|答应你|答应|记得|到时候会)|我.{0,14}(?:会|提醒你|叫你|陪你|告诉你|发给你)|放心.{0,8}我会|这事交给我|我不会忘|我记着)/i
 
 function readAll(): TaCommitment[] {
   try {
@@ -92,14 +92,19 @@ export function detectTaCommitment(
   const clean = String(text ?? '').replace(/\s+/g, ' ').trim()
   if (!clean || !PROMISE_RE.test(clean)) return null
 
-  const when = parseFutureIntent(clean, new Date(sourceTs))
-  const dueDay = when ? futureDayKey(when, new Date(sourceTs)) : undefined
+  const plan = parseFutureIntent(clean, new Date(sourceTs))
+  const time = parseFutureTime(clean, new Date(sourceTs))
+  const dueDay = plan
+    ? futureDayKey(plan, new Date(sourceTs))
+    : time && time.dayOffset != null
+      ? localDayKey(sourceTs + time.dayOffset * 86400000)
+      : undefined
   const clock = parseClock(clean)
   const dueAt = dueAtFor(dueDay, clock)
 
   // A promise can be filed without an exact clock. In that case the app
   // reminds on the first active check of the due day, rather than inventing a time.
-  const dueText = [when?.when, clock?.raw].filter(Boolean).join(' ').trim() || undefined
+  const dueText = [plan?.when ?? time?.when, clock?.raw].filter(Boolean).join(' ').trim() || undefined
   const base = typeof sourceMessageId === 'number' ? `m${sourceMessageId}` : `t${sourceTs}`
 
   return {
