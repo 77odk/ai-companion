@@ -18,10 +18,15 @@ export interface TaCommitment {
 
 const KEEP = 120
 const SIDECAR = 'ta_commitment_v1'
-const PROMISE_RE = /(?:我(?:会|一定会|保证|答应你|答应|记得|到时候会)|我.{0,14}(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)|放心.{0,8}我会|这事交给我|我不会忘|我记着)/i
-const SELF_ACTION_RE = /(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)/i
-const NEGATED_SELF_ACTION_RE = /我.{0,10}(?:不能|不会|不想|不打算|没法|没办法|无法|不方便).{0,12}(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)/i
-const THIRD_PARTY_ACTOR_RE = /我.{0,8}(?:觉得|认为|猜|估计|听说|感觉).{0,10}(?:他|她|TA|ta|对方|别人).{0,10}(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)/i
+const ZH_PROMISE_RE = /(?:我(?:会|一定会|保证|答应你|答应|记得|到时候会)|我.{0,14}(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)|放心.{0,8}我会|这事交给我|我不会忘|我记着)/i
+const ZH_SELF_ACTION_RE = /(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)/i
+const ZH_NEGATED_SELF_ACTION_RE = /我.{0,10}(?:不能|不会|不想|不打算|没法|没办法|无法|不方便).{0,12}(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)/i
+const ZH_THIRD_PARTY_ACTOR_RE = /我.{0,8}(?:觉得|认为|猜|估计|听说|感觉).{0,10}(?:他|她|TA|ta|对方|别人).{0,10}(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)/i
+
+const EN_ACTION_RE = /\b(?:remind|tell|message|text|call|send|check in|be there|stay with you|come|get back to you)\b/i
+const EN_PROMISE_RE = /\b(?:i(?:['’]ll| will).{0,56}(?:remind|tell|message|text|call|send|check in|be there|stay with you|come|get back to you)|i promise\b)/i
+const EN_NEGATED_RE = /\b(?:i won['’]t|i will not|i can['’]t|i cannot|i don['’]t plan to|i(?:['’]m| am) not going to)\b/i
+const EN_THIRD_PARTY_RE = /\bi\s+(?:think|guess|believe|heard|feel).{0,30}\b(?:he|she|they|someone|the other person)\b/i
 
 function readAll(): TaCommitment[] {
   const saved = getCloudStateSidecar<TaCommitment[]>(SIDECAR)
@@ -68,6 +73,103 @@ function parseClock(text: string): { hour: number; minute: number; raw: string }
   return { hour, minute, raw: m[0].trim() }
 }
 
+function parseEnglishClock(text: string): { hour: number; minute: number; raw: string } | null {
+  const m = String(text ?? '').match(/\bat\s+(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?\b/i)
+  if (!m) return null
+  let hour = Number(m[1])
+  const minute = m[2] ? Number(m[2]) : 0
+  if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute < 0 || minute > 59) return null
+  const meridiem = (m[3] ?? '').toLowerCase()
+  if (meridiem.startsWith('p') && hour < 12) hour += 12
+  if (meridiem.startsWith('a') && hour === 12) hour = 0
+  if (hour < 0 || hour > 23) return null
+  return { hour, minute, raw: m[0].trim() }
+}
+
+function englishFutureDay(text: string, sourceTs: number): { day?: string; when?: string } {
+  const lower = String(text ?? '').toLowerCase()
+  if (/\b(?:the day after tomorrow|in two days)\b/.test(lower)) {
+    return { day: localDayKeyFromOffset(sourceTs, 2), when: 'the day after tomorrow' }
+  }
+  if (/\btomorrow\b/.test(lower)) {
+    return { day: localDayKeyFromOffset(sourceTs, 1), when: 'tomorrow' }
+  }
+  if (/\b(?:today|tonight|this evening|this morning|this afternoon)\b/.test(lower)) {
+    return { day: localDayKey(sourceTs), when: lower.match(/\b(?:today|tonight|this evening|this morning|this afternoon)\b/)?.[0] }
+  }
+  const weekdays = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday']
+  const weekday = lower.match(/\b(?:next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/)
+  if (weekday) {
+    const target = weekdays.indexOf(weekday[1])
+    const current = new Date(sourceTs)
+    let offset = (target - current.getDay() + 7) % 7
+    if (offset === 0 || /^next\s+/i.test(weekday[0])) offset += 7
+    return { day: localDayKeyFromOffset(sourceTs, offset), when: weekday[0] }
+  }
+  return {}
+}
+
+function positivePromiseClause(clause: string): boolean {
+  const clean = clause.trim()
+  if (!clean) return false
+  if (ZH_PROMISE_RE.test(clean)) {
+    if (ZH_NEGATED_SELF_ACTION_RE.test(clean) || ZH_THIRD_PARTY_ACTOR_RE.test(clean)) return false
+    const action = clean.match(ZH_SELF_ACTION_RE)
+    if (!action || action.index == null) {
+      return /(?:我(?:一定会|保证|答应你|答应|记得|到时候会)|放心.{0,8}我会|这事交给我|我不会忘|我记着)/i.test(clean)
+    }
+    const beforeAction = clean.slice(0, action.index)
+    if (!beforeAction.includes('我')) return false
+    if (/(?:他|她|TA|ta|对方|别人).{0,8}$/.test(beforeAction)) return false
+    return true
+  }
+  if (!EN_PROMISE_RE.test(clean) || EN_NEGATED_RE.test(clean) || EN_THIRD_PARTY_RE.test(clean)) return false
+  return /\bi promise\b/i.test(clean) || EN_ACTION_RE.test(clean)
+}
+
+function splitPromiseClauses(text: string): string[] {
+  const parts = String(text ?? '')
+    .split(/[。！？!?；;\n]+|[，,]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+  const out: string[] = []
+  let pendingTime = ''
+  for (const part of parts) {
+    const timeOnly = /^(?:(?:今天|明天|后天|今晚|明早|明晚|上午|下午|傍晚|晚上|周[一二三四五六日天]|星期[一二三四五六日天]|下周[一二三四五六日天]|\d{1,2}(?::|：|点)\d{0,2}(?:分)?)|(?:tomorrow|today|tonight|the day after tomorrow|in two days|next\s+\w+|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?))+$/i.test(part.replace(/\s+/g, ' '))
+    if (!positivePromiseClause(part) && timeOnly) {
+      pendingTime = part
+      continue
+    }
+    const candidate = pendingTime && positivePromiseClause(part) ? `${pendingTime} ${part}` : part
+    pendingTime = ''
+    if (positivePromiseClause(candidate)) out.push(candidate)
+  }
+  return out
+}
+
+function timingForClause(clause: string, sourceTs: number): {
+  dueDay?: string
+  dueAt?: number
+  dueText?: string
+} {
+  const plan = parseFutureIntent(clause, new Date(sourceTs))
+  const time = parseFutureTime(clause, new Date(sourceTs))
+  const en = englishFutureDay(clause, sourceTs)
+  const dueDay = plan
+    ? futureDayKey(plan, new Date(sourceTs))
+    : time && time.dayOffset != null
+      ? localDayKeyFromOffset(sourceTs, time.dayOffset)
+      : en.day
+  const clock = parseClock(clause) ?? parseEnglishClock(clause)
+  const dueAt = dueAtFor(dueDay, clock)
+  const dueText = [plan?.when ?? time?.when ?? en.when, clock?.raw].filter(Boolean).join(' ').trim() || undefined
+  return {
+    ...(dueDay ? { dueDay } : {}),
+    ...(typeof dueAt === 'number' ? { dueAt } : {}),
+    ...(dueText ? { dueText } : {}),
+  }
+}
+
 function dueAtFor(day: string | undefined, clock: { hour: number; minute: number } | null): number | undefined {
   if (!day || !clock) return undefined
   const parts = day.split('-').map(Number)
@@ -77,58 +179,41 @@ function dueAtFor(day: string | undefined, clock: { hour: number; minute: number
   return Number.isFinite(ts) ? ts : undefined
 }
 
+export function detectTaCommitments(
+  text: string,
+  sessionId: string,
+  sourceTs: number,
+  sourceMessageId?: number,
+): TaCommitment[] {
+  const clean = String(text ?? '').replace(/\s+/g, ' ').trim()
+  if (!clean) return []
+  const clauses = splitPromiseClauses(clean)
+  if (clauses.length === 0) return []
+  const base = typeof sourceMessageId === 'number' ? `m${sourceMessageId}` : `t${sourceTs}`
+  return clauses.map((clause, index) => {
+    const timing = timingForClause(clause, sourceTs)
+    const suffix = clauses.length > 1 ? `-c${index + 1}` : ''
+    return {
+      id: `promise-${sessionId}-${base}${suffix}`,
+      sessionId,
+      ...(typeof sourceMessageId === 'number' ? { sourceMessageId } : {}),
+      sourceTs,
+      text: clause.slice(0, 280),
+      ...timing,
+      createdAt: Date.now(),
+    }
+  })
+}
+
 export function detectTaCommitment(
   text: string,
   sessionId: string,
   sourceTs: number,
   sourceMessageId?: number,
 ): TaCommitment | null {
-  const clean = String(text ?? '').replace(/\s+/g, ' ').trim()
-  if (!clean || !PROMISE_RE.test(clean)) return null
-
-  // 只把 SELF 真正承担的承诺建档。否定句和“我觉得他/她会……”属于非承诺，
-  // 不能反转成「TA 答应你的事」。
-  const clauses = clean.split(/[，,。！？!?；;\n]+/).map((part) => part.trim()).filter(Boolean)
-  const hasPositiveSelfCommitment = clauses.some((clause) => {
-    if (!PROMISE_RE.test(clause)) return false
-    if (NEGATED_SELF_ACTION_RE.test(clause)) return false
-    if (THIRD_PARTY_ACTOR_RE.test(clause)) return false
-
-    const action = clause.match(SELF_ACTION_RE)
-    if (!action || action.index == null) {
-      return /(?:我(?:一定会|保证|答应你|答应|记得|到时候会)|放心.{0,8}我会|这事交给我|我不会忘|我记着)/i.test(clause)
-    }
-    const beforeAction = clause.slice(0, action.index)
-    if (!beforeAction.includes('我')) return false
-    if (/(?:他|她|TA|ta|对方|别人).{0,8}$/.test(beforeAction)) return false
-    return true
-  })
-  if (!hasPositiveSelfCommitment) return null
-
-  const plan = parseFutureIntent(clean, new Date(sourceTs))
-  const time = parseFutureTime(clean, new Date(sourceTs))
-  const dueDay = plan
-    ? futureDayKey(plan, new Date(sourceTs))
-    : time && time.dayOffset != null
-      ? localDayKeyFromOffset(sourceTs, time.dayOffset)
-      : undefined
-  const clock = parseClock(clean)
-  const dueAt = dueAtFor(dueDay, clock)
-  const dueText = [plan?.when ?? time?.when, clock?.raw].filter(Boolean).join(' ').trim() || undefined
-  const base = typeof sourceMessageId === 'number' ? `m${sourceMessageId}` : `t${sourceTs}`
-
-  return {
-    id: `promise-${sessionId}-${base}`,
-    sessionId,
-    ...(typeof sourceMessageId === 'number' ? { sourceMessageId } : {}),
-    sourceTs,
-    text: clean.slice(0, 280),
-    ...(dueDay ? { dueDay } : {}),
-    ...(typeof dueAt === 'number' ? { dueAt } : {}),
-    ...(dueText ? { dueText } : {}),
-    createdAt: Date.now(),
-  }
+  return detectTaCommitments(text, sessionId, sourceTs, sourceMessageId)[0] ?? null
 }
+
 
 export function loadTaCommitments(sessionId?: string): TaCommitment[] {
   const sid = String(sessionId ?? '')
@@ -154,8 +239,6 @@ export function captureLatestTaCommitment(sessionId: string): TaCommitment | nul
   ))
   if (!latest) return null
 
-  // 同一轮被拆成多个 assistant bubble 时，它们共享 assistantTs。
-  // 必须检查整批，而不是只看最后一泡，否则“承诺 + 晚安”会漏掉前面的承诺。
   const batch = messages.filter((message) => (
     message.role === 'assistant'
     && message.replyState !== 'interrupted'
@@ -163,12 +246,32 @@ export function captureLatestTaCommitment(sessionId: string): TaCommitment | nul
     && message.content.trim()
   ))
   const batchText = batch.map((message) => message.content.trim()).join('\n')
-  const commitment = detectTaCommitment(batchText, sid, latest.ts)
-  if (!commitment) return null
-  const existing = readAll().find((item) => item.id === commitment.id)
-  if (existing) return existing
-  return saveTaCommitment(commitment) ? commitment : null
+  const detected = detectTaCommitments(batchText, sid, latest.ts)
+  if (detected.length === 0) return null
+
+  const existing = readAll()
+  let first: TaCommitment | null = null
+  for (const commitment of detected) {
+    const already = existing.find((item) => item.id === commitment.id)
+    if (already) {
+      if (!first) first = already
+      continue
+    }
+    if (saveTaCommitment(commitment) && !first) first = commitment
+  }
+  return first
 }
+
+export function deleteTaCommitmentsForSession(sessionId: string): boolean {
+  const sid = String(sessionId ?? '').trim()
+  if (!sid) return false
+  const all = readAll()
+  const next = all.filter((item) => item.sessionId !== sid)
+  if (next.length === all.length) return true
+  // notifyDataChanged 让既有 Cloud State capture 产生 ta_commitment tombstone；不另开删除接口。
+  return writeAll(next)
+}
+
 
 export function collectDueTaCommitments(now = Date.now()): TaCommitment[] {
   const today = localDayKey(now)
