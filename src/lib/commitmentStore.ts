@@ -124,7 +124,11 @@ export function saveTaCommitment(item: TaCommitment): boolean {
 export function captureLatestTaCommitment(sessionId: string): TaCommitment | null {
   const sid = String(sessionId ?? '').trim()
   if (!sid) return null
-  const latest = [...getMessagesCache(sid)].reverse().find((message) => message.role === 'assistant' && message.content.trim())
+  const latest = [...getMessagesCache(sid)].reverse().find((message) => (
+    message.role === 'assistant'
+    && message.replyState !== 'interrupted'
+    && message.content.trim()
+  ))
   if (!latest) return null
 
   const commitment = detectTaCommitment(latest.content, sid, latest.ts, typeof latest.id === 'number' ? latest.id : undefined)
