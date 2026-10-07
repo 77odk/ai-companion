@@ -1054,3 +1054,270 @@
     opacity: .92;
   }
 }
+
+
+/* ---- S3 · Star Jar ----------------------------------------------------- */
+.star-jar-page {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 25%, rgba(255, 225, 174, .24), transparent 42%),
+    linear-gradient(180deg, #7d4b37 0%, #a86544 46%, #6c3f31 100%);
+  color: #fff5e9;
+}
+
+.star-jar-topbar {
+  position: relative;
+  background: rgba(90, 52, 39, .54);
+  border-bottom-color: rgba(255,255,255,.08);
+}
+
+.star-jar-topbar .space-object-back,
+.star-jar-topbar strong,
+.star-jar-topbar span {
+  color: rgba(255, 247, 237, .9);
+}
+
+.star-jar-stage {
+  position: relative;
+  height: calc(100% - 64px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 24px 20px calc(30px + env(safe-area-inset-bottom));
+}
+
+.star-jar-vessel {
+  position: relative;
+  width: min(56vw, 238px);
+  aspect-ratio: .78;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.star-jar-vessel:disabled {
+  cursor: default;
+  opacity: .72;
+}
+
+.star-jar-lid {
+  position: absolute;
+  z-index: 4;
+  left: 19%;
+  right: 19%;
+  top: 0;
+  height: 13%;
+  border-radius: 9px 9px 4px 4px;
+  background:
+    linear-gradient(180deg, rgba(246, 205, 150, .84), rgba(122, 75, 50, .88)),
+    repeating-linear-gradient(90deg, transparent 0 8px, rgba(80,47,33,.12) 8px 9px);
+  box-shadow: 0 5px 12px rgba(47, 28, 21, .28);
+}
+
+.star-jar-glass {
+  position: absolute;
+  inset: 9% 5% 1%;
+  overflow: hidden;
+  border: 1px solid rgba(255, 242, 217, .35);
+  border-radius: 18% 18% 27% 27% / 10% 10% 16% 16%;
+  background:
+    linear-gradient(108deg, rgba(255,255,255,.18), transparent 18% 64%, rgba(255,255,255,.07)),
+    rgba(255, 236, 209, .06);
+  box-shadow:
+    inset 10px 0 18px rgba(255,255,255,.05),
+    inset -8px -10px 24px rgba(75,40,29,.16),
+    0 18px 44px rgba(44,25,19,.28);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.star-jar-glass::before {
+  content: '';
+  position: absolute;
+  left: 12%;
+  top: 9%;
+  width: 12%;
+  height: 57%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.36), rgba(255,255,255,0));
+  transform: rotate(3deg);
+}
+
+.star-jar-star {
+  position: absolute;
+  left: var(--star-x);
+  top: var(--star-y);
+  display: block;
+  color: #ffd88a;
+  font-size: clamp(9px, 3.1vw, 15px);
+  line-height: 1;
+  transform: translate(-50%, -50%) rotate(var(--star-r)) scale(.82);
+  filter: drop-shadow(0 0 4px rgba(255, 209, 114, .28));
+  animation: star-jar-twinkle 3.8s ease-in-out var(--star-d) infinite;
+}
+
+.star-jar-label {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: 11%;
+  transform: translateX(-50%);
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(95, 53, 39, .48);
+  color: rgba(255, 245, 229, .82);
+  font-size: 10px;
+  letter-spacing: .16em;
+  white-space: nowrap;
+}
+
+.star-jar-hint,
+.star-jar-empty {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: calc(26px + env(safe-area-inset-bottom));
+  margin: 0;
+  text-align: center;
+  color: rgba(255, 242, 227, .68);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.star-memory-paper {
+  position: absolute;
+  z-index: 8;
+  width: min(84vw, 360px);
+  min-height: 62%;
+  max-height: 78%;
+  overflow: auto;
+  padding: 26px 24px 22px;
+  border-radius: 7px;
+  background:
+    repeating-linear-gradient(0deg, rgba(118,78,52,.035) 0 1px, transparent 1px 27px),
+    #fff8e8;
+  color: #5b4032;
+  box-shadow: 0 24px 62px rgba(38,22,17,.36);
+  transform-origin: center;
+}
+
+.star-memory-paper.is-opening {
+  animation: star-paper-open .52s steps(6, end) both;
+}
+
+.star-memory-paper.is-detail {
+  animation: none;
+}
+
+.star-memory-paper.is-folding {
+  animation: star-paper-fold .46s steps(5, end) both;
+}
+
+.star-memory-folds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.star-memory-folds span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(101, 68, 48, .10);
+}
+
+.star-memory-folds span:nth-child(1) { top: 18%; }
+.star-memory-folds span:nth-child(2) { top: 34%; }
+.star-memory-folds span:nth-child(3) { top: 50%; }
+.star-memory-folds span:nth-child(4) { top: 66%; }
+.star-memory-folds span:nth-child(5) { top: 82%; }
+
+.star-memory-content {
+  position: relative;
+  z-index: 1;
+}
+
+.star-memory-content time,
+.star-memory-mood {
+  display: block;
+  margin: 0 0 8px;
+  color: rgba(91,64,50,.58);
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+
+.star-memory-text {
+  margin: 16px 0 20px;
+  font-size: 17px;
+  line-height: 1.9;
+}
+
+.star-memory-source {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(112, 77, 55, .11);
+}
+
+.star-memory-source span {
+  color: rgba(91,64,50,.56);
+  font-size: 10px;
+}
+
+.star-memory-source p {
+  margin: 7px 0 0;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.star-memory-fold-back {
+  display: block;
+  min-height: 40px;
+  margin: 22px 0 0 auto;
+  border: 0;
+  padding: 0 4px;
+  background: transparent;
+  color: #8a5c42;
+  font-size: 12px;
+}
+
+@keyframes star-jar-twinkle {
+  0%, 100% { opacity: .48; transform: translate(-50%, -50%) rotate(var(--star-r)) scale(.78); }
+  50% { opacity: .95; transform: translate(-50%, -50%) rotate(var(--star-r)) scale(1); }
+}
+
+@keyframes star-paper-open {
+  0% { opacity: 0; transform: scale(.12,.06) rotate(-2deg); }
+  20% { opacity: .8; transform: scale(.34,.10) rotate(1deg); }
+  40% { transform: scale(.68,.17) rotate(-.5deg); }
+  60% { transform: scale(.94,.36); }
+  80% { transform: scale(1,.72); }
+  100% { opacity: 1; transform: scale(1,1); }
+}
+
+@keyframes star-paper-fold {
+  0% { opacity: 1; transform: scale(1,1); }
+  20% { transform: scale(1,.72); }
+  40% { transform: scale(.94,.36); }
+  60% { transform: scale(.68,.17); }
+  80% { transform: scale(.34,.10) rotate(1deg); }
+  100% { opacity: 0; transform: scale(.12,.06) rotate(-2deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .star-jar-star {
+    animation: none;
+    opacity: .78;
+  }
+
+  .star-memory-paper.is-opening,
+  .star-memory-paper.is-folding {
+    animation-duration: 1ms;
+    animation-timing-function: linear;
+  }
+}
