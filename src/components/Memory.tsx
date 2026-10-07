@@ -1056,13 +1056,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
         </span>
       </header>
 
-      <section className="chaomu-status" aria-labelledby="chaomu-status-title">
-        <div className="chaomu-section-head chaomu-status-heading">
-          <div>
-            <span className="chaomu-section-kicker">STATUS</span>
-            <h2 id="chaomu-status-title">状态</h2>
-          </div>
-        </div>
+      <section className="chaomu-status" aria-label="状态">
         <ChaomuState dashboard={stateDashboard} />
       </section>
 
