@@ -2355,25 +2355,23 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }
 
 
-  const handleSaveMessageAsMemory = async (role: StoredMessage['role'], text: string): Promise<boolean> => {
+  const handleSaveMessageAsMemory = async (text: string): Promise<boolean> => {
     const sid = activeSessionId
     const token = getToken()
-    const clean = String(text ?? '').trim()
+    // USER 引用块只是上下文，不是本轮新断言；手动存记忆只保存 message body/evidence。
+    const clean = messageEvidenceText(String(text ?? '')).trim()
     if (!sid || !token || !clean) return false
 
     const current = getMemoriesCache(sid)
     if (isSimilarMemory(current, clean)) return true
 
-    const res = await postMemory(token, sid, {
-      content: clean,
-      ...(role === 'user' ? { source: clean } : { taReply: clean }),
-    })
+    const res = await postMemory(token, sid, { content: clean, source: clean })
     if (!res.ok) return false
 
     const item = {
       ...sessionMemoryToItem(res.data),
       topic: inferTopic(clean),
-      ...(role === 'user' ? { explicit: true } : {}),
+      explicit: true,
     }
     const next = [item, ...current.filter((memory) => memory.id !== item.id)]
     if (!saveMemoriesCache(sid, next)) return false
@@ -2541,8 +2539,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 typing={streaming && i === displayMessages.length - 1 && m.role === 'assistant' && m.content === ''}
                 onAvatarClick={onOpenProfile}
                 onQuote={handleQuoteMessage}
-                onSaveMemory={!streaming && !contextBusy
-                  ? (text) => handleSaveMessageAsMemory(m.role, text)
+                onSaveMemory={!streaming && !contextBusy && m.role === 'user'
+                  ? () => handleSaveMessageAsMemory(m.content)
                   : undefined}
                 onEdit={!streaming && !contextBusy && !isBusy && m.role === 'user' && typeof m.id === 'number'
                   ? (nextText) => commitConversationEdit(m, nextText)
