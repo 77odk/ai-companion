@@ -198,17 +198,18 @@ assert.ok(!byTitle.has('开始使用'), '「开始使用」应改名为「使用
 assert.ok(!byTitle.has('账号与同步'), '不应把原有「账号与隐私」分组改成「账号与同步」')
 
 const support = byTitle.get('使用与支持')
-const supportWanted = ['使用指南', 'API 设置', '消息与通知', '反馈与建议']
+const supportWanted = ['使用指南', 'API 设置', '用量信息', '反馈与建议']
 for (const label of supportWanted) {
   assert.ok(support.labels.includes(label), `「使用与支持」组内缺少「${label}」`)
 }
 assert.deepEqual(
   supportWanted.map((label) => support.labels.indexOf(label)),
   [...supportWanted.map((label) => support.labels.indexOf(label))].sort((a, b) => a - b),
-  '「使用与支持」组内顺序应为 使用指南 → API 设置 → 消息与通知 → 反馈与建议',
+  '「使用与支持」组内顺序应为 使用指南 → API 设置 → 用量信息 → 反馈与建议',
 )
-// 消息与通知保留未读红点挂载
-assert.match(support.body, /label="消息与通知" onClick=\{onOpenNotifications\} unread=\{hasUnreadNotifications\}/)
+// S5 后站内信入口只留 Home；设置页这里只保留独立的系统通知开关。
+assert.doesNotMatch(support.body, /label="消息与通知"/)
+assert.match(support.body, /aria-label="系统通知"/)
 assert.match(support.body, /label="反馈与建议" onClick=\{onOpenFeedback\}/)
 
 const account = byTitle.get('账号与隐私')

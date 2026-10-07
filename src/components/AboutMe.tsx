@@ -62,7 +62,7 @@ const DeleteIcon = () => (
 /** 「我自己说的」里的显式记忆：用户主动在关于我页输入框添加的（explicit=true，写全局），所有角色共享 */
 function myExplicitMemories(): MemoryItem[] {
   // 关于我是「你自己的事」：所有角色同步。只读全局库的 explicit 条目。
-  // 注意：聊天中保底记住的喜好（detectPreferenceFact 等）写在「当前角色」的会话记忆（TA所忆），
+  // 注意：聊天中保底记住的喜好（detectPreferenceFact 等）写在「当前角色」的会话记忆（TA 的会话记忆），
   // 不属于关于我——不要在关于我里汇总会话缓存的 explicit（2026-08-26 七七实测：西瓜串到关于我）。
   return loadMemory().filter((m) => m.explicit === true)
 }
@@ -161,7 +161,7 @@ export default function AboutMe({ onBack }: Props) {
 
   const handleRemoveMemory = (id: string) => {
     // 「我自己说的」存在全局记忆库（所有角色共享，myExplicitMemories 读的就是全局 explicit 条目）：
-    // 删除永远操作全局库，绝不碰会话缓存（那是 TA所忆，按角色隔离）。
+    // 删除永远操作全局库，绝不碰会话缓存（那是 TA 的会话记忆，按角色隔离）。
     // 修 review3 新-13：之前有会话时误删「会话缓存」里的条目，全局记忆根本没动 → 删了个寂寞。
     setMemories(removeMemoryItem(id).filter((m) => m.explicit === true))
   }

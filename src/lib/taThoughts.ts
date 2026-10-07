@@ -191,13 +191,13 @@ export function settleTaThoughts(sessionId: string, now = Date.now()): TaThought
 
 export function initTaThoughtCloudSync(): void {
   registerCloudStateAdapter(KIND, {
-    apply(entity: CloudStateEntity) {
+    apply(entity: CloudStateEntity, context) {
       if (!entity.sessionId || entity.entityId !== entity.sessionId) return
       const incoming = validBook(entity.payload, entity.sessionId)
       if (!incoming) return
       const map = readMap()
       const current = validBook(map[entity.sessionId], entity.sessionId)
-      if (current && current.updatedAt > incoming.updatedAt) return
+      if (!context.authoritative && current && current.updatedAt > incoming.updatedAt) return
       map[entity.sessionId] = incoming
       setCloudStateSidecar(SIDECAR, map)
       notifyDataChanged()
