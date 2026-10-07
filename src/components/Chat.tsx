@@ -1146,32 +1146,34 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         // 命中已有（含相似）→ 链路成功但不算新增：不提示「新记下」
         if (isSimilarMemory(getMemoriesCache(activeSessionId), trimmed)) return { ok: true, created: false }
         const token = getToken()
+        const paperAccountId = getAccount()?.account ?? null
         const paperMood = captureMemoryPaperMood(activeSessionId)
         const item = upsertMemoryCache(activeSessionId, trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
         // 本地写失败（回读不一致）→ upsertMemoryCache 返回 null：不写云端、也不当作成功
         if (!item) return { ok: false, created: false }
         // 即使后端或模型随后失败，当前 Memory 的“当时心情”也必须先保存下来。
-        seedMemoryPaperMood(activeSessionId, { kind: 'session', item }, paperMood)
-        if (token) {
+        seedMemoryPaperMood(activeSessionId, { kind: 'session', item }, paperMood, paperAccountId ?? undefined)
+        if (token && paperAccountId) {
           postMemory(token, activeSessionId, {
             content: trimmed,
             ...(snippet ? { source: snippet } : {}),
             ...(opts.taReply?.trim() ? { taReply: opts.taReply.trim() } : {}),
           }).then((res) => {
             if (!res.ok) return
+            if (getAccount()?.account !== paperAccountId || getToken() !== token) return
             reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
             const serverId = String(res.data.id)
             const paperItem: MemoryItem = { ...item, id: serverId }
             if (serverId !== item.id) {
               // Memory id 被服务端对齐后，纸条也必须跟着换主键；旧本地 id 发 tombstone，避免孤儿记录上云。
               deleteMemoryPapersForMemory('session', item.id, activeSessionId)
-              seedMemoryPaperMood(activeSessionId, { kind: 'session', item: paperItem }, paperMood)
+              seedMemoryPaperMood(activeSessionId, { kind: 'session', item: paperItem }, paperMood, paperAccountId)
             }
             // Memory 是权威事实；纸条只是一次生成的展示副本。生成失败留到星星罐补写，不影响写入成功。
             void generateMemoryPaper(
               activeSessionId,
               { kind: 'session', item: paperItem },
-              { preserveExistingMood: true },
+              { preserveExistingMood: true, expectedAccountId: paperAccountId },
             ).catch(() => {})
           })
         }
@@ -2406,6 +2408,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const handleSaveMessageAsMemory = async (text: string): Promise<boolean> => {
     const sid = activeSessionId
     const token = getToken()
+    const paperAccountId = getAccount()?.account ?? null
     // USER 引用块只是上下文，不是本轮新断言；手动存记忆只保存 message body/evidence。
     const clean = messageEvidenceText(String(text ?? '')).trim()
     if (!sid || !token || !clean) return false
@@ -2417,6 +2420,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const paperMood = captureMemoryPaperMood(sid)
     const res = await postMemory(token, sid, { content: clean, source: clean })
     if (!res.ok) return false
+    if (!paperAccountId || getAccount()?.account !== paperAccountId || getToken() !== token) return false
 
     const item = {
       ...sessionMemoryToItem(res.data),
@@ -2435,8 +2439,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       source: 'manual-message',
     })
     // 先把“写入当时”的心情落盘，再异步造句；模型失败也不会把历史心情一起丢掉。
-    seedMemoryPaperMood(sid, { kind: 'session', item }, paperMood)
-    void generateMemoryPaper(sid, { kind: 'session', item }, { preserveExistingMood: true }).catch(() => {})
+    seedMemoryPaperMood(sid, { kind: 'session', item }, paperMood, paperAccountId)
+    void generateMemoryPaper(
+      sid,
+      { kind: 'session', item },
+      { preserveExistingMood: true, expectedAccountId: paperAccountId },
+    ).catch(() => {})
     notifyMemoryUpdated()
     return true
   }
@@ -2523,6 +2531,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       setMemoryCorrectionNotice('这条记忆已经发生变化，没有覆盖它。你可以再告诉 TA 一次。')
       return
     }
+    const paperAccountId = getAccount()?.account ?? null
     setMemoryCorrectionBusy(true)
     setMemoryCorrectionNotice(null)
     try {
@@ -2547,6 +2556,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           void refreshMemoryPaperAfterCorrection(
             paperSessionId,
             { kind: freshTarget.kind, item: result.item },
+            paperAccountId,
           ).catch(() => {})
         }
       }
