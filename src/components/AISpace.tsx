@@ -11,6 +11,7 @@ import {
 } from '../lib/listenTogetherState'
 import {
   loadLocalPhotos,
+  saveLocalPhotos,
   saveLocalPhotoMetadata,
   addLocalPhoto,
   removeLocalPhoto,
@@ -112,6 +113,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   const [photoError, setPhotoError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const failedPhotoIdsRef = useRef<Set<string>>(new Set())
+  const scenePhotoDragRef = useRef<{
+    id: string
+    pointerId: number
+    board: DOMRect
+    offsetX: number
+    offsetY: number
+  } | null>(null)
   const drawerTimerRef = useRef<number | null>(null)
   const objectTimerRef = useRef<number | null>(null)
   const [drawerOpening, setDrawerOpening] = useState(false)
@@ -346,6 +354,49 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     )
   }
 
+  const defaultScenePlacement = (index: number) => {
+    const defaults = [
+      { x: 7, y: 8, rotate: -5 },
+      { x: 36, y: 5, rotate: 3 },
+      { x: 66, y: 9, rotate: -2 },
+      { x: 13, y: 42, rotate: 4 },
+      { x: 43, y: 38, rotate: -4 },
+      { x: 70, y: 43, rotate: 5 },
+      { x: 27, y: 68, rotate: -2 },
+      { x: 57, y: 67, rotate: 2 },
+    ]
+    return defaults[index % defaults.length]
+  }
+
+  const persistScenePhotoPlacements = (next: PhotoMeta[]) => {
+    const token = getToken()
+    if (token && sid) saveLocalPhotoMetadata(next, sid)
+    else saveLocalPhotos(next, sid)
+  }
+
+  const moveScenePhoto = (photoId: string, x: number, y: number) => {
+    setPhotos((current) => current.map((photo, index) => {
+      if (photo.id !== photoId) return photo
+      const base = photo.scenePlacement ?? defaultScenePlacement(index)
+      return {
+        ...photo,
+        scenePlacement: {
+          x: Math.max(2, Math.min(70, x)),
+          y: Math.max(4, Math.min(68, y)),
+          rotate: base.rotate,
+        },
+      }
+    }))
+  }
+
+  const finishScenePhotoDrag = () => {
+    scenePhotoDragRef.current = null
+    setPhotos((current) => {
+      persistScenePhotoPlacements(current)
+      return [...current]
+    })
+  }
+
   function renderHomePage() {
     const token = getToken()
     const scenePhotos = photos.slice(0, 8)
@@ -359,23 +410,6 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     }
 
     const openPhotoWallFromScene = () => {
-      if (openingObject || drawerOpening) return
-
-      // iOS Safari/PWA requires file input activation to stay inside the
-      // original user gesture. For an empty wall, open the picker immediately
-      // and let only the visual lift state run asynchronously.
-      if (photos.length === 0) {
-        setOpeningObject('photos')
-        fileInputRef.current?.click()
-        if (objectTimerRef.current !== null) window.clearTimeout(objectTimerRef.current)
-        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-        objectTimerRef.current = window.setTimeout(() => {
-          objectTimerRef.current = null
-          setOpeningObject(null)
-        }, reduce ? 1 : 310)
-        return
-      }
-
       openDeskObject('photos', openPhotoWall)
     }
 
@@ -414,26 +448,69 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             onClick={openPhotoWallFromScene}
           >
             <img className="space-object-asset is-photo-board" src="/space/generated/photo-board.svg" alt="" aria-hidden="true" draggable={false} />
-            <span className="space-live-photo-board" aria-hidden="true">
-              {scenePhotos.map((photo, index) => (
-                <span key={photo.id} className={`space-live-photo is-p${index}`}>
-                  <img
-                    src={photo.dataUrl ?? photoUrl(photo.id, token)}
-                    alt=""
-                    draggable={false}
-                    onError={() => {
-                      failedPhotoIdsRef.current.add(photo.id)
-                      setPhotoError(PHOTO_IMAGE_LOAD_ERROR)
-                    }}
-                    onLoad={() => {
-                      failedPhotoIdsRef.current.delete(photo.id)
-                      if (failedPhotoIdsRef.current.size === 0) {
-                        setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? null : current)
+            <span className="space-live-photo-board" aria-label="空间页照片摆放区">
+              {scenePhotos.map((photo, index) => {
+                const placement = photo.scenePlacement ?? defaultScenePlacement(index)
+                return (
+                  <span
+                    key={photo.id}
+                    className="space-live-photo"
+                    style={{
+                      '--scene-photo-x': `${placement.x}%`,
+                      '--scene-photo-y': `${placement.y}%`,
+                      '--scene-photo-r': `${placement.rotate}deg`,
+                      '--scene-photo-delay': `${-((index * 1.7) % 12)}s`,
+                      '--scene-photo-duration': `${12 + ((index * 13) % 55) / 10}s`,
+                    } as React.CSSProperties}
+                    onPointerDown={(event) => {
+                      event.stopPropagation()
+                      const board = event.currentTarget.parentElement?.getBoundingClientRect()
+                      if (!board) return
+                      const card = event.currentTarget.getBoundingClientRect()
+                      scenePhotoDragRef.current = {
+                        id: photo.id,
+                        pointerId: event.pointerId,
+                        board,
+                        offsetX: event.clientX - card.left,
+                        offsetY: event.clientY - card.top,
                       }
+                      event.currentTarget.setPointerCapture?.(event.pointerId)
                     }}
-                  />
-                </span>
-              ))}
+                    onPointerMove={(event) => {
+                      const drag = scenePhotoDragRef.current
+                      if (!drag || drag.id !== photo.id || drag.pointerId !== event.pointerId) return
+                      event.stopPropagation()
+                      const x = ((event.clientX - drag.board.left - drag.offsetX) / drag.board.width) * 100
+                      const y = ((event.clientY - drag.board.top - drag.offsetY) / drag.board.height) * 100
+                      moveScenePhoto(photo.id, x, y)
+                    }}
+                    onPointerUp={(event) => {
+                      const drag = scenePhotoDragRef.current
+                      if (!drag || drag.id !== photo.id || drag.pointerId !== event.pointerId) return
+                      event.stopPropagation()
+                      event.currentTarget.releasePointerCapture?.(event.pointerId)
+                      finishScenePhotoDrag()
+                    }}
+                    onPointerCancel={() => finishScenePhotoDrag()}
+                  >
+                    <img
+                      src={photo.dataUrl ?? photoUrl(photo.id, token)}
+                      alt=""
+                      draggable={false}
+                      onError={() => {
+                        failedPhotoIdsRef.current.add(photo.id)
+                        setPhotoError(PHOTO_IMAGE_LOAD_ERROR)
+                      }}
+                      onLoad={() => {
+                        failedPhotoIdsRef.current.delete(photo.id)
+                        if (failedPhotoIdsRef.current.size === 0) {
+                          setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? null : current)
+                        }
+                      }}
+                    />
+                  </span>
+                )
+              })}
             </span>
           </button>
 
