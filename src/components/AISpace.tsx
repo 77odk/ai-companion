@@ -72,9 +72,12 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
   const [sceneVersion, setSceneVersion] = useState(0)
-  const [listenSnapshot, setListenSnapshot] = useState(getListenTogetherSnapshot)
+  const [listenSnapshot, setListenSnapshot] = useState(() => getListenTogetherSnapshot(sessionId))
 
-  useEffect(() => subscribeListenTogether(setListenSnapshot), [])
+  useEffect(() => {
+    setListenSnapshot(getListenTogetherSnapshot(sessionId))
+    return subscribeListenTogether(sessionId, setListenSnapshot)
+  }, [sessionId])
 
   useEffect(() => {
     const refresh = () => setSceneVersion((value) => value + 1)
