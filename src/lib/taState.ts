@@ -47,14 +47,14 @@ export interface TaStateView {
   changedAt: number
 }
 
-interface PrivateAxes {
+export interface TaStateAxes {
   /** -1 舒展 → +1 紧绷 */
   relaxedTense: number
   /** -1 沉静 → +1 活跃 */
   quietActive: number
 }
 
-interface PrivateTendencies {
+export interface TaStateTendencies {
   connection: number
   expression: number
   exploration: number
@@ -64,19 +64,34 @@ interface PrivateTendencies {
   energy: number
 }
 
-interface PrivateReason {
+export interface TaStateReason {
   kind: 'time' | 'chat' | 'self-evidence' | 'story'
   text: string
   at: number
 }
 
+export interface TaStateSnapshot {
+  at: number
+  axes: TaStateAxes
+  tendencies: TaStateTendencies
+  reason: TaStateReason
+}
+
+export interface TaStateDetailView {
+  axes: TaStateAxes
+  tendencies: TaStateTendencies
+  score: number
+  history: TaStateSnapshot[]
+}
+
 interface PrivateTaState {
   sessionId: string
-  axes: PrivateAxes
-  tendencies: PrivateTendencies
+  axes: TaStateAxes
+  tendencies: TaStateTendencies
   mood: TaMoodWord
   description: string
-  reason: PrivateReason
+  reason: TaStateReason
+  history?: TaStateSnapshot[]
   lastSettledAt: number
   lastChangedAt: number
   updatedAt: number
@@ -90,6 +105,7 @@ const SETTLE_MIN_MS = 15 * 60_000
 const MOOD_STABLE_MS = 45 * 60_000
 const INTERACTION_MOOD_DEBOUNCE_MS = 30 * 60_000
 const CLOUD_HEARTBEAT_MS = 90 * 60_000
+const STATE_HISTORY_LIMIT = 120
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(.9, Number.isFinite(value) ? value : 0))
@@ -101,6 +117,22 @@ function clampAxis(value: number): number {
 
 function localHour(ts: number): number {
   return new Date(ts).getHours()
+}
+
+function snapshot(state: PrivateTaState, reason = state.reason): TaStateSnapshot {
+  return { at: reason.at, axes: { ...state.axes }, tendencies: { ...state.tendencies }, reason: { ...reason } }
+}
+
+function appendSnapshot(state: PrivateTaState, reason = state.reason): PrivateTaState {
+  const previous = Array.isArray(state.history) ? state.history : []
+  const last = previous[previous.length - 1]
+  if (last?.at === reason.at && last.reason.text === reason.text) return state
+  return { ...state, history: [...previous, snapshot(state, reason)].slice(-STATE_HISTORY_LIMIT) }
+}
+
+function stateScore(state: Pick<PrivateTaState, 'axes' | 'tendencies'>): number {
+  const raw = 72 + state.axes.quietActive * 22 + state.axes.relaxedTense * 12 + (state.tendencies.energy - .5) * 24
+  return Math.round(Math.max(48, Math.min(118, raw)))
 }
 
 
@@ -177,7 +209,7 @@ function initialState(sessionId: string, now: number): PrivateTaState {
   }
   state.mood = chooseMood(state)
   state.description = moodDescription(state.mood)
-  return state
+  return appendSnapshot(state)
 }
 
 function readMap(): Record<string, PrivateTaState> {
@@ -304,6 +336,7 @@ function settlePrivate(state: PrivateTaState, now: number): PrivateTaState {
     next.description = moodDescription(candidate)
     next.lastChangedAt = now
     next.reason = { kind: 'time', text: '日常节律和时间经过让状态慢慢变化', at: now }
+    return appendSnapshot(next)
   }
 
   return next
@@ -327,6 +360,16 @@ export function getTaStateView(sessionId: string, now = Date.now()): TaStateView
     description: state.description,
     reason: state.reason.text,
     changedAt: state.lastChangedAt,
+  }
+}
+
+export function getTaStateDetailView(sessionId: string, now = Date.now()): TaStateDetailView {
+  const state = getPrivate(sessionId, now)
+  return {
+    axes: { ...state.axes },
+    tendencies: { ...state.tendencies },
+    score: stateScore(state),
+    history: [...(state.history ?? [snapshot(state)])].sort((a, b) => a.at - b.at),
   }
 }
 
@@ -360,7 +403,8 @@ export function recordTaStateInteraction(sessionId: string, now = Date.now()): T
     next.lastChangedAt = now
   }
   // 普通互动只本地累积；只有可见心情变化或 90 分钟 heartbeat 才排一次 Cloud State。
-  persist(next, { forceCloud: moodChanged, notify: moodChanged })
+  const recorded = appendSnapshot(next)
+  persist(recorded, { forceCloud: moodChanged, notify: moodChanged })
   return getTaStateView(sessionId, now)
 }
 
@@ -465,6 +509,7 @@ export function captureTaStateEvidenceFromLatestReply(sessionId: string, now = D
   state.mood = chooseMood(state)
   state.description = moodDescription(state.mood)
   state.lastChangedAt = now
+  state = appendSnapshot(state)
   persist(state, { forceCloud: true })
   return getTaStateView(sessionId, now)
 }
