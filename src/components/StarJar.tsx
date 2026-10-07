@@ -133,9 +133,6 @@ export default function StarJar({ onBack }: Props) {
             </div>
             <article className="star-memory-content">
               {fmtDate(selected.createdAt) ? <time>{fmtDate(selected.createdAt)}</time> : null}
-              {selected.moodSnapshot?.trim() ? (
-                <p className="star-memory-mood">当时 · {selected.moodSnapshot.trim()}</p>
-              ) : null}
               <p className="star-memory-text">{selected.text}</p>
               {selected.source?.trim() ? (
                 <div className="star-memory-source">
