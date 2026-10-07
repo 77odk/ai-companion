@@ -429,6 +429,7 @@ export default function App() {
   const hasUnreadNotifications = loggedIn && (notificationServerUnread || notificationRevision > notificationReadRevision)
   const [initiativeNotice, setInitiativeNotice] = useState<InitiativeNotice | null>(null)
   const [commitmentReminder, setCommitmentReminder] = useState<TaCommitment | null>(null)
+  const commitmentReminderRef = useRef<TaCommitment | null>(null)
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
@@ -446,38 +447,41 @@ export default function App() {
   // 使用指南独立 view：返回时回到来源（欢迎页 / 我的 / 登录墙）
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate' | 'chat'>('welcome')
 
+  const checkDueCommitment = useCallback(() => {
+    if (!loggedIn || document.visibilityState !== 'visible' || commitmentReminderRef.current) return
+    const next = collectDueTaCommitments(Date.now())[0]
+    if (!next) return
+    const marked = markCommitmentReminded(next.id)
+    if (!marked) return
+    commitmentReminderRef.current = marked
+    setCommitmentReminder(marked)
+  }, [loggedIn])
+
   useEffect(() => {
     if (!loggedIn) {
+      commitmentReminderRef.current = null
       setCommitmentReminder(null)
       return
-    }
-
-    const checkDue = () => {
-      if (document.visibilityState !== 'visible') return
-      const next = collectDueTaCommitments(Date.now())[0]
-      if (!next) return
-      const marked = markCommitmentReminded(next.id)
-      if (marked) setCommitmentReminder(marked)
     }
 
     const onReplyCommitted = (event: Event) => {
       const sid = String((event as CustomEvent<{ sid?: string }>).detail?.sid ?? '')
       if (sid) captureLatestTaCommitment(sid)
-      checkDue()
+      checkDueCommitment()
     }
 
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') checkDue()
+      if (document.visibilityState === 'visible') checkDueCommitment()
     }
 
     window.addEventListener('yiwem:ai-reply-committed', onReplyCommitted)
     document.addEventListener('visibilitychange', onVisibility)
-    checkDue()
+    checkDueCommitment()
     return () => {
       window.removeEventListener('yiwem:ai-reply-committed', onReplyCommitted)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [loggedIn])
+  }, [loggedIn, checkDueCommitment])
 
   const recordInitiativeBackground = useCallback(() => {
     if (!loggedIn) return
@@ -1226,7 +1230,17 @@ export default function App() {
             <strong>{loadAIProfile(commitmentReminder.sessionId).nickname || 'TA'} 答应你的事</strong>
             <span>{commitmentReminder.text}</span>
           </div>
-          <button type="button" onClick={() => setCommitmentReminder(null)} aria-label="收起">×</button>
+          <button
+            type="button"
+            onClick={() => {
+              commitmentReminderRef.current = null
+              setCommitmentReminder(null)
+              window.setTimeout(checkDueCommitment, 0)
+            }}
+            aria-label="收起"
+          >
+            ×
+          </button>
         </div>
       )}
       {initiativeNotice && loggedIn && !gateShown && !needLightConsent && (
