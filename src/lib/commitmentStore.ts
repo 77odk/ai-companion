@@ -207,6 +207,22 @@ interface CommitmentClause {
   index: number
 }
 
+function isBarePromiseLead(clause: string): boolean {
+  const clean = clause.replace(/\s+/g, ' ').trim()
+  if (/^(?:我(?:保证|答应你|答应)|我记着|这事交给我|放心.{0,8}我会)$/i.test(clean)) return true
+  return /\bi\s+(?:promise|swear|guarantee)(?:\s+you)?[.!]?$/i.test(clean)
+}
+
+function isPromiseContinuation(clause: string): boolean {
+  const clean = clause.trim()
+  if (!clean) return false
+  if (/(?:^|[，,\s])(?:你|他|她|TA|对方|别人)(?:\s|明|后|今|会|要|将|得|需)/i.test(clean)) return false
+  if (/\b(?:you|they|he|she|someone|somebody)\b.{0,20}\b(?:will|would|can|should)\b/i.test(clean)) return false
+  if (isPositiveSelfCommitmentClause(clean)) return true
+  if (ZH_SELF_ACTION_RE.test(clean)) return true
+  return new RegExp(`\\b${EN_SELF_ACTION}\\b`, 'i').test(clean)
+}
+
 function positiveCommitmentClauses(text: string, sourceTs: number): CommitmentClause[] {
   const clean = String(text ?? '').replace(/[\t\r]+/g, ' ').trim()
   if (!clean) return []
@@ -221,9 +237,14 @@ function positiveCommitmentClauses(text: string, sourceTs: number): CommitmentCl
       if (!isPositiveSelfCommitmentClause(clause)) continue
 
       let scoped = clause
-      // 英文常写 “Tomorrow at 8, I'll remind you …”。只有当前承诺段本身没有时间，
-      // 且紧邻前段只是时间上下文时才合并；不会把别人的“明天 8 点考试”借给后面的后天承诺。
-      if (!hasFutureAnchor(clause, sourceTs) && i > 0) {
+      // “我答应你，明天 8 点提醒你喝水 / I promise you, tomorrow I'll remind you”：
+      // 前半句提供承诺主体，后半句提供动作/时间，必须合成同一条，而不是留下一个永不到期的空承诺。
+      if (isBarePromiseLead(clause) && i + 1 < commaParts.length && isPromiseContinuation(commaParts[i + 1])) {
+        scoped = `${clause}, ${commaParts[i + 1]}`
+        i += 1
+      } else if (!hasFutureAnchor(clause, sourceTs) && i > 0) {
+        // 英文也常写 “Tomorrow at 8, I'll remind you …”。只有当前承诺段本身没有时间，
+        // 且紧邻前段只是时间上下文时才合并；不会把别人的时间借给 TA 的承诺。
         const previous = commaParts[i - 1]
         if (
           previous.length <= 48
