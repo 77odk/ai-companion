@@ -2357,7 +2357,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }
 
 
-  const handleSaveMessageAsMemory = async (text: string): Promise<boolean> => {
+  const handleSaveMessageAsMemory = async (role: StoredMessage['role'], text: string): Promise<boolean> => {
     const sid = activeSessionId
     const token = getToken()
     const clean = String(text ?? '').trim()
@@ -2366,7 +2366,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const current = getMemoriesCache(sid)
     if (isSimilarMemory(current, clean)) return true
 
-    const res = await postMemory(token, sid, { content: clean, source: clean })
+    const res = await postMemory(token, sid, {
+      content: clean,
+      ...(role === 'user' ? { source: clean } : { taReply: clean }),
+    })
     if (!res.ok) return false
 
     const item = {
@@ -2542,7 +2545,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 onAvatarClick={onOpenProfile}
                 onQuote={handleQuoteMessage}
                 onSaveMemory={!streaming && !contextBusy
-                  ? (text) => handleSaveMessageAsMemory(text)
+                  ? (text) => handleSaveMessageAsMemory(m.role, text)
                   : undefined}
                 onEdit={!streaming && !contextBusy && !isBusy && m.role === 'user' && typeof m.id === 'number'
                   ? (nextText) => commitConversationEdit(m, nextText)
