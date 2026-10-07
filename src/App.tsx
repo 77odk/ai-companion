@@ -1577,7 +1577,6 @@ export default function App() {
                 onInitialPageBack={() => window.history.back()}
                 onPrivacyOpenChange={setSettingsPrivacyOpen}
                 onGoFeedback={openFeedback}
-                hasUnreadNotifications={hasUnreadNotifications}
                 onGoWelcome={() => navigate('welcome')}
                 onGoGuide={() => openGuide('settings')}
                 onGoWorkChat={() => navigate('chat')}
