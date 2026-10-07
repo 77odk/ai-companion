@@ -4,6 +4,7 @@ import { getActiveSessionId, getBusyState, getMemoriesCache, getSessionLang, mer
 import { listMemories, postMemory } from '../lib/sessionApi'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
 import { getToken } from '../lib/auth'
+import { getAccount } from '../lib/sync'
 import { correctMemoryText, removeMemory, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
 import { findChatRecordJumpTargetHydrated, type ChatJumpTarget, type MemoryReturnTarget } from '../lib/chatJump'
 import { alignPendingMemoriesForRefresh } from '../lib/memoryRefreshReconcile'
@@ -453,6 +454,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
 
   const confirmDelete = async () => {
     if (!selected || deleting) return
+    const paperAccountId = getAccount()?.account ?? null
     const target: MemoryCorrectionTarget = selected.kind === 'global'
       ? { kind: 'global', item: selected.item }
       : { kind: 'session', sessionId, item: selected.item, token: getToken() }
@@ -470,6 +472,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       selected.kind,
       selected.item.id,
       selected.kind === 'session' ? sessionId : undefined,
+      paperAccountId ?? undefined,
     )
     appendMemoryAudit({
       sessionId: selected.kind === 'session' ? sessionId : '',
@@ -490,6 +493,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
 
   const saveCorrection = async () => {
     if (!selected || saving) return
+    const paperAccountId = getAccount()?.account ?? null
     const text = draft.trim()
     if (!text) {
       setSaveError('记住的内容不能为空')
@@ -528,6 +532,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
         void refreshMemoryPaperAfterCorrection(
           sessionId,
           { kind: selected.kind, item: result.item },
+          paperAccountId,
         ).catch(() => {})
       }
     }
@@ -540,6 +545,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
       (entry.action !== 'edit' && entry.action !== 'delete') ||
       audits.some((item) => item.parentAuditId === entry.id)
     ) return
+    const paperAccountId = getAccount()?.account ?? null
     setRollbackBusyId(entry.id)
     setRollbackNotice('')
     try {
@@ -587,6 +593,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
             void refreshMemoryPaperAfterCorrection(
               sessionId,
               { kind: 'global', item: result.item },
+              paperAccountId,
             ).catch(() => {})
           }
         }
@@ -684,6 +691,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
         void refreshMemoryPaperAfterCorrection(
           sessionId,
           { kind: 'session', item: result.item },
+          paperAccountId,
         ).catch(() => {})
       }
 
