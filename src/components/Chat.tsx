@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildActionNarrationInstruction, buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
-import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
+import { deriveMemoryTriggerWords, detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
 import { selectMemoryWorkingSet, shouldTouchMemoryFromUser } from '../lib/memoryRecallPolicy'
 import { getSessionStart, isActionNarrationEnabled, loadMessages, loadPersona, loadSettings, loadAIProfile, loadUserProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, clearContextBridge, getContextUsage, setContextUsage, clearContextUsage, type ContextUsageState, type ReplyInterruptionReason, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
@@ -60,6 +60,7 @@ import { formatQuotedMessage, messageEvidenceText, parseQuotedMessage, type Mess
 import { CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState } from '../lib/conversationState'
 import { enqueueSessionMessageCommit, enqueueSessionMessageCommits } from '../lib/sessionMessageQueue'
 import { flushPendingOpsSnapshot } from '../lib/pendingReplay'
+import { appendMemoryAudit } from '../lib/memoryAudit'
 
 /**
  * 历史时间锚必须稳定：同一条历史消息无论过几分钟再次发送，前缀都完全一致，
@@ -2355,6 +2356,40 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     })
   }
 
+
+  const handleSaveMessageAsMemory = async (message: StoredMessage, text: string): Promise<boolean> => {
+    const sid = activeSessionId
+    const token = getToken()
+    const clean = String(text ?? '').trim()
+    if (!sid || !token || !clean) return false
+
+    const current = getMemoriesCache(sid)
+    if (isSimilarMemory(current, clean)) return true
+
+    const res = await postMemory(token, sid, { content: clean, source: clean })
+    if (!res.ok) return false
+
+    const item = {
+      ...sessionMemoryToItem(res.data),
+      topic: inferTopic(clean),
+      explicit: true,
+      triggerWords: deriveMemoryTriggerWords(clean, inferTopic(clean)),
+    }
+    const next = [item, ...current.filter((memory) => memory.id !== item.id)]
+    if (!saveMemoriesCache(sid, next)) return false
+
+    appendMemoryAudit({
+      sessionId: sid,
+      memoryKind: 'session',
+      memoryId: item.id,
+      action: 'create',
+      after: item,
+      source: 'manual-message',
+    })
+    notifyMemoryUpdated()
+    return true
+  }
+
   const insertActionNarration = () => {
     const el = inputRef.current
     const start = el?.selectionStart ?? input.length
@@ -2495,6 +2530,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 typing={streaming && i === displayMessages.length - 1 && m.role === 'assistant' && m.content === ''}
                 onAvatarClick={onOpenProfile}
                 onQuote={handleQuoteMessage}
+                onSaveMemory={!streaming && !contextBusy
+                  ? (text) => handleSaveMessageAsMemory(m, text)
+                  : undefined}
                 onEdit={!streaming && !contextBusy && !isBusy && m.role === 'user' && typeof m.id === 'number'
                   ? (nextText) => commitConversationEdit(m, nextText)
                   : undefined}
