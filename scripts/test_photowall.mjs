@@ -69,6 +69,11 @@ saveLocalPhotoMetadata([photo('cloud-1', 400, { dataUrl: 'data:image/jpeg;base64
 const cachedMeta = loadLocalPhotos('cloud-s1')
 ok(cachedMeta.length === 1 && cachedMeta[0].id === 'cloud-1', '登录用户元数据可本地缓存')
 ok(cachedMeta[0].dataUrl === undefined, '登录用户本地缓存不长期保存 dataUrl')
+saveLocalPhotoMetadata([
+  photo('placed-1', 410, { scenePlacement: { x: 22, y: 31, rotate: -4 } }),
+], 'placed-s1')
+const placedMeta = loadLocalPhotos('placed-s1')
+ok(placedMeta[0]?.scenePlacement?.x === 22 && placedMeta[0]?.scenePlacement?.y === 31, '空间页自定义摆放复用现有照片缓存')
 const afterAdd = addLocalPhoto(photo('p3', 300), 's1')
 ok(afterAdd.length === 3 && afterAdd[0].id === 'p3', 'addLocalPhoto 追加到最前')
 ok(loadLocalPhotos('s1').length === 3, 'addLocalPhoto 持久化')
@@ -92,6 +97,11 @@ ok(merged2.length === 1 && merged2[0].dataUrl === 'data:image/jpeg;base64,xx', '
 // 云端覆盖同 id 尺寸（以云端为准）
 const merged3 = mergePhotos([photo('p5', 100, { width: 10 })], [photo('p5', 100, { width: 800 })])
 ok(merged3[0].width === 800, '同 id 云端信息优先')
+const mergedPlacement = mergePhotos(
+  [photo('placed-cloud', 120, { scenePlacement: { x: 61, y: 44, rotate: 3 } })],
+  [photo('placed-cloud', 120, { width: 1200 })],
+)
+ok(mergedPlacement[0].scenePlacement?.x === 61, '云端元数据刷新不覆盖本机空间摆放')
 
 // ---- 云端列表边界校验 ----
 ok(normalizePhotoListData({ photos: [] })?.photos.length === 0, '合法空 photos 数组正常通过')
@@ -133,6 +143,9 @@ ok(archiveSource.includes('const preview = sorted.slice(0, 12)'), '首页照片�
 ok(archiveSource.includes('style={previewStyle(photo, index, preview.length)}'), '首页预览使用确定性散开样式')
 ok(!archiveSource.includes('index % 5'), '首页预览不再按 5 个槽位循环重叠')
 ok(!archiveSource.includes('Math.random()'), '首页预览刷新后位置稳定，不使用随机布局')
+ok(archiveSource.includes('onClick={() => setArchiveOpen(true)}'), '空照片墙先进入照片墙，不在空间页直接弹选择器')
+ok(aiSpaceSource.includes('scenePhotoDragRef'), '空间页照片支持拖动摆放')
+ok(aiSpaceSource.includes('persistScenePhotoPlacements'), '空间页照片摆放会持久化')
 
 // ---- dataUrl 字节估算 ----
 ok(dataUrlBytes('data:image/jpeg;base64,AAAA') === 3, 'base64 长度 ×0.75 估算（4 字符 → 3 字节）')
