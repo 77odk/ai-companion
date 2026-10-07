@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 import { buildActionNarrationInstruction, buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
-import { detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
+import { cleanMemoryProtocolArtifacts, detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
 import { selectMemoryWorkingSet, shouldTouchMemoryFromUser } from '../lib/memoryRecallPolicy'
 import { getSessionStart, isActionNarrationEnabled, loadMessages, loadPersona, loadSettings, loadAIProfile, loadUserProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, clearContextBridge, getContextUsage, setContextUsage, clearContextUsage, type ContextUsageState, type ReplyInterruptionReason, type StoredMessage } from '../lib/storage'
 import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
@@ -1136,7 +1136,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
 
     const writeMemory = (content: string, opts: { source?: string; topic?: string; explicit?: boolean; taReply?: string } = {}): MemoryWriteResult => {
-      const trimmed = content.trim()
+      const trimmed = cleanMemoryProtocolArtifacts(content)
       if (!trimmed) return { ok: false, created: false }
       // PATCH-01：source 保存完整真实用户原话——不再做 20 字截断，不摘要、不改写。
       // 空/纯空白时保持 undefined（旧数据兼容：无 source 不显示）。
@@ -1179,7 +1179,10 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       const plans = planMemoryWrites(explicitCandidates, rawText ? extractMemories(rawText) : [], text)
       // 当轮 TA 回应短快照（仅追溯展示；去系统标记/思考链后截断，不整段复制聊天历史）
       const replySnapshot = rawText
-        ? stripMemoryCorrectionMarkers(stripMemoryMarkers(stripThinkBlocks(rawText, lang))).trim().slice(0, 160) || undefined
+        ? cleanAttributionArtifacts(
+            stripMemoryCorrectionMarkers(stripMemoryMarkers(stripThinkBlocks(rawText, lang))),
+            lang,
+          ).trim().slice(0, 160) || undefined
         : undefined
       let created = false
       for (const p of plans) {
