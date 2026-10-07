@@ -434,6 +434,7 @@ export default function App() {
   const [initiativeNotice, setInitiativeNotice] = useState<InitiativeNotice | null>(null)
   const [commitmentReminder, setCommitmentReminder] = useState<TaCommitment | null>(null)
   const commitmentReminderRef = useRef<TaCommitment | null>(null)
+  const commitmentDeliveryInFlightRef = useRef<string | null>(null)
   const [settingsRootKey, setSettingsRootKey] = useState(0)
   const [spaceRootKey, setSpaceRootKey] = useState(0)
   const [memoryRootKey, setMemoryRootKey] = useState(0)
@@ -451,22 +452,34 @@ export default function App() {
   // 使用指南独立 view：返回时回到来源（欢迎页 / 我的 / 登录墙）
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate' | 'chat'>('welcome')
 
-  const checkDueCommitment = useCallback(() => {
-    if (!loggedIn || commitmentReminderRef.current) return
+  const checkDueCommitment = useCallback(async (): Promise<void> => {
+    if (!loggedIn || commitmentReminderRef.current || commitmentDeliveryInFlightRef.current) return
     const next = collectDueTaCommitments(Date.now())[0]
     if (!next) return
-    const marked = markCommitmentReminded(next.id)
-    if (!marked) return
-    commitmentReminderRef.current = marked
-    setCommitmentReminder(marked)
+    commitmentDeliveryInFlightRef.current = next.id
+    try {
+      const visible = document.visibilityState === 'visible'
+      if (!visible) {
+        // 后台只有“系统通知真的投递成功”才消费提醒；开关关闭/不支持/投递失败都继续保留 pending。
+        const taName = loadAIProfile(next.sessionId).nickname?.trim() || 'TA'
+        const delivered = await showSystemNotification(
+          taName,
+          '有一件答应你的事到时间了，打开忆文看看。',
+          'eluvin-promise-' + next.id,
+          { sessionId: next.sessionId, view: 'chat' },
+        )
+        if (!delivered) return
+        markCommitmentReminded(next.id)
+        return
+      }
 
-    // 页面仍在后台运行时也可以敲一下系统通知；内容保持通用，不把承诺正文放到锁屏。
-    const taName = loadAIProfile(marked.sessionId).nickname?.trim() || 'TA'
-    void showSystemNotification(
-      taName,
-      '有一件答应你的事到时间了，打开忆文看看。',
-      'eluvin-promise-' + marked.id,
-    )
+      const marked = markCommitmentReminded(next.id)
+      if (!marked) return
+      commitmentReminderRef.current = marked
+      setCommitmentReminder(marked)
+    } finally {
+      commitmentDeliveryInFlightRef.current = null
+    }
   }, [loggedIn])
 
   useEffect(() => {
@@ -487,8 +500,7 @@ export default function App() {
       if (nextAt == null) return
       const delay = Math.min(Math.max(0, nextAt - Date.now()), 2_147_000_000)
       dueTimer = window.setTimeout(() => {
-        checkDueCommitment()
-        armDueTimer()
+        void checkDueCommitment().finally(armDueTimer)
       }, delay)
     }
 
@@ -507,35 +519,33 @@ export default function App() {
         captureLatestTaCommitment(sid)
         settleCompanionContinuity(sid)
       }
-      checkDueCommitment()
-      armDueTimer()
+      void checkDueCommitment().finally(armDueTimer)
     }
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {
-        checkDueCommitment()
+        void checkDueCommitment().finally(armDueTimer)
         const sid = getActiveSessionId()
         if (sid) {
           // 离开期间不轮询；回来按 lastSettledAt 懒补算，等价于规则时钟持续走。
           getTaStateView(sid)
           settleTaThoughts(sid)
         }
+      } else {
+        armDueTimer()
       }
-      armDueTimer()
     }
 
     const onDataChange = () => {
       // Cloud State 可能在启动 hydration 时拉回“已经到期”的承诺。
       // 先立即检查 overdue，再重排未来 timer；否则 nextTaCommitmentCheckAt 会跳过已过期时间点。
-      checkDueCommitment()
-      armDueTimer()
+      void checkDueCommitment().finally(armDueTimer)
     }
 
     window.addEventListener('yiwem:ai-reply-committed', onReplyCommitted)
     window.addEventListener(ELUVIN_DATA_CHANGE, onDataChange)
     document.addEventListener('visibilitychange', onVisibility)
-    checkDueCommitment()
-    armDueTimer()
+    void checkDueCommitment().finally(armDueTimer)
     return () => {
       clearDueTimer()
       window.removeEventListener('yiwem:ai-reply-committed', onReplyCommitted)
@@ -543,6 +553,67 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [loggedIn, checkDueCommitment])
+
+  useEffect(() => {
+    if (!loggedIn) return
+    let retryTimer: number | null = null
+    let attempts = 0
+
+    const openTarget = (sessionId?: string) => {
+      const sid = String(sessionId ?? '').trim()
+      if (!sid) return false
+      if (!getSessionsCache().some((session) => String(session.id) === sid)) return false
+      setActiveSessionId(sid)
+      goView('chat')
+      return true
+    }
+
+    const clearRouteQuery = () => {
+      try {
+        const url = new URL(window.location.href)
+        if (!url.searchParams.has('eluvin_notification_session')) return
+        url.searchParams.delete('eluvin_notification_session')
+        url.searchParams.delete('eluvin_notification_view')
+        window.history.replaceState(window.history.state, '', url.toString())
+      } catch {
+        // Query cleanup must never block routing.
+      }
+    }
+
+    const routeFromLocation = () => {
+      let sid = ''
+      try {
+        sid = new URL(window.location.href).searchParams.get('eluvin_notification_session') ?? ''
+      } catch {
+        return
+      }
+      if (!sid) return
+      if (openTarget(sid)) {
+        clearRouteQuery()
+        return
+      }
+      if (attempts++ < 20) retryTimer = window.setTimeout(routeFromLocation, 300)
+    }
+
+    const onPageNotification = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionId?: string }>).detail
+      openTarget(detail?.sessionId)
+    }
+    const onServiceWorkerMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; sessionId?: string } | null
+      if (data?.type !== 'eluvin-notification-click') return
+      openTarget(data.sessionId)
+    }
+
+    window.addEventListener('eluvin-system-notification-click', onPageNotification)
+    navigator.serviceWorker?.addEventListener?.('message', onServiceWorkerMessage)
+    routeFromLocation()
+    return () => {
+      if (retryTimer !== null) window.clearTimeout(retryTimer)
+      window.removeEventListener('eluvin-system-notification-click', onPageNotification)
+      navigator.serviceWorker?.removeEventListener?.('message', onServiceWorkerMessage)
+    }
+  }, [loggedIn, goView])
 
   const recordInitiativeBackground = useCallback(() => {
     if (!loggedIn) return
@@ -674,6 +745,7 @@ export default function App() {
             taName,
             '有一条新消息，打开忆文看看。',
             'eluvin-initiative-' + sessionId,
+            { sessionId, view: 'chat' },
           )
         },
       },
