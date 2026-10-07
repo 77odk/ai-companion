@@ -515,7 +515,12 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
     setEditing(false)
   }
   const rollbackAuditEntry = async (entry: MemoryAuditEntry) => {
-    if (rollbackBusyId || !entry.before || (entry.action !== 'edit' && entry.action !== 'delete')) return
+    if (
+      rollbackBusyId ||
+      !entry.before ||
+      (entry.action !== 'edit' && entry.action !== 'delete') ||
+      audits.some((item) => item.parentAuditId === entry.id)
+    ) return
     setRollbackBusyId(entry.id)
     setRollbackNotice('')
     try {
@@ -1110,7 +1115,8 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
                         ? '回退'
                         : '存入'
                   const preview = entry.after?.text || entry.before?.text || ''
-                  const canRollback = (entry.action === 'edit' || entry.action === 'delete') && Boolean(entry.before)
+                  const rolledBack = audits.some((item) => item.parentAuditId === entry.id)
+                  const canRollback = (entry.action === 'edit' || entry.action === 'delete') && Boolean(entry.before) && !rolledBack
                   return (
                     <article key={entry.id} className="memory-audit-item">
                       <div>
@@ -1126,7 +1132,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
                         >
                           {rollbackBusyId === entry.id ? '回退中…' : '回退到之前'}
                         </button>
-                      ) : null}
+                      ) : rolledBack ? <span className="memory-audit-done">已回退</span> : null}
                     </article>
                   )
                 })}
