@@ -96,7 +96,7 @@ export function detectTaCommitment(
 
     const action = clause.match(SELF_ACTION_RE)
     if (!action || action.index == null) {
-      return /(?:这事交给我|我不会忘|我记着)/i.test(clause)
+      return /(?:我(?:一定会|保证|答应你|答应|记得|到时候会)|放心.{0,8}我会|这事交给我|我不会忘|我记着)/i.test(clause)
     }
     const beforeAction = clause.slice(0, action.index)
     if (!beforeAction.includes('我')) return false
