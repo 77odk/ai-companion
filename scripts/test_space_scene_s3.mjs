@@ -121,6 +121,10 @@ assert.ok(detectTaCommitment('我答应你明天早点休息。', '7', sourceTs,
 const englishPromise = detectTaCommitment("I'll remind you tomorrow at 8.", '7', sourceTs, 50)
 assert.ok(englishPromise, 'English mode promise must be recognized')
 assert.ok(typeof englishPromise?.dueAt === 'number', 'English tomorrow + at 8 must resolve a due time')
+const splitEnglishTime = detectTaCommitment("Tomorrow at 8, I'll remind you to drink water.", '7', sourceTs, 501)
+assert.ok(typeof splitEnglishTime?.dueAt === 'number', 'standalone English time phrase must attach to following promise')
+const splitChineseTime = detectTaCommitment('明天晚上8点，我会提醒你喝水。', '7', sourceTs, 502)
+assert.ok(typeof splitChineseTime?.dueAt === 'number', 'standalone Chinese time phrase must attach to following promise')
 
 const clauseScoped = detectTaCommitment('你明天早上8点考试，后天我会提醒你复盘。', '7', sourceTs, 51)
 assert.equal(clauseScoped?.dueDay, '2026-10-09', 'deadline must come from the matched promise clause')
