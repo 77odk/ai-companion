@@ -123,6 +123,49 @@ const RELATIONSHIP_PRESET_EN: Record<Exclude<RelationshipPreset, '自定义'>, s
   '原作角色与你的 OC': "a canon character and USER's OC",
 }
 
+function relationshipViewGuidance(setting: RelationshipSetting | null): string {
+  switch (setting?.preset) {
+    case '恋人':
+      return '亲密感只从真实相处里来，不因为设定本身自动变甜。'
+    case '兄妹':
+    case '家人':
+      return '熟悉和照顾可以存在，但不会被写成恋爱口径。'
+    case '偶像与粉丝':
+      return '会保留欣赏与边界感，不把这层关系自动改写成恋爱。'
+    case '宿敌':
+      return '张力可以保留，但不会凭空增加敌意、亏欠或情绪绑架。'
+    case '主仆':
+    case '师生':
+      return '身份差异会影响相处口径，但不会替代已经发生过的事实。'
+    case '原作角色与你的 OC':
+      return '角色世界与身份逻辑优先，新的共同经历仍必须真实发生后才算。'
+    case '自定义':
+      return '自定义关系只约束相处口径，不会替你们补写历史。'
+    default:
+      return ''
+  }
+}
+
+export function getRelationshipRoleGuidanceForPrompt(
+  sessionId: string,
+  lang: 'zh' | 'en',
+): string {
+  const setting = loadRelationshipSetting(sessionId)
+  if (!setting?.preset) return ''
+  if (lang === 'zh') return relationshipViewGuidance(setting)
+  switch (setting.preset) {
+    case '恋人': return 'Keep intimacy grounded in real interaction; do not become sweeter just because the label says lovers.'
+    case '兄妹':
+    case '家人': return 'Keep a family-like tone and do not romanticize it.'
+    case '偶像与粉丝': return 'Keep admiration and boundaries; do not automatically turn it romantic.'
+    case '宿敌': return 'Keep the rivalry texture without inventing hostility, debt, or emotional coercion.'
+    case '主仆':
+    case '师生': return 'Respect the role asymmetry, but never let it replace actual shared facts.'
+    case '原作角色与你的 OC': return 'Preserve canon/world role logic; shared history still requires real evidence.'
+    case '自定义': return 'Use the custom relationship only as a role constraint; never fabricate shared history.'
+  }
+}
+
 function relationshipLabel(setting: RelationshipSetting | null): string {
   if (!setting?.preset) return ''
   if (setting.preset === '自定义') return setting.customLabel?.trim() || '自定义'
@@ -169,12 +212,13 @@ export function getRelationshipView(sessionId: string, now = Date.now()): Relati
     : maturity === 1
       ? '关系正在真实相处里慢慢形成自己的样子，不靠等级推进。'
       : '先让真实聊天和共同经历慢慢决定它会变成什么样。'
+  const roleGuidance = relationshipViewGuidance(setting)
 
   return {
     settingLabel: label,
     hasExplicitSetting: Boolean(setting?.preset),
     description: label
-      ? `你们现在以「${label}」的关系相处；${evidence}。${tail}`
+      ? `你们现在以「${label}」的关系相处；${evidence}。${roleGuidance || tail}`
       : `你们还没有给关系下定义；${evidence}。${tail}`,
   }
 }
