@@ -60,6 +60,12 @@ function localDayKey(ts: number): string {
   return `${d.getFullYear()}-${mm}-${dd}`
 }
 
+function localDayKeyFromOffset(ts: number, dayOffset: number): string {
+  const d = new Date(ts)
+  d.setDate(d.getDate() + dayOffset)
+  return localDayKey(d.getTime())
+}
+
 function parseClock(text: string): { hour: number; minute: number; raw: string } | null {
   const m = String(text ?? '').match(/(?:上午|早上|中午|下午|傍晚|晚上|今晚)?\s*(\d{1,2})(?::|：|点)(\d{1,2})?\s*(?:分)?/)
   if (!m) return null
@@ -97,7 +103,7 @@ export function detectTaCommitment(
   const dueDay = plan
     ? futureDayKey(plan, new Date(sourceTs))
     : time && time.dayOffset != null
-      ? localDayKey(sourceTs + time.dayOffset * 86400000)
+      ? localDayKeyFromOffset(sourceTs, time.dayOffset)
       : undefined
   const clock = parseClock(clean)
   const dueAt = dueAtFor(dueDay, clock)
