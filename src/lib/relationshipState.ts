@@ -195,8 +195,9 @@ export function getRelationshipView(sessionId: string, now = Date.now()): Relati
   const dayCount = daysKnown(sid, now)
   const latest = events[0]
 
-  // 内部只用粗粒度成熟度选择句式，不展示阶段、档位、数值或进度。
-  const maturity = dayCount >= 120 || events.length >= 8 ? 2 : dayCount >= 30 || events.length >= 3 ? 1 : 0
+  // “认识多久”只是一条时间事实，绝不据此推断亲密度或关系阶段。
+  // 句式只看真实共同事件是否已经留下足够证据。
+  const maturity = events.length >= 8 ? 2 : events.length >= 3 ? 1 : 0
 
   let evidence = ''
   if (latest) {
