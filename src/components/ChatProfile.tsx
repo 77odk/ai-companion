@@ -29,6 +29,7 @@ import SpaceLife from './SpaceLife'
 import { AIDetail } from './Settings'
 import { ChatIcon, EntryChevron, SparkleIcon } from './spaceIcons'
 import type { ChatJumpTarget } from '../lib/chatJump'
+import { getRelationshipView } from '../lib/relationshipState'
 
 interface Props {
   /** 关闭资料卡回聊天 */
@@ -99,6 +100,10 @@ export default function ChatProfile({
       opening: extractOpeningLine(persona),
     }
   })()
+  const relationshipView = sessionId
+    ? getRelationshipView(sessionId)
+    : { settingLabel: '', description: '还没有足够的真实相处记录。', hasExplicitSetting: false }
+
   // 聊天记录子页数据：进资料卡时读一次（聊天页里消息不会在资料卡内变化）
   const [messages] = useState<StoredMessage[]>(() => (sessionId ? getMessagesCache(sessionId) : loadMessages()))
 
@@ -181,6 +186,13 @@ export default function ChatProfile({
       </section>
 
       <div className="ta-profile-body">
+        <section className="ta-profile-now">
+          <div className="ta-profile-section-head">
+            <h3>我们现在</h3>
+          </div>
+          <p>{relationshipView.description}</p>
+        </section>
+
         {(who.personality || who.background || who.opening) && (
           <section className="ta-profile-who">
             <div className="ta-profile-section-head">
