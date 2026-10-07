@@ -1,6 +1,7 @@
 import { notifyDataChanged } from './dataChange.ts'
 import { parseFutureIntent, parseFutureTime, futureDayKey } from './futureIntent.ts'
 import { getMessagesCache } from './sessionStore.ts'
+import { getAccount } from './sync.ts'
 
 export interface TaCommitment {
   id: string
@@ -15,42 +16,26 @@ export interface TaCommitment {
   remindedAt?: number
 }
 
-const KEY = 'ai_companion_ta_commitments_v1'
-const CAPTURE_KEY = 'ai_companion_ta_commitment_last_seen_v1'
 const KEEP = 120
-
 const PROMISE_RE = /(?:我(?:会|一定会|保证|答应你|答应|记得|到时候会)|我.{0,14}(?:会|提醒你|叫你|陪你|告诉你|发给你)|放心.{0,8}我会|这事交给我|我不会忘|我记着)/i
+const byAccount = new Map<string, TaCommitment[]>()
+
+function accountId(): string {
+  return getAccount()?.account.trim() ?? ''
+}
 
 function readAll(): TaCommitment[] {
-  try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((item): item is TaCommitment => (
-      item != null
-      && typeof item.id === 'string'
-      && typeof item.sessionId === 'string'
-      && typeof item.sourceTs === 'number'
-      && Number.isFinite(item.sourceTs)
-      && typeof item.text === 'string'
-      && typeof item.createdAt === 'number'
-      && Number.isFinite(item.createdAt)
-    ))
-  } catch {
-    return []
-  }
+  const account = accountId()
+  if (!account) return []
+  return [...(byAccount.get(account) ?? [])]
 }
 
 function writeAll(list: TaCommitment[], silent = false): boolean {
-  const payload = JSON.stringify(list.slice(0, KEEP))
-  try {
-    localStorage.setItem(KEY, payload)
-    if (!silent) notifyDataChanged()
-    return localStorage.getItem(KEY) === payload
-  } catch {
-    return false
-  }
+  const account = accountId()
+  if (!account) return false
+  byAccount.set(account, list.slice(0, KEEP))
+  if (!silent) notifyDataChanged()
+  return true
 }
 
 function localDayKey(ts: number): string {
@@ -64,6 +49,13 @@ function localDayKeyFromOffset(ts: number, dayOffset: number): string {
   const d = new Date(ts)
   d.setDate(d.getDate() + dayOffset)
   return localDayKey(d.getTime())
+}
+
+function localMidnight(day: string): number | undefined {
+  const parts = day.split('-').map(Number)
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return undefined
+  const ts = new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0).getTime()
+  return Number.isFinite(ts) ? ts : undefined
 }
 
 function parseClock(text: string): { hour: number; minute: number; raw: string } | null {
@@ -107,9 +99,6 @@ export function detectTaCommitment(
       : undefined
   const clock = parseClock(clean)
   const dueAt = dueAtFor(dueDay, clock)
-
-  // A promise can be filed without an exact clock. In that case the app
-  // reminds on the first active check of the due day, rather than inventing a time.
   const dueText = [plan?.when ?? time?.when, clock?.raw].filter(Boolean).join(' ').trim() || undefined
   const base = typeof sourceMessageId === 'number' ? `m${sourceMessageId}` : `t${sourceTs}`
 
@@ -134,29 +123,21 @@ export function loadTaCommitments(sessionId?: string): TaCommitment[] {
 }
 
 export function saveTaCommitment(item: TaCommitment): boolean {
-  if (!item?.id || !item.sessionId || !item.text) return false
+  if (!item?.id || !item.sessionId || !item.text || !accountId()) return false
   const all = readAll().filter((entry) => entry.id !== item.id)
   return writeAll([item, ...all])
 }
 
 export function captureLatestTaCommitment(sessionId: string): TaCommitment | null {
   const sid = String(sessionId ?? '').trim()
-  if (!sid) return null
+  if (!sid || !accountId()) return null
   const latest = [...getMessagesCache(sid)].reverse().find((message) => message.role === 'assistant' && message.content.trim())
   if (!latest) return null
 
-  const fingerprint = `${sid}:${latest.id ?? latest.ts}:${latest.ts}`
-  try {
-    const seen = JSON.parse(localStorage.getItem(CAPTURE_KEY) ?? '{}') as Record<string, string>
-    if (seen[sid] === fingerprint) return null
-    seen[sid] = fingerprint
-    localStorage.setItem(CAPTURE_KEY, JSON.stringify(seen))
-  } catch {
-    // Failure to persist the dedupe cursor must not block chat.
-  }
-
   const commitment = detectTaCommitment(latest.content, sid, latest.ts, typeof latest.id === 'number' ? latest.id : undefined)
   if (!commitment) return null
+  const existing = readAll().find((item) => item.id === commitment.id)
+  if (existing) return existing
   return saveTaCommitment(commitment) ? commitment : null
 }
 
@@ -168,6 +149,21 @@ export function collectDueTaCommitments(now = Date.now()): TaCommitment[] {
     if (item.dueDay) return item.dueDay <= today
     return false
   })
+}
+
+export function nextTaCommitmentCheckAt(now = Date.now()): number | null {
+  let next: number | null = null
+  for (const item of readAll()) {
+    if (item.remindedAt) continue
+    const candidate = typeof item.dueAt === 'number'
+      ? item.dueAt
+      : item.dueDay
+        ? localMidnight(item.dueDay)
+        : undefined
+    if (typeof candidate !== 'number' || candidate <= now) continue
+    if (next == null || candidate < next) next = candidate
+  }
+  return next
 }
 
 export function markCommitmentReminded(id: string, at = Date.now()): TaCommitment | null {
@@ -184,12 +180,17 @@ export function collectAllTaCommitments(): TaCommitment[] {
 }
 
 export function upsertTaCommitmentFromCloud(item: TaCommitment): void {
-  if (!item?.id || !item.sessionId || !item.text) return
+  if (!item?.id || !item.sessionId || !item.text || !accountId()) return
   const all = readAll().filter((entry) => entry.id !== item.id)
   writeAll([item, ...all], true)
 }
 
 export function deleteTaCommitmentFromCloud(id: string): void {
-  if (!id) return
+  if (!id || !accountId()) return
   writeAll(readAll().filter((entry) => entry.id !== id), true)
+}
+
+export function resetTaCommitmentRuntime(): void {
+  const account = accountId()
+  if (account) byAccount.delete(account)
 }
