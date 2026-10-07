@@ -1768,3 +1768,417 @@ html.eluvin-page-hidden .thought-book-page * {
     min-height: 44px;
   }
 }
+
+
+/* ---- S7 · real desk content layers ------------------------------------ */
+.space-scene-hotspot {
+  overflow: visible;
+}
+
+/* The click target follows the physical silhouette instead of exposing a
+   rectangular dashboard hit-area. */
+.space-scene-hotspot.is-photo-wall {
+  clip-path: polygon(4% 5%, 97% 1%, 100% 94%, 2% 99%);
+}
+.space-scene-hotspot.is-star-jar {
+  clip-path: polygon(27% 1%, 74% 1%, 82% 9%, 88% 32%, 91% 85%, 80% 98%, 18% 98%, 8% 85%, 11% 30%, 18% 9%);
+}
+.space-scene-hotspot.is-thought-book {
+  clip-path: polygon(2% 27%, 44% 14%, 52% 24%, 98% 17%, 98% 82%, 55% 91%, 47% 82%, 2% 92%);
+}
+.space-scene-hotspot.is-player {
+  clip-path: polygon(6% 12%, 94% 8%, 98% 82%, 86% 93%, 10% 91%, 2% 75%);
+}
+.space-scene-hotspot.is-weekly-letter {
+  clip-path: polygon(5% 17%, 98% 17%, 98% 88%, 8% 96%, 1% 76%);
+}
+
+/* Photo board covers any baked preview content and then mounts only the
+   user's actual photos. Empty photo data means an actually empty board. */
+.space-live-photo-board {
+  position: absolute;
+  inset: 3% 2% 4%;
+  overflow: hidden;
+  border-radius: 2px;
+  background:
+    linear-gradient(105deg, rgba(255,255,255,.08), transparent 32%),
+    linear-gradient(180deg, rgba(191,142,102,.96), rgba(170,117,84,.97));
+  box-shadow:
+    inset 0 0 0 1px rgba(102,66,46,.18),
+    0 5px 16px rgba(77,47,31,.08);
+  pointer-events: none;
+  transform-origin: 50% 16%;
+}
+
+.space-live-photo-board::before,
+.space-live-photo-board::after {
+  content: '';
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  height: 1px;
+  background: rgba(104,74,53,.30);
+  box-shadow: 0 1px rgba(255,241,220,.18);
+}
+.space-live-photo-board::before { top: 34%; transform: rotate(-1deg); }
+.space-live-photo-board::after { top: 67%; transform: rotate(.8deg); }
+
+.space-live-photo {
+  position: absolute;
+  width: 28%;
+  aspect-ratio: .78;
+  padding: 3px 3px 10px;
+  background: #fff7ea;
+  box-shadow: 0 3px 8px rgba(55,34,23,.22);
+  transform-origin: 50% 3%;
+  animation: space-photo-breeze 11s ease-in-out infinite both;
+}
+
+.space-live-photo::before {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: -4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a66d48;
+  box-shadow: 0 1px 2px rgba(64,37,24,.35);
+  transform: translateX(-50%);
+}
+
+.space-live-photo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  background: transparent;
+}
+
+.space-live-photo.is-p0 { left: 7%; top: 8%; transform: rotate(-5deg); animation-delay: -2.1s; animation-duration: 13.6s; }
+.space-live-photo.is-p1 { left: 36%; top: 5%; transform: rotate(3deg); animation-delay: -7.3s; animation-duration: 15.1s; }
+.space-live-photo.is-p2 { left: 66%; top: 9%; transform: rotate(-2deg); animation-delay: -4.8s; animation-duration: 12.4s; }
+.space-live-photo.is-p3 { left: 13%; top: 42%; transform: rotate(4deg); animation-delay: -9.2s; animation-duration: 16.7s; }
+.space-live-photo.is-p4 { left: 43%; top: 38%; transform: rotate(-4deg); animation-delay: -1.4s; animation-duration: 14.2s; }
+.space-live-photo.is-p5 { left: 70%; top: 43%; transform: rotate(5deg); animation-delay: -11.8s; animation-duration: 17.9s; }
+.space-live-photo.is-p6 { left: 27%; top: 68%; transform: rotate(-2deg); animation-delay: -5.6s; animation-duration: 15.8s; }
+.space-live-photo.is-p7 { left: 57%; top: 67%; transform: rotate(2deg); animation-delay: -8.7s; animation-duration: 13.1s; }
+
+@keyframes space-photo-breeze {
+  0%, 68%, 100% { rotate: 0deg; translate: 0 0; }
+  76% { rotate: .7deg; translate: 0 -1px; }
+  84% { rotate: -.45deg; translate: 0 0; }
+  91% { rotate: .2deg; }
+}
+
+.space-scene-hotspot.is-photo-wall:active .space-live-photo-board {
+  animation: space-board-touch .54s cubic-bezier(.16,1,.3,1) 1;
+}
+@keyframes space-board-touch {
+  0%, 100% { transform: rotate(0); }
+  28% { transform: rotate(.65deg); }
+  62% { transform: rotate(-.42deg); }
+}
+
+/* Glass jar: the opaque lower tint masks painted filler stars; every rendered
+   paper star below corresponds 1:1 to a real memory. */
+.space-live-jar {
+  position: absolute;
+  inset: 6% 9% 4%;
+  overflow: hidden;
+  border: 1px solid rgba(255,246,229,.48);
+  border-radius: 20% 20% 25% 25% / 11% 11% 18% 18%;
+  background:
+    linear-gradient(105deg, rgba(255,255,255,.22), transparent 19% 66%, rgba(255,255,255,.09)),
+    linear-gradient(180deg, rgba(255,244,226,.08), rgba(122,76,54,.28));
+  box-shadow:
+    inset 8px 0 12px rgba(255,255,255,.13),
+    inset -7px -9px 14px rgba(71,43,31,.14),
+    0 5px 12px rgba(72,44,31,.14);
+  pointer-events: none;
+}
+
+.space-live-jar::before {
+  content: '';
+  position: absolute;
+  z-index: 4;
+  left: 25%;
+  right: 25%;
+  top: -2%;
+  height: 9%;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #bd8d61, #8a5d3e);
+  box-shadow: 0 2px 4px rgba(65,39,27,.25);
+}
+
+.space-live-jar-glint {
+  position: absolute;
+  z-index: 3;
+  left: 11%;
+  top: 12%;
+  width: 8%;
+  height: 56%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0));
+  opacity: .55;
+  animation: space-jar-glint 9.4s ease-in-out infinite;
+}
+
+@keyframes space-jar-glint {
+  0%, 72%, 100% { opacity: .34; transform: translateX(0); }
+  80% { opacity: .72; transform: translateX(2px); }
+  91% { opacity: .42; transform: translateX(1px); }
+}
+
+.space-live-star-field {
+  position: absolute;
+  inset: 9% 6% 5%;
+}
+
+.space-live-star {
+  position: absolute;
+  left: var(--live-star-x);
+  top: var(--live-star-y);
+  width: clamp(5px, 2.15vw, 10px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) rotate(var(--live-star-r));
+  background: linear-gradient(
+    135deg,
+    hsl(var(--live-star-h) 67% 88%),
+    hsl(var(--live-star-h) 52% 69%)
+  );
+  clip-path: polygon(50% 0, 61% 35%, 100% 38%, 68% 59%, 79% 100%, 50% 73%, 20% 100%, 31% 59%, 0 38%, 39% 35%);
+  filter: drop-shadow(0 1px 1px rgba(70,43,31,.22));
+  animation: space-live-star-float var(--live-star-t) ease-in-out var(--live-star-d) infinite;
+}
+
+.space-live-star::before,
+.space-live-star::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  clip-path: inherit;
+}
+.space-live-star::before {
+  background: linear-gradient(36deg, transparent 47%, rgba(255,255,255,.34) 49% 52%, transparent 54%);
+}
+.space-live-star::after {
+  background: linear-gradient(144deg, transparent 47%, rgba(74,47,35,.16) 49% 51%, transparent 53%);
+}
+
+@keyframes space-live-star-float {
+  0%, 100% { transform: translate(-50%, -50%) translate3d(0,0,0) rotate(var(--live-star-r)); }
+  42% { transform: translate(-50%, -50%) translate3d(1px,-3px,0) rotate(calc(var(--live-star-r) + 3deg)); }
+  73% { transform: translate(-50%, -50%) translate3d(-1px,-1px,0) rotate(calc(var(--live-star-r) - 2deg)); }
+}
+
+.space-scene-hotspot.is-star-jar:active .space-live-jar {
+  animation: space-jar-touch .72s cubic-bezier(.16,1,.3,1) 1;
+}
+@keyframes space-jar-touch {
+  0%, 100% { transform: rotate(0); }
+  24% { transform: rotate(1.8deg); }
+  53% { transform: rotate(-1.2deg); }
+  78% { transform: rotate(.45deg); }
+}
+
+/* Open book: the paper layer masks any baked text. It stays blank unless a
+   real stored TA thought exists. */
+.space-live-book {
+  position: absolute;
+  inset: 22% 3% 10%;
+  display: grid;
+  place-items: center;
+  padding: 9% 17% 9% 17%;
+  overflow: hidden;
+  border-radius: 48% 48% 9% 9% / 13% 13% 12% 12%;
+  background:
+    linear-gradient(90deg, #f3dfbd 0 48.7%, #ceb48d 49.3%, #f6e5c7 50.7% 100%);
+  box-shadow:
+    inset 0 -2px 5px rgba(96,61,39,.12),
+    0 3px 8px rgba(65,39,26,.10);
+  pointer-events: none;
+  transform-origin: 50% 100%;
+}
+
+.space-live-book::after {
+  content: '';
+  position: absolute;
+  right: 4%;
+  top: 4%;
+  width: 13%;
+  height: 19%;
+  background: linear-gradient(135deg, rgba(255,255,255,.55), rgba(188,156,112,.25));
+  clip-path: polygon(100% 0, 100% 100%, 0 0);
+  transform-origin: 100% 0;
+  animation: space-page-corner 12.7s ease-in-out -4.2s infinite;
+}
+
+.space-live-book > span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgba(88,59,42,.58);
+  font-size: clamp(5px, 1.45vw, 8px);
+  line-height: 1.7;
+  text-align: left;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+@keyframes space-page-corner {
+  0%, 77%, 100% { transform: rotateX(0) translate(0,0); opacity: .5; }
+  84% { transform: rotateX(28deg) translate(-1px,1px); opacity: .8; }
+  92% { transform: rotateX(6deg); opacity: .58; }
+}
+
+.space-scene-hotspot.is-thought-book:active .space-live-book::after {
+  animation: space-page-touch .48s cubic-bezier(.16,1,.3,1) 1;
+}
+@keyframes space-page-touch {
+  0%, 100% { transform: rotateX(0); }
+  48% { transform: rotateX(54deg) translate(-2px,2px); }
+}
+
+/* Tablet screen is blank with no track. With a real selected song, the actual
+   title and Audio currentTime drive the visible progress. */
+.space-live-player {
+  position: absolute;
+  left: 9%;
+  right: 8%;
+  top: 18%;
+  bottom: 17%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 5%;
+  overflow: hidden;
+  padding: 8% 9%;
+  border-radius: 9%;
+  background: rgba(28,25,24,.94);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.10),
+    0 3px 8px rgba(42,27,20,.18);
+  pointer-events: none;
+  animation: space-screen-breathe 8.1s ease-in-out -2.8s infinite;
+}
+
+.space-live-player strong {
+  overflow: hidden;
+  color: rgba(255,245,231,.88);
+  font-size: clamp(5px, 1.5vw, 8px);
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.space-live-player-track {
+  position: relative;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.17);
+}
+.space-live-player-track > i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: rgba(255,231,199,.82);
+  transition: transform 180ms linear;
+}
+
+@keyframes space-screen-breathe {
+  0%, 100% { filter: brightness(.92); }
+  50% { filter: brightness(1.06); }
+}
+
+.space-live-earphone-wire {
+  position: absolute;
+  left: 55%;
+  top: 78%;
+  width: 44%;
+  height: 39%;
+  border-right: 1px solid rgba(244,232,212,.78);
+  border-bottom: 1px solid rgba(244,232,212,.72);
+  border-radius: 0 0 74% 0;
+  pointer-events: none;
+  transform-origin: 72% 0;
+  animation: space-wire-sway 10.6s ease-in-out -6.1s infinite;
+}
+@keyframes space-wire-sway {
+  0%, 72%, 100% { transform: rotate(0); }
+  82% { transform: rotate(.9deg); }
+  91% { transform: rotate(-.45deg); }
+}
+
+/* Drawer now really travels out of the desk; letters are drawn only from the
+   real weekly-letter count. */
+.space-drawer-peek {
+  left: 7%;
+  right: 2%;
+  top: 22%;
+  height: 55%;
+  overflow: hidden;
+  border-radius: 2px 2px 7px 7px;
+  background: linear-gradient(180deg, rgba(73,42,27,.86) 0 19%, rgba(154,96,56,.96) 20% 100%);
+  box-shadow:
+    inset 0 1px rgba(255,239,215,.12),
+    0 4px 8px rgba(52,30,20,.16);
+  transform: translate3d(0,0,0);
+  transition: transform 460ms cubic-bezier(.16,1,.3,1);
+  will-change: transform;
+}
+
+.space-drawer-interior {
+  position: absolute;
+  left: 9%;
+  right: 8%;
+  top: 4%;
+  height: 36%;
+  overflow: hidden;
+  background: #4c2d20;
+}
+
+.space-drawer-interior > i {
+  position: absolute;
+  left: calc(6% + (var(--letter-i) * 7%));
+  top: calc(4% + (var(--letter-i) * 2px));
+  width: 68%;
+  height: 70%;
+  border-radius: 1px;
+  background: #f2dfc4;
+  border: 1px solid rgba(118,78,51,.18);
+  transform: rotate(calc(-4deg + (var(--letter-i) * 1.7deg)));
+  box-shadow: 0 1px 2px rgba(49,30,21,.15);
+}
+
+.space-scene-hotspot.is-weekly-letter:active .space-drawer-peek {
+  transform: translate3d(0, 8%, 0);
+}
+
+.space-scene-hotspot.is-weekly-letter.is-opening .space-drawer-peek {
+  transform: translate3d(0, 48%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-live-photo,
+  .space-live-photo-board,
+  .space-live-jar-glint,
+  .space-live-star,
+  .space-live-book::after,
+  .space-live-player,
+  .space-live-earphone-wire,
+  .space-scene-hotspot.is-star-jar:active .space-live-jar,
+  .space-scene-hotspot.is-thought-book:active .space-live-book::after {
+    animation: none !important;
+  }
+
+  .space-drawer-peek,
+  .space-live-player-track > i {
+    transition: none !important;
+  }
+
+  .space-scene-hotspot.is-weekly-letter.is-opening .space-drawer-peek {
+    transform: translate3d(0, 48%, 0);
+  }
+}
