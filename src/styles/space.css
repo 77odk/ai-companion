@@ -1512,13 +1512,45 @@
   position: absolute;
   left: var(--star-x);
   top: var(--star-y);
+  width: clamp(10px, 3.4vw, 17px);
+  aspect-ratio: 1;
   display: block;
-  color: #ffd88a;
-  font-size: clamp(9px, 3.1vw, 15px);
-  line-height: 1;
-  transform: translate(-50%, -50%) rotate(var(--star-r)) scale(.82);
-  filter: drop-shadow(0 0 4px rgba(255, 209, 114, .28));
+  transform: translate(-50%, -50%) rotate(var(--star-r)) scale(.86);
+  filter: drop-shadow(0 2px 2px rgba(74, 47, 34, .22));
   animation: none;
+  --star-paper: hsl(var(--star-hue) 62% 79%);
+  --star-paper-light: hsl(var(--star-hue) 70% 87%);
+  --star-paper-dark: hsl(var(--star-hue) 47% 68%);
+}
+
+.star-jar-star .fold {
+  position: absolute;
+  inset: 8%;
+  display: block;
+  background: linear-gradient(135deg, var(--star-paper-light), var(--star-paper-dark));
+  clip-path: polygon(50% 0, 61% 36%, 100% 38%, 69% 59%, 80% 100%, 50% 73%, 20% 100%, 31% 59%, 0 38%, 39% 36%);
+  box-shadow: inset 0 0 0 .5px rgba(255,255,255,.26);
+}
+
+.star-jar-star .fold.is-a {
+  clip-path: polygon(50% 0, 61% 36%, 50% 50%, 39% 36%);
+  background: linear-gradient(145deg, var(--star-paper-light), var(--star-paper));
+}
+.star-jar-star .fold.is-b {
+  clip-path: polygon(61% 36%, 100% 38%, 69% 59%, 50% 50%);
+  background: linear-gradient(210deg, var(--star-paper), var(--star-paper-dark));
+}
+.star-jar-star .fold.is-c {
+  clip-path: polygon(69% 59%, 80% 100%, 50% 73%, 50% 50%);
+  background: linear-gradient(320deg, var(--star-paper-light), var(--star-paper-dark));
+}
+.star-jar-star .fold.is-d {
+  clip-path: polygon(50% 50%, 50% 73%, 20% 100%, 31% 59%);
+  background: linear-gradient(35deg, var(--star-paper), var(--star-paper-dark));
+}
+.star-jar-star .fold.is-e {
+  clip-path: polygon(0 38%, 39% 36%, 50% 50%, 31% 59%);
+  background: linear-gradient(135deg, var(--star-paper-light), var(--star-paper));
 }
 
 .star-jar-label {
@@ -1646,9 +1678,10 @@
   font-size: 12px;
 }
 
-@keyframes star-jar-twinkle {
-  0%, 100% { opacity: .48; transform: translate(-50%, -50%) rotate(var(--star-r)) scale(.78); }
-  50% { opacity: .95; transform: translate(-50%, -50%) rotate(var(--star-r)) scale(1); }
+@keyframes star-jar-float {
+  0%, 100% { transform: translate(-50%, -50%) translate3d(0, 0, 0) rotate(var(--star-r)) scale(.86); }
+  38% { transform: translate(-50%, -50%) translate3d(1px, -4px, 0) rotate(calc(var(--star-r) + 3deg)) scale(.9); }
+  67% { transform: translate(-50%, -50%) translate3d(-1px, -2px, 0) rotate(calc(var(--star-r) - 2deg)) scale(.87); }
 }
 
 @keyframes star-paper-open {
@@ -1685,13 +1718,8 @@
   }
 }
 
-.star-jar-star.is-moving {
-  animation: star-jar-twinkle 3.8s ease-in-out var(--star-d) infinite;
-}
-
-.star-jar-star.is-filler {
-  opacity: .34;
-  filter: none;
+ .star-jar-star.is-moving {
+  animation: star-jar-float 7.2s ease-in-out var(--star-d) infinite;
 }
 
 .star-memory-heading {
