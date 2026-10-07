@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
-import EventArchive from './EventArchive'
 import { getActiveSessionId } from '../lib/sessionStore'
 import {
   loadLocalPhotos,
@@ -244,10 +243,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
         </section>
 
         {/*
-          S1 keeps the approved artwork visually untouched while preserving the
-          existing Space capabilities. Transparent hit areas sit on the objects
-          already present in the confirmed composition; S2 replaces these temporary
-          compatibility entry points with the final CSS/SVG object interactions.
+          The approved artwork remains the visual coordinate system. Photo archive
+          access stays mounted here; shared experiences moved to Chaomu in S3,
+          while desk objects use the S2 CSS/SVG interaction layer.
         */}
         <div className="space-scene-hotspots">
           <button
@@ -257,18 +255,6 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             onClick={() => {
               document
                 .querySelector<HTMLButtonElement>('.ai-space-page .photo-stack-preview, .ai-space-page .photo-archive-empty')
-                ?.click()
-            }}
-          />
-          <button
-            type="button"
-            className="space-scene-hotspot is-moments"
-            aria-label="打开一起经历过"
-            onClick={() => {
-              document
-                .querySelector<HTMLButtonElement>(
-                  '.ai-space-page .event-archive-preview .ai-space-v2-all, .ai-space-page .event-archive-preview-item, .ai-space-page .event-archive-empty',
-                )
                 ?.click()
             }}
           />
@@ -316,7 +302,6 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
 
         <div className="space-scene-service-host">
           {renderPhotoWall()}
-          <EventArchive sessionId={sid} />
         </div>
       </>
     )
