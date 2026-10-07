@@ -37,6 +37,9 @@ interface AccountMetadata {
   versions: Record<string, number>
   /** Server-seen entities whose business adapter was unavailable at pull time. */
   inbox: Record<string, CloudStateEntity>
+  /** Small account-scoped business sidecars that belong to Cloud State kinds.
+   * Reuses the existing metadata key instead of creating parallel localStorage keys. */
+  sidecars: Record<string, unknown>
 }
 
 interface MetadataRoot {
@@ -110,6 +113,7 @@ function readMetadata(account: string): AccountMetadata {
     cursor: Number.isFinite(saved?.cursor) && saved.cursor >= 0 ? saved.cursor : 0,
     versions: saved?.versions && typeof saved.versions === 'object' ? { ...saved.versions } : {},
     inbox: saved?.inbox && typeof saved.inbox === 'object' ? { ...saved.inbox } : {},
+    sidecars: saved?.sidecars && typeof saved.sidecars === 'object' ? { ...saved.sidecars } : {},
   }
   // Deployed metadata keyed inbox entries by kind+entityId. Inbox values retain
   // sessionId, so they can be migrated losslessly without resetting the cursor.
@@ -143,6 +147,31 @@ function writeMetadataReliably(account: string, metadata: AccountMetadata): void
 export function getCloudStateCursor(account = getAccount()?.account): number {
   return account ? readMetadata(account).cursor : 0
 }
+
+/**
+ * Account-scoped local cache for small Cloud State-backed auxiliary records.
+ * This is deliberately stored inside the existing Cloud State metadata record:
+ * callers must not create a second localStorage key for the same business data.
+ */
+export function getCloudStateSidecar<T>(namespace: string, account = getAccount()?.account): T | null {
+  if (!account || !namespace) return null
+  const value = readMetadata(account).sidecars[namespace]
+  return value == null ? null : value as T
+}
+
+export function setCloudStateSidecar(namespace: string, value: unknown, account = getAccount()?.account): boolean {
+  if (!account || !namespace) return false
+  const metadata = readMetadata(account)
+  if (value == null) delete metadata.sidecars[namespace]
+  else metadata.sidecars[namespace] = value
+  try {
+    writeMetadataReliably(account, metadata)
+    return true
+  } catch {
+    return false
+  }
+}
+
 
 export function getCloudStateVersion(kind: string, entityId: string, account = getAccount()?.account, sessionId?: string): number {
   if (!account) return 0
