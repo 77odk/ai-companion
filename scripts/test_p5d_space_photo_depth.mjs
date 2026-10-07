@@ -4,6 +4,7 @@ import fs from 'node:fs'
 const space = fs.readFileSync(new URL('../src/styles/space.css', import.meta.url), 'utf8')
 const photos = fs.readFileSync(new URL('../src/styles/photoWallArchive.css', import.meta.url), 'utf8')
 const aiSpace = fs.readFileSync(new URL('../src/components/AISpace.tsx', import.meta.url), 'utf8')
+const memory = fs.readFileSync(new URL('../src/components/Memory.tsx', import.meta.url), 'utf8')
 const photoWall = fs.readFileSync(new URL('../src/components/PhotoWallArchive.tsx', import.meta.url), 'utf8')
 
 function expectPressAfterLift(css, activeSelector, hoverSelector, focusSelector) {
