@@ -33,6 +33,7 @@ import {
 import { loadUserProfile } from '../lib/storage'
 import { captureMemoryPaperMood, deleteMemoryPapersForMemory, generateMemoryPaper, seedMemoryPaperMood } from '../lib/memoryPaper'
 import { getActiveSessionId } from '../lib/sessionStore'
+import { getAccount } from '../lib/sync'
 
 interface Props {
   /** 返回忆览页 */
@@ -159,14 +160,19 @@ export default function AboutMe({ onBack }: Props) {
     // 导致提交后关于我页面不显示）
     const before = loadMemory()
     const sid = getActiveSessionId()
+    const paperAccountId = getAccount()?.account ?? null
     const paperMood = sid ? captureMemoryPaperMood(sid) : undefined
     const next = addMemoryItem(t, '其他', true)
     setMemories(next.filter((m) => m.explicit === true))
     const added = next.find((item) => !before.some((previous) => previous.id === item.id))
     if (sid && added) {
       // 全局“关于我”事实共享，但纸条属于当前 TA：先落当时状态，模型失败也不能把 mood 一起丢掉。
-      seedMemoryPaperMood(sid, { kind: 'global', item: added }, paperMood)
-      void generateMemoryPaper(sid, { kind: 'global', item: added }, { preserveExistingMood: true }).catch(() => {})
+      seedMemoryPaperMood(sid, { kind: 'global', item: added }, paperMood, paperAccountId ?? undefined)
+      void generateMemoryPaper(
+        sid,
+        { kind: 'global', item: added },
+        { preserveExistingMood: true, expectedAccountId: paperAccountId },
+      ).catch(() => {})
     }
     setText('')
   }
