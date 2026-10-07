@@ -112,6 +112,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,ico,png}'],
         navigateFallback: 'index.html',
+        // Generated SW imports this tiny click router so notification taps can focus/open the originating TA.
+        importScripts: ['notification-sw.js'],
       },
     }),
   ],
