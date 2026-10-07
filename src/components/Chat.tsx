@@ -61,6 +61,7 @@ import { CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdFo
 import { enqueueSessionMessageCommit, enqueueSessionMessageCommits } from '../lib/sessionMessageQueue'
 import { flushPendingOpsSnapshot } from '../lib/pendingReplay'
 import { appendMemoryAudit } from '../lib/memoryAudit'
+import { captureMemoryPaperMood, generateMemoryPaper, refreshMemoryPaperAfterCorrection } from '../lib/memoryPaper'
 import { getTaStateView, taMoodLabelForPrompt } from '../lib/taState'
 import { getRelationshipRoleGuidanceForPrompt, getRelationshipSettingLabelForPrompt } from '../lib/relationshipState'
 
@@ -1145,6 +1146,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         // 命中已有（含相似）→ 链路成功但不算新增：不提示「新记下」
         if (isSimilarMemory(getMemoriesCache(activeSessionId), trimmed)) return { ok: true, created: false }
         const token = getToken()
+        const paperMood = captureMemoryPaperMood(activeSessionId)
         const item = upsertMemoryCache(activeSessionId, trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
         // 本地写失败（回读不一致）→ upsertMemoryCache 返回 null：不写云端、也不当作成功
         if (!item) return { ok: false, created: false }
@@ -1154,7 +1156,11 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             ...(snippet ? { source: snippet } : {}),
             ...(opts.taReply?.trim() ? { taReply: opts.taReply.trim() } : {}),
           }).then((res) => {
-            if (res.ok) reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
+            if (!res.ok) return
+            reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
+            const paperItem: MemoryItem = { ...item, id: String(res.data.id) }
+            // Memory 是权威事实；纸条只是一次生成的展示副本。生成失败留到星星罐补写，不影响写入成功。
+            void generateMemoryPaper(activeSessionId, { kind: 'session', item: paperItem }, { mood: paperMood }).catch(() => {})
           })
         }
         notifyMemoryUpdated()
@@ -2395,6 +2401,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const current = getMemoriesCache(sid)
     if (isSimilarMemory(current, clean)) return true
 
+    // 纸条的心情必须是“记忆写入那一刻”的 TA 状态；网络请求之后再读会变成另一个时刻。
+    const paperMood = captureMemoryPaperMood(sid)
     const res = await postMemory(token, sid, { content: clean, source: clean })
     if (!res.ok) return false
 
@@ -2414,6 +2422,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       after: item,
       source: 'manual-message',
     })
+    // 造句失败不反向撤销真实 Memory；星星罐会把缺失纸条列为可补写，不编造内容或心情。
+    void generateMemoryPaper(sid, { kind: 'session', item }, { mood: paperMood }).catch(() => {})
     notifyMemoryUpdated()
     return true
   }
@@ -2518,6 +2528,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
           after: result.item,
           source: 'detail',
         })
+        const paperSessionId = freshTarget.kind === 'session' ? freshTarget.sessionId : activeSessionId
+        if (paperSessionId) {
+          // 纠正只重写纸条正文；当时的心情快照若存在必须原样保留。
+          void refreshMemoryPaperAfterCorrection(
+            paperSessionId,
+            { kind: freshTarget.kind, item: result.item },
+          ).catch(() => {})
+        }
       }
       notifyMemoryUpdated()
       setPendingMemoryCorrection(null)
