@@ -616,3 +616,109 @@
     padding-right: max(64px, calc((100% - var(--el-content-photo-max)) / 2));
   }
 }
+
+
+/* Space-scene photo wall: use the existing archive/data path, but let the
+   preview live directly on the approved wall instead of inside a card. */
+.photo-archive-scene-slot {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.photo-stack-preview--scene {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  min-height: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+  perspective: 900px;
+}
+
+.photo-stack-preview--scene .photo-stack-felt {
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  background:
+    radial-gradient(circle at 20% 24%, rgba(121, 75, 47, .045) 0 .55px, transparent .8px),
+    radial-gradient(circle at 73% 68%, rgba(121, 75, 47, .04) 0 .5px, transparent .8px);
+  background-size: 14px 14px, 17px 17px;
+  box-shadow: inset 0 0 26px rgba(110, 63, 38, .035);
+  opacity: .6;
+}
+
+.photo-stack-preview--scene .photo-stack-card {
+  width: clamp(52px, 18.5vw, 92px);
+  height: clamp(70px, 24vw, 120px);
+  padding: 5px 5px 17px;
+  border-radius: 2px;
+  background: rgba(255, 249, 237, .96);
+  box-shadow:
+    0 5px 10px rgba(83, 46, 25, .15),
+    0 1px 1px rgba(83, 46, 25, .08);
+}
+
+.photo-stack-preview--scene .photo-stack-card img {
+  border-radius: 1px;
+}
+
+.photo-stack-preview--scene .photo-stack-card:nth-of-type(n+9) {
+  opacity: .92;
+}
+
+.photo-stack-preview--scene .photo-stack-uploading {
+  bottom: 2%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 247, 232, .78);
+  color: rgba(91, 58, 42, .78);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+
+.photo-archive-scene-error {
+  position: absolute;
+  z-index: 90;
+  left: 50%;
+  bottom: 0;
+  max-width: 88%;
+  margin: 0;
+  padding: 5px 8px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(255, 244, 229, .84);
+  color: rgba(88, 55, 39, .86);
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .photo-stack-preview--scene:hover {
+    transform: none;
+  }
+
+  .photo-stack-preview--scene:hover .photo-stack-card {
+    box-shadow:
+      0 7px 14px rgba(83, 46, 25, .18),
+      0 1px 1px rgba(83, 46, 25, .08);
+  }
+}
+
+.photo-stack-preview--scene:active {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-stack-preview--scene,
+  .photo-stack-preview--scene .photo-stack-card {
+    transition: none;
+  }
+}
