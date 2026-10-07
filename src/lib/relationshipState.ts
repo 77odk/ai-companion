@@ -112,10 +112,28 @@ function daysKnown(sessionId: string, now: number): number {
   return Math.max(1, Math.floor((now - raw) / 86_400_000) + 1)
 }
 
+const RELATIONSHIP_PRESET_EN: Record<Exclude<RelationshipPreset, '自定义'>, string> = {
+  '恋人': 'lovers',
+  '兄妹': 'siblings',
+  '家人': 'family',
+  '偶像与粉丝': 'idol and fan',
+  '宿敌': 'rivals',
+  '主仆': 'master and servant',
+  '师生': 'teacher and student',
+  '原作角色与你的 OC': "a canon character and USER's OC",
+}
+
 function relationshipLabel(setting: RelationshipSetting | null): string {
   if (!setting?.preset) return ''
   if (setting.preset === '自定义') return setting.customLabel?.trim() || '自定义'
   return setting.preset
+}
+
+export function getRelationshipSettingLabelForPrompt(sessionId: string, lang: 'zh' | 'en'): string {
+  const setting = loadRelationshipSetting(sessionId)
+  if (!setting?.preset) return ''
+  if (setting.preset === '自定义') return setting.customLabel?.trim() || ''
+  return lang === 'en' ? RELATIONSHIP_PRESET_EN[setting.preset] : setting.preset
 }
 
 export function getRelationshipView(sessionId: string, now = Date.now()): RelationshipView {
