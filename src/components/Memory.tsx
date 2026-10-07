@@ -663,12 +663,6 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
   const prefersReduced =
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-  const openBookCover = () => {
-    setBookStage('cover')
-    setBookFrom('cover')
-    setView('book')
-  }
-
   const openBookHere = () => {
     const idx = bookPages.findIndex((p) => p.type === 'memory' && p.index === selectedIndex)
     setBookPageIdx(idx >= 0 ? idx : 0)
