@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
+import { SPACE_SCENE_SRC } from './spaceSceneAsset'
 import { getActiveSessionId } from '../lib/sessionStore'
 import {
   loadLocalPhotos,
@@ -188,49 +189,12 @@ export default function AISpace({ onOpenWeekly }: Props) {
     setPhotoUploading(0)
   }
 
-  function renderPhotoWall() {
-    const token = getToken()
-    return (
-      <>
-        <PhotoWallArchive
-          photos={photos}
-          uploading={photoUploading}
-          error={photoError}
-          photoSrc={(photo) => photo.dataUrl ?? photoUrl(photo.id, token)}
-          onPhotoLoadError={(photo) => {
-            failedPhotoIdsRef.current.add(photo.id)
-            setPhotoError(PHOTO_IMAGE_LOAD_ERROR)
-          }}
-          onPhotoLoadSuccess={(photo) => {
-            failedPhotoIdsRef.current.delete(photo.id)
-            if (failedPhotoIdsRef.current.size === 0) {
-              setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? null : current)
-            }
-          }}
-          onAdd={() => fileInputRef.current?.click()}
-          onDelete={handleDeletePhoto}
-        />
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="ai-photo-file"
-          onChange={(event) => {
-            void handlePhotoFiles(event.target.files)
-            event.target.value = ''
-          }}
-        />
-      </>
-    )
-  }
-
   function renderHomePage() {
     return (
       <div className="space-scene" data-space-scene="golden-desk">
         <img
           className="space-scene-background"
-          src="/space-scenes/golden-desk.webp"
+          src={SPACE_SCENE_SRC}
           alt=""
           draggable={false}
           aria-hidden="true"
