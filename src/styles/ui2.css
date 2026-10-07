@@ -1506,6 +1506,14 @@
   line-height: 1.2;
 }
 
+.welcome-reference-ai {
+  margin: 9px 0 0;
+  color: rgba(74, 63, 59, .54);
+  font-size: 10px;
+  letter-spacing: .08em;
+  line-height: 1.3;
+}
+
 /* 轻艺术字副标题：楷体气质、分两行（逗号后换行），不抢主标题 */
 .welcome-reference-lead {
   margin: 0 0 0;
@@ -3313,6 +3321,14 @@
   gap: 3px;
 }
 
+.chat-header-name-row {
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 .chat-header-name {
   max-width: 100%;
   overflow: hidden;
@@ -3323,6 +3339,21 @@
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 1.25;
+}
+
+.chat-header-ai-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 17px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--color-text-muted) 24%, transparent);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: .06em;
+  line-height: 1;
 }
 
 .chat-header-presence {
