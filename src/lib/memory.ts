@@ -744,15 +744,14 @@ export function deriveMemoryTriggerWords(text: string, topic?: string): string[]
   }
   const inferred = topic?.trim() || inferTopic(text)
   if (inferred && inferred !== '其他') push(inferred)
-  for (const word of [...kw.multi].sort((a, b) => a.length - b.length || a.localeCompare(b))) {
+  // Set 保留源文本出现顺序；不做 locale 排序，也不截断候选。
+  // 触发词只在本地匹配，不进入模型上下文，因此没必要用 cap 换正确性。
+  // UI 若只想展示少量 chip，应在展示层 slice，而不能让召回因此丢掉句尾的关键实体。
+  for (const word of kw.multi) {
     if (word.length >= 2 && word.length <= 8) push(word)
-    if (out.length >= 8) break
   }
-  for (const word of kw.singles) {
-    push(word)
-    if (out.length >= 8) break
-  }
-  return out.slice(0, 8)
+  for (const word of kw.singles) push(word)
+  return out
 }
 
 function memoryTriggers(memory: MemoryItem): string[] {
