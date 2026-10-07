@@ -75,6 +75,8 @@ console.log('[S3] 星星纸条在写入时一次生成，记录当时 TA 心情�
 assert.match(memoryPaper, /const SIDECAR = 'memory_paper_v1'/)
 assert.match(memoryPaper, /captureMemoryPaperMood/)
 assert.match(memoryPaper, /seedMemoryPaperMood/)
+assert.match(memoryPaper, /expectedAccountId/)
+assert.match(memoryPaper, /getAccount\(\)\?\.account !== accountId/)
 assert.match(memoryPaper, /sentence: ''/)
 assert.match(memoryPaper, /只改写已有事实，绝不补共同经历、原因、地点、时间或感受/)
 assert.match(memoryPaper, /preserveExistingMood/)
