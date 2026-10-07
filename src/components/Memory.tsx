@@ -718,7 +718,7 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
           <div className="memory-book-cover-veil" aria-hidden="true" />
           <div className="memory-book-cover-content">
             <p className="memory-book-cover-en">E L U V I N</p>
-            <h2 className="memory-book-cover-title">TA 记得的你</h2>
+            <h2 className="memory-book-cover-title">记忆书</h2>
             <p className="memory-book-cover-name">MEMORY BOOK</p>
             {yearRange ? <p className="memory-book-cover-years">{yearRange}</p> : null}
             <p className="memory-book-cover-line">那些被记住的小事，</p>
@@ -984,7 +984,22 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
                 </div>
               </div>
             ) : (
-              <p className="memory-detail-text">{selected.item.text}</p>
+              <>
+                <p className="memory-detail-text">{selected.item.text}</p>
+                {deriveMemoryTriggerWords(selected.item.text, selected.item.topic).length > 0 ? (
+                  <div className="memory-trigger-row" aria-label="记忆触发词">
+                    <span>触发词</span>
+                    <div>
+                      {(selected.item.triggerWords?.length
+                        ? selected.item.triggerWords
+                        : deriveMemoryTriggerWords(selected.item.text, selected.item.topic)
+                      ).slice(0, 8).map((word) => (
+                        <span key={word} className="memory-trigger-chip">{word}</span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
             )}
           </div>
           {pinned ? (
