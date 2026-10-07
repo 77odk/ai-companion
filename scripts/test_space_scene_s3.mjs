@@ -10,7 +10,7 @@ import {
   collectDueTaCommitments,
   markCommitmentReminded,
 } from '../src/lib/commitmentStore.ts'
-import { saveMessagesCache } from '../src/lib/sessionStore.ts'
+import { saveMessagesCache, setSessionsCache } from '../src/lib/sessionStore.ts'
 import {
   appendMemoryAudit,
   loadMemoryAudit,
@@ -103,6 +103,7 @@ console.log('[S3] TA 承诺单独建档；只有真实承诺才进入，明确�
 store.clear()
 login()
 const sourceTs = new Date(2026, 9, 7, 10, 0).getTime()
+setSessionsCache([{ id: '7', title: 'TA 7' }, { id: '8', title: 'TA 8' }])
 const promise = detectTaCommitment('我答应你明天晚上8点提醒你喝水。', '7', sourceTs, 42)
 assert.ok(promise)
 assert.equal(promise.sessionId, '7')
@@ -154,6 +155,7 @@ assert.equal(collectDueTaCommitments(sourceTs).length, 0)
 saveTaCommitment({ ...promise, id: 'session-7-promise', sessionId: '7' })
 saveTaCommitment({ ...promise, id: 'session-8-promise', sessionId: '8' })
 assert.equal(deleteTaCommitmentsForSession('7'), true)
+setSessionsCache([{ id: '8', title: 'TA 8' }])
 assert.equal(loadTaCommitments('7').length, 0, '删除角色后该 TA 的承诺必须从本地档案清掉')
 assert.equal(loadTaCommitments('8').some((item) => item.id === 'session-8-promise'), true, '删除一个角色不能误删其它角色承诺')
 assert.match(rolesPage, /deleteTaCommitmentsForSession\(id\)/)
