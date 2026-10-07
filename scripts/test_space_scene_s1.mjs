@@ -9,8 +9,10 @@ const asset = 'public/space/space-desk.webp'
 
 assert.match(aiSpace, /className="space-scene-shell"/)
 assert.match(aiSpace, /src="\/space\/space-desk\.webp"/)
-assert.match(aiSpace, /className="space-scene-hotspot is-photo-wall"/)
+assert.match(aiSpace, /space-scene-hotspot is-photo-wall/)
 assert.match(aiSpace, /space-scene-hotspot is-weekly-letter/)
+assert.match(aiSpace, /\/space\/generated\/photo-board\.svg/)
+assert.match(aiSpace, /\/space\/generated\/jar\.svg/)
 assert.match(aiSpace, /className="space-scene-service-host"/)
 assert.match(aiSpace, /\{renderPhotoWall\(\)\}/)
 
