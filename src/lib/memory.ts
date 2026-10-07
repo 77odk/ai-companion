@@ -24,6 +24,10 @@ export interface MemoryItem {
   lastMentionedAt?: number
   /** 双源信任：true=用户亲口明说的（手动添加），注入排序时优先；缺省/缺失=TA 从聊天里推断的、或旧数据（优先级低） */
   explicit?: boolean
+  /** 记忆激活词：只有命中本轮上下文才允许进入模型上下文。旧数据缺失时由 text/topic 本地派生。 */
+  triggerWords?: string[]
+  /** 当时状态/心情快照；只有真实写入过才展示，旧数据没有就保持空。 */
+  moodSnapshot?: string
   /**
    * 本机专用标记（不上传、不进云端）：这条是刚在本机写的、还没确认上传成功。
    * 拉云端列表做合并时用它区分两件事——带标记 = 还没传成功的新记忆，必须保留；
@@ -730,6 +734,48 @@ function extractKeywords(text: string): { multi: Set<string>; singles: Set<strin
   return { multi, singles }
 }
 
+/**
+ * 为旧记忆/自动记忆派生轻量触发词，不调模型、不建向量库。
+ * 显式 triggerWords 存在时优先用显式值；这里仅作向后兼容。
+ */
+export function deriveMemoryTriggerWords(text: string, topic?: string): string[] {
+  const kw = extractKeywords(text)
+  const out: string[] = []
+  const push = (value: string) => {
+    const v = value.trim().toLowerCase()
+    if (!v || STOP_CHARS.has(v) || out.includes(v)) return
+    out.push(v)
+  }
+  const inferred = topic?.trim() || inferTopic(text)
+  if (inferred && inferred !== '其他') push(inferred)
+  for (const word of [...kw.multi].sort((a, b) => a.length - b.length || a.localeCompare(b))) {
+    if (word.length >= 2 && word.length <= 8) push(word)
+    if (out.length >= 8) break
+  }
+  for (const word of kw.singles) {
+    push(word)
+    if (out.length >= 8) break
+  }
+  return out.slice(0, 8)
+}
+
+function memoryTriggers(memory: MemoryItem): string[] {
+  const explicit = Array.isArray(memory.triggerWords)
+    ? memory.triggerWords.map((word) => String(word ?? '').trim().toLowerCase()).filter(Boolean)
+    : []
+  return explicit.length > 0 ? [...new Set(explicit)].slice(0, 12) : deriveMemoryTriggerWords(memory.text, memory.topic)
+}
+
+function triggerMatchesContext(trigger: string, raw: string, multi: Set<string>, singles: Set<string>): boolean {
+  const t = trigger.trim().toLowerCase()
+  if (!t) return false
+  const lower = raw.toLowerCase()
+  if (lower.includes(t)) return true
+  if (t.length === 1) return singles.has(t) || raw.includes(t)
+  if (multi.has(t)) return true
+  return hasCommonKeyword(t, raw, multi, singles)
+}
+
 /** 记忆 text 与 contextText 是否有共同实词：2 字以上词有交集，或任一侧的单字实词出现在另一侧文本里 */
 function hasCommonKeyword(
   memText: string,
@@ -745,7 +791,7 @@ function hasCommonKeyword(
 }
 
 export interface RecallOptions {
-  /** 兜底条数：无任何命中时取最活跃的前 N 条，默认 5 */
+  /** 兼容旧调用签名；B19 起无命中不再兜底注入。 */
   fallbackCount?: number
   /** 排序基准时间（测试可传固定值），默认 Date.now() */
   now?: number
@@ -770,51 +816,21 @@ export function recallRelevantMemories(
   opts: RecallOptions = {},
 ): MemoryItem[] {
   const now = opts.now ?? Date.now()
-  const fallbackCount = opts.fallbackCount ?? 10
   const valid = (Array.isArray(items) ? items : []).filter(
     (m): m is MemoryItem =>
       m != null && typeof m.text === 'string' && isMemoryActive(m, now),
   )
   if (valid.length === 0) return []
 
-  const pinned = valid.filter((m) => m.pinned === true)
-  const rest = valid.filter((m) => m.pinned !== true)
-
-  const ctxRaw = String(contextText ?? '')
+  const ctxRaw = String(contextText ?? '').trim()
+  if (!ctxRaw) return []
   const ctxKw = extractKeywords(ctxRaw)
 
-  // 主题命中：context 里出现主题词表里的词 → 该主题全部记忆带上
-  const hitTopics = new Set<string>()
-  for (const [re, topic] of TOPIC_RULES) {
-    if (re.test(ctxRaw)) hitTopics.add(topic)
-  }
+  // B19：条目只有触发词命中才进入上下文。pinned / explicit 只参与命中后的排序，
+  // 不能绕过激活门；也不再用“无命中时塞几条”的兜底把整库带进每一轮。
+  const matched = valid.filter((memory) => (
+    memoryTriggers(memory).some((trigger) => triggerMatchesContext(trigger, ctxRaw, ctxKw.multi, ctxKw.singles))
+  ))
 
-  const matched: MemoryItem[] = []
-  const seen = new Set<string>()
-  for (const m of rest) {
-    const topic = m.topic?.trim() || inferTopic(m.text)
-    if (hitTopics.has(topic)) {
-      seen.add(m.id)
-      matched.push(m)
-      continue
-    }
-    if (seen.has(m.id)) continue
-    if (hasCommonKeyword(m.text, ctxRaw, ctxKw.multi, ctxKw.singles)) {
-      seen.add(m.id)
-      matched.push(m)
-    }
-  }
-
-  // 一条都没命中 → 兜底：pinned 全量 + explicit（用户明说）全量 + 其余按活跃度补到 fallbackCount。
-  // 刷新对话/无上下文时走这里：保证关键事实（置顶的、用户亲口说的）永远在 TA 的脑子里。
-  if (matched.length === 0) {
-    const ranked = rankDualSource(valid, now)
-    const pin = ranked.filter((m) => m.pinned === true)
-    const explicit = ranked.filter((m) => m.explicit === true && m.pinned !== true)
-    const others = ranked.filter((m) => m.pinned !== true && m.explicit !== true)
-    const restCount = Math.max(0, fallbackCount - pin.length - explicit.length)
-    return [...pin, ...explicit, ...others.slice(0, restCount)]
-  }
-
-  return rankDualSource([...pinned, ...matched], now)
+  return rankDualSource(matched, now)
 }
