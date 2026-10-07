@@ -19,6 +19,9 @@ export interface TaCommitment {
 const KEEP = 120
 const SIDECAR = 'ta_commitment_v1'
 const PROMISE_RE = /(?:我(?:会|一定会|保证|答应你|答应|记得|到时候会)|我.{0,14}(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)|放心.{0,8}我会|这事交给我|我不会忘|我记着)/i
+const SELF_ACTION_RE = /(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)/i
+const NEGATED_SELF_ACTION_RE = /我.{0,10}(?:不能|不会|不想|不打算|没法|没办法|无法|不方便).{0,12}(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)/i
+const THIRD_PARTY_ACTOR_RE = /我.{0,8}(?:觉得|认为|猜|估计|听说|感觉).{0,10}(?:他|她|TA|ta|对方|别人).{0,10}(?:提醒你|叫你|陪你|告诉你|发给你|来找你|去找你|给你)/i
 
 function readAll(): TaCommitment[] {
   const saved = getCloudStateSidecar<TaCommitment[]>(SIDECAR)
@@ -83,6 +86,25 @@ export function detectTaCommitment(
   const clean = String(text ?? '').replace(/\s+/g, ' ').trim()
   if (!clean || !PROMISE_RE.test(clean)) return null
 
+  // 只把 SELF 真正承担的承诺建档。否定句和“我觉得他/她会……”属于非承诺，
+  // 不能反转成「TA 答应你的事」。
+  const clauses = clean.split(/[，,。！？!?；;\n]+/).map((part) => part.trim()).filter(Boolean)
+  const hasPositiveSelfCommitment = clauses.some((clause) => {
+    if (!PROMISE_RE.test(clause)) return false
+    if (NEGATED_SELF_ACTION_RE.test(clause)) return false
+    if (THIRD_PARTY_ACTOR_RE.test(clause)) return false
+
+    const action = clause.match(SELF_ACTION_RE)
+    if (!action || action.index == null) {
+      return /(?:这事交给我|我不会忘|我记着)/i.test(clause)
+    }
+    const beforeAction = clause.slice(0, action.index)
+    if (!beforeAction.includes('我')) return false
+    if (/(?:他|她|TA|ta|对方|别人).{0,8}$/.test(beforeAction)) return false
+    return true
+  })
+  if (!hasPositiveSelfCommitment) return null
+
   const plan = parseFutureIntent(clean, new Date(sourceTs))
   const time = parseFutureTime(clean, new Date(sourceTs))
   const dueDay = plan
@@ -124,14 +146,24 @@ export function saveTaCommitment(item: TaCommitment): boolean {
 export function captureLatestTaCommitment(sessionId: string): TaCommitment | null {
   const sid = String(sessionId ?? '').trim()
   if (!sid) return null
-  const latest = [...getMessagesCache(sid)].reverse().find((message) => (
+  const messages = getMessagesCache(sid)
+  const latest = [...messages].reverse().find((message) => (
     message.role === 'assistant'
     && message.replyState !== 'interrupted'
     && message.content.trim()
   ))
   if (!latest) return null
 
-  const commitment = detectTaCommitment(latest.content, sid, latest.ts, typeof latest.id === 'number' ? latest.id : undefined)
+  // 同一轮被拆成多个 assistant bubble 时，它们共享 assistantTs。
+  // 必须检查整批，而不是只看最后一泡，否则“承诺 + 晚安”会漏掉前面的承诺。
+  const batch = messages.filter((message) => (
+    message.role === 'assistant'
+    && message.replyState !== 'interrupted'
+    && message.ts === latest.ts
+    && message.content.trim()
+  ))
+  const batchText = batch.map((message) => message.content.trim()).join('\n')
+  const commitment = detectTaCommitment(batchText, sid, latest.ts)
   if (!commitment) return null
   const existing = readAll().find((item) => item.id === commitment.id)
   if (existing) return existing
