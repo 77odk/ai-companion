@@ -4,7 +4,6 @@ import { assignDayRows, boardHeightForPhotos, groupPhotosByMonth, layoutForPhoto
 import '../styles/photoWallArchive.css'
 
 interface Props {
-  scene?: boolean
   photos: PhotoMeta[]
   uploading: number
   error: string | null
@@ -78,7 +77,7 @@ function fmtMD(ts: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
-export default function PhotoWallArchive({ scene = false, photos, uploading, error, photoSrc, onPhotoLoadError, onPhotoLoadSuccess, onAdd, onDelete }: Props) {
+export default function PhotoWallArchive({ photos, uploading, error, photoSrc, onPhotoLoadError, onPhotoLoadSuccess, onAdd, onDelete }: Props) {
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -142,13 +141,28 @@ export default function PhotoWallArchive({ scene = false, photos, uploading, err
 
   return (
     <>
-      {scene ? (
-        <div className="photo-archive-scene-slot">
+      <section className="ai-space-v2-section space-archive-section photo-archive-preview-section">
+        <div className="ai-space-v2-head">
+          <span className="ai-space-v2-title">照片墙</span>
+          <span className="ai-space-v2-en">PHOTO WALL</span>
+          {sorted.length > 0 && (
+            <button type="button" className="ai-space-v2-all" onClick={() => setOpen(true)}>
+              查看全部 ›
+            </button>
+          )}
+        </div>
+
+        {sorted.length === 0 && uploading === 0 ? (
+          <button type="button" className="photo-archive-empty" onClick={onAdd}>
+            <span className="photo-archive-empty-plus" aria-hidden="true">＋</span>
+            <span>从第一张开始，慢慢留下我们的日子。</span>
+          </button>
+        ) : (
           <button
             type="button"
-            className="photo-stack-preview photo-stack-preview--scene"
+            className="photo-stack-preview"
             onClick={() => setOpen(true)}
-            aria-label={sorted.length > 0 ? '打开照片墙' : '打开照片墙并添加照片'}
+            aria-label="打开照片墙"
           >
             <span className="photo-stack-felt" aria-hidden="true" />
             {preview.map((photo, index) => {
@@ -171,63 +185,15 @@ export default function PhotoWallArchive({ scene = false, photos, uploading, err
             })}
             {uploading > 0 && <span className="photo-stack-uploading">正在放进照片墙…</span>}
           </button>
-          {error && <p className="ai-photo-err photo-archive-scene-error">{error}</p>}
-        </div>
-      ) : (
-        <section className="ai-space-v2-section space-archive-section photo-archive-preview-section">
-          <div className="ai-space-v2-head">
-            <span className="ai-space-v2-title">照片墙</span>
-            <span className="ai-space-v2-en">PHOTO WALL</span>
-            {sorted.length > 0 && (
-              <button type="button" className="ai-space-v2-all" onClick={() => setOpen(true)}>
-                查看全部 ›
-              </button>
-            )}
-          </div>
+        )}
 
-          {sorted.length === 0 && uploading === 0 ? (
-            <button type="button" className="photo-archive-empty" onClick={onAdd}>
-              <span className="photo-archive-empty-plus" aria-hidden="true">＋</span>
-              <span>从第一张开始，慢慢留下我们的日子。</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="photo-stack-preview"
-              onClick={() => setOpen(true)}
-              aria-label="打开照片墙"
-            >
-              <span className="photo-stack-felt" aria-hidden="true" />
-              {preview.map((photo, index) => {
-                const layout = layoutForPhoto(photo.id, photo.createdAt, dayRows.get(photo.id) ?? 0)
-                return (
-                  <span
-                    key={photo.id}
-                    className={`photo-stack-card pin-${layout.pin}`}
-                    style={previewStyle(photo, index, preview.length)}
-                  >
-                    <img
-                      src={photoSrc(photo)}
-                      alt=""
-                      loading={index < 6 ? 'eager' : 'lazy'}
-                      onError={(event) => handlePhotoImageError(event, photo)}
-                      onLoad={(event) => handlePhotoImageLoad(event, photo)}
-                    />
-                  </span>
-                )
-              })}
-              {uploading > 0 && <span className="photo-stack-uploading">正在放进照片墙…</span>}
-            </button>
-          )}
-
-          {error && <p className="ai-photo-err">{error}</p>}
-          {sorted.length > 0 && (
-            <button type="button" className="photo-archive-add-inline" onClick={onAdd}>
-              ＋ 添加照片
-            </button>
-          )}
-        </section>
-      )}
+        {error && <p className="ai-photo-err">{error}</p>}
+        {sorted.length > 0 && (
+          <button type="button" className="photo-archive-add-inline" onClick={onAdd}>
+            ＋ 添加照片
+          </button>
+        )}
+      </section>
 
       {open && (
         <div className="photo-archive-page" role="dialog" aria-label="照片墙">
