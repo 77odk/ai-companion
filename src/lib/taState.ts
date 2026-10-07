@@ -479,13 +479,13 @@ export function getTaThoughtSignal(
 
 export function initTaStateCloudSync(): void {
   registerCloudStateAdapter(KIND, {
-    apply(entity: CloudStateEntity) {
+    apply(entity: CloudStateEntity, context) {
       if (!entity.sessionId || entity.entityId !== entity.sessionId) return
       const incoming = validPrivateState(entity.payload, entity.sessionId)
       if (!incoming) return
       const map = readMap()
       const current = validPrivateState(map[entity.sessionId], entity.sessionId)
-      if (current && current.updatedAt > incoming.updatedAt) return
+      if (!context.authoritative && current && current.updatedAt > incoming.updatedAt) return
       map[entity.sessionId] = incoming
       setCloudStateSidecar(SIDECAR, map)
       notifyDataChanged()
