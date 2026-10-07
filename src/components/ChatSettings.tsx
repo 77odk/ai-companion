@@ -234,12 +234,14 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
                 <span>频率</span>
                 <select
                   className="input"
-                  value={Math.min(3, initiativePreference.dailyLimit)}
+                  value={initiativePreference.dailyLimit}
                   onChange={(event) => updateInitiativePreference({ dailyLimit: Number(event.target.value) })}
                 >
                   <option value={1}>少一点 · 每天最多 1 次</option>
                   <option value={2}>适中 · 每天最多 2 次</option>
                   <option value={3}>多一点 · 每天最多 3 次</option>
+                  <option value={4}>常一点 · 每天最多 4 次</option>
+                  <option value={5}>最多 · 每天最多 5 次</option>
                 </select>
               </label>
               <div className="initiative-quiet-setting">
