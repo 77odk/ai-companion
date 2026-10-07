@@ -4,6 +4,7 @@
 
 import { getAccount, clearAccount } from './sync.ts'
 import { notifyAuthChanged } from './dataChange.ts'
+import { clearListenTogether } from './listenTogetherState.ts'
 
 /** 游客可看的展示类 view：欢迎页 / 选角色模板页 / 使用指南 */
 export const PUBLIC_VIEWS = ['welcome', 'role', 'guide'] as const
@@ -25,6 +26,7 @@ export function isLoggedIn(): boolean {
 
 /** 登出：清 token/account 并广播登录状态变化（App 收到后刷新登录墙） */
 export function logout(): void {
+  clearListenTogether()
   clearAccount()
   notifyAuthChanged()
 }
