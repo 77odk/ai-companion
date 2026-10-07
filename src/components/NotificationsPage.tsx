@@ -72,7 +72,7 @@ function dateLabel(value: string): string {
 }
 
 /**
- * 消息与通知：数据来自后端 GET /api/notifications（未登录不请求、不发红点）。
+ * 站内信：数据来自后端 GET /api/notifications（未登录不请求、不发红点）。
  * 拉到数据即视为已读，回执上抛给 App 统一 POST /api/notifications/read。
  */
 export default function NotificationsPage({ onBack, onRead, onAuthExpired }: Props) {
@@ -148,7 +148,7 @@ export default function NotificationsPage({ onBack, onRead, onAuthExpired }: Pro
           </svg>
           返回
         </button>
-        <h2 className="detail-title">消息与通知</h2>
+        <h2 className="detail-title">站内信</h2>
         <span className="detail-spacer" aria-hidden="true" />
       </div>
 
