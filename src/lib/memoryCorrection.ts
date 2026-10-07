@@ -1,4 +1,4 @@
-import { deriveMemoryTriggerWords, loadMemory, removeMemoryItem, updateMemoryItemContent, type MemoryItem } from './memory.ts'
+import { loadMemory, removeMemoryItem, updateMemoryItemContent, type MemoryItem } from './memory.ts'
 import { deleteMemory, patchMemory } from './sessionApi.ts'
 import { getMemoriesCache, saveMemoriesCache } from './sessionStore.ts'
 
@@ -214,11 +214,7 @@ export async function correctMemoryText(
   const response = await patchMemory(target.token, current.id, { content: text })
   if (!response.ok) return { ok: false, message: response.message || '保存失败，请重试' }
 
-  const item = {
-    ...current,
-    text,
-    triggerWords: deriveMemoryTriggerWords(text, current.topic),
-  }
+  const item = { ...current, text }
   saveMemoriesCache(
     target.sessionId,
     cached.map((memory) => (memory.id === current.id ? item : memory)),
