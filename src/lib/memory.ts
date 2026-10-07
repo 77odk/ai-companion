@@ -732,7 +732,7 @@ function extractKeywords(text: string): { multi: Set<string>; singles: Set<strin
 
 /**
  * 为旧记忆/自动记忆派生轻量触发词，不调模型、不建向量库。
- * 显式 triggerWords 存在时优先用显式值；这里仅作向后兼容。
+ * 只从既有 text/topic 派生，不写回 MemoryItem；旧数据天然兼容。
  */
 export function deriveMemoryTriggerWords(text: string, topic?: string): string[] {
   const kw = extractKeywords(text)
@@ -766,6 +766,12 @@ function triggerMatchesContext(trigger: string, raw: string, multi: Set<string>,
   if (!t) return false
   const lower = raw.toLowerCase()
   if (lower.includes(t)) return true
+
+  // topic 本身也是合法触发词，但用户通常说“猫/咖啡/加班”而不会说“宠物/饮食/工作”。
+  // 用既有 TOPIC_RULES 判本轮是否命中该主题，仍是纯本地规则，不扩大到无关记忆。
+  const topicRule = TOPIC_RULES.find(([, topic]) => topic.toLowerCase() === t)
+  if (topicRule?.[0].test(raw)) return true
+
   if (t.length === 1) return singles.has(t) || raw.includes(t)
   if (multi.has(t)) return true
   return hasCommonKeyword(t, raw, multi, singles)
@@ -795,7 +801,7 @@ export interface RecallOptions {
 /**
  * B19 关键词激活召回：
  * 0. 先过滤已过期条目；
- * 1. 每条记忆使用显式 triggerWords；旧数据没有时从 text/topic 本地派生；
+ * 1. 每条记忆从现有 text/topic 本地派生触发词；
  * 2. 本轮上下文命中至少一个触发词，才允许进入模型上下文；
  * 3. pinned / explicit 不能绕过激活门，只用于命中后的排序；
  * 4. 无命中、空上下文都返回空数组，不再做“塞几条进去”的兜底。
