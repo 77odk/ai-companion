@@ -85,7 +85,10 @@ const promise = detectTaCommitment('我答应你明天晚上8点提醒你喝水�
 assert.ok(promise)
 assert.equal(promise.sessionId, '7')
 assert.ok(typeof promise.dueAt === 'number')
-assert.equal(detectTaCommitment('今天天气不错。', '7', sourceTs, 43), null)
+const genericPromise = detectTaCommitment('我明天晚上8点会提醒你喝水。', '7', sourceTs, 43)
+assert.ok(genericPromise)
+assert.ok(typeof genericPromise.dueAt === 'number')
+assert.equal(detectTaCommitment('今天天气不错。', '7', sourceTs, 44), null)
 
 const due = { ...promise, dueAt: sourceTs - 1, createdAt: sourceTs - 1000 }
 assert.equal(saveTaCommitment(due), true)
