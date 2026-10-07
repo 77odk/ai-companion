@@ -1166,7 +1166,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
             const paperItem: MemoryItem = { ...item, id: serverId }
             if (serverId !== item.id) {
               // Memory id 被服务端对齐后，纸条也必须跟着换主键；旧本地 id 发 tombstone，避免孤儿记录上云。
-              deleteMemoryPapersForMemory('session', item.id, activeSessionId)
+              deleteMemoryPapersForMemory('session', item.id, activeSessionId, paperAccountId)
               seedMemoryPaperMood(activeSessionId, { kind: 'session', item: paperItem }, paperMood, paperAccountId)
             }
             // Memory 是权威事实；纸条只是一次生成的展示副本。生成失败留到星星罐补写，不影响写入成功。
