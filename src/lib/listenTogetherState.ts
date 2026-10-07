@@ -1,3 +1,5 @@
+import { ELUVIN_AUTH_CHANGE } from './dataChange.ts'
+
 export interface ListenTogetherSnapshot {
   title: string
   hasTrack: boolean
@@ -89,4 +91,10 @@ export function clearListenTogether(): void {
   objectUrl = ''
   title = ''
   emit()
+}
+
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  // Audio/ObjectURL belong to the current signed-in browser session. Any auth
+  // transition invalidates that transient selection without touching auth.ts.
+  window.addEventListener(ELUVIN_AUTH_CHANGE, clearListenTogether)
 }
