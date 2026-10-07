@@ -777,3 +777,36 @@
   color: var(--color-text-muted);
   font-size: 10px;
 }
+
+.chaomu-status-now {
+  display: grid;
+  gap: 7px;
+  padding: 2px 0 8px;
+}
+
+.chaomu-status-now strong {
+  width: fit-content;
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: .02em;
+  color: var(--color-text);
+}
+
+.chaomu-status-now p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.72;
+  color: var(--color-text);
+}
+
+.chaomu-status-now > span {
+  width: fit-content;
+  margin-top: 2px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary-soft) 28%, transparent);
+  color: var(--color-text-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
