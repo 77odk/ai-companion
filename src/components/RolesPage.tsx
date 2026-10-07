@@ -104,7 +104,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
   const switchActiveSession = (id: string) => {
     const previous = getActiveSessionId()
     if (previous && previous !== id) pauseListenTogether(previous)
-    switchActiveSession(id)
+    setActiveSessionId(id)
   }
 
   // 点角色/角色详情：打开该角色资料卡（不切换当前会话；资料卡由 App 用临时角色参数渲染）
@@ -122,7 +122,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
 
   const confirmSelect = (id: string) => {
     setConfirmingSelect(null)
-    setActiveSessionId(id)
+    switchActiveSession(id)
     onSelectDone?.()
   }
 
