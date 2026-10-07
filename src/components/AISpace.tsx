@@ -352,6 +352,15 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             draggable={false}
           />
           <span className="space-scene-ambient" aria-hidden="true" />
+          <span className="space-plant-motion is-hanging" aria-hidden="true">
+            <i className="is-tip-a" />
+            <i className="is-tip-b" />
+            <i className="is-tip-c" />
+          </span>
+          <span className="space-plant-motion is-right" aria-hidden="true">
+            <i className="is-tip-a" />
+            <i className="is-tip-b" />
+          </span>
         </section>
 
         {/*
