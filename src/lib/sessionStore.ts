@@ -501,7 +501,7 @@ export function touchMemoryCache(sessionId: string, id: string, now: number = Da
  * - 有会话 → 全局记忆 + 当前会话记忆缓存合并召回（角色私有整套按会话切换，全局记忆所有角色保留）
  * - 无会话（游客/过渡态）→ 只读全局记忆（老逻辑）
  * 严禁串读：只读全局 + 当前会话，绝不读别的会话缓存。
- * 召回逻辑（recallRelevantMemories：pinned 恒带 / 主题命中 / 关键词命中 / 活跃兜底）不变，只换数据来源组合。
+ * 召回逻辑走 B19 trigger activation：只有命中触发词的条目进入候选；pinned/explicit 仅决定命中后的排序。
  */
 export function recallSessionMemories(
   activeSessionId: string,
