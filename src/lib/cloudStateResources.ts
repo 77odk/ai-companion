@@ -29,6 +29,18 @@ import {
   saveWeeklyReviewsFromCloud,
   type WeeklyReview,
 } from './weeklyReview.ts'
+import {
+  collectAllMemoryAudit,
+  deleteMemoryAuditFromCloud,
+  upsertMemoryAuditFromCloud,
+  type MemoryAuditEntry,
+} from './memoryAudit.ts'
+import {
+  collectAllTaCommitments,
+  deleteTaCommitmentFromCloud,
+  upsertTaCommitmentFromCloud,
+  type TaCommitment,
+} from './commitmentStore.ts'
 
 const GLOBAL = 'global'
 const THEME_KEY = 'ai_companion_theme'
@@ -1061,6 +1073,80 @@ function deleteSessionStartEntity(entity: CloudStateEntity): void {
   notifyDataChanged()
 }
 
+
+function validMemoryAudit(value: unknown): MemoryAuditEntry | null {
+  const item = record(value)
+  if (!item || typeof item.id !== 'string' || typeof item.sessionId !== 'string' ||
+    (item.memoryKind !== 'global' && item.memoryKind !== 'session') ||
+    typeof item.memoryId !== 'string' || typeof item.action !== 'string' ||
+    typeof item.at !== 'number') return null
+  return item as unknown as MemoryAuditEntry
+}
+
+let memoryAuditSnapshot = new Map<string, MemoryAuditEntry>()
+function resetMemoryAuditSnapshot(): void {
+  memoryAuditSnapshot = new Map(collectAllMemoryAudit().map((entry) => [entry.id, entry]))
+}
+function captureMemoryAudit(): void {
+  const next = new Map(collectAllMemoryAudit().map((entry) => [entry.id, entry]))
+  for (const [id, entry] of next) {
+    const previous = memoryAuditSnapshot.get(id)
+    if (!previous || JSON.stringify(previous) !== JSON.stringify(entry)) {
+      queue('memory_audit', id, entry, false, entry.sessionId || undefined)
+    }
+  }
+  for (const [id, entry] of memoryAuditSnapshot) {
+    if (!next.has(id)) queue('memory_audit', id, undefined, true, entry.sessionId || undefined)
+  }
+  memoryAuditSnapshot = next
+}
+function applyMemoryAuditEntity(entity: CloudStateEntity): void {
+  const entry = validMemoryAudit(entity.payload)
+  if (!entry || entry.id !== entity.entityId) return
+  upsertMemoryAuditFromCloud(entry)
+  resetMemoryAuditSnapshot()
+}
+function deleteMemoryAuditEntity(entity: CloudStateEntity): void {
+  deleteMemoryAuditFromCloud(entity.entityId)
+  resetMemoryAuditSnapshot()
+}
+
+function validTaCommitment(value: unknown): TaCommitment | null {
+  const item = record(value)
+  if (!item || typeof item.id !== 'string' || typeof item.sessionId !== 'string' ||
+    typeof item.sourceTs !== 'number' || typeof item.text !== 'string' ||
+    typeof item.createdAt !== 'number') return null
+  return item as unknown as TaCommitment
+}
+
+let commitmentSnapshot = new Map<string, TaCommitment>()
+function resetCommitmentSnapshot(): void {
+  commitmentSnapshot = new Map(collectAllTaCommitments().map((entry) => [entry.id, entry]))
+}
+function captureTaCommitments(): void {
+  const next = new Map(collectAllTaCommitments().map((entry) => [entry.id, entry]))
+  for (const [id, entry] of next) {
+    const previous = commitmentSnapshot.get(id)
+    if (!previous || JSON.stringify(previous) !== JSON.stringify(entry)) {
+      queue('ta_commitment', id, entry, false, entry.sessionId)
+    }
+  }
+  for (const [id, entry] of commitmentSnapshot) {
+    if (!next.has(id)) queue('ta_commitment', id, undefined, true, entry.sessionId)
+  }
+  commitmentSnapshot = next
+}
+function applyTaCommitmentEntity(entity: CloudStateEntity): void {
+  const item = validTaCommitment(entity.payload)
+  if (!item || item.id !== entity.entityId || !entity.sessionId || item.sessionId !== entity.sessionId) return
+  upsertTaCommitmentFromCloud(item)
+  resetCommitmentSnapshot()
+}
+function deleteTaCommitmentEntity(entity: CloudStateEntity): void {
+  deleteTaCommitmentFromCloud(entity.entityId)
+  resetCommitmentSnapshot()
+}
+
 let initialized = false
 export function initCloudStateResourceAdapters(): void {
   if (initialized) return
@@ -1074,6 +1160,8 @@ export function initCloudStateResourceAdapters(): void {
   resetDefaultRoleSnapshot()
   resetReplyLengthSnapshot()
   resetSessionStartSnapshot()
+  resetMemoryAuditSnapshot()
+  resetCommitmentSnapshot()
   registerTaRuntimeCloudSnapshotResetter(resetRuntimeSnapshot)
   initConversationStateCloudAdapter()
   registerCloudStateAdapter('theme', {
@@ -1141,6 +1229,14 @@ export function initCloudStateResourceAdapters(): void {
     apply: applySessionStartEntity,
     delete: deleteSessionStartEntity,
   })
+  registerCloudStateAdapter('memory_audit', {
+    apply: applyMemoryAuditEntity,
+    delete: deleteMemoryAuditEntity,
+  })
+  registerCloudStateAdapter('ta_commitment', {
+    apply: applyTaCommitmentEntity,
+    delete: deleteTaCommitmentEntity,
+  })
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, capturePersonalDays)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureAnniversaries)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureSpacePosts)
@@ -1151,5 +1247,7 @@ export function initCloudStateResourceAdapters(): void {
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureDefaultRole)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureReplyLengths)
   if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureSessionStarts)
-  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot(); resetUserProfileSnapshot(); resetDefaultRoleSnapshot(); resetReplyLengthSnapshot(); resetSessionStartSnapshot() })
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureMemoryAudit)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_DATA_CHANGE, captureTaCommitments)
+  if (typeof window !== 'undefined') window.addEventListener(ELUVIN_AUTH_CHANGE, () => { resetPersonalSnapshot(); resetAnniversarySnapshot(); resetSpaceSnapshot(); resetRuntimeSnapshot(); resetWeeklySnapshot(); resetProfileSnapshot(); resetUserProfileSnapshot(); resetDefaultRoleSnapshot(); resetReplyLengthSnapshot(); resetSessionStartSnapshot(); resetMemoryAuditSnapshot(); resetCommitmentSnapshot() })
 }
