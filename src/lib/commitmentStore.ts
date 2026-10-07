@@ -135,7 +135,10 @@ function splitPromiseClauses(text: string): string[] {
   const out: string[] = []
   let pendingTime = ''
   for (const part of parts) {
-    const timeOnly = /^(?:(?:今天|明天|后天|今晚|明早|明晚|上午|下午|傍晚|晚上|周[一二三四五六日天]|星期[一二三四五六日天]|下周[一二三四五六日天]|\d{1,2}(?::|：|点)\d{0,2}(?:分)?)|(?:tomorrow|today|tonight|the day after tomorrow|in two days|next\s+\w+|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?))+$/i.test(part.replace(/\s+/g, ' '))
+    const normalized = part.replace(/\s+/g, ' ').trim()
+    const chineseTimeOnly = /^(?:(?:今天|明天|后天|今晚|明早|明晚|周[一二三四五六日天]|星期[一二三四五六日天]|下周[一二三四五六日天])(?:\s*(?:上午|早上|中午|下午|傍晚|晚上)?\s*\d{1,2}(?:(?::|：|点)\d{0,2})?\s*(?:分)?)?|(?:上午|早上|中午|下午|傍晚|晚上)?\s*\d{1,2}(?:(?::|：|点)\d{0,2})?\s*(?:分)?)$/i.test(normalized)
+    const englishTimeOnly = /^(?:(?:tomorrow|today|tonight|this evening|this morning|this afternoon|the day after tomorrow|in two days|(?:next\s+)?(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday))(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?)?|at\s+\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?)$/i.test(normalized)
+    const timeOnly = chineseTimeOnly || englishTimeOnly
     if (!positivePromiseClause(part) && timeOnly) {
       pendingTime = part
       continue
