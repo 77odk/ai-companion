@@ -18,7 +18,7 @@ export interface MemoryAuditEntry {
   parentAuditId?: string
 }
 
-const KEEP = 240
+const KEEP = 80
 const SIDECAR = 'memory_audit_v1'
 
 function readAll(): MemoryAuditEntry[] {
