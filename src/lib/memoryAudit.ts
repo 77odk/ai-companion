@@ -1,5 +1,5 @@
 import { notifyDataChanged } from './dataChange.ts'
-import { getAccount } from './sync.ts'
+import { getCloudStateSidecar, setCloudStateSidecar } from './cloudState.ts'
 import type { MemoryItem } from './memory.ts'
 
 export type MemoryAuditKind = 'global' | 'session'
@@ -19,24 +19,17 @@ export interface MemoryAuditEntry {
 }
 
 const KEEP = 240
-const byAccount = new Map<string, MemoryAuditEntry[]>()
-
-function accountId(): string {
-  return getAccount()?.account.trim() ?? ''
-}
+const SIDECAR = 'memory_audit_v1'
 
 function readAll(): MemoryAuditEntry[] {
-  const account = accountId()
-  if (!account) return []
-  return [...(byAccount.get(account) ?? [])]
+  const saved = getCloudStateSidecar<MemoryAuditEntry[]>(SIDECAR)
+  return Array.isArray(saved) ? [...saved] : []
 }
 
 function writeAll(entries: MemoryAuditEntry[], silent = false): boolean {
-  const account = accountId()
-  if (!account) return false
-  byAccount.set(account, entries.slice(0, KEEP))
-  if (!silent) notifyDataChanged()
-  return true
+  const ok = setCloudStateSidecar(SIDECAR, entries.slice(0, KEEP))
+  if (ok && !silent) notifyDataChanged()
+  return ok
 }
 
 export function loadMemoryAudit(sessionId?: string): MemoryAuditEntry[] {
@@ -49,7 +42,6 @@ export function loadMemoryAudit(sessionId?: string): MemoryAuditEntry[] {
 export function appendMemoryAudit(
   entry: Omit<MemoryAuditEntry, 'id' | 'at'> & Partial<Pick<MemoryAuditEntry, 'id' | 'at'>>,
 ): MemoryAuditEntry | null {
-  if (!accountId()) return null
   const at = typeof entry.at === 'number' && Number.isFinite(entry.at) ? entry.at : Date.now()
   const id = entry.id?.trim() || `mem-audit-${at}-${Math.random().toString(36).slice(2, 8)}`
   const next: MemoryAuditEntry = {
@@ -69,17 +61,13 @@ export function collectAllMemoryAudit(): MemoryAuditEntry[] {
 }
 
 export function upsertMemoryAuditFromCloud(entry: MemoryAuditEntry): void {
-  if (!entry?.id || !entry.memoryId || !accountId()) return
+  if (!entry?.id || !entry.memoryId) return
   const all = readAll().filter((item) => item.id !== entry.id)
   writeAll([entry, ...all].sort((a, b) => b.at - a.at), true)
 }
 
 export function deleteMemoryAuditFromCloud(id: string): void {
-  if (!id || !accountId()) return
+  if (!id) return
   writeAll(readAll().filter((entry) => entry.id !== id), true)
 }
 
-export function resetMemoryAuditRuntime(): void {
-  const account = accountId()
-  if (account) byAccount.delete(account)
-}
