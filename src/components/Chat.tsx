@@ -2357,7 +2357,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   }
 
 
-  const handleSaveMessageAsMemory = async (message: StoredMessage, text: string): Promise<boolean> => {
+  const handleSaveMessageAsMemory = async (text: string): Promise<boolean> => {
     const sid = activeSessionId
     const token = getToken()
     const clean = String(text ?? '').trim()
@@ -2531,7 +2531,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
                 onAvatarClick={onOpenProfile}
                 onQuote={handleQuoteMessage}
                 onSaveMemory={!streaming && !contextBusy
-                  ? (text) => handleSaveMessageAsMemory(m, text)
+                  ? (text) => handleSaveMessageAsMemory(text)
                   : undefined}
                 onEdit={!streaming && !contextBusy && !isBusy && m.role === 'user' && typeof m.id === 'number'
                   ? (nextText) => commitConversationEdit(m, nextText)
