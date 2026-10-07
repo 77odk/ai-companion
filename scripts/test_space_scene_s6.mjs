@@ -75,8 +75,11 @@ assert.match(privacy, /忆文面向 18 周岁及以上用户/)
 assert.match(privacy, /未满 18 周岁不能使用/)
 
 console.log('[S6] 旧入口文案与内部来源前缀不再漏到展示层')
-assert.doesNotMatch(aboutMe, /TA所忆|TA 的空间\s*→/)
-assert.match(aboutMe, /朝暮 → 记忆长河/)
+const aboutMeRenderedSource = aboutMe
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '')
+assert.doesNotMatch(aboutMeRenderedSource, /TA所忆|TA 的空间\s*→/)
+assert.match(aboutMeRenderedSource, /朝暮 → 记忆长河/)
 assert.match(bubble, /cleanAttributionArtifacts/)
 assert.match(attribution, /回复里绝不能输出/)
 assert.match(attribution, /cleanStreamingAttributionArtifacts/)
