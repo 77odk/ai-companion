@@ -74,11 +74,12 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     if (drawerOpening) return
     setDrawerOpening(true)
     if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
+    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 260
     drawerTimerRef.current = window.setTimeout(() => {
       drawerTimerRef.current = null
       onOpenWeekly()
       setDrawerOpening(false)
-    }, 260)
+    }, delay)
   }
 
   const clearNonImagePhotoError = () => {
