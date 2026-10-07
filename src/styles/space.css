@@ -1312,3 +1312,27 @@
     animation-timing-function: linear;
   }
 }
+
+.star-jar-star.is-filler {
+  opacity: .34;
+  filter: none;
+}
+
+.star-memory-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.star-memory-heading > span {
+  color: rgba(91,64,50,.72);
+  font-size: 11px;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+
+.star-memory-heading time {
+  margin: 0;
+}
