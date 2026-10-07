@@ -19,6 +19,7 @@ const chat = readFileSync('src/components/Chat.tsx', 'utf8')
 const memoryCss = readFileSync('src/styles/memory.css', 'utf8')
 const spaceCss = readFileSync('src/styles/space.css', 'utf8')
 const cloudResources = readFileSync('src/lib/cloudStateResources.ts', 'utf8')
+const memoryLib = readFileSync('src/lib/memory.ts', 'utf8')
 
 const store = new Map()
 globalThis.localStorage = {
@@ -29,6 +30,11 @@ globalThis.localStorage = {
   get length() { return store.size },
 }
 globalThis.window = { dispatchEvent: () => {} }
+
+function login(account = 'a@example.com') {
+  store.set('ai_companion_account', JSON.stringify({ token: 'token-' + account, account }))
+}
+login()
 
 console.log('[S3] 星星罐从空间页独立进入，不再把物件直接送进朝暮')
 assert.match(aiSpace, /onOpenStarJar/)
@@ -51,6 +57,7 @@ assert.match(app, />\s*朝暮\s*<\/button>/)
 assert.match(memory, /type="search"/)
 assert.match(memoryCss, /memory-search/)
 assert.match(memoryCss, /memory-audit-panel/)
+assert.doesNotMatch(memoryLib, /triggerWords\??:|moodSnapshot\??:/, 'MemoryItem schema stays frozen')
 
 console.log('[S3] 消息可手动存为记忆，写入链仍复用现有 memories API')
 assert.match(bubble, /Save to memory|存为记忆/)
@@ -73,6 +80,10 @@ const audit = appendMemoryAudit({
 })
 assert.ok(audit)
 assert.equal(loadMemoryAudit('7')[0]?.before?.text, '旧版本')
+login('b@example.com')
+assert.equal(loadMemoryAudit('7').length, 0, '账号 B 不得读到账号 A 的审计')
+login('a@example.com')
+assert.equal(loadMemoryAudit('7')[0]?.before?.text, '旧版本', '切回账号 A 后只看到 A 自己的审计')
 assert.match(memory, /rollbackAuditEntry/)
 assert.match(memory, /回退到之前/)
 assert.match(memory, /parentAuditId/)
@@ -93,9 +104,16 @@ assert.equal(detectTaCommitment('今天天气不错。', '7', sourceTs, 44), nul
 const due = { ...promise, dueAt: sourceTs - 1, createdAt: sourceTs - 1000 }
 assert.equal(saveTaCommitment(due), true)
 assert.equal(collectDueTaCommitments(sourceTs).length, 1)
+login('b@example.com')
+assert.equal(collectDueTaCommitments(sourceTs).length, 0, '账号 B 不得看到账号 A 的承诺')
+login('a@example.com')
+assert.equal(collectDueTaCommitments(sourceTs).length, 1)
 assert.ok(markCommitmentReminded(due.id, sourceTs))
 assert.equal(collectDueTaCommitments(sourceTs).length, 0)
 assert.match(cloudResources, /registerCloudStateAdapter\('ta_commitment'/)
+assert.match(app, /nextTaCommitmentCheckAt/)
+assert.match(app, /setTimeout\(\(\) => \{[\s\S]*checkDueCommitment\(\)/)
+assert.match(chat, /window\.dispatchEvent\(new CustomEvent\('yiwem:ai-reply-committed'/)
 
 console.log('[S3] 隐私边界：状态页只读取现有可信展示文本，不写底层数值到 UI')
 assert.match(memory, /runtimeDisplayLabel/)
