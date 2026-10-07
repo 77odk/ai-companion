@@ -6,6 +6,7 @@ import type { FeedbackDraft } from './components/FeedbackPage'
 import Chat from './components/Chat'
 import type { SettingsPage } from './components/Settings'
 import LoginGate from './components/LoginGate'
+import WellbeingGuard from './components/WellbeingGuard'
 import ConsentGate, { consentGateNeeded } from './components/ConsentGate'
 import { getAccount, API_BASE } from './lib/sync'
 import { pingSiteHit } from './lib/siteStats'
@@ -1272,7 +1273,8 @@ export default function App() {
           </div>
         </div>
       )}
-      {commitmentReminder && loggedIn && !gateShown && !needLightConsent && (
+      <WellbeingGuard enabled={loggedIn && !gateShown && !needLightConsent} />
+            {commitmentReminder && loggedIn && !gateShown && !needLightConsent && (
         <div className="commitment-reminder" role="status" aria-live="polite">
           <div>
             <strong>{loadAIProfile(commitmentReminder.sessionId).nickname || 'TA'} 答应你的事</strong>
