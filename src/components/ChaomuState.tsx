@@ -174,7 +174,7 @@ export default function ChaomuState({ dashboard }: Props) {
             {dashboard.history.length === 0 ? (
               <p className="chaomu-state-log-empty">还没有可回看的状态变化。</p>
             ) : (
-              [...dashboard.history].reverse().map((point, reverseIndex, reversed) => {
+              [...dashboard.history].reverse().map((point, reverseIndex) => {
                 const chronologicalIndex = dashboard.history.length - 1 - reverseIndex
                 const prev = chronologicalIndex > 0 ? dashboard.history[chronologicalIndex - 1] : null
                 const scoreDelta = prev ? point.score - prev.score : 0
