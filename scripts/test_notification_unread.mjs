@@ -26,9 +26,9 @@ assert.match(app, /hasUnreadNotifications=\{hasUnreadNotifications\}/)
 assert.match(app, /onRead=\{markNotificationsRead\}/)
 
 assert.match(home, /home-inbox-unread-dot/)
-assert.match(home, /消息与通知，有新消息/)
-assert.match(settings, /entry-unread-dot/)
-assert.match(settings, /unread=\{hasUnreadNotifications\}/)
+assert.match(home, /站内信，有新消息/)
+assert.doesNotMatch(settings, /unread=\{hasUnreadNotifications\}/)
+assert.doesNotMatch(settings, /label="消息与通知"/)
 
 assert.match(page, /onRead\?: \(revision: number\) => void/)
 assert.match(page, /onRead\?\.\(revision\)/)

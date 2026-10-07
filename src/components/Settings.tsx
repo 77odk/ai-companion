@@ -31,6 +31,8 @@ import {
   isActionNarrationEnabled,
   saveActionNarrationEnabled,
   getAllLocalContextUsageTurns,
+  isSystemNotificationEnabled,
+  saveSystemNotificationEnabled,
   type AIGender,
   type ModelSettings,
   type Provider,
@@ -64,6 +66,7 @@ import {
   roleInitial,
 } from '../lib/sessionProfile'
 import { estimateUsageTurnCost, formatUsageMoney, formatUsageTokens, summarizeUsageTurns } from '../lib/usageCost'
+import { requestSystemNotificationPermission, systemNotificationPermission } from '../lib/systemNotification'
 import {
   RELATIONSHIP_PRESETS,
   loadRelationshipSetting,
@@ -98,13 +101,11 @@ interface Props {
   onAnniversaryBack?: () => void
   /** 全屏设置二级页（隐私 / 聊天设置）：通知 App 隐藏底部导航。 */
   onPrivacyOpenChange?: (open: boolean) => void
-  onGoNotifications?: () => void
   /** 「反馈与建议」入口：由 App 切到独立 feedback view（与通知页同一套全屏页） */
   onGoFeedback?: () => void
-  hasUnreadNotifications?: boolean
 }
 
-export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onInitialPageBack, onAnniversaryBack, onPrivacyOpenChange, onGoNotifications, onGoFeedback, hasUnreadNotifications = false }: Props) {
+export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRoles, onGoAboutMe, onGoProfile, initialPage, onInitialPageBack, onAnniversaryBack, onPrivacyOpenChange, onGoFeedback }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage ?? 'main')
   const mainScrollTopRef = useRef(0)
   const restoreMainScrollRef = useRef(false)
@@ -193,9 +194,7 @@ export default function Settings({ onGoWelcome, onGoGuide, onGoWorkChat, onGoRol
       onOpenAppearance={() => openSubpage('appearance')}
       onOpenAnniversary={() => openSubpage('anniversary')}
       onOpenReply={() => openSubpage('reply')}
-      onOpenNotifications={() => onGoNotifications?.()}
       onOpenFeedback={() => onGoFeedback?.()}
-      hasUnreadNotifications={hasUnreadNotifications}
       onGoRoles={() => onGoRoles?.()}
       onGoAboutMe={() => onGoAboutMe?.()}
       onGoProfile={() => onGoProfile?.()}
@@ -243,9 +242,7 @@ function MainCenter({
   onOpenAppearance,
   onOpenAnniversary,
   onOpenReply,
-  onOpenNotifications,
   onOpenFeedback,
-  hasUnreadNotifications,
   onGoRoles,
   onGoAboutMe,
   onGoProfile,
@@ -261,9 +258,7 @@ function MainCenter({
   onOpenAppearance: () => void
   onOpenAnniversary: () => void
   onOpenReply: () => void
-  onOpenNotifications: () => void
   onOpenFeedback: () => void
-  hasUnreadNotifications: boolean
   onGoRoles?: () => void
   onGoAboutMe?: () => void
   onGoProfile?: () => void
@@ -277,6 +272,32 @@ function MainCenter({
   const accountLabel = getAccount()?.account ?? null
   const loggedIn = isLoggedIn()
   const replyLength = getGlobalReplyLength(accountLabel ?? '')
+  const [systemNotifications, setSystemNotifications] = useState(
+    () => isSystemNotificationEnabled() && systemNotificationPermission() === 'granted',
+  )
+  const [systemNotificationHint, setSystemNotificationHint] = useState('')
+
+  const toggleSystemNotifications = async () => {
+    setSystemNotificationHint('')
+    if (systemNotifications) {
+      if (saveSystemNotificationEnabled(false)) setSystemNotifications(false)
+      return
+    }
+    const result = await requestSystemNotificationPermission()
+    if (result === 'granted') {
+      if (saveSystemNotificationEnabled(true)) setSystemNotifications(true)
+      return
+    }
+    if (result === 'needs-home-screen') {
+      setSystemNotificationHint('请先把忆文添加到主屏幕，再从主屏幕打开忆文开启通知。')
+      return
+    }
+    if (result === 'unsupported') {
+      setSystemNotificationHint('当前浏览器暂不支持系统通知。')
+      return
+    }
+    setSystemNotificationHint('没有拿到系统通知权限，可以在系统设置里重新开启。')
+  }
 
   const handleLogout = () => {
     if (!window.confirm('退出登录后，本地记录不会丢；下次登录同一账号就能找回来。确定退出吗？')) return
@@ -309,7 +330,25 @@ function MainCenter({
         <EntryRow icon={<BookIcon />} label="使用指南" onClick={onOpenGuide} />
         <EntryRow icon={<KeyIcon />} label="API 设置" status={`${providerLabel} · ${modelLabel}`} onClick={onOpenProvider} />
         <EntryRow icon={<UsageIcon />} label="用量信息" onClick={onOpenUsage} />
-        <EntryRow icon={<NotificationIcon />} label="消息与通知" onClick={onOpenNotifications} unread={hasUnreadNotifications} />
+        <div className="entry-row settings-toggle-row">
+          <span className="entry-icon"><NotificationIcon /></span>
+          <span className="entry-label">
+            系统通知
+            <small>{systemNotificationPermission() === 'granted' && systemNotifications ? '已开启' : '关闭时只在忆文里显示'}</small>
+          </span>
+          <button
+            type="button"
+            className={`settings-switch${systemNotifications ? ' on' : ''}`}
+            role="switch"
+            aria-checked={systemNotifications}
+            aria-label="系统通知"
+            onClick={() => void toggleSystemNotifications()}
+          >
+            <span className="settings-switch-thumb" />
+          </button>
+        </div>
+        <p className="settings-inline-help">⚠️ios 用户：需要把忆文添加到主屏幕才能开启通知，safari 浏览器使用收不到哦</p>
+        {systemNotificationHint ? <p className="settings-inline-help is-error" role="status">{systemNotificationHint}</p> : null}
         <EntryRow icon={<FeedbackIcon />} label="反馈与建议" onClick={onOpenFeedback} />
       </ProfileGroup>
 

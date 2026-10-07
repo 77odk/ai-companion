@@ -392,8 +392,8 @@ export default function Home({ onGoChat, onGoLife, onGoAnniversary, onGoNotifica
         type="button"
         className="home-inbox-button"
         onClick={onGoNotifications}
-        aria-label={hasUnreadNotifications ? '消息与通知，有新消息' : '消息与通知'}
-        title="消息与通知"
+        aria-label={hasUnreadNotifications ? '站内信，有新消息' : '站内信'}
+        title="站内信"
       >
         {hasUnreadNotifications ? <span className="home-inbox-unread-dot" aria-hidden="true" /> : null}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

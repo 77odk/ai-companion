@@ -172,6 +172,37 @@
   opacity: 0.5;
 }
 
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+}
+
+.settings-toggle-row .entry-label {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  flex: 1;
+}
+
+.settings-toggle-row .entry-label small {
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.settings-inline-help {
+  margin: -2px 12px 10px 58px;
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.settings-inline-help.is-error,
+.settings-inline-notice {
+  color: var(--el-danger, #b54f45);
+}
+
 /* ---- Expanded update controls remain part of the list ----------------- */
 .settings-page .update-controls-secondary {
   gap: var(--el-space-2, 8px);
@@ -679,36 +710,43 @@
   outline-offset: -2px;
 }
 
-.initiative-notification-setting {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.initiative-message-preferences {
+  display: grid;
   gap: var(--el-space-3, 12px);
-  padding: 0 var(--el-space-4, 16px) var(--el-space-4, 16px);
+  padding: var(--el-space-3, 12px) var(--el-space-4, 16px) var(--el-space-4, 16px);
   border-top: 1px solid var(--el-border-soft, var(--color-border));
 }
 
-.initiative-notification-setting > div {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--el-space-1, 4px);
+.initiative-message-preferences > label,
+.initiative-quiet-setting {
+  display: grid;
+  gap: 6px;
 }
 
-.initiative-notification-setting strong {
-  font-size: var(--el-font-support, 13px);
-  font-weight: var(--el-weight-semibold, 600);
-  color: var(--el-text-primary, var(--color-text));
+.initiative-message-preferences > label > span,
+.initiative-quiet-setting > span {
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: var(--el-font-caption, 12px);
+  line-height: 1.4;
 }
 
-.initiative-notification-setting small {
+.initiative-quiet-setting > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.initiative-quiet-setting > div > span {
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: 12px;
+}
+
+.initiative-message-hint {
+  margin: 0;
+  color: var(--el-text-secondary, var(--color-text-muted));
   font-size: var(--el-font-caption, 12px);
   line-height: var(--el-line-support, 1.6);
-  color: var(--el-text-secondary, var(--color-text-muted));
-}
-
-.initiative-notification-setting .btn {
-  flex: none;
 }
 
 .chat-settings-refresh-confirm {

@@ -63,6 +63,24 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   const [photoError, setPhotoError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const failedPhotoIdsRef = useRef<Set<string>>(new Set())
+  const drawerTimerRef = useRef<number | null>(null)
+  const [drawerOpening, setDrawerOpening] = useState(false)
+
+  useEffect(() => () => {
+    if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
+  }, [])
+
+  const openWeeklyFromDrawer = () => {
+    if (drawerOpening) return
+    setDrawerOpening(true)
+    if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
+    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 260
+    drawerTimerRef.current = window.setTimeout(() => {
+      drawerTimerRef.current = null
+      onOpenWeekly()
+      setDrawerOpening(false)
+    }, delay)
+  }
 
   const clearNonImagePhotoError = () => {
     setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? current : null)
@@ -292,9 +310,10 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           </button>
           <button
             type="button"
-            className="space-scene-hotspot is-weekly-letter"
-            aria-label="打开一周情书"
-            onClick={onOpenWeekly}
+            className={`space-scene-hotspot is-weekly-letter${drawerOpening ? ' is-opening' : ''}`}
+            aria-label="拉开抽屉，打开一周情书"
+            onClick={openWeeklyFromDrawer}
+            disabled={drawerOpening}
           >
             <span className="space-drawer-peek" aria-hidden="true" />
           </button>

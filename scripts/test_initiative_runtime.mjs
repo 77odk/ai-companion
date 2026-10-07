@@ -352,10 +352,12 @@ console.log('[initiative-runtime] Prompt 只带角色与真实理由，不带整
   assert.match(selfIntent, /继续听你讲/)
 }
 
-console.log('[initiative-runtime] App 只在 hidden/pagehide 记离开，visible 时补算；权限只由按钮请求')
+console.log('[initiative-runtime] App 只在 hidden/pagehide 记离开，visible 时补算；系统通知与主动消息分离')
 {
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
-  const settings = readFileSync(new URL('../src/components/ChatSettings.tsx', import.meta.url), 'utf8')
+  const chatSettings = readFileSync(new URL('../src/components/ChatSettings.tsx', import.meta.url), 'utf8')
+  const settings = readFileSync(new URL('../src/components/Settings.tsx', import.meta.url), 'utf8')
+  const systemNotification = readFileSync(new URL('../src/lib/systemNotification.ts', import.meta.url), 'utf8')
   assert.match(app, /document\.visibilityState === 'hidden'[\s\S]*recordInitiativeBackground\(\)/)
   assert.match(app, /document\.visibilityState === 'visible'[\s\S]*runInitiativeCatchUpNow\(\)/)
   assert.match(app, /pagehide/)
@@ -370,11 +372,17 @@ console.log('[initiative-runtime] App 只在 hidden/pagehide 记离开，visible
   assert.match(app, /branchIdForNewMessage\(latestState\) !== conversationBranchId/)
   assert.match(app, /recordLocalModelUsageTurn/)
   assert.match(app, /continuity:\s*getTaContinuity\(sessionId, now\)/, 'A2 必须只读 taRuntime continuity 作为主动 evidence')
-  assert.match(app, /Notification\.permission === 'granted'/)
-  assert.match(app, /new Notification\(taName,[\s\S]*catch \{/)
-  assert.doesNotMatch(app, /Notification\.requestPermission\(/)
-  assert.match(settings, /Notification\.requestPermission\(\)/)
-  assert.match(settings, /Key 不上传服务器/)
+  assert.match(app, /showSystemNotification/)
+  assert.match(app, /有一条新消息，打开忆文看看。/)
+  assert.doesNotMatch(app, /new Notification\(taName/)
+  assert.doesNotMatch(chatSettings, /系统通知/)
+  assert.match(chatSettings, /如果你没有回应，下一次主动消息会自动隔得更久/)
+  assert.match(chatSettings, /quietStartHour/)
+  assert.match(chatSettings, /quietEndHour/)
+  assert.match(settings, /系统通知/)
+  assert.match(settings, /⚠️ios 用户：需要把忆文添加到主屏幕才能开启通知，safari 浏览器使用收不到哦/)
+  assert.match(systemNotification, /Notification\.requestPermission\(\)/)
+  assert.match(chatSettings, /Key 不上传服务器/)
 }
 
 console.log('initiative runtime tests passed')

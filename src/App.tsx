@@ -71,6 +71,7 @@ import { chatCompletion, type ModelUsage } from './lib/api'
 import { estimateToken } from './lib/token'
 import { resolveIdentityMode } from './lib/companionPolicy'
 import { captureLatestTaCommitment, collectDueTaCommitments, markCommitmentReminded, nextTaCommitmentCheckAt, type TaCommitment } from './lib/commitmentStore'
+import { showSystemNotification } from './lib/systemNotification'
 import { captureTaStateEvidenceFromLatestReply, getTaStateView, recordTaStateInteraction } from './lib/taState'
 import { settleTaThoughts } from './lib/taThoughts'
 
@@ -450,13 +451,21 @@ export default function App() {
   const [guideBack, setGuideBack] = useState<'welcome' | 'settings' | 'gate' | 'chat'>('welcome')
 
   const checkDueCommitment = useCallback(() => {
-    if (!loggedIn || document.visibilityState !== 'visible' || commitmentReminderRef.current) return
+    if (!loggedIn || commitmentReminderRef.current) return
     const next = collectDueTaCommitments(Date.now())[0]
     if (!next) return
     const marked = markCommitmentReminded(next.id)
     if (!marked) return
     commitmentReminderRef.current = marked
     setCommitmentReminder(marked)
+
+    // 页面仍在后台运行时也可以敲一下系统通知；内容保持通用，不把承诺正文放到锁屏。
+    const taName = loadAIProfile(marked.sessionId).nickname?.trim() || 'TA'
+    void showSystemNotification(
+      taName,
+      '有一件答应你的事到时间了，打开忆文看看。',
+      'eluvin-promise-' + marked.id,
+    )
   }, [loggedIn])
 
   useEffect(() => {
@@ -658,25 +667,13 @@ export default function App() {
 
           setInitiativeNotice({ accountId, sessionId, taName, content })
 
-          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            try {
-              const notification = new Notification(taName, {
-                body: content,
-                tag: 'eluvin-initiative-' + sessionId,
-              })
-              notification.onclick = () => {
-                notification.close()
-                window.focus()
-                if (getAccount()?.account !== accountId) return
-                if (!getSessionsCache().some((item) => String(item.id) === sessionId)) return
-                setActiveSessionId(sessionId)
-                setInitiativeNotice(null)
-                replaceView('chat')
-              }
-            } catch {
-              // 部分移动浏览器不允许页面直接构造 Notification；应用内提示仍已正常显示。
-            }
-          }
+          // 系统通知和「TA 主动来找你」是两个独立开关。
+          // 系统层只显示通用敲门文案，不把聊天正文暴露在锁屏上；正文仍只在忆文里打开后看。
+          void showSystemNotification(
+            taName,
+            '有一条新消息，打开忆文看看。',
+            'eluvin-initiative-' + sessionId,
+          )
         },
       },
     )
@@ -1588,9 +1585,7 @@ export default function App() {
                 initialPage={settingsTarget}
                 onInitialPageBack={() => window.history.back()}
                 onPrivacyOpenChange={setSettingsPrivacyOpen}
-                onGoNotifications={() => openNotifications('settings')}
                 onGoFeedback={openFeedback}
-                hasUnreadNotifications={hasUnreadNotifications}
                 onGoWelcome={() => navigate('welcome')}
                 onGoGuide={() => openGuide('settings')}
                 onGoWorkChat={() => navigate('chat')}

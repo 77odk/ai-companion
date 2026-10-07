@@ -35,17 +35,15 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
   const [preference, setPreference] = useState<ReplyLengthPreference>(() => getReplyLengthPreference(accountId, sessionId))
   const [error, setError] = useState('')
   const [confirmRefresh, setConfirmRefresh] = useState(false)
-  const [initiativeEnabled, setInitiativeEnabled] = useState(() => getInitiativePreference(accountId, sessionId).enabled)
+  const [initiativePreference, setInitiativePreference] = useState(() => getInitiativePreference(accountId, sessionId))
+  const initiativeEnabled = initiativePreference.enabled
   const [confirmInitiative, setConfirmInitiative] = useState(false)
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(() =>
-    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
-  )
 
   useEffect(() => {
     const refresh = () => {
       setGlobalValue(getGlobalReplyLength(accountId))
       setPreference(getReplyLengthPreference(accountId, sessionId))
-      setInitiativeEnabled(getInitiativePreference(accountId, sessionId).enabled)
+      setInitiativePreference(getInitiativePreference(accountId, sessionId))
     }
     window.addEventListener(ELUVIN_DATA_CHANGE, refresh)
     return () => window.removeEventListener(ELUVIN_DATA_CHANGE, refresh)
@@ -89,7 +87,7 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
       setError('没有保存成功，稍后再试一下')
       return
     }
-    setInitiativeEnabled(false)
+    setInitiativePreference(getInitiativePreference(accountId, sessionId))
     setConfirmInitiative(false)
     setError('')
   }
@@ -100,20 +98,25 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
       setError('没有保存成功，稍后再试一下')
       return
     }
-    setInitiativeEnabled(true)
+    setInitiativePreference(getInitiativePreference(accountId, sessionId))
     setConfirmInitiative(false)
     setError('')
   }
 
-  const requestSystemNotificationPermission = async () => {
-    if (typeof Notification === 'undefined' || notificationPermission !== 'default') return
-    try {
-      const permission = await Notification.requestPermission()
-      setNotificationPermission(permission)
-    } catch {
-      setNotificationPermission(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission)
+  const updateInitiativePreference = (patch: Partial<typeof initiativePreference>) => {
+    if (!accountId || !sessionId) return
+    if (!saveInitiativePreference(accountId, sessionId, patch)) {
+      setError('没有保存成功，稍后再试一下')
+      return
     }
+    setInitiativePreference(getInitiativePreference(accountId, sessionId))
+    setError('')
   }
+
+  const hourOptions = Array.from({ length: 24 }, (_, hour) => ({
+    value: hour,
+    label: `${String(hour).padStart(2, '0')}:00`,
+  }))
 
   const refreshConversation = () => {
     if (!sessionId) return
@@ -212,7 +215,7 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
           <div className="chat-follow-row">
             <div className="chat-follow-copy">
               <strong>让 TA 主动找你</strong>
-              <small>默认关闭 · 每天最多 2 次 · 23:00–08:00 不打扰</small>
+              <small>{initiativeEnabled ? `每天最多 ${initiativePreference.dailyLimit} 次 · ${String(initiativePreference.quietStartHour).padStart(2, '0')}:00–${String(initiativePreference.quietEndHour).padStart(2, '0')}:00 不打扰` : '默认关闭 · 只在有真实理由时开口'}</small>
             </div>
             <button
               type="button"
@@ -226,24 +229,44 @@ export default function ChatSettings({ onBack, onRefreshed }: Props) {
             </button>
           </div>
           {initiativeEnabled ? (
-            <div className="initiative-notification-setting">
-              <div>
-                <strong>系统通知</strong>
-                <small>
-                  {notificationPermission === 'granted'
-                    ? '已允许；页面开着时也可以显示系统通知'
-                    : notificationPermission === 'denied'
-                      ? '浏览器已关闭通知；应用内提示仍会正常显示'
-                      : notificationPermission === 'unsupported'
-                        ? '当前浏览器不支持系统通知；应用内提示仍会正常显示'
-                        : '可选；只有你点“允许”才会向浏览器申请权限'}
-                </small>
+            <div className="initiative-message-preferences">
+              <label>
+                <span>频率</span>
+                <select
+                  className="input"
+                  value={initiativePreference.dailyLimit}
+                  onChange={(event) => updateInitiativePreference({ dailyLimit: Number(event.target.value) })}
+                >
+                  <option value={1}>少一点 · 每天最多 1 次</option>
+                  <option value={2}>适中 · 每天最多 2 次</option>
+                  <option value={3}>多一点 · 每天最多 3 次</option>
+                  <option value={4}>常一点 · 每天最多 4 次</option>
+                  <option value={5}>最多 · 每天最多 5 次</option>
+                </select>
+              </label>
+              <div className="initiative-quiet-setting">
+                <span>静默时段</span>
+                <div>
+                  <select
+                    className="input"
+                    value={initiativePreference.quietStartHour}
+                    onChange={(event) => updateInitiativePreference({ quietStartHour: Number(event.target.value) })}
+                    aria-label="静默开始时间"
+                  >
+                    {hourOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  <span aria-hidden="true">—</span>
+                  <select
+                    className="input"
+                    value={initiativePreference.quietEndHour}
+                    onChange={(event) => updateInitiativePreference({ quietEndHour: Number(event.target.value) })}
+                    aria-label="静默结束时间"
+                  >
+                    {hourOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </div>
               </div>
-              {notificationPermission === 'default' ? (
-                <button type="button" className="btn btn-ghost" onClick={() => void requestSystemNotificationPermission()}>
-                  允许
-                </button>
-              ) : null}
+              <p className="initiative-message-hint">如果你没有回应，下一次主动消息会自动隔得更久。</p>
             </div>
           ) : null}
           {confirmInitiative ? (

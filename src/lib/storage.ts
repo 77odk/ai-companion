@@ -54,6 +54,35 @@ export function saveActionNarrationEnabled(enabled: boolean): boolean {
   }
 }
 
+/** 系统通知开关与其它设置共用现有 settings key；不等同于 TA 主动消息开关。 */
+export function isSystemNotificationEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw) as { systemNotificationEnabled?: unknown }
+    return parsed?.systemNotificationEnabled === true
+  } catch {
+    return false
+  }
+}
+
+export function saveSystemNotificationEnabled(enabled: boolean): boolean {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    const base = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {}
+    const next = { ...base, systemNotificationEnabled: enabled }
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
+    if (isSystemNotificationEnabled() !== enabled) return false
+    notifyDataChanged()
+    return true
+  } catch {
+    return false
+  }
+}
+
 export interface InitiativePreference {
   enabled: boolean
   dailyLimit: number
@@ -322,6 +351,7 @@ export function saveSettings(settings: ModelSettings): void {
     model: settings.model.trim() || DEFAULT_SETTINGS[settings.provider].model,
   }
   const actionNarrationEnabled = isActionNarrationEnabled()
+  const systemNotificationEnabled = isSystemNotificationEnabled()
   let initiativeByAccount: unknown
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
@@ -336,6 +366,7 @@ export function saveSettings(settings: ModelSettings): void {
       provider: settings.provider,
       providers,
       ...(actionNarrationEnabled ? { actionNarrationEnabled: true } : {}),
+      ...(systemNotificationEnabled ? { systemNotificationEnabled: true } : {}),
       ...(initiativeByAccount && typeof initiativeByAccount === 'object' && !Array.isArray(initiativeByAccount)
         ? { initiativeByAccount }
         : {}),
