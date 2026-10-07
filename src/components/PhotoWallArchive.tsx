@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react'
+import { useMemo, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react'
 import type { PhotoMeta } from '../lib/photoWall'
 import { assignDayRows, boardHeightForPhotos, groupPhotosByMonth, layoutForPhoto } from '../lib/photoWallLayout'
 import '../styles/photoWallArchive.css'
@@ -84,9 +84,10 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const touchStartX = useRef<number | null>(null)
 
-  useEffect(() => {
-    onOpenChange?.(open)
-  }, [open, onOpenChange])
+  const setArchiveOpen = (next: boolean) => {
+    setOpen(next)
+    onOpenChange?.(next)
+  }
   const sorted = useMemo(() => [...photos].sort((a, b) => b.createdAt - a.createdAt), [photos])
   const preview = sorted.slice(0, 12)
   const groups = useMemo(() => groupPhotosByMonth(sorted), [sorted])
@@ -151,7 +152,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
           <span className="ai-space-v2-title">照片墙</span>
           <span className="ai-space-v2-en">PHOTO WALL</span>
           {sorted.length > 0 && (
-            <button type="button" className="ai-space-v2-all" onClick={() => setOpen(true)}>
+            <button type="button" className="ai-space-v2-all" onClick={() => setArchiveOpen(true)}>
               查看全部 ›
             </button>
           )}
@@ -166,7 +167,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
           <button
             type="button"
             className="photo-stack-preview"
-            onClick={() => setOpen(true)}
+            onClick={() => setArchiveOpen(true)}
             aria-label="打开照片墙"
           >
             <span className="photo-stack-felt" aria-hidden="true" />
@@ -203,7 +204,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
       {open && (
         <div className="photo-archive-page" role="dialog" aria-label="照片墙">
           <div className="photo-archive-topbar">
-            <button type="button" className="photo-archive-back" onClick={() => setOpen(false)}>
+            <button type="button" className="photo-archive-back" onClick={() => setArchiveOpen(false)}>
               ‹ 返回
             </button>
             <div>
