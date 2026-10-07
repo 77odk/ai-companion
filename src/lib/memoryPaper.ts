@@ -131,7 +131,9 @@ export function seedMemoryPaperMood(
   sessionId: string,
   target: MemoryPaperTarget,
   mood?: MemoryPaperMoodSnapshot,
+  expectedAccountId = getAccount()?.account,
 ): MemoryPaperRecord | null {
+  if (!expectedAccountId || getAccount()?.account !== expectedAccountId) return null
   const sid = String(sessionId ?? '').trim()
   const memoryId = String(target.item?.id ?? '').trim()
   const text = String(target.item?.text ?? '').trim()
@@ -207,8 +209,11 @@ export async function generateMemoryPaper(
   options: {
     mood?: MemoryPaperMoodSnapshot
     preserveExistingMood?: boolean
+    expectedAccountId?: string | null
   } = {},
 ): Promise<MemoryPaperRecord | null> {
+  const accountId = options.expectedAccountId ?? getAccount()?.account ?? null
+  if (!accountId || getAccount()?.account !== accountId) return null
   const sid = String(sessionId ?? '').trim()
   const memoryId = String(target.item?.id ?? '').trim()
   const text = String(target.item?.text ?? '').trim()
@@ -218,6 +223,8 @@ export async function generateMemoryPaper(
   if (existing && existing.sourceText.trim() === text && existing.sentence.trim()) return existing
 
   const sentence = await generateSentence(sid, text)
+  // 模型请求跨异步边界；账号在此期间改变时绝不能把旧账号的 Memory/句子写进新账号 sidecar。
+  if (getAccount()?.account !== accountId) return null
   const now = Date.now()
   const record: MemoryPaperRecord = {
     sessionId: sid,
@@ -240,8 +247,9 @@ export async function generateMemoryPaper(
 export async function refreshMemoryPaperAfterCorrection(
   sessionId: string,
   target: MemoryPaperTarget,
+  expectedAccountId?: string | null,
 ): Promise<MemoryPaperRecord | null> {
-  return generateMemoryPaper(sessionId, target, { preserveExistingMood: true })
+  return generateMemoryPaper(sessionId, target, { preserveExistingMood: true, expectedAccountId })
 }
 
 export function deleteMemoryPapersForMemory(
@@ -273,15 +281,21 @@ export async function backfillMemoryPapers(
   onProgress?: (done: number, total: number) => void,
 ): Promise<{ generated: number; failed: number }> {
   const sid = String(sessionId ?? '').trim()
-  if (!sid) return { generated: 0, failed: 0 }
+  const accountId = getAccount()?.account ?? null
+  if (!sid || !accountId) return { generated: 0, failed: 0 }
   const missing = targets.filter(({ kind, item }) => !getMemoryPaperForItem(sid, kind, item))
   let generated = 0
   let failed = 0
   for (let index = 0; index < missing.length; index += 1) {
+    if (getAccount()?.account !== accountId) break
     const target = missing[index]
     try {
       // 旧数据没有 mood 时仍为空；若只是 Memory 被纠正导致纸条失配，则保留原来的“当时心情”。
-      const result = await generateMemoryPaper(sid, target, { preserveExistingMood: true })
+      const result = await generateMemoryPaper(
+        sid,
+        target,
+        { preserveExistingMood: true, expectedAccountId: accountId },
+      )
       if (result) generated += 1
       else failed += 1
     } catch {
