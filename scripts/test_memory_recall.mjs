@@ -76,6 +76,11 @@ const derived = deriveMemoryTriggerWords('家里养了一只橘猫', '宠物')
 ok(derived.length > 0 && derived.includes('宠物'), '旧条目能派生轻量触发词')
 const legacy = M('legacy', '晚上怕黑会开灯', recent)
 ok(recallRelevantMemories([legacy], '晚上关灯会害怕吗', { now }).length === 1, '旧条目仍可由文本派生触发')
+const longUnthemed = M('color', '用户最喜欢的颜色是蓝色', recent)
+ok(
+  recallRelevantMemories([longUnthemed], '蓝色', { now }).some((item) => item.id === 'color'),
+  '长句句尾关键实体不会被触发词截断丢失',
+)
 
 console.log('\n[B19-5] 不修改输入数组 / 非法输入安全')
 const input = [
