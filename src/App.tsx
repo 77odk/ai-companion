@@ -606,11 +606,13 @@ export default function App() {
     }
 
     window.addEventListener('eluvin-system-notification-click', onPageNotification)
+    window.addEventListener(ELUVIN_DATA_CHANGE, routeFromLocation)
     navigator.serviceWorker?.addEventListener?.('message', onServiceWorkerMessage)
     routeFromLocation()
     return () => {
       if (retryTimer !== null) window.clearTimeout(retryTimer)
       window.removeEventListener('eluvin-system-notification-click', onPageNotification)
+      window.removeEventListener(ELUVIN_DATA_CHANGE, routeFromLocation)
       navigator.serviceWorker?.removeEventListener?.('message', onServiceWorkerMessage)
     }
   }, [loggedIn, goView])
@@ -1369,7 +1371,7 @@ export default function App() {
             onClick={() => {
               commitmentReminderRef.current = null
               setCommitmentReminder(null)
-              window.setTimeout(checkDueCommitment, 0)
+              window.setTimeout(() => void checkDueCommitment(), 0)
             }}
             aria-label="收起"
           >
