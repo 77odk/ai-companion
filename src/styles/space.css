@@ -1439,15 +1439,31 @@
   accent-color: #e7b27b;
 }
 
-.listen-actions {
+.listen-connect {
   display: flex;
   justify-content: center;
-  gap: 9px;
+  margin-top: 26px;
+}
+
+.listen-connect button {
+  min-width: 132px;
+  min-height: 42px;
+  border: 1px solid rgba(255,248,239,.16);
+  border-radius: 999px;
+  background: #f0c08d;
+  color: #3f2d25;
+  font-weight: 600;
+}
+
+.listen-transport {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 1fr;
+  gap: 8px;
   margin-top: 18px;
 }
 
+.listen-transport button,
 .listen-actions button {
-  min-width: 96px;
   min-height: 38px;
   border: 1px solid rgba(255,248,239,.14);
   border-radius: 999px;
@@ -1455,12 +1471,39 @@
   color: rgba(255,248,239,.82);
 }
 
-.listen-actions .listen-play {
+.listen-transport .listen-play {
   background: #f0c08d;
   color: #3f2d25;
   border-color: transparent;
 }
 
+.listen-volume-row {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 9px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.listen-volume-row span {
+  color: rgba(255,248,239,.58);
+  font-size: 10px;
+}
+
+.listen-volume-row input {
+  width: 100%;
+  accent-color: #e7b27b;
+}
+
+.listen-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.listen-connect button:active,
+.listen-transport button:active,
 .listen-actions button:active {
   transform: translateY(1px) scale(.99);
 }
@@ -1474,7 +1517,8 @@
   .space-object-glint,
   .space-object-screen-glow,
   .thought-book-cover,
-  .thought-book-turning-page {
+  .thought-book-turning-page,
+  .space-live-photo {
     animation: none;
     transition: none;
   }
