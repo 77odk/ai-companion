@@ -172,6 +172,103 @@
   opacity: 0.5;
 }
 
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+}
+
+.settings-toggle-row .entry-label {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  flex: 1;
+}
+
+.settings-toggle-row .entry-label small {
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.settings-inline-help {
+  margin: -2px 12px 10px 58px;
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.settings-inline-help.is-error,
+.settings-inline-notice {
+  color: var(--el-danger, #b54f45);
+}
+
+.initiative-settings-card {
+  display: grid;
+  gap: 22px;
+}
+
+.initiative-setting-row,
+.initiative-quiet {
+  display: grid;
+  gap: 12px;
+}
+
+.initiative-setting-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.initiative-setting-row strong,
+.initiative-quiet strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.initiative-setting-row p,
+.initiative-quiet p {
+  margin: 4px 0 0;
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.initiative-field {
+  padding-top: 18px;
+  border-top: 1px solid var(--el-border-soft, var(--color-border));
+}
+
+.initiative-quiet {
+  padding-top: 18px;
+  border-top: 1px solid var(--el-border-soft, var(--color-border));
+}
+
+.initiative-quiet-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: end;
+}
+
+.initiative-quiet-inputs > label {
+  display: grid;
+  gap: 6px;
+  color: var(--el-text-secondary, var(--color-text-muted));
+  font-size: 11px;
+}
+
+.initiative-quiet-inputs > span {
+  padding-bottom: 13px;
+  color: var(--el-text-secondary, var(--color-text-muted));
+}
+
+.settings-inline-notice {
+  margin: 0 16px 16px;
+  font-size: 12px;
+}
+
 /* ---- Expanded update controls remain part of the list ----------------- */
 .settings-page .update-controls-secondary {
   gap: var(--el-space-2, 8px);
