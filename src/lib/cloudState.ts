@@ -25,6 +25,8 @@ export interface CloudStateEntity {
 export interface CloudStateApplyContext {
   source: 'cloud'
   silent: true
+  /** conflict push 返回的服务端 canonical；adapter 必须接受它，不能再按本机时间戳拒绝。 */
+  canonical?: boolean
 }
 
 export interface CloudStateAdapter {
@@ -288,7 +290,11 @@ async function applyEntity(account: string, entity: CloudStateEntity, opts: { fo
     saveUnknownEntity(account, entity)
     return
   }
-  const context: CloudStateApplyContext = { source: 'cloud', silent: true }
+  const context: CloudStateApplyContext = {
+    source: 'cloud',
+    silent: true,
+    ...(opts.force ? { canonical: true } : {}),
+  }
   if (entity.deleted) await adapter.delete(entity, context)
   else await adapter.apply(entity, context)
   saveVersion(account, entity)
