@@ -196,8 +196,7 @@ export function initTaThoughtCloudSync(): void {
       const incoming = validBook(entity.payload, entity.sessionId)
       if (!incoming) return
       const map = readMap()
-      const current = validBook(map[entity.sessionId], entity.sessionId)
-      if (current && current.updatedAt > incoming.updatedAt) return
+      // Cloud State version is canonical across devices; local updatedAt clocks are not comparable.
       map[entity.sessionId] = incoming
       setCloudStateSidecar(SIDECAR, map)
       notifyDataChanged()
