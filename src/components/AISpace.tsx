@@ -562,9 +562,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label="打开 TA 的思绪"
             onClick={() => openDeskObject('book', onOpenThoughts)}
           >
-            <span className="space-scene-art-crop is-book-art" aria-hidden="true">
-              <img src="/space/space-desk.webp" alt="" draggable={false} />
-            </span>
+            <img
+              className="space-object-cutout is-book-cutout"
+              src="/space/cutouts/thought-book.png"
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
             <span className="space-live-book" aria-hidden="true">
               {latestThought ? <span>{latestThought.text}</span> : null}
             </span>
@@ -576,9 +580,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label={listenSnapshot.hasTrack ? `打开一起听歌，正在听 ${listenSnapshot.title}` : '打开一起听歌，去接音乐'}
             onClick={() => openDeskObject('player', onOpenListen)}
           >
-            <span className="space-scene-art-crop is-player-art" aria-hidden="true">
-              <img src="/space/space-desk.webp" alt="" draggable={false} />
-            </span>
+            <img
+              className="space-object-cutout is-player-cutout"
+              src="/space/cutouts/music-player.png"
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
             <span className="space-live-player" aria-hidden="true">
               {listenSnapshot.hasTrack ? (
                 <>
