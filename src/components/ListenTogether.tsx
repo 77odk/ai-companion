@@ -50,9 +50,13 @@ export default function ListenTogether({ onBack }: Props) {
       <main className="listen-stage">
         <section className="listen-player" aria-label="一起听歌播放器">
           <div className="listen-device-wrap">
-            <span className="listen-approved-device-art" aria-hidden="true">
-              <img src="/space/space-desk.webp" alt="" draggable={false} />
-            </span>
+            <img
+              className="listen-approved-device-art"
+              src="/space/cutouts/music-player.png"
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
             <div className="listen-tablet">
               <div className="listen-tablet-screen">
                 <div className="listen-meta">
