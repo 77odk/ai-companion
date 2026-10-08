@@ -22,7 +22,7 @@ interface LocalTrack {
   objectUrl: string
 }
 
-interface SessionPlayerState {
+interface UserPlayerState {
   player: HTMLAudioElement | null
   tracks: LocalTrack[]
   currentIndex: number
@@ -31,10 +31,13 @@ interface SessionPlayerState {
   listeners: Set<Listener>
 }
 
-const states = new Map<string, SessionPlayerState>()
-
-function sessionKey(sessionId?: string): string {
-  return String(sessionId ?? '').trim()
+const state: UserPlayerState = {
+  player: null,
+  tracks: [],
+  currentIndex: 0,
+  mode: 'sequence',
+  volume: .8,
+  listeners: new Set(),
 }
 
 function emptySnapshot(): ListenTogetherSnapshot {
@@ -51,61 +54,13 @@ function emptySnapshot(): ListenTogetherSnapshot {
   }
 }
 
-function ensureState(sessionId?: string): SessionPlayerState | null {
-  const sid = sessionKey(sessionId)
-  if (!sid) return null
-  let state = states.get(sid)
-  if (!state) {
-    state = {
-      player: null,
-      tracks: [],
-      currentIndex: 0,
-      mode: 'sequence',
-      volume: .8,
-      listeners: new Set(),
-    }
-    states.set(sid, state)
-  }
-  return state
-}
-
-function emit(sessionId?: string): void {
-  const sid = sessionKey(sessionId)
-  const state = sid ? states.get(sid) : null
-  if (!state) return
-  const next = snapshot(sid)
-  state.listeners.forEach((listener) => listener(next))
-}
-
-function ensurePlayer(sessionId?: string): HTMLAudioElement | null {
-  const sid = sessionKey(sessionId)
-  const state = ensureState(sid)
-  if (!sid || !state || typeof window === 'undefined' || typeof Audio === 'undefined') return null
-  if (state.player) return state.player
-
-  const audio = new Audio()
-  audio.preload = 'metadata'
-  audio.volume = state.volume
-  for (const event of ['play', 'pause', 'timeupdate', 'loadedmetadata', 'durationchange']) {
-    audio.addEventListener(event, () => emit(sid))
-  }
-  audio.addEventListener('ended', () => {
-    void stepListenTogether(sid, 1, true)
-  })
-  state.player = audio
-  return audio
-}
-
-function currentTrack(state: SessionPlayerState): LocalTrack | null {
+function currentTrack(): LocalTrack | null {
   return state.tracks[state.currentIndex] ?? null
 }
 
-function snapshot(sessionId?: string): ListenTogetherSnapshot {
-  const sid = sessionKey(sessionId)
-  const state = sid ? states.get(sid) : null
-  if (!state) return emptySnapshot()
+function snapshot(): ListenTogetherSnapshot {
   const audio = state.player
-  const track = currentTrack(state)
+  const track = currentTrack()
   return {
     title: track?.title ?? '',
     hasTrack: Boolean(track),
@@ -119,11 +74,33 @@ function snapshot(sessionId?: string): ListenTogetherSnapshot {
   }
 }
 
+function emit(): void {
+  const next = snapshot()
+  state.listeners.forEach((listener) => listener(next))
+}
+
+function ensurePlayer(): HTMLAudioElement | null {
+  if (typeof window === 'undefined' || typeof Audio === 'undefined') return null
+  if (state.player) return state.player
+
+  const audio = new Audio()
+  audio.preload = 'metadata'
+  audio.volume = state.volume
+  for (const event of ['play', 'pause', 'timeupdate', 'loadedmetadata', 'durationchange']) {
+    audio.addEventListener(event, emit)
+  }
+  audio.addEventListener('ended', () => {
+    void stepListenTogether('', 1, true)
+  })
+  state.player = audio
+  return audio
+}
+
 function titleForFile(file: File): string {
   return file.name.replace(/\.[^.]+$/, '') || file.name
 }
 
-function nextIndex(state: SessionPlayerState, direction: 1 | -1): number {
+function nextIndex(direction: 1 | -1): number {
   const count = state.tracks.length
   if (count <= 1) return 0
   if (state.mode === 'shuffle' && direction === 1) {
@@ -133,50 +110,53 @@ function nextIndex(state: SessionPlayerState, direction: 1 | -1): number {
   return (state.currentIndex + direction + count) % count
 }
 
-async function loadIndex(sessionId: string, index: number, autoplay: boolean): Promise<void> {
-  const sid = sessionKey(sessionId)
-  const state = sid ? states.get(sid) : null
-  const audio = ensurePlayer(sid)
-  if (!sid || !state || !audio || state.tracks.length === 0) return
+async function loadIndex(index: number, autoplay: boolean): Promise<void> {
+  const audio = ensurePlayer()
+  if (!audio || state.tracks.length === 0) return
 
   state.currentIndex = Math.max(0, Math.min(state.tracks.length - 1, index))
-  const track = currentTrack(state)
+  const track = currentTrack()
   if (!track) return
+
   audio.src = track.objectUrl
   audio.currentTime = 0
   audio.volume = state.volume
   audio.load()
-  emit(sid)
+  emit()
+
   if (autoplay) {
     try {
       await audio.play()
     } catch {
       // 浏览器若要求新的用户手势，保留选中歌曲并停在可播放状态。
-      emit(sid)
+      emit()
     }
   }
 }
 
-export function getListenTogetherSnapshot(sessionId?: string): ListenTogetherSnapshot {
-  return snapshot(sessionId)
+/**
+ * 播放器属于当前用户/浏览器会话，而不是某个 TA。
+ * 保留 sessionId 参数只是为了兼容现有调用点；切换 TA 不会切断或复制播放状态。
+ */
+export function getListenTogetherSnapshot(_sessionId?: string): ListenTogetherSnapshot {
+  return state.tracks.length || state.player ? snapshot() : emptySnapshot()
 }
 
-export function subscribeListenTogether(sessionId: string, listener: Listener): () => void {
-  const state = ensureState(sessionId)
-  if (!state) {
-    listener(emptySnapshot())
-    return () => {}
-  }
+export function subscribeListenTogether(
+  _sessionId: string,
+  listener: Listener,
+): () => void {
   state.listeners.add(listener)
-  listener(snapshot(sessionId))
+  listener(getListenTogetherSnapshot())
   return () => state.listeners.delete(listener)
 }
 
-export function chooseListenTogetherTracks(sessionId: string, files: FileList | File[]): void {
-  const sid = sessionKey(sessionId)
-  const state = ensureState(sid)
-  const audio = ensurePlayer(sid)
-  if (!sid || !state || !audio) return
+export function chooseListenTogetherTracks(
+  _sessionId: string,
+  files: FileList | File[],
+): void {
+  const audio = ensurePlayer()
+  if (!audio) return
 
   audio.pause()
   for (const track of state.tracks) URL.revokeObjectURL(track.objectUrl)
@@ -191,76 +171,56 @@ export function chooseListenTogetherTracks(sessionId: string, files: FileList | 
   if (state.tracks.length === 0) {
     audio.removeAttribute('src')
     audio.load()
-    emit(sid)
+    emit()
     return
   }
 
-  void loadIndex(sid, 0, false)
+  void loadIndex(0, false)
 }
 
 export function chooseListenTogetherTrack(sessionId: string, file: File): void {
   chooseListenTogetherTracks(sessionId, [file])
 }
 
-export async function toggleListenTogether(sessionId: string): Promise<void> {
-  const sid = sessionKey(sessionId)
-  const state = sid ? states.get(sid) : null
-  const audio = ensurePlayer(sid)
-  if (!sid || !state || !audio || !currentTrack(state)) return
-
-  if (audio.paused) {
-    for (const [otherSid, other] of states) {
-      if (otherSid === sid || !other.player || other.player.paused) continue
-      other.player.pause()
-      emit(otherSid)
-    }
-    await audio.play()
-  } else {
-    audio.pause()
-  }
+export async function toggleListenTogether(_sessionId: string): Promise<void> {
+  const audio = ensurePlayer()
+  if (!audio || !currentTrack()) return
+  if (audio.paused) await audio.play()
+  else audio.pause()
 }
 
 export async function stepListenTogether(
-  sessionId: string,
+  _sessionId: string,
   direction: 1 | -1,
   autoplay?: boolean,
 ): Promise<void> {
-  const sid = sessionKey(sessionId)
-  const state = sid ? states.get(sid) : null
-  if (!sid || !state || state.tracks.length === 0) return
+  if (state.tracks.length === 0) return
   const shouldPlay = autoplay ?? Boolean(state.player && !state.player.paused && !state.player.ended)
-  await loadIndex(sid, nextIndex(state, direction), shouldPlay)
+  await loadIndex(nextIndex(direction), shouldPlay)
 }
 
-export function seekListenTogether(sessionId: string, seconds: number): void {
-  const sid = sessionKey(sessionId)
-  const state = sid ? states.get(sid) : null
-  const audio = ensurePlayer(sid)
-  if (!sid || !state || !audio || !currentTrack(state) || !Number.isFinite(seconds)) return
+export function seekListenTogether(_sessionId: string, seconds: number): void {
+  const audio = ensurePlayer()
+  if (!audio || !currentTrack() || !Number.isFinite(seconds)) return
   const end = Number.isFinite(audio.duration) ? audio.duration : seconds
   audio.currentTime = Math.max(0, Math.min(end, seconds))
-  emit(sid)
+  emit()
 }
 
-export function setListenTogetherVolume(sessionId: string, volume: number): void {
-  const sid = sessionKey(sessionId)
-  const state = ensureState(sid)
-  if (!sid || !state || !Number.isFinite(volume)) return
+export function setListenTogetherVolume(_sessionId: string, volume: number): void {
+  if (!Number.isFinite(volume)) return
   state.volume = Math.max(0, Math.min(1, volume))
-  const audio = ensurePlayer(sid)
+  const audio = ensurePlayer()
   if (audio) audio.volume = state.volume
-  emit(sid)
+  emit()
 }
 
-export function setListenTogetherMode(sessionId: string, mode: ListenPlaybackMode): void {
-  const sid = sessionKey(sessionId)
-  const state = ensureState(sid)
-  if (!sid || !state) return
+export function setListenTogetherMode(_sessionId: string, mode: ListenPlaybackMode): void {
   state.mode = mode === 'shuffle' ? 'shuffle' : 'sequence'
-  emit(sid)
+  emit()
 }
 
-function clearSession(state: SessionPlayerState): void {
+export function clearListenTogether(): void {
   if (state.player) {
     state.player.pause()
     state.player.removeAttribute('src')
@@ -269,31 +229,10 @@ function clearSession(state: SessionPlayerState): void {
   for (const track of state.tracks) URL.revokeObjectURL(track.objectUrl)
   state.tracks = []
   state.currentIndex = 0
-}
-
-export function clearListenTogether(sessionId?: string): void {
-  const sid = sessionKey(sessionId)
-  if (sid) {
-    const state = states.get(sid)
-    if (!state) return
-    clearSession(state)
-    emit(sid)
-    return
-  }
-  for (const [key, state] of states) {
-    clearSession(state)
-    emit(key)
-  }
-}
-
-export function pauseListenTogether(sessionId: string): void {
-  const sid = sessionKey(sessionId)
-  const state = sid ? states.get(sid) : null
-  if (!state?.player || state.player.paused) return
-  state.player.pause()
-  emit(sid)
+  emit()
 }
 
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-  window.addEventListener(ELUVIN_AUTH_CHANGE, () => clearListenTogether())
+  // 登录账号变化才清理；切 TA 不影响用户正在播放的音乐。
+  window.addEventListener(ELUVIN_AUTH_CHANGE, clearListenTogether)
 }
