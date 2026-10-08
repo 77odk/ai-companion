@@ -2489,3 +2489,79 @@ html.eluvin-page-hidden .thought-book-page * {
     transform: none !important;
   }
 }
+
+
+/* ---- Mobile visual baseline · approved artwork is the coordinate plane --- */
+
+/* 941×1672 is the approved mobile composition. The scene and every hotspot
+   share this exact plane; no layer is allowed to stretch against the page. */
+.space-scene-shell,
+.space-scene-hotspots {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  width: min(100%, calc(100dvh * 941 / 1672));
+  height: auto;
+  aspect-ratio: 941 / 1672;
+  margin: 0;
+  transform: translateX(-50%);
+}
+
+.space-scene-shell {
+  overflow: hidden;
+}
+
+.space-scene-backplate {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  object-position: 50% 50%;
+}
+
+.space-scene-hotspots {
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Physical materials come from the approved artwork / cutout assets.
+   Live layers may show real data, but must not repaint another book/tablet/
+   headphone/drawer body on top of them. */
+.space-live-book {
+  background: transparent;
+  box-shadow: none;
+}
+
+.space-live-player {
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+
+.space-live-earphone-wire {
+  display: none;
+}
+
+.space-drawer-peek {
+  background: transparent;
+  box-shadow: none;
+}
+
+.space-drawer-interior {
+  display: none;
+}
+
+/* The old synthetic leaf tips were deliberately removed from AISpace.
+   Keep the approved photographed/illustrated plants untouched. */
+.space-plant-motion {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-scene-shell,
+  .space-scene-hotspots {
+    transform: translateX(-50%);
+  }
+}
