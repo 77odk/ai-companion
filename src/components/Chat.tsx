@@ -63,6 +63,7 @@ import { flushPendingOpsSnapshot } from '../lib/pendingReplay'
 import { appendMemoryAudit } from '../lib/memoryAudit'
 import { getTaStateView, taMoodLabelForPrompt } from '../lib/taState'
 import { getRelationshipRoleGuidanceForPrompt, getRelationshipSettingLabelForPrompt } from '../lib/relationshipState'
+import { getListenTogetherSnapshot } from '../lib/listenTogetherState'
 
 /**
  * 历史时间锚必须稳定：同一条历史消息无论过几分钟再次发送，前缀都完全一致，
@@ -1327,6 +1328,16 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     const contextBlocks: ContextBlock[] = [
       { id: 'current-time', content: buildTimeContext(Date.now(), lang), priority: 'core' },
     ]
+    const listening = getListenTogetherSnapshot()
+    if (listening.hasTrack) {
+      contextBlocks.push({
+        id: 'user-listening',
+        priority: 'ambient',
+        content: lang === 'en'
+          ? `[USER's player right now]\nTrack: ${listening.title}\nStatus: ${listening.playing ? 'playing' : 'paused'}. This is real player state shared across TA switches. You may naturally know what USER is listening to; do not invent audio details that are not present here.`
+          : `【用户此刻的播放器】\n正在听：${listening.title}\n状态：${listening.playing ? '播放中' : '已暂停'}。这是用户级真实播放器状态，切换 TA 也不变。你可以自然知道用户正在听什么，但不要编造这里没有的歌曲细节。`,
+      })
+    }
     const correctionTargets = new Map<string, MemoryCorrectionTarget>()
 
     const contextText = base
