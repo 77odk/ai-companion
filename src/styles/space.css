@@ -2736,3 +2736,152 @@ html.eluvin-page-hidden .thought-book-page * {
     animation: none !important;
   }
 }
+
+
+/* ---- Mobile object continuity · expanded objects keep approved pixels ----- */
+/* The scene object itself is never redrawn on entry. The approved artwork is
+   enlarged as the physical shell; only the live content area is replaced. */
+.listen-device-wrap {
+  position: relative;
+  width: min(90vw, 430px);
+  aspect-ratio: 1.386 / 1;
+  margin: 0 auto;
+  padding-bottom: 0;
+}
+
+.listen-approved-device-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  clip-path: polygon(7% 10%, 91% 7%, 98% 18%, 94% 89%, 8% 93%, 2% 79%);
+  pointer-events: none;
+}
+
+.listen-approved-device-art > img {
+  position: absolute;
+  display: block;
+  width: 270.2703%;
+  height: 666.6667%;
+  left: -145.9459%;
+  top: -346.6667%;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.listen-tablet {
+  position: absolute;
+  z-index: 3;
+  left: 9%;
+  right: 8%;
+  top: 18%;
+  bottom: 17%;
+  padding: 0;
+  border-radius: 8%;
+  background: transparent;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.listen-tablet-screen {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: clamp(10px, 3.4vw, 18px) clamp(10px, 3.1vw, 17px);
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 22% 4%, rgba(236,166,100,.12), transparent 34%),
+    rgba(24, 21, 20, .965);
+}
+
+.listen-meta {
+  gap: 2px;
+}
+
+.listen-meta strong {
+  font-size: clamp(12px, 3.3vw, 15px);
+}
+
+.listen-progress-row {
+  margin-top: clamp(8px, 2.8vw, 14px);
+}
+
+.listen-transport {
+  margin-top: clamp(8px, 2.8vw, 14px);
+}
+
+.listen-volume-row {
+  margin-top: clamp(8px, 2.8vw, 13px);
+}
+
+.listen-actions {
+  margin-top: clamp(7px, 2.4vw, 12px);
+}
+
+.listen-connect {
+  margin-top: clamp(10px, 3vw, 16px);
+}
+
+.listen-tablet-port,
+.listen-stand,
+.listen-earphones,
+.listen-cover {
+  display: none !important;
+}
+
+.star-jar-vessel {
+  width: min(62vw, 276px);
+  aspect-ratio: .9;
+}
+
+.star-jar-approved-art {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  overflow: hidden;
+  clip-path: polygon(24% 0, 76% 0, 88% 13%, 94% 78%, 82% 100%, 18% 100%, 6% 78%, 12% 13%);
+  pointer-events: none;
+}
+
+.star-jar-approved-art > img {
+  position: absolute;
+  display: block;
+  width: 312.5%;
+  height: 500%;
+  left: -56.25%;
+  top: -235%;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.star-jar-lid {
+  display: none !important;
+}
+
+.star-jar-glass {
+  z-index: 3;
+  inset: 20% 20% 12%;
+  border: 0;
+  border-radius: 22% 22% 27% 27% / 10% 10% 18% 18%;
+  background: rgba(244, 222, 190, .74);
+  box-shadow: inset 7px 0 12px rgba(255,255,255,.20);
+  -webkit-backdrop-filter: blur(7px) saturate(.72);
+  backdrop-filter: blur(7px) saturate(.72);
+}
+
+.star-jar-glass::before {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listen-approved-device-art,
+  .star-jar-approved-art {
+    animation: none !important;
+    transform: none !important;
+  }
+}
