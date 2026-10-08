@@ -427,21 +427,12 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             draggable={false}
           />
           <span className="space-scene-ambient" aria-hidden="true" />
-          <span className="space-plant-motion is-hanging" aria-hidden="true">
-            <i className="is-tip-a" />
-            <i className="is-tip-b" />
-            <i className="is-tip-c" />
-          </span>
-          <span className="space-plant-motion is-right" aria-hidden="true">
-            <i className="is-tip-a" />
-            <i className="is-tip-b" />
-          </span>
         </section>
 
         {/*
-          The approved artwork remains the visual coordinate system. Photo archive
-          access stays mounted here; shared experiences moved to Chaomu in S3,
-          while desk objects use the S2 CSS/SVG interaction layer.
+          Mobile first: the approved 941×1672 artwork is the only coordinate system.
+          Physical objects must stay on that artwork/cutout layer; CSS here only
+          carries real content, hit areas and motion.
         */}
         <div className="space-scene-hotspots">
           <button
