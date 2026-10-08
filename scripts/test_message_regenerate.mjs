@@ -43,6 +43,8 @@ assert.deepEqual(
 
 const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
 const bubble = fs.readFileSync(new URL('../src/components/MessageBubble.tsx', import.meta.url), 'utf8')
+// C 级拆分第 1 刀：三条状态提示条（含撤销按钮）已搬到 ChatNotices.tsx，断言随之改读新文件（契约不变）。
+const notices = fs.readFileSync(new URL('../src/components/ChatNotices.tsx', import.meta.url), 'utf8')
 
 console.log('[message regenerate] one reply pipeline, no duplicate user side effects')
 assert.match(chat, /existingRound\?: \{[\s\S]*userMessage: StoredMessage[\s\S]*visibleHistory: StoredMessage\[\][\s\S]*branchId: string/)
@@ -77,6 +79,6 @@ assert.match(bubble, /onRegenerate\?: \(\) => void/)
 assert.match(bubble, /const regenerateLabel = sessionLang === 'en' \? 'Regenerate' : '重新生成'/)
 assert.match(bubble, /!isUser && onRegenerate/)
 assert.match(chat, /onRegenerate=\{!streaming && !contextBusy && !isBusy && regenerationSourceUser\(m\)/)
-assert.match(chat, /disabled=\{streaming\}>\{chatUiLang === 'en' \? 'Undo' : '撤销'\}/)
+assert.match(notices, /disabled=\{streaming\}>\{lang === 'en' \? 'Undo' : '撤销'\}/)
 
 console.log('message regenerate contract: PASS')

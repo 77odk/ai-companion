@@ -92,6 +92,7 @@ import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
 import { processEventCandidate } from '../lib/eventDetector'
 import MilestoneCard from './MilestoneCard'
 import ChatCompanionControls from './ChatCompanionControls'
+import ChatNotices from './ChatNotices'
 
 
 /**
@@ -2601,34 +2602,19 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         )}
       </div>
 
-      {jumpNotice && (
-        <div className="chat-jump-notice" role="status">{jumpNotice}</div>
-      )}
-
-      {branchActionNotice && (
-        <div className="chat-branch-action-notice" role="status">
-          <span>{branchActionNotice.text}</span>
-          <button type="button" onClick={undoConversationBranchAction} disabled={streaming}>{chatUiLang === 'en' ? 'Undo' : '撤销'}</button>
-        </div>
-      )}
-
-      {showReplyRecovery && recoverableReply && (
-        <div className="chat-reply-recovery" role="status">
-          <span>
-            {chatUiLang === 'en'
-              ? 'That reply was interrupted. Any part already received is kept.'
-              : '刚才的回复中断了，已经收到的部分会保留。'}
-          </span>
-          <div className="chat-reply-recovery-actions">
-            <button type="button" onClick={handleContinueAfterInterruption}>
-              {chatUiLang === 'en' ? 'Continue' : '继续'}
-            </button>
-            <button type="button" onClick={handleRetryInterruptedReply} disabled={streaming || Boolean(contextBusy) || isBusy}>
-              {chatUiLang === 'en' ? 'Retry TA only' : '只重试 TA'}
-            </button>
-          </div>
-        </div>
-      )}
+      <ChatNotices
+        jumpNotice={jumpNotice}
+        branchActionNotice={branchActionNotice}
+        onUndoBranchAction={undoConversationBranchAction}
+        showReplyRecovery={showReplyRecovery}
+        recoverableReply={recoverableReply}
+        onContinue={handleContinueAfterInterruption}
+        onRetryInterruptedReply={handleRetryInterruptedReply}
+        streaming={streaming}
+        contextBusy={contextBusy}
+        isBusy={isBusy}
+        lang={chatUiLang}
+      />
 
       {error && (
         <div className="chat-error-wrap">
