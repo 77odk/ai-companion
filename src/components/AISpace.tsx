@@ -1,8 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
-import { getActiveSessionId } from '../lib/sessionStore'
+import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
+import { loadMemory, MEMORY_UPDATED_EVENT } from '../lib/memory'
+import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
+import { loadTaThoughts } from '../lib/taThoughts'
+import { getWeeklyReviews } from '../lib/weeklyReview'
+import {
+  getListenTogetherSnapshot,
+  subscribeListenTogether,
+} from '../lib/listenTogetherState'
 import {
   loadLocalPhotos,
+  saveLocalPhotos,
   saveLocalPhotoMetadata,
   addLocalPhoto,
   removeLocalPhoto,
@@ -53,9 +62,50 @@ function isValidCloudPhotoRow(value: unknown): value is {
 
 const PHOTO_IMAGE_LOAD_ERROR = '有照片暂时没显示出来，照片还在，稍后再试。'
 
+type DeskObjectKind = 'photos' | 'jar' | 'book' | 'player'
+let carriedDeskObject: Exclude<DeskObjectKind, 'photos'> | null = null
+let drawerNeedsReturn = false
+
+
+function sceneMemoryCount(sessionId: string): number {
+  const global = loadMemory().filter((item) => item.explicit === true && item.text?.trim())
+  const session = sessionId ? getMemoriesCache(sessionId).filter((item) => item.text?.trim()) : []
+  return global.length + session.length
+}
+
 export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, onOpenWeekly }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
+  const [sceneVersion, setSceneVersion] = useState(0)
+  const [listenSnapshot, setListenSnapshot] = useState(() => getListenTogetherSnapshot(sessionId))
+
+  useEffect(() => {
+    setListenSnapshot(getListenTogetherSnapshot(sessionId))
+    return subscribeListenTogether(sessionId, setListenSnapshot)
+  }, [sessionId])
+
+  useEffect(() => {
+    const refresh = () => setSceneVersion((value) => value + 1)
+    window.addEventListener(MEMORY_UPDATED_EVENT, refresh)
+    window.addEventListener(ELUVIN_DATA_CHANGE, refresh)
+    return () => {
+      window.removeEventListener(MEMORY_UPDATED_EVENT, refresh)
+      window.removeEventListener(ELUVIN_DATA_CHANGE, refresh)
+    }
+  }, [])
+
+  const memoryCount = useMemo(
+    () => sceneMemoryCount(sessionId),
+    [sessionId, sceneVersion],
+  )
+  const latestThought = useMemo(
+    () => sessionId ? loadTaThoughts(sessionId)[0] ?? null : null,
+    [sessionId, sceneVersion],
+  )
+  const weeklyCount = useMemo(
+    () => getWeeklyReviews(sid).length,
+    [sid, sceneVersion],
+  )
 
   /* ---- 照片墙：上传/数据源沿用旧实现，展示交给稳定长墙组件。 ---- */
   const [photos, setPhotos] = useState<PhotoMeta[]>(() => loadLocalPhotos(sid))
@@ -63,20 +113,78 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   const [photoError, setPhotoError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const failedPhotoIdsRef = useRef<Set<string>>(new Set())
+  const scenePhotoDragRef = useRef<{
+    id: string
+    pointerId: number
+    board: DOMRect
+    offsetX: number
+    offsetY: number
+    startX: number
+    startY: number
+    moved: boolean
+  } | null>(null)
   const drawerTimerRef = useRef<number | null>(null)
+  const objectTimerRef = useRef<number | null>(null)
   const [drawerOpening, setDrawerOpening] = useState(false)
+  const [drawerReturning, setDrawerReturning] = useState(() => {
+    const returning = drawerNeedsReturn
+    drawerNeedsReturn = false
+    return returning
+  })
+  const [openingObject, setOpeningObject] = useState<DeskObjectKind | null>(null)
+  const [placingObject, setPlacingObject] = useState<DeskObjectKind | null>(() => {
+    const returning = carriedDeskObject
+    carriedDeskObject = null
+    return returning
+  })
+
+  const beginPlaceBack = (kind: DeskObjectKind) => {
+    setPlacingObject(kind)
+  }
+
+  useEffect(() => {
+    if (!placingObject) return
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const timer = window.setTimeout(() => setPlacingObject(null), reduce ? 1 : 420)
+    return () => window.clearTimeout(timer)
+  }, [placingObject])
+
+  useEffect(() => {
+    if (!drawerReturning) return
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const timer = window.setTimeout(() => setDrawerReturning(false), reduce ? 1 : 460)
+    return () => window.clearTimeout(timer)
+  }, [drawerReturning])
 
   useEffect(() => () => {
     if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
+    if (objectTimerRef.current !== null) window.clearTimeout(objectTimerRef.current)
   }, [])
+
+  const openDeskObject = (
+    kind: DeskObjectKind,
+    open: () => void,
+  ) => {
+    if (openingObject || drawerOpening) return
+    setOpeningObject(kind)
+    if (objectTimerRef.current !== null) window.clearTimeout(objectTimerRef.current)
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    objectTimerRef.current = window.setTimeout(() => {
+      objectTimerRef.current = null
+      if (kind !== 'photos') carriedDeskObject = kind
+      open()
+      setOpeningObject(null)
+    }, reduce ? 1 : 310)
+  }
 
   const openWeeklyFromDrawer = () => {
     if (drawerOpening) return
     setDrawerOpening(true)
     if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
-    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 260
+    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 470
     drawerTimerRef.current = window.setTimeout(() => {
       drawerTimerRef.current = null
+      drawerNeedsReturn = true
       onOpenWeekly()
       setDrawerOpening(false)
     }, delay)
@@ -230,6 +338,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           }}
           onAdd={() => fileInputRef.current?.click()}
           onDelete={handleDeletePhoto}
+          onOpenChange={(open) => {
+            if (!open) beginPlaceBack('photos')
+          }}
         />
         <input
           ref={fileInputRef}
@@ -246,7 +357,65 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     )
   }
 
+  const defaultScenePlacement = (index: number) => {
+    const defaults = [
+      { x: 7, y: 8, rotate: -5 },
+      { x: 36, y: 5, rotate: 3 },
+      { x: 66, y: 9, rotate: -2 },
+      { x: 13, y: 42, rotate: 4 },
+      { x: 43, y: 38, rotate: -4 },
+      { x: 70, y: 43, rotate: 5 },
+      { x: 27, y: 68, rotate: -2 },
+      { x: 57, y: 67, rotate: 2 },
+    ]
+    return defaults[index % defaults.length]
+  }
+
+  const persistScenePhotoPlacements = (next: PhotoMeta[]) => {
+    const token = getToken()
+    if (token && sid) saveLocalPhotoMetadata(next, sid)
+    else saveLocalPhotos(next, sid)
+  }
+
+  const moveScenePhoto = (photoId: string, x: number, y: number) => {
+    setPhotos((current) => current.map((photo, index) => {
+      if (photo.id !== photoId) return photo
+      const base = photo.scenePlacement ?? defaultScenePlacement(index)
+      return {
+        ...photo,
+        scenePlacement: {
+          x: Math.max(2, Math.min(70, x)),
+          y: Math.max(4, Math.min(68, y)),
+          rotate: base.rotate,
+        },
+      }
+    }))
+  }
+
+  const finishScenePhotoDrag = () => {
+    scenePhotoDragRef.current = null
+    setPhotos((current) => {
+      persistScenePhotoPlacements(current)
+      return [...current]
+    })
+  }
+
   function renderHomePage() {
+    const token = getToken()
+    const scenePhotos = photos.slice(0, 8)
+    const progress = listenSnapshot.duration > 0
+      ? Math.max(0, Math.min(1, listenSnapshot.current / listenSnapshot.duration))
+      : 0
+    const openPhotoWall = () => {
+      document
+        .querySelector<HTMLButtonElement>('.ai-space-page .photo-stack-preview, .ai-space-page .photo-archive-empty')
+        ?.click()
+    }
+
+    const openPhotoWallFromScene = () => {
+      openDeskObject('photos', openPhotoWall)
+    }
+
     return (
       <>
         <section className="space-scene-shell" aria-label="TA 的空间">
@@ -258,6 +427,15 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             draggable={false}
           />
           <span className="space-scene-ambient" aria-hidden="true" />
+          <span className="space-plant-motion is-hanging" aria-hidden="true">
+            <i className="is-tip-a" />
+            <i className="is-tip-b" />
+            <i className="is-tip-c" />
+          </span>
+          <span className="space-plant-motion is-right" aria-hidden="true">
+            <i className="is-tip-a" />
+            <i className="is-tip-b" />
+          </span>
         </section>
 
         {/*
@@ -268,54 +446,164 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
         <div className="space-scene-hotspots">
           <button
             type="button"
-            className="space-scene-hotspot is-photo-wall"
+            className={`space-scene-hotspot is-photo-wall${openingObject === 'photos' ? ' is-lifting' : ''}`}
             aria-label="打开照片墙"
-            onClick={() => {
-              document
-                .querySelector<HTMLButtonElement>('.ai-space-page .photo-stack-preview, .ai-space-page .photo-archive-empty')
-                ?.click()
-            }}
-          />
-          <button
-            type="button"
-            className="space-scene-hotspot is-star-jar"
-            aria-label="打开记忆星星罐"
-            onClick={onOpenStarJar}
+            onClick={openPhotoWallFromScene}
           >
-            <svg viewBox="0 0 100 100" aria-hidden="true">
-              <path className="space-object-glint" d="M27 18c-7 16-8 37-3 54" />
-              <path className="space-object-rim" d="M23 18h54" />
-            </svg>
+            <img className="space-object-asset is-photo-board" src="/space/generated/photo-board.svg" alt="" aria-hidden="true" draggable={false} />
+            <span className="space-live-photo-board" aria-label="空间页照片摆放区">
+              {scenePhotos.map((photo, index) => {
+                const placement = photo.scenePlacement ?? defaultScenePlacement(index)
+                return (
+                  <span
+                    key={photo.id}
+                    className="space-live-photo"
+                    style={{
+                      '--scene-photo-x': `${placement.x}%`,
+                      '--scene-photo-y': `${placement.y}%`,
+                      '--scene-photo-r': `${placement.rotate}deg`,
+                      '--scene-photo-delay': `${-((index * 1.7) % 12)}s`,
+                      '--scene-photo-duration': `${12 + ((index * 13) % 55) / 10}s`,
+                    } as React.CSSProperties}
+                    onPointerDown={(event) => {
+                      event.stopPropagation()
+                      const board = event.currentTarget.parentElement?.getBoundingClientRect()
+                      if (!board) return
+                      const card = event.currentTarget.getBoundingClientRect()
+                      scenePhotoDragRef.current = {
+                        id: photo.id,
+                        pointerId: event.pointerId,
+                        board,
+                        offsetX: event.clientX - card.left,
+                        offsetY: event.clientY - card.top,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        moved: false,
+                      }
+                      event.currentTarget.setPointerCapture?.(event.pointerId)
+                    }}
+                    onPointerMove={(event) => {
+                      const drag = scenePhotoDragRef.current
+                      if (!drag || drag.id !== photo.id || drag.pointerId !== event.pointerId) return
+                      event.stopPropagation()
+                      if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) {
+                        drag.moved = true
+                      }
+                      if (!drag.moved) return
+                      const x = ((event.clientX - drag.board.left - drag.offsetX) / drag.board.width) * 100
+                      const y = ((event.clientY - drag.board.top - drag.offsetY) / drag.board.height) * 100
+                      moveScenePhoto(photo.id, x, y)
+                    }}
+                    onPointerUp={(event) => {
+                      const drag = scenePhotoDragRef.current
+                      if (!drag || drag.id !== photo.id || drag.pointerId !== event.pointerId) return
+                      event.stopPropagation()
+                      event.currentTarget.releasePointerCapture?.(event.pointerId)
+                      if (drag.moved) finishScenePhotoDrag()
+                      else {
+                        scenePhotoDragRef.current = null
+                        openPhotoWallFromScene()
+                      }
+                    }}
+                    onPointerCancel={() => finishScenePhotoDrag()}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <img
+                      src={photo.dataUrl ?? photoUrl(photo.id, token)}
+                      alt=""
+                      draggable={false}
+                      onError={() => {
+                        failedPhotoIdsRef.current.add(photo.id)
+                        setPhotoError(PHOTO_IMAGE_LOAD_ERROR)
+                      }}
+                      onLoad={() => {
+                        failedPhotoIdsRef.current.delete(photo.id)
+                        if (failedPhotoIdsRef.current.size === 0) {
+                          setPhotoError((current) => current === PHOTO_IMAGE_LOAD_ERROR ? null : current)
+                        }
+                      }}
+                    />
+                  </span>
+                )
+              })}
+            </span>
           </button>
+
           <button
             type="button"
-            className="space-scene-hotspot is-thought-book"
+            className={`space-scene-hotspot is-star-jar${openingObject === 'jar' ? ' is-lifting' : ''}`}
+            aria-label={memoryCount > 0 ? `打开记忆星星罐，共 ${memoryCount} 颗星` : '打开空的记忆星星罐'}
+            onClick={() => openDeskObject('jar', onOpenStarJar)}
+          >
+            <img className="space-object-asset is-jar" src="/space/generated/jar.svg" alt="" aria-hidden="true" draggable={false} />
+            <span className="space-live-jar" aria-hidden="true">
+              <span className="space-live-jar-glint" />
+              <span className="space-live-star-field">
+                {Array.from({ length: memoryCount }, (_, index) => (
+                  <i
+                    key={index}
+                    className="space-live-star"
+                    style={{
+                      '--live-star-x': `${8 + ((index * 41) % 84)}%`,
+                      '--live-star-y': `${18 + ((index * 29) % 69)}%`,
+                      '--live-star-r': `${-24 + ((index * 31) % 49)}deg`,
+                      '--live-star-d': `${-((index * 0.37) % 6.7)}s`,
+                      '--live-star-t': `${5.8 + ((index * 17) % 28) / 10}s`,
+                      '--live-star-h': `${(index * 47) % 360}`,
+                    } as React.CSSProperties}
+                  />
+                ))}
+              </span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className={`space-scene-hotspot is-thought-book${openingObject === 'book' ? ' is-lifting' : ''}`}
             aria-label="打开 TA 的思绪"
-            onClick={onOpenThoughts}
+            onClick={() => openDeskObject('book', onOpenThoughts)}
           >
-            <svg viewBox="0 0 100 100" aria-hidden="true">
-              <path className="space-object-paper-edge" d="M12 50c23-7 38-6 47 0 10-6 19-6 29-4" />
-            </svg>
+            <img className="space-object-asset is-book" src="/space/generated/book.svg" alt="" aria-hidden="true" draggable={false} />
+            <span className="space-live-book" aria-hidden="true">
+              {latestThought ? <span>{latestThought.text}</span> : null}
+            </span>
           </button>
+
           <button
             type="button"
-            className="space-scene-hotspot is-player"
-            aria-label="打开一起听歌"
-            onClick={onOpenListen}
+            className={`space-scene-hotspot is-player${listenSnapshot.playing ? ' is-playing' : ''}${openingObject === 'player' ? ' is-lifting' : ''}`}
+            aria-label={listenSnapshot.hasTrack ? `打开一起听歌，正在听 ${listenSnapshot.title}` : '打开一起听歌，去接音乐'}
+            onClick={() => openDeskObject('player', onOpenListen)}
           >
-            <svg viewBox="0 0 100 100" aria-hidden="true">
-              <rect className="space-object-screen-glow" x="14" y="20" width="72" height="54" rx="8" />
-              <path className="space-object-progress" d="M24 63h37" />
-            </svg>
+            <span className="space-live-player" aria-hidden="true">
+              {listenSnapshot.hasTrack ? (
+                <>
+                  <strong>{listenSnapshot.title}</strong>
+                  <span className="space-live-player-track">
+                    <i style={{ transform: `scaleX(${progress})` }} />
+                  </span>
+                </>
+              ) : (
+                <strong className="space-live-player-connect">接音乐</strong>
+              )}
+            </span>
+            <span className="space-live-earphone-wire" aria-hidden="true" />
           </button>
+
           <button
             type="button"
-            className={`space-scene-hotspot is-weekly-letter${drawerOpening ? ' is-opening' : ''}`}
+            className={`space-scene-hotspot is-weekly-letter${drawerOpening ? ' is-opening' : ''}${drawerReturning ? ' is-returning' : ''}`}
             aria-label="拉开抽屉，打开一周情书"
             onClick={openWeeklyFromDrawer}
             disabled={drawerOpening}
           >
-            <span className="space-drawer-peek" aria-hidden="true" />
+            <span className="space-drawer-peek" aria-hidden="true">
+              <span className="space-drawer-interior">
+                {Array.from({ length: Math.min(5, weeklyCount) }, (_, index) => (
+                  <i key={index} style={{ '--letter-i': index } as React.CSSProperties} />
+                ))}
+              </span>
+            </span>
           </button>
         </div>
 
@@ -326,5 +614,5 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     )
   }
 
-  return <div className="page ai-space-page">{renderHomePage()}</div>
+  return <div className={`page ai-space-page${placingObject ? ` is-placing-${placingObject}` : ''}`}>{renderHomePage()}</div>
 }

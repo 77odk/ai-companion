@@ -100,6 +100,11 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
   })
   const activeId = getActiveSessionId()
 
+  const switchActiveSession = (id: string) => {
+    // 音乐是用户级状态；换 TA 只切会话，不暂停用户正在听的歌。
+    setActiveSessionId(id)
+  }
+
   // 点角色/角色详情：打开该角色资料卡（不切换当前会话；资料卡由 App 用临时角色参数渲染）
   const openRoleProfile = (id: string) => {
     setMenuFor(null)
@@ -115,7 +120,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
 
   const confirmSelect = (id: string) => {
     setConfirmingSelect(null)
-    setActiveSessionId(id)
+    switchActiveSession(id)
     onSelectDone?.()
   }
 
@@ -171,7 +176,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
 
       // 只有删除当前角色时才改 active。没有有效默认角色就清空 active，并留在角色管理页等待用户自己选。
       if (getActiveSessionId() === String(id)) {
-        setActiveSessionId(resolution.nextActiveId)
+        switchActiveSession(resolution.nextActiveId)
         if (resolution.destination === 'home') onSwitch()
       }
     } finally {

@@ -1,4 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
+import { getActiveSessionId } from '../lib/sessionStore'
+import {
+  chooseListenTogetherTracks,
+  getListenTogetherSnapshot,
+  seekListenTogether,
+  setListenTogetherMode,
+  setListenTogetherVolume,
+  stepListenTogether,
+  subscribeListenTogether,
+  toggleListenTogether,
+} from '../lib/listenTogetherState'
 
 interface Props {
   onBack: () => void
@@ -11,37 +22,18 @@ function fmt(seconds: number): string {
 }
 
 export default function ListenTogether({ onBack }: Props) {
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const sessionId = getActiveSessionId()
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const [src, setSrc] = useState('')
-  const [title, setTitle] = useState('还没有选择歌曲')
-  const [playing, setPlaying] = useState(false)
-  const [current, setCurrent] = useState(0)
-  const [duration, setDuration] = useState(0)
+  const [snapshot, setSnapshot] = useState(() => getListenTogetherSnapshot(sessionId))
 
-  useEffect(() => () => {
-    if (src) URL.revokeObjectURL(src)
-  }, [src])
-
-  const choose = (file?: File) => {
-    if (!file) return
-    if (src) URL.revokeObjectURL(src)
-    const next = URL.createObjectURL(file)
-    setSrc(next)
-    setTitle(file.name.replace(/\.[^.]+$/, '') || file.name)
-    setCurrent(0)
-    setDuration(0)
-    setPlaying(false)
-  }
+  useEffect(() => {
+    setSnapshot(getListenTogetherSnapshot(sessionId))
+    return subscribeListenTogether(sessionId, setSnapshot)
+  }, [sessionId])
 
   const toggle = async () => {
-    const audio = audioRef.current
-    if (!audio || !src) {
-      inputRef.current?.click()
-      return
-    }
-    if (audio.paused) await audio.play()
-    else audio.pause()
+    if (!snapshot.hasTrack) return
+    await toggleListenTogether(sessionId)
   }
 
   return (
@@ -54,6 +46,7 @@ export default function ListenTogether({ onBack }: Props) {
         </div>
         <span aria-hidden="true" />
       </header>
+
       <main className="listen-stage">
         <section className="listen-player" aria-label="一起听歌播放器">
           <div className="listen-device-wrap">
@@ -62,34 +55,93 @@ export default function ListenTogether({ onBack }: Props) {
                 <div className="listen-cover" aria-hidden="true">
                   <span />
                 </div>
+
                 <div className="listen-meta">
-                  <strong>{title}</strong>
-                  <span>{src ? '本地音乐' : '只读取你自己选择的音乐'}</span>
+                  <strong>{snapshot.hasTrack ? snapshot.title : '还没有接音乐'}</strong>
+                  <span>
+                    {snapshot.hasTrack
+                      ? `${snapshot.currentIndex + 1} / ${snapshot.trackCount}`
+                      : '先把音乐接进来，播放器会留在这里'}
+                  </span>
                 </div>
+
                 <div className="listen-progress-row">
-                  <span>{fmt(current)}</span>
+                  <span>{fmt(snapshot.current)}</span>
                   <input
                     type="range"
                     min="0"
-                    max={Math.max(1, duration)}
+                    max={Math.max(1, snapshot.duration)}
                     step="0.1"
-                    value={Math.min(current, Math.max(1, duration))}
-                    onChange={(event) => {
-                      const audio = audioRef.current
-                      if (!audio) return
-                      audio.currentTime = Number(event.target.value)
-                      setCurrent(audio.currentTime)
-                    }}
+                    value={Math.min(snapshot.current, Math.max(1, snapshot.duration))}
+                    disabled={!snapshot.hasTrack}
+                    onChange={(event) => seekListenTogether(sessionId, Number(event.target.value))}
                     aria-label="播放进度"
                   />
-                  <span>{fmt(duration)}</span>
+                  <span>{fmt(snapshot.duration)}</span>
                 </div>
-                <div className="listen-actions">
-                  <button type="button" onClick={() => inputRef.current?.click()}>选择歌曲</button>
-                  <button type="button" className="listen-play" onClick={() => void toggle()}>
-                    {playing ? '暂停' : '播放'}
+
+                {!snapshot.hasTrack && (
+                  <div className="listen-connect">
+                    <button type="button" onClick={() => inputRef.current?.click()}>
+                      去接音乐
+                    </button>
+                  </div>
+                )}
+
+                <div className="listen-transport">
+                  <button
+                    type="button"
+                    disabled={!snapshot.hasTrack}
+                    onClick={() => void stepListenTogether(sessionId, -1)}
+                  >
+                    上一首
+                  </button>
+                  <button
+                    type="button"
+                    className="listen-play"
+                    disabled={!snapshot.hasTrack}
+                    onClick={() => void toggle()}
+                  >
+                    {snapshot.playing ? '暂停' : '播放'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!snapshot.hasTrack}
+                    onClick={() => void stepListenTogether(sessionId, 1)}
+                  >
+                    下一首
                   </button>
                 </div>
+
+                <label className="listen-volume-row">
+                  <span>音量</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={snapshot.volume}
+                    onChange={(event) => setListenTogetherVolume(sessionId, Number(event.target.value))}
+                    aria-label="音量"
+                  />
+                </label>
+
+                {snapshot.hasTrack && (
+                  <div className="listen-actions">
+                    <button
+                      type="button"
+                      onClick={() => setListenTogetherMode(
+                        sessionId,
+                        snapshot.mode === 'sequence' ? 'shuffle' : 'sequence',
+                      )}
+                    >
+                      {snapshot.mode === 'sequence' ? '顺序播放' : '随机播放'}
+                    </button>
+                    <button type="button" onClick={() => inputRef.current?.click()}>
+                      换一组音乐
+                    </button>
+                  </div>
+                )}
               </div>
               <span className="listen-tablet-port" aria-hidden="true" />
             </div>
@@ -99,24 +151,19 @@ export default function ListenTogether({ onBack }: Props) {
               <i />
             </span>
           </div>
+
           <input
             ref={inputRef}
             className="ai-photo-file"
             type="file"
             accept="audio/*"
+            multiple
             onChange={(event) => {
-              choose(event.target.files?.[0])
+              if (event.target.files?.length) {
+                chooseListenTogetherTracks(sessionId, event.target.files)
+              }
               event.target.value = ''
             }}
-          />
-          <audio
-            ref={audioRef}
-            src={src || undefined}
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
-            onTimeUpdate={(event) => setCurrent(event.currentTarget.currentTime)}
-            onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
-            onEnded={() => setPlaying(false)}
           />
         </section>
       </main>

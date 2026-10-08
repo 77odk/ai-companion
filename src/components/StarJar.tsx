@@ -48,9 +48,8 @@ export default function StarJar({ onBack }: Props) {
   const [phase, setPhase] = useState<JarPhase>('jar')
   const [selected, setSelected] = useState<{ item: MemoryItem; number: number } | null>(null)
   const timers = useRef<number[]>([])
-  // 视觉上维持 30–45 颗的丰满度；真实记忆仍是一条对应一个编号星星。
-  // 记忆少于 30 时其余只是无语义填充光点，绝不参与抽取。
-  const visibleStarCount = Math.max(30, Math.min(45, numberedMemories.length))
+  // 一颗星只对应一条真实记忆；没有记忆时罐子必须是空的。
+  const visibleStarCount = numberedMemories.length
 
   useEffect(() => {
     const refresh = () => setVersion((value) => value + 1)
@@ -110,20 +109,22 @@ export default function StarJar({ onBack }: Props) {
           <span className="star-jar-glass" aria-hidden="true">
             {Array.from({ length: visibleStarCount }, (_, index) => (
               <span
-                key={index}
-                className={[
-                  'star-jar-star',
-                  index < 6 ? 'is-moving' : '',
-                  index >= numberedMemories.length ? 'is-filler' : '',
-                ].filter(Boolean).join(' ')}
+                key={numberedMemories[index]?.item.id ?? index}
+                className={`star-jar-star${index < Math.min(9, visibleStarCount) ? ' is-moving' : ''}`}
                 style={{
                   '--star-x': `${8 + ((index * 37) % 83)}%`,
                   '--star-y': `${12 + ((index * 53) % 76)}%`,
                   '--star-r': `${-18 + ((index * 29) % 37)}deg`,
                   '--star-d': `${(index % 7) * 0.17}s`,
+                  '--star-hue': `${(index * 47) % 360}`,
                 } as React.CSSProperties}
+                aria-hidden="true"
               >
-                ★
+                <i className="fold is-a" />
+                <i className="fold is-b" />
+                <i className="fold is-c" />
+                <i className="fold is-d" />
+                <i className="fold is-e" />
               </span>
             ))}
           </span>

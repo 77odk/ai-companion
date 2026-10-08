@@ -810,3 +810,213 @@
   font-size: 10px;
   line-height: 1.4;
 }
+
+
+/* ---- S7 · 朝暮真实状态仪表 -------------------------------------------- */
+.chaomu-status {
+  padding-top: 10px;
+}
+
+.chaomu-status-heading {
+  margin-bottom: 4px;
+}
+
+.chaomu-state-v2 {
+  overflow: hidden;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 22% 10%, color-mix(in srgb, var(--color-primary-soft) 34%, transparent), transparent 42%),
+    color-mix(in srgb, var(--color-card) 82%, var(--color-bg));
+  border: 1px solid color-mix(in srgb, var(--color-border) 68%, transparent);
+}
+
+.chaomu-pulse-summary {
+  width: 100%;
+  min-height: 126px;
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  padding: 18px 16px 16px;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chaomu-pulse-summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 45%, white);
+  outline-offset: -4px;
+}
+
+.chaomu-pulse-score {
+  display: block;
+  font-size: 44px;
+  font-weight: 680;
+  line-height: 1;
+  letter-spacing: -.045em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.chaomu-pulse {
+  width: 100%;
+  height: 78px;
+  overflow: visible;
+}
+
+.chaomu-pulse path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chaomu-pulse-baseline {
+  stroke: color-mix(in srgb, var(--color-border) 48%, transparent);
+  stroke-width: 1;
+}
+
+.chaomu-pulse-trace {
+  stroke: color-mix(in srgb, var(--color-primary-deep) 78%, var(--color-text));
+  stroke-width: 2.4;
+  stroke-dasharray: 285 18;
+  stroke-dashoffset: 0;
+  animation: chaomu-pulse-run 3.8s linear infinite;
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--color-primary-soft) 32%, transparent));
+}
+
+@keyframes chaomu-pulse-run {
+  to { stroke-dashoffset: -303; }
+}
+
+.chaomu-state-detail {
+  padding: 0 16px 18px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 52%, transparent);
+}
+
+.chaomu-state-curves {
+  display: grid;
+  gap: 0;
+}
+
+.chaomu-state-curve {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 72px;
+  margin: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 42%, transparent);
+}
+
+.chaomu-state-curve > span {
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 560;
+  line-height: 1.35;
+}
+
+.chaomu-state-curve svg {
+  width: 100%;
+  height: 58px;
+  overflow: visible;
+}
+
+.chaomu-state-midline {
+  fill: none;
+  stroke: color-mix(in srgb, var(--color-border) 45%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+}
+
+.chaomu-state-line {
+  fill: none;
+  stroke: color-mix(in srgb, var(--color-primary-deep) 68%, var(--color-text));
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chaomu-state-dot {
+  fill: color-mix(in srgb, var(--color-primary-deep) 72%, var(--color-text));
+}
+
+.chaomu-state-log {
+  display: grid;
+  gap: 0;
+  padding-top: 16px;
+}
+
+.chaomu-state-log-item {
+  padding: 13px 0 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 42%, transparent);
+}
+
+.chaomu-state-log-item:last-child {
+  border-bottom: 0;
+}
+
+.chaomu-state-log-item > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chaomu-state-log-item time {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chaomu-state-log-item strong {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chaomu-state-log-item strong.is-up {
+  color: var(--color-primary-deep);
+}
+
+.chaomu-state-log-item strong.is-down {
+  color: color-mix(in srgb, var(--color-text-muted) 80%, var(--color-text));
+}
+
+.chaomu-state-log-item > span {
+  display: block;
+  margin-top: 5px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.chaomu-state-log-item p {
+  margin: 7px 0 0;
+  color: var(--color-text);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.chaomu-state-log-empty {
+  margin: 14px 0 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.chaomu-state-v2.is-empty .chaomu-pulse-score {
+  opacity: .42;
+}
+
+.chaomu-state-v2.is-empty .chaomu-pulse {
+  stroke: color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chaomu-pulse-trace {
+    animation: none !important;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+}

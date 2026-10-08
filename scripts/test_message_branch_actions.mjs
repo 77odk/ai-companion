@@ -41,7 +41,7 @@ assert.match(
 )
 assert.match(
   app,
-  /if \(active\) \{[\s\S]*?if \(!await ensureStartupConversationReady\(activeId\)\) return[\s\S]*?setActiveSessionId\(activeId\)/,
+  /if \(active\) \{[\s\S]*?if \(!await ensureStartupConversationReady\(activeId\)\) return[\s\S]*?switchActiveSession\(activeId\)/,
   'normal cloud-session restore waits for the readiness gate before becoming writable',
 )
 assert.match(

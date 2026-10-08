@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { deriveMemoryTriggerWords, isSimilarMemory, loadMemory, saveMemory, type MemoryItem } from '../lib/memory'
-import { getActiveSessionId, getBusyState, getMemoriesCache, getSessionLang, mergeSessionMemories, saveMemoriesCache, sessionMemoryToItem } from '../lib/sessionStore'
+import { getActiveSessionId, getMemoriesCache, mergeSessionMemories, saveMemoriesCache, sessionMemoryToItem } from '../lib/sessionStore'
 import { listMemories, postMemory } from '../lib/sessionApi'
 import { buildBookPages, type BookPage, type DatedMemory } from '../lib/memoryBook'
 import { getToken } from '../lib/auth'
@@ -9,9 +9,9 @@ import { findChatRecordJumpTargetHydrated, type ChatJumpTarget, type MemoryRetur
 import { alignPendingMemoriesForRefresh } from '../lib/memoryRefreshReconcile'
 import { recordMemoryIdAlias, resolveMemoryIdAlias, subscribeMemoryIdAliases } from '../lib/memoryIdAliases'
 import EventArchive from './EventArchive'
-import { getOrAdvanceTaRuntime, getSessionPersona, runtimeDisplayLabel } from '../lib/taRuntime'
 import { appendMemoryAudit, loadMemoryAudit, type MemoryAuditEntry } from '../lib/memoryAudit'
-import { getTaStateView } from '../lib/taState'
+import { getTaStateDashboard } from '../lib/taState'
+import ChaomuState from './ChaomuState'
 
 // UI2-03 Memory Correction —— 「时间是目录，记忆是正文。」
 // 数据链 100% 原样：global explicit memories + active session memories，按 createdAt 排序。
@@ -164,18 +164,8 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
     }
   }, [sessionId])
 
-  const statusLabel = useMemo(() => {
-    if (!sessionId) return ''
-    const busy = getBusyState(sessionId)
-    if (busy.status === 'busy' && busy.busyUntil > statusNow && busy.busyReason) return busy.busyReason
-    return runtimeDisplayLabel(
-      getOrAdvanceTaRuntime(sessionId, getSessionPersona(sessionId), statusNow),
-      getSessionLang(sessionId),
-    )
-  }, [sessionId, statusNow])
-
-  const stateView = useMemo(
-    () => sessionId ? getTaStateView(sessionId, statusNow) : null,
+  const stateDashboard = useMemo(
+    () => sessionId ? getTaStateDashboard(sessionId, statusNow) : null,
     [sessionId, statusNow],
   )
 
@@ -1066,24 +1056,8 @@ export default function Memory({ onJumpToChatLog, initialDetail, onInitialDetail
         </span>
       </header>
 
-      <section className="chaomu-status" aria-labelledby="chaomu-status-title">
-        <div className="chaomu-section-head">
-          <div>
-            <span className="chaomu-section-kicker">STATUS</span>
-            <h2 id="chaomu-status-title">状态</h2>
-          </div>
-        </div>
-        <div className="chaomu-status-now">
-          {stateView ? (
-            <>
-              <strong>{stateView.mood}</strong>
-              <p>{stateView.description}</p>
-              {statusLabel ? <span>{statusLabel}</span> : null}
-            </>
-          ) : (
-            <p className="is-empty">现在还没有状态记录。</p>
-          )}
-        </div>
+      <section className="chaomu-status" aria-label="状态">
+        <ChaomuState dashboard={stateDashboard} />
       </section>
 
       <section className="memory-river chaomu-memory-river" aria-label="记忆长河">

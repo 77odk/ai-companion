@@ -12,6 +12,7 @@ interface Props {
   onPhotoLoadSuccess?: (photo: PhotoMeta) => void
   onAdd: () => void
   onDelete: (photo: PhotoMeta) => Promise<boolean>
+  onOpenChange?: (open: boolean) => void
 }
 
 type WallStyle = CSSProperties & {
@@ -77,11 +78,16 @@ function fmtMD(ts: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
-export default function PhotoWallArchive({ photos, uploading, error, photoSrc, onPhotoLoadError, onPhotoLoadSuccess, onAdd, onDelete }: Props) {
+export default function PhotoWallArchive({ photos, uploading, error, photoSrc, onPhotoLoadError, onPhotoLoadSuccess, onAdd, onDelete, onOpenChange }: Props) {
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const touchStartX = useRef<number | null>(null)
+
+  const setArchiveOpen = (next: boolean) => {
+    setOpen(next)
+    onOpenChange?.(next)
+  }
   const sorted = useMemo(() => [...photos].sort((a, b) => b.createdAt - a.createdAt), [photos])
   const preview = sorted.slice(0, 12)
   const groups = useMemo(() => groupPhotosByMonth(sorted), [sorted])
@@ -146,22 +152,22 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
           <span className="ai-space-v2-title">照片墙</span>
           <span className="ai-space-v2-en">PHOTO WALL</span>
           {sorted.length > 0 && (
-            <button type="button" className="ai-space-v2-all" onClick={() => setOpen(true)}>
+            <button type="button" className="ai-space-v2-all" onClick={() => setArchiveOpen(true)}>
               查看全部 ›
             </button>
           )}
         </div>
 
         {sorted.length === 0 && uploading === 0 ? (
-          <button type="button" className="photo-archive-empty" onClick={onAdd}>
+          <button type="button" className="photo-archive-empty" onClick={() => setArchiveOpen(true)}>
             <span className="photo-archive-empty-plus" aria-hidden="true">＋</span>
-            <span>从第一张开始，慢慢留下我们的日子。</span>
+            <span>打开照片墙</span>
           </button>
         ) : (
           <button
             type="button"
             className="photo-stack-preview"
-            onClick={() => setOpen(true)}
+            onClick={() => setArchiveOpen(true)}
             aria-label="打开照片墙"
           >
             <span className="photo-stack-felt" aria-hidden="true" />
@@ -198,7 +204,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
       {open && (
         <div className="photo-archive-page" role="dialog" aria-label="照片墙">
           <div className="photo-archive-topbar">
-            <button type="button" className="photo-archive-back" onClick={() => setOpen(false)}>
+            <button type="button" className="photo-archive-back" onClick={() => setArchiveOpen(false)}>
               ‹ 返回
             </button>
             <div>

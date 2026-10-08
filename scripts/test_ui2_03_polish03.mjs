@@ -5,11 +5,13 @@ import path from 'node:path'
 
 const root = process.cwd()
 const memory = readFileSync(path.join(root, 'src/components/Memory.tsx'), 'utf8')
+const chaomuState = readFileSync(path.join(root, 'src/components/ChaomuState.tsx'), 'utf8')
 const css = readFileSync(path.join(root, 'src/styles/memory.css'), 'utf8')
 const memoryLib = readFileSync(path.join(root, 'src/lib/memory.ts'), 'utf8')
 
 assert.match(memory, /className="memory-title">朝暮</)
-assert.match(memory, /STATUS/)
+assert.match(memory, /<ChaomuState dashboard=\{stateDashboard\} \/>/)
+assert.match(chaomuState, /chaomu-pulse-score/)
 assert.match(memory, /MEMORY RIVER/)
 assert.match(memory, /<EventArchive sessionId=\{sessionId \|\| undefined\} \/>/)
 assert.match(memory, /type="search"/)
