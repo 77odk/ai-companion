@@ -2565,3 +2565,80 @@ html.eluvin-page-hidden .thought-book-page * {
     transform: translateX(-50%);
   }
 }
+
+
+/* ---- Approved-art crops for physical objects --------------------------- */
+.space-scene-art-crop {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.space-scene-art-crop > img {
+  position: absolute;
+  display: block;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+/* Player hotspot = 54% / 52% / 37% / 15% of the approved scene.
+   Re-project that exact slice of the approved artwork instead of drawing a
+   second tablet shell. */
+.space-scene-art-crop.is-player-art > img {
+  width: 270.2703%;
+  height: 666.6667%;
+  left: -145.9459%;
+  top: -346.6667%;
+}
+
+/* Only the tablet SCREEN is replaced, because its song/progress are live user
+   data. The bezel, stand and cable remain the approved artwork. */
+.space-scene-hotspot.is-player .space-live-player {
+  z-index: 3;
+  left: 9%;
+  right: 8%;
+  top: 18%;
+  bottom: 17%;
+  background: rgba(28, 25, 24, .96);
+  border: 0;
+  box-shadow: none;
+}
+
+/* The drawer body comes from the same approved artwork. Its wrapper is the
+   moving part; CSS no longer paints a second wooden drawer. */
+.space-scene-hotspot.is-weekly-letter .space-drawer-peek {
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+}
+
+.space-scene-art-crop.is-drawer-art > img {
+  width: 200%;
+  height: 625%;
+  left: -98%;
+  top: -525%;
+}
+
+.space-scene-hotspot.is-lifting .space-scene-art-crop {
+  animation: space-object-lift .31s cubic-bezier(.2,.78,.2,1) both;
+}
+
+.ai-space-page.is-placing-player .space-scene-hotspot.is-player .space-scene-art-crop {
+  animation: space-object-place-back .42s cubic-bezier(.16,1,.3,1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-scene-hotspot.is-lifting .space-scene-art-crop,
+  .ai-space-page.is-placing-player .space-scene-hotspot.is-player .space-scene-art-crop {
+    animation: none !important;
+    transform: none !important;
+  }
+}
