@@ -358,15 +358,16 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   }
 
   const defaultScenePlacement = (index: number) => {
+    // 对齐定稿图里真实照片位；这里只换用户照片内容，不另画一套照片墙。
     const defaults = [
-      { x: 7, y: 8, rotate: -5 },
-      { x: 36, y: 5, rotate: 3 },
-      { x: 66, y: 9, rotate: -2 },
-      { x: 13, y: 42, rotate: 4 },
-      { x: 43, y: 38, rotate: -4 },
-      { x: 70, y: 43, rotate: 5 },
-      { x: 27, y: 68, rotate: -2 },
-      { x: 57, y: 67, rotate: 2 },
+      { x: 8, y: 13, rotate: -5 },
+      { x: 37, y: 14, rotate: 3 },
+      { x: 68, y: 1, rotate: -2 },
+      { x: 4, y: 43, rotate: 4 },
+      { x: 31, y: 43, rotate: -4 },
+      { x: 62, y: 53, rotate: 5 },
+      { x: 5, y: 66, rotate: -2 },
+      { x: 75, y: 70, rotate: 2 },
     ]
     return defaults[index % defaults.length]
   }
@@ -384,8 +385,8 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
       return {
         ...photo,
         scenePlacement: {
-          x: Math.max(2, Math.min(70, x)),
-          y: Math.max(4, Math.min(68, y)),
+          x: Math.max(2, Math.min(78, x)),
+          y: Math.max(1, Math.min(72, y)),
           rotate: base.rotate,
         },
       }
