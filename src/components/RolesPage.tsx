@@ -28,7 +28,6 @@ import type { StoredMessage } from '../lib/storage'
 import { clearDefaultRoleId, getDefaultRoleId, setDefaultRoleId } from '../lib/defaultRole'
 import { clearReplyLengthOverride } from '../lib/replyLength'
 import { removeTaCommitmentsForSession } from '../lib/commitmentStore'
-import { pauseListenTogether } from '../lib/listenTogetherState'
 
 interface Props {
   /** 返回「我的」（角色管理页的返回落点） */
@@ -102,8 +101,7 @@ export default function RolesPage({ onBack, onNew, onSwitch, onOpenProfile, onSe
   const activeId = getActiveSessionId()
 
   const switchActiveSession = (id: string) => {
-    const previous = getActiveSessionId()
-    if (previous && previous !== id) pauseListenTogether(previous)
+    // 音乐是用户级状态；换 TA 只切会话，不暂停用户正在听的歌。
     setActiveSessionId(id)
   }
 
