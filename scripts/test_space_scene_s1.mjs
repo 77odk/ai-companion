@@ -8,6 +8,7 @@ const ui2 = readFileSync('src/styles/ui2.css', 'utf8')
 const asset = 'public/space/space-desk.webp'
 const playerCutout = 'public/space/cutouts/music-player.png'
 const bookCutout = 'public/space/cutouts/thought-book.png'
+const jarCutout = 'public/space/cutouts/memory-jar.png'
 
 assert.match(aiSpace, /className="space-scene-shell"/)
 assert.match(aiSpace, /src="\/space\/space-desk\.webp"/)
@@ -15,7 +16,8 @@ assert.match(aiSpace, /space-scene-hotspot is-photo-wall/)
 assert.match(aiSpace, /space-scene-hotspot is-weekly-letter/)
 assert.doesNotMatch(aiSpace, /\/space\/generated\//)
 assert.match(aiSpace, /space-scene-art-crop is-photo-wall-art/)
-assert.match(aiSpace, /space-scene-art-crop is-jar-art/)
+assert.match(aiSpace, /space-object-cutout is-jar-cutout/)
+assert.match(aiSpace, /src="\\/space\\/cutouts\\/memory-jar\\.png"/)
 assert.match(aiSpace, /space-object-cutout is-book-cutout/)
 assert.match(aiSpace, /src="\/space\/cutouts\/thought-book\.png"/)
 assert.match(aiSpace, /space-object-cutout is-player-cutout/)
@@ -46,7 +48,7 @@ assert.match(css, /prefers-reduced-motion: reduce/)
 const bytes = statSync(asset).size
 assert.ok(bytes > 20_000, 'confirmed scene artwork should not be an empty placeholder')
 assert.ok(bytes < 300_000, 'scene artwork must stay inside the v2 asset budget')
-for (const cutout of [playerCutout, bookCutout]) {
+for (const cutout of [playerCutout, bookCutout, jarCutout]) {
   const cutoutBytes = statSync(cutout).size
   assert.ok(cutoutBytes > 2_000, 'real transparent cutout must not be an empty placeholder')
   assert.ok(cutoutBytes < 300_000, 'each transparent cutout stays inside the asset budget')
