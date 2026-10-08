@@ -441,8 +441,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label="打开照片墙"
             onClick={openPhotoWallFromScene}
           >
-            <img className="space-object-asset is-photo-board" src="/space/generated/photo-board.svg" alt="" aria-hidden="true" draggable={false} />
+            <span className="space-scene-art-crop is-photo-wall-art" aria-hidden="true">
+              <img src="/space/space-desk.webp" alt="" draggable={false} />
+            </span>
             <span className="space-live-photo-board" aria-label="空间页照片摆放区">
+              {Array.from({ length: 8 }, (_, index) => (
+                <i key={`photo-slot-${index}`} className={`space-photo-slot-mask is-slot-${index + 1}`} aria-hidden="true" />
+              ))}
               {scenePhotos.map((photo, index) => {
                 const placement = photo.scenePlacement ?? defaultScenePlacement(index)
                 return (
@@ -526,7 +531,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label={memoryCount > 0 ? `打开记忆星星罐，共 ${memoryCount} 颗星` : '打开空的记忆星星罐'}
             onClick={() => openDeskObject('jar', onOpenStarJar)}
           >
-            <img className="space-object-asset is-jar" src="/space/generated/jar.svg" alt="" aria-hidden="true" draggable={false} />
+            <span className="space-scene-art-crop is-jar-art" aria-hidden="true">
+              <img src="/space/space-desk.webp" alt="" draggable={false} />
+            </span>
             <span className="space-live-jar" aria-hidden="true">
               <span className="space-live-jar-glint" />
               <span className="space-live-star-field">
@@ -554,7 +561,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label="打开 TA 的思绪"
             onClick={() => openDeskObject('book', onOpenThoughts)}
           >
-            <img className="space-object-asset is-book" src="/space/generated/book.svg" alt="" aria-hidden="true" draggable={false} />
+            <span className="space-scene-art-crop is-book-art" aria-hidden="true">
+              <img src="/space/space-desk.webp" alt="" draggable={false} />
+            </span>
             <span className="space-live-book" aria-hidden="true">
               {latestThought ? <span>{latestThought.text}</span> : null}
             </span>
