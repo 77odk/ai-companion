@@ -90,6 +90,13 @@ export default function ThoughtBook({ onBack }: Props) {
 
       <main className="thought-book-stage" aria-label="TA 的思绪">
         <div className={`thought-book-shell${opened ? ' is-open' : ''}`}>
+          <img
+            className="thought-book-approved-art"
+            src="/space/cutouts/thought-book.png"
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />
           <button
             type="button"
             className="thought-book-cover"
