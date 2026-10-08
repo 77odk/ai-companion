@@ -532,9 +532,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label={memoryCount > 0 ? `打开记忆星星罐，共 ${memoryCount} 颗星` : '打开空的记忆星星罐'}
             onClick={() => openDeskObject('jar', onOpenStarJar)}
           >
-            <span className="space-scene-art-crop is-jar-art" aria-hidden="true">
-              <img src="/space/space-desk.webp" alt="" draggable={false} />
-            </span>
+            <img
+              className="space-object-cutout is-jar-cutout"
+              src="/space/cutouts/memory-jar.png"
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
             <span className="space-live-jar" aria-hidden="true">
               <span className="space-live-jar-glint" />
               <span className="space-live-star-field">
