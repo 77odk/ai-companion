@@ -105,7 +105,9 @@ export default function StarJar({ onBack }: Props) {
           disabled={numberedMemories.length === 0 || phase !== 'jar'}
           aria-label={numberedMemories.length > 0 ? '随机抽一颗记忆星星' : '还没有可以抽取的记忆'}
         >
-          <span className="star-jar-lid" aria-hidden="true" />
+          <span className="star-jar-approved-art" aria-hidden="true">
+            <img src="/space/space-desk.webp" alt="" draggable={false} />
+          </span>
           <span className="star-jar-glass" aria-hidden="true">
             {Array.from({ length: visibleStarCount }, (_, index) => (
               <span
