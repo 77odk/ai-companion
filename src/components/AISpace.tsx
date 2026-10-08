@@ -566,6 +566,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label={listenSnapshot.hasTrack ? `打开一起听歌，正在听 ${listenSnapshot.title}` : '打开一起听歌，去接音乐'}
             onClick={() => openDeskObject('player', onOpenListen)}
           >
+            <span className="space-scene-art-crop is-player-art" aria-hidden="true">
+              <img src="/space/space-desk.webp" alt="" draggable={false} />
+            </span>
             <span className="space-live-player" aria-hidden="true">
               {listenSnapshot.hasTrack ? (
                 <>
@@ -589,6 +592,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             disabled={drawerOpening}
           >
             <span className="space-drawer-peek" aria-hidden="true">
+              <span className="space-scene-art-crop is-drawer-art">
+                <img src="/space/space-desk.webp" alt="" draggable={false} />
+              </span>
               <span className="space-drawer-interior">
                 {Array.from({ length: Math.min(5, weeklyCount) }, (_, index) => (
                   <i key={index} style={{ '--letter-i': index } as React.CSSProperties} />
