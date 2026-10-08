@@ -50,12 +50,11 @@ export default function ListenTogether({ onBack }: Props) {
       <main className="listen-stage">
         <section className="listen-player" aria-label="一起听歌播放器">
           <div className="listen-device-wrap">
+            <span className="listen-approved-device-art" aria-hidden="true">
+              <img src="/space/space-desk.webp" alt="" draggable={false} />
+            </span>
             <div className="listen-tablet">
               <div className="listen-tablet-screen">
-                <div className="listen-cover" aria-hidden="true">
-                  <span />
-                </div>
-
                 <div className="listen-meta">
                   <strong>{snapshot.hasTrack ? snapshot.title : '还没有接音乐'}</strong>
                   <span>
@@ -143,13 +142,7 @@ export default function ListenTogether({ onBack }: Props) {
                   </div>
                 )}
               </div>
-              <span className="listen-tablet-port" aria-hidden="true" />
             </div>
-            <span className="listen-stand" aria-hidden="true" />
-            <span className="listen-earphones" aria-hidden="true">
-              <i />
-              <i />
-            </span>
           </div>
 
           <input
