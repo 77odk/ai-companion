@@ -75,7 +75,6 @@ import { captureLatestTaCommitment, collectDueTaCommitments, markCommitmentRemin
 import { showSystemNotification } from './lib/systemNotification'
 import { captureTaStateEvidenceFromLatestReply, getTaStateView, recordTaStateInteraction } from './lib/taState'
 import { settleTaThoughts } from './lib/taThoughts'
-import { pauseListenTogether } from './lib/listenTogetherState'
 
 // Secondary views are loaded only when opened. Same components and routes; this only removes them from the startup bundle.
 const RolePicker = lazy(() => import('./components/RolePicker'))
@@ -122,10 +121,8 @@ function systemNotificationTargetUrl(sessionId: string): string {
 }
 
 function switchActiveSession(sessionId: string): void {
-  const next = String(sessionId ?? '')
-  const previous = getActiveSessionId()
-  if (previous && previous !== next) pauseListenTogether(previous)
-  setActiveSessionId(next)
+  // 播放器属于用户，不属于 TA；切换会话只切聊天上下文，不打断音乐。
+  setActiveSessionId(String(sessionId ?? ''))
 }
 
 // 底部四 tab 的常显范围：主视图（TA/空间/记忆/我的）带底部导航；Chat 等全屏页不带。
