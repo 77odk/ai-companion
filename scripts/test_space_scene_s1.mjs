@@ -23,7 +23,10 @@ assert.match(
 )
 
 assert.match(css, /Direction v6 · S1 Space scene composition lock/)
-assert.match(css, /object-fit: cover/)
+assert.match(css, /aspect-ratio: 941 \/ 1672/)
+assert.match(css, /\.space-scene-shell,\s*\.space-scene-hotspots \{[\s\S]{0,420}width: min\(100%, calc\(100dvh \* 941 \/ 1672\)\)/)
+assert.match(css, /object-fit: fill/)
+assert.doesNotMatch(css.slice(css.lastIndexOf('Mobile visual baseline')), /object-fit: cover/)
 assert.match(css, /space-scene-service-host/)
 assert.match(css, /space-scene-hotspot\.is-photo-wall/)
 assert.match(ui2, /\.app:has\(\.ai-space-page\) \.app-main \{\s*padding-bottom: 0;/)
