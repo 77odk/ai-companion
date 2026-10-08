@@ -581,24 +581,18 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                 <strong className="space-live-player-connect">接音乐</strong>
               )}
             </span>
-            <span className="space-live-earphone-wire" aria-hidden="true" />
           </button>
 
           <button
             type="button"
             className={`space-scene-hotspot is-weekly-letter${drawerOpening ? ' is-opening' : ''}${drawerReturning ? ' is-returning' : ''}`}
-            aria-label="拉开抽屉，打开一周情书"
+            aria-label={weeklyCount > 0 ? `拉开抽屉，打开一周情书，共 ${weeklyCount} 封` : '拉开抽屉，打开一周情书'}
             onClick={openWeeklyFromDrawer}
             disabled={drawerOpening}
           >
             <span className="space-drawer-peek" aria-hidden="true">
               <span className="space-scene-art-crop is-drawer-art">
                 <img src="/space/space-desk.webp" alt="" draggable={false} />
-              </span>
-              <span className="space-drawer-interior">
-                {Array.from({ length: Math.min(5, weeklyCount) }, (_, index) => (
-                  <i key={index} style={{ '--letter-i': index } as React.CSSProperties} />
-                ))}
               </span>
             </span>
           </button>
