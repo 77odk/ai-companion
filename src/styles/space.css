@@ -2642,3 +2642,97 @@ html.eluvin-page-hidden .thought-book-page * {
     transform: none !important;
   }
 }
+
+
+/* ---- Mobile object pixels: crop the approved scene, replace content only - */
+.space-scene-art-crop.is-photo-wall-art > img {
+  width: 153.8462%;
+  height: 232.5581%;
+  left: -47.6923%;
+  top: -20.9302%;
+}
+
+.space-scene-art-crop.is-jar-art > img {
+  width: 312.5%;
+  height: 500%;
+  left: -56.25%;
+  top: -235%;
+}
+
+.space-scene-art-crop.is-book-art > img {
+  width: 136.9863%;
+  height: 555.5556%;
+  left: -26.0274%;
+  top: -366.6667%;
+}
+
+/* No separate cork-board redraw. The approved wall/pins stay visible; these
+   eight neutral inner masks only erase baked demo-photo pixels so missing
+   user photos never masquerade as real content. */
+.space-scene-hotspot.is-photo-wall .space-live-photo-board {
+  z-index: 3;
+  inset: 0;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.space-photo-slot-mask {
+  position: absolute;
+  z-index: 0;
+  display: block;
+  border-radius: 1px;
+  background:
+    linear-gradient(145deg, rgba(255,248,236,.98), rgba(239,219,190,.98));
+  box-shadow: 0 2px 5px rgba(74,43,27,.08);
+  pointer-events: none;
+}
+
+.space-photo-slot-mask.is-slot-1 { left: 8%; top: 13%; width: 23%; height: 25%; transform: rotate(-5deg); }
+.space-photo-slot-mask.is-slot-2 { left: 37%; top: 14%; width: 23%; height: 26%; transform: rotate(3deg); }
+.space-photo-slot-mask.is-slot-3 { left: 68%; top: 1%; width: 24%; height: 30%; transform: rotate(-2deg); }
+.space-photo-slot-mask.is-slot-4 { left: 4%; top: 43%; width: 22%; height: 23%; transform: rotate(4deg); }
+.space-photo-slot-mask.is-slot-5 { left: 31%; top: 43%; width: 31%; height: 27%; transform: rotate(-4deg); }
+.space-photo-slot-mask.is-slot-6 { left: 62%; top: 53%; width: 27%; height: 27%; transform: rotate(5deg); }
+.space-photo-slot-mask.is-slot-7 { left: 5%; top: 66%; width: 23%; height: 23%; transform: rotate(-2deg); }
+.space-photo-slot-mask.is-slot-8 { left: 75%; top: 70%; width: 22%; height: 27%; transform: rotate(2deg); }
+
+.space-live-photo {
+  z-index: 2;
+}
+
+/* Keep the exact jar body from the artwork. This frosted inner pane erases the
+   baked demo stars; the live star field above it remains 1:1 with real memory. */
+.space-scene-hotspot.is-star-jar .space-live-jar {
+  z-index: 3;
+  inset: 20% 20% 12%;
+  border: 0;
+  border-radius: 22% 22% 27% 27% / 10% 10% 18% 18%;
+  background: rgba(244, 222, 190, .74);
+  box-shadow: inset 7px 0 12px rgba(255,255,255,.20);
+  backdrop-filter: blur(7px) saturate(.72);
+  -webkit-backdrop-filter: blur(7px) saturate(.72);
+}
+
+/* Page interiors may change because they contain real TA thoughts; the book
+   cover/pages silhouette itself remains the approved artwork crop. */
+.space-scene-hotspot.is-thought-book .space-live-book {
+  z-index: 3;
+  inset: 24% 11% 12%;
+  background:
+    linear-gradient(90deg,
+      rgba(248,234,209,.97) 0 48.6%,
+      rgba(207,179,139,.91) 49.2% 50.8%,
+      rgba(248,234,209,.97) 51.4% 100%);
+  box-shadow: none;
+  clip-path: polygon(2% 17%, 43% 3%, 50% 12%, 97% 7%, 97% 86%, 55% 98%, 49% 87%, 2% 95%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-live-photo,
+  .space-live-jar,
+  .space-live-book {
+    animation: none !important;
+  }
+}
