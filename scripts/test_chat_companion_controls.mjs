@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const css = readFileSync(new URL('../src/styles/ui2.css', import.meta.url), 'utf8')
 const controls = readFileSync(new URL('../src/components/ChatCompanionControls.tsx', import.meta.url), 'utf8')
-const chat = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
+const chat = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
 const composer = readFileSync(new URL('../src/components/ChatComposer.tsx', import.meta.url), 'utf8')
 const chatUi = chat + '\n' + composer
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')

@@ -74,7 +74,7 @@ check('无 localStorage 环境取默认系数，不抛错', () => {
 })
 
 // —— 接线断言：Chat 里两处写入都必须走新口径，别退回「一轮的量」 ——
-const chatSource = readFileSync(new URL('../src/lib/contextMeterState.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
+const chatSource = readFileSync(new URL('../src/lib/contextMeterState.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
 
 check('发送前写入：总量 = 会话累计估算', () => {
   assert.match(chatSource, /used: sessionContentTokens,/, '发送前总量必须用会话累计')

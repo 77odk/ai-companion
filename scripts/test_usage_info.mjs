@@ -234,7 +234,7 @@ assert.equal(summary.cacheUnknownTurns, 1)
 assert.match(formatUsageMoney(summary.today.cost), /未知|\$|¥/)
 
 console.log('[usage info] Chat 卸载后仍按本轮 owner session 落用量，React meter 才受 mounted 限制')
-const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
+const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
 assert.match(chatSource, /if \(mountedRef\.current\) setContextMeter\(completedContextState\)/)
 assert.match(chatSource, /if \(roundSessionId\) setContextUsage\(completedContextState, roundSessionId, settings\)/)
 assert.doesNotMatch(chatSource, /if \(activeSessionId\) setContextUsage\(actualContextState, activeSessionId\)/)

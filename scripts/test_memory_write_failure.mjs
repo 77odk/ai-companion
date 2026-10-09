@@ -61,7 +61,7 @@ mode = 'ok'
 ok(dAfter.length === 0, 'D global 写失败 → 返回未变更列表（调用方据此判定失败）', `len=${dAfter.length}`)
 
 // ---- E/F/G：两个成功提示的判定依据 ----（源码契约 + 行为）
-const chatSrc = read('src/components/Chat.tsx') + '\n' + readFileSync('src/lib/chatStreamEngine.ts', 'utf8')
+const chatSrc = read('src/components/Chat.tsx') + '\n' + read('src/lib/useChatScroll.ts') + '\n' + readFileSync('src/lib/chatStreamEngine.ts', 'utf8')
 const bubbleSrc = read('src/components/MessageBubble.tsx')
 ok(/if \(!item\) return \{ ok: false, created: false \}/.test(chatSrc), 'E1 writeMemory：本地写失败立即返回 ok:false/created:false（不再继续当成功）')
 ok(/if \(res\.created\) created = true/.test(chatSrc) && /if \(created\) userMsg\.memorySaved = true/.test(chatSrc), 'E2 flushMemoryWrites：只有「真实新增(created)」才置 memorySaved（不再要求 explicit）')

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 const main = fs.readFileSync(new URL('../src/main.tsx', import.meta.url), 'utf8')
 const chatCss = fs.readFileSync(new URL('../src/styles/chat.css', import.meta.url), 'utf8')
-const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8')
 const bubble = fs.readFileSync(new URL('../src/components/MessageBubble.tsx', import.meta.url), 'utf8')
 const controls = fs.readFileSync(new URL('../src/components/ChatCompanionControls.tsx', import.meta.url), 'utf8')
 
