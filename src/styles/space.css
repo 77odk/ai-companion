@@ -3252,6 +3252,12 @@ html.eluvin-page-hidden .thought-book-page * {
   }
 }
 
+/* Photo thumbnails must not inherit the old board-shaped clip polygon:
+   this is especially important for edge photos in non-layered fallback. */
+.space-scene-hotspot.is-photo-wall {
+  clip-path: none;
+}
+
 /* G0-A wall-photo fidelity: the approved design uses individual pinned photos,
    not the historic generated board strings. Leave all photo data/drag untouched. */
 .space-scene-hotspot.is-photo-wall .space-live-photo-board::before,
