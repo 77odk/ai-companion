@@ -105,7 +105,7 @@ function paint(p,sample,quality){
   // incorrectly paints the cavity scene over the paper and moving objects.
   if(drawerProgress>.01){
     c.globalAlpha=drawerProgress;c.drawImage(imgs['room-cavity.webp'],0,0,W,H);c.globalAlpha=1
-    c.save();c.translate(0,drawerProgress*105)
+    c.save();c.translate(0,drawerProgress*155) // E-style larger pull; fixed desk, drawer only
     c.drawImage(imgs['open_drawer.png'],444,1320,502,345);c.restore()
   }
   // This source has baked foliage; overlaying the cutout is intentionally
