@@ -1,13 +1,12 @@
 /**
- * Space's optional physical sprite layer. Never request missing image assets:
- * the manifest stays disabled until the whole set is committed and checked.
+ * Space's optional physical sprite layer. Assets must preload before activation.
+ * Passing this technical gate does NOT mean the scene is visually approved.
  */
 export const SPACE_LAYER_BASE = '/space/layered/'
 export const SPACE_LAYER_VERSION = '2026-10-09'
 export const SPACE_LAYER_REQUIRED = [
   'room-closed.webp',
   'room-cavity.webp',
-  'photo_wall_board.png',
   'glass_memory_jar.png',
   'open_book.png',
   'tablet_player.png',
