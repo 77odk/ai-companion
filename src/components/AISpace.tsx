@@ -244,6 +244,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     drag.element.style.removeProperty('transform')
     drag.element.style.removeProperty('opacity')
     drag.element.classList.remove('is-dragging')
+    scenePageRef.current?.classList.remove('is-drawer-pulling')
     drawerGestureRef.current = null
   }
 
@@ -502,6 +503,15 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-hidden="true"
             draggable={false}
           />
+          {layeredReady ? (
+            <img
+              className={`space-scene-backplate is-drawer-cavity${drawerOpening || drawerReturning ? ' is-visible' : ''}`}
+              src={`${SPACE_LAYER_BASE}room-cavity.webp`}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
+          ) : null}
           <span className="space-scene-ambient" aria-hidden="true" />
         </section>
 
@@ -728,6 +738,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
               if (!drag.moved && Math.abs(event.clientY - drag.startY) > 5) {
                 drag.moved = true
                 drag.element.classList.add('is-dragging')
+                if (layeredReady) scenePageRef.current?.classList.add('is-drawer-pulling')
               }
               if (!drag.moved) return
               const pull = projectSpaceDrawerPull(drag.startY, event.clientY, drag.hitHeight)
