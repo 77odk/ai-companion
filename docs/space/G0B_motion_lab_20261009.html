@@ -179,10 +179,29 @@ function paint(p,sample,quality){
     c.globalAlpha=drawerProgress;c.drawImage(imgs['room-cavity.webp'],0,0,W,H);c.globalAlpha=1
     c.save()
     if ($('use-c-drawer').checked && nativeCDrawer) {
-      // C material already illustrates a deeper pull. Move slightly in its
-      // native perspective rather than first translating the whole drawer down.
-      c.translate(-25*drawerProgress,-35*drawerProgress)
-      c.drawImage(nativeCDrawer,C_CROP.x,C_CROP.y,C_CROP.width,C_CROP.height) // native C geometry diagnostic only
+      // G0-B diagnostic: native C inner side/wax and native E wooden front
+      // travel separately. The static desk is always the cavity background.
+      c.save()
+      c.beginPath()
+      c.moveTo(441,1423); c.lineTo(492,1368); c.lineTo(515,1332)
+      c.lineTo(538,1327); c.lineTo(648,1350); c.lineTo(821,1373)
+      c.lineTo(940,1398); c.lineTo(940,1535); c.lineTo(441,1439)
+      c.closePath(); c.clip()
+      // Avoid painting any C source pixels on the E desk surface.
+      c.beginPath();c.moveTo(440,1375);c.lineTo(941,1464)
+      c.lineTo(941,1672);c.lineTo(440,1672);c.closePath();c.clip()
+      c.drawImage(nativeCDrawer,C_CROP.x,C_CROP.y,C_CROP.width,C_CROP.height)
+      c.restore()
+      // The E cutout is clipped to its real wood front: never double-render
+      // the wax heart from the E and C source images.
+      c.save()
+      c.translate(E_CROP.x - 24*drawerProgress,E_CROP.y - 45*drawerProgress)
+      c.scale(1,1 + .10*drawerProgress)
+      c.beginPath();c.moveTo(4,34);c.lineTo(481,128)
+      c.lineTo(481,243);c.lineTo(4,152);c.closePath();c.clip()
+      const eFront=nativeEDrawer || imgs['e_drawer_pixel_trial_v1.webp']
+      c.drawImage(eFront,0,0,E_CROP.width,E_CROP.height)
+      c.restore()
     }
     else {
       c.translate(0,drawerProgress*119) // E isolated travel comparison
