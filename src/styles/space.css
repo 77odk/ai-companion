@@ -3063,3 +3063,27 @@ html.eluvin-page-hidden .thought-book-page * {
 .space-live-star:nth-child(n + 13) {
   animation: none;
 }
+
+/* ---- Game viewport cover: never stretch the 941×1672 approved plane ------- */
+/* Layout is calculated once per container resize; the art, live content and
+   hit areas always share the same cover dimensions and cropping. */
+.space-scene-shell,
+.space-scene-hotspots {
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  width: var(--space-scene-width, min(100%, calc(100dvh * 941 / 1672)));
+  height: var(--space-scene-height, auto);
+  aspect-ratio: 941 / 1672;
+  transform: translate(-50%, -50%);
+}
+.space-live-photo.is-dragging {
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .space-scene-shell,
+  .space-scene-hotspots {
+    transform: translate(-50%, -50%);
+  }
+}
