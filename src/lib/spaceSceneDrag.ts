@@ -38,3 +38,13 @@ export function hasMovedSpacePhoto(
 ): boolean {
   return Math.hypot(current.x - start.x, current.y - start.y) > threshold
 }
+
+/** Drawer pull is a gesture, never a scroll-jacking global listener. */
+export function projectSpaceDrawerPull(startY: number, currentY: number, hitHeight: number): number {
+  if (!Number.isFinite(hitHeight) || hitHeight <= 0 || !Number.isFinite(startY) || !Number.isFinite(currentY)) return 0
+  return clampPosition((currentY - startY) * 100 / hitHeight, 0, 48)
+}
+
+export function shouldOpenSpaceDrawer(pullPercent: number): boolean {
+  return Number.isFinite(pullPercent) && pullPercent >= 22
+}
