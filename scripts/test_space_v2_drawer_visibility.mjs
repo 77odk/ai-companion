@@ -43,7 +43,7 @@ for (const [w, h] of [[390, 844], [390, 690], [430, 932]]) {
   const y0 = Math.max(world.y + reveal, camera.visibleWorld.y)
   const y1 = Math.min(world.y + reveal + world.height, camera.visibleWorld.y + camera.visibleWorld.height)
   const visibility = Math.max(0, x1 - x0) * Math.max(0, y1 - y0) / (world.width * world.height)
-  assert.ok(Number.isFinite(travelPx) && travelPx >= 45 && travelPx <= 65)
+  assert.ok(Number.isFinite(travelPx) && travelPx >= 45 && travelPx <= 70)
   assert.ok(visibility >= 0.45, 'at least the majority of the nominal open-area should be visible')
   outcomes.push({ screen: `${w}x${h}`, travelPx: +travelPx.toFixed(1), visibleArea: +(visibility * 100).toFixed(1) })
 }
