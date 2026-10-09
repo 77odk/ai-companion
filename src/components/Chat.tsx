@@ -93,6 +93,7 @@ import { processEventCandidate } from '../lib/eventDetector'
 import MilestoneCard from './MilestoneCard'
 import ChatCompanionControls from './ChatCompanionControls'
 import ChatReplyError from './ChatReplyError'
+import ChatMemoryCorrection from './ChatMemoryCorrection'
 import ChatNotices from './ChatNotices'
 
 
@@ -2640,29 +2641,13 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         onGoSettings={onGoSettings}
       />
 
-      {pendingMemoryCorrection && (
-        <div className="memory-correction-consent" role="group" aria-label="确认纠正记忆">
-          <div className="memory-correction-consent-title">TA 想纠正一条记忆</div>
-          <div className="memory-correction-consent-row">
-            <span>原来记的是</span>
-            <strong>{pendingMemoryCorrection.target.item.text}</strong>
-          </div>
-          <div className="memory-correction-consent-row">
-            <span>准备改成</span>
-            <strong>{pendingMemoryCorrection.value}</strong>
-          </div>
-          <div className="memory-correction-consent-actions">
-            <button type="button" onClick={rejectPendingMemoryCorrection} disabled={memoryCorrectionBusy}>先不改</button>
-            <button type="button" onClick={() => void confirmPendingMemoryCorrection()} disabled={memoryCorrectionBusy}>
-              {memoryCorrectionBusy ? '正在纠正…' : '确认纠正'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {memoryCorrectionNotice && (
-        <div className="memory-correction-notice" role="status">{memoryCorrectionNotice}</div>
-      )}
+      <ChatMemoryCorrection
+        pending={pendingMemoryCorrection}
+        busy={memoryCorrectionBusy}
+        notice={memoryCorrectionNotice}
+        onReject={rejectPendingMemoryCorrection}
+        onConfirm={() => void confirmPendingMemoryCorrection()}
+      />
 
       <div className="chat-composer-panel">
         {quoteDraft && (
