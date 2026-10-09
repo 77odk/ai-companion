@@ -3057,3 +3057,9 @@ html.eluvin-page-hidden .thought-book-page * {
     transition: none !important;
   }
 }
+
+/* Only the first 12 real memory stars float. The rest still render one-to-one
+   with saved memories, but do not create hundreds of simultaneous animations. */
+.space-live-star:nth-child(n + 13) {
+  animation: none;
+}
