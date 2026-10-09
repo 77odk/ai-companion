@@ -16,7 +16,7 @@ for (const [asset, label] of [
   assert.equal(binary.toString('ascii', 8, 12), 'WEBP', label)
 }
 assert.match(lab, /e_drawer_pixel_trial_v1\.webp/)
-assert.match(lab, /c_drawer_inner_trial_v1\\.webp/)
+assert.match(lab, /c_drawer_inner_trial_v1\.webp/)
 assert.match(lab, /use-c-drawer/)
 assert.match(lab, /id="c-source"/)
 assert.match(lab, /const C_CROP = \{ x: 435, y: 1325, width: 506, height: 347 \}/)
