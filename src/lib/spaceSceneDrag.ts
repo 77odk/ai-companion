@@ -48,3 +48,16 @@ export function projectSpaceDrawerPull(startY: number, currentY: number, hitHeig
 export function shouldOpenSpaceDrawer(pullPercent: number): boolean {
   return Number.isFinite(pullPercent) && pullPercent >= 22
 }
+
+/** Cover the actual Space view without stretching the approved scene.
+ * Cropping is symmetric; every object shares this exact pixel plane.
+ */
+export function computeSpaceCover(
+  viewportWidth: number,
+  viewportHeight: number,
+): { width: number; height: number } | null {
+  if (!Number.isFinite(viewportWidth) || !Number.isFinite(viewportHeight)
+    || viewportWidth <= 0 || viewportHeight <= 0) return null
+  const scale = Math.max(viewportWidth / 941, viewportHeight / 1672)
+  return { width: 941 * scale, height: 1672 * scale }
+}
