@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer } from '../src/lib/spaceSceneDrag.ts'
+import { computeSpaceCover, hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer } from '../src/lib/spaceSceneDrag.ts'
 
 console.log('[Space game] photo placement uses pointer delta, not rotated bounding-box offset')
 const origin = { x: 30, y: 20, rotate: -7 }
@@ -29,3 +29,15 @@ assert.equal(shouldOpenSpaceDrawer(21.99), false)
 assert.equal(shouldOpenSpaceDrawer(22), true)
 assert.equal(shouldOpenSpaceDrawer(Number.NaN), false)
 console.log('[Space game] drawer thresholds PASS')
+
+console.log('[Space game] scene art + hotspots share a true viewport-cover plane')
+for (const [viewWidth, viewHeight] of [[390, 844], [390, 690], [430, 932], [941, 1672]]) {
+  const covered = computeSpaceCover(viewWidth, viewHeight)
+  assert.ok(covered)
+  assert.ok(covered.width >= viewWidth - 0.01)
+  assert.ok(covered.height >= viewHeight - 0.01)
+  assert.ok(Math.abs(covered.width / covered.height - 941 / 1672) < 0.00001)
+}
+assert.equal(computeSpaceCover(0, 844), null)
+assert.equal(computeSpaceCover(390, NaN), null)
+console.log('[Space game] ratio/cover/null sizing PASS')
