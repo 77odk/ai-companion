@@ -177,14 +177,19 @@ function paint(p,sample,quality){
   // incorrectly paints the cavity scene over the paper and moving objects.
   if(drawerProgress>.01){
     c.globalAlpha=drawerProgress;c.drawImage(imgs['room-cavity.webp'],0,0,W,H);c.globalAlpha=1
-    c.save();c.translate(0,drawerProgress*119) // E drawer 42% of 284 world px
+    c.save()
     if ($('use-c-drawer').checked && nativeCDrawer) {
+      // C material already illustrates a deeper pull. Move slightly in its
+      // native perspective rather than first translating the whole drawer down.
       c.translate(-25*drawerProgress,-35*drawerProgress)
       c.drawImage(nativeCDrawer,C_CROP.x,C_CROP.y,C_CROP.width,C_CROP.height) // native C geometry diagnostic only
     }
-    else if ($('old-drawer').checked) c.drawImage(imgs['open_drawer.png'],444,1320,502,345) // OLD WRONG ART / A-B only
-    else if (nativeEDrawer) c.drawImage(nativeEDrawer,E_CROP.x,E_CROP.y,E_CROP.width,E_CROP.height)
-    else c.drawImage(imgs['e_drawer_pixel_trial_v1.webp'],E_CROP.x,E_CROP.y,E_CROP.width,E_CROP.height) // exact E candidate
+    else {
+      c.translate(0,drawerProgress*119) // E isolated travel comparison
+      if ($('old-drawer').checked) c.drawImage(imgs['open_drawer.png'],444,1320,502,345)
+      else if (nativeEDrawer) c.drawImage(nativeEDrawer,E_CROP.x,E_CROP.y,E_CROP.width,E_CROP.height)
+      else c.drawImage(imgs['e_drawer_pixel_trial_v1.webp'],E_CROP.x,E_CROP.y,E_CROP.width,E_CROP.height)
+    }
     c.restore()
   }
   // This source has baked foliage; overlaying the cutout is intentionally
