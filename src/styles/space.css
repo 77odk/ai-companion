@@ -3042,3 +3042,18 @@ html.eluvin-page-hidden .thought-book-page * {
     filter: none;
   }
 }
+
+/* The physical drawer follows the finger directly, then eases to open/closed. */
+.space-scene-hotspot.is-weekly-letter {
+  touch-action: none;
+}
+.space-scene-hotspot.is-weekly-letter .space-drawer-peek.is-dragging {
+  transition: none !important;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-scene-hotspot.is-weekly-letter .space-drawer-peek.is-dragging {
+    transition: none !important;
+  }
+}
