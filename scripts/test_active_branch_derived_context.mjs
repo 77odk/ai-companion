@@ -81,11 +81,12 @@ assert.equal(filterChatTopicsForBranch(loadChatTopics('legacy'), 'branch-new').l
 
 console.log('[active derived context] runtime wiring uses active branch facts')
 const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+const chatAll = chat + '\n' + fs.readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8')
 const space = fs.readFileSync(new URL('../src/lib/aiSpace.ts', import.meta.url), 'utf8')
 const weekly = fs.readFileSync(new URL('../src/components/WeeklyPage.tsx', import.meta.url), 'utf8')
 
-assert.match(chat, /buildFutureAgendaBlock\(futureTopicsFromMessages\(base\), new Date\(\), lang\)/)
-assert.match(chat, /recordChatTopic\([\s\S]*roundBranchId \?\? conversationState\?\.activeBranchId \?\? 'root'/)
+assert.match(chatAll, /buildFutureAgendaBlock\(futureTopicsFromMessages\(base\), new Date\(\), lang\)/)
+assert.match(chatAll, /recordChatTopic\([\s\S]*roundBranchId \?\? conversationState\?\.activeBranchId \?\? 'root'/)
 
 assert.match(space, /filterChatTopicsForBranch\(loadChatTopics\(sessionId\), conversationBranchId\)/)
 assert.match(space, /conversationBranchStillActive = currentConversationBranchId === \(plan\.conversationBranchId \?\? 'root'\)/)

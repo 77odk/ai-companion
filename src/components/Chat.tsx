@@ -1,102 +1,54 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {getToken} from '../lib/auth'
+import {getAccount} from '../lib/sync'
+import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react'
 import MessageBubble from './MessageBubble'
-import { buildActionNarrationInstruction, buildBusyReturnPrompt, buildMemoryBlock, buildSystemPrompt, buildTimeContext, chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError } from '../lib/api'
-import { cleanMemoryProtocolArtifacts, detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, loadMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, stripMemoryMarkers, stripThinkBlocks, touchMemory, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult } from '../lib/memory'
-import { selectMemoryWorkingSet, shouldTouchMemoryFromUser } from '../lib/memoryRecallPolicy'
-import { getSessionStart, isActionNarrationEnabled, loadMessages, loadPersona, loadSettings, loadAIProfile, loadUserProfile, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, getContextBridge, setContextBridge, setContextBridgeTurns, clearContextBridge, getContextUsage, setContextUsage, clearContextUsage, type ContextUsageState, type ReplyInterruptionReason, type StoredMessage } from '../lib/storage'
-import { verifyChatJumpTarget, type ChatJumpTarget } from '../lib/chatJump'
-import { getToken } from '../lib/auth'
-import { getAccount } from '../lib/sync'
-import { getSession, listMemories, postMemory, postMessage, type Session } from '../lib/sessionApi'
-import {
-  addPendingOp,
-  confirmMessageInCache,
-  getActiveSessionId,
-  getBusyState,
-  getMemoriesCache,
-  getMessagesCache,
-  getPendingOps,
-  getSessionsCache,
-  markRead,
-  mergeSessionMemories,
-  mergeSessionMessages,
-  newPendingOpId,
-  recallSessionMemories,
-  reconcileMemoryCacheId,
-  removePendingOp,
-  saveBusyState,
-  saveMemoriesCache,
-  saveMessagesCache,
-  sessionMemoryToItem,
-  splitAssistantReplies,
-  touchMemoryCache,
-  upsertMemoryCache,
-  type PendingOp,
-} from '../lib/sessionStore'
-import { findBusyCutoff, inferBusyReason, randomBusyDurationMs, serializeBusyContext, type BusyState } from '../lib/aiBusy'
-import { busyCycleId, cancelBusyReturn, triggerBusyReturn } from '../lib/busyReturn'
-import { busyReturnFallback, classifyAvailability, isGroundedBusyReturn, type AvailabilityDecision } from '../lib/availability'
-import { loadCurrentPosts } from '../lib/aiSpace'
-import { buildSpacePostsBlock, personaHasLifeAnchors, LIFE_BASELINE, LIFE_BASELINE_EN } from '../lib/spaceChatInject'
-import { commitPartialReply } from '../lib/partialReply'
-import { findRecoverableReply, interruptionReasonFromError, normalizeStaleReplyLifecycle, preserveReplyLifecycle, registerActiveReplyRun, setReplyLifecycle, unregisterActiveReplyRun } from '../lib/replyLifecycle'
-import { buildFutureAgendaBlock } from '../lib/futureAgenda'
-import { buildYourMomentBlock, MOMENT_GUIDE_EN, MOMENT_GUIDE_ZH, shouldInjectYourMoment } from '../lib/yourMoment'
-import { buildTaRuntimeContext, getOrAdvanceTaRuntime, getSessionPersona, shouldInjectTaRuntimeContext, syncTaRuntimeFromAssistantText } from '../lib/taRuntime'
-import { buildIdentityContext } from '../lib/identityContext'
-import { dropRepeatedReplies } from '../lib/replyDedupe'
-import { collapseAdjacentDuplicateAssistantReplies } from '../lib/chatDisplay'
-import { buildReplyLengthInstruction, getEffectiveReplyLength, splitDetailedAssistantReply } from '../lib/replyLength'
-import { allowsBusyState, allowsEmbodiedLifeContext, buildIdentityBoundaryRepair, resolveIdentityMode } from '../lib/companionPolicy'
-import { cleanAttributionArtifacts, cleanStreamingAttributionArtifacts, formatAttributedLine, hasAttributionLeak } from '../lib/promptAttribution'
-import { retryPendingMemoryUploads } from '../lib/memoryUploadRetry'
-import { ELUVIN_DATA_CHANGE, notifyDataChanged } from '../lib/dataChange'
-import { composeContext, buildCompactedHistory, buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT, type ContextBlock } from '../lib/contextComposer'
-import { estimateToken } from '../lib/token'
-import { calibrateContextFactor, contentTokensOf, loadContextFactor, saveContextFactor, usageMessages } from '../lib/contextUsage'
-import { buildUserWeatherContext, readUserWeatherContext } from '../lib/homeWeather'
-import { clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, savePendingMemoryCorrection, stripMemoryCorrectionMarkers, type MemoryCorrectionTarget } from '../lib/memoryCorrection'
-import { formatQuotedMessage, messageEvidenceText, parseQuotedMessage, type MessageQuote, type MessageQuoteSpeaker } from '../lib/messageQuote'
-import { CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState } from '../lib/conversationState'
-import { enqueueSessionMessageCommit, enqueueSessionMessageCommits } from '../lib/sessionMessageQueue'
-import { flushPendingOpsSnapshot } from '../lib/pendingReplay'
-import { appendMemoryAudit } from '../lib/memoryAudit'
-import { getTaStateView, taMoodLabelForPrompt } from '../lib/taState'
-import { getRelationshipRoleGuidanceForPrompt, getRelationshipSettingLabelForPrompt } from '../lib/relationshipState'
-import { getListenTogetherSnapshot } from '../lib/listenTogetherState'
+import {buildBusyReturnPrompt, buildSystemPrompt, chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError} from '../lib/api'
+import {cleanMemoryProtocolArtifacts, detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult, loadMemory, stripMemoryMarkers, stripThinkBlocks} from '../lib/memory'
+import {getSessionStart, loadMessages, loadPersona, loadSettings, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, setContextBridge, setContextBridgeTurns, clearContextBridge, getContextUsage, setContextUsage, clearContextUsage, type ContextUsageState, type ReplyInterruptionReason, type StoredMessage, getContextBridge, isActionNarrationEnabled, loadAIProfile} from '../lib/storage'
+import {verifyChatJumpTarget, type ChatJumpTarget} from '../lib/chatJump'
+import {getSession, listMemories, postMemory, postMessage, type Session} from '../lib/sessionApi'
+import {addPendingOp, confirmMessageInCache, getActiveSessionId, getBusyState, getMemoriesCache, getMessagesCache, getPendingOps, getSessionsCache, markRead, mergeSessionMemories, mergeSessionMessages, newPendingOpId, reconcileMemoryCacheId, removePendingOp, saveBusyState, saveMemoriesCache, saveMessagesCache, sessionMemoryToItem, splitAssistantReplies, upsertMemoryCache, type PendingOp} from '../lib/sessionStore'
+import {findBusyCutoff, inferBusyReason, randomBusyDurationMs, serializeBusyContext, type BusyState} from '../lib/aiBusy'
+import {busyCycleId, cancelBusyReturn, triggerBusyReturn} from '../lib/busyReturn'
+import {busyReturnFallback, classifyAvailability, isGroundedBusyReturn, type AvailabilityDecision} from '../lib/availability'
+import {commitPartialReply} from '../lib/partialReply'
+import {findRecoverableReply, interruptionReasonFromError, normalizeStaleReplyLifecycle, preserveReplyLifecycle, registerActiveReplyRun, setReplyLifecycle, unregisterActiveReplyRun} from '../lib/replyLifecycle'
+import {syncTaRuntimeFromAssistantText, getSessionPersona} from '../lib/taRuntime'
+import {dropRepeatedReplies} from '../lib/replyDedupe'
+import {collapseAdjacentDuplicateAssistantReplies} from '../lib/chatDisplay'
+import {splitDetailedAssistantReply, getEffectiveReplyLength} from '../lib/replyLength'
+import {allowsBusyState, buildIdentityBoundaryRepair, resolveIdentityMode} from '../lib/companionPolicy'
+import {cleanStreamingAttributionArtifacts, hasAttributionLeak, cleanAttributionArtifacts} from '../lib/promptAttribution'
+import {retryPendingMemoryUploads} from '../lib/memoryUploadRetry'
+import {ELUVIN_DATA_CHANGE, notifyDataChanged} from '../lib/dataChange'
+import {buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT} from '../lib/contextComposer'
+import {estimateToken} from '../lib/token'
+import {calibrateContextFactor, contentTokensOf, loadContextFactor, saveContextFactor, usageMessages} from '../lib/contextUsage'
+import {clearPendingMemoryCorrection, correctMemoryText, extractMemoryCorrectionProposal, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, savePendingMemoryCorrection, type MemoryCorrectionTarget, stripMemoryCorrectionMarkers} from '../lib/memoryCorrection'
+import {formatQuotedMessage, parseQuotedMessage, type MessageQuote, type MessageQuoteSpeaker, messageEvidenceText} from '../lib/messageQuote'
+import {CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState} from '../lib/conversationState'
+import {enqueueSessionMessageCommit, enqueueSessionMessageCommits} from '../lib/sessionMessageQueue'
+import {flushPendingOpsSnapshot} from '../lib/pendingReplay'
+import {appendMemoryAudit} from '../lib/memoryAudit'
 
 /**
  * 历史时间锚必须稳定：同一条历史消息无论过几分钟再次发送，前缀都完全一致，
  * 让 provider 能复用「核心 system + 历史」这一大段前缀。当前时间另走动态 ContextBlock。
  */
-function msgTimeMark(ts: number, _lang: Lang): string {
-  if (!Number.isFinite(ts) || ts <= 0) return ''
-  const d = new Date(ts)
-  if (Number.isNaN(d.getTime())) return ''
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `[${yyyy}-${mm}-${dd} ${hh}:${min}] `
-}
-import { detectLang, type Lang } from '../lib/langDetect'
-import { getSessionLang, saveSessionLang } from '../lib/sessionStore'
-import { filterSessionMessages } from '../lib/aiSpaceDetail'
-import { takeChatMessage } from '../lib/chatInject'
-import { decodePersonaText, extractOpeningLine } from '../lib/customPersona'
-import { ensureMilestoneEvent, getMilestoneStatus, latestReachedMilestoneDay, markMilestoneShown } from '../lib/milestone'
-import { getWeeklyReviews } from '../lib/weeklyReview'
-import { completeChatTopicPair, futureTopicsFromMessages, recordChatTopic } from '../lib/chatTopics'
-import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
-import { processEventCandidate } from '../lib/eventDetector'
+import {detectLang, type Lang} from '../lib/langDetect'
+import {getSessionLang, saveSessionLang} from '../lib/sessionStore'
+import {filterSessionMessages} from '../lib/aiSpaceDetail'
+import {takeChatMessage} from '../lib/chatInject'
+import {decodePersonaText, extractOpeningLine} from '../lib/customPersona'
+import {ensureMilestoneEvent, getMilestoneStatus, latestReachedMilestoneDay, markMilestoneShown} from '../lib/milestone'
+import {completeChatTopicPair, recordChatTopic} from '../lib/chatTopics'
 import MilestoneCard from './MilestoneCard'
 import ChatReplyError from './ChatReplyError'
+import {buildChatContextBlocks} from '../lib/chatContextBuild'
 import ChatComposer from './ChatComposer'
-import { hasBridgableHistory } from './ChatComposer'
+import {hasBridgableHistory} from './ChatComposer'
 import ChatMemoryCorrection from './ChatMemoryCorrection'
 import ChatNotices from './ChatNotices'
-
 
 /**
  * PR #99 Session Bridge：只承接“同一 session 刷新前”的历史。
@@ -1261,303 +1213,12 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       }
     }
 
-    // Event Candidate Window：只带最近 6 条聊天里最多 2 条历史 user 原话 + 真实 ts；TA 文本永不作为 Event 证据。
-    // 这让软 Event 在第一次“收口句”命中时就有多轮 evidence；最终仍由 Event V2 原五维硬闸门决定是否落库。
-    if (!replayExistingUser) {
-      const recentEventUserEvidence = roundVisibleMessages
-        .slice(-6)
-        .filter((m) => m.role === 'user')
-        .slice(-2)
-        .map((m) => ({ text: messageEvidenceText(m.content), ts: m.ts }))
-        .filter((m) => m.text.length > 0)
-      void processEventCandidate({
-        sessionId: activeSessionId || undefined,
-        userText: text,
-        recentUserEvidence: recentEventUserEvidence,
-        now: userMsg.ts,
-      })
-    }
-
-    const nameForPrompt = (() => {
-      if (!activeSessionId) return loadAIProfile().nickname
-      const cached = getSessionsCache().find((s) => String(s.id) === activeSessionId)
-      const t = (cached?.title || activeSession?.title || '').trim()
-      if (!t || t === '新会话' || t === '我们的开始') return loadAIProfile(activeSessionId).nickname
-      return t
-    })()
-    const accountId = activeSessionId ? (getAccount()?.account ?? '') : ''
-    const replyLength = activeSessionId
-      ? getEffectiveReplyLength(accountId, activeSessionId)
-      : 'natural'
-    const replyPreference = buildReplyLengthInstruction(replyLength, lang).trim()
-    const allowActionNarration = isActionNarrationEnabled()
-    const actionNarrationPreference = buildActionNarrationInstruction(allowActionNarration, lang).trim()
-    // 回复偏好与旁白约定都并进现有主 system 文本末尾，不增加第二条 system。
-    const apiMessages: ApiMessage[] = [
-      {
-        role: 'system',
-        content:
-          buildSystemPrompt(persona, nameForPrompt, undefined, getActiveSessionId() || undefined, lang, false) +
-          (replyPreference ? '\n\n' + replyPreference : '') +
-          (actionNarrationPreference ? '\n\n' + actionNarrationPreference : ''),
-      },
-    ]
-    // 核心 system 只留稳定身份/规则；Memory/Event/Runtime/Space 等都走现有 ContextBlock，
-    // 避免所有功能永久挤进不可裁剪的 core。
-    const contextBlocks: ContextBlock[] = [
-      { id: 'current-time', content: buildTimeContext(Date.now(), lang), priority: 'core' },
-    ]
-    const listening = getListenTogetherSnapshot()
-    if (listening.hasTrack) {
-      contextBlocks.push({
-        id: 'user-listening',
-        priority: 'ambient',
-        content: lang === 'en'
-          ? `[USER's player right now]\nTrack: ${listening.title}\nStatus: ${listening.playing ? 'playing' : 'paused'}. This is real player state shared across TA switches. You may naturally know what USER is listening to; do not invent audio details that are not present here.`
-          : `【用户此刻的播放器】\n正在听：${listening.title}\n状态：${listening.playing ? '播放中' : '已暂停'}。这是用户级真实播放器状态，切换 TA 也不变。你可以自然知道用户正在听什么，但不要编造这里没有的歌曲细节。`,
-      })
-    }
-    const correctionTargets = new Map<string, MemoryCorrectionTarget>()
-
-    const contextText = base
-      .slice(-6)
-      .map((m) => (m.role === 'assistant'
-        ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(m.content)), lang), lang)
-        : m.content))
-      .join('\n')
-    const recalledMemory = recallSessionMemories(activeSessionId, contextText)
-    const memory = selectMemoryWorkingSet(recalledMemory, {
-      userText: text,
-      // correction ref 只会让最终字符串更长；用同长度的 s:<id> 做预算上界，避免真实渲染后超出 working-set budget。
-      renderBlock: (items) => buildMemoryBlock(
-        items,
-        lang,
-        correctionIntent ? (item) => `s:${item.id}` : undefined,
-      ),
-    }).items
-    if (memory.length > 0) {
-      const refByItem = new Map<object, string>()
-      if (correctionIntent) {
-        const globalItems = loadMemory()
-        const sessionItems = activeSessionId ? getMemoriesCache(activeSessionId) : []
-        const token = getToken() ?? ''
-        for (const m of memory) {
-          const globalMatch = globalItems.filter((item) => item.id === m.id && item.text === m.text)
-          const sessionMatch = sessionItems.filter((item) => item.id === m.id && item.text === m.text)
-          if (globalMatch.length + sessionMatch.length !== 1) continue
-          if (globalMatch.length === 1) {
-            const ref = `g:${m.id}`
-            refByItem.set(m, ref)
-            correctionTargets.set(ref, { kind: 'global', item: globalMatch[0] })
-          } else if (activeSessionId && sessionMatch.length === 1) {
-            const ref = `s:${m.id}`
-            refByItem.set(m, ref)
-            correctionTargets.set(ref, { kind: 'session', sessionId: activeSessionId, item: sessionMatch[0], token })
-          }
-        }
-      }
-      const memoryBlock = buildMemoryBlock(memory, lang, correctionIntent ? (item) => refByItem.get(item) : undefined)
-      if (memoryBlock) {
-        contextBlocks.push({ id: 'memory', content: memoryBlock, priority: 'memory' })
-      }
-      if (correctionTargets.size > 0) {
-        contextBlocks.push({
-          id: 'memory-correction-consent',
-          priority: 'core',
-          content: lang === 'en'
-            ? 'USER may be correcting a stored fact. Only if they clearly replace/deny one numbered [M:...] memory, ask naturally for confirmation and end with exactly one line: [Correct Memory <g:id or s:id>] <the complete corrected fact>. This is only a proposal; do not claim it is already changed. Do not emit a normal [Memory] marker for the same fact.'
-            : '用户这句话可能在纠正旧记忆。只有在他明确否定/替换上面某条带 [M:...] 编号的记忆时，先自然询问是否要改，并在回复末尾单独输出一行【纠正记忆·g:id或s:id】纠正后的完整事实。这个标记只是申请，不能说已经改好；同一事实不要再输出普通【记忆】标记。一次最多一条。',
-        })
-      }
-      const now = Date.now()
-      for (const m of memory) {
-        if (m.pinned || !shouldTouchMemoryFromUser(m, text)) continue
-        if (activeSessionId) touchMemoryCache(activeSessionId, m.id, now)
-        touchMemory(m.id, now)
-      }
-    }
-    // Event（E3 二处）：最近 5 条一起经历过的事注入（记忆注入之后、自我时间线之前）；
-    // 只作背景信息，不让 TA 直接复述
-    const recentEvents = getRecentEvents(activeSessionId || undefined, 3)
-    if (recentEvents.length > 0) {
-      const eventsHeader = lang === 'en'
-        ? 'Background info — things you two have been through together (do not repeat these lines as-is):\n'
-        : '以上是背景信息，不要直接复述这些句子——你们一起经历过的事：\n'
-      contextBlocks.push({
-        id: 'events',
-        priority: 'event',
-        content:
-          eventsHeader +
-          recentEvents.map((e) => {
-            const eventText = `${e.title}${e.description ? `（${e.description}）` : ''}`
-            return `- ${formatEventDateShort(e.occurredAt)}：${formatAttributedLine(eventText, 'SHARED', lang, 'USER')}`
-          }).join('\n'),
-      })
-    }
-    // 最近 TA 原话已经完整存在 history + 相对时间标记里，不再重复塞一份 SelfTimeline system。
-    // TA Runtime：只在用户这一轮明确询问 TA 的当前状态时注入。
-    // 平时不把 TA 上轮自述再喂回去，避免“自述 → Runtime → 再自述”越滚越具体；Home 展示仍独立读取同一 Runtime。
-    if (shouldInjectTaRuntimeContext(text, lang)) {
-      const runtime = getOrAdvanceTaRuntime(
-        activeSessionId || undefined,
-        getSessionPersona(activeSessionId || undefined),
-        Date.now(),
-      )
-      const runtimeCtx = buildTaRuntimeContext(runtime, lang)
-      if (runtimeCtx) {
-        contextBlocks.push({ id: 'runtime', content: runtimeCtx, priority: 'runtime' })
-      }
-    }
-    // S4：给模型只发当前轮需要的粗粒度状态摘要，不暴露双轴/七倾向/变化历史。
-    if (activeSessionId) {
-      const taState = getTaStateView(activeSessionId)
-      const promptMood = taMoodLabelForPrompt(taState.mood, lang)
-      contextBlocks.push({
-        id: 'ta-state',
-        priority: 'ambient',
-        content: lang === 'en'
-          ? `[Your current inner state]\nMood: ${promptMood}. Let it affect tone subtly. Do not announce a cause unless chat history directly supports one.`
-          : `【你此刻的内在状态】\n心情：${promptMood}。只让它轻微影响语气；除非聊天历史有直接证据，不要主动编原因。`,
-      })
-
-      const relationshipLabel = getRelationshipSettingLabelForPrompt(activeSessionId, lang)
-      if (relationshipLabel) {
-        const relationshipGuidance = getRelationshipRoleGuidanceForPrompt(activeSessionId, lang)
-        contextBlocks.push({
-          id: 'relationship-setting',
-          priority: 'core',
-          content: lang === 'en'
-            ? `[Relationship setting]\nUSER explicitly set your relationship as: ${relationshipLabel}. This setting controls role consistency only; never invent shared history from it.${relationshipGuidance ? ` ${relationshipGuidance}` : ''}`
-            : `【关系设定】\n用户明确设定你们的关系是：${relationshipLabel}。它只约束关系口径，绝不能据此编造共同经历。${relationshipGuidance ? ` ${relationshipGuidance}` : ''}`,
-        })
-      }
-    }
-
-    const userWeather = readUserWeatherContext(loadUserProfile().city ?? '')
-    if (userWeather) {
-      contextBlocks.push({
-        id: 'user-weather',
-        content: buildUserWeatherContext(userWeather, lang),
-        priority: 'ambient',
-      })
-    }
-    const identityCtx = buildIdentityContext(activeSessionId || undefined, lang)
-    if (identityCtx) {
-      contextBlocks.push({ id: 'identity', content: identityCtx, priority: 'core' })
-    }
-    const journalRelevant = /周记|周报|周总结|这周|上周|本周|journal|weekly/i.test(text)
-    const weeklyList = journalRelevant ? getWeeklyReviews(activeSessionId || undefined) : []
-    if (weeklyList.length > 0) {
-      const w = weeklyList[0]
-      // TASK-JOURNAL-INJECT：不只带标题，带最近一篇正文前 200 字摘要，被问"周记写的啥"有内容可答
-      const excerpt = (w.content ?? '').trim().slice(0, 200)
-      if (lang === 'en') {
-        contextBlocks.push({
-          id: 'weekly-review',
-          priority: 'ambient',
-          content: `Your most recent journal entry to them is "${w.title}" (${w.weekLabel}).${excerpt ? `\n${formatAttributedLine(excerpt, 'SELF', 'en')}` : ''}\nIf they bring it up, respond in the tone and content of this entry.`,
-        })
-      } else {
-        contextBlocks.push({
-          id: 'weekly-review',
-          priority: 'ambient',
-          content: `你最近写给对方的周记是「${w.title}」（${w.weekLabel}）。${excerpt ? `\n${formatAttributedLine(excerpt, 'SELF', 'zh')}` : ''}\n对方要是提起周记，就照这篇的语气和内容回应。`,
-        })
-      }
-    }
-    const identityMode = resolveIdentityMode(activeSessionId || undefined)
-    const allowEmbodiedLife = allowsEmbodiedLifeContext(identityMode)
-    // Space 旧动态没有 identityMode stamp。为避免从沉浸切到自然 / AI 后把旧吃饭、出门、地点继续当成 SELF 事实，
-    // v1 仅在沉浸档把 Space 历史注入 Chat；Space 页面本身仍照当前 identity policy 正常生成与展示。
-    if (allowEmbodiedLife) {
-      const spaceBlock = buildSpacePostsBlock(loadCurrentPosts(activeSessionId || undefined), 2, lang)
-      if (spaceBlock) {
-        contextBlocks.push({ id: 'space-posts', content: spaceBlock, priority: 'ambient' })
-      }
-    }
-    // 未来约定注入（因果链第二环 TASK-FUTURE-AGENDA）：TA 记得「约好还没做的事」，
-    // 对方问起/到期临近时能自然接，不会一问三不知；没约定返回空串跳过，不占上下文。
-    const agendaBlock = buildFutureAgendaBlock(futureTopicsFromMessages(base), new Date(), lang)
-    if (agendaBlock) {
-      contextBlocks.push({ id: 'future-agenda', content: agendaBlock, priority: 'event' })
-    }
-    // 生活基线 / 你的时刻只在这一轮真的需要 TA 分享自己近况时才进上下文，不再每轮常驻。
-    const recentUserTexts = base
-      .filter((m) => m.role === 'user')
-      .slice(-3)
-      .map((m) => m.content)
-    const shouldShareMoment = allowEmbodiedLife && shouldInjectYourMoment(recentUserTexts, lang)
-    if (shouldShareMoment && !personaHasLifeAnchors(persona)) {
-      contextBlocks.push({
-        id: 'life-baseline',
-        content: lang === 'en' ? LIFE_BASELINE_EN : LIFE_BASELINE,
-        priority: 'ambient',
-      })
-    }
-    if (shouldShareMoment) {
-      const momentBlock = buildYourMomentBlock(persona, new Date(), lang)
-      if (momentBlock) {
-        contextBlocks.push({
-          id: 'your-moment',
-          priority: 'ambient',
-          content: `${lang === 'en' ? MOMENT_GUIDE_EN : MOMENT_GUIDE_ZH}\n${formatAttributedLine(momentBlock, 'SELF', lang)}`,
-        })
-      }
-    }
-    if (!replayExistingUser && memInstr.isInstruction && !(correctionIntent && correctionTargets.size > 0)) {
-      if (lang === 'en') {
-        contextBlocks.push({
-          id: 'memory-explicit',
-          priority: 'core',
-          content: `USER just asked you to remember: ${formatAttributedLine(memInstr.fact ?? text, 'USER', 'en')}. Write only that stated fact, with no inference or added conclusion. End with one [Memory: Topic] line and briefly confirm it was noted.`,
-        })
-      } else {
-        contextBlocks.push({
-          id: 'memory-explicit',
-          priority: 'core',
-          content: `USER 刚要求你记住：${formatAttributedLine(memInstr.fact ?? text, 'USER', 'zh')}。只写这条明确事实，不推断、不补充；回复末尾单独一行输出【记忆·主题】内容，并简短确认已记下。`,
-        })
-      }
-    } else if (isRetort && !(correctionIntent && correctionTargets.size > 0)) {
-      if (lang === 'en') {
-        contextBlocks.push({
-          id: 'memory-retort',
-          priority: 'core',
-          content:
-            'They reminded you to save something from the recent conversation. Extract only stable facts they actually stated; do not infer. End with one [Memory: Topic] line and confirm it was noted.',
-        })
-      } else {
-        contextBlocks.push({
-          id: 'memory-retort',
-          priority: 'core',
-          content:
-            '用户在提醒你记下最近提过的信息。只提取用户实际说过、适合长期保留的稳定事实，不推断不补充；回复末尾输出一行【记忆·主题】内容，并确认已记下。',
-        })
-      }
-    }
-
-    const history: ApiMessage[] = base.map((m) => {
-      const body =
-        m.role === 'assistant'
-          ? cleanAttributionArtifacts(stripThinkBlocks(stripMemoryMarkers(m.content), lang), lang)
-          : m.content
-      const mark = msgTimeMark(m.ts, lang)
-      return { role: m.role, content: mark ? mark + body : body }
+    const {
+      replyLength, allowActionNarration, apiMessages, correctionTargets, composed,
+    } = buildChatContextBlocks({
+      activeSession, activeSessionId, base, bridgeInfo, compactDone, compactSummary, contextBoundary,
+      persona, lang, text, userMsg, roundVisibleMessages, replayExistingUser, correctionIntent, memInstr, isRetort,
     })
-
-    // PR #99 Session Bridge：已承接时，注入 evidence-only bridge 摘要（memory 优先级块，不新增 LLM 调用）。
-    // 只临时参与后续约 BRIDGE_ACTIVE_TURNS 轮（turnsLeft 递减，归零后退出注入）；不写 Memory / Event。
-    const bridgeBlocks: ContextBlock[] = []
-    if (activeSessionId && bridgeInfo && bridgeInfo.bridgedAt >= contextBoundary && bridgeInfo.turnsLeft > 0 && bridgeInfo.content.trim()) {
-      bridgeBlocks.push({ id: 'bridge', content: bridgeInfo.content, priority: 'memory' })
-    }
-    // PR #99 Context Compact：已压缩时，注入 = [较老历史摘要(system)] + [最近原始消息]。
-    // 当前时间已经在 buildSystemPrompt 中注入一次；这里不再追加第二条时间 system。
-    const historyForModel =
-      activeSessionId && compactDone && compactSummary.trim()
-        ? buildCompactedHistory(compactSummary, history, COMPACT_KEEP_RECENT)
-        : history
-    const composed = composeContext(apiMessages, historyForModel, [...contextBlocks, ...bridgeBlocks])
     // 上下文总量 = 刷新之后这一段（sessionStart 起）所有内容的 provider 口径估算；
     // 「本轮输入」仍是本轮 payload 的估算，两者分开显示。
     const sessionContentTokens = contentTokensOf(usageMessages(roundVisibleMessages, userMsg), loadContextFactor())
@@ -2373,7 +2034,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       inputRef.current?.focus({ preventScroll: true })
     })
   }
-
 
   const handleSaveMessageAsMemory = async (text: string): Promise<boolean> => {
     const sid = activeSessionId

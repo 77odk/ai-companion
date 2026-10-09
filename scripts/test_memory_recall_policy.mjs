@@ -194,7 +194,8 @@ assert.ok(hugePinned.estimatedTokens > 80, 'pinned 自身超预算时要如实�
 
 console.log('\n[memory recall 2] Chat 生产挂载必须传 current user text + 最终 block renderer')
 const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
-assert.match(chatSource, /selectMemoryWorkingSet\(recalledMemory, \{[\s\S]*userText: text,[\s\S]*renderBlock: \(items\) => buildMemoryBlock\(/)
-assert.match(chatSource, /if \(m\.pinned \|\| !shouldTouchMemoryFromUser\(m, text\)\) continue/)
+const chatSource__all = chatSource + '\n' + readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8')
+assert.match(chatSource__all, /selectMemoryWorkingSet\(recalledMemory, \{[\s\S]*userText: text,[\s\S]*renderBlock: \(items\) => buildMemoryBlock\(/)
+assert.match(chatSource__all, /if \(m\.pinned \|\| !shouldTouchMemoryFromUser\(m, text\)\) continue/)
 
 console.log('\nmemory_recall_policy：全部通过')

@@ -162,7 +162,7 @@ check('但不会一句一泡', longParts.length < 10, String(longParts.length))
 check('拆分后内容不丢', longParts.map((p) => p.content).join('') === veryLong)
 
 console.log('\n[7] 源码 contract')
-const chatSrc = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+const chatSrc = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8')
 const settingsSrc = readFileSync(new URL('../src/components/Settings.tsx', import.meta.url), 'utf8')
 const chatSettingsSrc = readFileSync(new URL('../src/components/ChatSettings.tsx', import.meta.url), 'utf8')
 const partialSrc = readFileSync(new URL('../src/lib/partialReply.ts', import.meta.url), 'utf8')
