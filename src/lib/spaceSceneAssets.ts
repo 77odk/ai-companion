@@ -6,6 +6,7 @@ export const SPACE_LAYER_BASE = '/space/layered/'
 export const SPACE_LAYER_VERSION = '2026-10-09'
 export const SPACE_LAYER_REQUIRED = [
   'room-closed.webp',
+  'room-cavity.webp',
   'photo_wall_board.png',
   'glass_memory_jar.png',
   'open_book.png',
