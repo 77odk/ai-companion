@@ -25,6 +25,7 @@ import {
   type PhotoMeta,
 } from '../lib/photoWall'
 import { getToken } from '../lib/auth'
+import { hasMovedSpacePhoto, projectSpacePhotoDrag, type ScenePhotoPlacement } from '../lib/spaceSceneDrag'
 
 interface Props {
   onOpenStarJar: () => void
@@ -109,6 +110,8 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
 
   /* ---- 照片墙：上传/数据源沿用旧实现，展示交给稳定长墙组件。 ---- */
   const [photos, setPhotos] = useState<PhotoMeta[]>(() => loadLocalPhotos(sid))
+  const photosRef = useRef(photos)
+  photosRef.current = photos
   const [photoUploading, setPhotoUploading] = useState(0)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -116,11 +119,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   const scenePhotoDragRef = useRef<{
     id: string
     pointerId: number
-    board: DOMRect
-    offsetX: number
-    offsetY: number
-    startX: number
-    startY: number
+    element: HTMLSpanElement
+    boardWidth: number
+    boardHeight: number
+    start: { x: number; y: number }
+    origin: ScenePhotoPlacement
+    latest: ScenePhotoPlacement
+    frame: number | null
     moved: boolean
   } | null>(null)
   const drawerTimerRef = useRef<number | null>(null)
@@ -159,6 +164,10 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   useEffect(() => () => {
     if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
     if (objectTimerRef.current !== null) window.clearTimeout(objectTimerRef.current)
+    if (scenePhotoDragRef.current?.frame !== null && scenePhotoDragRef.current) {
+      window.cancelAnimationFrame(scenePhotoDragRef.current.frame!)
+    }
+    scenePhotoDragRef.current = null
   }, [])
 
   const openDeskObject = (
@@ -378,27 +387,42 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     else saveLocalPhotos(next, sid)
   }
 
-  const moveScenePhoto = (photoId: string, x: number, y: number) => {
-    setPhotos((current) => current.map((photo, index) => {
-      if (photo.id !== photoId) return photo
-      const base = photo.scenePlacement ?? defaultScenePlacement(index)
-      return {
-        ...photo,
-        scenePlacement: {
-          x: Math.max(2, Math.min(78, x)),
-          y: Math.max(1, Math.min(72, y)),
-          rotate: base.rotate,
-        },
-      }
-    }))
+  // Game-style drag: compose only the touched photo on animation frames.
+  // React state and photo metadata are committed once, when the finger lifts.
+  const paintScenePhoto = (element: HTMLSpanElement, point: ScenePhotoPlacement) => {
+    element.style.setProperty('--scene-photo-x', `${point.x}%`)
+    element.style.setProperty('--scene-photo-y', `${point.y}%`)
   }
 
-  const finishScenePhotoDrag = () => {
-    scenePhotoDragRef.current = null
-    setPhotos((current) => {
-      persistScenePhotoPlacements(current)
-      return [...current]
+  const queueScenePhotoFrame = () => {
+    const drag = scenePhotoDragRef.current
+    if (!drag || drag.frame !== null) return
+    drag.frame = window.requestAnimationFrame(() => {
+      drag.frame = null
+      if (scenePhotoDragRef.current === drag) paintScenePhoto(drag.element, drag.latest)
     })
+  }
+
+  const finishScenePhotoDrag = (commit: boolean, pointer?: { x: number; y: number }) => {
+    const drag = scenePhotoDragRef.current
+    if (!drag) return
+    scenePhotoDragRef.current = null
+    if (drag.frame !== null) window.cancelAnimationFrame(drag.frame)
+    drag.element.classList.remove('is-dragging')
+    if (!commit) {
+      paintScenePhoto(drag.element, drag.origin)
+      return
+    }
+    const nextPoint = pointer
+      ? projectSpacePhotoDrag(drag.origin, drag.start, pointer, drag.boardWidth, drag.boardHeight)
+      : drag.latest
+    paintScenePhoto(drag.element, nextPoint)
+    const nextPhotos = photosRef.current.map((photo) => photo.id === drag.id
+      ? { ...photo, scenePlacement: nextPoint }
+      : photo)
+    photosRef.current = nextPhotos
+    persistScenePhotoPlacements(nextPhotos)
+    setPhotos(nextPhotos)
   }
 
   function renderHomePage() {
@@ -464,17 +488,19 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                     } as React.CSSProperties}
                     onPointerDown={(event) => {
                       event.stopPropagation()
+                      if (scenePhotoDragRef.current || !event.isPrimary) return
                       const board = event.currentTarget.parentElement?.getBoundingClientRect()
-                      if (!board) return
-                      const card = event.currentTarget.getBoundingClientRect()
+                      if (!board || board.width <= 0 || board.height <= 0) return
                       scenePhotoDragRef.current = {
                         id: photo.id,
                         pointerId: event.pointerId,
-                        board,
-                        offsetX: event.clientX - card.left,
-                        offsetY: event.clientY - card.top,
-                        startX: event.clientX,
-                        startY: event.clientY,
+                        element: event.currentTarget,
+                        boardWidth: board.width,
+                        boardHeight: board.height,
+                        start: { x: event.clientX, y: event.clientY },
+                        origin: { ...placement },
+                        latest: { ...placement },
+                        frame: null,
                         moved: false,
                       }
                       event.currentTarget.setPointerCapture?.(event.pointerId)
@@ -483,26 +509,41 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                       const drag = scenePhotoDragRef.current
                       if (!drag || drag.id !== photo.id || drag.pointerId !== event.pointerId) return
                       event.stopPropagation()
-                      if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) {
+                      const pointer = { x: event.clientX, y: event.clientY }
+                      if (!drag.moved && hasMovedSpacePhoto(drag.start, pointer)) {
                         drag.moved = true
+                        drag.element.classList.add('is-dragging')
                       }
                       if (!drag.moved) return
-                      const x = ((event.clientX - drag.board.left - drag.offsetX) / drag.board.width) * 100
-                      const y = ((event.clientY - drag.board.top - drag.offsetY) / drag.board.height) * 100
-                      moveScenePhoto(photo.id, x, y)
+                      drag.latest = projectSpacePhotoDrag(
+                        drag.origin, drag.start, pointer, drag.boardWidth, drag.boardHeight,
+                      )
+                      queueScenePhotoFrame()
                     }}
                     onPointerUp={(event) => {
                       const drag = scenePhotoDragRef.current
                       if (!drag || drag.id !== photo.id || drag.pointerId !== event.pointerId) return
                       event.stopPropagation()
-                      event.currentTarget.releasePointerCapture?.(event.pointerId)
-                      if (drag.moved) finishScenePhotoDrag()
-                      else {
-                        scenePhotoDragRef.current = null
+                      const pointer = { x: event.clientX, y: event.clientY }
+                      if (drag.moved || hasMovedSpacePhoto(drag.start, pointer)) {
+                        event.preventDefault()
+                        finishScenePhotoDrag(true, pointer)
+                      } else {
+                        finishScenePhotoDrag(false)
                         openPhotoWallFromScene()
                       }
                     }}
-                    onPointerCancel={() => finishScenePhotoDrag()}
+                    onPointerCancel={(event) => {
+                      if (scenePhotoDragRef.current?.pointerId === event.pointerId) {
+                        event.stopPropagation()
+                        finishScenePhotoDrag(false)
+                      }
+                    }}
+                    onLostPointerCapture={(event) => {
+                      if (scenePhotoDragRef.current?.pointerId === event.pointerId) {
+                        finishScenePhotoDrag(false)
+                      }
+                    }}
                     onClick={(event) => event.stopPropagation()}
                   >
                     <img
