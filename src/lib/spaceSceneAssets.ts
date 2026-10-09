@@ -21,10 +21,11 @@ export const SPACE_LAYER_REQUIRED = [
 export function isSpaceLayerManifestReady(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const item = value as { enabled?: unknown; version?: unknown; assets?: unknown }
+  const assets = item.assets
   return item.enabled === true
     && item.version === SPACE_LAYER_VERSION
-    && Array.isArray(item.assets)
-    && SPACE_LAYER_REQUIRED.every((filename) => item.assets?.includes(filename))
+    && Array.isArray(assets)
+    && SPACE_LAYER_REQUIRED.every((filename) => assets.includes(filename))
 }
 
 export async function preloadSpaceLayer(): Promise<boolean> {
