@@ -21,10 +21,11 @@ footer{padding:14px 20px 28px;font-size:12px;color:#dbcfc0}
 <body>
 <header>
 <h1>忆文 · G0-B 无依赖动画原型（隔离实验）</h1>
-<p class="warning">非产品页面 · 默认抽屉为不合格旧素材；可选择本地 E 原图进行临时对照，仅测试运动、遮挡与降级。不读取云端或保存原图。</p>
+<p class="warning">非产品页面 · 默认使用仓库中 E 原图裁切候选；旧圆把手仅作为 A/B 对照。隐藏侧板仍未重建，不能代表产品验收。</p>
 <p>没有用户照片或账户访问，不连接后端，不修改状态。此 HTML 只在 docs 中，正式 AISpace 未加载它。</p>
 <div class="controls">
 <button id="drawer" type="button">开合抽屉（全部视口）</button>
+<label><input type="checkbox" id="old-drawer"> 对照旧圆把手（仅测试）</label>
 <label for="e-source">本地 E 原图（941×1672）</label><input id="e-source" type="file" accept="image/png,image/jpeg,image/webp" aria-label="选择E原图，仅本地处理">
 <button id="pause" type="button">暂停 / 继续</button>
 <label><input type="checkbox" id="reduce"> 减少动态效果</label>
@@ -39,7 +40,7 @@ footer{padding:14px 20px 28px;font-size:12px;color:#dbcfc0}
 const W = 941, H = 1672, panels = [[390,844],[390,690],[430,932]]
 const $ = id => document.getElementById(id)
 const source = '../../public/space/layered/'
-const names = ['room-closed.webp','room-cavity.webp','open_drawer.png','open_book.png','hanging_plant.png']
+const names = ['room-closed.webp','room-cavity.webp','open_drawer.png','e_drawer_pixel_trial_v1.webp','open_book.png','hanging_plant.png']
 const imgs = {}
 const promises = names.map(name=>new Promise((ok,no)=>{
   const im = new Image(); im.onload=()=>{imgs[name]=im;ok()};im.onerror=()=>no(Error(name));im.src=source+name
@@ -142,8 +143,9 @@ function paint(p,sample,quality){
   if(drawerProgress>.01){
     c.globalAlpha=drawerProgress;c.drawImage(imgs['room-cavity.webp'],0,0,W,H);c.globalAlpha=1
     c.save();c.translate(0,drawerProgress*119) // E drawer 42% of 284 world px
-    if (nativeEDrawer) c.drawImage(nativeEDrawer,E_CROP.x,E_CROP.y,E_CROP.width,E_CROP.height)
-    else c.drawImage(imgs['open_drawer.png'],444,1320,502,345) // OLD WRONG ART / A-B only
+    if ($('old-drawer').checked) c.drawImage(imgs['open_drawer.png'],444,1320,502,345) // OLD WRONG ART / A-B only
+    else if (nativeEDrawer) c.drawImage(nativeEDrawer,E_CROP.x,E_CROP.y,E_CROP.width,E_CROP.height)
+    else c.drawImage(imgs['e_drawer_pixel_trial_v1.webp'],E_CROP.x,E_CROP.y,E_CROP.width,E_CROP.height) // exact E candidate
     c.restore()
   }
   // This source has baked foliage; overlaying the cutout is intentionally
