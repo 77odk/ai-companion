@@ -4,7 +4,7 @@ import { Script } from 'node:vm'
 
 const html = readFileSync('docs/space/G0B_motion_lab_20261009.html', 'utf8')
 const motion = readFileSync('src/lib/spaceAmbientMotion.ts', 'utf8')
-assert.match(html, /<canvas/)
+assert.match(html, /document\.createElement\('canvas'\)/)
 assert.equal((html.match(/390,844|390,690|430,932/g) ?? []).length, 3)
 for (const asset of ['room-closed.webp','room-cavity.webp','open_drawer.png','open_book.png','hanging_plant.png']) {
   assert.ok(html.includes(asset), 'lab must use committed local art: ' + asset)
