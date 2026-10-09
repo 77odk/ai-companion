@@ -242,6 +242,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     const drag = drawerGestureRef.current
     if (!drag) return
     drag.element.style.removeProperty('transform')
+    drag.element.style.removeProperty('opacity')
     drag.element.classList.remove('is-dragging')
     drawerGestureRef.current = null
   }
@@ -731,6 +732,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
               if (!drag.moved) return
               const pull = projectSpaceDrawerPull(drag.startY, event.clientY, drag.hitHeight)
               drag.element.style.transform = `translate3d(0, ${pull}%, 0)`
+              if (layeredReady) drag.element.style.opacity = String(Math.min(1, pull / 48))
             }}
             onPointerUp={(event) => {
               const drag = drawerGestureRef.current
