@@ -8,10 +8,15 @@ const css = readFileSync('src/styles/space.css', 'utf8')
 assert.doesNotMatch(view, /\/space\/space-desk\.webp/, 'demo-composite must not render')
 assert.doesNotMatch(view, /is-photo-board-cutout|photo_wall_board\.png/, 'wood-and-string board differs from approved pinned-photo artwork')
 assert.doesNotMatch(view, /space-photo-slot-mask/, 'empty spaces must stay empty')
-assert.match(view, /const scenePhotos = photos\.slice\(0, 8\)/)
+assert.match(view, /const scenePhotos = visiblePhotos\.slice\(0, 8\)/)
 assert.match(view, /scenePhotos\.map\(\(photo, index\) =>/)
 assert.match(view, /src=\{photo\.dataUrl \?\? photoUrl\(photo\.id, token\)\}/)
 assert.match(view, /loadLocalPhotos\(sid\)/, 'photo records must stay scoped to active session')
+assert.match(view, /visiblePhotos = useMemo\(\(\) => photos\.filter\(\(photo\) => photo\.sessionId === sid\)/,
+  'new role must not briefly render the previous role photos')
+assert.match(view, /photos=\{visiblePhotos\}/, 'full photo wall also uses session-filtered photos')
+assert.match(view, /cloudRows\.some\(\(photo\) => !isValidCloudPhotoRow\(photo\) \|\| photo\.sessionId !== sid\)/,
+  'cross-session photo response must not be merged')
 assert.match(view, /saveLocalPhotoMetadata\(next, sid\)/, 'drag placement still saves in existing metadata')
 assert.match(view, /\{renderPhotoWall\(\)\}/, 'full photo wall remains mounted')
 
