@@ -1,6 +1,8 @@
 import {getToken} from '../lib/auth'
 import {getAccount} from '../lib/sync'
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react'
+import { resolveChatLang } from '../lib/chatLang'
+import { buildEstimatedContextState } from '../lib/contextMeterState'
 import MessageBubble from './MessageBubble'
 import {buildBusyReturnPrompt, buildSystemPrompt, chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, looksFabricated, looksIdentityDisclosure, looksRobotic, looksRecoverableServiceStyle, streamChat, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError} from '../lib/api'
 import {cleanMemoryProtocolArtifacts, detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, extractThinkBlocks, inferTopic, isMemoryRetort, isSimilarMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult, loadMemory, stripMemoryMarkers, stripThinkBlocks} from '../lib/memory'
@@ -35,7 +37,7 @@ import {appendMemoryAudit} from '../lib/memoryAudit'
  * 历史时间锚必须稳定：同一条历史消息无论过几分钟再次发送，前缀都完全一致，
  * 让 provider 能复用「核心 system + 历史」这一大段前缀。当前时间另走动态 ContextBlock。
  */
-import {detectLang, type Lang} from '../lib/langDetect'
+import {type Lang} from '../lib/langDetect'
 import {getSessionLang, saveSessionLang} from '../lib/sessionStore'
 import {filterSessionMessages} from '../lib/aiSpaceDetail'
 import {takeChatMessage} from '../lib/chatInject'
@@ -1044,21 +1046,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         : message
 
     // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看包含当前消息的最近5条用户消息），存 sessionStore
-    const personaText = persona?.trim() || ''
-    let lang: Lang
-    if (personaText) {
-      lang = detectLang(personaText)
-    } else {
-      const recentUserMsgs = (replayExistingUser
-        ? roundVisibleMessages.filter((m) => m.role === 'user').map((m) => messageEvidenceText(m.content))
-        : [
-            ...roundVisibleMessages.filter((m) => m.role === 'user').map((m) => messageEvidenceText(m.content)),
-            text,
-          ]
-      ).slice(-5)
-      const zhCount = recentUserMsgs.filter((m) => detectLang(m) === 'zh').length
-      lang = zhCount > recentUserMsgs.length / 2 ? 'zh' : 'en'
-    }
+    // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看包含当前消息的最近5条用户消息），存 sessionStore
+    const lang = resolveChatLang({ persona, replayExistingUser, roundVisibleMessages, text })
+    if (activeSessionId) saveSessionLang(activeSessionId, lang)
     if (activeSessionId) saveSessionLang(activeSessionId, lang)
 
     const settings = loadSettings()
@@ -1221,15 +1211,14 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     })
     // 上下文总量 = 刷新之后这一段（sessionStart 起）所有内容的 provider 口径估算；
     // 「本轮输入」仍是本轮 payload 的估算，两者分开显示。
-    const sessionContentTokens = contentTokensOf(usageMessages(roundVisibleMessages, userMsg), loadContextFactor())
-    const estimatedContextState: ContextUsageState = {
+    const estimatedContextState = buildEstimatedContextState({
+      roundVisibleMessages,
+      userMsg,
       sessionStart,
-      used: sessionContentTokens,
-      budget: composed.hardBudget,
-      source: 'estimate',
+      hardBudget: composed.hardBudget,
       inputTokens: composed.totalTokens,
-      updatedAt: Date.now(),
-    }
+      now: Date.now(),
+    })
     setContextMeter(estimatedContextState)
     if (activeSessionId) setContextUsage(estimatedContextState, activeSessionId)
     if (composed.overBudget) {
