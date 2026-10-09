@@ -182,6 +182,7 @@ function paint(p,sample,quality){
       // G0-B diagnostic: native C inner side/wax and native E wooden front
       // travel separately. The static desk is always the cavity background.
       c.save()
+      c.globalAlpha=Math.min(1,drawerProgress*3)
       c.beginPath()
       c.moveTo(441,1423); c.lineTo(492,1368); c.lineTo(515,1332)
       c.lineTo(538,1327); c.lineTo(648,1350); c.lineTo(821,1373)
@@ -195,6 +196,7 @@ function paint(p,sample,quality){
       // The E cutout is clipped to its real wood front: never double-render
       // the wax heart from the E and C source images.
       c.save()
+      c.globalAlpha=Math.min(1,drawerProgress*3)
       c.translate(E_CROP.x - 24*drawerProgress,E_CROP.y - 45*drawerProgress)
       c.scale(1,1 + .10*drawerProgress)
       c.beginPath();c.moveTo(4,34);c.lineTo(481,128)
