@@ -55,6 +55,10 @@ const planes = panels.map(([width,height])=>{
   return {width,height,dpr,canvas,ctx:canvas.getContext('2d'),scale,ox,oy}
 })
 let t=0,lastStamp=0,lastPaint=-Infinity,drawerProgress=0,drawerGoal=0,paused=false,smoothedFrameMs=16.7
+let paintedDrawer=-1,paintedGuides=null
+const reducePreference=window.matchMedia('(prefers-reduced-motion: reduce)')
+$('reduce').checked=reducePreference.matches
+reducePreference.addEventListener?.('change',e=>{ if(e.matches)$('reduce').checked=true })
 function smooth(x){x=Math.max(0,Math.min(1,x));return x*x*(3-2*x)}
 function windAt(ms,low){
   let q=low?.4:1,sec=ms/1000
@@ -133,8 +137,13 @@ function frame(now){
   if(!paused)t+=delta
   const timeStep=quality==='low'?1000/12:1000/30
   drawerProgress=$('reduce').checked?drawerGoal:drawerProgress+(drawerGoal-drawerProgress)*(1-Math.exp(-delta/145))
+  if(document.hidden)return
+  const staticChanged=Math.abs(drawerProgress-paintedDrawer)>.001||$('guides').checked!==paintedGuides
+  if(quality==='off'&&!staticChanged)return
   if(quality!=='off'&&now-lastPaint<timeStep)return
   lastPaint=now
+  paintedDrawer=drawerProgress
+  paintedGuides=$('guides').checked
   const sample=windAt(t,quality==='low')
   for(const p of planes)paint(p,sample,quality)
   $('status').textContent='素材 '+Object.keys(imgs).length+'/'+names.length+' · '+(quality==='off'?'静止':quality==='low'?'低性能 12fps':'普通 30fps')+' · 抽屉 '+Math.round(drawerProgress*100)+'%'
