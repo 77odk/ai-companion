@@ -1,0 +1,18 @@
+{
+  "version": "2026-10-09",
+  "enabled": false,
+  "description": "Layered game scene is staged. Set enabled true only in the same commit that adds the complete vetted binary image set.",
+  "assets": [
+    "room-closed.webp",
+    "photo_wall_board.png",
+    "glass_memory_jar.png",
+    "open_book.png",
+    "tablet_player.png",
+    "wired_earphones.png",
+    "open_drawer.png",
+    "origami_pink.png",
+    "origami_blue.png",
+    "origami_yellow.png",
+    "origami_purple.png"
+  ]
+}
