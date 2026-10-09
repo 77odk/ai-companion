@@ -1,11 +1,10 @@
 {
   "version": "2026-10-09",
   "enabled": true,
-  "description": "Approved staged sprite set committed; activate only when all required images preload successfully.",
+  "description": "Staged active sprite preload list; technical readiness does not certify visual approval.",
   "assets": [
     "room-closed.webp",
     "room-cavity.webp",
-    "photo_wall_board.png",
     "glass_memory_jar.png",
     "open_book.png",
     "tablet_player.png",
