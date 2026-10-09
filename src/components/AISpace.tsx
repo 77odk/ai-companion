@@ -25,7 +25,7 @@ import {
   type PhotoMeta,
 } from '../lib/photoWall'
 import { getToken } from '../lib/auth'
-import { hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer, type ScenePhotoPlacement } from '../lib/spaceSceneDrag'
+import { computeSpaceCover, hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer, type ScenePhotoPlacement } from '../lib/spaceSceneDrag'
 
 interface Props {
   onOpenStarJar: () => void
@@ -77,7 +77,29 @@ function sceneMemoryCount(sessionId: string): number {
 export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, onOpenWeekly }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
+  const scenePageRef = useRef<HTMLDivElement | null>(null)
+  const [sceneCover, setSceneCover] = useState<{ width: number; height: number } | null>(null)
   const [sceneVersion, setSceneVersion] = useState(0)
+  useEffect(() => {
+    const page = scenePageRef.current
+    if (!page) return
+    const updateCover = () => {
+      const { width, height } = page.getBoundingClientRect()
+      const next = computeSpaceCover(width, height)
+      if (next) setSceneCover((prev) => (
+        prev && Math.abs(prev.width - next.width) < .5 && Math.abs(prev.height - next.height) < .5
+          ? prev : next
+      ))
+    }
+    updateCover()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateCover)
+      return () => window.removeEventListener('resize', updateCover)
+    }
+    const observer = new ResizeObserver(updateCover)
+    observer.observe(page)
+    return () => observer.disconnect()
+  }, [])
   const [listenSnapshot, setListenSnapshot] = useState(() => getListenTogetherSnapshot(sessionId))
 
   useEffect(() => {
@@ -405,9 +427,10 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
 
   // Game-style drag: compose only the touched photo on animation frames.
   // React state and photo metadata are committed once, when the finger lifts.
-  const paintScenePhoto = (element: HTMLSpanElement, point: ScenePhotoPlacement) => {
-    element.style.setProperty('--scene-photo-x', `${point.x}%`)
-    element.style.setProperty('--scene-photo-y', `${point.y}%`)
+  const paintScenePhoto = (drag: NonNullable<typeof scenePhotoDragRef.current>) => {
+    const dx = (drag.latest.x - drag.origin.x) * drag.boardWidth / 100
+    const dy = (drag.latest.y - drag.origin.y) * drag.boardHeight / 100
+    drag.element.style.transform = `translate3d(${dx}px, ${dy}px, 0) rotate(${drag.origin.rotate}deg)`
   }
 
   const queueScenePhotoFrame = () => {
@@ -415,7 +438,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     if (!drag || drag.frame !== null) return
     drag.frame = window.requestAnimationFrame(() => {
       drag.frame = null
-      if (scenePhotoDragRef.current === drag) paintScenePhoto(drag.element, drag.latest)
+      if (scenePhotoDragRef.current === drag) paintScenePhoto(drag)
     })
   }
 
@@ -426,13 +449,15 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     if (drag.frame !== null) window.cancelAnimationFrame(drag.frame)
     drag.element.classList.remove('is-dragging')
     if (!commit) {
-      paintScenePhoto(drag.element, drag.origin)
+      drag.element.style.removeProperty('transform')
       return
     }
     const nextPoint = pointer
       ? projectSpacePhotoDrag(drag.origin, drag.start, pointer, drag.boardWidth, drag.boardHeight)
       : drag.latest
-    paintScenePhoto(drag.element, nextPoint)
+    drag.element.style.setProperty('--scene-photo-x', `${nextPoint.x}%`)
+    drag.element.style.setProperty('--scene-photo-y', `${nextPoint.y}%`)
+    drag.element.style.removeProperty('transform')
     const nextPhotos = photosRef.current.map((photo) => photo.id === drag.id
       ? { ...photo, scenePlacement: nextPoint }
       : photo)
@@ -733,5 +758,16 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     )
   }
 
-  return <div className={`page ai-space-page${placingObject ? ` is-placing-${placingObject}` : ''}`}>{renderHomePage()}</div>
+  return (
+    <div
+      ref={scenePageRef}
+      className={`page ai-space-page${placingObject ? ` is-placing-${placingObject}` : ''}`}
+      style={sceneCover ? {
+        '--space-scene-width': `${sceneCover.width}px`,
+        '--space-scene-height': `${sceneCover.height}px`,
+      } as React.CSSProperties : undefined}
+    >
+      {renderHomePage()}
+    </div>
+  )
 }
