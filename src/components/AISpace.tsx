@@ -26,7 +26,7 @@ import {
 } from '../lib/photoWall'
 import { getToken } from '../lib/auth'
 import { preloadSpaceLayer, SPACE_LAYER_BASE } from '../lib/spaceSceneAssets'
-import { computeSpaceCover, hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer, type ScenePhotoPlacement } from '../lib/spaceSceneDrag'
+import { computeSpaceCover, hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer, SPACE_DRAWER_OPEN_PERCENT, type ScenePhotoPlacement } from '../lib/spaceSceneDrag'
 
 interface Props {
   onOpenStarJar: () => void
@@ -232,7 +232,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     if (drawerOpening || drawerReturning || drawerTimerRef.current !== null) return
     setDrawerOpening(true)
     if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
-    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 470
+    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 760
     drawerTimerRef.current = window.setTimeout(() => {
       drawerTimerRef.current = null
       drawerNeedsReturn = true
@@ -739,7 +739,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
               if (!drag.moved) return
               const pull = projectSpaceDrawerPull(drag.startY, event.clientY, drag.hitHeight)
               drag.element.style.transform = `translate3d(0, ${pull}%, 0)`
-              if (layeredReady) drag.element.style.opacity = String(Math.min(1, pull / 48))
+              if (layeredReady) drag.element.style.opacity = String(Math.min(1, pull / SPACE_DRAWER_OPEN_PERCENT))
             }}
             onPointerUp={(event) => {
               const drag = drawerGestureRef.current
