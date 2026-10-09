@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync, statSync } from 'node:fs'
 import { SPACE_LAYER_REQUIRED } from '../src/lib/spaceSceneAssets.ts'
+import { computeSpaceCamera } from '../src/lib/spaceWorldCamera.ts'
 
 const view = readFileSync('src/components/AISpace.tsx', 'utf8')
 const css = readFileSync('src/styles/space.css', 'utf8')
@@ -40,3 +41,34 @@ assert.match(css, /\.space-scene-hotspot\.is-photo-wall \.space-live-photo-board
 assert.match(css, /\.space-live-photo::before\s*\{/, 'existing single-photo pin appearance should remain')
 
 console.log('[Space V2 photos] real session photos, empty wall, consistent preload geometry: PASS')
+
+
+// Only defaults are normalized here. Persisted user placements remain untouched.
+// Prevent new thumbnails from being clipped by cover-cropped 390/430 px displays.
+const definition = view.match(/const defaults = \[([\s\S]*?)\]\s*return defaults\[index % defaults\.length\]/)
+assert.ok(definition, 'default scene positions missing')
+const placements = [...definition[1].matchAll(/\{\s*x:\s*(\d+),\s*y:\s*(\d+),\s*rotate:\s*(-?\d+)\s*\}/g)]
+  .map((m) => ({ x: Number(m[1]), y: Number(m[2]) }))
+assert.equal(placements.length, 8)
+const photoWidth = css.match(/\.space-live-photo\s*\{[^}]*?width:\s*([\d.]+)%/) 
+assert.ok(photoWidth, 'photo thumbnail width not found')
+const frame = normal.slice(1).map(Number)
+const [fx, fy, fw, fh] = frame
+const worldWidth = 941, worldHeight = 1672
+const thumbWorldWidth = fw / 100 * worldWidth * Number(photoWidth[1]) / 100
+for (const [width, height] of [[390, 844], [390, 690], [430, 932]]) {
+  const camera = computeSpaceCamera({ x: 0, y: 0, width, height })
+  assert.ok(camera)
+  const visible = camera.visibleWorld
+  for (const [index, p] of placements.entries()) {
+    const left = worldWidth * (fx / 100 + fw / 100 * p.x / 100)
+    const top = worldHeight * (fy / 100 + fh / 100 * p.y / 100)
+    const right = left + thumbWorldWidth
+    const bottom = top + thumbWorldWidth / .78
+    assert.ok(left >= visible.x - 0.05 && right <= visible.x + visible.width + 0.05,
+      'default photo ' + (index + 1) + ' clips horizontally at ' + width + 'x' + height)
+    assert.ok(top >= visible.y - 0.05 && bottom <= visible.y + visible.height + 0.05,
+      'default photo ' + (index + 1) + ' clips vertically at ' + width + 'x' + height)
+  }
+}
+console.log('[Space V2 photos] all 8 default thumbnails fit 390x844, 390x690, 430x932: PASS')
