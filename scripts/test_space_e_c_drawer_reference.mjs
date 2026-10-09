@@ -16,8 +16,14 @@ assert.match(lab, /id="use-c-drawer"/)
 assert.match(lab, /id="c-source"/)
 assert.match(lab, /const C_CROP = \{ x: 435, y: 1325, width: 506, height: 347 \}/)
 assert.match(lab, /const C_POLY =/)
-assert.match(lab, /c\.translate\(-25\*drawerProgress,-35\*drawerProgress\)/,
-  'C reference moves on native perspective, not plus E down-shift')
+assert.match(lab, /c\.translate\(E_CROP\.x - 24\*drawerProgress,E_CROP\.y - 45\*drawerProgress\)/,
+  'E wooden front moves in native perspective without changing the fixed desk')
+assert.match(lab, /c\.scale\(1,1 \+ \.10\*drawerProgress\)/,
+  'E drawer face has mild depth scaling')
+assert.match(lab, /c\.globalAlpha=Math\.min\(1,drawerProgress\*3\)/,
+  'drawer inner depth must fade, not appear at once')
+assert.match(lab, /c\.moveTo\(441,1423\)/, 'C inner clip is separate from E wooden front')
+assert.match(lab, /c\.moveTo\(4,34\)/, 'wood-only clip prevents duplicate wax seal')
 assert.match(lab, /c\.translate\(0,drawerProgress\*119\)/,
   'E original motion comparison remains separate')
 assert.match(lab, /URL\.revokeObjectURL\(url\)/, 'local image URLs are released')
