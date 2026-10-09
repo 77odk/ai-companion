@@ -25,7 +25,7 @@ import {
   type PhotoMeta,
 } from '../lib/photoWall'
 import { getToken } from '../lib/auth'
-import { hasMovedSpacePhoto, projectSpacePhotoDrag, type ScenePhotoPlacement } from '../lib/spaceSceneDrag'
+import { hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer, type ScenePhotoPlacement } from '../lib/spaceSceneDrag'
 
 interface Props {
   onOpenStarJar: () => void
@@ -128,6 +128,14 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     frame: number | null
     moved: boolean
   } | null>(null)
+  const drawerGestureRef = useRef<{
+    pointerId: number
+    element: HTMLSpanElement
+    startY: number
+    hitHeight: number
+    moved: boolean
+  } | null>(null)
+  const ignoreDrawerClickRef = useRef(false)
   const drawerTimerRef = useRef<number | null>(null)
   const objectTimerRef = useRef<number | null>(null)
   const [drawerOpening, setDrawerOpening] = useState(false)
@@ -187,7 +195,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   }
 
   const openWeeklyFromDrawer = () => {
-    if (drawerOpening) return
+    if (drawerOpening || drawerReturning || drawerTimerRef.current !== null) return
     setDrawerOpening(true)
     if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
     const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 470
@@ -197,6 +205,14 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
       onOpenWeekly()
       setDrawerOpening(false)
     }, delay)
+  }
+
+  const finishDrawerGesture = () => {
+    const drag = drawerGestureRef.current
+    if (!drag) return
+    drag.element.style.removeProperty('transform')
+    drag.element.classList.remove('is-dragging')
+    drawerGestureRef.current = null
   }
 
   const clearNonImagePhotoError = () => {
@@ -650,8 +666,57 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             type="button"
             className={`space-scene-hotspot is-weekly-letter${drawerOpening ? ' is-opening' : ''}${drawerReturning ? ' is-returning' : ''}`}
             aria-label={weeklyCount > 0 ? `拉开抽屉，打开一周情书，共 ${weeklyCount} 封` : '拉开抽屉，打开一周情书'}
-            onClick={openWeeklyFromDrawer}
-            disabled={drawerOpening}
+            onPointerDown={(event) => {
+              if (drawerOpening || drawerReturning || !event.isPrimary || event.button !== 0) return
+              const element = event.currentTarget.querySelector<HTMLSpanElement>('.space-drawer-peek')
+              const hitHeight = event.currentTarget.getBoundingClientRect().height
+              if (!element || hitHeight <= 0) return
+              drawerGestureRef.current = {
+                pointerId: event.pointerId,
+                element,
+                startY: event.clientY,
+                hitHeight,
+                moved: false,
+              }
+              event.currentTarget.setPointerCapture?.(event.pointerId)
+            }}
+            onPointerMove={(event) => {
+              const drag = drawerGestureRef.current
+              if (!drag || drag.pointerId !== event.pointerId) return
+              if (!drag.moved && Math.abs(event.clientY - drag.startY) > 5) {
+                drag.moved = true
+                drag.element.classList.add('is-dragging')
+              }
+              if (!drag.moved) return
+              const pull = projectSpaceDrawerPull(drag.startY, event.clientY, drag.hitHeight)
+              drag.element.style.transform = `translate3d(0, ${pull}%, 0)`
+            }}
+            onPointerUp={(event) => {
+              const drag = drawerGestureRef.current
+              if (!drag || drag.pointerId !== event.pointerId) return
+              const moved = drag.moved || Math.abs(event.clientY - drag.startY) > 5
+              const pull = projectSpaceDrawerPull(drag.startY, event.clientY, drag.hitHeight)
+              finishDrawerGesture()
+              if (!moved) return // ordinary tap / keyboard activation uses onClick
+              event.preventDefault()
+              ignoreDrawerClickRef.current = true
+              window.setTimeout(() => { ignoreDrawerClickRef.current = false }, 0)
+              if (shouldOpenSpaceDrawer(pull)) openWeeklyFromDrawer()
+            }}
+            onPointerCancel={(event) => {
+              if (drawerGestureRef.current?.pointerId === event.pointerId) finishDrawerGesture()
+            }}
+            onLostPointerCapture={(event) => {
+              if (drawerGestureRef.current?.pointerId === event.pointerId) finishDrawerGesture()
+            }}
+            onClick={() => {
+              if (ignoreDrawerClickRef.current) {
+                ignoreDrawerClickRef.current = false
+                return
+              }
+              openWeeklyFromDrawer()
+            }}
+            disabled={drawerOpening || drawerReturning}
           >
             <span className="space-drawer-peek" aria-hidden="true">
               <span className="space-scene-art-crop is-drawer-art">
