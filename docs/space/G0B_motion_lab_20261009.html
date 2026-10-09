@@ -28,7 +28,7 @@ footer{padding:14px 20px 28px;font-size:12px;color:#dbcfc0}
 <label><input type="checkbox" id="old-drawer"> 对照旧圆把手（仅测试）</label>
 <label for="e-source">本地 E 原图（941×1672）</label><input id="e-source" type="file" accept="image/png,image/jpeg,image/webp" aria-label="选择E原图，仅本地处理">
 <label for="c-source">本地 C 原图（仅用于隐藏侧板参考）</label><input id="c-source" type="file" accept="image/png,image/jpeg,image/webp" aria-label="选择C原图，仅本地处理">
-<label><input id="use-c-drawer" type="checkbox"> 隔离 A/B：使用 C 深开素材</label>
+<label><input id="use-c-drawer" type="checkbox" checked> 试验：C 内层 + E 木质前脸（未验收）</label>
 <button id="pause" type="button">暂停 / 继续</button>
 <label><input type="checkbox" id="reduce"> 减少动态效果</label>
 <label><input type="checkbox" id="low"> 低性能模式</label>
@@ -42,7 +42,7 @@ footer{padding:14px 20px 28px;font-size:12px;color:#dbcfc0}
 const W = 941, H = 1672, panels = [[390,844],[390,690],[430,932]]
 const $ = id => document.getElementById(id)
 const source = '../../public/space/layered/'
-const names = ['room-closed.webp','room-cavity.webp','open_drawer.png','e_drawer_pixel_trial_v1.webp','open_book.png','hanging_plant.png']
+const names = ['room-closed.webp','room-cavity.webp','open_drawer.png','e_drawer_pixel_trial_v1.webp','c_drawer_inner_trial_v1.webp','open_book.png','hanging_plant.png']
 const imgs = {}
 const promises = names.map(name=>new Promise((ok,no)=>{
   const im = new Image(); im.onload=()=>{imgs[name]=im;ok()};im.onerror=()=>no(Error(name));im.src=source+name
@@ -178,7 +178,7 @@ function paint(p,sample,quality){
   if(drawerProgress>.01){
     c.globalAlpha=drawerProgress;c.drawImage(imgs['room-cavity.webp'],0,0,W,H);c.globalAlpha=1
     c.save()
-    if ($('use-c-drawer').checked && nativeCDrawer) {
+    if ($('use-c-drawer').checked) {
       // G0-B diagnostic: native C inner side/wax and native E wooden front
       // travel separately. The static desk is always the cavity background.
       c.save()
@@ -191,7 +191,8 @@ function paint(p,sample,quality){
       // Avoid painting any C source pixels on the E desk surface.
       c.beginPath();c.moveTo(440,1375);c.lineTo(941,1464)
       c.lineTo(941,1672);c.lineTo(440,1672);c.closePath();c.clip()
-      c.drawImage(nativeCDrawer,C_CROP.x,C_CROP.y,C_CROP.width,C_CROP.height)
+      if(nativeCDrawer) c.drawImage(nativeCDrawer,C_CROP.x,C_CROP.y,C_CROP.width,C_CROP.height)
+      else c.drawImage(imgs['c_drawer_inner_trial_v1.webp'],C_CROP.x,C_CROP.y,C_CROP.width,210)
       c.restore()
       // The E cutout is clipped to its real wood front: never double-render
       // the wax heart from the E and C source images.
