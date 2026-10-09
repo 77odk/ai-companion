@@ -1,0 +1,40 @@
+/** Coordinate helpers for the mobile Space's fixed 941×1672 scene plane.
+ * Only photos change position; objects and uploaded photo data remain untouched.
+ */
+export type ScenePointer = { x: number; y: number }
+export type ScenePhotoPlacement = { x: number; y: number; rotate: number }
+
+function clampPosition(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
+/** Delta-based dragging avoids a jump when a rotated photo is first touched. */
+export function projectSpacePhotoDrag(
+  origin: ScenePhotoPlacement,
+  start: ScenePointer,
+  current: ScenePointer,
+  boardWidth: number,
+  boardHeight: number,
+): ScenePhotoPlacement {
+  if (
+    !Number.isFinite(boardWidth) || !Number.isFinite(boardHeight)
+    || boardWidth <= 0 || boardHeight <= 0
+    || !Number.isFinite(start.x) || !Number.isFinite(start.y)
+    || !Number.isFinite(current.x) || !Number.isFinite(current.y)
+  ) return { ...origin }
+
+  return {
+    x: clampPosition(origin.x + (current.x - start.x) * 100 / boardWidth, 2, 78),
+    y: clampPosition(origin.y + (current.y - start.y) * 100 / boardHeight, 1, 72),
+    rotate: origin.rotate,
+  }
+}
+
+/** Click stays click until the user's finger has intentionally moved. */
+export function hasMovedSpacePhoto(
+  start: ScenePointer,
+  current: ScenePointer,
+  threshold = 5,
+): boolean {
+  return Math.hypot(current.x - start.x, current.y - start.y) > threshold
+}
