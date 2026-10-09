@@ -3229,3 +3229,24 @@ html.eluvin-page-hidden .thought-book-page * {
     transition: none !important;
   }
 }
+
+/* A distinct cavity state prevents the original wood drawer face from
+   remaining visible underneath the moving transparent PNG. The background
+   and movable sprite change together; idle keeps the clean closed scene. */
+.ai-space-page.is-layered .space-scene-backplate.is-drawer-cavity {
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+.ai-space-page.is-layered .space-scene-backplate.is-drawer-cavity.is-visible,
+.ai-space-page.is-layered.is-drawer-pulling .space-scene-backplate.is-drawer-cavity {
+  opacity: 1;
+}
+.ai-space-page.is-layered .space-scene-ambient {
+  z-index: 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-space-page.is-layered .space-scene-backplate.is-drawer-cavity {
+    transition: none;
+  }
+}
