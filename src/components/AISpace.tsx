@@ -498,7 +498,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
         <section className="space-scene-shell" aria-label="TA 的空间">
           <img
             className="space-scene-backplate"
-            src={layeredReady ? `${SPACE_LAYER_BASE}room-closed.webp` : '/space/space-desk.webp'}
+            src={`${SPACE_LAYER_BASE}room-closed.webp`}
             alt=""
             aria-hidden="true"
             draggable={false}
@@ -529,15 +529,10 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           >
             {layeredReady ? (
               <img className="space-object-cutout is-photo-board-cutout" src={`${SPACE_LAYER_BASE}photo_wall_board.png`} alt="" aria-hidden="true" draggable={false} />
-            ) : (
-              <span className="space-scene-art-crop is-photo-wall-art" aria-hidden="true">
-                <img src="/space/space-desk.webp" alt="" draggable={false} />
-              </span>
-            )}
+            ) : null}
+            {/* On fallback, keep the real photo placement directly on the empty wall.
+                Never show baked sample photos or synthetic empty-photo cards. */}
             <span className="space-live-photo-board" aria-label="空间页照片摆放区">
-              {!layeredReady && Array.from({ length: 8 }, (_, index) => (
-                <i key={`photo-slot-${index}`} className={`space-photo-slot-mask is-slot-${index + 1}`} aria-hidden="true" />
-              ))}
               {scenePhotos.map((photo, index) => {
                 const placement = photo.scenePlacement ?? defaultScenePlacement(index)
                 return (
@@ -775,11 +770,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             <span className="space-drawer-peek" aria-hidden="true">
               {layeredReady ? (
                 <img className="space-layer-drawer-art" src={`${SPACE_LAYER_BASE}open_drawer.png`} alt="" draggable={false} />
-              ) : (
-                <span className="space-scene-art-crop is-drawer-art">
-                  <img src="/space/space-desk.webp" alt="" draggable={false} />
-                </span>
-              )}
+              ) : null}
             </span>
           </button>
         </div>
