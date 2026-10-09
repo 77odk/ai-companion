@@ -4,6 +4,9 @@ import { Script } from 'node:vm'
 
 const html = readFileSync('docs/space/G0B_motion_lab_20261009.html', 'utf8')
 const motion = readFileSync('src/lib/spaceAmbientMotion.ts', 'utf8')
+const activeSpace = readFileSync('src/components/AISpace.tsx', 'utf8')
+assert.doesNotMatch(activeSpace, /spaceAmbientMotion|G0B_motion_lab/, 'unapproved motion must not mount in live AISpace')
+
 assert.match(html, /document\.createElement\('canvas'\)/)
 assert.equal((html.match(/390,844|390,690|430,932/g) ?? []).length, 3)
 for (const asset of ['room-closed.webp','room-cavity.webp','open_drawer.png','open_book.png','hanging_plant.png']) {
