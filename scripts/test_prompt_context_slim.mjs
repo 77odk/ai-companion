@@ -50,7 +50,7 @@ assert.ok(!prompt.includes('特别是对方明确说你们的关系、你的身�
 assert.ok(estimateToken(prompt) < 1800, `默认 system prompt 不再无限膨胀（当前估算 ${estimateToken(prompt)} tokens）`)
 
 console.log('\n[4] 功能上下文做减法：不再把重复/低相关块每轮塞进 core')
-const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8')
+const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8')
 assert.ok(!chatSource.includes('apiMessages.push('), '功能上下文不再永久塞进不可裁剪 core')
 assert.ok(!chatSource.includes('buildSelfTimelineBlock'), '最近 TA 原话已有 history + 时间标记，不重复注入 SelfTimeline')
 assert.match(chatSource, /getRecentEvents\(activeSessionId \|\| undefined, 3\)/, 'Event 常驻窗口从 5 条收窄到 3 条')

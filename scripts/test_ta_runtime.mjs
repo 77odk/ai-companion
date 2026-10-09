@@ -59,7 +59,7 @@ const clearLS = () => localStorage.clear()
 
 const taSrc = readFileSync(fileURLToPath(new URL('../src/lib/taRuntime.ts', import.meta.url)), 'utf8')
 const memorySrc = readFileSync(fileURLToPath(new URL('../src/components/Memory.tsx', import.meta.url)), 'utf8')
-const chatSrc = readFileSync(fileURLToPath(new URL('../src/components/Chat.tsx', import.meta.url)), 'utf8') + '\n' + readFileSync(fileURLToPath(new URL('../src/lib/chatContextBuild.ts', import.meta.url)), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
+const chatSrc = readFileSync(fileURLToPath(new URL('../src/components/Chat.tsx', import.meta.url)), 'utf8') + '\n' + readFileSync(fileURLToPath(new URL('../src/lib/useChatScroll.ts', import.meta.url)), 'utf8') + '\n' + readFileSync(fileURLToPath(new URL('../src/lib/chatContextBuild.ts', import.meta.url)), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
 const syncSrc = readFileSync(fileURLToPath(new URL('../src/lib/sync.ts', import.meta.url)), 'utf8')
 
 const T0 = new Date(2026, 8, 25, 18, 0, 0).getTime()

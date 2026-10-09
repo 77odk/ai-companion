@@ -114,7 +114,7 @@ check('三处请求都走 thinkingRequestOpts', (src.match(/\.\.\.thinkingReques
 check('三处都有降级重试', (src.match(/markThinkingUnsupported\(settings\)/g) || []).length === 3)
 check('解析兼容 reasoning 字段', /delta\?\.reasoning_content \?\? delta\?\.reasoning/.test(src))
 check('Gemini 格式走 extra_body.google.thinking_config（Codex P1）', /extra_body: \{ google: \{ thinking_config: \{ include_thoughts: true \} \} \}/.test(src))
-const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8')
 check('聊天页显示灰字提示', /该模型不支持思考链/.test(chat))
 check('聊天页监听不支持事件', /yiwem:thinking-unsupported/.test(chat))
 

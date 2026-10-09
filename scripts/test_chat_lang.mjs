@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { detectLang } from '../src/lib/langDetect.ts'
 
-const chat = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatLang.ts', import.meta.url), 'utf8')
+const chat = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatLang.ts', import.meta.url), 'utf8')
 
 function resolveChatLang(persona, historicalUserMessages, currentUserMessage) {
   const personaText = persona?.trim() || ''

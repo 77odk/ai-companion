@@ -15,7 +15,7 @@ const storage = readFileSync('src/lib/storage.ts', 'utf8')
 const systemNotification = readFileSync('src/lib/systemNotification.ts', 'utf8')
 const sessionStore = readFileSync('src/lib/sessionStore.ts', 'utf8')
 const rolesPage = readFileSync('src/components/RolesPage.tsx', 'utf8')
-const chat = readFileSync('src/components/Chat.tsx', 'utf8')
+const chat = readFileSync('src/components/Chat.tsx', 'utf8') + '\n' + readFileSync('src/lib/useChatScroll.ts', 'utf8')
 
 const chatAll = chat + '\n' + readFileSync('src/lib/chatContextBuild.ts', 'utf8')
 
