@@ -41,7 +41,7 @@
 ## 测试状态
 
 - 只读二进制解析：4/4 文件成功，输出的三个 alpha 像素桶加总与各文件总像素一致。
-- 独立标准库 alpha 质量脚本：已在工作环境以两个合成 PNG fixture 验证（有透明裁切、纯不透明背景），但脚本本批**未提交到本仓库**。
+- 独立标准库 alpha 质量脚本：已在工作环境以两个合成 PNG fixture 验证（有透明裁切、纯不透明背景），且相同的只读 Node 脚本现已提交至 `scripts/audit_space_layer_alpha.mjs`；`scripts/test_space_scene_layer.mjs` 现检查全部必需 PNG 确实含 alpha=0 像素。
 - 本地 `npm test`、真实已登录 App 390×844、原稿同构图 A/B、PR #233 性能 A/B：**均未执行**，不得声称通过。
 
 **本批修改范围**：只新增此 G0-A 审计文档，不修改任何既存图片或业务代码。
