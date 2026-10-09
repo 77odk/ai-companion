@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs'
 const css = readFileSync(new URL('../src/styles/ui2.css', import.meta.url), 'utf8')
 const controls = readFileSync(new URL('../src/components/ChatCompanionControls.tsx', import.meta.url), 'utf8')
 const chat = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+const composer = readFileSync(new URL('../src/components/ChatComposer.tsx', import.meta.url), 'utf8')
+const chatUi = chat + '\n' + composer
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 
 function cssBlock(selector) {
@@ -15,32 +17,32 @@ function cssBlock(selector) {
 }
 
 test('composer and companion controls share one visual panel', () => {
-  assert.match(chat, /<div className="chat-composer-panel">/)
-  assert.match(chat, /<div className="chat-inline-controls">/)
-  assert.match(chat, /<ChatCompanionControls sessionId=\{activeSessionId\} \/>/)
+  assert.match(composer, /<div className="chat-composer-panel">/)
+  assert.match(chatUi, /<div className="chat-inline-controls">/)
+  assert.match(chatUi, /<ChatCompanionControls sessionId=\{activeSessionId\} \/>/)
   assert.doesNotMatch(app, /<ChatCompanionControls/)
   assert.match(cssBlock('.chat-page .chat-composer-panel'), /border-radius:\s*20px/)
   assert.match(cssBlock('.chat-page .chat-composer-panel'), /env\(safe-area-inset-bottom\)/)
 })
 
 test('context meter shows session context percent and per-turn token details', () => {
-  assert.match(chat, /className="context-meter-circle"/)
-  assert.match(chat, /className="context-meter-ring"/)
-  assert.match(chat, /Math\.round\(\(contextMeter\.used \/ contextMeter\.budget\) \* 100\)/)
-  assert.match(chat, /上下文总量/)
-  assert.match(chat, /本轮输入/)
-  assert.match(chat, /本轮输出/)
-  assert.doesNotMatch(chat, /<span>总 tokens<\/span>/)
-  assert.match(chat, /Cache 命中/)
+  assert.match(composer, /className="context-meter-circle"/)
+  assert.match(chatUi, /className="context-meter-ring"/)
+  assert.match(chatUi, /Math\.round\(\(contextMeter\.used \/ contextMeter\.budget\) \* 100\)/)
+  assert.match(chatUi, /上下文总量/)
+  assert.match(chatUi, /本轮输入/)
+  assert.match(chatUi, /本轮输出/)
+  assert.doesNotMatch(chatUi, /<span>总 tokens<\/span>/)
+  assert.match(chatUi, /Cache 命中/)
   assert.match(chat, /source: 'estimate'/)
   assert.match(chat, /source: 'actual'/)
-  assert.match(chat, /本轮真实/)
-  assert.match(chat, /本轮估算/)
-  assert.match(chat, /还没有数据/)
-  assert.match(chat, /'整理'/)
-  assert.match(chat, /'承接'/)
+  assert.match(chatUi, /本轮真实/)
+  assert.match(chatUi, /本轮估算/)
+  assert.match(chatUi, /还没有数据/)
+  assert.match(chatUi, /'整理'/)
+  assert.match(chatUi, /'承接'/)
   assert.ok(
-    chat.indexOf('<ChatCompanionControls sessionId={activeSessionId} />') < chat.indexOf('className="context-meter-slot"'),
+    composer.indexOf('<ChatCompanionControls sessionId={activeSessionId} />') < composer.indexOf('className="context-meter-slot"'),
     'Context 控件在身份/模型控件之后',
   )
   assert.doesNotMatch(chat, /CONTEXT_SOFT_BUDGET/)
@@ -101,6 +103,6 @@ test('immersion control shows only the selected value while keeping approved cho
 
 test('chat still resolves controls from active session id before cache hydration', () => {
   assert.match(app, /const activeChatSessionId = getActiveSessionId\(\)/)
-  assert.match(chat, /activeSessionId && \(/)
+  assert.match(composer, /activeSessionId && \(/)
   assert.doesNotMatch(app, /headerSession && <ChatCompanionControls/)
 })

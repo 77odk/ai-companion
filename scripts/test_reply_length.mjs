@@ -186,7 +186,8 @@ check('旁白复用 ai_companion_settings，不新建 storage key', storageSrc.i
 check('模型设置保存会保留旁白开关', storageSrc.includes('const actionNarrationEnabled = isActionNarrationEnabled()') && storageSrc.includes('...(actionNarrationEnabled ? { actionNarrationEnabled: true } : {})'))
 check('Chat 把旁白约定拼进同一主 system', chatSrc.includes('buildActionNarrationInstruction') && chatSrc.includes("actionNarrationPreference ? '\\n\\n' + actionNarrationPreference : ''"))
 check('Chat 护栏文本和最终展示文本分离', chatSrc.includes('guardAssistantReplyBody') && chatSrc.includes('visibleCleaned'))
-check('Chat 的括号快捷按钮存在', chatSrc.includes('className="btn-action-narration"') && chatSrc.includes('（'));
+const composerSrcForNarration = readFileSync(new URL('../src/components/ChatComposer.tsx', import.meta.url), 'utf8')
+check('Chat 的括号快捷按钮存在', composerSrcForNarration.includes('className="btn-action-narration"') && composerSrcForNarration.includes('（'));
 
 check('reply_length_global 仍注册', cloudSrc.includes("registerCloudStateAdapter('reply_length_global'"))
 check('reply_length preference 仍复用原 Cloud kind', cloudSrc.includes("registerCloudStateAdapter('reply_length'"))
