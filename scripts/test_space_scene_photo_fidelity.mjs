@@ -37,6 +37,7 @@ assert.ok(layered, 'layered wall geometry missing')
 assert.deepEqual(normal.slice(1), layered.slice(1), 'photo placement frame changes on preload')
 assert.ok(normal.slice(1).every(v => Number.isFinite(Number(v))))
 assert.match(css, /\.ai-space-page\.is-layered \.space-live-photo-board\s*\{\s*inset:\s*0;/)
+assert.match(css.slice(css.lastIndexOf('G0-A wall-photo fidelity') - 250), /\.space-scene-hotspot\.is-photo-wall\s*\{\s*clip-path:\s*none;/, 'legacy fallback polygon must not clip user photos')
 assert.match(css, /\.space-scene-hotspot\.is-photo-wall \.space-live-photo-board::before,[\s\S]*?::after\s*\{\s*content:\s*none;/)
 assert.match(css, /\.space-live-photo::before\s*\{/, 'existing single-photo pin appearance should remain')
 
