@@ -27,6 +27,8 @@ footer{padding:14px 20px 28px;font-size:12px;color:#dbcfc0}
 <button id="drawer" type="button">开合抽屉（全部视口）</button>
 <label><input type="checkbox" id="old-drawer"> 对照旧圆把手（仅测试）</label>
 <label for="e-source">本地 E 原图（941×1672）</label><input id="e-source" type="file" accept="image/png,image/jpeg,image/webp" aria-label="选择E原图，仅本地处理">
+<label for="c-source">本地 C 原图（仅用于隐藏侧板参考）</label><input id="c-source" type="file" accept="image/png,image/jpeg,image/webp" aria-label="选择C原图，仅本地处理">
+<label><input id="use-c-drawer" type="checkbox"> 隔离 A/B：使用 C 深开素材</label>
 <button id="pause" type="button">暂停 / 继续</button>
 <label><input type="checkbox" id="reduce"> 减少动态效果</label>
 <label><input type="checkbox" id="low"> 低性能模式</label>
@@ -58,12 +60,45 @@ const planes = panels.map(([width,height])=>{
 })
 let t=0,lastStamp=0,lastPaint=-Infinity,drawerProgress=0,drawerGoal=0,paused=false,smoothedFrameMs=16.7
 let nativeEDrawer = null
+let nativeCDrawer = null
 const E_CROP = { x: 460, y: 1429, width: 481, height: 243 }
 const E_POLY = [
   [466,1454],[481,1449],[500,1448],[575,1462],
   [720,1492],[940,1541],[940,1671],[867,1671],
   [800,1653],[650,1617],[535,1588],[466,1569],
 ] // World-space approved E pixels only, no invented hidden side.
+// The C artwork is not an approved replacement for the user's E desk.
+// It supplies only a native hidden-side/open-drawer comparison frame.
+const C_CROP = { x: 435, y: 1325, width: 506, height: 347 }
+const C_POLY = [[441,1424],[492,1368],[515,1332],[538,1327],[648,1350],[821,1373],[940,1398],[940,1671],[441,1606]]
+$('c-source').addEventListener('change', async event => {
+  const file = event.currentTarget.files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/')) { $('status').textContent='仅接受图片文件'; return }
+  const url = URL.createObjectURL(file)
+  try {
+    const image = new Image()
+    await new Promise((ok,no)=>{ image.onload=ok;image.onerror=no;image.src=url })
+    if (image.naturalWidth !== W || image.naturalHeight !== H) {
+      $('status').textContent = 'C 原图必须为 941×1672'
+      return
+    }
+    const canvas=document.createElement('canvas')
+    canvas.width=C_CROP.width;canvas.height=C_CROP.height
+    const c=canvas.getContext('2d')
+    if(!c)return
+    c.beginPath()
+    C_POLY.forEach(([x,y],i)=>i?c.lineTo(x-C_CROP.x,y-C_CROP.y):c.moveTo(x-C_CROP.x,y-C_CROP.y))
+    c.closePath();c.clip()
+    c.drawImage(image,-C_CROP.x,-C_CROP.y)
+    nativeCDrawer=canvas
+    $('status').textContent='C 侧板参考已载入（仅隔离 A/B；不改 E 原桌）'
+  } catch {
+    $('status').textContent='C 图加载失败'
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+})
 $('e-source').addEventListener('change', async event => {
   const file = event.currentTarget.files?.[0]
   if (!file) return
@@ -143,7 +178,11 @@ function paint(p,sample,quality){
   if(drawerProgress>.01){
     c.globalAlpha=drawerProgress;c.drawImage(imgs['room-cavity.webp'],0,0,W,H);c.globalAlpha=1
     c.save();c.translate(0,drawerProgress*119) // E drawer 42% of 284 world px
-    if ($('old-drawer').checked) c.drawImage(imgs['open_drawer.png'],444,1320,502,345) // OLD WRONG ART / A-B only
+    if ($('use-c-drawer').checked && nativeCDrawer) {
+      c.translate(-25*drawerProgress,-35*drawerProgress)
+      c.drawImage(nativeCDrawer,C_CROP.x,C_CROP.y,C_CROP.width,C_CROP.height) // native C geometry diagnostic only
+    }
+    else if ($('old-drawer').checked) c.drawImage(imgs['open_drawer.png'],444,1320,502,345) // OLD WRONG ART / A-B only
     else if (nativeEDrawer) c.drawImage(nativeEDrawer,E_CROP.x,E_CROP.y,E_CROP.width,E_CROP.height)
     else c.drawImage(imgs['e_drawer_pixel_trial_v1.webp'],E_CROP.x,E_CROP.y,E_CROP.width,E_CROP.height) // exact E candidate
     c.restore()
