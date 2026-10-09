@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Eluvin Space V2 · G0-B isolated motion lab</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#28231d;color:#faf2e5;font:14px/1.55 system-ui,-apple-system,sans-serif}
+header{padding:18px 20px;border-bottom:1px solid #514131}h1{font-size:18px;margin:0 0 6px}
+.warning{color:#ffd8a5;font-weight:650}p{margin:6px 0;max-width:100ch}
+.controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
+button,select{font:inherit;min-height:40px;padding:7px 12px;border-radius:9px;border:1px solid #a18b71;background:#453b30;color:inherit}
+button:focus-visible,select:focus-visible{outline:2px solid #ffe4a7}
+.panels{display:flex;gap:20px;padding:20px;align-items:start;overflow-x:auto}
+.panel{flex:0 0 auto}h2{font-size:13px;margin:0 0 8px;font-weight:500}
+.panel canvas{border:1px solid #a18b71;display:block;touch-action:none;background:#d19a69}
+.panel small{display:block;font-size:12px;margin-top:7px;color:#dbcfbb}
+footer{padding:14px 20px 28px;font-size:12px;color:#dbcfc0}
+</style>
+</head>
+<body>
+<header>
+<h1>忆文 · G0-B 无依赖动画原型（隔离实验）</h1>
+<p class="warning">非产品页面 · 植物/抽屉底图仍有烘焙遮挡，可能重影；仅验收相机、输入、低频风场、纸角控制点、抽屉与降级。</p>
+<p>没有用户照片或账户访问，不连接后端，不修改状态。此 HTML 只在 docs 中，正式 AISpace 未加载它。</p>
+<div class="controls">
+<button id="drawer" type="button">开合抽屉（全部视口）</button>
+<button id="pause" type="button">暂停 / 继续</button>
+<label><input type="checkbox" id="reduce"> 减少动态效果</label>
+<label><input type="checkbox" id="low"> 低性能模式</label>
+<label><input type="checkbox" id="guides"> 坐标辅助线</label>
+</div>
+<p id="status" role="status">正在读取本地仓库素材…</p>
+</header>
+<section class="panels" id="panels"></section>
+<footer>资源路径：仓库内 ../../public/space/layered/。若直接打开本地 HTML，请保留原始仓库目录结构。所有构图与美术均待 G0-A 视觉门禁；不可将此页当作真实 App 390×844 验收。</footer>
+<script type="module">
+const W = 941, H = 1672, panels = [[390,844],[390,690],[430,932]]
+const $ = id => document.getElementById(id)
+const source = '../../public/space/layered/'
+const names = ['room-closed.webp','room-cavity.webp','open_drawer.png','open_book.png','hanging_plant.png']
+const imgs = {}
+const promises = names.map(name=>new Promise((ok,no)=>{
+  const im = new Image(); im.onload=()=>{imgs[name]=im;ok()};im.onerror=()=>no(Error(name));im.src=source+name
+}))
+const planes = panels.map(([width,height])=>{
+  const block=document.createElement('div');block.className='panel'
+  const label=document.createElement('h2');label.textContent=width+' × '+height
+  const canvas=document.createElement('canvas');canvas.style.width=width+'px';canvas.style.height=height+'px'
+  const dpr=Math.min(devicePixelRatio||1,2)
+  canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr)
+  const note=document.createElement('small');note.textContent='世界坐标 941×1672 · cover 裁切'
+  block.append(label,canvas,note);$('panels').append(block)
+  const scale=Math.max(width/W,height/H), ox=(width-W*scale)/2,oy=(height-H*scale)/2
+  return {width,height,dpr,canvas,ctx:canvas.getContext('2d'),scale,ox,oy}
+})
+let t=0,lastStamp=0,lastPaint=-Infinity,drawerProgress=0,drawerGoal=0,paused=false,smoothedFrameMs=16.7
+function smooth(x){x=Math.max(0,Math.min(1,x));return x*x*(3-2*x)}
+function windAt(ms,low){
+  let q=low?.4:1,sec=ms/1000
+  const x=sec%23.4,g=smooth((x-11.4)/.45)*(1-smooth((x-12.25)/1.25))
+  const base=.62*Math.sin(sec*2*Math.PI/11.7)+.23*Math.sin(sec*2*Math.PI/19.1+.8)
+  const w=Math.max(-1,Math.min(1,base+.31*g))*q
+  return {joint:[w*1.2,w*2.35,w*3.55],paper:[w*.18,w*.64,w*1.9]}
+}
+function cameraPointer(e,p){
+  const rect=p.canvas.getBoundingClientRect(),sx=(e.clientX-rect.left)*p.width/rect.width,sy=(e.clientY-rect.top)*p.height/rect.height
+  return {x:(sx-p.ox)/p.scale,y:(sy-p.oy)/p.scale}
+}
+for(const p of planes){
+  let start=null
+  p.canvas.addEventListener('pointerdown',e=>{
+    const hit=cameraPointer(e,p)
+    if(hit.x<430||hit.y<1330||hit.y>1672)return
+    start={id:e.pointerId,y:hit.y,begin:drawerGoal,moved:false}
+    p.canvas.setPointerCapture(e.pointerId)
+  })
+  p.canvas.addEventListener('pointermove',e=>{
+    if(!start||start.id!==e.pointerId)return
+    const hit=cameraPointer(e,p),dist=hit.y-start.y
+    if(Math.abs(dist)>6)start.moved=true
+    drawerGoal=Math.max(0,Math.min(1,start.begin+dist/190))
+  })
+  p.canvas.addEventListener('pointerup',e=>{
+    if(!start||start.id!==e.pointerId)return
+    if(!start.moved)drawerGoal=drawerGoal>=.5?0:1
+    else drawerGoal=drawerGoal>=.24?1:0
+    start=null
+  })
+  p.canvas.addEventListener('pointercancel',()=>{start=null})
+}
+$('drawer').onclick=()=>{drawerGoal=1-drawerGoal}
+$('pause').onclick=()=>{paused=!paused}
+const rad = Math.PI / 180
+function paint(p,sample,quality){
+  const c=p.ctx;if(!c)return
+  c.setTransform(p.dpr,0,0,p.dpr,0,0);c.clearRect(0,0,p.width,p.height)
+  c.translate(p.ox,p.oy);c.scale(p.scale,p.scale)
+  c.drawImage(imgs['room-closed.webp'],0,0,W,H)
+  // This source has baked foliage; overlaying the cutout is intentionally
+  // diagnostic ONLY. Do not activate in AISpace before new clean art exists.
+  if(quality!=='off'){
+    c.save();c.translate(198,18);c.rotate(sample.joint[1]*rad);c.globalAlpha=.5
+    c.drawImage(imgs['hanging_plant.png'],-122,-32,224,488);c.restore()
+  }
+  // Book lies above the real desk. No user thoughts or fake book entries here.
+  c.drawImage(imgs['open_book.png'],130,1085,697,312)
+  if(quality!=='off'){
+    c.save();c.globalAlpha=.17
+    c.fillStyle='#fff0c9';c.beginPath();c.moveTo(580,1117)
+    c.quadraticCurveTo(688,1101+sample.paper[1],750,1154+sample.paper[2])
+    c.lineTo(749,1156);c.lineTo(580,1120);c.fill();c.restore()
+  }
+  if(drawerProgress>.01){
+    c.globalAlpha=drawerProgress;c.drawImage(imgs['room-cavity.webp'],0,0,W,H);c.globalAlpha=1
+    c.save();c.translate(0,drawerProgress*105)
+    c.drawImage(imgs['open_drawer.png'],444,1320,502,345);c.restore()
+  }
+  if($('guides').checked){
+    c.strokeStyle='rgba(7,49,83,.65)';c.lineWidth=3;c.strokeRect(0,0,W,H)
+    c.strokeStyle='rgba(252,227,101,.7)';c.strokeRect(941*.31,1672*.09,941*.65,1672*.43)
+    c.strokeRect(941*.48,1672*.82,941*.55,1672*.17)
+  }
+}
+function frame(now){
+  requestAnimationFrame(frame)
+  const delta=Math.min(100,Math.max(0,now-(lastStamp||now)));lastStamp=now
+  smoothedFrameMs=smoothedFrameMs*.96+delta*.04
+  const low=$('low').checked||smoothedFrameMs>43
+  const quality=document.hidden||$('reduce').checked?'off':low?'low':'full'
+  if(!paused)t+=delta
+  const timeStep=quality==='low'?1000/12:1000/30
+  drawerProgress=$('reduce').checked?drawerGoal:drawerProgress+(drawerGoal-drawerProgress)*(1-Math.exp(-delta/145))
+  if(quality!=='off'&&now-lastPaint<timeStep)return
+  lastPaint=now
+  const sample=windAt(t,quality==='low')
+  for(const p of planes)paint(p,sample,quality)
+  $('status').textContent='素材 '+Object.keys(imgs).length+'/'+names.length+' · '+(quality==='off'?'静止':quality==='low'?'低性能 12fps':'普通 30fps')+' · 抽屉 '+Math.round(drawerProgress*100)+'%'
+}
+Promise.all(promises).then(()=>{ $('status').textContent='本地素材已载入 · 原型可交互';requestAnimationFrame(frame) }).catch(e=>{$('status').textContent='缺失本地素材：'+e.message+'（保持原仓库目录结构打开）'})
+</script>
+</body>
+</html>
