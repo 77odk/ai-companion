@@ -1,7 +1,7 @@
 {
   "version": "2026-10-09",
   "enabled": false,
-  "description": "Layered game scene is staged. Set enabled true only in the same commit that adds the complete vetted binary image set.",
+  "description": "Staged. Do not activate before design/screen checks and committing entire vetted binary set.",
   "assets": [
     "room-closed.webp",
     "room-cavity.webp",
