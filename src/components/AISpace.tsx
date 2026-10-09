@@ -423,12 +423,12 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     const defaults = [
       { x: 8, y: 13, rotate: -5 },
       { x: 37, y: 14, rotate: 3 },
-      { x: 68, y: 1, rotate: -2 },
+      { x: 60, y: 1, rotate: -2 },
       { x: 4, y: 43, rotate: 4 },
       { x: 31, y: 43, rotate: -4 },
       { x: 62, y: 53, rotate: 5 },
       { x: 5, y: 66, rotate: -2 },
-      { x: 75, y: 70, rotate: 2 },
+      { x: 62, y: 70, rotate: 2 },
     ]
     return defaults[index % defaults.length]
   }
