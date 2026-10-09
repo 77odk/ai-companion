@@ -5,14 +5,19 @@ const lab = readFileSync('docs/space/G0B_motion_lab_20261009.html', 'utf8')
 const app = readFileSync('src/components/AISpace.tsx', 'utf8')
 const manifest = readFileSync('public/space/layered/manifest.json', 'utf8')
 const extractor = readFileSync('scripts/g0a_extract_c_drawer_depth.py', 'utf8')
-const asset = 'public/space/layered/e_drawer_pixel_trial_v1.webp'
-const size = statSync(asset).size
-assert.ok(size > 2500 && size < 300000, 'staged E source cutout must be nonempty and within budget')
-const binary = readFileSync(asset)
-assert.equal(binary.toString('ascii', 0, 4), 'RIFF')
-assert.equal(binary.toString('ascii', 8, 12), 'WEBP')
+for (const [asset, label] of [
+  ['public/space/layered/e_drawer_pixel_trial_v1.webp', 'E visible wooden face'],
+  ['public/space/layered/c_drawer_inner_trial_v1.webp', 'C hidden inner depth'],
+]) {
+  const size = statSync(asset).size
+  assert.ok(size > 2500 && size < 300000, label + ' must be nonempty and under 300 KB')
+  const binary = readFileSync(asset)
+  assert.equal(binary.toString('ascii', 0, 4), 'RIFF', label)
+  assert.equal(binary.toString('ascii', 8, 12), 'WEBP', label)
+}
 assert.match(lab, /e_drawer_pixel_trial_v1\.webp/)
-assert.match(lab, /id="use-c-drawer"/)
+assert.match(lab, /c_drawer_inner_trial_v1\\.webp/)
+assert.match(lab, /use-c-drawer/)
 assert.match(lab, /id="c-source"/)
 assert.match(lab, /const C_CROP = \{ x: 435, y: 1325, width: 506, height: 347 \}/)
 assert.match(lab, /const C_POLY =/)
@@ -30,8 +35,8 @@ assert.match(lab, /URL\.revokeObjectURL\(url\)/, 'local image URLs are released'
 assert.match(extractor, /EXPERIMENT_ONLY_NOT_VISUALLY_APPROVED/)
 assert.match(extractor, /if destination\.exists\(\):/)
 assert.match(extractor, /if "public" in destination\.parts:/)
-assert.doesNotMatch(app, /e_drawer_pixel_trial_v1|nativeCDrawer|c_drawer_fullopen/)
-assert.doesNotMatch(manifest, /e_drawer_pixel_trial_v1|c_drawer_fullopen/)
+assert.doesNotMatch(app, /e_drawer_pixel_trial_v1|nativeCDrawer|c_drawer_fullopen|c_drawer_inner_trial_v1/)
+assert.doesNotMatch(manifest, /e_drawer_pixel_trial_v1|c_drawer_fullopen|c_drawer_inner_trial_v1/)
 assert.doesNotMatch(lab, /fetch\(|localStorage|sessionStorage|api\.eluvin|https?:\/\//)
 const inline = lab.match(/<script type="module">([\s\S]*?)<\/script>/)
 assert.ok(inline)
