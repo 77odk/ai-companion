@@ -19,8 +19,10 @@ from zipfile import ZipFile
 ROOT = Path(__file__).resolve().parent.parent
 DEST = ROOT / "public" / "space" / "layered"
 MAX_SIZE = 300_000
-ROOM_SOURCE = "extra/room-closed.webp"
-ROOM_DEST = "room-closed.webp"
+ROOM_ASSETS = {
+    "extra/room-closed.webp": "room-closed.webp",
+    "extra/room-cavity.webp": "room-cavity.webp",
+}
 
 
 def digest(data: bytes) -> str:
@@ -54,12 +56,13 @@ def main() -> None:
             staged[filename] = data
         if len(staged) != 28:
             raise ValueError(f"Expected 28 transparent cutouts; found {len(staged)}")
-        if ROOM_SOURCE not in z.namelist():
-            raise ValueError("Missing reviewed closed-drawer source " + ROOM_SOURCE)
-        room = z.read(ROOM_SOURCE)
-        if len(room) > MAX_SIZE or room[:4] != b"RIFF" or room[8:12] != b"WEBP":
-            raise ValueError("Closed scene must be a local <=300KB WebP")
-        staged[ROOM_DEST] = room
+        for source_name, dest_name in ROOM_ASSETS.items():
+            if source_name not in z.namelist():
+                raise ValueError("Missing physical drawer scene: " + source_name)
+            room = z.read(source_name)
+            if len(room) > MAX_SIZE or room[:4] != b"RIFF" or room[8:12] != b"WEBP":
+                raise ValueError("Drawer scene must be a local <=300KB WebP: " + source_name)
+            staged[dest_name] = room
 
     DEST.mkdir(parents=True, exist_ok=True)
     for name, data in staged.items():
@@ -76,7 +79,7 @@ def main() -> None:
         finally:
             if os.path.exists(temp):
                 os.unlink(temp)
-    print(f"Staged {len(staged)} verified files in {DEST.relative_to(ROOT)}")
+    print(f"Staged {len(staged)} verified sprite and room files in {DEST.relative_to(ROOT)}")
     print("Manifest stays disabled. Do not enable until visual comparison, drawer motion and real App browser checks pass.")
 
 
