@@ -3203,3 +3203,29 @@ html.eluvin-page-hidden .thought-book-page * {
     animation: none !important;
   }
 }
+
+/* Drawer is not present twice: the closed repaired cabinet is the only idle
+   layer. The movable letter-filled cutout emerges when opened / pulled. */
+.ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter .space-drawer-peek {
+  opacity: 0;
+  transform: translate3d(0, -12%, 0) scale(.94);
+  transition:
+    opacity 180ms ease,
+    transform 450ms cubic-bezier(.16, 1, .3, 1);
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter.is-opening .space-drawer-peek {
+  opacity: 1;
+  transform: translate3d(0, 22%, 0) scale(1);
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter.is-returning .space-drawer-peek {
+  animation: space-layer-drawer-return 460ms cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes space-layer-drawer-return {
+  from { opacity: 1; transform: translate3d(0, 22%, 0) scale(1); }
+  to { opacity: 0; transform: translate3d(0, -12%, 0) scale(.94); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter .space-drawer-peek {
+    transition: none !important;
+  }
+}
