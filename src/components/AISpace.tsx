@@ -725,7 +725,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
               if (!moved) return // ordinary tap / keyboard activation uses onClick
               event.preventDefault()
               ignoreDrawerClickRef.current = true
-              window.setTimeout(() => { ignoreDrawerClickRef.current = false }, 0)
+              window.setTimeout(() => { ignoreDrawerClickRef.current = false }, 350)
               if (shouldOpenSpaceDrawer(pull)) openWeeklyFromDrawer()
             }}
             onPointerCancel={(event) => {
