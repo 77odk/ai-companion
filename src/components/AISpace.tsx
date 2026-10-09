@@ -527,11 +527,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label="打开照片墙"
             onClick={openPhotoWallFromScene}
           >
-            {layeredReady ? (
-              <img className="space-object-cutout is-photo-board-cutout" src={`${SPACE_LAYER_BASE}photo_wall_board.png`} alt="" aria-hidden="true" draggable={false} />
-            ) : null}
-            {/* On fallback, keep the real photo placement directly on the empty wall.
-                Never show baked sample photos or synthetic empty-photo cards. */}
+            {/* The approved artwork pins photos directly to the wall, not to a
+                separate wood-and-string board. Both preload states render only
+                the real session photos at identical world-space positions. */}
             <span className="space-live-photo-board" aria-label="空间页照片摆放区">
               {scenePhotos.map((photo, index) => {
                 const placement = photo.scenePlacement ?? defaultScenePlacement(index)
