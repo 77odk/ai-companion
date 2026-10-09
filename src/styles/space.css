@@ -3087,3 +3087,119 @@ html.eluvin-page-hidden .thought-book-page * {
     transform: translate(-50%, -50%);
   }
 }
+
+/* ---- Optional 2D sprite scene: enabled only after ALL assets preload ----- */
+/* All positions are percentages of the same 941×1672 covered scene plane.
+   The old scene remains the exact fail-closed fallback. */
+.ai-space-page.is-layered .space-scene-hotspot.is-photo-wall {
+  left: 29%; top: 10%; width: 59%; height: 29%; z-index: 3;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-star-jar {
+  left: 19%; top: 47%; width: 27%; height: 19%; z-index: 5;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-thought-book {
+  left: 14%; top: 66%; width: 73%; height: 19%; z-index: 4;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-player {
+  left: 54%; top: 51.5%; width: 40%; height: 15%; z-index: 6;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter {
+  left: 48%; top: 82%; width: 55%; height: 17%; z-index: 7;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-photo-wall,
+.ai-space-page.is-layered .space-scene-hotspot.is-star-jar,
+.ai-space-page.is-layered .space-scene-hotspot.is-thought-book,
+.ai-space-page.is-layered .space-scene-hotspot.is-player {
+  clip-path: none;
+}
+.ai-space-page.is-layered .space-scene-hotspot .space-object-cutout {
+  transform: none;
+  object-fit: contain;
+  width: 100%;
+  height: 100%;
+}
+.ai-space-page.is-layered .space-live-photo-board {
+  inset: 10%;
+  z-index: 3;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  pointer-events: none;
+}
+.ai-space-page.is-layered .space-live-photo {
+  width: 28%;
+}
+.ai-space-page.is-layered .space-live-jar {
+  inset: 19% 20% 12%;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  border: 0;
+}
+.ai-space-page.is-layered .space-live-star {
+  width: clamp(5px, 2vw, 11px);
+  background: transparent;
+  clip-path: none;
+  filter: none;
+  transform: translate(-50%, -50%) rotate(var(--live-star-r));
+}
+.ai-space-page.is-layered .space-live-star::before,
+.ai-space-page.is-layered .space-live-star::after { display: none; }
+.space-layer-origami {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.ai-space-page.is-layered .space-live-book {
+  inset: 23% 13% 12%;
+  background: transparent;
+  clip-path: none;
+  box-shadow: none;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-player .space-live-player {
+  left: 9%;
+  right: 8%;
+  top: 18%;
+  bottom: 17%;
+  border: 0;
+  box-shadow: none;
+  border-radius: 5%;
+  background: rgba(26, 24, 23, .97);
+}
+.space-layer-earphones {
+  position: absolute;
+  z-index: 7;
+  left: 69%;
+  top: 60%;
+  width: 24%;
+  height: 10%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter {
+  clip-path: none;
+}
+.ai-space-page.is-layered .space-drawer-peek {
+  inset: 0;
+  height: 100%;
+  background: transparent;
+}
+.space-layer-drawer-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter.is-opening .space-drawer-peek {
+  transform: translate3d(0, 48%, 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-space-page.is-layered .space-live-star {
+    animation: none !important;
+  }
+}
