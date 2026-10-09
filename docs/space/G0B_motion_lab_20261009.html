@@ -21,10 +21,11 @@ footer{padding:14px 20px 28px;font-size:12px;color:#dbcfc0}
 <body>
 <header>
 <h1>忆文 · G0-B 无依赖动画原型（隔离实验）</h1>
-<p class="warning">非产品页面 · 植物/抽屉底图仍有烘焙遮挡，可能重影；仅验收相机、输入、低频风场、纸角控制点、抽屉与降级。</p>
+<p class="warning">非产品页面 · 默认抽屉为不合格旧素材；可选择本地 E 原图进行临时对照，仅测试运动、遮挡与降级。不读取云端或保存原图。</p>
 <p>没有用户照片或账户访问，不连接后端，不修改状态。此 HTML 只在 docs 中，正式 AISpace 未加载它。</p>
 <div class="controls">
 <button id="drawer" type="button">开合抽屉（全部视口）</button>
+<label for="e-source">本地 E 原图（941×1672）</label><input id="e-source" type="file" accept="image/png,image/jpeg,image/webp" aria-label="选择E原图，仅本地处理">
 <button id="pause" type="button">暂停 / 继续</button>
 <label><input type="checkbox" id="reduce"> 减少动态效果</label>
 <label><input type="checkbox" id="low"> 低性能模式</label>
@@ -55,6 +56,41 @@ const planes = panels.map(([width,height])=>{
   return {width,height,dpr,canvas,ctx:canvas.getContext('2d'),scale,ox,oy}
 })
 let t=0,lastStamp=0,lastPaint=-Infinity,drawerProgress=0,drawerGoal=0,paused=false,smoothedFrameMs=16.7
+let nativeEDrawer = null
+const E_CROP = { x: 460, y: 1429, width: 481, height: 243 }
+const E_POLY = [
+  [466,1454],[481,1449],[500,1448],[575,1462],
+  [720,1492],[940,1541],[940,1671],[867,1671],
+  [800,1653],[650,1617],[535,1588],[466,1569],
+] // World-space approved E pixels only, no invented hidden side.
+$('e-source').addEventListener('change', async event => {
+  const file = event.currentTarget.files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/')) { $('status').textContent = '仅接受图片文件'; return }
+  const url = URL.createObjectURL(file)
+  try {
+    const image = new Image()
+    await new Promise((ok, no) => { image.onload = ok; image.onerror = no; image.src = url })
+    if (image.naturalWidth !== W || image.naturalHeight !== H) {
+      $('status').textContent = 'E 原图必须严格为 941×1672'
+      return
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = E_CROP.width; canvas.height = E_CROP.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.beginPath()
+    E_POLY.forEach(([x,y],i)=>i?ctx.lineTo(x-E_CROP.x,y-E_CROP.y):ctx.moveTo(x-E_CROP.x,y-E_CROP.y))
+    ctx.closePath(); ctx.clip()
+    ctx.drawImage(image,-E_CROP.x,-E_CROP.y)
+    nativeEDrawer = canvas
+    $('status').textContent = '已载入 E 原生像素抽屉 · 仅作临时视觉评审'
+  } catch {
+    $('status').textContent = '本地 E 图加载失败'
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+})
 let paintedDrawer=-1,paintedGuides=null
 const reducePreference=window.matchMedia('(prefers-reduced-motion: reduce)')
 $('reduce').checked=reducePreference.matches
@@ -105,8 +141,10 @@ function paint(p,sample,quality){
   // incorrectly paints the cavity scene over the paper and moving objects.
   if(drawerProgress>.01){
     c.globalAlpha=drawerProgress;c.drawImage(imgs['room-cavity.webp'],0,0,W,H);c.globalAlpha=1
-    c.save();c.translate(0,drawerProgress*155) // E-style larger pull; fixed desk, drawer only
-    c.drawImage(imgs['open_drawer.png'],444,1320,502,345);c.restore()
+    c.save();c.translate(0,drawerProgress*119) // E drawer 42% of 284 world px
+    if (nativeEDrawer) c.drawImage(nativeEDrawer,E_CROP.x,E_CROP.y,E_CROP.width,E_CROP.height)
+    else c.drawImage(imgs['open_drawer.png'],444,1320,502,345) // OLD WRONG ART / A-B only
+    c.restore()
   }
   // This source has baked foliage; overlaying the cutout is intentionally
   // diagnostic ONLY. Do not activate in AISpace before new clean art exists.
