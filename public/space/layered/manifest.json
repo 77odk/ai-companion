@@ -1,7 +1,7 @@
 {
   "version": "2026-10-09",
-  "enabled": false,
-  "description": "Staged. Do not activate before design/screen checks and committing entire vetted binary set.",
+  "enabled": true,
+  "description": "Approved staged sprite set committed; activate only when all required images preload successfully.",
   "assets": [
     "room-closed.webp",
     "room-cavity.webp",
