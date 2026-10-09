@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { computeSpaceCover, hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer } from '../src/lib/spaceSceneDrag.ts'
+import { computeSpaceCover, hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer, SPACE_DRAWER_OPEN_PERCENT } from '../src/lib/spaceSceneDrag.ts'
 
 console.log('[Space game] photo placement uses pointer delta, not rotated bounding-box offset')
 const origin = { x: 30, y: 20, rotate: -7 }
@@ -21,7 +21,10 @@ assert.equal(hasMovedSpacePhoto(start, { x: 116, y: 220 }), true)
 console.log('[Space game] no finger-start jump, bounded drag, preserved rotation and tap threshold: PASS')
 
 console.log('[Space game] drawer pull follows the finger, clamps and snaps back')
-assert.equal(projectSpaceDrawerPull(200, 250, 100), 48)
+assert.equal(SPACE_DRAWER_OPEN_PERCENT, 42)
+assert.equal(projectSpaceDrawerPull(200, 250, 100), SPACE_DRAWER_OPEN_PERCENT)
+assert.equal(projectSpaceDrawerPull(200, 300, 100), SPACE_DRAWER_OPEN_PERCENT)
+assert.equal(projectSpaceDrawerPull(200, 242, 100), SPACE_DRAWER_OPEN_PERCENT)
 assert.equal(projectSpaceDrawerPull(200, 220, 100), 20)
 assert.equal(projectSpaceDrawerPull(200, 100, 100), 0)
 assert.equal(projectSpaceDrawerPull(200, 250, 0), 0)
