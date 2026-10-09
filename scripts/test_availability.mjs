@@ -34,7 +34,7 @@ for (const [input, state] of cases) {
 }
 
 test('Chat gates Busy by identity mode and repairs unavailable claims outside immersive', () => {
-  const source = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+  const source = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
   // 产品定义演进：身份模式按实时读取（live/resolve）门控 Busy（Codex 修复"生成中途切换模式"），
   // 语义与旧 `const allowBusy = allowsBusyState(identityMode)` 等价但不再缓存请求开始的模式。
   assert.match(source, /const liveAllowBusy = allowsBusyState\(liveIdentityMode\)/)
