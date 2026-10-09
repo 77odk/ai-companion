@@ -143,6 +143,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   const [photos, setPhotos] = useState<PhotoMeta[]>(() => loadLocalPhotos(sid))
   const photosRef = useRef(photos)
   photosRef.current = photos
+  // Keep role transitions private even before the new session's effect runs.
+  // This is display-only: never remove or rewrite photos from another session.
+  const visiblePhotos = useMemo(() => photos.filter((photo) => photo.sessionId === sid), [photos, sid])
   const [photoUploading, setPhotoUploading] = useState(0)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -269,7 +272,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
       if (
         !res.ok
         || !Array.isArray(cloudRows)
-        || cloudRows.some((photo) => !isValidCloudPhotoRow(photo))
+        || cloudRows.some((photo) => !isValidCloudPhotoRow(photo) || photo.sessionId !== sid)
       ) {
         setPhotoError(local.length > 0
           ? '云端照片暂时没加载完整，本机已有的先保留。'
@@ -380,7 +383,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     return (
       <>
         <PhotoWallArchive
-          photos={photos}
+          photos={visiblePhotos}
           uploading={photoUploading}
           error={photoError}
           photoSrc={(photo) => photo.dataUrl ?? photoUrl(photo.id, token)}
@@ -479,7 +482,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
 
   function renderHomePage() {
     const token = getToken()
-    const scenePhotos = photos.slice(0, 8)
+    const scenePhotos = visiblePhotos.slice(0, 8)
     const progress = listenSnapshot.duration > 0
       ? Math.max(0, Math.min(1, listenSnapshot.current / listenSnapshot.duration))
       : 0
