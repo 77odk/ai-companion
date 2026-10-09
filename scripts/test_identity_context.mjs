@@ -56,7 +56,7 @@ const enCtx = buildIdentityContext(SID, 'en')
 ok(enCtx.includes('You are female') && enCtx.includes('About you'), 'en：性别 + 备注都在')
 
 // 7. 三个入口都接上了（静态断言）
-const chat = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+const chat = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8')
 const weekly = readFileSync(new URL('../src/lib/weeklyReview.ts', import.meta.url), 'utf8')
 const space = readFileSync(new URL('../src/lib/aiSpaceLlm.ts', import.meta.url), 'utf8')
 const page = readFileSync(new URL('../src/components/WeeklyPage.tsx', import.meta.url), 'utf8')

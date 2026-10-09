@@ -68,7 +68,7 @@ const original = {
 
 console.log('\n[1] Detail 来源语义与空态')
 const component = fs.readFileSync(new URL('../src/components/Memory.tsx', import.meta.url), 'utf8')
-const chatComponent = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+const chatComponent = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8')
 const promptSource = fs.readFileSync(new URL('../src/lib/chatPrompts.ts', import.meta.url), 'utf8')
 check('source 有值展示真实 source', component.includes('selected.item.source.trim()'))
 check('source 无值显示诚实空态', component.includes('没有保留当时原文'))

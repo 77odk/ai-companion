@@ -52,20 +52,20 @@ assert.equal(
 )
 
 const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+const chatAll = chat + '\n' + fs.readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8')
 const bubble = fs.readFileSync(new URL('../src/components/MessageBubble.tsx', import.meta.url), 'utf8')
 
-assert.match(chat, /userText:\s*text/, 'current Event candidate uses newly typed body only')
-assert.match(
-  chat,
+assert.match(chatAll, /userText:\s*text/, 'current Event candidate uses newly typed body only')
+assert.match(chatAll,
   /recordChatTopic\([\s\S]*?text,[\s\S]*?userMsg\.ts,[\s\S]*?roundBranchId \?\? conversationState\?\.activeBranchId \?\? 'root',[\s\S]*?\)/,
   'FutureIntent/Space topic capture uses newly typed body and the current conversation branch',
 )
-assert.match(chat, /messageEvidenceText\(m\.content\)/, 'historical quoted rows are stripped before Event evidence reuse')
-assert.match(chat, /formatQuotedMessage\(quote, text\)/, 'stored session message keeps quote context in normal content')
-assert.match(chat, /const userMsg: StoredMessage = \{[\s\S]*?content: messageText,[\s\S]*?ts: Date\.now\(\)/, 'normal send persists quoted content')
-assert.match(chat, /handleBusySend\(messageText\)/, 'busy send preserves the same quoted content')
-assert.match(chat, /const handleBusySend = \(text: string\)[\s\S]*?const userMsg: StoredMessage = \{[\s\S]*?content: text,[\s\S]*?ts: Date\.now\(\)/, 'busy helper remains scoped to its own argument')
-assert.match(chat, /onQuote=\{handleQuoteMessage\}/, 'Chat wires quote action into bubbles')
+assert.match(chatAll, /messageEvidenceText\(m\.content\)/, 'historical quoted rows are stripped before Event evidence reuse')
+assert.match(chatAll, /formatQuotedMessage\(quote, text\)/, 'stored session message keeps quote context in normal content')
+assert.match(chatAll, /const userMsg: StoredMessage = \{[\s\S]*?content: messageText,[\s\S]*?ts: Date\.now\(\)/, 'normal send persists quoted content')
+assert.match(chatAll, /handleBusySend\(messageText\)/, 'busy send preserves the same quoted content')
+assert.match(chatAll, /const handleBusySend = \(text: string\)[\s\S]*?const userMsg: StoredMessage = \{[\s\S]*?content: text,[\s\S]*?ts: Date\.now\(\)/, 'busy helper remains scoped to its own argument')
+assert.match(chatAll, /onQuote=\{handleQuoteMessage\}/, 'Chat wires quote action into bubbles')
 assert.match(bubble, /copyVisibleText\(visibleCopyText\)/, 'copy uses cleaned visible text')
 assert.match(bubble, /parseQuotedMessage\(message\.content\)/, 'quoted session content renders through stable parser')
 
