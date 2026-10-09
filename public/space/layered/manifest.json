@@ -4,6 +4,7 @@
   "description": "Layered game scene is staged. Set enabled true only in the same commit that adds the complete vetted binary image set.",
   "assets": [
     "room-closed.webp",
+    "room-cavity.webp",
     "photo_wall_board.png",
     "glass_memory_jar.png",
     "open_book.png",
