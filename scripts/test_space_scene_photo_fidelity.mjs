@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
+import { SPACE_LAYER_REQUIRED } from '../src/lib/spaceSceneAssets.ts'
 
 const view = readFileSync('src/components/AISpace.tsx', 'utf8')
 const css = readFileSync('src/styles/space.css', 'utf8')
+
+const activeManifest = JSON.parse(readFileSync('public/space/layered/manifest.json', 'utf8'))
+assert.equal(SPACE_LAYER_REQUIRED.includes('photo_wall_board.png'), false, 'unused board must not download in preload')
+assert.equal(activeManifest.assets.includes('photo_wall_board.png'), false, 'active manifest must match rendered photos')
+assert.ok(statSync('public/space/layered/photo_wall_board.png').size > 0, 'original cutout must stay intact')
+
 
 // No sample photos/board are allowed in either the normal or fallback scene.
 assert.doesNotMatch(view, /\/space\/space-desk\.webp/, 'demo-composite must not render')
