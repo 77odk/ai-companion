@@ -3023,3 +3023,22 @@ html.eluvin-page-hidden .thought-book-page * {
 .star-jar-approved-art > img {
   display: none;
 }
+
+/* ---- Mobile scene game feel: one composited object at a time ------------- */
+/* A held photo stops its ambient sway so it stays exactly under the finger.
+   Position updates bypass React until the pointer is released. */
+.space-live-photo.is-dragging,
+.space-live-photo.is-dragging:active {
+  z-index: 20;
+  animation: none !important;
+  cursor: grabbing;
+  will-change: left, top;
+  filter: drop-shadow(0 7px 8px rgba(53, 30, 18, .23));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-live-photo.is-dragging {
+    animation: none !important;
+    filter: none;
+  }
+}
