@@ -92,6 +92,7 @@ import { getRecentEvents, formatEventDateShort } from '../lib/eventStore'
 import { processEventCandidate } from '../lib/eventDetector'
 import MilestoneCard from './MilestoneCard'
 import ChatCompanionControls from './ChatCompanionControls'
+import ChatReplyError from './ChatReplyError'
 import ChatNotices from './ChatNotices'
 
 
@@ -2616,44 +2617,28 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         lang={chatUiLang}
       />
 
-      {error && (
-        <div className="chat-error-wrap">
-          <div className="chat-error">
-            {failedReplyRetryAvailable
-              ? (chatUiLang === 'en' ? 'That reply was interrupted. You can retry TA only.' : 'TA 刚才的回复中断了，可以只重试 TA。')
-              : error}
-          </div>
-          {failedReplyRetryAvailable && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              disabled={streaming}
-              onClick={() => failedReplyRetryRef.current?.()}
-            >
-              {chatUiLang === 'en' ? 'Retry TA only' : '只重试 TA'}
-            </button>
-          )}
-          {isRateLimitError(error) && (
-            <RateLimitFallback
-              hasDoubao={Boolean(loadSettings().providers.volcengine?.apiKey)}
-              onSwitch={() => {
-                const s = loadSettings()
-                const doubao = s.providers.volcengine
-                if (!doubao.apiKey) return
-                saveSettings({
-                  provider: 'volcengine',
-                  apiKey: doubao.apiKey,
-                  baseUrl: doubao.baseUrl,
-                  model: doubao.model,
-                })
-                setError(null)
-                if (failedText) setInput(failedText)
-              }}
-              onGoSettings={onGoSettings}
-            />
-          )}
-        </div>
-      )}
+      <ChatReplyError
+        error={error}
+        failedReplyRetryAvailable={failedReplyRetryAvailable}
+        onRetryFailedReply={() => failedReplyRetryRef.current?.()}
+        streaming={streaming}
+        lang={chatUiLang}
+        hasDoubao={Boolean(loadSettings().providers.volcengine?.apiKey)}
+        onSwitchToDoubao={() => {
+          const s = loadSettings()
+          const doubao = s.providers.volcengine
+          if (!doubao.apiKey) return
+          saveSettings({
+            provider: 'volcengine',
+            apiKey: doubao.apiKey,
+            baseUrl: doubao.baseUrl,
+            model: doubao.model,
+          })
+          setError(null)
+          if (failedText) setInput(failedText)
+        }}
+        onGoSettings={onGoSettings}
+      />
 
       {pendingMemoryCorrection && (
         <div className="memory-correction-consent" role="group" aria-label="确认纠正记忆">
@@ -2880,39 +2865,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       </div>
 
       {showMilestone && milestone && <MilestoneCard day={milestone.day} onClose={closeMilestone} />}
-    </div>
-  )
-}
-
-function isRateLimitError(message: string): boolean {
-  return message.includes('429') || message.includes('太频繁') || message.includes('访问量过大')
-}
-
-function RateLimitFallback({
-  hasDoubao,
-  onSwitch,
-  onGoSettings,
-}: {
-  hasDoubao: boolean
-  onSwitch: () => void
-  onGoSettings: () => void
-}) {
-  if (hasDoubao) {
-    return (
-      <div className="rate-fallback">
-        <span className="rate-fallback-text">智谱现在太挤了，切到豆包不排队。</span>
-        <button type="button" className="rate-fallback-btn" onClick={onSwitch}>
-          切到豆包
-        </button>
-      </div>
-    )
-  }
-  return (
-    <div className="rate-fallback">
-      <span className="rate-fallback-text">智谱现在太挤了，去配个豆包（免费）不排队。</span>
-      <button type="button" className="rate-fallback-btn" onClick={onGoSettings}>
-        去配置豆包
-      </button>
     </div>
   )
 }
