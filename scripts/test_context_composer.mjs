@@ -208,11 +208,13 @@ assert.equal(getContextBridge('S1'), null, '清除后返回 null')
 // ── PR #99：Chat.tsx / cloudStateResources.ts 源码契约 ──
 console.log('\n[contract] Chat 与 Cloud State 接入契约')
 const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+const composerSource = readFileSync(new URL('../src/components/ChatComposer.tsx', import.meta.url), 'utf8')
+const chatUiSource = chatSource + '\n' + composerSource
 const cloudSource = readFileSync(new URL('../src/lib/cloudStateResources.ts', import.meta.url), 'utf8')
 const syncSource = readFileSync(new URL('../src/lib/sync.ts', import.meta.url), 'utf8')
 const promptSource = readFileSync(new URL('../src/lib/chatPrompts.ts', import.meta.url), 'utf8')
 // Meter：session 级持久化；真实 usage 优先校准当前上下文总量，无 usage 才用 compose 估算
-assert.match(chatSource, /context-meter-slot/, 'Meter 控件渲染')
+assert.match(chatUiSource, /context-meter-slot/, 'Meter 控件渲染')
 assert.match(chatSource, /getContextUsage\(activeSessionId\)/, '进入会话从 session 持久化恢复 Meter')
 assert.match(chatSource, /setContextUsage\(estimatedContextState, activeSessionId\)/, '发送时估算 Meter 持久化')
 assert.match(chatSource, /used: sessionContentTokens,[\s\S]*source: 'estimate',[\s\S]*inputTokens: composed\.totalTokens/, '发送前：总量按会话累计估算，明细保留本轮输入估算')

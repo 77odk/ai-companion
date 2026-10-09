@@ -32,7 +32,8 @@ assert.ok(chatImport > keyGuideImport, 'chat.css must be the final CSS integrati
 assert.equal(chat.includes("import '../styles/chat.css'"), false)
 assert.equal(bubble.includes("import '../styles/chat.css'"), false)
 assert.equal(controls.includes("import '../styles/chat.css'"), false)
-assert.ok(chat.includes('className="chat-composer-panel"'))
+const composerSrc = fs.readFileSync(new URL('../src/components/ChatComposer.tsx', import.meta.url), 'utf8')
+assert.ok(composerSrc.includes('className="chat-composer-panel"'))
 assert.ok(bubble.includes('message-actions-trigger'))
 assert.ok(controls.includes('chat-control-capsule'))
 
