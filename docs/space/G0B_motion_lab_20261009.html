@@ -97,6 +97,13 @@ function paint(p,sample,quality){
   c.setTransform(p.dpr,0,0,p.dpr,0,0);c.clearRect(0,0,p.width,p.height)
   c.translate(p.ox,p.oy);c.scale(p.scale,p.scale)
   c.drawImage(imgs['room-closed.webp'],0,0,W,H)
+  // Background switch must precede the foreground. Otherwise opening a drawer
+  // incorrectly paints the cavity scene over the paper and moving objects.
+  if(drawerProgress>.01){
+    c.globalAlpha=drawerProgress;c.drawImage(imgs['room-cavity.webp'],0,0,W,H);c.globalAlpha=1
+    c.save();c.translate(0,drawerProgress*105)
+    c.drawImage(imgs['open_drawer.png'],444,1320,502,345);c.restore()
+  }
   // This source has baked foliage; overlaying the cutout is intentionally
   // diagnostic ONLY. Do not activate in AISpace before new clean art exists.
   if(quality!=='off'){
@@ -110,11 +117,6 @@ function paint(p,sample,quality){
     c.fillStyle='#fff0c9';c.beginPath();c.moveTo(580,1117)
     c.quadraticCurveTo(688,1101+sample.paper[1],750,1154+sample.paper[2])
     c.lineTo(749,1156);c.lineTo(580,1120);c.fill();c.restore()
-  }
-  if(drawerProgress>.01){
-    c.globalAlpha=drawerProgress;c.drawImage(imgs['room-cavity.webp'],0,0,W,H);c.globalAlpha=1
-    c.save();c.translate(0,drawerProgress*105)
-    c.drawImage(imgs['open_drawer.png'],444,1320,502,345);c.restore()
   }
   if($('guides').checked){
     c.strokeStyle='rgba(7,49,83,.65)';c.lineWidth=3;c.strokeRect(0,0,W,H)
