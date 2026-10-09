@@ -3092,7 +3092,8 @@ html.eluvin-page-hidden .thought-book-page * {
 /* All positions are percentages of the same 941×1672 covered scene plane.
    The old scene remains the exact fail-closed fallback. */
 .ai-space-page.is-layered .space-scene-hotspot.is-photo-wall {
-  left: 29%; top: 10%; width: 59%; height: 29%; z-index: 3;
+  /* Match the preloaded/fallback wall area: photos must not jump on load. */
+  left: 31%; top: 9%; width: 65%; height: 43%; z-index: 3;
 }
 .ai-space-page.is-layered .space-scene-hotspot.is-star-jar {
   left: 19%; top: 47%; width: 27%; height: 19%; z-index: 5;
@@ -3119,7 +3120,7 @@ html.eluvin-page-hidden .thought-book-page * {
   height: 100%;
 }
 .ai-space-page.is-layered .space-live-photo-board {
-  inset: 10%;
+  inset: 0;
   z-index: 3;
   background: transparent;
   border: 0;
@@ -3249,4 +3250,11 @@ html.eluvin-page-hidden .thought-book-page * {
   .ai-space-page.is-layered .space-scene-backplate.is-drawer-cavity {
     transition: none;
   }
+}
+
+/* G0-A wall-photo fidelity: the approved design uses individual pinned photos,
+   not the historic generated board strings. Leave all photo data/drag untouched. */
+.space-scene-hotspot.is-photo-wall .space-live-photo-board::before,
+.space-scene-hotspot.is-photo-wall .space-live-photo-board::after {
+  content: none;
 }
