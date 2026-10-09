@@ -25,6 +25,7 @@ import {
   type PhotoMeta,
 } from '../lib/photoWall'
 import { getToken } from '../lib/auth'
+import { preloadSpaceLayer, SPACE_LAYER_BASE } from '../lib/spaceSceneAssets'
 import { computeSpaceCover, hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer, type ScenePhotoPlacement } from '../lib/spaceSceneDrag'
 
 interface Props {
@@ -79,6 +80,14 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   const sid = sessionId || undefined
   const scenePageRef = useRef<HTMLDivElement | null>(null)
   const [sceneCover, setSceneCover] = useState<{ width: number; height: number } | null>(null)
+  const [layeredReady, setLayeredReady] = useState(false)
+  useEffect(() => {
+    let alive = true
+    void preloadSpaceLayer().then((ready) => {
+      if (alive) setLayeredReady(ready)
+    })
+    return () => { alive = false }
+  }, [])
   const [sceneVersion, setSceneVersion] = useState(0)
   useEffect(() => {
     const page = scenePageRef.current
@@ -487,7 +496,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
         <section className="space-scene-shell" aria-label="TA 的空间">
           <img
             className="space-scene-backplate"
-            src="/space/space-desk.webp"
+            src={layeredReady ? `${SPACE_LAYER_BASE}room-closed.webp` : '/space/space-desk.webp'}
             alt=""
             aria-hidden="true"
             draggable={false}
@@ -507,11 +516,15 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label="打开照片墙"
             onClick={openPhotoWallFromScene}
           >
-            <span className="space-scene-art-crop is-photo-wall-art" aria-hidden="true">
-              <img src="/space/space-desk.webp" alt="" draggable={false} />
-            </span>
+            {layeredReady ? (
+              <img className="space-object-cutout is-photo-board-cutout" src={`${SPACE_LAYER_BASE}photo_wall_board.png`} alt="" aria-hidden="true" draggable={false} />
+            ) : (
+              <span className="space-scene-art-crop is-photo-wall-art" aria-hidden="true">
+                <img src="/space/space-desk.webp" alt="" draggable={false} />
+              </span>
+            )}
             <span className="space-live-photo-board" aria-label="空间页照片摆放区">
-              {Array.from({ length: 8 }, (_, index) => (
+              {!layeredReady && Array.from({ length: 8 }, (_, index) => (
                 <i key={`photo-slot-${index}`} className={`space-photo-slot-mask is-slot-${index + 1}`} aria-hidden="true" />
               ))}
               {scenePhotos.map((photo, index) => {
@@ -616,7 +629,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           >
             <img
               className="space-object-cutout is-jar-cutout"
-              src="/space/cutouts/memory-jar.png"
+              src={layeredReady ? `${SPACE_LAYER_BASE}glass_memory_jar.png` : '/space/cutouts/memory-jar.png'}
               alt=""
               aria-hidden="true"
               draggable={false}
@@ -636,7 +649,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                       '--live-star-t': `${5.8 + ((index * 17) % 28) / 10}s`,
                       '--live-star-h': `${(index * 47) % 360}`,
                     } as React.CSSProperties}
-                  />
+                  >
+                    {layeredReady ? <img className="space-layer-origami" alt="" src={`${SPACE_LAYER_BASE}${['origami_pink.png','origami_blue.png','origami_yellow.png','origami_purple.png'][index % 4]}`} draggable={false} /> : null}
+                  </i>
                 ))}
               </span>
             </span>
@@ -650,7 +665,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           >
             <img
               className="space-object-cutout is-book-cutout"
-              src="/space/cutouts/thought-book.png"
+              src={layeredReady ? `${SPACE_LAYER_BASE}open_book.png` : '/space/cutouts/thought-book.png'}
               alt=""
               aria-hidden="true"
               draggable={false}
@@ -668,7 +683,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           >
             <img
               className="space-object-cutout is-player-cutout"
-              src="/space/cutouts/music-player.png"
+              src={layeredReady ? `${SPACE_LAYER_BASE}tablet_player.png` : '/space/cutouts/music-player.png'}
               alt=""
               aria-hidden="true"
               draggable={false}
@@ -687,6 +702,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             </span>
           </button>
 
+          {layeredReady ? <img className="space-layer-earphones" src={`${SPACE_LAYER_BASE}wired_earphones.png`} alt="" aria-hidden="true" draggable={false} /> : null}
           <button
             type="button"
             className={`space-scene-hotspot is-weekly-letter${drawerOpening ? ' is-opening' : ''}${drawerReturning ? ' is-returning' : ''}`}
@@ -744,9 +760,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             disabled={drawerOpening || drawerReturning}
           >
             <span className="space-drawer-peek" aria-hidden="true">
-              <span className="space-scene-art-crop is-drawer-art">
-                <img src="/space/space-desk.webp" alt="" draggable={false} />
-              </span>
+              {layeredReady ? (
+                <img className="space-layer-drawer-art" src={`${SPACE_LAYER_BASE}open_drawer.png`} alt="" draggable={false} />
+              ) : (
+                <span className="space-scene-art-crop is-drawer-art">
+                  <img src="/space/space-desk.webp" alt="" draggable={false} />
+                </span>
+              )}
             </span>
           </button>
         </div>
@@ -761,7 +781,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   return (
     <div
       ref={scenePageRef}
-      className={`page ai-space-page${placingObject ? ` is-placing-${placingObject}` : ''}`}
+      className={`page ai-space-page${layeredReady ? ' is-layered' : ''}${placingObject ? ` is-placing-${placingObject}` : ''}`}
       style={sceneCover ? {
         '--space-scene-width': `${sceneCover.width}px`,
         '--space-scene-height': `${sceneCover.height}px`,
