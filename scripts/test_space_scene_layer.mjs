@@ -27,3 +27,17 @@ assert.equal(isSpaceLayerManifestReady({ ...manifest, enabled: true, version: 'w
 assert.equal(isSpaceLayerManifestReady(null), false)
 assert.equal(isSpaceLayerManifestReady({ enabled: true, version: SPACE_LAYER_VERSION, assets: [...SPACE_LAYER_REQUIRED] }), true)
 console.log('[Space Layer] the new sprite scene stays off until all assets are confirmed: PASS')
+
+// G0-A alpha validation: PNG color type 6 alone does not prove actual transparency.
+// The audit is read-only and uses only Node built-in zlib.
+import { execFileSync } from 'node:child_process'
+const alphaAudit = JSON.parse(execFileSync(process.execPath, ['scripts/audit_space_layer_alpha.mjs'], { encoding: 'utf8' }))
+assert.ok(alphaAudit.count >= 28, 'G0-A alpha inventory must cover 28 candidate cutouts')
+for (const filename of SPACE_LAYER_REQUIRED.filter((name) => name.endsWith('.png'))) {
+  const layer = alphaAudit.result[filename]
+  assert.ok(layer, 'G0-A alpha audit missing: ' + filename)
+  assert.ok(layer.transparent > 0, 'sprite must contain actual transparent pixels: ' + filename)
+  assert.equal(layer.transparent + layer.partial + layer.opaque, layer.width * layer.height,
+    'alpha buckets must cover every image pixel: ' + filename)
+}
+console.log('[Space Layer] G0-A alpha channel pixels verified for all required PNGs: PASS')
