@@ -431,6 +431,14 @@ function applyGenderEntity(entity: CloudStateEntity): void {
   const key = genderStorageKey(entity.entityId)
   const cloudLocked = value?.locked === true
   const local = readLocalGenderRecord(key)
+  // 反向补种（2026-10-09）：本机已锁但云端是旧值 → 把本机值推回它原来那个 entity，
+  // 否则这个旧值会一直躺在云端，凡是本机没记录的环境（换设备 / 换域名）都会拿到它。
+  // ★ 必须写回 entity.entityId（不是 GLOBAL 常量）：云端全局那份的 id 是 '__global'，
+  //   用 GLOBAL='global' 会另开一行，变成两个全局值各说各话。
+  if (local && local.locked && local.g !== gender) {
+    queue('gender', entity.entityId, { g: local.g, locked: true })
+    return
+  }
   // 与 storage.applyCloudGenders 同一条规则（2026-09-14 拍板「只增不改」）：
   // 本机已锁一律不动 —— 云端 locked:false 是把「选好就锁死」冲开的病根（云端那份可能是
   // 9/15 从旧 blob 播种的旧值，legacy 导入规则又不许覆盖已有 V2，所以它会一直停在 false）；
