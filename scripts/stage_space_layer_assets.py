@@ -49,7 +49,7 @@ def main() -> None:
             data = z.read(name)
             if digest(data) != entry["sha256"] or len(data) != entry["size_bytes"]:
                 raise ValueError("SHA-256 / size mismatch: " + filename)
-            if len(data) > MAX_SIZE or data[:8] != b"\\x89PNG\\r\\n\\x1a\\n" or data[25] != 6:
+            if len(data) > MAX_SIZE or data[:8] != bytes([137, 80, 78, 71, 13, 10, 26, 10]) or data[25] != 6:
                 raise ValueError("Expected <=300KB true RGBA PNG: " + filename)
             staged[filename] = data
         if len(staged) != 28:
