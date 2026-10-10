@@ -27,7 +27,7 @@ import {
   type PhotoMeta,
 } from '../lib/photoWall'
 import { getToken } from '../lib/auth'
-import { preloadSpaceLayer, SPACE_LAYER_BASE } from '../lib/spaceSceneAssets'
+import { preloadSpaceLayer, SPACE_LAYER_BASE, SPACE_ART_REVIEW_BUILD } from '../lib/spaceSceneAssets'
 import { computeSpaceCover, hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer, SPACE_DRAWER_OPEN_PERCENT, type ScenePhotoPlacement } from '../lib/spaceSceneDrag'
 
 interface Props {
@@ -815,6 +815,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   return (
     <div
       ref={scenePageRef}
+      data-space-art-review={SPACE_ART_REVIEW_BUILD ? 'unapproved' : undefined}
       className={`page ai-space-page${layeredReady ? ' is-layered is-content-clean' : ''}${placingObject ? ` is-placing-${placingObject}` : ''}`}
       style={sceneCover ? {
         '--space-scene-width': `${sceneCover.width}px`,
