@@ -45,7 +45,10 @@ export function paintSpaceDrawer(
   ctx.translate(-x, -y)
 
   ctx.save()
-  ctx.globalAlpha = Math.min(1, p * 3)
+  // A delayed smooth reveal prevents C letters from suddenly popping into
+  // view on the first quarter of a drag. The cavity appears before contents.
+  const interiorPhase = clamp((p - 0.03) / 0.72)
+  ctx.globalAlpha = interiorPhase * interiorPhase * (3 - 2 * interiorPhase)
   // The C cutout already excludes its unrelated tabletop and front cabinet.
   ctx.translate(0, (1 - p) * 23)
   ctx.drawImage(art.interior, 435, 1325, 506, 210)
@@ -55,7 +58,7 @@ export function paintSpaceDrawer(
   // the E envelope and wax heart: this removes the doubled-wax bug.
   const destination = mixQuad(p)
   ctx.save()
-  ctx.globalAlpha = Math.min(1, p * 4)
+  ctx.globalAlpha = Math.min(1, p * 3)
   const strips = 32
   for (let strip = 0; strip < strips; strip++) {
     const a = strip / strips, b = (strip + 1) / strips
