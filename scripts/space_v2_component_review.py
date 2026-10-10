@@ -12,7 +12,7 @@ import json
 import shutil
 
 
-def run(html_path: Path, output: Path) -> int:
+def run(html_path: Path, output: Path, record_video: bool = False) -> int:
     from playwright.sync_api import sync_playwright
     html = html_path.read_text()
     if 'ISOLATED_EMPTY_ACCOUNT_COMPONENT_REVIEW' not in html:
@@ -25,7 +25,9 @@ def run(html_path: Path, output: Path) -> int:
                                      args=['--no-sandbox', '--disable-dev-shm-usage'])
         for width, height in [(390, 844), (390, 690), (430, 932)]:
             page = browser.new_page(viewport={'width': width, 'height': height},
-                                    reduced_motion='reduce' if height == 690 else 'no-preference')
+                                    reduced_motion='reduce' if height == 690 else 'no-preference',
+                                    **({'record_video_dir': str(output / 'video'),
+                                        'record_video_size': {'width': width, 'height': height}} if record_video else {}))
             errors = []
             page.on('pageerror', lambda e: errors.append(str(e)))
             page.on('console', lambda m: errors.append(m.text) if m.type == 'error' else None)
@@ -106,7 +108,10 @@ def run(html_path: Path, output: Path) -> int:
                 errors.append('initial overflow or broken artwork')
             report['viewports'].append(row)
             print(json.dumps(row, ensure_ascii=False), flush=True)
+            video = page.video
             page.close()
+            if video:
+                video.save_as(str(output / f'{label}-interactions.webm'))
         browser.close()
     (output / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
     return int(any(row['errors'] for row in report['viewports']))
@@ -116,5 +121,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--html', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--video', action='store_true', help='Record actual gestures and entry/return flows')
     args = parser.parse_args()
-    raise SystemExit(run(args.html, args.out))
+    raise SystemExit(run(args.html, args.out, args.video))

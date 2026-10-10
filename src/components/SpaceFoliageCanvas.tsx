@@ -75,7 +75,11 @@ export default function SpaceFoliageCanvas({ scenePageRef }: {
     const start = performance.now()
     const tick = (now: number) => {
       frame = 0
-      if (!alive || document.hidden || reduce.matches) return
+      if (!alive) return
+      // Media-query change events can arrive after the next animation tick.
+      // Stop all scene motion and restore the neutral foliage pose together,
+      // even when the browser notices the preference before its event fires.
+      if (document.hidden || reduce.matches) { resume(); return }
       if (lastFrame) frameMs = frameMs * .85 + (now - lastFrame) * .15
       lastFrame = now
       const quality = selectSpaceMotionQuality({ visible: true, reducedMotion: false, lowPower: false, meanFrameMs: frameMs })

@@ -126,3 +126,32 @@ CI 两个既有 G0-A 出图脚本已改用本轮真实候选，避免旧空桌�
 | `wired_earphones.png` | 294×192 | 96352 | 源画已有正确连线和耳机；避免第二套线材。 |
 | `wood_picture_frame.png` | 194×223 | 60317 | 桌上画框不在原稿。 |
 | `woven_chair.png` | 224×237 | 99074 | 原位椅子已在底图，重复叠加会重影。 |
+
+## 接续：动态偏好切换、录屏与绘制测量
+
+发现运行中切换 reduced-motion 时，植物 RAF 能停止，但媒体查询事件延迟可能使
+场景 motion 状态仍为 on。现已在动画 tick 检测到偏好后同步暂停全部场景动效，
+恢复静态植物姿态；浏览器复测状态为 off、1200ms 绘制 0，切回后恢复。
+离开房间时局部绘制 0，返回后重新挂载并恢复。
+
+三档 `*-interactions.webm` 录制的是实际组件指针拖动、回弹、书信及其他入口/返回，
+不是通过截图合成的动画。`video-report.json` 均无运行错误、破图或横向溢出。
+
+`space_v2_motion_review.py` 另测完整 23.4 秒风周期、运行中偏好、卸载/重挂载、
+6 倍桌面 CPU 降速，记录帧间隔和主植物 CPU 绘制提交耗时（不包含 GPU 合成）。
+`motion-loaded-report.json` 为录制与工程测试并行时的结果：负载较高、帧间隔波动显著，
+只能证明动效生命周期与降速路径可运行，不能据此宣布手机流畅度通过。
+当前无头 Chromium 切换标签仍返回 document.hidden=false，因此真实后台标签测试
+不受支持，仍列为未验收；没有伪造隐藏状态或真实天气。
+
+复现：在已有 Chromium / Python Playwright 的 QA 环境运行
+`python3 scripts/space_v2_component_review.py --html /tmp/space-v2-review.html --out /tmp/video-review --video`，
+以及 `python3 scripts/space_v2_motion_review.py --html /tmp/space-v2-review.html --out /tmp/motion-review`。
+录屏需 Playwright FFmpeg 工具（本环境仅安装到 /tmp，不改变项目 npm 依赖）。
+本轮修复后重新执行 npm test 274/274、build 成功、lint 无新增错误。
+
+关闭录制、等待其他测试结束后又单独复测，结果见 `motion-report.json`：
+正常主植物 CPU 提交耗时 P95 0.5ms、帧间隔中位数约 49.8ms；6 倍 CPU 降速
+P95 5.3ms、帧间隔中位数 54ms。减少动态效果及场景卸载时绘制均为 0，恢复及
+重挂载成功；完整风周期后无错误、无破图/横向溢出。这些数字只描述本云环境
+Chromium，不替代实体手机 GPU/帧率。修复前 HEAD 的 GitHub CI #724 已确认成功。
