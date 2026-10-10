@@ -3237,7 +3237,11 @@ html.eluvin-page-hidden .thought-book-page * {
 .ai-space-page.is-layered .space-scene-backplate.is-drawer-cavity {
   z-index: 1;
   opacity: 0;
-  transition: opacity 160ms ease-out;
+  /* Only the lower-right physical drawer may change. The wall, sunlight,
+     plants, tabletop and the rest of the desk must remain the exact same
+     image pixels while opening; never crossfade an entire second room. */
+  clip-path: polygon(44% 77%, 100% 77%, 100% 100%, 44% 100%);
+  transition: none;
 }
 .ai-space-page.is-layered .space-scene-backplate.is-drawer-cavity.is-visible,
 .ai-space-page.is-layered.is-drawer-pulling .space-scene-backplate.is-drawer-cavity {
