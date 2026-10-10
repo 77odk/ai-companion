@@ -29,6 +29,13 @@ const mixQuad = (p: number): Quad => SOURCE_FACE.map((q, i) => [
   lerp(q[1], OPEN_FACE[i][1], p),
 ]) as unknown as Quad
 
+/** Front-apron occlusion: the inner envelopes may emerge only behind the desk
+ * edge, then clear the lip as the drawer moves out. These are world Y values. */
+export function spaceDrawerAperture(progress: number): { leftTop: number; rightTop: number } {
+  const p = clamp(progress)
+  return { leftTop: 1452 - 110 * p, rightTop: 1546 - 150 * p }
+}
+
 /** C canvas has its own alpha silhouette; do not paint its separate cabinet. */
 export function paintSpaceDrawer(
   ctx: CanvasRenderingContext2D,
@@ -51,6 +58,16 @@ export function paintSpaceDrawer(
   ctx.globalAlpha = interiorPhase * interiorPhase * (3 - 2 * interiorPhase)
   // The C cutout already excludes its unrelated tabletop and front cabinet.
   ctx.translate(0, (1 - p) * 23)
+  // Progressive apron occlusion, not alpha-only fade: otherwise the C sprite
+  // protrudes through the stationary E tabletop on the first frames.
+  const { leftTop, rightTop } = spaceDrawerAperture(p)
+  ctx.beginPath()
+  ctx.moveTo(435, leftTop)
+  ctx.lineTo(941, rightTop)
+  ctx.lineTo(941, 1672)
+  ctx.lineTo(435, 1672)
+  ctx.closePath()
+  ctx.clip()
   ctx.drawImage(art.interior, 435, 1325, 506, 210)
   ctx.restore()
 
