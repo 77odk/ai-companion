@@ -10,7 +10,7 @@ import argparse
 from pathlib import Path
 
 SOURCE_DIMENSIONS = (941, 1672)
-CROP = (435, 1325, 941, 1672)
+CROP = (435, 1325, 941, 1535)  # only the 210px exposed inner depth
 C_SILHOUETTE = (
     (441, 1424), (492, 1368), (515, 1332), (538, 1327),
     (648, 1350), (821, 1373), (940, 1398),
