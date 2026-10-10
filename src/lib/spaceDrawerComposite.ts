@@ -36,6 +36,13 @@ export function spaceDrawerAperture(progress: number): { leftTop: number; rightT
   return { leftTop: 1452 - 110 * p, rightTop: 1546 - 150 * p }
 }
 
+/** Blend the fixed closed-drawer background into the empty cavity at the
+ * same progress as the moving drawer. An instantaneous full cavity on first
+ * touch would reveal a black hole before the E/C sprite becomes visible. */
+export function spaceDrawerCavityAlpha(progress: number): number {
+  return Math.min(1, clamp(progress) * 2)
+}
+
 /** C canvas has its own alpha silhouette; do not paint its separate cabinet. */
 export function paintSpaceDrawer(
   ctx: CanvasRenderingContext2D,
