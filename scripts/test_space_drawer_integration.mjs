@@ -36,7 +36,7 @@ assert.match(view, /\.catch\(\(\) => \{[\s\S]*?setReady\(false\)/)
 assert.doesNotMatch(view, /localStorage|sessionStorage|fetch\(|photoUrl|uploadPhoto/)
 
 // Both new image sources are strictly staged, and no prior image was deleted.
-for(const n of ['e_drawer_pixel_trial_v1.webp','c_drawer_inner_trial_v1.webp']){
+for(const n of ['e_drawer_hq_v2.webp','c_drawer_depth_hq_v2.webp']){
   assert.ok(SPACE_LAYER_REQUIRED.includes(n), n)
   assert.ok(manifest.assets.includes(n), n)
 }
