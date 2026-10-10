@@ -41,7 +41,7 @@ assert.deepEqual(
   [[1, '你好（改）']],
 )
 
-const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
+const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatMessages.ts', import.meta.url), 'utf8')
 const chatAll = chat + '\n' + fs.readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8')
 const bubble = fs.readFileSync(new URL('../src/components/MessageBubble.tsx', import.meta.url), 'utf8')
 // C 级拆分第 1 刀：三条状态提示条（含撤销按钮）已搬到 ChatNotices.tsx，断言随之改读新文件（契约不变）。

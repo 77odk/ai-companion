@@ -10,6 +10,7 @@ import {getSessionStart, loadMessages, loadPersona, loadSettings, loadChatBg, sa
 import {type ChatJumpTarget} from '../lib/chatJump'
 import {useChatScroll} from '../lib/useChatScroll'
 import {useChatSession} from '../lib/useChatSession'
+import {useChatMessages} from '../lib/useChatMessages'
 import {listMemories, postMemory, postMessage} from '../lib/sessionApi'
 import {addPendingOp, confirmMessageInCache, getActiveSessionId, getBusyState, getMemoriesCache, getMessagesCache, getSessionsCache, markRead, mergeSessionMemories, newPendingOpId, reconcileMemoryCacheId, removePendingOp, saveBusyState, saveMemoriesCache, saveMessagesCache, sessionMemoryToItem, upsertMemoryCache, type PendingOp} from '../lib/sessionStore'
 import {inferBusyReason, randomBusyDurationMs, serializeBusyContext, type BusyState} from '../lib/aiBusy'
@@ -39,7 +40,7 @@ import {appendMemoryAudit} from '../lib/memoryAudit'
 import {type Lang} from '../lib/langDetect'
 import {getSessionLang} from '../lib/sessionStore'
 import {takeChatMessage} from '../lib/chatInject'
-import {decodePersonaText, extractOpeningLine} from '../lib/customPersona'
+import {decodePersonaText} from '../lib/customPersona'
 import {filterSessionMessages} from '../lib/aiSpaceDetail'
 import {ensureMilestoneEvent, getMilestoneStatus, latestReachedMilestoneDay, markMilestoneShown} from '../lib/milestone'
 import {recordChatTopic} from '../lib/chatTopics'
@@ -92,9 +93,8 @@ interface Props {
 export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJump, onJumpConsumed, jumpNotice, onJumpNotice }: Props) {
   const activeSessionId = getActiveSessionId()
 
-  const [messages, setMessages] = useState<StoredMessage[]>(() =>
-    activeSessionId ? getMessagesCache(activeSessionId) : loadMessages(),
-  )
+  // —— 第 3 组拆分：消息缓存与对账下沉 useChatMessages（本组只搬不改）——
+  const { messages, setMessages, persistMessages, uploadMessage } = useChatMessages({ activeSessionId })
   const [input, setInput] = useState('')
   const [quoteDraft, setQuoteDraft] = useState<MessageQuote | null>(null)
   const [actionNarrationEnabled, setActionNarrationEnabledState] = useState(() => isActionNarrationEnabled())
@@ -227,43 +227,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     onJumpConsumed,
     onJumpNotice,
   })
-
-  const persistMessages = useCallback((sid: string | null, msgs: StoredMessage[]) => {
-    if (sid) {
-      saveMessagesCache(sid, msgs)
-      // 数据 owner 由 sid 决定；“已读”只属于此刻仍在看的会话。
-      if (sid === getActiveSessionId()) markRead(sid)
-    } else {
-      saveMessages(msgs)
-    }
-  }, [])
-
-  const uploadMessage = useCallback((
-    sid: string | null,
-    msg: StoredMessage,
-    onConfirmed?: (confirmed: { id: number; ts: number }) => void,
-  ): Promise<void> => {
-    const token = getToken()
-    if (!sid || !token) return Promise.resolve()
-    const op: PendingOp = {
-      id: newPendingOpId(),
-      type: 'message',
-      sessionId: sid,
-      ...(msg.conversationBranchId ? { conversationBranchId: msg.conversationBranchId } : {}),
-      payload: { role: msg.role, content: msg.content, thinking: msg.thinking ?? '' },
-      ts: msg.ts,
-    }
-    addPendingOp(op)
-    return enqueueSessionMessageCommit(sid, () =>
-      postMessage(token, sid, { role: msg.role, content: msg.content, thinking: msg.thinking }),
-    ).then((res) => {
-      if (!res.ok) return
-      removePendingOp(op.id)
-      confirmMessageInCache(sid, op, res.data)
-      const confirmedTs = Date.parse(res.data.createdAt)
-      if (Number.isFinite(confirmedTs)) onConfirmed?.({ id: res.data.id, ts: confirmedTs })
-    })
-  }, [])
 
   // ---- 忙碌状态：进入忙碌 ----
   const enterBusy = (sid: string | null, triggerText: string, decision: AvailabilityDecision, contextMessages = visibleMessages) => {
@@ -640,18 +603,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     window.addEventListener('yiwem:ai-reply-committed', onCommitted)
     return () => window.removeEventListener('yiwem:ai-reply-committed', onCommitted)
   }, [])
-
-  useEffect(() => {
-    if (activeSessionId) return
-    const existing = loadMessages()
-    if (existing.length > 0) return
-    const opening = extractOpeningLine(loadPersona())
-    if (!opening) return
-    const firstMsg: StoredMessage = { role: 'assistant', content: opening, ts: Date.now() }
-    const next = [...existing, firstMsg]
-    saveMessages(next)
-    setMessages(next)
-  }, [activeSessionId])
 
   useEffect(() => {
     const now = Date.now()

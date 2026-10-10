@@ -80,7 +80,7 @@ assert.equal(filterChatTopicsForBranch(loadChatTopics('legacy'), 'branch-new').l
   'legacy root material never leaks into a forked branch')
 
 console.log('[active derived context] runtime wiring uses active branch facts')
-const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8')
+const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatMessages.ts', import.meta.url), 'utf8')
 const chatAll = chat + '\n' + fs.readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8')
 const space = fs.readFileSync(new URL('../src/lib/aiSpace.ts', import.meta.url), 'utf8')
 const weekly = fs.readFileSync(new URL('../src/components/WeeklyPage.tsx', import.meta.url), 'utf8')
