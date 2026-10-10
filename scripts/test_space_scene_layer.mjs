@@ -21,11 +21,16 @@ if (manifest.enabled) {
 } else {
   assert.equal(isSpaceLayerManifestReady(manifest), false, 'staging is fail-closed')
 }
-assert.equal(isSpaceLayerManifestReady({ ...manifest, enabled: true }), true)
+assert.equal(isSpaceLayerManifestReady({ ...manifest, enabled: true }), false,
+  'technical switch alone may not bypass the explicit art gate')
+assert.equal(isSpaceLayerManifestReady({ ...manifest, enabled: true, artApproved: true }), true,
+  'approved visuals and technical readiness must both be present')
 assert.equal(isSpaceLayerManifestReady({ ...manifest, enabled: true, assets: ['room-closed.webp'] }), false)
 assert.equal(isSpaceLayerManifestReady({ ...manifest, enabled: true, version: 'wrong' }), false)
 assert.equal(isSpaceLayerManifestReady(null), false)
-assert.equal(isSpaceLayerManifestReady({ enabled: true, version: SPACE_LAYER_VERSION, assets: [...SPACE_LAYER_REQUIRED] }), true)
+assert.equal(isSpaceLayerManifestReady({ enabled: true, version: SPACE_LAYER_VERSION, assets: [...SPACE_LAYER_REQUIRED] }), false,
+  'a manifest with no art decision may not activate')
+assert.equal(isSpaceLayerManifestReady({ enabled: true, artApproved: true, version: SPACE_LAYER_VERSION, assets: [...SPACE_LAYER_REQUIRED] }), true)
 console.log('[Space Layer] the new sprite scene stays off until all assets are confirmed: PASS')
 
 // G0-A alpha validation: PNG color type 6 alone does not prove actual transparency.
