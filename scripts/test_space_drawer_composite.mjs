@@ -20,7 +20,7 @@ function makeCanvas() {
     clearRect(...args) { calls.push(['clear', ...args]) },
     translate(...args) { assert.ok(args.every(Number.isFinite)); calls.push(['shift',...args]) },
     transform(...args) { assert.ok(args.every(Number.isFinite)); calls.push(['matrix',...args]) },
-    drawImage(...args) { assert.ok(args.slice(1).every(Number.isFinite)); calls.push(['image',...args.slice(1)]) },
+    drawImage(...args) { assert.ok(args.slice(1).every(Number.isFinite)); calls.push(['image',this.globalAlpha,...args.slice(1)]) },
   }
   return canvas
 }
@@ -38,6 +38,16 @@ for (const t of [-1,0,0.001,.25,.5,.75,1,2,NaN,Infinity]) {
     assert.equal(c.calls.filter(x=>x[0]==='matrix').length,32)
   }
 }
+// A deliberate reveal curve: early drag shows the cavity before the
+// letter stack; halfway exposes most letters; fully open never pops.
+const early = makeCanvas(), middle = makeCanvas(), finish = makeCanvas()
+paintSpaceDrawer(early, art, .25)
+paintSpaceDrawer(middle, art, .5)
+paintSpaceDrawer(finish, art, 1)
+const contentsAlpha = c => c.calls.find(row=>row[0]==='image')[1]
+assert.ok(contentsAlpha(early) > 0.1 && contentsAlpha(early) < .3)
+assert.ok(contentsAlpha(middle) > .6 && contentsAlpha(middle) < .8)
+assert.equal(contentsAlpha(finish),1)
 for (const [ms,lo,hi] of [[0,0,0],[100,.3,.4],[380,.87,.88],[760,1,1],[2000,1,1]]) {
   const p=drawerFrameProgress(ms)
   assert.ok(p>=lo && p<=hi, 'unexpected easing at '+ms+'ms: '+p)
