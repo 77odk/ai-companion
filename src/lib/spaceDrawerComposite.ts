@@ -65,6 +65,22 @@ export function paintSpaceDrawer(
   ctx.globalAlpha = interiorPhase * interiorPhase * (3 - 2 * interiorPhase)
   // The C cutout already excludes its unrelated tabletop and front cabinet.
   ctx.translate(0, (1 - p) * 23)
+  // The previously bundled HQ C bitmap also contains C's stationary desktop
+  // and lower cabinet. Clip to its genuine drawer SIDE + LETTERS silhouette
+  // so it can never repaint the fixed E desk or duplicate its moving front.
+  // Once a clean new-named C asset passes G0-A, this remains an extra guard.
+  ctx.beginPath()
+  ctx.moveTo(441, 1424)
+  ctx.lineTo(492, 1368)
+  ctx.lineTo(515, 1332)
+  ctx.lineTo(538, 1327)
+  ctx.lineTo(648, 1350)
+  ctx.lineTo(821, 1373)
+  ctx.lineTo(940, 1398)
+  ctx.lineTo(940, 1535)
+  ctx.lineTo(441, 1438)
+  ctx.closePath()
+  ctx.clip()
   // Progressive apron occlusion, not alpha-only fade: otherwise the C sprite
   // protrudes through the stationary E tabletop on the first frames.
   const { leftTop, rightTop } = spaceDrawerAperture(p)
