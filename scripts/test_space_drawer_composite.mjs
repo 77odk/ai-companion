@@ -52,8 +52,8 @@ for (const t of [-1,0,0.001,.25,.5,.75,1,2,NaN,Infinity]) {
   if (!Number.isFinite(t) || t <= 0) {
     assert.equal(c.calls.filter(x=>x[0]==='image').length,0)
   } else {
-    assert.equal(c.calls.filter(x=>x[0]==='image').length,33, '1 C depth + 32 E texture strips')
-    assert.equal(c.calls.filter(x=>x[0]==='matrix').length,32)
+    assert.equal(c.calls.filter(x=>x[0]==='image').length,3, '1 C interior + 2 E face triangles')
+    assert.equal(c.calls.filter(x=>x[0]==='matrix').length,2)
   }
 }
 // A deliberate reveal curve: early drag shows the cavity before the
@@ -75,7 +75,8 @@ assert.equal(drawerFrameProgress(400,0),1)
 assert.equal(drawerFrameProgress(Number.NaN),0)
 const source=readFileSync('src/lib/spaceDrawerComposite.ts','utf8')
 assert.doesNotMatch(source,/fetch\(|localStorage|sessionStorage|new Image\(/)
-assert.match(source,/const strips = 32/, 'small ROI contains perspective, not the entire desk')
+assert.match(source,/const triangles:/, 'exactly two native E-face transforms')
+assert.doesNotMatch(source,/const strips = 32/, 'vertical texture strip seams cannot return')
 assert.match(source,/ctx\.moveTo\(441, 1424\)/)
 assert.match(source,/ctx\.lineTo\(940, 1535\)/)
 assert.match(source,/ctx\.lineTo\(441, 1438\)/)
