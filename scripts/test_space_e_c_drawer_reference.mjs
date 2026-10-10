@@ -8,8 +8,8 @@ const extractor = readFileSync('scripts/g0a_extract_c_drawer_depth.py', 'utf8')
 const visual = readFileSync('src/components/SpaceDrawerCanvas.tsx','utf8')
 const compositor = readFileSync('src/lib/spaceDrawerComposite.ts','utf8')
 for (const [asset, label] of [
-  ['public/space/layered/e_drawer_pixel_trial_v1.webp', 'E visible wooden face'],
-  ['public/space/layered/c_drawer_inner_trial_v1.webp', 'C hidden inner depth'],
+  ['public/space/layered/e_drawer_hq_v2.webp', 'E visible wooden face'],
+  ['public/space/layered/c_drawer_depth_hq_v2.webp', 'C hidden inner depth'],
 ]) {
   const size = statSync(asset).size
   assert.ok(size > 2500 && size < 300000, label + ' must be nonempty and under 300 KB')
@@ -39,12 +39,12 @@ assert.match(extractor, /if destination\.exists\(\):/)
 assert.match(extractor, /if "public" in destination\.parts:/)
 assert.match(app, /<SpaceDrawerCanvas opening=\{drawerOpening\} returning=\{drawerReturning\}/)
 assert.doesNotMatch(app, /open_drawer\.png|nativeCDrawer|c_drawer_fullopen/)
-assert.match(visual, /e_drawer_pixel_trial_v1\.webp/)
-assert.match(visual, /c_drawer_inner_trial_v1\.webp/)
+assert.match(visual, /e_drawer_hq_v2\.webp/)
+assert.match(visual, /c_drawer_depth_hq_v2\.webp/)
 assert.match(visual, /paintSpaceDrawer\(ctx, art, clamped\)/)
 assert.match(compositor, /const strips = 32/)
-assert.match(manifest, /e_drawer_pixel_trial_v1\.webp/)
-assert.match(manifest, /c_drawer_inner_trial_v1\.webp/)
+assert.match(manifest, /e_drawer_hq_v2\.webp/)
+assert.match(manifest, /c_drawer_depth_hq_v2\.webp/)
 assert.doesNotMatch(manifest, /open_drawer\.png|c_drawer_fullopen/)
 assert.doesNotMatch(lab, /fetch\(|localStorage|sessionStorage|api\.eluvin|https?:\/\//)
 const inline = lab.match(/<script type="module">([\s\S]*?)<\/script>/)
