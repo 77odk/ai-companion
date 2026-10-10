@@ -1,0 +1,183 @@
+{
+  "kind": "ISOLATED_EMPTY_ACCOUNT_COMPONENT_REVIEW",
+  "realAppAuthenticated": false,
+  "viewports": [
+    {
+      "viewport": "390x844",
+      "layout": {
+        "width": 390,
+        "viewport": 390,
+        "broken": 0,
+        "photos": 0,
+        "stars": 0,
+        "environment": "neutral",
+        "motion": "on",
+        "canvasSizes": [
+          [
+            325,
+            630
+          ],
+          [
+            94,
+            220
+          ]
+        ]
+      },
+      "errors": [],
+      "interactions": [
+        {
+          "kind": "short drawer pull",
+          "actualView": "space"
+        },
+        {
+          "kind": "drawer release",
+          "actualView": "weekly"
+        },
+        {
+          "kind": "photos",
+          "actualView": "photos"
+        },
+        {
+          "kind": "jar",
+          "actualView": "jar"
+        },
+        {
+          "kind": "book",
+          "actualView": "book"
+        },
+        {
+          "kind": "player",
+          "actualView": "player"
+        }
+      ],
+      "unverified": [
+        "saved-photo drag/persistence",
+        "nonempty memories",
+        "nonempty thought pagination",
+        "music playback",
+        "nonempty weekly letters",
+        "consented live weather",
+        "real mobile GPU"
+      ],
+      "idleCanvasDrawCalls1100ms": 1406
+    },
+    {
+      "viewport": "390x690",
+      "layout": {
+        "width": 390,
+        "viewport": 390,
+        "broken": 0,
+        "photos": 0,
+        "stars": 0,
+        "environment": "neutral",
+        "motion": "off",
+        "canvasSizes": [
+          [
+            325,
+            630
+          ],
+          [
+            94,
+            220
+          ]
+        ]
+      },
+      "errors": [],
+      "interactions": [
+        {
+          "kind": "short drawer pull",
+          "actualView": "space"
+        },
+        {
+          "kind": "drawer release",
+          "actualView": "weekly"
+        },
+        {
+          "kind": "photos",
+          "actualView": "photos"
+        },
+        {
+          "kind": "jar",
+          "actualView": "jar"
+        },
+        {
+          "kind": "book",
+          "actualView": "book"
+        },
+        {
+          "kind": "player",
+          "actualView": "player"
+        }
+      ],
+      "unverified": [
+        "saved-photo drag/persistence",
+        "nonempty memories",
+        "nonempty thought pagination",
+        "music playback",
+        "nonempty weekly letters",
+        "consented live weather",
+        "real mobile GPU"
+      ],
+      "idleCanvasDrawCalls1100ms": 0
+    },
+    {
+      "viewport": "430x932",
+      "layout": {
+        "width": 430,
+        "viewport": 430,
+        "broken": 0,
+        "photos": 0,
+        "stars": 0,
+        "environment": "neutral",
+        "motion": "on",
+        "canvasSizes": [
+          [
+            325,
+            630
+          ],
+          [
+            94,
+            220
+          ]
+        ]
+      },
+      "errors": [],
+      "interactions": [
+        {
+          "kind": "short drawer pull",
+          "actualView": "space"
+        },
+        {
+          "kind": "drawer release",
+          "actualView": "weekly"
+        },
+        {
+          "kind": "photos",
+          "actualView": "photos"
+        },
+        {
+          "kind": "jar",
+          "actualView": "jar"
+        },
+        {
+          "kind": "book",
+          "actualView": "book"
+        },
+        {
+          "kind": "player",
+          "actualView": "player"
+        }
+      ],
+      "unverified": [
+        "saved-photo drag/persistence",
+        "nonempty memories",
+        "nonempty thought pagination",
+        "music playback",
+        "nonempty weekly letters",
+        "consented live weather",
+        "real mobile GPU"
+      ],
+      "idleCanvasDrawCalls1100ms": 1702
+    }
+  ]
+}

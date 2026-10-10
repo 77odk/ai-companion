@@ -1,0 +1,27 @@
+{
+  "kind": "ISOLATED_EMPTY_ACCOUNT_DETAIL_FAILURE_REVIEW",
+  "realAppAuthenticated": false,
+  "cases": [
+    {
+      "name": "ResizeObserver unavailable",
+      "nativeFocus": true,
+      "returns": "space",
+      "filePicker": true,
+      "pageErrors": []
+    },
+    {
+      "name": "artwork gate closed",
+      "nativeFocus": false,
+      "returns": "space",
+      "filePicker": true,
+      "pageErrors": []
+    },
+    {
+      "name": "native room decode failed",
+      "nativeFocus": false,
+      "returns": "space",
+      "filePicker": true,
+      "pageErrors": []
+    }
+  ]
+}

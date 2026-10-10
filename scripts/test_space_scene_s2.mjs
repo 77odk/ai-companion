@@ -20,7 +20,13 @@ assert.match(aiSpace, /is-lifting/)
 assert.match(css, /@keyframes space-object-lift/)
 assert.match(css, /@keyframes space-object-place-back/)
 assert.match(aiSpace, /const openWeeklyFromDrawer/)
-assert.match(aiSpace, /onClick=\{openWeeklyFromDrawer\}/)
+const drawerMarkup = aiSpace.slice(
+  aiSpace.indexOf('className={`space-scene-hotspot is-weekly-letter'),
+  aiSpace.indexOf('<span className="space-drawer-peek"'),
+)
+assert.match(drawerMarkup, /onClick=\{\(\) => \{[\s\S]*?openWeeklyFromDrawer\(\)/)
+assert.match(drawerMarkup, /projectSpaceDrawerPull\(/)
+assert.match(drawerMarkup, /shouldOpenSpaceDrawer\(/)
 assert.match(aiSpace, /onOpenWeekly\(\)/)
 
 console.log('[Space S2] photo archive compatibility entry remains reachable; S3 moves shared experiences to Chaomu')

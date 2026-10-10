@@ -1,0 +1,29 @@
+{
+  "kind": "G1_DETAIL_HELPER_EMPTY_FIXTURE_ONLY",
+  "realAppAuthenticated": false,
+  "details": [
+    {
+      "nativeFocus": true,
+      "brokenVisibleImages": 0,
+      "documentWidth": 390,
+      "viewportWidth": 390,
+      "stageLeft": 0,
+      "stageRight": 390,
+      "projectedScreen": false,
+      "kind": "jar",
+      "returnedToSpace": true
+    },
+    {
+      "nativeFocus": true,
+      "brokenVisibleImages": 0,
+      "documentWidth": 390,
+      "viewportWidth": 390,
+      "stageLeft": 0,
+      "stageRight": 390,
+      "projectedScreen": true,
+      "kind": "player",
+      "filePickerOpened": true,
+      "returnedToSpace": true
+    }
+  ]
+}

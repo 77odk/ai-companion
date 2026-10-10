@@ -1,0 +1,46 @@
+{
+  "check": "G1_BROWSER_PREFLIGHT_NOT_VISUAL_SIGNOFF",
+  "manifestArtGateNotBypassed": true,
+  "screenshotsOptIn": true,
+  "results": [
+    {
+      "viewport": "390x844",
+      "status": "FALLBACK_SMOKE_ONLY",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "layered": false,
+      "sceneRatio": 0.5627962085308057,
+      "drawerPresent": true,
+      "drawerVisibleArea": 26972.4921875,
+      "brokenBackplates": 0,
+      "scenePresent": true,
+      "errorCount": 0
+    },
+    {
+      "viewport": "390x690",
+      "status": "FALLBACK_SMOKE_ONLY",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "layered": false,
+      "sceneRatio": 0.5628086315362241,
+      "drawerPresent": true,
+      "drawerVisibleArea": 21332.6953125,
+      "brokenBackplates": 0,
+      "scenePresent": true,
+      "errorCount": 0
+    },
+    {
+      "viewport": "430x932",
+      "status": "FALLBACK_SMOKE_ONLY",
+      "viewportWidth": 430,
+      "documentWidth": 430,
+      "layered": false,
+      "sceneRatio": 0.5627850053648069,
+      "drawerPresent": true,
+      "drawerVisibleArea": 32842.50476074219,
+      "brokenBackplates": 0,
+      "scenePresent": true,
+      "errorCount": 0
+    }
+  ]
+}

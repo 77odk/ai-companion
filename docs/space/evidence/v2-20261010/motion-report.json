@@ -1,0 +1,83 @@
+{
+  "kind": "ISOLATED_EMPTY_ACCOUNT_MOTION_REVIEW",
+  "physicalPhone": false,
+  "errors": [],
+  "samples": [
+    {
+      "frames": 46,
+      "paintP95Ms": 0.5,
+      "intervalMedianMs": 49.80000000074506,
+      "intervalP95Ms": 83.40000000037253,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "normal idle",
+      "durationMs": 2200
+    },
+    {
+      "frames": 0,
+      "paintP95Ms": null,
+      "intervalMedianMs": null,
+      "intervalP95Ms": null,
+      "motion": "off",
+      "environment": "neutral",
+      "name": "runtime reduced-motion",
+      "durationMs": 1200
+    },
+    {
+      "frames": 25,
+      "paintP95Ms": 0.7000000011175871,
+      "intervalMedianMs": 50,
+      "intervalP95Ms": 50.09999999962747,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "motion resumed",
+      "durationMs": 1200
+    },
+    {
+      "frames": 52,
+      "paintP95Ms": 5.300000000745058,
+      "intervalMedianMs": 54,
+      "intervalP95Ms": 77.90000000037253,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "desktop CPU 6x slowdown",
+      "durationMs": 3000
+    },
+    {
+      "frames": 27,
+      "paintP95Ms": 0.6999999992549419,
+      "intervalMedianMs": 50,
+      "intervalP95Ms": 50.100000001490116,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "after full wind cycle",
+      "durationMs": 1200
+    },
+    {
+      "frames": 0,
+      "paintP95Ms": null,
+      "intervalMedianMs": null,
+      "intervalP95Ms": null,
+      "motion": null,
+      "environment": null,
+      "name": "scene unmounted",
+      "durationMs": 1200
+    },
+    {
+      "frames": 28,
+      "paintP95Ms": 0.40000000037252903,
+      "intervalMedianMs": 49.59999999962747,
+      "intervalP95Ms": 50.40000000037253,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "scene remounted",
+      "durationMs": 1200
+    }
+  ],
+  "backgroundTabSupported": false,
+  "finalLayout": {
+    "width": 390,
+    "viewport": 390,
+    "broken": 0
+  }
+}

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { getActiveSessionId } from '../lib/sessionStore'
+import SpaceObjectScene, { SpacePlayerScreen } from './SpaceObjectScene'
+import { useSpaceObjectScene } from '../lib/useSpaceObjectScene'
+import { SPACE_PLAYER_FRAME } from '../lib/spaceObjectFocus'
 import {
   chooseListenTogetherTracks,
   getListenTogetherSnapshot,
@@ -22,6 +25,8 @@ function fmt(seconds: number): string {
 }
 
 export default function ListenTogether({ onBack }: Props) {
+  const artwork = useSpaceObjectScene()
+  const PlayerPlane = artwork.ready ? SpacePlayerScreen : 'div'
   const sessionId = getActiveSessionId()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [snapshot, setSnapshot] = useState(() => getListenTogetherSnapshot(sessionId))
@@ -37,7 +42,7 @@ export default function ListenTogether({ onBack }: Props) {
   }
 
   return (
-    <div className="page space-object-page listen-together-page">
+    <div className={`page space-object-page listen-together-page${artwork.ready ? ' is-native-object-focus' : ''}`}>
       <header className="space-object-topbar">
         <button type="button" onClick={onBack} className="space-object-back">‹ 返回</button>
         <div>
@@ -50,12 +55,22 @@ export default function ListenTogether({ onBack }: Props) {
       <main className="listen-stage">
         <section className="listen-player" aria-label="一起听歌播放器">
           <div className="listen-device-wrap">
-            <div className="listen-tablet">
+            {artwork.ready ? <SpaceObjectScene frame={SPACE_PLAYER_FRAME} onError={artwork.fail} /> : <img
+              className="listen-approved-device-art"
+              src="/space/cutouts/music-player.png"
+              onError={(event) => {
+                const image = event.currentTarget
+                if (!image.dataset.fallback) {
+                  image.dataset.fallback = 'true'
+                  image.src = '/space/layered/tablet_player.png'
+                }
+              }}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />}
+            <PlayerPlane className="listen-tablet">
               <div className="listen-tablet-screen">
-                <div className="listen-cover" aria-hidden="true">
-                  <span />
-                </div>
-
                 <div className="listen-meta">
                   <strong>{snapshot.hasTrack ? snapshot.title : '还没有接音乐'}</strong>
                   <span>
@@ -143,13 +158,7 @@ export default function ListenTogether({ onBack }: Props) {
                   </div>
                 )}
               </div>
-              <span className="listen-tablet-port" aria-hidden="true" />
-            </div>
-            <span className="listen-stand" aria-hidden="true" />
-            <span className="listen-earphones" aria-hidden="true">
-              <i />
-              <i />
-            </span>
+            </PlayerPlane>
           </div>
 
           <input

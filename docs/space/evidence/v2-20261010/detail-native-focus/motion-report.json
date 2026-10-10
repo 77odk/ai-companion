@@ -1,0 +1,83 @@
+{
+  "kind": "ISOLATED_EMPTY_ACCOUNT_MOTION_REVIEW",
+  "physicalPhone": false,
+  "errors": [],
+  "samples": [
+    {
+      "frames": 48,
+      "paintP95Ms": 0.6000000014901161,
+      "intervalMedianMs": 50,
+      "intervalP95Ms": 50.20000000298023,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "normal idle",
+      "durationMs": 2200
+    },
+    {
+      "frames": 0,
+      "paintP95Ms": null,
+      "intervalMedianMs": null,
+      "intervalP95Ms": null,
+      "motion": "off",
+      "environment": "neutral",
+      "name": "runtime reduced-motion",
+      "durationMs": 1200
+    },
+    {
+      "frames": 27,
+      "paintP95Ms": 0.30000000074505806,
+      "intervalMedianMs": 49.899999998509884,
+      "intervalP95Ms": 50.20000000298023,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "motion resumed",
+      "durationMs": 1200
+    },
+    {
+      "frames": 55,
+      "paintP95Ms": 4.5,
+      "intervalMedianMs": 51.5,
+      "intervalP95Ms": 77.60000000149012,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "desktop CPU 6x slowdown",
+      "durationMs": 3000
+    },
+    {
+      "frames": 27,
+      "paintP95Ms": 0.30000000074505806,
+      "intervalMedianMs": 49.899999998509884,
+      "intervalP95Ms": 50.20000000298023,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "after full wind cycle",
+      "durationMs": 1200
+    },
+    {
+      "frames": 0,
+      "paintP95Ms": null,
+      "intervalMedianMs": null,
+      "intervalP95Ms": null,
+      "motion": null,
+      "environment": null,
+      "name": "scene unmounted",
+      "durationMs": 1200
+    },
+    {
+      "frames": 25,
+      "paintP95Ms": 0.3999999985098839,
+      "intervalMedianMs": 50,
+      "intervalP95Ms": 51.399999998509884,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "scene remounted",
+      "durationMs": 1200
+    }
+  ],
+  "backgroundTabSupported": false,
+  "finalLayout": {
+    "width": 390,
+    "viewport": 390,
+    "broken": 0
+  }
+}

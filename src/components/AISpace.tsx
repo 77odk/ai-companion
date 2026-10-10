@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
+import SpaceDrawerCanvas, { type SpaceDrawerController } from './SpaceDrawerCanvas'
+import SpaceFoliageCanvas from './SpaceFoliageCanvas'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { loadMemory, MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
@@ -25,6 +27,8 @@ import {
   type PhotoMeta,
 } from '../lib/photoWall'
 import { getToken } from '../lib/auth'
+import { preloadSpaceLayer, SPACE_LAYER_BASE, SPACE_ART_REVIEW_BUILD } from '../lib/spaceSceneAssets'
+import { computeSpaceCover, hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer, SPACE_DRAWER_OPEN_PERCENT, type ScenePhotoPlacement } from '../lib/spaceSceneDrag'
 
 interface Props {
   onOpenStarJar: () => void
@@ -76,7 +80,37 @@ function sceneMemoryCount(sessionId: string): number {
 export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, onOpenWeekly }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
+  const scenePageRef = useRef<HTMLDivElement | null>(null)
+  const [sceneCover, setSceneCover] = useState<{ width: number; height: number } | null>(null)
+  const [layeredReady, setLayeredReady] = useState(false)
+  useEffect(() => {
+    let alive = true
+    void preloadSpaceLayer().then((ready) => {
+      if (alive) setLayeredReady(ready)
+    })
+    return () => { alive = false }
+  }, [])
   const [sceneVersion, setSceneVersion] = useState(0)
+  useEffect(() => {
+    const page = scenePageRef.current
+    if (!page) return
+    const updateCover = () => {
+      const { width, height } = page.getBoundingClientRect()
+      const next = computeSpaceCover(width, height)
+      if (next) setSceneCover((prev) => (
+        prev && Math.abs(prev.width - next.width) < .5 && Math.abs(prev.height - next.height) < .5
+          ? prev : next
+      ))
+    }
+    updateCover()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateCover)
+      return () => window.removeEventListener('resize', updateCover)
+    }
+    const observer = new ResizeObserver(updateCover)
+    observer.observe(page)
+    return () => observer.disconnect()
+  }, [])
   const [listenSnapshot, setListenSnapshot] = useState(() => getListenTogetherSnapshot(sessionId))
 
   useEffect(() => {
@@ -109,6 +143,11 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
 
   /* ---- 照片墙：上传/数据源沿用旧实现，展示交给稳定长墙组件。 ---- */
   const [photos, setPhotos] = useState<PhotoMeta[]>(() => loadLocalPhotos(sid))
+  const photosRef = useRef(photos)
+  photosRef.current = photos
+  // Keep role transitions private even before the new session's effect runs.
+  // This is display-only: never remove or rewrite photos from another session.
+  const visiblePhotos = useMemo(() => photos.filter((photo) => photo.sessionId === sid), [photos, sid])
   const [photoUploading, setPhotoUploading] = useState(0)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -116,14 +155,25 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   const scenePhotoDragRef = useRef<{
     id: string
     pointerId: number
-    board: DOMRect
-    offsetX: number
-    offsetY: number
-    startX: number
-    startY: number
+    element: HTMLSpanElement
+    boardWidth: number
+    boardHeight: number
+    start: { x: number; y: number }
+    origin: ScenePhotoPlacement
+    latest: ScenePhotoPlacement
+    frame: number | null
     moved: boolean
   } | null>(null)
+  const drawerGestureRef = useRef<{
+    pointerId: number
+    element: HTMLSpanElement
+    startY: number
+    hitHeight: number
+    moved: boolean
+  } | null>(null)
+  const ignoreDrawerClickRef = useRef(false)
   const drawerTimerRef = useRef<number | null>(null)
+  const drawerVisualRef = useRef<SpaceDrawerController | null>(null)
   const objectTimerRef = useRef<number | null>(null)
   const [drawerOpening, setDrawerOpening] = useState(false)
   const [drawerReturning, setDrawerReturning] = useState(() => {
@@ -152,13 +202,17 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   useEffect(() => {
     if (!drawerReturning) return
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    const timer = window.setTimeout(() => setDrawerReturning(false), reduce ? 1 : 460)
+    const timer = window.setTimeout(() => setDrawerReturning(false), reduce ? 1 : 620)
     return () => window.clearTimeout(timer)
   }, [drawerReturning])
 
   useEffect(() => () => {
     if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
     if (objectTimerRef.current !== null) window.clearTimeout(objectTimerRef.current)
+    if (scenePhotoDragRef.current?.frame !== null && scenePhotoDragRef.current) {
+      window.cancelAnimationFrame(scenePhotoDragRef.current.frame!)
+    }
+    scenePhotoDragRef.current = null
   }, [])
 
   const openDeskObject = (
@@ -178,16 +232,26 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   }
 
   const openWeeklyFromDrawer = () => {
-    if (drawerOpening) return
+    if (drawerOpening || drawerReturning || drawerTimerRef.current !== null) return
     setDrawerOpening(true)
     if (drawerTimerRef.current !== null) window.clearTimeout(drawerTimerRef.current)
-    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 470
+    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 760
     drawerTimerRef.current = window.setTimeout(() => {
       drawerTimerRef.current = null
       drawerNeedsReturn = true
       onOpenWeekly()
       setDrawerOpening(false)
     }, delay)
+  }
+
+  const finishDrawerGesture = () => {
+    const drag = drawerGestureRef.current
+    if (!drag) return
+    drag.element.style.removeProperty('transform')
+    drag.element.style.removeProperty('opacity')
+    drag.element.classList.remove('is-dragging')
+    scenePageRef.current?.classList.remove('is-drawer-pulling')
+    drawerGestureRef.current = null
   }
 
   const clearNonImagePhotoError = () => {
@@ -211,7 +275,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
       if (
         !res.ok
         || !Array.isArray(cloudRows)
-        || cloudRows.some((photo) => !isValidCloudPhotoRow(photo))
+        || cloudRows.some((photo) => !isValidCloudPhotoRow(photo) || photo.sessionId !== sid)
       ) {
         setPhotoError(local.length > 0
           ? '云端照片暂时没加载完整，本机已有的先保留。'
@@ -322,7 +386,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     return (
       <>
         <PhotoWallArchive
-          photos={photos}
+          photos={visiblePhotos}
           uploading={photoUploading}
           error={photoError}
           photoSrc={(photo) => photo.dataUrl ?? photoUrl(photo.id, token)}
@@ -358,15 +422,16 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   }
 
   const defaultScenePlacement = (index: number) => {
+    // 对齐定稿图里真实照片位；这里只换用户照片内容，不另画一套照片墙。
     const defaults = [
-      { x: 7, y: 8, rotate: -5 },
-      { x: 36, y: 5, rotate: 3 },
-      { x: 66, y: 9, rotate: -2 },
-      { x: 13, y: 42, rotate: 4 },
-      { x: 43, y: 38, rotate: -4 },
-      { x: 70, y: 43, rotate: 5 },
-      { x: 27, y: 68, rotate: -2 },
-      { x: 57, y: 67, rotate: 2 },
+      { x: 8, y: 13, rotate: -5 },
+      { x: 37, y: 14, rotate: 3 },
+      { x: 60, y: 1, rotate: -2 },
+      { x: 4, y: 43, rotate: 4 },
+      { x: 31, y: 43, rotate: -4 },
+      { x: 62, y: 53, rotate: 5 },
+      { x: 5, y: 66, rotate: -2 },
+      { x: 62, y: 70, rotate: 2 },
     ]
     return defaults[index % defaults.length]
   }
@@ -377,32 +442,50 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     else saveLocalPhotos(next, sid)
   }
 
-  const moveScenePhoto = (photoId: string, x: number, y: number) => {
-    setPhotos((current) => current.map((photo, index) => {
-      if (photo.id !== photoId) return photo
-      const base = photo.scenePlacement ?? defaultScenePlacement(index)
-      return {
-        ...photo,
-        scenePlacement: {
-          x: Math.max(2, Math.min(70, x)),
-          y: Math.max(4, Math.min(68, y)),
-          rotate: base.rotate,
-        },
-      }
-    }))
+  // Game-style drag: compose only the touched photo on animation frames.
+  // React state and photo metadata are committed once, when the finger lifts.
+  const paintScenePhoto = (drag: NonNullable<typeof scenePhotoDragRef.current>) => {
+    const dx = (drag.latest.x - drag.origin.x) * drag.boardWidth / 100
+    const dy = (drag.latest.y - drag.origin.y) * drag.boardHeight / 100
+    drag.element.style.transform = `translate3d(${dx}px, ${dy}px, 0) rotate(${drag.origin.rotate}deg)`
   }
 
-  const finishScenePhotoDrag = () => {
-    scenePhotoDragRef.current = null
-    setPhotos((current) => {
-      persistScenePhotoPlacements(current)
-      return [...current]
+  const queueScenePhotoFrame = () => {
+    const drag = scenePhotoDragRef.current
+    if (!drag || drag.frame !== null) return
+    drag.frame = window.requestAnimationFrame(() => {
+      drag.frame = null
+      if (scenePhotoDragRef.current === drag) paintScenePhoto(drag)
     })
+  }
+
+  const finishScenePhotoDrag = (commit: boolean, pointer?: { x: number; y: number }) => {
+    const drag = scenePhotoDragRef.current
+    if (!drag) return
+    scenePhotoDragRef.current = null
+    if (drag.frame !== null) window.cancelAnimationFrame(drag.frame)
+    drag.element.classList.remove('is-dragging')
+    if (!commit) {
+      drag.element.style.removeProperty('transform')
+      return
+    }
+    const nextPoint = pointer
+      ? projectSpacePhotoDrag(drag.origin, drag.start, pointer, drag.boardWidth, drag.boardHeight)
+      : drag.latest
+    drag.element.style.setProperty('--scene-photo-x', `${nextPoint.x}%`)
+    drag.element.style.setProperty('--scene-photo-y', `${nextPoint.y}%`)
+    drag.element.style.removeProperty('transform')
+    const nextPhotos = photosRef.current.map((photo) => photo.id === drag.id
+      ? { ...photo, scenePlacement: nextPoint }
+      : photo)
+    photosRef.current = nextPhotos
+    persistScenePhotoPlacements(nextPhotos)
+    setPhotos(nextPhotos)
   }
 
   function renderHomePage() {
     const token = getToken()
-    const scenePhotos = photos.slice(0, 8)
+    const scenePhotos = visiblePhotos.slice(0, 8)
     const progress = listenSnapshot.duration > 0
       ? Math.max(0, Math.min(1, listenSnapshot.current / listenSnapshot.duration))
       : 0
@@ -421,27 +504,28 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
         <section className="space-scene-shell" aria-label="TA 的空间">
           <img
             className="space-scene-backplate"
-            src="/space/space-desk.webp"
+            src={`${SPACE_LAYER_BASE}${layeredReady ? 'room-content-clean-v2.webp' : 'room-closed.webp'}`}
             alt=""
             aria-hidden="true"
             draggable={false}
           />
+          {layeredReady ? (
+            <img
+              className={`space-scene-backplate is-drawer-cavity${drawerOpening || drawerReturning ? ' is-visible' : ''}`}
+              src={`${SPACE_LAYER_BASE}room-content-cavity-v2.webp`}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
+          ) : null}
+          {layeredReady ? <SpaceFoliageCanvas scenePageRef={scenePageRef} /> : null}
           <span className="space-scene-ambient" aria-hidden="true" />
-          <span className="space-plant-motion is-hanging" aria-hidden="true">
-            <i className="is-tip-a" />
-            <i className="is-tip-b" />
-            <i className="is-tip-c" />
-          </span>
-          <span className="space-plant-motion is-right" aria-hidden="true">
-            <i className="is-tip-a" />
-            <i className="is-tip-b" />
-          </span>
         </section>
 
         {/*
-          The approved artwork remains the visual coordinate system. Photo archive
-          access stays mounted here; shared experiences moved to Chaomu in S3,
-          while desk objects use the S2 CSS/SVG interaction layer.
+          Mobile first: the approved 941×1672 artwork is the only coordinate system.
+          Physical objects must stay on that artwork/cutout layer; CSS here only
+          carries real content, hit areas and motion.
         */}
         <div className="space-scene-hotspots">
           <button
@@ -450,7 +534,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label="打开照片墙"
             onClick={openPhotoWallFromScene}
           >
-            <img className="space-object-asset is-photo-board" src="/space/generated/photo-board.svg" alt="" aria-hidden="true" draggable={false} />
+            {/* The approved artwork pins photos directly to the wall, not to a
+                separate wood-and-string board. Both preload states render only
+                the real session photos at identical world-space positions. */}
             <span className="space-live-photo-board" aria-label="空间页照片摆放区">
               {scenePhotos.map((photo, index) => {
                 const placement = photo.scenePlacement ?? defaultScenePlacement(index)
@@ -467,17 +553,19 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                     } as React.CSSProperties}
                     onPointerDown={(event) => {
                       event.stopPropagation()
+                      if (scenePhotoDragRef.current || !event.isPrimary) return
                       const board = event.currentTarget.parentElement?.getBoundingClientRect()
-                      if (!board) return
-                      const card = event.currentTarget.getBoundingClientRect()
+                      if (!board || board.width <= 0 || board.height <= 0) return
                       scenePhotoDragRef.current = {
                         id: photo.id,
                         pointerId: event.pointerId,
-                        board,
-                        offsetX: event.clientX - card.left,
-                        offsetY: event.clientY - card.top,
-                        startX: event.clientX,
-                        startY: event.clientY,
+                        element: event.currentTarget,
+                        boardWidth: board.width,
+                        boardHeight: board.height,
+                        start: { x: event.clientX, y: event.clientY },
+                        origin: { ...placement },
+                        latest: { ...placement },
+                        frame: null,
                         moved: false,
                       }
                       event.currentTarget.setPointerCapture?.(event.pointerId)
@@ -486,26 +574,41 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                       const drag = scenePhotoDragRef.current
                       if (!drag || drag.id !== photo.id || drag.pointerId !== event.pointerId) return
                       event.stopPropagation()
-                      if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) {
+                      const pointer = { x: event.clientX, y: event.clientY }
+                      if (!drag.moved && hasMovedSpacePhoto(drag.start, pointer)) {
                         drag.moved = true
+                        drag.element.classList.add('is-dragging')
                       }
                       if (!drag.moved) return
-                      const x = ((event.clientX - drag.board.left - drag.offsetX) / drag.board.width) * 100
-                      const y = ((event.clientY - drag.board.top - drag.offsetY) / drag.board.height) * 100
-                      moveScenePhoto(photo.id, x, y)
+                      drag.latest = projectSpacePhotoDrag(
+                        drag.origin, drag.start, pointer, drag.boardWidth, drag.boardHeight,
+                      )
+                      queueScenePhotoFrame()
                     }}
                     onPointerUp={(event) => {
                       const drag = scenePhotoDragRef.current
                       if (!drag || drag.id !== photo.id || drag.pointerId !== event.pointerId) return
                       event.stopPropagation()
-                      event.currentTarget.releasePointerCapture?.(event.pointerId)
-                      if (drag.moved) finishScenePhotoDrag()
-                      else {
-                        scenePhotoDragRef.current = null
+                      const pointer = { x: event.clientX, y: event.clientY }
+                      if (drag.moved || hasMovedSpacePhoto(drag.start, pointer)) {
+                        event.preventDefault()
+                        finishScenePhotoDrag(true, pointer)
+                      } else {
+                        finishScenePhotoDrag(false)
                         openPhotoWallFromScene()
                       }
                     }}
-                    onPointerCancel={() => finishScenePhotoDrag()}
+                    onPointerCancel={(event) => {
+                      if (scenePhotoDragRef.current?.pointerId === event.pointerId) {
+                        event.stopPropagation()
+                        finishScenePhotoDrag(false)
+                      }
+                    }}
+                    onLostPointerCapture={(event) => {
+                      if (scenePhotoDragRef.current?.pointerId === event.pointerId) {
+                        finishScenePhotoDrag(false)
+                      }
+                    }}
                     onClick={(event) => event.stopPropagation()}
                   >
                     <img
@@ -535,7 +638,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label={memoryCount > 0 ? `打开记忆星星罐，共 ${memoryCount} 颗星` : '打开空的记忆星星罐'}
             onClick={() => openDeskObject('jar', onOpenStarJar)}
           >
-            <img className="space-object-asset is-jar" src="/space/generated/jar.svg" alt="" aria-hidden="true" draggable={false} />
+            <img
+              className="space-object-cutout is-jar-cutout"
+              src={layeredReady ? `${SPACE_LAYER_BASE}glass_memory_jar.png` : '/space/cutouts/memory-jar.png'}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
             <span className="space-live-jar" aria-hidden="true">
               <span className="space-live-jar-glint" />
               <span className="space-live-star-field">
@@ -551,7 +660,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                       '--live-star-t': `${5.8 + ((index * 17) % 28) / 10}s`,
                       '--live-star-h': `${(index * 47) % 360}`,
                     } as React.CSSProperties}
-                  />
+                  >
+                    {layeredReady ? <img className="space-layer-origami" alt="" src={`${SPACE_LAYER_BASE}${['origami_pink.png','origami_blue.png','origami_yellow.png','origami_purple.png'][index % 4]}`} draggable={false} /> : null}
+                  </i>
                 ))}
               </span>
             </span>
@@ -563,7 +674,20 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label="打开 TA 的思绪"
             onClick={() => openDeskObject('book', onOpenThoughts)}
           >
-            <img className="space-object-asset is-book" src="/space/generated/book.svg" alt="" aria-hidden="true" draggable={false} />
+            <img
+              className="space-object-cutout is-book-cutout"
+              src={layeredReady ? `${SPACE_LAYER_BASE}open_book.png` : '/space/cutouts/thought-book.png'}
+              onError={(event) => {
+                const image = event.currentTarget
+                if (!image.dataset.fallback) {
+                  image.dataset.fallback = 'true'
+                  image.src = `${SPACE_LAYER_BASE}open_book.png`
+                }
+              }}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
             <span className="space-live-book" aria-hidden="true">
               {latestThought ? <span>{latestThought.text}</span> : null}
             </span>
@@ -575,6 +699,20 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             aria-label={listenSnapshot.hasTrack ? `打开一起听歌，正在听 ${listenSnapshot.title}` : '打开一起听歌，去接音乐'}
             onClick={() => openDeskObject('player', onOpenListen)}
           >
+            <img
+              className="space-object-cutout is-player-cutout"
+              src={layeredReady ? `${SPACE_LAYER_BASE}tablet_player.png` : '/space/cutouts/music-player.png'}
+              onError={(event) => {
+                const image = event.currentTarget
+                if (!image.dataset.fallback) {
+                  image.dataset.fallback = 'true'
+                  image.src = `${SPACE_LAYER_BASE}tablet_player.png`
+                }
+              }}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
             <span className="space-live-player" aria-hidden="true">
               {listenSnapshot.hasTrack ? (
                 <>
@@ -587,23 +725,83 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                 <strong className="space-live-player-connect">接音乐</strong>
               )}
             </span>
-            <span className="space-live-earphone-wire" aria-hidden="true" />
           </button>
 
+          {/* The content-clean plate retains the original wired earphones in
+              their exact tabletop position. Never add a second cable. */}
+          {layeredReady ? (
+            <SpaceDrawerCanvas opening={drawerOpening} returning={drawerReturning} controllerRef={drawerVisualRef} scenePageRef={scenePageRef} />
+          ) : null}
           <button
             type="button"
             className={`space-scene-hotspot is-weekly-letter${drawerOpening ? ' is-opening' : ''}${drawerReturning ? ' is-returning' : ''}`}
-            aria-label="拉开抽屉，打开一周情书"
-            onClick={openWeeklyFromDrawer}
-            disabled={drawerOpening}
+            aria-label={weeklyCount > 0 ? `拉开抽屉，打开一周情书，共 ${weeklyCount} 封` : '拉开抽屉，打开一周情书'}
+            onPointerDown={(event) => {
+              if (drawerOpening || drawerReturning || !event.isPrimary || event.button !== 0) return
+              const element = event.currentTarget.querySelector<HTMLSpanElement>('.space-drawer-peek')
+              const hitHeight = event.currentTarget.getBoundingClientRect().height
+              if (!element || hitHeight <= 0) return
+              drawerGestureRef.current = {
+                pointerId: event.pointerId,
+                element,
+                startY: event.clientY,
+                hitHeight,
+                moved: false,
+              }
+              event.currentTarget.setPointerCapture?.(event.pointerId)
+            }}
+            onPointerMove={(event) => {
+              const drag = drawerGestureRef.current
+              if (!drag || drag.pointerId !== event.pointerId) return
+              if (!drag.moved && Math.abs(event.clientY - drag.startY) > 5) {
+                drag.moved = true
+                drag.element.classList.add('is-dragging')
+                if (layeredReady && drawerVisualRef.current) scenePageRef.current?.classList.add('is-drawer-pulling')
+              }
+              if (!drag.moved) return
+              const pull = projectSpaceDrawerPull(drag.startY, event.clientY, drag.hitHeight)
+              if (layeredReady && drawerVisualRef.current) {
+                const fraction = pull / SPACE_DRAWER_OPEN_PERCENT
+                drawerVisualRef.current.paint(fraction)
+              } else if (!layeredReady) {
+                drag.element.style.transform = `translate3d(0, ${pull}%, 0)`
+              }
+            }}
+            onPointerUp={(event) => {
+              const drag = drawerGestureRef.current
+              if (!drag || drag.pointerId !== event.pointerId) return
+              const moved = drag.moved || Math.abs(event.clientY - drag.startY) > 5
+              const pull = projectSpaceDrawerPull(drag.startY, event.clientY, drag.hitHeight)
+              finishDrawerGesture()
+              if (!moved) return // ordinary tap / keyboard activation uses onClick
+              event.preventDefault()
+              ignoreDrawerClickRef.current = true
+              window.setTimeout(() => { ignoreDrawerClickRef.current = false }, 350)
+              if (shouldOpenSpaceDrawer(pull)) openWeeklyFromDrawer()
+              else drawerVisualRef.current?.reset()
+            }}
+            onPointerCancel={(event) => {
+              if (drawerGestureRef.current?.pointerId === event.pointerId) {
+                finishDrawerGesture()
+                drawerVisualRef.current?.reset()
+              }
+            }}
+            onLostPointerCapture={(event) => {
+              if (drawerGestureRef.current?.pointerId === event.pointerId) {
+                finishDrawerGesture()
+                drawerVisualRef.current?.reset()
+              }
+            }}
+            onClick={() => {
+              if (ignoreDrawerClickRef.current) {
+                ignoreDrawerClickRef.current = false
+                return
+              }
+              openWeeklyFromDrawer()
+            }}
+            disabled={drawerOpening || drawerReturning}
           >
-            <span className="space-drawer-peek" aria-hidden="true">
-              <span className="space-drawer-interior">
-                {Array.from({ length: Math.min(5, weeklyCount) }, (_, index) => (
-                  <i key={index} style={{ '--letter-i': index } as React.CSSProperties} />
-                ))}
-              </span>
-            </span>
+            <span className="space-drawer-peek" aria-hidden="true" />
           </button>
         </div>
 
@@ -614,5 +812,17 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     )
   }
 
-  return <div className={`page ai-space-page${placingObject ? ` is-placing-${placingObject}` : ''}`}>{renderHomePage()}</div>
+  return (
+    <div
+      ref={scenePageRef}
+      data-space-art-review={SPACE_ART_REVIEW_BUILD ? 'unapproved' : undefined}
+      className={`page ai-space-page${layeredReady ? ' is-layered is-content-clean' : ''}${placingObject ? ` is-placing-${placingObject}` : ''}`}
+      style={sceneCover ? {
+        '--space-scene-width': `${sceneCover.width}px`,
+        '--space-scene-height': `${sceneCover.height}px`,
+      } as React.CSSProperties : undefined}
+    >
+      {renderHomePage()}
+    </div>
+  )
 }

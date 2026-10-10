@@ -1,0 +1,83 @@
+{
+  "kind": "ISOLATED_EMPTY_ACCOUNT_MOTION_REVIEW",
+  "physicalPhone": false,
+  "errors": [],
+  "samples": [
+    {
+      "frames": 18,
+      "paintP95Ms": 0.7000000011175871,
+      "intervalMedianMs": 124.59999999962747,
+      "intervalP95Ms": 189.5,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "normal idle",
+      "durationMs": 2200
+    },
+    {
+      "frames": 0,
+      "paintP95Ms": null,
+      "intervalMedianMs": null,
+      "intervalP95Ms": null,
+      "motion": "off",
+      "environment": "neutral",
+      "name": "runtime reduced-motion",
+      "durationMs": 1200
+    },
+    {
+      "frames": 11,
+      "paintP95Ms": 0.6999999992549419,
+      "intervalMedianMs": 114,
+      "intervalP95Ms": 183.7000000011176,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "motion resumed",
+      "durationMs": 1200
+    },
+    {
+      "frames": 15,
+      "paintP95Ms": 36.79999999888241,
+      "intervalMedianMs": 209.40000000037253,
+      "intervalP95Ms": 303.59999999962747,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "desktop CPU 6x slowdown",
+      "durationMs": 3000
+    },
+    {
+      "frames": 5,
+      "paintP95Ms": 0.900000000372529,
+      "intervalMedianMs": 314.40000000037253,
+      "intervalP95Ms": 361.40000000037253,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "after full wind cycle",
+      "durationMs": 1200
+    },
+    {
+      "frames": 0,
+      "paintP95Ms": null,
+      "intervalMedianMs": null,
+      "intervalP95Ms": null,
+      "motion": null,
+      "environment": null,
+      "name": "scene unmounted",
+      "durationMs": 1200
+    },
+    {
+      "frames": 16,
+      "paintP95Ms": 0.5,
+      "intervalMedianMs": 87.39999999850988,
+      "intervalP95Ms": 113.40000000037253,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "scene remounted",
+      "durationMs": 1200
+    }
+  ],
+  "backgroundTabSupported": false,
+  "finalLayout": {
+    "width": 390,
+    "viewport": 390,
+    "broken": 0
+  }
+}
