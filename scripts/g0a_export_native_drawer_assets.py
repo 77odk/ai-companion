@@ -20,7 +20,7 @@ ORIGINALS = {
     "E": "f772bab67fd89bd6284909ad3c2fe30c576da917dfb4a15dad21f1bc94a9cd56",
     "C": "ffcc66ab9943c31a319dfdc805a2e2e406b2065b63326cc82873bf34cfe71454",
 }
-SIZES = {"E": (481, 243), "C": (506, 347)}
+SIZES = {"E": (481, 243), "C": (506, 210)}
 MIN_WEBP_BYTES = {"E": 12_000, "C": 20_000}
 MAX_FILE_BYTES = 300_000
 
