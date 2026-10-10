@@ -31,43 +31,6 @@ BOXES = {
     "earphones": (69, 60, 24, 10),
 }
 
-OBJECT_SCRIPT = r"""
-const objectSources=__SOURCES__;
-const boxes=__BOXES__;
-let baseReady=false,objectsReady=false;
-Object.defineProperty(window,'qaReady',{
-  configurable:true,
-  get(){ return baseReady&&objectsReady; },
-  set(next){ baseReady=Boolean(next); }
-});
-const loaded={};
-Promise.all(Object.keys(objectSources).map(k=>new Promise((resolve,reject)=>{
-  const img=new Image();
-  img.onload=()=>{ loaded[k]=img; resolve(); };
-  img.onerror=()=>reject(new Error('missing '+k+' sprite'));
-  img.src=objectSources[k];
-}))).then(()=>{objectsReady=true;}).catch(e=>{window.qaError=String(e)});
-setTimeout(()=>{
-  if(!window.qaReady && !window.qaError)
-    document.body.textContent='G0A_CLI_ERROR_TIMEOUT_'+JSON.stringify({
-      baseReady,objectsReady,loaded:Object.keys(loaded),drawer:typeof window.drawFrame
-    });
-},4500);
-function contain(ctx,img,rect) {
- const [x,y,w,h]=rect.map((v,i)=>v/100*(i%2===0?941:1672));
- const scale=Math.min(w/img.naturalWidth,h/img.naturalHeight);
- const dw=img.naturalWidth*scale,dh=img.naturalHeight*scale;
- ctx.drawImage(img,x+(w-dw)/2,y+(h-dh)/2,dw,dh);
-}
-window.__drawObjects=(ctx)=>{
- // This layering follows the real app z-index: drawer 3, book 4,
- // jar 5, player 6, earphones 7. All use genuine bundled PNG pixels.
- for(const k of ['book','jar','player','earphones']) contain(ctx,loaded[k],boxes[k]);
- // Photo wall intentionally blank: only real session photos may appear.
- // Letter, music and memory counts intentionally absent.
-};
-"""
-
 def run(root: Path, output: Path) -> int:
     orig_input, orig_html, orig_stages = drawer.input_bundle, drawer.make_html, drawer.STAGES
     def with_objects(path: Path):
@@ -80,20 +43,31 @@ def run(root: Path, output: Path) -> int:
         return script,base
     def with_painter(script: str, base: dict[str,str]) -> str:
         html=orig_html(script,base)
-        # Force object compositing on the same ORIGINAL world plane before
-        # camera cropping, not on top of the mobile viewport.
-        needle='ctx.drawImage(c,427,1309);'
-        if html.count(needle)!=1: raise RuntimeError('drawer scene hook changed')
-        html=html.replace(needle,needle+'window.__drawObjects(ctx);')
-        extra=OBJECT_SCRIPT.replace('__SOURCES__',json.dumps(
-            {k:base[k] for k in OBJECTS})).replace('__BOXES__',json.dumps(BOXES))
-        diagnostics = (
-            '<script>window.addEventListener("error",e=>{'
-            'document.body.textContent="G0A_CLI_ERROR_JS_"+e.message},true);'
-            '</script>'
-        )
-        return html.replace('<body>', '<body>'+diagnostics).replace(
-            '</body>','<script>'+extra+'</script></body>')
+        # Extend the ORIGINAL scene's single image Promise to cover the four
+        # genuine cutouts. One ready gate, no second async clock or race.
+        original="['closed','cavity','face','inner']"
+        extended="['closed','cavity','face','inner','book','jar','player','earphones']"
+        if html.count(original)!=2:
+            raise RuntimeError('Original four-image renderer changed')
+        html=html.replace(original,extended)
+        helper = """
+const objectBoxes=__BOXES__;
+function drawContain(ctx,img,rect) {
+  const [x,y,w,h]=rect.map((v,i)=>v/100*(i%2===0?941:1672));
+  const scale=Math.min(w/img.naturalWidth,h/img.naturalHeight);
+  const dw=img.naturalWidth*scale,dh=img.naturalHeight*scale;
+  ctx.drawImage(img,x+(w-dw)/2,y+(h-dh)/2,dw,dh);
+}
+""".replace('__BOXES__',json.dumps(BOXES))
+        anchor='window.drawFrame=(progress,width,height)=>{'
+        if html.count(anchor)!=1:
+            raise RuntimeError('Original scene rendering entrypoint changed')
+        html=html.replace(anchor,helper+anchor)
+        after='ctx.drawImage(c,427,1309);'
+        if html.count(after)!=1: raise RuntimeError('Original drawer paint changed')
+        paint="""for (const k of ['book','jar','player','earphones'])
+      drawContain(ctx,imgs[k],objectBoxes[k]);"""
+        return html.replace(after,after+paint)
     try:
         drawer.input_bundle=with_objects
         drawer.make_html=with_painter
