@@ -24,7 +24,7 @@ export function paintSpaceDrawerFrontMesh(
     const a = (dx1 * sy2 - dx2 * sy1) / determinant
     const b = (dy1 * sy2 - dy2 * sy1) / determinant
     const c = (sx1 * dx2 - sx2 * dx1) / determinant
-    const dMatrix = (sy2 * dy1 - sy1 * dy2) / determinant * -1
+    const dMatrix = (sx1 * dy2 - sx2 * dy1) / determinant
     const e = d[0][0] - a * s[0][0] - c * s[0][1]
     const f = d[0][1] - b * s[0][0] - dMatrix * s[0][1]
     ctx.save()
