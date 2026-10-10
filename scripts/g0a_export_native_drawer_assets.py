@@ -41,7 +41,7 @@ def export(source_e: Path, source_c: Path, destination: Path) -> dict:
     destination.mkdir(parents=True, exist_ok=False)
     results = {}
     for label, src in source_paths.items():
-        name = "e_drawer_hq_v2" if label == "E" else "c_drawer_depth_hq_v2"
+        name = "e_drawer_hq_v2" if label == "E" else "c_drawer_inner_hq_v3"
         png = destination / (name + ".png")
         webp = destination / (name + ".webp")
         if label == "E":
