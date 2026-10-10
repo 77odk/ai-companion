@@ -1,7 +1,7 @@
 {
   "version": "2026-10-09",
   "enabled": true,
-  "description": "Staged active sprite preload list; technical readiness does not certify visual approval.",
+  "description": "Source-grounded E/C drawer canvas, still pending independent mobile visual approval.",
   "assets": [
     "room-closed.webp",
     "room-cavity.webp",
@@ -9,10 +9,11 @@
     "open_book.png",
     "tablet_player.png",
     "wired_earphones.png",
-    "open_drawer.png",
     "origami_pink.png",
     "origami_blue.png",
     "origami_yellow.png",
-    "origami_purple.png"
+    "origami_purple.png",
+    "e_drawer_pixel_trial_v1.webp",
+    "c_drawer_inner_trial_v1.webp"
   ]
 }
