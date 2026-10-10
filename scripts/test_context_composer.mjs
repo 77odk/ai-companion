@@ -208,7 +208,7 @@ assert.equal(getContextBridge('S1'), null, '清除后返回 null')
 // ── PR #99：Chat.tsx / cloudStateResources.ts 源码契约 ──
 console.log('\n[contract] Chat 与 Cloud State 接入契约')
 const chatSource = readFileSync(new URL('../src/lib/contextMeterState.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
-const chatSource__all = chatSource + '\n' + readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8')
+const chatSource__all = chatSource + '\n' + readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatSession.ts', import.meta.url), 'utf8')
 const composerSource = readFileSync(new URL('../src/components/ChatComposer.tsx', import.meta.url), 'utf8')
 const chatUiSource = chatSource + '\n' + composerSource
 const cloudSource = readFileSync(new URL('../src/lib/cloudStateResources.ts', import.meta.url), 'utf8')
