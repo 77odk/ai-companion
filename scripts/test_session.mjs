@@ -112,7 +112,7 @@ eq(all[0].content, '刷新前的话', '刷新前的聊天记录仍在 localStora
 
 
 console.log('\n[8] P0-A 前台恢复：只复用现有 pending + session pull')
-const chatSrc = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8')
+const chatSrc = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatSession.ts', import.meta.url), 'utf8')
 const recoveryStart = chatSrc.indexOf('const runSessionRecovery = async () =>')
 const recoveryEnd = recoveryStart >= 0 ? chatSrc.indexOf('const onOnline = () =>', recoveryStart) : -1
 const recoveryBlock = recoveryStart >= 0 && recoveryEnd > recoveryStart

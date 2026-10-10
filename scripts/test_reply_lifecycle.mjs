@@ -97,7 +97,7 @@ assert.equal(interruptionReasonFromError({ kind: 'network', message: '网络不�
 assert.equal(interruptionReasonFromError({ message: 'other failure' }), 'unknown')
 
 console.log('[reply lifecycle] Chat 静态闭环：Stop / 切模型 / 切会话 / pagehide + TA-only retry')
-const chatSrc = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
+const chatSrc = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatSession.ts', import.meta.url), 'utf8')
 assert.match(chatSrc, /replyInterruptionReasonRef\.current = 'stop'/)
 assert.match(chatSrc, /replyInterruptionReasonRef\.current = 'model-switch'/)
 assert.match(chatSrc, /replyInterruptionReasonRef\.current = 'session-switch'/)

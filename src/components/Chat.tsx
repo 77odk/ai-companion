@@ -1,38 +1,35 @@
 import {getToken} from '../lib/auth'
 import {getAccount} from '../lib/sync'
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
-import {resolveChatLang} from '../lib/chatLang'
 import {buildEstimatedContextState} from '../lib/contextMeterState'
 import {createChatStreamEngineStream} from '../lib/chatStreamEngine'
 import MessageBubble from './MessageBubble'
 import {buildBusyReturnPrompt, buildSystemPrompt, chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError} from '../lib/api'
 import {cleanMemoryProtocolArtifacts, detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, inferTopic, isMemoryRetort, isSimilarMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult, loadMemory, stripMemoryMarkers, stripThinkBlocks} from '../lib/memory'
-import {getSessionStart, loadMessages, loadPersona, loadSettings, loadChatBg, saveMessages, saveSettings, getContextCompactAt, setContextCompactAt, getContextCompactSummary, setContextCompactSummary, setContextBridge, setContextBridgeTurns, clearContextBridge, getContextUsage, setContextUsage, clearContextUsage, type ContextUsageState, type ReplyInterruptionReason, type StoredMessage, getContextBridge, isActionNarrationEnabled, loadAIProfile} from '../lib/storage'
+import {getSessionStart, loadMessages, loadPersona, loadSettings, loadChatBg, saveMessages, saveSettings, setContextCompactAt, setContextCompactSummary, setContextBridge, setContextBridgeTurns, clearContextBridge, setContextUsage, clearContextUsage, type ReplyInterruptionReason, type StoredMessage, isActionNarrationEnabled, loadAIProfile} from '../lib/storage'
 import {type ChatJumpTarget} from '../lib/chatJump'
 import {useChatScroll} from '../lib/useChatScroll'
-import {getSession, listMemories, postMemory, postMessage, type Session} from '../lib/sessionApi'
-import {addPendingOp, confirmMessageInCache, getActiveSessionId, getBusyState, getMemoriesCache, getMessagesCache, getPendingOps, getSessionsCache, markRead, mergeSessionMemories, mergeSessionMessages, newPendingOpId, reconcileMemoryCacheId, removePendingOp, saveBusyState, saveMemoriesCache, saveMessagesCache, sessionMemoryToItem, upsertMemoryCache, type PendingOp} from '../lib/sessionStore'
+import {useChatSession} from '../lib/useChatSession'
+import {listMemories, postMemory, postMessage} from '../lib/sessionApi'
+import {addPendingOp, confirmMessageInCache, getActiveSessionId, getBusyState, getMemoriesCache, getMessagesCache, getSessionsCache, markRead, mergeSessionMemories, newPendingOpId, reconcileMemoryCacheId, removePendingOp, saveBusyState, saveMemoriesCache, saveMessagesCache, sessionMemoryToItem, upsertMemoryCache, type PendingOp} from '../lib/sessionStore'
 import {inferBusyReason, randomBusyDurationMs, serializeBusyContext, type BusyState} from '../lib/aiBusy'
 import {busyCycleId, cancelBusyReturn, triggerBusyReturn} from '../lib/busyReturn'
 import {busyReturnFallback, classifyAvailability, isGroundedBusyReturn, type AvailabilityDecision} from '../lib/availability'
 import {commitPartialReply} from '../lib/partialReply'
-import {findRecoverableReply, normalizeStaleReplyLifecycle, preserveReplyLifecycle, registerActiveReplyRun, setReplyLifecycle, unregisterActiveReplyRun} from '../lib/replyLifecycle'
+import {findRecoverableReply, registerActiveReplyRun, setReplyLifecycle, unregisterActiveReplyRun} from '../lib/replyLifecycle'
 import {getSessionPersona} from '../lib/taRuntime'
 
-import {collapseAdjacentDuplicateAssistantReplies} from '../lib/chatDisplay'
 import {getEffectiveReplyLength} from '../lib/replyLength'
 import {allowsBusyState, resolveIdentityMode} from '../lib/companionPolicy'
 import {cleanAttributionArtifacts} from '../lib/promptAttribution'
-import {retryPendingMemoryUploads} from '../lib/memoryUploadRetry'
 import {ELUVIN_DATA_CHANGE, notifyDataChanged} from '../lib/dataChange'
 import {buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INPUT_BUDGET, BRIDGE_TAIL_COUNT} from '../lib/contextComposer'
 
 
-import {clearPendingMemoryCorrection, correctMemoryText, hasMemoryCorrectionMarker, loadPendingMemoryCorrection, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, type MemoryCorrectionTarget, stripMemoryCorrectionMarkers} from '../lib/memoryCorrection'
+import {clearPendingMemoryCorrection, correctMemoryText, hasMemoryCorrectionMarker, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, stripMemoryCorrectionMarkers} from '../lib/memoryCorrection'
 import {formatQuotedMessage, parseQuotedMessage, type MessageQuote, type MessageQuoteSpeaker, messageEvidenceText} from '../lib/messageQuote'
-import {CONVERSATION_STATE_CHANGE_EVENT, activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState} from '../lib/conversationState'
-import {enqueueSessionMessageCommit, enqueueSessionMessageCommits} from '../lib/sessionMessageQueue'
-import {flushPendingOpsSnapshot} from '../lib/pendingReplay'
+import {activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState} from '../lib/conversationState'
+import {enqueueSessionMessageCommit} from '../lib/sessionMessageQueue'
 import {appendMemoryAudit} from '../lib/memoryAudit'
 
 /**
@@ -40,10 +37,10 @@ import {appendMemoryAudit} from '../lib/memoryAudit'
  * 让 provider 能复用「核心 system + 历史」这一大段前缀。当前时间另走动态 ContextBlock。
  */
 import {type Lang} from '../lib/langDetect'
-import {getSessionLang, saveSessionLang} from '../lib/sessionStore'
-import {filterSessionMessages} from '../lib/aiSpaceDetail'
+import {getSessionLang} from '../lib/sessionStore'
 import {takeChatMessage} from '../lib/chatInject'
 import {decodePersonaText, extractOpeningLine} from '../lib/customPersona'
+import {filterSessionMessages} from '../lib/aiSpaceDetail'
 import {ensureMilestoneEvent, getMilestoneStatus, latestReachedMilestoneDay, markMilestoneShown} from '../lib/milestone'
 import {recordChatTopic} from '../lib/chatTopics'
 import MilestoneCard from './MilestoneCard'
@@ -98,10 +95,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [messages, setMessages] = useState<StoredMessage[]>(() =>
     activeSessionId ? getMessagesCache(activeSessionId) : loadMessages(),
   )
-  const [conversationState, setConversationState] = useState<ConversationState | null>(() =>
-    activeSessionId ? loadConversationState(activeSessionId) : null,
-  )
-  const currentConversationBranchId = branchIdForNewMessage(conversationState)
   const [input, setInput] = useState('')
   const [quoteDraft, setQuoteDraft] = useState<MessageQuote | null>(null)
   const [actionNarrationEnabled, setActionNarrationEnabledState] = useState(() => isActionNarrationEnabled())
@@ -120,43 +113,9 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [hasKey] = useState(() => Boolean(loadSettings().apiKey))
   // 该模型不支持思考链：请求被服务商拒了以后由 modelChat 降级并通知，这里只负责显示一行灰字
   const [thinkingUnsupported, setThinkingUnsupported] = useState(() => isThinkingUnsupported(loadSettings()))
-  const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [isBusy, setIsBusy] = useState(false)
-  const persona = decodePersonaText(activeSession?.persona ?? loadPersona())
   const [milestone, setMilestone] = useState<{ day: number; hit: boolean; shown: boolean } | null>(null)
   const [showMilestone, setShowMilestone] = useState(false)
-  // 刷新对话只推进当前 session 的上下文分界线；历史仍完整保留。
-  const sessionStart = getSessionStart(activeSessionId || undefined)
-  // 新 branch 创建后，旧 branch 生成的 Compact/Bridge/Meter 都不能继续注入。
-  const conversationBranchBoundary = getActiveConversationBranchCreatedAt(conversationState)
-  const contextBoundary = Math.max(sessionStart, conversationBranchBoundary)
-  // Context：session 级状态。退出聊天 / 页面刷新不清零；sessionStart 或 active branch 变化都会进入新上下文段。
-  const [contextMeter, setContextMeter] = useState<ContextUsageState | null>(() => {
-    if (!activeSessionId) return null
-    const stored = getContextUsage(activeSessionId)
-    return stored && stored.sessionStart === sessionStart && stored.updatedAt >= contextBoundary ? stored : null
-  })
-  // Compact：用户主动「压缩」→ 最多 1 次模型调用，把较老历史压成 summary；之后注入 = summary + recent raw。
-  // 每会话最多压缩 1 次；原聊天记录绝不删除。summary 持久化，刷新后无需再调模型。
-  const [compactDone, setCompactDone] = useState(() => {
-    if (!activeSessionId) return false
-    const compactedAt = getContextCompactAt(activeSessionId)
-    return compactedAt > 0 && compactedAt >= contextBoundary
-  })
-  const [compactSummary, setCompactSummary] = useState(() => {
-    if (!activeSessionId) return ''
-    const compactedAt = getContextCompactAt(activeSessionId)
-    return compactedAt > 0 && compactedAt >= contextBoundary ? getContextCompactSummary(activeSessionId) : ''
-  })
-  // Bridge：用户主动「承接」→ 最多 1 次模型调用生成 evidence-only bridge，临时参与约 6–10 轮后退出。
-  const [bridgeInfo, setBridgeInfo] = useState(() => {
-    if (!activeSessionId) return null
-    const stored = getContextBridge(activeSessionId)
-    return stored && stored.bridgedAt >= contextBoundary ? stored : null
-  })
-  // contextBusy：防止 Compact / Bridge 的模型调用并发（每次最多 1 次）。
-  const [contextBusy, setContextBusy] = useState<'compact' | 'bridge' | null>(null)
-  const [contextNotice, setContextNotice] = useState<string | null>(null)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
   const [contextDetailOpen, setContextDetailOpen] = useState(false)
   const contextMeterRef = useRef<HTMLDivElement>(null)
@@ -173,33 +132,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     document.addEventListener('pointerdown', closeOutside)
     return () => document.removeEventListener('pointerdown', closeOutside)
   }, [contextMenuOpen])
-  const [pendingMemoryCorrection, setPendingMemoryCorrection] = useState<{ target: MemoryCorrectionTarget; value: string } | null>(() =>
-    activeSessionId ? loadPendingMemoryCorrection(activeSessionId, sessionStart, getToken() ?? '') : null,
-  )
-  const [memoryCorrectionBusy, setMemoryCorrectionBusy] = useState(false)
-  const [memoryCorrectionNotice, setMemoryCorrectionNotice] = useState<string | null>(null)
-
-  // messages 始终保留完整 raw 历史；只有 activeMessages 参与显示/上下文。
-  const activeMessages = useMemo(
-    () => resolveConversationMessages(conversationState, messages),
-    [conversationState, messages],
-  )
-  const visibleMessages = useMemo(
-    () => filterSessionMessages(activeMessages, sessionStart),
-    [activeMessages, sessionStart],
-  )
-  const recoverableReply = useMemo(() => findRecoverableReply(visibleMessages), [visibleMessages])
-  const showReplyRecovery = Boolean(
-    recoverableReply &&
-    !failedReplyRetryAvailable &&
-    recoveryDismissedTs !== recoverableReply.userMessage.ts,
-  )
-  // 只在展示层合并“同一生成批次内、相邻、内容完全相同”的 TA 气泡；底层历史/上传/上下文一律不改。
-  const displayMessages = useMemo(
-    () => collapseAdjacentDuplicateAssistantReplies(visibleMessages),
-    [visibleMessages],
-  )
-
   // 切角色 / 刷新上下文后，Compact 与 Bridge 只能沿用当前 segment 之后生成的状态。
   // 旧 segment 的摘要/bridge 仍可保存在存储与云端，但绝不能重新注入到“重新开始”的上下文。
   useEffect(() => {
@@ -214,58 +146,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     return () => window.removeEventListener(ELUVIN_DATA_CHANGE, refreshActionNarration)
   }, [])
 
-  useEffect(() => {
-    const refreshConversationState = (event: Event) => {
-      const sid = (event as CustomEvent<{ sessionId?: string }>).detail?.sessionId
-      if (!activeSessionId || (sid && sid !== activeSessionId)) return
-      setConversationState(loadConversationState(activeSessionId))
-    }
-    window.addEventListener(CONVERSATION_STATE_CHANGE_EVENT, refreshConversationState)
-    return () => window.removeEventListener(CONVERSATION_STATE_CHANGE_EVENT, refreshConversationState)
-  }, [activeSessionId])
 
-  useEffect(() => {
-    // 切会话 / 刷新当前上下文段：上一轮失败的“重试”立即失效。
-    failedReplyRetryRef.current = null
-    setFailedReplyRetryAvailable(false)
-    setRecoveryDismissedTs(null)
-    setError(null)
-    setFailedText(null)
-    setQuoteDraft(null)
-    if (!activeSessionId) {
-      setCompactDone(false)
-      setCompactSummary('')
-      setBridgeInfo(null)
-      setContextMeter(null)
-      setContextNotice(null)
-      setContextBusy(null)
-      setPendingMemoryCorrection(null)
-      setMemoryCorrectionBusy(false)
-      setMemoryCorrectionNotice(null)
-      return
-    }
-    const compactedAt = getContextCompactAt(activeSessionId)
-    const compactIsCurrent = compactedAt > 0 && compactedAt >= contextBoundary
-    setCompactDone(compactIsCurrent)
-    setCompactSummary(compactIsCurrent ? getContextCompactSummary(activeSessionId) : '')
-    const storedBridge = getContextBridge(activeSessionId)
-    setBridgeInfo(storedBridge && storedBridge.bridgedAt >= sessionStart ? storedBridge : null)
-    const storedUsage = getContextUsage(activeSessionId)
-    setContextMeter(storedUsage && storedUsage.sessionStart === sessionStart && storedUsage.updatedAt >= contextBoundary ? storedUsage : null)
-    setContextNotice(null)
-    setContextBusy(null)
-    setPendingMemoryCorrection(loadPendingMemoryCorrection(activeSessionId, sessionStart, getToken() ?? ''))
-    setMemoryCorrectionBusy(false)
-    setMemoryCorrectionNotice(null)
-  }, [activeSessionId, sessionStart, contextBoundary])
-  // 第一组拆分：滚动与跳转（scrollRef / 跳转锚 refs / auto-scroll / jump 定位）下沉 useChatScroll。
-  const { scrollRef, releaseJumpHold } = useChatScroll({
-    visibleMessages,
-    pendingJump: pendingJump ?? null,
-    activeSessionId,
-    onJumpConsumed,
-    onJumpNotice,
-  })
   const inputRef = useRef<HTMLTextAreaElement>(null)
   // UI2-03B-1：失败提示状态已上移到 App（Props.jumpNotice / onJumpNotice）——
   // Chat 不再本地持 notice state / timer：dev StrictMode 提前跑 cleanup 曾把 timer 清掉
@@ -303,6 +184,49 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const busyTriggeredRef = useRef(false)
   const enterBusyRef = useRef<(sid: string | null, text: string, decision: AvailabilityDecision, contextMessages?: StoredMessage[]) => void>(() => {})
   const sendBusyReturnRef = useRef<(runId: number, sid: string, state: BusyState) => Promise<void>>(async () => {})
+  // —— 第 2 组拆分：会话装载与切换下沉 useChatSession（本组只搬不改）——
+  // 同一提交内「流中断收口」（runId++ / abort / finalize / timer 清理）仍在下方原 effect
+  // 中先执行（流式 / engine 域，后续组处理）；hook 只负责会话域的装载与忙碌恢复。
+  const { activeSession, conversationState, activeMessages, visibleMessages, displayMessages, persistChatLang, contextMeter, setContextMeter, compactDone, setCompactDone, compactSummary, setCompactSummary, bridgeInfo, setBridgeInfo, contextBusy, setContextBusy, contextNotice, setContextNotice, pendingMemoryCorrection, setPendingMemoryCorrection, memoryCorrectionBusy, setMemoryCorrectionBusy, memoryCorrectionNotice, setMemoryCorrectionNotice } = useChatSession({
+    activeSessionId,
+    messages,
+    setMessages,
+    mountedRef,
+    streamingRef,
+    runIdRef,
+    busyTimerRef,
+    sendBusyReturnRef,
+    setIsBusy,
+    failedReplyRetryRef,
+    setFailedReplyRetryAvailable,
+    setRecoveryDismissedTs,
+    setError,
+    setFailedText,
+    setQuoteDraft,
+  })
+  const currentConversationBranchId = branchIdForNewMessage(conversationState)
+  const persona = decodePersonaText(activeSession?.persona ?? loadPersona())
+  // 刷新对话只推进当前 session 的上下文分界线；历史仍完整保留。
+  const sessionStart = getSessionStart(activeSessionId || undefined)
+  // 新 branch 创建后，旧 branch 生成的 Compact/Bridge/Meter 都不能继续注入。
+  const conversationBranchBoundary = getActiveConversationBranchCreatedAt(conversationState)
+  const contextBoundary = Math.max(sessionStart, conversationBranchBoundary)
+
+  const recoverableReply = useMemo(() => findRecoverableReply(visibleMessages), [visibleMessages])
+  const showReplyRecovery = Boolean(
+    recoverableReply &&
+    !failedReplyRetryAvailable &&
+    recoveryDismissedTs !== recoverableReply.userMessage.ts,
+  )
+
+  // 第一组拆分：滚动与跳转（scrollRef / 跳转锚 refs / auto-scroll / jump 定位）下沉 useChatScroll。
+  const { scrollRef, releaseJumpHold } = useChatScroll({
+    visibleMessages,
+    pendingJump: pendingJump ?? null,
+    activeSessionId,
+    onJumpConsumed,
+    onJumpNotice,
+  })
 
   const persistMessages = useCallback((sid: string | null, msgs: StoredMessage[]) => {
     if (sid) {
@@ -528,45 +452,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       clearTimeout(busyTimerRef.current)
       busyTimerRef.current = null
     }
-    const cachedMessages = activeSessionId ? getMessagesCache(activeSessionId) : loadMessages()
-    const normalizedReply = normalizeStaleReplyLifecycle(cachedMessages, activeSessionId || null)
-    if (normalizedReply.changed) {
-      if (activeSessionId) saveMessagesCache(activeSessionId, normalizedReply.messages)
-      else saveMessages(normalizedReply.messages)
-    }
-    setMessages(normalizedReply.messages)
-    setConversationState(activeSessionId ? loadConversationState(activeSessionId) : null)
-    setActiveSession(null)
-    if (activeSessionId) markRead(activeSessionId)
-    // 恢复忙碌状态：只有沉浸档允许恢复；自然 / AI 遇到旧 busy 立即取消，避免模式切换后继续“闭嘴”。
-    if (activeSessionId) {
-      const state = getBusyState(activeSessionId)
-      if (!allowsBusyState(resolveIdentityMode(activeSessionId)) && state.status === 'busy') {
-        cancelBusyReturn(activeSessionId, state, { saveState: saveBusyState, onIdle: () => setIsBusy(false) })
-        setIsBusy(false)
-      } else if (state.status === 'busy' && state.busyUntil > 0) {
-        if (Date.now() >= state.busyUntil && !state.returnSent) {
-          // 忙碌已结束但没发回来的消息，补发
-          setIsBusy(false)
-          void sendBusyReturnRef.current(runIdRef.current, activeSessionId, state)
-        } else if (Date.now() < state.busyUntil) {
-          // 还在忙碌中，恢复定时器
-          setIsBusy(true)
-          const remaining = state.busyUntil - Date.now()
-          const triggerRunId = runIdRef.current
-          busyTimerRef.current = window.setTimeout(() => {
-            setIsBusy(false)
-            void sendBusyReturnRef.current(triggerRunId, activeSessionId, state)
-          }, remaining)
-        } else {
-          setIsBusy(false)
-        }
-      } else {
-        setIsBusy(false)
-      }
-    } else {
-      setIsBusy(false)
-    }
   }, [activeSessionId])
 
   // 身份模式在聊天页内切换时即时收口 Busy：切到自然 / AI 立刻取消旧 cycle，不补发“忙完回来”。
@@ -588,52 +473,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     window.addEventListener(ELUVIN_DATA_CHANGE, syncBusyWithIdentity)
     return () => window.removeEventListener(ELUVIN_DATA_CHANGE, syncBusyWithIdentity)
   }, [activeSessionId])
-
-  // P0-A：会话消息恢复只复用现有 session API + merge；不建第二套同步层。
-  // 调用方保证先 flush pending 再 pull，避免“本机看见已发送、服务端还没收到”的窗口继续扩大。
-  const refreshSessionMessages = useCallback(async (sessionId: string) => {
-    const token = getToken()
-    if (!token || !sessionId) return
-    const res = await getSession(token, sessionId)
-    if (!res.ok || !mountedRef.current || String(getActiveSessionId()) !== String(sessionId)) return
-    const cloud: StoredMessage[] = res.data.messages
-      .map((m) => ({ id: m.id, role: m.role, content: m.content, ts: Date.parse(m.createdAt), thinking: m.thinking }))
-      .filter((m) => Number.isFinite(m.ts))
-    const local = getMessagesCache(sessionId)
-    const latestLocalUser = [...local].reverse().find((message) => message.role === 'user')
-    const hasActiveLocalReply = Boolean(
-      latestLocalUser &&
-      (latestLocalUser.replyState === 'pending' || latestLocalUser.replyState === 'streaming'),
-    )
-    // pending / streaming 仍属于正在运行的本机 BYOK 请求，暂缓 pull，避免中途改写本轮基线。
-    if (hasActiveLocalReply) {
-      setActiveSession(res.data.session)
-      setMessages(local)
-      markRead(sessionId)
-      return
-    }
-    // interrupted 已经收口，不能永久阻断 cloud refresh。先正常合并权威历史，
-    // 再只按 id 或精确 role+ts+content 恢复本机中断标记；绝不按“唯一正文”猜身份。
-    const interruptedLifecycle = local.filter((message) => message.replyState === 'interrupted')
-    const merged = preserveReplyLifecycle(interruptedLifecycle, mergeSessionMessages(local, cloud))
-    saveMessagesCache(sessionId, merged)
-    setActiveSession(res.data.session)
-    if (merged.length > 0) {
-      setMessages(merged)
-      markRead(sessionId)
-      return
-    }
-    const opening = extractOpeningLine(res.data.session.persona)
-    if (!opening) {
-      setMessages([])
-      markRead(sessionId)
-      return
-    }
-    const firstMsg: StoredMessage = { role: 'assistant', content: opening, ts: Date.now() }
-    saveMessagesCache(sessionId, [firstMsg])
-    setMessages([firstMsg])
-    markRead(sessionId)
-  }, [])
 
   // 记忆沿用原来的“进入当前聊天时拉一次”；P0-A 不扩大 Memory 同步行为。
   useEffect(() => {
@@ -737,61 +576,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     document.addEventListener('visibilitychange', onVisible)
   }, [])
 
-  // #20 + P0-A：沿用同一 pending outbox。挂载/联网/回前台时先补传消息，再拉当前 session 收敛。
-  // 不轮询；生成中的聊天不做 pull，避免把正在显示的流式占位覆盖掉。
-  const memoryRetryInFlightRef = useRef<Set<string>>(new Set())
-  const sessionRecoveryInFlightRef = useRef<Set<string>>(new Set())
-
-  useEffect(() => {
-    if (!activeSessionId) return
-
-    const runMemoryRetry = async () => {
-      const token = getToken()
-      if (!token || memoryRetryInFlightRef.current.has(activeSessionId)) return
-      memoryRetryInFlightRef.current.add(activeSessionId)
-      try {
-        await retryPendingMemoryUploads(token, activeSessionId)
-      } finally {
-        memoryRetryInFlightRef.current.delete(activeSessionId)
-      }
-    }
-
-    const runSessionRecovery = async () => {
-      const token = getToken()
-      if (!token || sessionRecoveryInFlightRef.current.has(activeSessionId)) return
-      sessionRecoveryInFlightRef.current.add(activeSessionId)
-      try {
-        const pendingSnapshot = getPendingOps()
-        const pendingMessageSessionIds = pendingSnapshot.flatMap((op) =>
-          op.type === 'message' && typeof op.sessionId === 'string' ? [op.sessionId] : [],
-        )
-        await enqueueSessionMessageCommits(
-          [activeSessionId, ...pendingMessageSessionIds],
-          () => flushPendingOpsSnapshot(token, pendingSnapshot),
-        )
-        if (!streamingRef.current) await refreshSessionMessages(activeSessionId)
-      } finally {
-        sessionRecoveryInFlightRef.current.delete(activeSessionId)
-      }
-    }
-
-    void runSessionRecovery()
-    void runMemoryRetry()
-
-    const onOnline = () => {
-      void runSessionRecovery()
-      void runMemoryRetry()
-    }
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void runSessionRecovery()
-    }
-    window.addEventListener('online', onOnline)
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      window.removeEventListener('online', onOnline)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [activeSessionId, refreshSessionMessages])
 
   useEffect(() => {
     mountedRef.current = true
@@ -953,10 +737,7 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
         : message
 
     // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看包含当前消息的最近5条用户消息），存 sessionStore
-    // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看包含当前消息的最近5条用户消息），存 sessionStore
-    const lang = resolveChatLang({ persona, replayExistingUser, roundVisibleMessages, text })
-    if (activeSessionId) saveSessionLang(activeSessionId, lang)
-    if (activeSessionId) saveSessionLang(activeSessionId, lang)
+    const lang = persistChatLang({ persona, replayExistingUser, visibleMessages: roundVisibleMessages, text })
 
     const settings = loadSettings()
     if (!settings.apiKey || !settings.baseUrl || !settings.model) {
