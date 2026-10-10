@@ -40,7 +40,7 @@ assert.deepEqual(parseQuotedMessage(editedQuoted), {
 })
 
 console.log('[message edit] UI wiring is branch-only')
-const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8')
+const chat = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatMessages.ts', import.meta.url), 'utf8')
 const bubble = fs.readFileSync(new URL('../src/components/MessageBubble.tsx', import.meta.url), 'utf8')
 assert.match(chat, /const commitConversationEdit = \(message: StoredMessage, nextBody: string\) =>/)
 assert.match(chat, /forkConversation\(conversationState, activeSessionId, messages, \{[\s\S]*forkAfterMessageId: message\.id,[\s\S]*contentOverrides: \{ \[message\.id\]: editedContent \},[\s\S]*reason: 'edit'/)

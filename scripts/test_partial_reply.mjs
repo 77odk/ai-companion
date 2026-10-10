@@ -122,7 +122,7 @@ check('分支 interrupted payload 明确带中断标记', String(branchOps.at(-1
 
 console.log('[7] 静态检查：Chat.tsx 真的挂了兜底')
 const fs = await import('node:fs')
-const chatSrc = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8')
+const chatSrc = fs.readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../src/lib/useChatMessages.ts', import.meta.url), 'utf8')
 check('注册 pagehide', /addEventListener\('pagehide'/.test(chatSrc))
 check('注册 visibilitychange', /addEventListener\('visibilitychange'/.test(chatSrc))
 check('调用 commitPartialReply（带当前回复长度 + live branch + lifecycle）', /commitPartialReply\([\s\S]*?partialReplyLength,[\s\S]*?partialBranchId,[\s\S]*?state: 'interrupted'/.test(chatSrc))
