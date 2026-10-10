@@ -34,7 +34,7 @@ export default function SpaceDrawerCanvas({ opening, returning, controllerRef }:
 
   useEffect(() => {
     let alive = true
-    const filenames = ['e_drawer_hq_v2.webp', 'c_drawer_depth_hq_v2.webp']
+    const filenames = ['e_drawer_hq_v2.webp', 'c_drawer_inner_hq_v3.webp']
     void Promise.all(filenames.map((filename) => new Promise<HTMLImageElement>((resolve, reject) => {
       const image = new Image()
       image.onload = () => image.naturalWidth > 0 ? resolve(image) : reject(new Error('Invalid sprite'))
