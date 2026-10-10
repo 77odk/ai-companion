@@ -59,3 +59,16 @@ jobs:
           path: _space_art_review/
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Space G0-A whole-desk visual preflight
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/space-mobile-visual-baseline'
+        run: python3 scripts/g0a_full_scene_preview.py --out _space_full_scene_review
+
+      - name: Upload G0-A whole-desk review
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'fix/space-mobile-visual-baseline'
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-g0a-whole-desk-qa
+          path: _space_full_scene_review/
+          if-no-files-found: warn
+          retention-days: 7
