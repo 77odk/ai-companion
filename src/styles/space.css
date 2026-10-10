@@ -3243,6 +3243,11 @@ html.eluvin-page-hidden .thought-book-page * {
 .ai-space-page.is-layered.is-drawer-pulling .space-scene-backplate.is-drawer-cavity {
   opacity: 1;
 }
+.ai-space-page.is-layered.is-drawer-pulling .space-scene-backplate.is-drawer-cavity {
+  /* Pointer paint and cavity reveal share the exact same drag fraction. */
+  opacity: var(--space-drawer-cavity-opacity, 0);
+  transition: none;
+}
 .ai-space-page.is-layered .space-scene-ambient {
   z-index: 2;
 }
