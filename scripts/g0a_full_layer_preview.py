@@ -18,6 +18,9 @@ import json
 import re
 import subprocess
 import sys
+import shutil
+import tempfile
+from urllib.parse import urlencode
 from pathlib import Path
 
 WORLD = (941, 1672)
@@ -139,11 +142,85 @@ def run(root: Path, output: Path) -> int:
     print(json.dumps(report,ensure_ascii=False))
     return 1 if report['browserErrors'] else 0
 
+# Headless Chrome CLI backend. Python Playwright is optional, so GitHub Actions
+# can produce real repository art previews without installing any packages.
+CHROME_CAPTURE = r"""
+const q=new URLSearchParams(location.search);
+const p=Number(q.get('p')),w=Number(q.get('w')),h=Number(q.get('h'));
+(function waitForArt(){
+ if(window.qaError){document.body.textContent='G0A_CLI_ERROR_'+window.qaError;return;}
+ if(!window.qaReady){setTimeout(waitForArt,12);return;}
+ try {
+  const frame=window.drawFrame(p,w,h);
+  const output=frame.png.split(',')[1];
+  // PNG data is kept inside local Chrome; only screenshot bytes leave the
+  // temporary QA HTML. No login, user photo or remote URL is ever read.
+  document.body.textContent='G0A_CLI_START|'+output+'|G0A_CLI_END';
+ } catch(e) {document.body.textContent='G0A_CLI_ERROR_'+String(e);}
+})();
+"""
+
+def run_chrome_cli(root: Path, output: Path) -> int:
+    chrome=next((p for key in ('CHROME_BIN',) for p in [__import__('os').environ.get(key)] if p),None)
+    if not chrome:
+        chrome=next((shutil.which(name) for name in ('google-chrome','chromium','chromium-browser')
+                     if shutil.which(name)),None)
+    if not chrome:
+        print('BLOCKED: Chrome/Chromium CLI unavailable',file=sys.stderr)
+        return 2
+    js, assets=input_bundle(root)
+    html=make_html(js,assets).replace('</body>','<script>'+CHROME_CAPTURE+'</script></body>')
+    output.mkdir(parents=True,exist_ok=True)
+    report={
+      'kind':'G0A_TRUE_REPO_ART_PREVIEW_NOT_APPROVED',
+      'renderEngine':'chrome-cli',
+      'sourceFiles':ASSETS,'viewports':[],'stages':STAGES,
+      'manifestArtApproval':False,'browserErrors':[],
+    }
+    with tempfile.TemporaryDirectory(prefix='eluvin-g0a-') as temporary:
+        page=Path(temporary)/'scene.html'
+        page.write_text(html,encoding='utf-8')
+        for width,height in [*VIEWPORTS, WORLD]:
+            for p in STAGES:
+                target=page.as_uri()+'?'+urlencode({'w':width,'h':height,'p':p})
+                args=[
+                    chrome,'--headless=new','--no-sandbox','--disable-dev-shm-usage',
+                    '--disable-gpu','--no-first-run','--disable-extensions',
+                    '--disable-background-networking','--dump-dom',
+                    '--virtual-time-budget=6000',target,
+                ]
+                label=(f'world_{round(p*100):03}' if (width,height)==WORLD
+                       else f'{width}x{height}_{round(p*100):03}')
+                result=subprocess.run(args,text=True,capture_output=True,timeout=30)
+                if result.returncode:
+                    raise RuntimeError(label+' Chrome exited '+str(result.returncode)
+                                       +': '+result.stderr[-350:])
+                match=re.search(r'G0A_CLI_START\|([A-Za-z0-9+/=]+)\|G0A_CLI_END',
+                                result.stdout)
+                if not match:
+                    raise RuntimeError(label+' no screenshot ('+result.stdout[-180:]+')')
+                data=base64.b64decode(match.group(1),validate=True)
+                if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+                    raise RuntimeError(label+' invalid PNG')
+                actual=(int.from_bytes(data[16:20],'big'),int.from_bytes(data[20:24],'big'))
+                if actual!=(width,height):
+                    raise RuntimeError(label+f' PNG dimensions {actual} != {(width,height)}')
+                (output/(label+'.png')).write_bytes(data)
+                print('[G0-A]',label,len(data),'bytes',flush=True)
+            if (width,height)!=WORLD:
+                report['viewports'].append(f'{width}x{height}')
+    (output/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+    print(json.dumps(report,ensure_ascii=False))
+    return 0
+
 def main()->int:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo',type=Path,default=Path(__file__).resolve().parents[1])
     parser.add_argument('--out',type=Path,required=True)
+    parser.add_argument('--engine',choices=('playwright','chrome-cli'),default='playwright')
     args=parser.parse_args()
+    if args.engine=='chrome-cli':
+        return run_chrome_cli(args.repo.resolve(),args.out.resolve())
     return run(args.repo.resolve(),args.out.resolve())
 
 if __name__=='__main__':
