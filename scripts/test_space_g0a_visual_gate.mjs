@@ -4,8 +4,8 @@ import { isSpaceLayerManifestReady } from '../src/lib/spaceSceneAssets.ts'
 
 const manifest = JSON.parse(readFileSync('public/space/layered/manifest.json', 'utf8'))
 const requirements = [
-  { name: 'e_drawer_pixel_trial_v1.webp', width: 481, height: 243, minBytes: 12000 },
-  { name: 'c_drawer_inner_trial_v1.webp', width: 506, height: 210, minBytes: 20000 },
+  { name: 'e_drawer_hq_v2.webp', width: 481, height: 243, minBytes: 12000 },
+  { name: 'c_drawer_depth_hq_v2.webp', width: 506, height: 210, minBytes: 20000 },
 ]
 const readiness = isSpaceLayerManifestReady(manifest)
 assert.equal(readiness, manifest.enabled === true && manifest.artApproved === true &&
