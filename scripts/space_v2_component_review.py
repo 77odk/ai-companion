@@ -102,6 +102,35 @@ def run(html_path: Path, output: Path, record_video: bool = False) -> int:
                 broken = page.evaluate('Array.from(document.images).filter(im=>!im.naturalWidth).length')
                 if broken:
                     errors.append(f'{kind}: {broken} broken artwork images')
+                if kind in ('jar', 'player'):
+                    page.wait_for_selector('.is-native-object-focus')
+                    detail = page.evaluate("""()=>{
+                      const stage=document.querySelector('.star-jar-stage,.listen-stage');
+                      const r=stage.getBoundingClientRect();
+                      const native=document.querySelector('.space-object-native-room');
+                      return {nativeFocus:true,stageLeft:r.left,stageRight:r.right,
+                        viewport:innerWidth,roomSize:[native.naturalWidth,native.naturalHeight],
+                        errorImages:[...document.images].filter(im=>!im.naturalWidth).length};
+                    }""")
+                    row.setdefault('details', {})[kind] = detail
+                    if abs(detail['stageLeft']) > 1 or abs(detail['stageRight'] - width) > 1:
+                        errors.append(f'{kind}: focused room must fill the stage without side gutters')
+                    if detail['roomSize'] != [941, 1672]:
+                        errors.append(f'{kind}: wrong native room resource')
+                    if kind == 'player':
+                        # The real empty-state button opens the existing picker.
+                        # No file is selected, and no track/content is invented.
+                        with page.expect_file_chooser() as picker:
+                            page.get_by_role('button', name='去接音乐', exact=True).tap()
+                        detail['nativeScreenFilePicker'] = picker.value.is_multiple()
+                        volume = page.get_by_role('slider', name='音量', exact=True)
+                        volume.scroll_into_view_if_needed()
+                        before = volume.input_value()
+                        volume.tap()
+                        detail['volumeBefore'] = before
+                        detail['volumeAfterTouch'] = volume.input_value()
+                        if detail['volumeAfterTouch'] == before:
+                            errors.append('player: transformed volume touch did not change the real control')
                 page.screenshot(path=str(output / f'{label}-{kind}.png'))
                 page.get_by_role('button', name='返回', exact=False).first.click()
                 page.wait_for_timeout(750)

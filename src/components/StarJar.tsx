@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadMemory, MEMORY_UPDATED_EVENT, type MemoryItem } from '../lib/memory'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
+import SpaceObjectScene from './SpaceObjectScene'
+import { useSpaceObjectScene } from '../lib/useSpaceObjectScene'
+import { SPACE_JAR_FRAME } from '../lib/spaceObjectFocus'
 
 interface Props {
   onBack: () => void
@@ -36,6 +39,7 @@ function memoryPool(sessionId: string): MemoryItem[] {
 }
 
 export default function StarJar({ onBack }: Props) {
+  const artwork = useSpaceObjectScene()
   const sessionId = getActiveSessionId()
   const [version, setVersion] = useState(0)
   const memories = useMemo(() => memoryPool(sessionId), [sessionId, version])
@@ -87,7 +91,7 @@ export default function StarJar({ onBack }: Props) {
   }
 
   return (
-    <div className="page star-jar-page">
+    <div className={`page star-jar-page${artwork.ready ? ' is-native-object-focus' : ''}`}>
       <header className="space-object-topbar star-jar-topbar">
         <button type="button" onClick={onBack} className="space-object-back">‹ 返回</button>
         <div>
@@ -105,13 +109,13 @@ export default function StarJar({ onBack }: Props) {
           disabled={numberedMemories.length === 0 || phase !== 'jar'}
           aria-label={numberedMemories.length > 0 ? '随机抽一颗记忆星星' : '还没有可以抽取的记忆'}
         >
-          <img
+          {artwork.ready ? <SpaceObjectScene frame={SPACE_JAR_FRAME} onError={artwork.fail} /> : <img
             className="star-jar-approved-art"
             src="/space/cutouts/memory-jar.png"
             alt=""
             aria-hidden="true"
             draggable={false}
-          />
+          />}
           <span className="star-jar-glass" aria-hidden="true">
             {Array.from({ length: visibleStarCount }, (_, index) => (
               <span

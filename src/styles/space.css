@@ -3371,6 +3371,86 @@ html.eluvin-page-hidden .thought-book-page * {
 .listen-player { max-width: 100%; min-width: 0; }
 .listen-device-wrap { width: min(100%, 430px); }
 .listen-tablet-screen { overflow-y: auto; overscroll-behavior: contain; }
+
+/* Candidate detail views keep native room pixels around the enlarged object.
+   These share the layered resource gate; ordinary builds stay on the existing
+   detail fallback until the complete artwork is approved. */
+.space-object-native-room {
+  position: absolute;
+  z-index: 0;
+  max-width: none;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+}
+.page.is-native-object-focus { padding: 0; gap: 0; overflow: hidden; }
+.is-native-object-focus .space-object-topbar { position: relative; z-index: 10; flex-shrink: 0; }
+.is-native-object-focus .star-jar-stage { padding: 0; flex: 1; height: auto; min-height: 0; }
+.is-native-object-focus .star-jar-vessel {
+  width: min(67vw, 276px);
+  aspect-ratio: 260 / 310;
+  opacity: 1;
+}
+.is-native-object-focus .star-jar-glass {
+  inset: 24% 8% 10%;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.is-native-object-focus .star-jar-empty,
+.is-native-object-focus .star-jar-hint {
+  z-index: 2;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(59, 34, 21, .55);
+  color: #fff5e9;
+}
+.is-native-object-focus .listen-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding-left: 12px;
+  padding-right: 12px;
+  grid-template-columns: minmax(0, 1fr);
+}
+.is-native-object-focus .listen-player {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+}
+.is-native-object-focus .listen-device-wrap {
+  width: min(100%, 430px);
+  aspect-ratio: 315 / 234;
+}
+.listen-tablet.is-native-plane {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  transform-origin: 0 0;
+}
+.is-native-plane .listen-tablet-screen {
+  padding: 12px 16px;
+  background: transparent;
+  border-radius: inherit;
+  scrollbar-width: thin;
+}
+.is-native-plane .listen-progress-row,
+.is-native-plane .listen-transport,
+.is-native-plane .listen-volume-row,
+.is-native-plane .listen-actions,
+.is-native-plane .listen-connect { margin-top: 10px; }
+.is-native-plane .listen-meta strong { font-size: 18px; }
+.is-native-plane .listen-meta span,
+.is-native-plane .listen-progress-row span,
+.is-native-plane .listen-volume-row span { font-size: 14px; }
+/* Projection shrinks this DOM plane: grow its controls before projecting so
+   the resulting touch targets stay usable on the real tilted screen. */
+.is-native-plane .listen-connect button { min-height: 64px; font-size: 20px; }
+.is-native-plane .listen-transport button,
+.is-native-plane .listen-actions button { min-height: 60px; font-size: 16px; }
 @media (prefers-reduced-motion: reduce) {
   .ai-space-page.is-content-clean .space-live-photo { rotate: 0deg; }
   .thought-book-turning-page { filter: none; }

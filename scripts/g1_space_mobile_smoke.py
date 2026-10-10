@@ -28,8 +28,55 @@ def origin_is_safe(url: str) -> bool:
     return parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
 
 
+def review_details(page, screenshots, width, height, layered):
+    """Navigate the real App without selecting files or changing user data."""
+    details = []
+    for kind, hotspot, destination in [('jar', 'is-star-jar', '.star-jar-page'),
+                                        ('player', 'is-player', '.listen-together-page')]:
+        page.locator('.space-scene-hotspot.' + hotspot).click()
+        root = page.locator(destination)
+        root.wait_for(state='visible', timeout=10000)
+        if layered:
+            page.wait_for_selector(destination + '.is-native-object-focus', timeout=10000)
+        page.wait_for_timeout(500)
+        result = root.evaluate("""async root=>{
+          const images=[...root.querySelectorAll('img')];
+          const decoded=await Promise.all(images.map(im=>im.decode().then(()=>true,()=>false)));
+          const stage=root.querySelector('.star-jar-stage,.listen-stage').getBoundingClientRect();
+          return {nativeFocus:root.classList.contains('is-native-object-focus'),
+            brokenVisibleImages:decoded.filter(value=>!value).length,
+            documentWidth:document.documentElement.scrollWidth,viewportWidth:innerWidth,
+            stageLeft:stage.left,stageRight:stage.right,
+            projectedScreen:!!root.querySelector('.listen-tablet.is-native-plane')};
+        }""")
+        result['kind'] = kind
+        if result['brokenVisibleImages'] or result['documentWidth'] > width + 1:
+            raise RuntimeError(kind + ' detail has broken artwork or horizontal overflow')
+        if result['nativeFocus'] and (abs(result['stageLeft']) > 1 or abs(result['stageRight'] - width) > 1):
+            raise RuntimeError(kind + ' focused room has side gutters')
+        if kind == 'player':
+            if result['nativeFocus'] and not result['projectedScreen']:
+                raise RuntimeError('Native player is missing its matching control plane')
+            # An empty library exposes this picker; do not replace real tracks.
+            connect = root.get_by_role('button', name='去接音乐', exact=True)
+            if connect.count():
+                with page.expect_file_chooser() as picker:
+                    connect.click()
+                result['filePickerOpened'] = picker.value.is_multiple()
+            else:
+                result['filePickerOpened'] = None  # Actual library is nonempty.
+        if screenshots:
+            page.screenshot(path=str(screenshots / f'{kind}_{width}x{height}.png'))
+        root.get_by_role('button', name='返回', exact=False).first.click()
+        page.locator('.ai-space-page').wait_for(state='visible', timeout=10000)
+        page.wait_for_timeout(500)
+        result['returnedToSpace'] = True
+        details.append(result)
+    return details
+
+
 def run(url: str, storage_state: str | None, screenshots: Path | None,
-        interactive_login: bool = False, cdp_url: str | None = None) -> int:
+        interactive_login: bool = False, cdp_url: str | None = None, details: bool = False) -> int:
     try:
         from playwright.sync_api import sync_playwright, TimeoutError as BrowserTimeout
     except ImportError:
@@ -153,6 +200,9 @@ def run(url: str, storage_state: str | None, screenshots: Path | None,
                     if screenshots:
                         screenshots.mkdir(parents=True, exist_ok=True)
                         page.screenshot(path=str(screenshots / f"space_{width}x{height}.png"))
+                    if details:
+                        record['details'] = review_details(page, screenshots, width, height, layout['layered'])
+                        record['errorCount'] = len(errors)
                     record["status"] = "FAIL" if errors else (
                         "UNAPPROVED_LAYERED_REVIEW_SMOKE_ONLY" if layout["layered"] and layout["unapprovedReviewBuild"] else
                         "LAYERED_RUNTIME_SMOKE_ONLY" if layout["layered"] else "FALLBACK_SMOKE_ONLY")
@@ -161,6 +211,7 @@ def run(url: str, storage_state: str | None, screenshots: Path | None,
                         failed = True
                 except Exception as exc:
                     record["status"] = "FAIL"
+                    record["errorCount"] = max(1, len(errors))
                     record["errors"] = [str(exc)[:200]]
                     failed = True
                 finally:
@@ -191,6 +242,7 @@ def main() -> int:
     parser.add_argument("--interactive-login", action="store_true", help="Log in normally in a local headed browser; no credential export")
     parser.add_argument("--cdp-url", help="Optional localhost HTTP debug endpoint of an already logged-in dedicated test browser; no state export")
     parser.add_argument("--screenshots", type=Path, help="Opt-in PRIVATE local screenshot directory")
+    parser.add_argument("--details", action="store_true", help="Also check jar/player detail and return in the real App; no content or playback changes")
     args = parser.parse_args()
     if not origin_is_safe(args.url):
         parser.error("G1 preflight only accepts local HTTP preview URLs, never production")
@@ -200,7 +252,7 @@ def main() -> int:
         parser.error("Choose interactive login, existing local browser, or existing local state")
     if args.cdp_url and (not origin_is_safe(args.cdp_url) or urlparse(args.cdp_url).username or urlparse(args.cdp_url).password):
         parser.error("Only a localhost HTTP debug endpoint without credentials is supported")
-    return run(args.url, args.storage_state, args.screenshots, args.interactive_login, args.cdp_url)
+    return run(args.url, args.storage_state, args.screenshots, args.interactive_login, args.cdp_url, args.details)
 
 
 if __name__ == "__main__":
