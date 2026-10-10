@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
   SPACE_DRAWER_ART_ROI, paintSpaceDrawer, drawerFrameProgress, spaceDrawerAperture, spaceDrawerCavityAlpha,
+  spaceDrawerFrontAlpha, spaceDrawerInteriorAlpha, spaceDrawerInnerLeftEdge,
 } from '../src/lib/spaceDrawerComposite.ts'
 
 const noop = {}
@@ -30,8 +31,8 @@ assert.deepEqual(spaceDrawerAperture(0), {leftTop:1452,rightTop:1546})
 assert.deepEqual(spaceDrawerAperture(1), {leftTop:1342,rightTop:1396})
 assert.deepEqual(spaceDrawerAperture(Number.NaN), spaceDrawerAperture(0))
 assert.equal(spaceDrawerCavityAlpha(0), 0)
-assert.equal(spaceDrawerCavityAlpha(0.05), 0.1)
-assert.equal(spaceDrawerCavityAlpha(0.25), 0.5)
+assert.equal(spaceDrawerCavityAlpha(0.05), 0.3)
+assert.equal(spaceDrawerCavityAlpha(0.25), 1)
 assert.equal(spaceDrawerCavityAlpha(0.5), 1)
 assert.equal(spaceDrawerCavityAlpha(1), 1)
 assert.equal(spaceDrawerCavityAlpha(-1), 0)
@@ -63,9 +64,21 @@ paintSpaceDrawer(early, art, .25)
 paintSpaceDrawer(middle, art, .5)
 paintSpaceDrawer(finish, art, 1)
 const contentsAlpha = c => c.calls.find(row=>row[0]==='image')[1]
-assert.ok(contentsAlpha(early) > 0.1 && contentsAlpha(early) < .3)
-assert.ok(contentsAlpha(middle) > .6 && contentsAlpha(middle) < .8)
+assert.equal(contentsAlpha(early), 1, 'letters must no longer be transparent at quarter pull')
+assert.equal(contentsAlpha(middle), 1, 'halfway letters must look like real paper')
 assert.equal(contentsAlpha(finish),1)
+for (const p of [.25,.5,.75,1]) {
+  assert.equal(spaceDrawerFrontAlpha(p),1, 'wood front must not ghost at visual keyframes')
+  assert.equal(spaceDrawerInteriorAlpha(p),1, 'paper inner layer must not ghost at visual keyframes')
+}
+assert.ok(spaceDrawerFrontAlpha(.05)>0 && spaceDrawerFrontAlpha(.05)<1)
+assert.equal(spaceDrawerFrontAlpha(0),0)
+assert.equal(spaceDrawerInteriorAlpha(0),0)
+for(const p of [0,.25,.5,.75,1]) {
+  const frontLeft=466 + (442-466)*p
+  assert.equal(spaceDrawerInnerLeftEdge(p),frontLeft-3,
+    'C side must not stick out beyond a narrow natural rim')
+}
 for (const [ms,lo,hi] of [[0,0,0],[100,.3,.4],[380,.87,.88],[760,1,1],[2000,1,1]]) {
   const p=drawerFrameProgress(ms)
   assert.ok(p>=lo && p<=hi, 'unexpected easing at '+ms+'ms: '+p)
