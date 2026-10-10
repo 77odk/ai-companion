@@ -1,7 +1,7 @@
 {
   "version": "2026-10-09",
-  "enabled": true,
-  "description": "Source-grounded E/C drawer canvas, still pending independent mobile visual approval.",
+  "enabled": false,
+  "description": "G0-A artwork gate FAILED: E/C drawer sprites are low-quality temporary crops. Keep layered scene off until visual review; safe fallback only.",
   "assets": [
     "room-closed.webp",
     "room-cavity.webp",
