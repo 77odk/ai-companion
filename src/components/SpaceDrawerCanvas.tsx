@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import { SPACE_LAYER_BASE } from '../lib/spaceSceneAssets'
-import { drawerFrameProgress, paintSpaceDrawer, SPACE_DRAWER_ART_ROI, type SpaceDrawerArt } from '../lib/spaceDrawerComposite'
+import { drawerFrameProgress, paintSpaceDrawer, spaceDrawerCavityAlpha, SPACE_DRAWER_ART_ROI, type SpaceDrawerArt } from '../lib/spaceDrawerComposite'
 
 export interface SpaceDrawerController {
   /** Pointer preview in 0..1 scene-progress coordinates. No storage writes. */
@@ -12,10 +12,11 @@ interface Props {
   opening: boolean
   returning: boolean
   controllerRef: MutableRefObject<SpaceDrawerController | null>
+  scenePageRef: MutableRefObject<HTMLDivElement | null>
 }
 
 /** Motion is restricted to the drawer's 514×363 ROI, never the fixed desktop. */
-export default function SpaceDrawerCanvas({ opening, returning, controllerRef }: Props) {
+export default function SpaceDrawerCanvas({ opening, returning, controllerRef, scenePageRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const artRef = useRef<SpaceDrawerArt | null>(null)
   const paintedRef = useRef(0)
@@ -29,8 +30,11 @@ export default function SpaceDrawerCanvas({ opening, returning, controllerRef }:
     if (!ctx) return
     const clamped = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0
     paintedRef.current = clamped
+    // The cavity and the moving sprite share exactly one progress clock for
+    // pointer drags, auto-open, return, reduced motion and slow devices.
+    scenePageRef.current?.style.setProperty('--space-drawer-cavity-opacity', String(spaceDrawerCavityAlpha(clamped)))
     paintSpaceDrawer(ctx, art, clamped)
-  }, [])
+  }, [scenePageRef])
 
   useEffect(() => {
     let alive = true
@@ -48,7 +52,11 @@ export default function SpaceDrawerCanvas({ opening, returning, controllerRef }:
       // Fail closed: the clickable weekly-letter entry stays available.
       if (alive) { artRef.current = null; setReady(false) }
     })
-    return () => { alive = false; artRef.current = null }
+    return () => {
+      alive = false
+      artRef.current = null
+      scenePageRef.current?.style.removeProperty('--space-drawer-cavity-opacity')
+    }
   }, [])
 
   useEffect(() => {
