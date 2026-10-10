@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
 import SpaceDrawerCanvas, { type SpaceDrawerController } from './SpaceDrawerCanvas'
+import { spaceDrawerCavityAlpha } from '../lib/spaceDrawerComposite'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { loadMemory, MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
@@ -250,6 +251,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     drag.element.style.removeProperty('opacity')
     drag.element.classList.remove('is-dragging')
     scenePageRef.current?.classList.remove('is-drawer-pulling')
+    scenePageRef.current?.style.removeProperty('--space-drawer-cavity-opacity')
     drawerGestureRef.current = null
   }
 
@@ -739,12 +741,17 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
               if (!drag.moved && Math.abs(event.clientY - drag.startY) > 5) {
                 drag.moved = true
                 drag.element.classList.add('is-dragging')
-                if (layeredReady) scenePageRef.current?.classList.add('is-drawer-pulling')
+                if (layeredReady && drawerVisualRef.current) scenePageRef.current?.classList.add('is-drawer-pulling')
               }
               if (!drag.moved) return
               const pull = projectSpaceDrawerPull(drag.startY, event.clientY, drag.hitHeight)
-              if (layeredReady) drawerVisualRef.current?.paint(pull / SPACE_DRAWER_OPEN_PERCENT)
-              else drag.element.style.transform = `translate3d(0, ${pull}%, 0)`
+              if (layeredReady && drawerVisualRef.current) {
+                const fraction = pull / SPACE_DRAWER_OPEN_PERCENT
+                scenePageRef.current?.style.setProperty('--space-drawer-cavity-opacity', String(spaceDrawerCavityAlpha(fraction)))
+                drawerVisualRef.current.paint(fraction)
+              } else if (!layeredReady) {
+                drag.element.style.transform = `translate3d(0, ${pull}%, 0)`
+              }
             }}
             onPointerUp={(event) => {
               const drag = drawerGestureRef.current
