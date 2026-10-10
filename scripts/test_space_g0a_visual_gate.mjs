@@ -1,20 +1,25 @@
 import assert from 'node:assert/strict'
 import { readFileSync, statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { isSpaceLayerManifestReady } from '../src/lib/spaceSceneAssets.ts'
 
 const manifest = JSON.parse(readFileSync('public/space/layered/manifest.json', 'utf8'))
 const requirements = [
-  { name: 'e_drawer_hq_v2.webp', width: 481, height: 243, minBytes: 12000 },
-  { name: 'c_drawer_depth_hq_v2.webp', width: 506, height: 210, minBytes: 20000 },
+  { name: 'e_drawer_hq_v2.webp', width: 481, height: 243, minBytes: 12000, gitBlob: '81033c593d5c96a77355b147e503092c1af3bb4e' },
+  { name: 'c_drawer_depth_hq_v2.webp', width: 506, height: 210, minBytes: 20000, gitBlob: '537f918ca733d137bdd7bc27ca0becb71de948eb' },
 ]
 const readiness = isSpaceLayerManifestReady(manifest)
 assert.equal(readiness, manifest.enabled === true && manifest.artApproved === true &&
   requirements.every(({ name }) => manifest.assets.includes(name)),
   'manifest must preserve two independent technical+visual switches')
 const pending = []
-for (const { name, width, height, minBytes } of requirements) {
+for (const { name, width, height, minBytes, gitBlob } of requirements) {
   const path = 'public/space/layered/' + name
   const bytes = readFileSync(path)
+  // Pin the exact approved-source extraction candidates. A replacement requires
+  // updating this digest as a deliberate new art-review batch; no silent swaps.
+  const actualBlob = createHash('sha1').update(Buffer.from(`blob ${bytes.length}\\0`)).update(bytes).digest('hex')
+  assert.equal(actualBlob, gitBlob, name + ': source sprite changed without G0-A asset review')
   assert.equal(bytes.toString('ascii', 0, 4), 'RIFF', name)
   assert.equal(bytes.toString('ascii', 8, 12), 'WEBP', name)
   let dimensions = null
