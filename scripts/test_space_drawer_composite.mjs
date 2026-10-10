@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
-  SPACE_DRAWER_ART_ROI, paintSpaceDrawer, drawerFrameProgress, spaceDrawerAperture,
+  SPACE_DRAWER_ART_ROI, paintSpaceDrawer, drawerFrameProgress, spaceDrawerAperture, spaceDrawerCavityAlpha,
 } from '../src/lib/spaceDrawerComposite.ts'
 
 const noop = {}
@@ -29,6 +29,14 @@ assert.deepEqual(SPACE_DRAWER_ART_ROI, {x:427,y:1309,width:514,height:363})
 assert.deepEqual(spaceDrawerAperture(0), {leftTop:1452,rightTop:1546})
 assert.deepEqual(spaceDrawerAperture(1), {leftTop:1342,rightTop:1396})
 assert.deepEqual(spaceDrawerAperture(Number.NaN), spaceDrawerAperture(0))
+assert.equal(spaceDrawerCavityAlpha(0), 0)
+assert.equal(spaceDrawerCavityAlpha(0.05), 0.1)
+assert.equal(spaceDrawerCavityAlpha(0.25), 0.5)
+assert.equal(spaceDrawerCavityAlpha(0.5), 1)
+assert.equal(spaceDrawerCavityAlpha(1), 1)
+assert.equal(spaceDrawerCavityAlpha(-1), 0)
+assert.equal(spaceDrawerCavityAlpha(Number.NaN), 0)
+assert.equal(spaceDrawerCavityAlpha(Infinity), 0)
 assert.deepEqual(spaceDrawerAperture(200), spaceDrawerAperture(1))
 for (const p of [.1,.25,.5,.75,.9]) {
   const { leftTop,rightTop } = spaceDrawerAperture(p)
