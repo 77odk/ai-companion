@@ -54,9 +54,10 @@ def run(html_path, output, record_video=False):
             page.evaluate('window.__paintReview=[]')
             page.wait_for_timeout(duration)
             result = page.evaluate('''()=>{
-              const times=window.__paintReview.filter(p=>p.width===325).map(p=>p.time);
+              const width=document.querySelector('.space-foliage-canvas')?.width;
+              const times=window.__paintReview.filter(p=>p.width===width).map(p=>p.time);
               const intervals=times.slice(1).map((t,i)=>t-times[i]).sort((a,b)=>a-b);
-              const paint=window.__paintReview.filter(p=>p.width===325&&p.paintMs!=null).map(p=>p.paintMs).sort((a,b)=>a-b);
+              const paint=window.__paintReview.filter(p=>p.width===width&&p.paintMs!=null).map(p=>p.paintMs).sort((a,b)=>a-b);
               return {frames:times.length,paintP95Ms:paint[Math.floor(paint.length*.95)]??null,intervalMedianMs:intervals[Math.floor(intervals.length*.5)]??null,
                 intervalP95Ms:intervals[Math.floor(intervals.length*.95)]??null,
                 motion:document.querySelector('.ai-space-page')?.dataset.spaceMotion,

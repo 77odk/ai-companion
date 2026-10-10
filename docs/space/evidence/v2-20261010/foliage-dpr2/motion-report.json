@@ -1,0 +1,83 @@
+{
+  "kind": "ISOLATED_EMPTY_ACCOUNT_MOTION_REVIEW",
+  "physicalPhone": false,
+  "errors": [],
+  "samples": [
+    {
+      "frames": 49,
+      "paintP95Ms": 0.5,
+      "intervalMedianMs": 49.900000002235174,
+      "intervalP95Ms": 50.20000000298023,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "normal idle",
+      "durationMs": 2200
+    },
+    {
+      "frames": 0,
+      "paintP95Ms": null,
+      "intervalMedianMs": null,
+      "intervalP95Ms": null,
+      "motion": "off",
+      "environment": "neutral",
+      "name": "runtime reduced-motion",
+      "durationMs": 1200
+    },
+    {
+      "frames": 27,
+      "paintP95Ms": 0.8000000007450581,
+      "intervalMedianMs": 50,
+      "intervalP95Ms": 51.600000001490116,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "motion resumed",
+      "durationMs": 1200
+    },
+    {
+      "frames": 50,
+      "paintP95Ms": 5.400000002235174,
+      "intervalMedianMs": 55.600000001490116,
+      "intervalP95Ms": 94.80000000074506,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "desktop CPU 6x slowdown",
+      "durationMs": 3000
+    },
+    {
+      "frames": 27,
+      "paintP95Ms": 0.5999999977648258,
+      "intervalMedianMs": 50,
+      "intervalP95Ms": 50.100000001490116,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "after full wind cycle",
+      "durationMs": 1200
+    },
+    {
+      "frames": 0,
+      "paintP95Ms": null,
+      "intervalMedianMs": null,
+      "intervalP95Ms": null,
+      "motion": null,
+      "environment": null,
+      "name": "scene unmounted",
+      "durationMs": 1200
+    },
+    {
+      "frames": 27,
+      "paintP95Ms": 0.30000000074505806,
+      "intervalMedianMs": 49.900000002235174,
+      "intervalP95Ms": 50.19999999925494,
+      "motion": "on",
+      "environment": "neutral",
+      "name": "scene remounted",
+      "durationMs": 1200
+    }
+  ],
+  "backgroundTabSupported": false,
+  "finalLayout": {
+    "width": 390,
+    "viewport": 390,
+    "broken": 0
+  }
+}

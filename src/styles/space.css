@@ -3303,6 +3303,13 @@ html.eluvin-page-hidden .thought-book-page * {
   pointer-events: none;
   user-select: none;
 }
+.space-scene-backplate.is-foliage-restored {
+  z-index: 0;
+  opacity: 0;
+}
+[data-space-foliage-ready="true"] .space-scene-backplate.is-foliage-restored {
+  opacity: 1;
+}
 .ai-space-page.is-content-clean .space-scene-hotspot.is-star-jar {
   left: 20.5%; top: 47.5%; width: 27%; height: 18%;
 }

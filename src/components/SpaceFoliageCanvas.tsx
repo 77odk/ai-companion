@@ -5,8 +5,8 @@ import { isHomeWeatherEnabled, loadHomeWeather, type HomeWeather } from '../lib/
 import { loadUserProfile } from '../lib/storage'
 
 const BRANCHES = [
-  { x: 65, y: 80, width: 325, height: 630, phase: 0, gain: 1 },
-  { x: 847, y: 795, width: 94, height: 220, phase: .27, gain: .45 },
+  { x: 0, y: 0, width: 400, height: 735, phase: 0, gain: 1 },
+  { x: 780, y: 750, width: 161, height: 300, phase: .27, gain: .45 },
 ] as const
 
 /** Native foliage pixels, bent along the branch rather than translating a
@@ -43,31 +43,36 @@ export default function SpaceFoliageCanvas({ scenePageRef }: {
         }
       })
     }
-    let layers: Array<{ leaves: HTMLCanvasElement; wall: HTMLCanvasElement }> = []
+    let layers: Array<{ leaves: HTMLCanvasElement }> = []
     const draw = (elapsed: number, quality: 'off' | 'low' | 'full') => {
       const rainy = Boolean(weather && Date.now() - weather.fetchedAt < 30 * 60_000 && ['drizzle', 'rain', 'thunder'].includes(weather.visual))
       const strength = rainy ? 1 : .32
       host.dataset.spaceEnvironment = rainy ? 'rain' : 'neutral'
       const paper = sampleSpaceWind(elapsed, 0, quality)
       host.style.setProperty('--space-paper-wind', `${paper.paperOffsets[2] * strength * .3}deg`)
-      layers.forEach(({ leaves, wall }, index) => {
+      layers.forEach(({ leaves }, index) => {
         const canvas = canvasRefs.current[index]
         const ctx = canvas?.getContext('2d')
         if (!ctx) return
-        ctx.clearRect(0, 0, wall.width, wall.height)
-        ctx.drawImage(wall, 0, 0)
+        ctx.clearRect(0, 0, leaves.width, leaves.height)
         const branch = BRANCHES[index]
         const wind = sampleSpaceWind(Math.max(0, elapsed - branch.phase * 1000), 0, quality)
         const tip = wind.plantDegrees[2] * branch.gain * strength
         const offset = (y: number) => tip * (y / leaves.height) ** 1.65
         const rows = 36
         for (let row = 0; row < rows; row++) {
-          const y = row * leaves.height / rows
-          const height = leaves.height / rows
+          const y = Math.round(row * leaves.height / rows)
+          const height = Math.round((row + 1) * leaves.height / rows) - y
           const shear = (offset(y + height) - offset(y)) / height
           ctx.save()
+          // Clip destination pixels before deforming the full bitmap. Cropping
+          // fractional source strips filters their edges against transparency,
+          // leaving horizontal seams that are especially visible at mobile DPR.
+          ctx.beginPath()
+          ctx.rect(0, y, leaves.width, height)
+          ctx.clip()
           ctx.transform(1, 0, shear, 1, offset(y) - shear * y, 0)
-          ctx.drawImage(leaves, 0, y, leaves.width, height, 0, y, leaves.width, height)
+          ctx.drawImage(leaves, 0, 0)
           ctx.restore()
         }
       })
@@ -97,24 +102,26 @@ export default function SpaceFoliageCanvas({ scenePageRef }: {
       if (document.hidden || reduce.matches) draw(0, 'off')
       else frame = requestAnimationFrame(tick)
     }
-    void Promise.all([load('room-content-clean-v2.webp'), load('room-foliage-restored-v2.webp'), load('foliage-alpha-v2.webp')]).then(([original, restored, matte]) => {
+    void Promise.all([load('room-content-clean-v2.webp'), load('room-foliage-restored-v2.webp'), load('foliage-alpha-v2.webp')]).then(([original, , matte]) => {
       if (!alive) return
       layers = BRANCHES.map(branch => {
-        const leaves = document.createElement('canvas'), wall = document.createElement('canvas')
-        leaves.width = wall.width = branch.width
-        leaves.height = wall.height = branch.height
-        const leafCtx = leaves.getContext('2d')!, wallCtx = wall.getContext('2d')!
+        const leaves = document.createElement('canvas')
+        leaves.width = branch.width
+        leaves.height = branch.height
+        const leafCtx = leaves.getContext('2d')!
         leafCtx.drawImage(original, branch.x, branch.y, branch.width, branch.height, 0, 0, branch.width, branch.height)
-        wallCtx.drawImage(restored, branch.x, branch.y, branch.width, branch.height, 0, 0, branch.width, branch.height)
         // Use the repaired alpha only. All visible leaf colors/material still
         // come from the reference-aligned plate, including pale sunlit leaves
         // and thin stems that color-key subtraction used to destroy.
         leafCtx.globalCompositeOperation = 'destination-in'
         leafCtx.drawImage(matte, branch.x, branch.y, branch.width, branch.height, 0, 0, branch.width, branch.height)
         leafCtx.globalCompositeOperation = 'source-over'
-        return { leaves, wall }
+        return { leaves }
       })
       draw(0, 'off')
+      // The restored wall must be one continuous room plate, never two local
+      // rectangles whose repaired lighting differs from the original pixels.
+      host.dataset.spaceFoliageReady = 'true'
       resume()
     }).catch(() => {
       // The original content-clean backplate stays visible on load failure.
@@ -131,10 +138,13 @@ export default function SpaceFoliageCanvas({ scenePageRef }: {
       reduce.removeEventListener('change', resume)
       delete host.dataset.spaceMotion
       delete host.dataset.spaceEnvironment
+      delete host.dataset.spaceFoliageReady
       host.style.removeProperty('--space-paper-wind')
     }
   }, [scenePageRef])
-  return <>{BRANCHES.map((branch, index) => (
+  return <><img className="space-scene-backplate is-foliage-restored"
+    src={`${SPACE_LAYER_BASE}room-foliage-restored-v2.webp`} alt="" aria-hidden="true" draggable={false} />
+    {BRANCHES.map((branch, index) => (
     <canvas key={index} ref={value => { canvasRefs.current[index] = value }}
       className="space-foliage-canvas" width={branch.width} height={branch.height}
       style={{ left: `${branch.x / 941 * 100}%`, top: `${branch.y / 1672 * 100}%`, width: `${branch.width / 941 * 100}%`, height: `${branch.height / 1672 * 100}%` }}

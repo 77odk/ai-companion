@@ -25,6 +25,7 @@ def run(html_path: Path, output: Path, record_video: bool = False) -> int:
                                      args=['--no-sandbox', '--disable-dev-shm-usage'])
         for width, height in [(390, 844), (390, 690), (430, 932)]:
             page = browser.new_page(viewport={'width': width, 'height': height},
+                                    device_scale_factor=2, is_mobile=True, has_touch=True,
                                     reduced_motion='reduce' if height == 690 else 'no-preference',
                                     **({'record_video_dir': str(output / 'video'),
                                         'record_video_size': {'width': width, 'height': height}} if record_video else {}))
@@ -37,7 +38,7 @@ def run(html_path: Path, output: Path, record_video: bool = False) -> int:
             label = f'{width}x{height}'
             page.screenshot(path=str(output / f'{label}-room.png'))
             layout = page.evaluate("""()=>({
-              width:document.documentElement.scrollWidth, viewport:innerWidth,
+              width:document.documentElement.scrollWidth, viewport:innerWidth, deviceScaleFactor:devicePixelRatio,
               broken:[...document.images].filter(im=>!im.complete||!im.naturalWidth).length,
               photos:document.querySelectorAll('.space-live-photo').length,
               stars:document.querySelectorAll('.space-live-star').length,
