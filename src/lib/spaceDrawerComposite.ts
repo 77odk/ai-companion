@@ -64,7 +64,7 @@ export function paintSpaceDrawer(
   const interiorPhase = clamp((p - 0.03) / 0.72)
   ctx.globalAlpha = interiorPhase * interiorPhase * (3 - 2 * interiorPhase)
   // The C cutout already excludes its unrelated tabletop and front cabinet.
-  ctx.translate(0, (1 - p) * 23)
+  ctx.translate(0, (1 - p) * 63 + 8)
   // The previously bundled HQ C bitmap also contains C's stationary desktop
   // and lower cabinet. Clip to its genuine drawer SIDE + LETTERS silhouette
   // so it can never repaint the fixed E desk or duplicate its moving front.
