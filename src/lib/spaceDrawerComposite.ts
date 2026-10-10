@@ -97,45 +97,43 @@ export function paintSpaceDrawer(
   ctx.drawImage(art.interior, 435, 1325, 506, 210)
   ctx.restore()
 
-  // Draw ONLY the natural E wooden front. Source top sampling starts *below*
-  // the E envelope and wax heart: this removes the doubled-wax bug.
+  // Two affine triangles replace 32 vertical texture strips. Repeated strips
+  // left pinstripe gaps (and produced dark overlaps when widened). This is
+  // still the original E wood pixel source, not a repaint or generated desk.
   const destination = mixQuad(p)
   ctx.save()
   ctx.globalAlpha = Math.min(1, p * 3)
-  const strips = 32
-  for (let strip = 0; strip < strips; strip++) {
-    const a = strip / strips, b = (strip + 1) / strips
-    const along = (pointA: Point, pointB: Point, ratio: number): Point => [
-      lerp(pointA[0], pointB[0], ratio), lerp(pointA[1], pointB[1], ratio),
-    ]
-    const tl = along(destination[0], destination[1], a)
-    const tr = along(destination[0], destination[1], b)
-    const bl = along(destination[3], destination[2], a)
-    const br = along(destination[3], destination[2], b)
-    const sl = along(SOURCE_FACE[0], SOURCE_FACE[1], a)
-    const sr = along(SOURCE_FACE[0], SOURCE_FACE[1], b)
-    const sb = along(SOURCE_FACE[3], SOURCE_FACE[2], a)
-    // Source E image starts at world (460, 1429).
-    const sx1 = sl[0] - 460, sx2 = sr[0] - 460
-    const sy1 = sl[1] - 1429, sy2 = sr[1] - 1429
-    const syBottom = sb[1] - 1429
-    const dY = syBottom - sy1
-    if (sx2 <= sx1 || dY <= 0) continue
-    const c = (bl[0] - tl[0]) / dY
-    const d = (bl[1] - tl[1]) / dY
-    const aMatrix = (tr[0] - tl[0] - c * (sy2 - sy1)) / (sx2 - sx1)
-    const bMatrix = (tr[1] - tl[1] - d * (sy2 - sy1)) / (sx2 - sx1)
-    const e = tl[0] - aMatrix * sx1 - c * sy1
-    const f = tl[1] - bMatrix * sx1 - d * sy1
+  const triangles: readonly (readonly [number, number, number])[] = [[0, 1, 2], [0, 2, 3]]
+  for (const [ia, ib, ic] of triangles) {
+    const indices = [ia, ib, ic]
+    const source: Point[] = indices.map((i) => [
+      SOURCE_FACE[i][0] - 460, SOURCE_FACE[i][1] - 1429,
+    ])
+    const target: Point[] = indices.map((i) => destination[i])
+    const sx1 = source[1][0] - source[0][0]
+    const sy1 = source[1][1] - source[0][1]
+    const sx2 = source[2][0] - source[0][0]
+    const sy2 = source[2][1] - source[0][1]
+    const dx1 = target[1][0] - target[0][0]
+    const dy1 = target[1][1] - target[0][1]
+    const dx2 = target[2][0] - target[0][0]
+    const dy2 = target[2][1] - target[0][1]
+    const determinant = sx1 * sy2 - sx2 * sy1
+    if (Math.abs(determinant) < 1e-7) continue
+    const a = (dx1 * sy2 - dx2 * sy1) / determinant
+    const b = (dy1 * sy2 - dy2 * sy1) / determinant
+    const c = (sx1 * dx2 - sx2 * dx1) / determinant
+    const d = (sx1 * dy2 - sx2 * dy1) / determinant
+    const e = target[0][0] - a * source[0][0] - c * source[0][1]
+    const f = target[0][1] - b * source[0][0] - d * source[0][1]
     ctx.save()
     ctx.beginPath()
-    ctx.moveTo(tl[0] - .15, tl[1] - .15)
-    ctx.lineTo(tr[0] + .15, tr[1] - .15)
-    ctx.lineTo(br[0] + .15, br[1] + .15)
-    ctx.lineTo(bl[0] - .15, bl[1] + .15)
+    ctx.moveTo(...target[0])
+    ctx.lineTo(...target[1])
+    ctx.lineTo(...target[2])
     ctx.closePath()
     ctx.clip()
-    ctx.transform(aMatrix, bMatrix, c, d, e, f)
+    ctx.transform(a, b, c, d, e, f)
     ctx.drawImage(art.face, 0, 0, 481, 243)
     ctx.restore()
   }
