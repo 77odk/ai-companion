@@ -81,7 +81,13 @@ def run(root: Path, output: Path) -> int:
         html=html.replace(needle,needle+'window.__drawObjects(ctx);')
         extra=OBJECT_SCRIPT.replace('__SOURCES__',json.dumps(
             {k:base[k] for k in OBJECTS})).replace('__BOXES__',json.dumps(BOXES))
-        return html.replace('</body>','<script>'+extra+'</script></body>')
+        diagnostics = (
+            '<script>window.addEventListener("error",e=>{'
+            'document.body.textContent="G0A_CLI_ERROR_JS_"+e.message},true);'
+            '</script>'
+        )
+        return html.replace('<body>', '<body>'+diagnostics).replace(
+            '</body>','<script>'+extra+'</script></body>')
     try:
         drawer.input_bundle=with_objects
         drawer.make_html=with_painter
