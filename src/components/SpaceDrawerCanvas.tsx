@@ -74,11 +74,17 @@ export default function SpaceDrawerCanvas({ opening, returning, controllerRef }:
     let frame = 0
     let started = -1
     let lastPainted = -Infinity
+    let lastFrame = -1
+    let smoothedFrameMs = 16.7
     const update = (now: number) => {
       if (started < 0) started = now
       const elapsed = now - started
-      // 30fps cap, no heavy off-screen RAF work.
-      if (now - lastPainted >= 1000 / 30 || elapsed >= duration) {
+      if (lastFrame >= 0) smoothedFrameMs = smoothedFrameMs * .85 + (now - lastFrame) * .15
+      lastFrame = now
+      // 30fps normally, 12fps if the device is already struggling.
+      // Never call the full scene renderer or spawn independent physics.
+      const frameInterval = smoothedFrameMs > 43 ? 1000 / 12 : 1000 / 30
+      if (now - lastPainted >= frameInterval || elapsed >= duration) {
         const eased = drawerFrameProgress(elapsed, duration)
         paint(start + (finish - start) * eased)
         lastPainted = now
