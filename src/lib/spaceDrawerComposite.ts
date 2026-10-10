@@ -1,4 +1,4 @@
-import { paintSpaceDrawerFrontMesh } from './spaceDrawerFaceMesh'
+import { paintSpaceDrawerFrontMesh } from './spaceDrawerFaceMesh.ts'
 
 /**
  * E-front / C-interior drawer compositing in the 941 × 1672 Space world.
