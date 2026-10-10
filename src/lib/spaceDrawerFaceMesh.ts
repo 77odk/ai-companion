@@ -1,6 +1,7 @@
 /** Draw the E wooden drawer front with two adjacent source-derived triangles.
- * The caller supplies a transparent 514x363 scratch canvas and composites
- * that canvas ONCE at the desired opacity. This prevents 32-strip alpha seams.
+ * The caller can paint directly in the 514x363 drawer ROI, or use an
+ * offscreen surface if a later visual gate calls for one. Two triangles remove
+ * the 32-strip pinstripes without generating or repainting desk textures.
  * No independent desk shape, content or model-generated texture is introduced.
  */
 type Point = readonly [number, number]
