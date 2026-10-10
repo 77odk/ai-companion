@@ -3241,10 +3241,8 @@ html.eluvin-page-hidden .thought-book-page * {
 }
 .ai-space-page.is-layered .space-scene-backplate.is-drawer-cavity.is-visible,
 .ai-space-page.is-layered.is-drawer-pulling .space-scene-backplate.is-drawer-cavity {
-  opacity: 1;
-}
-.ai-space-page.is-layered.is-drawer-pulling .space-scene-backplate.is-drawer-cavity {
-  /* Pointer paint and cavity reveal share the exact same drag fraction. */
+  /* No separate 160ms cavity animation: both drag and automatic open/return
+     must use the same pixel progress as the active E/C canvas sprite. */
   opacity: var(--space-drawer-cavity-opacity, 0);
   transition: none;
 }
