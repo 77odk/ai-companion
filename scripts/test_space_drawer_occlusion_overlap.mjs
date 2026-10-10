@@ -4,6 +4,15 @@ import { paintSpaceDrawer } from '../src/lib/spaceDrawerComposite.ts'
 
 const src = readFileSync('src/lib/spaceDrawerComposite.ts','utf8')
 assert.match(src, /ctx\.translate\(0, \(1 - p\) \* 63 \+ 8\)/)
+// G0-A: the aperture belongs to the STATIONARY desktop. It must be clipped
+// before C letters/side translate; otherwise the clipping line itself moves
+// and exposes a very large fake black cavity at 25% pull.
+const deskAperture = src.indexOf('const { leftTop, rightTop } = spaceDrawerAperture(p)')
+const cMovement = src.indexOf('ctx.translate(0, (1 - p) * 63 + 8)')
+assert.ok(deskAperture > 0 && cMovement > deskAperture,
+  'fixed desk edge must be established BEFORE moving interior')
+assert.ok(src.slice(deskAperture, cMovement).includes('ctx.clip()'),
+  'desk aperture must be clipped in untransformed world coordinates')
 
 // The source C sprite physically ends at world 1438 / 1535 (left/right),
 // while the E wooden front begins on its two perspective edges. The C inner
