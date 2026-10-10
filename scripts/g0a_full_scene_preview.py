@@ -47,6 +47,12 @@ Promise.all(Object.keys(objectSources).map(k=>new Promise((resolve,reject)=>{
   img.onerror=()=>reject(new Error('missing '+k+' sprite'));
   img.src=objectSources[k];
 }))).then(()=>{objectsReady=true;}).catch(e=>{window.qaError=String(e)});
+setTimeout(()=>{
+  if(!window.qaReady && !window.qaError)
+    document.body.textContent='G0A_CLI_ERROR_TIMEOUT_'+JSON.stringify({
+      baseReady,objectsReady,loaded:Object.keys(loaded),drawer:typeof window.drawFrame
+    });
+},4500);
 function contain(ctx,img,rect) {
  const [x,y,w,h]=rect.map((v,i)=>v/100*(i%2===0?941:1672));
  const scale=Math.min(w/img.naturalWidth,h/img.naturalHeight);
