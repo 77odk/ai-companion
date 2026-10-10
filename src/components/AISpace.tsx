@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
 import SpaceDrawerCanvas, { type SpaceDrawerController } from './SpaceDrawerCanvas'
-import { spaceDrawerCavityAlpha } from '../lib/spaceDrawerComposite'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { loadMemory, MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
@@ -251,7 +250,6 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     drag.element.style.removeProperty('opacity')
     drag.element.classList.remove('is-dragging')
     scenePageRef.current?.classList.remove('is-drawer-pulling')
-    scenePageRef.current?.style.removeProperty('--space-drawer-cavity-opacity')
     drawerGestureRef.current = null
   }
 
@@ -715,7 +713,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
 
           {layeredReady ? <img className="space-layer-earphones" src={`${SPACE_LAYER_BASE}wired_earphones.png`} alt="" aria-hidden="true" draggable={false} /> : null}
           {layeredReady ? (
-            <SpaceDrawerCanvas opening={drawerOpening} returning={drawerReturning} controllerRef={drawerVisualRef} />
+            <SpaceDrawerCanvas opening={drawerOpening} returning={drawerReturning} controllerRef={drawerVisualRef} scenePageRef={scenePageRef} />
           ) : null}
           <button
             type="button"
@@ -747,7 +745,6 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
               const pull = projectSpaceDrawerPull(drag.startY, event.clientY, drag.hitHeight)
               if (layeredReady && drawerVisualRef.current) {
                 const fraction = pull / SPACE_DRAWER_OPEN_PERCENT
-                scenePageRef.current?.style.setProperty('--space-drawer-cavity-opacity', String(spaceDrawerCavityAlpha(fraction)))
                 drawerVisualRef.current.paint(fraction)
               } else if (!layeredReady) {
                 drag.element.style.transform = `translate3d(0, ${pull}%, 0)`
