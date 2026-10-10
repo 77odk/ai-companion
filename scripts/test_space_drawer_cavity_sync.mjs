@@ -23,8 +23,9 @@ const cavityBlock = css.slice(css.lastIndexOf('/* A distinct cavity state'), css
 assert.ok(cavityBlock.includes('transition: none;'))
 assert.doesNotMatch(cavityBlock, /\.is-visible,[\s\S]{0,170}opacity: 1;/)
 assert.equal(spaceDrawerCavityAlpha(0),0)
-assert.equal(spaceDrawerCavityAlpha(0.25),0.5)
+assert.equal(spaceDrawerCavityAlpha(0.25),1)
 assert.equal(spaceDrawerCavityAlpha(0.5),1)
+assert.equal(spaceDrawerCavityAlpha(0.05),0.3)
 assert.equal(spaceDrawerCavityAlpha(1),1)
 for (const t of [0, 100, 250, 380, 500, 760]) {
   const progress = drawerFrameProgress(t)
