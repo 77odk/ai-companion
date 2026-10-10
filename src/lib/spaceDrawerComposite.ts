@@ -1,3 +1,5 @@
+import { paintSpaceDrawerFrontMesh } from './spaceDrawerFaceMesh'
+
 /**
  * E-front / C-interior drawer compositing in the 941 × 1672 Space world.
  * No external renderer or dependencies. Art is source-derived, not synthesized
@@ -97,46 +99,15 @@ export function paintSpaceDrawer(
   ctx.drawImage(art.interior, 435, 1325, 506, 210)
   ctx.restore()
 
-  // Two affine triangles replace 32 vertical texture strips. Repeated strips
-  // left pinstripe gaps (and produced dark overlaps when widened). This is
-  // still the original E wood pixel source, not a repaint or generated desk.
+  // Two native E triangles replace 32 vertical strips. The mapping math is
+  // shared with its geometry test rather than duplicated in this renderer.
   const destination = mixQuad(p)
   ctx.save()
   ctx.globalAlpha = Math.min(1, p * 3)
-  const triangles: readonly (readonly [number, number, number])[] = [[0, 1, 2], [0, 2, 3]]
-  for (const [ia, ib, ic] of triangles) {
-    const indices = [ia, ib, ic]
-    const source: Point[] = indices.map((i) => [
-      SOURCE_FACE[i][0] - 460, SOURCE_FACE[i][1] - 1429,
-    ])
-    const target: Point[] = indices.map((i) => destination[i])
-    const sx1 = source[1][0] - source[0][0]
-    const sy1 = source[1][1] - source[0][1]
-    const sx2 = source[2][0] - source[0][0]
-    const sy2 = source[2][1] - source[0][1]
-    const dx1 = target[1][0] - target[0][0]
-    const dy1 = target[1][1] - target[0][1]
-    const dx2 = target[2][0] - target[0][0]
-    const dy2 = target[2][1] - target[0][1]
-    const determinant = sx1 * sy2 - sx2 * sy1
-    if (Math.abs(determinant) < 1e-7) continue
-    const a = (dx1 * sy2 - dx2 * sy1) / determinant
-    const b = (dy1 * sy2 - dy2 * sy1) / determinant
-    const c = (sx1 * dx2 - sx2 * dx1) / determinant
-    const d = (sx1 * dy2 - sx2 * dy1) / determinant
-    const e = target[0][0] - a * source[0][0] - c * source[0][1]
-    const f = target[0][1] - b * source[0][0] - d * source[0][1]
-    ctx.save()
-    ctx.beginPath()
-    ctx.moveTo(...target[0])
-    ctx.lineTo(...target[1])
-    ctx.lineTo(...target[2])
-    ctx.closePath()
-    ctx.clip()
-    ctx.transform(a, b, c, d, e, f)
-    ctx.drawImage(art.face, 0, 0, 481, 243)
-    ctx.restore()
-  }
+  const sourceFace: Quad = [
+    [6, 71], [480, 157], [480, 242], [6, 142],
+  ]
+  paintSpaceDrawerFrontMesh(ctx, art.face, sourceFace, destination)
   ctx.restore()
   ctx.restore()
 }
