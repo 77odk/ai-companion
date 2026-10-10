@@ -64,6 +64,9 @@ export function paintSpaceDrawer(
   const interiorPhase = clamp((p - 0.03) / 0.72)
   ctx.globalAlpha = interiorPhase * interiorPhase * (3 - 2 * interiorPhase)
   // The C cutout already excludes its unrelated tabletop and front cabinet.
+  // The C source ends at left/right world y=1438/1535 while the E face
+  // starts lower during intermediate pull frames. Maintain slight overlap
+  // so the fixed cavity cannot shine through their seam.
   ctx.translate(0, (1 - p) * 63 + 8)
   // The previously bundled HQ C bitmap also contains C's stationary desktop
   // and lower cabinet. Clip to its genuine drawer SIDE + LETTERS silhouette
