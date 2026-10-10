@@ -18,7 +18,8 @@ for (const { name, width, height, minBytes, gitBlob } of requirements) {
   const bytes = readFileSync(path)
   // Pin the exact approved-source extraction candidates. A replacement requires
   // updating this digest as a deliberate new art-review batch; no silent swaps.
-  const actualBlob = createHash('sha1').update(Buffer.from(`blob ${bytes.length}\\0`)).update(bytes).digest('hex')
+  const prefix = Buffer.concat([Buffer.from(`blob ${bytes.length}`), Buffer.from([0])])
+  const actualBlob = createHash('sha1').update(prefix).update(bytes).digest('hex')
   assert.equal(actualBlob, gitBlob, name + ': source sprite changed without G0-A asset review')
   assert.equal(bytes.toString('ascii', 0, 4), 'RIFF', name)
   assert.equal(bytes.toString('ascii', 8, 12), 'WEBP', name)
