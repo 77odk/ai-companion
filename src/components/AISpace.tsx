@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
+import SpaceDrawerCanvas, { type SpaceDrawerController } from './SpaceDrawerCanvas'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { loadMemory, MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
@@ -171,6 +172,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   } | null>(null)
   const ignoreDrawerClickRef = useRef(false)
   const drawerTimerRef = useRef<number | null>(null)
+  const drawerVisualRef = useRef<SpaceDrawerController | null>(null)
   const objectTimerRef = useRef<number | null>(null)
   const [drawerOpening, setDrawerOpening] = useState(false)
   const [drawerReturning, setDrawerReturning] = useState(() => {
@@ -199,7 +201,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   useEffect(() => {
     if (!drawerReturning) return
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    const timer = window.setTimeout(() => setDrawerReturning(false), reduce ? 1 : 460)
+    const timer = window.setTimeout(() => setDrawerReturning(false), reduce ? 1 : 620)
     return () => window.clearTimeout(timer)
   }, [drawerReturning])
 
@@ -710,6 +712,9 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           </button>
 
           {layeredReady ? <img className="space-layer-earphones" src={`${SPACE_LAYER_BASE}wired_earphones.png`} alt="" aria-hidden="true" draggable={false} /> : null}
+          {layeredReady ? (
+            <SpaceDrawerCanvas opening={drawerOpening} returning={drawerReturning} controllerRef={drawerVisualRef} />
+          ) : null}
           <button
             type="button"
             className={`space-scene-hotspot is-weekly-letter${drawerOpening ? ' is-opening' : ''}${drawerReturning ? ' is-returning' : ''}`}
@@ -738,8 +743,8 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
               }
               if (!drag.moved) return
               const pull = projectSpaceDrawerPull(drag.startY, event.clientY, drag.hitHeight)
-              drag.element.style.transform = `translate3d(0, ${pull}%, 0)`
-              if (layeredReady) drag.element.style.opacity = String(Math.min(1, pull / SPACE_DRAWER_OPEN_PERCENT))
+              if (layeredReady) drawerVisualRef.current?.paint(pull / SPACE_DRAWER_OPEN_PERCENT)
+              else drag.element.style.transform = `translate3d(0, ${pull}%, 0)`
             }}
             onPointerUp={(event) => {
               const drag = drawerGestureRef.current
@@ -752,12 +757,19 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
               ignoreDrawerClickRef.current = true
               window.setTimeout(() => { ignoreDrawerClickRef.current = false }, 350)
               if (shouldOpenSpaceDrawer(pull)) openWeeklyFromDrawer()
+              else drawerVisualRef.current?.reset()
             }}
             onPointerCancel={(event) => {
-              if (drawerGestureRef.current?.pointerId === event.pointerId) finishDrawerGesture()
+              if (drawerGestureRef.current?.pointerId === event.pointerId) {
+                finishDrawerGesture()
+                drawerVisualRef.current?.reset()
+              }
             }}
             onLostPointerCapture={(event) => {
-              if (drawerGestureRef.current?.pointerId === event.pointerId) finishDrawerGesture()
+              if (drawerGestureRef.current?.pointerId === event.pointerId) {
+                finishDrawerGesture()
+                drawerVisualRef.current?.reset()
+              }
             }}
             onClick={() => {
               if (ignoreDrawerClickRef.current) {
@@ -768,11 +780,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             }}
             disabled={drawerOpening || drawerReturning}
           >
-            <span className="space-drawer-peek" aria-hidden="true">
-              {layeredReady ? (
-                <img className="space-layer-drawer-art" src={`${SPACE_LAYER_BASE}open_drawer.png`} alt="" draggable={false} />
-              ) : null}
-            </span>
+            <span className="space-drawer-peek" aria-hidden="true" />
           </button>
         </div>
 
