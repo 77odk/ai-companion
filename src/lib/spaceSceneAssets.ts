@@ -12,7 +12,7 @@ export const SPACE_LAYER_REQUIRED = [
   'tablet_player.png',
   'wired_earphones.png',
   'e_drawer_hq_v2.webp',
-  'c_drawer_depth_hq_v2.webp',
+  'c_drawer_inner_hq_v3.webp',
   'origami_pink.png',
   'origami_blue.png',
   'origami_yellow.png',
