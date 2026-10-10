@@ -7,6 +7,7 @@ const src = readFileSync(name, 'utf8')
 execFileSync('python3', ['-c',[
   'import ast,runpy,sys',
   'p=sys.argv[1]',
+  'sys.path.insert(0,str(__import__("pathlib").Path(p).parent.resolve()))',
   'ast.parse(open(p,encoding="utf-8").read())',
   'm=runpy.run_path(p,run_name="__g0a_test__")',
   'assert set(m["OBJECTS"])=={"book","jar","player","earphones"}',
