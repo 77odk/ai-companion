@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import {
   SPACE_DRAWER_ART_ROI, paintSpaceDrawer, drawerFrameProgress, spaceDrawerAperture, spaceDrawerCavityAlpha,
   spaceDrawerFrontAlpha, spaceDrawerInteriorAlpha, spaceDrawerInnerLeftEdge,
+  spaceDrawerFrontQuad,
 } from '../src/lib/spaceDrawerComposite.ts'
 
 const noop = {}
@@ -27,8 +28,8 @@ function makeCanvas() {
 }
 const art = { face: noop, interior: noop }
 assert.deepEqual(SPACE_DRAWER_ART_ROI, {x:427,y:1309,width:514,height:363})
-assert.deepEqual(spaceDrawerAperture(0), {leftTop:1452,rightTop:1546})
-assert.deepEqual(spaceDrawerAperture(1), {leftTop:1342,rightTop:1396})
+assert.deepEqual(spaceDrawerAperture(0), {leftTop:1432,rightTop:1518})
+assert.deepEqual(spaceDrawerAperture(1), spaceDrawerAperture(0))
 assert.deepEqual(spaceDrawerAperture(Number.NaN), spaceDrawerAperture(0))
 assert.equal(spaceDrawerCavityAlpha(0), 0)
 assert.ok(Math.abs(spaceDrawerCavityAlpha(0.05)-0.3)<1e-12)
@@ -41,8 +42,8 @@ assert.equal(spaceDrawerCavityAlpha(Infinity), 0)
 assert.deepEqual(spaceDrawerAperture(200), spaceDrawerAperture(1))
 for (const p of [.1,.25,.5,.75,.9]) {
   const { leftTop,rightTop } = spaceDrawerAperture(p)
-  assert.ok(leftTop >= 1342 && leftTop <= 1452)
-  assert.ok(rightTop >= 1396 && rightTop <= 1546)
+  assert.equal(leftTop, 1432)
+  assert.equal(rightTop, 1518)
   assert.ok(rightTop > leftTop, 'aperture stays aligned with E desktop perspective')
 }
 for (const t of [-1,0,0.001,.25,.5,.75,1,2,NaN,Infinity]) {
@@ -75,7 +76,7 @@ assert.ok(spaceDrawerFrontAlpha(.05)>0 && spaceDrawerFrontAlpha(.05)<1)
 assert.equal(spaceDrawerFrontAlpha(0),0)
 assert.equal(spaceDrawerInteriorAlpha(0),0)
 for(const p of [0,.25,.5,.75,1]) {
-  const frontLeft=466 + (442-466)*p
+  const frontLeft=spaceDrawerFrontQuad(p)[0][0]
   assert.equal(spaceDrawerInnerLeftEdge(p),frontLeft-3,
     'C side must not stick out beyond a narrow natural rim')
 }

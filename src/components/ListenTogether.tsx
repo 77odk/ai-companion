@@ -53,6 +53,13 @@ export default function ListenTogether({ onBack }: Props) {
             <img
               className="listen-approved-device-art"
               src="/space/cutouts/music-player.png"
+              onError={(event) => {
+                const image = event.currentTarget
+                if (!image.dataset.fallback) {
+                  image.dataset.fallback = 'true'
+                  image.src = '/space/layered/tablet_player.png'
+                }
+              }}
               alt=""
               aria-hidden="true"
               draggable={false}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
 import SpaceDrawerCanvas, { type SpaceDrawerController } from './SpaceDrawerCanvas'
+import SpaceFoliageCanvas from './SpaceFoliageCanvas'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { loadMemory, MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
@@ -503,7 +504,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
         <section className="space-scene-shell" aria-label="TA 的空间">
           <img
             className="space-scene-backplate"
-            src={`${SPACE_LAYER_BASE}room-closed.webp`}
+            src={`${SPACE_LAYER_BASE}${layeredReady ? 'room-content-clean-v2.webp' : 'room-closed.webp'}`}
             alt=""
             aria-hidden="true"
             draggable={false}
@@ -511,12 +512,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           {layeredReady ? (
             <img
               className={`space-scene-backplate is-drawer-cavity${drawerOpening || drawerReturning ? ' is-visible' : ''}`}
-              src={`${SPACE_LAYER_BASE}room-cavity.webp`}
+              src={`${SPACE_LAYER_BASE}room-content-cavity-v2.webp`}
               alt=""
               aria-hidden="true"
               draggable={false}
             />
           ) : null}
+          {layeredReady ? <SpaceFoliageCanvas scenePageRef={scenePageRef} /> : null}
           <span className="space-scene-ambient" aria-hidden="true" />
         </section>
 
@@ -675,6 +677,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             <img
               className="space-object-cutout is-book-cutout"
               src={layeredReady ? `${SPACE_LAYER_BASE}open_book.png` : '/space/cutouts/thought-book.png'}
+              onError={(event) => {
+                const image = event.currentTarget
+                if (!image.dataset.fallback) {
+                  image.dataset.fallback = 'true'
+                  image.src = `${SPACE_LAYER_BASE}open_book.png`
+                }
+              }}
               alt=""
               aria-hidden="true"
               draggable={false}
@@ -693,6 +702,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             <img
               className="space-object-cutout is-player-cutout"
               src={layeredReady ? `${SPACE_LAYER_BASE}tablet_player.png` : '/space/cutouts/music-player.png'}
+              onError={(event) => {
+                const image = event.currentTarget
+                if (!image.dataset.fallback) {
+                  image.dataset.fallback = 'true'
+                  image.src = `${SPACE_LAYER_BASE}tablet_player.png`
+                }
+              }}
               alt=""
               aria-hidden="true"
               draggable={false}
@@ -711,7 +727,8 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             </span>
           </button>
 
-          {layeredReady ? <img className="space-layer-earphones" src={`${SPACE_LAYER_BASE}wired_earphones.png`} alt="" aria-hidden="true" draggable={false} /> : null}
+          {/* The content-clean plate retains the original wired earphones in
+              their exact tabletop position. Never add a second cable. */}
           {layeredReady ? (
             <SpaceDrawerCanvas opening={drawerOpening} returning={drawerReturning} controllerRef={drawerVisualRef} scenePageRef={scenePageRef} />
           ) : null}
@@ -798,7 +815,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   return (
     <div
       ref={scenePageRef}
-      className={`page ai-space-page${layeredReady ? ' is-layered' : ''}${placingObject ? ` is-placing-${placingObject}` : ''}`}
+      className={`page ai-space-page${layeredReady ? ' is-layered is-content-clean' : ''}${placingObject ? ` is-placing-${placingObject}` : ''}`}
       style={sceneCover ? {
         '--space-scene-width': `${sceneCover.width}px`,
         '--space-scene-height': `${sceneCover.height}px`,

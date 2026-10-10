@@ -93,6 +93,13 @@ export default function ThoughtBook({ onBack }: Props) {
           <img
             className="thought-book-approved-art"
             src="/space/cutouts/thought-book.png"
+            onError={(event) => {
+              const image = event.currentTarget
+              if (!image.dataset.fallback) {
+                image.dataset.fallback = 'true'
+                image.src = '/space/layered/open_book.png'
+              }
+            }}
             alt=""
             aria-hidden="true"
             draggable={false}

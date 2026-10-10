@@ -27,8 +27,8 @@ WORLD = (941, 1672)
 VIEWPORTS = ((390, 844), (390, 690), (430, 932))
 STAGES = (0, 0.25, 0.5, 0.75, 1.0)
 ASSETS = {
-    "closed": "public/space/layered/room-closed.webp",
-    "cavity": "public/space/layered/room-cavity.webp",
+    "closed": "public/space/layered/room-content-clean-v2.webp",
+    "cavity": "public/space/layered/room-content-cavity-v2.webp",
     "face": "public/space/layered/e_drawer_hq_v2.webp",
     "inner": "public/space/layered/c_drawer_inner_hq_v3.webp",
 }
@@ -82,8 +82,8 @@ Promise.all(['closed','cavity','face','inner'].map(k=>load(assets[k]))).then(val
     const ctx=scene.getContext('2d');
     ctx.drawImage(imgs.closed,0,0,W,H);
     ctx.save();
-    ctx.beginPath();ctx.moveTo(W*.44,H*.77);ctx.lineTo(W,H*.77);
-    ctx.lineTo(W,H);ctx.lineTo(W*.44,H);ctx.closePath();ctx.clip();
+    ctx.beginPath();ctx.moveTo(W*.520723,H*.856459);ctx.lineTo(W,H*.907919);
+    ctx.lineTo(W,H*.958732);ctx.lineTo(W*.520723,H*.898923);ctx.closePath();ctx.clip();
     ctx.globalAlpha=window.G0A.spaceDrawerCavityAlpha(p);
     ctx.drawImage(imgs.cavity,0,0,W,H);
     ctx.restore();

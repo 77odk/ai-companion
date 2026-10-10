@@ -21,21 +21,33 @@ export interface SpaceDrawerArt {
 const SOURCE_FACE: Quad = [
   [466, 1500], [940, 1586], [940, 1671], [466, 1571],
 ]
-const OPEN_FACE: Quad = [
-  [442, 1442], [940, 1540], [940, 1671], [442, 1614],
-]
-const lerp = (from: number, to: number, value: number) => from + (to - from) * value
 const clamp = (p: number) => Number.isFinite(p) ? Math.max(0, Math.min(1, p)) : 0
-const mixQuad = (p: number): Quad => SOURCE_FACE.map((q, i) => [
-  lerp(q[0], OPEN_FACE[i][0], p),
-  lerp(q[1], OPEN_FACE[i][1], p),
-]) as unknown as Quad
+
+/** A wooden front is a rigid plane. Every corner travels by the same vector;
+ * changing its height independently was stretching the original E material. */
+export function spaceDrawerTravel(progress: number): Point {
+  const p = clamp(progress)
+  return [24 - 32 * p, -68 + 96 * p]
+}
+
+export function spaceDrawerFrontQuad(progress: number): Quad {
+  const [dx, dy] = spaceDrawerTravel(progress)
+  return SOURCE_FACE.map(([x, y]) => [x + dx, y + dy]) as unknown as Quad
+}
+
+/** C's inner lip reaches behind E's front, using exactly the same travel.
+ * The 14px right overlap is the source perspective difference, not a stretch. */
+export function spaceDrawerInteriorTravel(progress: number): Point {
+  const [dx, dy] = spaceDrawerTravel(progress)
+  return [dx + 25, dy + 65]
+}
 
 /** Front-apron occlusion: the inner envelopes may emerge only behind the desk
  * edge, then clear the lip as the drawer moves out. These are world Y values. */
 export function spaceDrawerAperture(progress: number): { leftTop: number; rightTop: number } {
-  const p = clamp(progress)
-  return { leftTop: 1452 - 110 * p, rightTop: 1546 - 150 * p }
+  // This is the fixed cabinet opening, never the travelling inner lip.
+  void progress
+  return { leftTop: 1432, rightTop: 1518 }
 }
 
 /** Blend the fixed closed-drawer background into the empty cavity at the
@@ -60,7 +72,7 @@ export function spaceDrawerInteriorAlpha(progress: number): number {
 /** C's source-left plywood must never project outside the E moving face.
  * A 3px overlap keeps the natural wooden rim without a detached pale spike. */
 export function spaceDrawerInnerLeftEdge(progress: number): number {
-  return lerp(SOURCE_FACE[0][0], OPEN_FACE[0][0], clamp(progress)) - 3
+  return spaceDrawerFrontQuad(progress)[0][0] - 3
 }
 
 /** C canvas has its own alpha silhouette; do not paint its separate cabinet. */
@@ -94,14 +106,14 @@ export function paintSpaceDrawer(
   ctx.lineTo(435, 1672)
   ctx.closePath()
   ctx.clip()
-  // The C source ends at left/right world y=1438/1535 while the E face
-  // starts lower during intermediate pull frames. Keep that positive overlap
-  // independent from the stationary desk edge.
-  ctx.translate(0, (1 - p) * 63 + 8)
+  // The C lip and E face travel together. Their source-derived overlap stays
+  // constant at every progress value, independently of the fixed cabinet.
+  const [innerX, innerY] = spaceDrawerInteriorTravel(p)
+  ctx.translate(innerX, innerY)
   // The C side wall can be wider than the E front in intermediate states.
   // Trim only the detached left sliver, leaving the genuine side/rim behind
   // the moving E face. Coordinates are on the shared 941x1672 world plane.
-  const innerLeft = spaceDrawerInnerLeftEdge(p)
+  const innerLeft = spaceDrawerInnerLeftEdge(p) - innerX
   ctx.beginPath()
   ctx.moveTo(innerLeft, 1309)
   ctx.lineTo(941, 1309)
@@ -132,7 +144,7 @@ export function paintSpaceDrawer(
 
   // Two native E triangles replace 32 vertical strips. The mapping math is
   // shared with its geometry test rather than duplicated in this renderer.
-  const destination = mixQuad(p)
+  const destination = spaceDrawerFrontQuad(p)
   ctx.save()
   ctx.globalAlpha = spaceDrawerFrontAlpha(p)
   const sourceFace: Quad = [

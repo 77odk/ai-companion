@@ -3292,3 +3292,80 @@ html.eluvin-page-hidden .thought-book-page * {
      round-knob dresser underneath the E/C composition. */
   visibility: hidden;
 }
+
+/* V2 candidate: original object silhouettes and contact shadows live in one
+   content-clean plate. Only real content and local material motion overlay it. */
+.ai-space-page.is-content-clean .space-object-cutout,
+.ai-space-page.is-content-clean .space-layer-earphones { display: none; }
+.space-foliage-canvas {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  user-select: none;
+}
+.ai-space-page.is-content-clean .space-scene-hotspot.is-star-jar {
+  left: 20.5%; top: 47.5%; width: 27%; height: 18%;
+}
+.ai-space-page.is-content-clean .space-live-jar {
+  inset: 29% 10% 8%;
+  overflow: hidden;
+}
+.ai-space-page.is-content-clean .space-scene-hotspot.is-player {
+  left: 56%; top: 52.9%; width: 33%; height: 13.1%;
+}
+.ai-space-page.is-content-clean .space-scene-hotspot.is-player .space-live-player {
+  left: 12%; right: 10%; top: 15%; bottom: 18%;
+  transform: skew(-9deg, 4deg);
+  background: transparent;
+}
+.ai-space-page.is-content-clean .space-scene-hotspot.is-thought-book {
+  left: 23%; top: 65%; width: 77%; height: 16%;
+  clip-path: polygon(0 53%, 51% 0, 100% 26%, 100% 88%, 79% 100%, 0 59%);
+}
+.ai-space-page.is-content-clean .space-live-book {
+  inset: 22% 13% 20% 52%;
+  transform: skew(-22deg, 10deg);
+  padding: 5%;
+}
+.ai-space-page.is-content-clean .space-live-book::after { content: none; }
+.ai-space-page.is-content-clean .space-scene-backplate.is-drawer-cavity {
+  /* Cabinet opening only: never erase the book or the fixed desk apron. */
+  /* The painter remains the clock during an aborted drag's spring-back, too,
+     after the pointer's is-drawer-pulling class has already been removed. */
+  opacity: var(--space-drawer-cavity-opacity, 0);
+  clip-path: polygon(52.0723% 85.6459%, 100% 90.7919%, 100% 95.8732%, 52.0723% 89.8923%);
+}
+.ai-space-page.is-content-clean .space-live-photo:not(.is-dragging) {
+  rotate: var(--space-paper-wind, 0deg);
+  border-radius: 1px 1px 5% 2%;
+  box-shadow: 0 1px 2px rgba(55,34,23,.17), 1px 5px 8px rgba(55,34,23,.17);
+}
+.ai-space-page[data-space-environment="rain"] .space-scene-ambient {
+  opacity: .05;
+}
+.ai-space-page[data-space-motion="off"] *,
+.ai-space-page[data-space-motion="off"] *::before,
+.ai-space-page[data-space-motion="off"] *::after { animation-play-state: paused !important; }
+
+/* The existing real-content page turn keeps its two faces and page ordering.
+   Add a travelling crease/shadow rather than replacing any stored text. */
+.thought-book-turning-page { filter: drop-shadow(0 3px 5px rgba(91,62,38,.17)); }
+.thought-book-turning-page .thought-book-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent 5%, rgba(99,67,42,.04) 35%, rgba(255,255,255,.35) 52%, rgba(99,67,42,.12) 65%, transparent 94%);
+  opacity: 0;
+  animation: space-paper-crease 440ms ease-in-out both;
+}
+@keyframes space-paper-crease { 0%,100% { opacity: 0; } 45% { opacity: 1; } }
+.thought-book-shell { width: min(100%, 430px); }
+.listen-player { max-width: 100%; min-width: 0; }
+.listen-device-wrap { width: min(100%, 430px); }
+.listen-tablet-screen { overflow-y: auto; overscroll-behavior: contain; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-space-page.is-content-clean .space-live-photo { rotate: 0deg; }
+  .thought-book-turning-page { filter: none; }
+  .thought-book-turning-page .thought-book-face::after { animation: none; }
+}

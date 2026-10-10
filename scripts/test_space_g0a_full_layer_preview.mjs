@@ -6,8 +6,8 @@ const path='scripts/g0a_full_layer_preview.py'
 const source=readFileSync(path,'utf8')
 execFileSync('python3',['-c',
   "import ast,sys;ast.parse(open(sys.argv[1],encoding='utf-8').read())",path])
-assert.match(source,/public\/space\/layered\/room-closed\.webp/)
-assert.match(source,/public\/space\/layered\/room-cavity\.webp/)
+assert.match(source,/public\/space\/layered\/room-content-clean-v2\.webp/)
+assert.match(source,/public\/space\/layered\/room-content-cavity-v2\.webp/)
 assert.match(source,/public\/space\/layered\/e_drawer_hq_v2\.webp/)
 assert.match(source,/public\/space\/layered\/c_drawer_inner_hq_v3\.webp/)
 assert.match(source,/spaceDrawerComposite\.ts/)
@@ -22,4 +22,5 @@ assert.match(source,/manifest\.get\('enabled'\) or manifest\.get\('artApproved'\
 assert.doesNotMatch(source,/http[s]?:\/\/|localStorage|fetch\(|deletePhoto|api\/state/)
 const css=readFileSync('src/styles/space.css','utf8')
 assert.match(css,/clip-path: polygon\(44% 77%, 100% 77%, 100% 100%, 44% 100%\)/)
+assert.match(css,/clip-path: polygon\(52\.0723% 85\.6459%, 100% 90\.7919%, 100% 95\.8732%, 52\.0723% 89\.8923%\)/)
 console.log('[G0-A] real-repo 3x5 browser renderer uses the actual E/C TS painter and scoped cavity: PASS')

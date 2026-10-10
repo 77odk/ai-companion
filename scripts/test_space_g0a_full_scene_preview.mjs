@@ -10,17 +10,13 @@ execFileSync('python3', ['-c',[
   'sys.path.insert(0,str(__import__("pathlib").Path(p).parent.resolve()))',
   'ast.parse(open(p,encoding="utf-8").read())',
   'm=runpy.run_path(p,run_name="__g0a_test__")',
-  'assert set(m["OBJECTS"])=={"book","jar","player","earphones"}',
-  'assert set(m["BOXES"])==set(m["OBJECTS"])',
+  'assert m["drawer"].ASSETS["closed"]=="public/space/layered/room-content-clean-v2.webp"',
+  'assert m["drawer"].ASSETS["cavity"]=="public/space/layered/room-content-cavity-v2.webp"',
 ].join(';'), name])
 assert.match(src,/g0a_full_layer_preview as drawer/)
-assert.match(src,/open_book\.png/)
-assert.match(src,/glass_memory_jar\.png/)
-assert.match(src,/tablet_player\.png/)
-assert.match(src,/wired_earphones\.png/)
 assert.match(src,/drawer\.STAGES=\(0,0\.5,1\.0\)/)
-assert.match(src,/drawContain\(ctx,imgs\[k\],objectBoxes\[k\]\)/)
-assert.match(src,/\['book','jar','player','earphones'\]/)
+assert.match(src,/drawer\.run_chrome_cli\(root, output\)/)
+assert.doesNotMatch(src,/drawContain|objectBoxes/, 'native plate objects may not receive duplicate cutouts')
 assert.match(src,/no fabricated photos or user content/i)
 assert.match(src,/real user photos, personal memories and live music/)
 assert.doesNotMatch(src,/faker|sample-photo|placeholder-image|localStorage|fetch\(/)

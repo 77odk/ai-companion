@@ -28,7 +28,7 @@ assert.match(css, /\.ai-space-page\.is-layered \.space-v2-drawer-canvas\s*\{[^}]
 assert.match(css, /\.ai-space-page\.is-layered \.space-scene-hotspot\.is-thought-book\s*\{[^}]*z-index: 4;/)
 assert.match(css, /\.ai-space-page\.is-layered \.space-drawer-peek\s*\{[^}]*visibility: hidden;/)
 assert.doesNotMatch(scene, /space-layer-drawer-art|open_drawer\.png/)
-assert.match(scene, /room-cavity\.webp/)
+assert.match(scene, /room-content-cavity-v2\.webp/)
 assert.match(view, /aria-hidden="true"/)
 assert.match(view, /document\.hidden/)
 assert.match(view, /requestAnimationFrame/)

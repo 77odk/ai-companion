@@ -1,0 +1,139 @@
+import { useEffect, useRef, type MutableRefObject } from 'react'
+import { SPACE_LAYER_BASE } from '../lib/spaceSceneAssets'
+import { sampleSpaceWind, selectSpaceMotionQuality, shouldPaintSpaceFrame } from '../lib/spaceAmbientMotion'
+import { isHomeWeatherEnabled, loadHomeWeather, type HomeWeather } from '../lib/homeWeather'
+import { loadUserProfile } from '../lib/storage'
+
+const BRANCHES = [
+  { x: 65, y: 80, width: 325, height: 630, phase: 0, gain: 1 },
+  { x: 847, y: 795, width: 94, height: 220, phase: .27, gain: .45 },
+] as const
+
+/** Native foliage pixels, bent along the branch rather than translating a
+ * rectangular sprite. Only these two local regions are painted at 12/30fps.
+ * The separately restored wall is mandatory; never animate over baked leaves. */
+export default function SpaceFoliageCanvas({ scenePageRef }: {
+  scenePageRef: MutableRefObject<HTMLDivElement | null>
+}) {
+  const canvasRefs = useRef<Array<HTMLCanvasElement | null>>([])
+  useEffect(() => {
+    const host = scenePageRef.current
+    if (!host) return
+    let alive = true
+    let frame = 0
+    let weather: HomeWeather | null = null
+    let lastPaint = -Infinity
+    let frameMs = 16.7
+    let lastFrame = 0
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const load = (name: string) => new Promise<HTMLImageElement>((resolve, reject) => {
+      const im = new Image()
+      im.onload = () => resolve(im)
+      im.onerror = reject
+      im.src = SPACE_LAYER_BASE + name
+    })
+    const refreshWeather = () => {
+      if (document.hidden || !isHomeWeatherEnabled()) { weather = null; return }
+      const city = loadUserProfile().city?.trim()
+      if (!city) { weather = null; return }
+      void loadHomeWeather(city).then(value => {
+        if (alive) {
+          weather = value && Date.now() - value.fetchedAt < 30 * 60_000 ? value : null
+          if (reduce.matches && layers.length) draw(0, 'off')
+        }
+      })
+    }
+    let layers: Array<{ leaves: HTMLCanvasElement; wall: HTMLCanvasElement }> = []
+    const draw = (elapsed: number, quality: 'off' | 'low' | 'full') => {
+      const rainy = Boolean(weather && Date.now() - weather.fetchedAt < 30 * 60_000 && ['drizzle', 'rain', 'thunder'].includes(weather.visual))
+      const strength = rainy ? 1 : .32
+      host.dataset.spaceEnvironment = rainy ? 'rain' : 'neutral'
+      const paper = sampleSpaceWind(elapsed, 0, quality)
+      host.style.setProperty('--space-paper-wind', `${paper.paperOffsets[2] * strength * .3}deg`)
+      layers.forEach(({ leaves, wall }, index) => {
+        const canvas = canvasRefs.current[index]
+        const ctx = canvas?.getContext('2d')
+        if (!ctx) return
+        ctx.clearRect(0, 0, wall.width, wall.height)
+        ctx.drawImage(wall, 0, 0)
+        const branch = BRANCHES[index]
+        const wind = sampleSpaceWind(Math.max(0, elapsed - branch.phase * 1000), 0, quality)
+        const tip = wind.plantDegrees[2] * branch.gain * strength
+        const offset = (y: number) => tip * (y / leaves.height) ** 1.65
+        const rows = 36
+        for (let row = 0; row < rows; row++) {
+          const y = row * leaves.height / rows
+          const height = leaves.height / rows
+          const shear = (offset(y + height) - offset(y)) / height
+          ctx.save()
+          ctx.transform(1, 0, shear, 1, offset(y) - shear * y, 0)
+          ctx.drawImage(leaves, 0, y, leaves.width, height, 0, y, leaves.width, height)
+          ctx.restore()
+        }
+      })
+    }
+    const start = performance.now()
+    const tick = (now: number) => {
+      frame = 0
+      if (!alive || document.hidden || reduce.matches) return
+      if (lastFrame) frameMs = frameMs * .85 + (now - lastFrame) * .15
+      lastFrame = now
+      const quality = selectSpaceMotionQuality({ visible: true, reducedMotion: false, lowPower: false, meanFrameMs: frameMs })
+      if (shouldPaintSpaceFrame(now, lastPaint, quality)) { draw(now - start, quality); lastPaint = now }
+      frame = requestAnimationFrame(tick)
+    }
+    const resume = () => {
+      if (frame) cancelAnimationFrame(frame)
+      frame = 0
+      lastFrame = 0
+      lastPaint = -Infinity
+      host.dataset.spaceMotion = document.hidden || reduce.matches ? 'off' : 'on'
+      if (!layers.length) return
+      refreshWeather()
+      if (document.hidden || reduce.matches) draw(0, 'off')
+      else frame = requestAnimationFrame(tick)
+    }
+    void Promise.all([load('room-content-clean-v2.webp'), load('room-foliage-restored-v2.webp'), load('foliage-alpha-v2.webp')]).then(([original, restored, matte]) => {
+      if (!alive) return
+      layers = BRANCHES.map(branch => {
+        const leaves = document.createElement('canvas'), wall = document.createElement('canvas')
+        leaves.width = wall.width = branch.width
+        leaves.height = wall.height = branch.height
+        const leafCtx = leaves.getContext('2d')!, wallCtx = wall.getContext('2d')!
+        leafCtx.drawImage(original, branch.x, branch.y, branch.width, branch.height, 0, 0, branch.width, branch.height)
+        wallCtx.drawImage(restored, branch.x, branch.y, branch.width, branch.height, 0, 0, branch.width, branch.height)
+        // Use the repaired alpha only. All visible leaf colors/material still
+        // come from the reference-aligned plate, including pale sunlit leaves
+        // and thin stems that color-key subtraction used to destroy.
+        leafCtx.globalCompositeOperation = 'destination-in'
+        leafCtx.drawImage(matte, branch.x, branch.y, branch.width, branch.height, 0, 0, branch.width, branch.height)
+        leafCtx.globalCompositeOperation = 'source-over'
+        return { leaves, wall }
+      })
+      draw(0, 'off')
+      resume()
+    }).catch(() => {
+      // The original content-clean backplate stays visible on load failure.
+      for (const canvas of canvasRefs.current) canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height)
+    })
+    document.addEventListener('visibilitychange', resume)
+    reduce.addEventListener('change', resume)
+    const weatherTimer = window.setInterval(refreshWeather, 60_000)
+    return () => {
+      alive = false
+      cancelAnimationFrame(frame)
+      window.clearInterval(weatherTimer)
+      document.removeEventListener('visibilitychange', resume)
+      reduce.removeEventListener('change', resume)
+      delete host.dataset.spaceMotion
+      delete host.dataset.spaceEnvironment
+      host.style.removeProperty('--space-paper-wind')
+    }
+  }, [scenePageRef])
+  return <>{BRANCHES.map((branch, index) => (
+    <canvas key={index} ref={value => { canvasRefs.current[index] = value }}
+      className="space-foliage-canvas" width={branch.width} height={branch.height}
+      style={{ left: `${branch.x / 941 * 100}%`, top: `${branch.y / 1672 * 100}%`, width: `${branch.width / 941 * 100}%`, height: `${branch.height / 1672 * 100}%` }}
+      aria-hidden="true" />
+  ))}</>
+}

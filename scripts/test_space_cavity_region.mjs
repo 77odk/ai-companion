@@ -18,7 +18,7 @@ assert.ok(left < SPACE_DRAWER_ART_ROI.x && top < SPACE_DRAWER_ART_ROI.y,
 assert.ok(left > SPACE_WORLD_WIDTH*.40 && top > SPACE_WORLD_HEIGHT*.73,
   'do not crossfade the rest of the desk, wall, sunlight or plants')
 assert.match(app,/room-closed\.webp/)
-assert.match(app,/room-cavity\.webp/)
+assert.match(app,/room-content-cavity-v2\.webp/)
 assert.match(css,/opacity:\s*var\(--space-drawer-cavity-opacity, 0\)/)
 assert.equal(manifest.enabled,false)
 assert.equal(manifest.artApproved,false)

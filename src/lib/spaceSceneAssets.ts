@@ -5,6 +5,10 @@
 export const SPACE_LAYER_BASE = '/space/layered/'
 export const SPACE_LAYER_VERSION = '2026-10-09'
 export const SPACE_LAYER_REQUIRED = [
+  'room-content-clean-v2.webp',
+  'room-foliage-restored-v2.webp',
+  'foliage-alpha-v2.webp',
+  'room-content-cavity-v2.webp',
   'room-closed.webp',
   'room-cavity.webp',
   'glass_memory_jar.png',

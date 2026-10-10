@@ -20,6 +20,7 @@ export default function SpaceDrawerCanvas({ opening, returning, controllerRef, s
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const artRef = useRef<SpaceDrawerArt | null>(null)
   const paintedRef = useRef(0)
+  const settleFrameRef = useRef(0)
   const [ready, setReady] = useState(false)
 
   const paint = useCallback((progress: number) => {
@@ -54,6 +55,7 @@ export default function SpaceDrawerCanvas({ opening, returning, controllerRef, s
     })
     return () => {
       alive = false
+      window.cancelAnimationFrame(settleFrameRef.current)
       artRef.current = null
       scenePageRef.current?.style.removeProperty('--space-drawer-cavity-opacity')
     }
@@ -61,12 +63,39 @@ export default function SpaceDrawerCanvas({ opening, returning, controllerRef, s
 
   useEffect(() => {
     if (!ready) return
-    controllerRef.current = { paint, reset: () => paint(0) }
-    return () => { controllerRef.current = null }
+    const cancelSettle = () => {
+      window.cancelAnimationFrame(settleFrameRef.current)
+      settleFrameRef.current = 0
+    }
+    controllerRef.current = {
+      paint: (progress) => { cancelSettle(); paint(progress) },
+      reset: () => {
+        cancelSettle()
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)')
+        const start = paintedRef.current
+        if (!start || reduce.matches || document.hidden) { paint(0); return }
+        const began = performance.now()
+        let lastPaint = -Infinity
+        const settle = (now: number) => {
+          if (document.hidden || reduce.matches) { paint(0); settleFrameRef.current = 0; return }
+          const elapsed = now - began
+          if (now - lastPaint >= 1000 / 30 || elapsed >= 360) {
+            paint(start * (1 - drawerFrameProgress(elapsed, 360)))
+            lastPaint = now
+          }
+          if (elapsed < 360) settleFrameRef.current = window.requestAnimationFrame(settle)
+          else settleFrameRef.current = 0
+        }
+        settleFrameRef.current = window.requestAnimationFrame(settle)
+      },
+    }
+    return () => { cancelSettle(); controllerRef.current = null }
   }, [ready, paint, controllerRef])
 
   useEffect(() => {
     if (!ready) return
+    window.cancelAnimationFrame(settleFrameRef.current)
+    settleFrameRef.current = 0
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
     if (!opening && !returning) {
       paint(0)

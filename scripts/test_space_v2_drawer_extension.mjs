@@ -32,7 +32,7 @@ assert.doesNotMatch(scene, /style\.removeProperty\('--space-drawer-cavity-opacit
 assert.match(css, /\.ai-space-page\.is-layered \.space-scene-backplate\.is-drawer-cavity\.is-visible,[\s\S]{0,260}opacity: var\(--space-drawer-cavity-opacity, 0\);\s*transition: none;/, 'opening and pulling use the same opacity variable')
 assert.doesNotMatch(scene, /if \(layeredReady\) scenePageRef\.current\?\.classList\.add\('is-drawer-pulling'\)/, 'no black-hole state before canvas ready')
 assert.match(scene, /room-closed\.webp/)
-assert.match(scene, /room-cavity\.webp/)
+assert.match(scene, /room-content-cavity-v2\.webp/)
 assert.match(scene, /<SpaceDrawerCanvas/, 'layered drawer has one E/C canvas')
 assert.doesNotMatch(scene, /space-layer-drawer-art/, 'old round-knob drawable removed')
 assert.doesNotMatch(scene, /space-desk\.webp/, 'no baked photo fallback')
