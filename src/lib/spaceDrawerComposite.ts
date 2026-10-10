@@ -42,7 +42,25 @@ export function spaceDrawerAperture(progress: number): { leftTop: number; rightT
  * same progress as the moving drawer. An instantaneous full cavity on first
  * touch would reveal a black hole before the E/C sprite becomes visible. */
 export function spaceDrawerCavityAlpha(progress: number): number {
-  return Math.min(1, clamp(progress) * 2)
+  // All exposed materials become opaque before the 25% inspect frame.
+  // A long full-room dissolve makes the real wooden drawer look translucent.
+  return Math.min(1, clamp(progress) * 6)
+}
+
+/** Fast material reveal: opacity stops blending with the old closed cabinet
+ * before the drawer reaches its clearly visible first quarter. */
+export function spaceDrawerFrontAlpha(progress: number): number {
+  return Math.min(1, clamp(progress) * 6)
+}
+
+export function spaceDrawerInteriorAlpha(progress: number): number {
+  return clamp((clamp(progress) - 0.01) / 0.2)
+}
+
+/** C's source-left plywood must never project outside the E moving face.
+ * A 3px overlap keeps the natural wooden rim without a detached pale spike. */
+export function spaceDrawerInnerLeftEdge(progress: number): number {
+  return lerp(SOURCE_FACE[0][0], OPEN_FACE[0][0], clamp(progress)) - 3
 }
 
 /** C canvas has its own alpha silhouette; do not paint its separate cabinet. */
@@ -63,13 +81,23 @@ export function paintSpaceDrawer(
   ctx.save()
   // A delayed smooth reveal prevents C letters from suddenly popping into
   // view on the first quarter of a drag. The cavity appears before contents.
-  const interiorPhase = clamp((p - 0.03) / 0.72)
-  ctx.globalAlpha = interiorPhase * interiorPhase * (3 - 2 * interiorPhase)
+  ctx.globalAlpha = spaceDrawerInteriorAlpha(p)
   // The C cutout already excludes its unrelated tabletop and front cabinet.
   // The C source ends at left/right world y=1438/1535 while the E face
   // starts lower during intermediate pull frames. Maintain slight overlap
   // so the fixed cavity cannot shine through their seam.
   ctx.translate(0, (1 - p) * 63 + 8)
+  // The C side wall can be wider than the E front in intermediate states.
+  // Trim only the detached left sliver, leaving the genuine side/rim behind
+  // the moving E face. Coordinates are on the shared 941x1672 world plane.
+  const innerLeft = spaceDrawerInnerLeftEdge(p)
+  ctx.beginPath()
+  ctx.moveTo(innerLeft, 1309)
+  ctx.lineTo(941, 1309)
+  ctx.lineTo(941, 1672)
+  ctx.lineTo(innerLeft, 1672)
+  ctx.closePath()
+  ctx.clip()
   // The previously bundled HQ C bitmap also contains C's stationary desktop
   // and lower cabinet. Clip to its genuine drawer SIDE + LETTERS silhouette
   // so it can never repaint the fixed E desk or duplicate its moving front.
@@ -103,7 +131,7 @@ export function paintSpaceDrawer(
   // shared with its geometry test rather than duplicated in this renderer.
   const destination = mixQuad(p)
   ctx.save()
-  ctx.globalAlpha = Math.min(1, p * 3)
+  ctx.globalAlpha = spaceDrawerFrontAlpha(p)
   const sourceFace: Quad = [
     [6, 71], [480, 157], [480, 242], [6, 142],
   ]
