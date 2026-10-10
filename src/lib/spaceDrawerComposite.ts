@@ -82,10 +82,21 @@ export function paintSpaceDrawer(
   // A delayed smooth reveal prevents C letters from suddenly popping into
   // view on the first quarter of a drag. The cavity appears before contents.
   ctx.globalAlpha = spaceDrawerInteriorAlpha(p)
-  // The C cutout already excludes its unrelated tabletop and front cabinet.
+  // This aperture is anchored to the FIXED E desk in world coordinates.
+  // Clip BEFORE translating the mobile C interior. Translating the clip with
+  // the letters would lower the desk edge by up to 71px and create a dark hole
+  // during the first quarter of the pull.
+  const { leftTop, rightTop } = spaceDrawerAperture(p)
+  ctx.beginPath()
+  ctx.moveTo(435, leftTop)
+  ctx.lineTo(941, rightTop)
+  ctx.lineTo(941, 1672)
+  ctx.lineTo(435, 1672)
+  ctx.closePath()
+  ctx.clip()
   // The C source ends at left/right world y=1438/1535 while the E face
-  // starts lower during intermediate pull frames. Maintain slight overlap
-  // so the fixed cavity cannot shine through their seam.
+  // starts lower during intermediate pull frames. Keep that positive overlap
+  // independent from the stationary desk edge.
   ctx.translate(0, (1 - p) * 63 + 8)
   // The C side wall can be wider than the E front in intermediate states.
   // Trim only the detached left sliver, leaving the genuine side/rim behind
@@ -114,16 +125,8 @@ export function paintSpaceDrawer(
   ctx.lineTo(441, 1438)
   ctx.closePath()
   ctx.clip()
-  // Progressive apron occlusion, not alpha-only fade: otherwise the C sprite
-  // protrudes through the stationary E tabletop on the first frames.
-  const { leftTop, rightTop } = spaceDrawerAperture(p)
-  ctx.beginPath()
-  ctx.moveTo(435, leftTop)
-  ctx.lineTo(941, rightTop)
-  ctx.lineTo(941, 1672)
-  ctx.lineTo(435, 1672)
-  ctx.closePath()
-  ctx.clip()
+  // The fixed-desk aperture was already applied *before* mobile transforms.
+  // Clip the genuine C side+letters silhouette here and keep the E body fixed.
   ctx.drawImage(art.interior, 435, 1325, 506, 210)
   ctx.restore()
 
