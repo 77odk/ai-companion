@@ -3264,3 +3264,24 @@ html.eluvin-page-hidden .thought-book-page * {
 .space-scene-hotspot.is-photo-wall .space-live-photo-board::after {
   content: none;
 }
+
+
+/* G0-B: only the E/C drawer sprite is animated; the desk backplates do not
+   translate. ROI = (427,1309,514,363) on the 941x1672 shared world plane. */
+.ai-space-page.is-layered .space-v2-drawer-canvas {
+  position: absolute;
+  left: 45.3773%;
+  top: 78.2895%;
+  width: 54.6227%;
+  height: 21.7105%;
+  z-index: 7;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.ai-space-page.is-layered .space-drawer-peek {
+  /* Keep the original hit/gesture element, but avoid rendering an old
+     round-knob dresser underneath the E/C composition. */
+  visibility: hidden;
+}
