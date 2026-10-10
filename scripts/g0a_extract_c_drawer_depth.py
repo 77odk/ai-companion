@@ -14,7 +14,10 @@ CROP = (435, 1325, 941, 1535)  # only the 210px exposed inner depth
 C_SILHOUETTE = (
     (441, 1424), (492, 1368), (515, 1332), (538, 1327),
     (648, 1350), (821, 1373), (940, 1398),
-    (940, 1671), (441, 1606),
+    # The 210px crop ends at world y=1535. The previous bottom points
+    # (1671,1606) were below that crop and accidentally kept C's front cabinet.
+    # This narrow lower edge retains the letters and side rail ONLY.
+    (940, 1535), (441, 1438),
 )
 MAX_BYTES = 300_000
 
