@@ -4,6 +4,7 @@ import { projectSpaceDrawerPull, SPACE_DRAWER_OPEN_PERCENT, shouldOpenSpaceDrawe
 
 const css = readFileSync('src/styles/space.css', 'utf8')
 const scene = readFileSync('src/components/AISpace.tsx', 'utf8')
+const painter = readFileSync('src/components/SpaceDrawerCanvas.tsx', 'utf8')
 const lab = readFileSync('docs/space/G0B_motion_lab_20261009.html', 'utf8')
 
 // The E-variant desk itself must not move. Only the independent drawer layer moves.
@@ -24,9 +25,11 @@ assert.match(liveEnd, /@keyframes space-layer-drawer-return\s*\{\s*from \{ opaci
 assert.match(liveEnd, /transform 620ms cubic-bezier/)
 assert.match(scene, /const delay = window\.matchMedia\?\.\('\(prefers-reduced-motion: reduce\)'\)\.matches \? 1 : 760/)
 assert.match(scene, /drawerVisualRef\.current\.paint\(fraction\)/, 'gesture drives E/C canvas continuously')
-assert.match(scene, /scenePageRef\.current\?\.style\.setProperty\('--space-drawer-cavity-opacity', String\(spaceDrawerCavityAlpha\(fraction\)\)\)/)
-assert.match(scene, /scenePageRef\.current\?\.style\.removeProperty\('--space-drawer-cavity-opacity'\)/)
-assert.match(css, /\.ai-space-page\.is-layered\.is-drawer-pulling \.space-scene-backplate\.is-drawer-cavity\s*\{\s*\/\*[^}]*\*\/\s*opacity: var\(--space-drawer-cavity-opacity, 0\);\s*transition: none;/s)
+assert.match(painter, /spaceDrawerCavityAlpha\(clamped\)/, 'shared Canvas progress reveals cavity')
+assert.doesNotMatch(scene, /spaceDrawerCavityAlpha\(fraction\)/, 'no competing cavity clock')
+assert.match(painter, /scenePageRef\.current\?\.style\.removeProperty\('--space-drawer-cavity-opacity'\)/, 'cleanup belongs to canvas lifecycle')
+assert.doesNotMatch(scene, /style\.removeProperty\('--space-drawer-cavity-opacity'\)/, 'drag release must not flash the empty hole')
+assert.match(css, /\.ai-space-page\.is-layered \.space-scene-backplate\.is-drawer-cavity\.is-visible,[\s\S]{0,260}opacity: var\(--space-drawer-cavity-opacity, 0\);\s*transition: none;/, 'opening and pulling use the same opacity variable')
 assert.doesNotMatch(scene, /if \(layeredReady\) scenePageRef\.current\?\.classList\.add\('is-drawer-pulling'\)/, 'no black-hole state before canvas ready')
 assert.match(scene, /room-closed\.webp/)
 assert.match(scene, /room-cavity\.webp/)
