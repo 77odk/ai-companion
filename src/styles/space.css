@@ -3274,7 +3274,7 @@ html.eluvin-page-hidden .thought-book-page * {
   top: 78.2895%;
   width: 54.6227%;
   height: 21.7105%;
-  z-index: 7;
+  z-index: 3;
   display: block;
   pointer-events: none;
   user-select: none;
