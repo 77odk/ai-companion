@@ -126,3 +126,12 @@
 - 后续主要工作：确认 E 固定柜体/空腔底图与透明活动层的物理一致性、继续植物与其他物件的细节验收、在真实 3 档手机视口走完整流程、Codex 只查大问题。
 
 **结论：两张抽屉小素材的“保真入库”已完成，但整页 G0-A 美术签收未通过。保留 PR Draft，不合并不部署。**
+
+
+## 2026-10-10 C 内层纯净遮挡 v3（覆盖前述 v2“当前候选”的称呼）
+
+- 新的 **`c_drawer_inner_hq_v3.webp`**，506×210 / **30,406 bytes**，Git blob `e1cb8243112fb458a5816cd92a44e16703067927`。源于同一张原生 C 原稿，不重画材质。
+- 原脚本曾在 C 裁切的下方保留约 25,233 个像素的柜体前板/裙边区域；当前轮廓沿真实抽屉内缘结束。通过 Git 哈希校验将新的二进制入库，以**新文件名**替代候选引用，不覆盖 `c_drawer_depth_hq_v2.webp`。
+- `scripts/g0a_extract_c_drawer_depth.py` 与 `scripts/g0a_export_native_drawer_assets.py` 现都使用这一纯内层遮挡标准，避免“按脚本复刻却产生不同图层”的回归。
+- 活动画面使用 `e_drawer_hq_v2.webp` + `c_drawer_inner_hq_v3.webp`，固定桌面从不运动；动态裁切在 E 桌沿后显示 C 信封。
+- **仍不是视觉签收**：底图空腔的 E 版透视与木纹尚需同条件验收，真实已登录 App 三屏及降级待测。`manifest.enabled=false` 且 `artApproved=false`，PR Draft，不合并不部署。
