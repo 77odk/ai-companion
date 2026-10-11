@@ -287,7 +287,7 @@ assert.equal(emptyPlan.pending.length, 0)
 assert.equal(emptyPlan.created, 0)
 
 console.log('\n[14] partial 回复不能补成完整对话对')
-const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
+const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatMessages.ts', import.meta.url), 'utf8')
 assert.match(chatSource, /const spacePairEligibleRef = useRef\(false\)/)
 assert.match(chatSource, /if \(spacePairEligibleRef\.current\) \{[\s\S]{0,500}completeChatTopicPair/)
 assert.match(chatSource, /const handleStop = \(\) => \{[\s\S]{0,900}spacePairEligibleRef\.current = false/)

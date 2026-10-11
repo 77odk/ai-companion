@@ -151,7 +151,7 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
 
 // ---- H：pending jump 必须让第一次 auto-scroll 让位（源码级断言） ----
 {
-  const chatSrc = readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+  const chatSrc = readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatMessages.ts', import.meta.url), 'utf8')
   const anchor = chatSrc.indexOf('el.scrollTop = el.scrollHeight')
   const effectStart = chatSrc.lastIndexOf('useEffect(() => {', anchor)
   const effectBody = chatSrc.slice(effectStart, anchor)
@@ -216,7 +216,7 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
 
 // ---- I：DOM 定位必须锁 user role（源码级断言 + 纯逻辑） ----
 {
-  const chatSrc = readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+  const chatSrc = readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatMessages.ts', import.meta.url), 'utf8')
   const bubbleSrc = readFileSync(new URL('../src/components/MessageBubble.tsx', import.meta.url), 'utf8')
   ok(
     chatSrc.includes('`[data-msg-role="user"][data-msg-ts="${ts}"]`'),
@@ -242,7 +242,7 @@ const uid = (content, ts) => ({ role: 'user', content, ts })
 
 // ---- J：B/C 与 notice 修复的源码契约（防回归） ----
 {
-  const chatSrc = readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8')
+  const chatSrc = readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatMessages.ts', import.meta.url), 'utf8')
   const appSrc = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 
   // B/C：首次 jump 必须 paint 前 instant 定位

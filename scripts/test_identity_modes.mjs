@@ -142,7 +142,7 @@ const rolesSource = readFileSync(new URL('../src/components/RolesPage.tsx', impo
 const controlsSource = readFileSync(new URL('../src/components/ChatCompanionControls.tsx', import.meta.url), 'utf8')
 const appSource = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 const memorySource = readFileSync(new URL('../src/components/Memory.tsx', import.meta.url), 'utf8')
-const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8')
+const chatSource = readFileSync(new URL('../src/components/Chat.tsx', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatScroll.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/chatStreamEngine.ts', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/lib/useChatMessages.ts', import.meta.url), 'utf8')
 const chatSource__all = chatSource + '\n' + readFileSync(new URL('../src/lib/chatContextBuild.ts', import.meta.url), 'utf8')
 assert.match(rolesSource, /clearAIProfile\(id\)/)
 assert.match(controlsSource, /loadSavedConfigs\(\)/)
