@@ -1,0 +1,233 @@
+{
+  "three": "0.180.0",
+  "resolution": 1024,
+  "samplingResolution": 128,
+  "hemisphereRays": 12,
+  "colorSpace": "linear",
+  "gamma": 1,
+  "sunlight": false,
+  "movableObjects": false,
+  "seed": "deterministic-golden-angle",
+  "files": {
+    "desktop-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "5f1c1e85270365d6130d6c3fb36d873f57c625a11792428f43b77d6ebb385458"
+    },
+    "desktop-light.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "5780d34136374f0f48638ad9ba658e9cfb22e435cf9818938e6e8f5f575adc8a"
+    },
+    "desk-leg-front-left-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "ef4c519ad3cc4374549d3b7f0e4707c531769d3832463c18f78d076c8e9c7709"
+    },
+    "desk-leg-front-right-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "f4858a0865453db58fd55eca496ffa863556c069dbaab4b4fab664f146a5fb9e"
+    },
+    "desk-leg-back-left-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "2d229cdd60bcadbcb55cf16e4c8869964591e324770358a60f6183d76cbb0aa3"
+    },
+    "desk-leg-back-right-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "ac36802527585bff33d7e3b8e50741a79e63bc608d46e8c19957b3e0eef67ce3"
+    },
+    "drawer-left-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "9f21735ee8f09ae3dcc9eca41404b7b1442fb9b4b53e5edbdc7fe1f916042ff2"
+    },
+    "drawer-right-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "9ca34635f6f8bf14ef8086ad46743317a025933ea1b16275f6be433ce21715e0"
+    },
+    "drawer-back-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "84cd53d819b3664f08023b3aaa1436e564881cd064fcfc2e5d90b268858fa151"
+    },
+    "desk-front-apron-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "f6d3c6a1d8d1d58f67e7e304632b7d4248890fe5f2407097ca610ff61460a93f"
+    },
+    "back-wall-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "55f878e00948bfa902c630166f5cfdc55699659561b2383cecd82213fc67c794"
+    },
+    "back-wall-light.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "5aeb7e62b993fc8deddccfd7551c82355e1789ab477385cf8c71649850fd3e40"
+    },
+    "window-wall-bottom-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "66c7008373b11f20e714d2f291f3a78ef92580bfe81ef7dfe24303bfa0768e01"
+    },
+    "window-wall-bottom-light.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "68eb5d439951d6de961b4eadc30f92374460a3784b28a1900e63e50081d8e6e3"
+    },
+    "window-wall-top-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "f58f250834582f985220ec17c9a43fed0114fdb5b7affe4dcf25e9eb9911cc6e"
+    },
+    "window-wall-top-light.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "61f9370d35d4e6968ac365983a5e76bcc4d25859121fbb68ff95090b5370ea13"
+    },
+    "window-wall-back-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "d478f6c569597db17fe5ecf9f17b7e51f3403d01516a4a0bb6c53c7ccec9ea65"
+    },
+    "window-wall-back-light.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "71f0f791ef2294701acdd2ec82b19407afd3234ccec1730914086de731ddfc2e"
+    },
+    "window-wall-front-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "402e569401e8ea01c92dcbfb2a298a6dd5ef54072391ad97e259cbc745867a68"
+    },
+    "window-wall-front-light.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "599b0fb16349f883cc34c8609213607f3ea1c44a00f598944d569ba981232ace"
+    },
+    "floor-ao.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "bf2e1d56e64e51c390eb1d2798024d4cb4c3367b9cac611596dcaad8e3779ee0"
+    },
+    "floor-light.png": {
+      "space": "LinearSRGBColorSpace",
+      "pngGamma": 1,
+      "uv": "uv1",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "1b26ca1b830bfd579d3137b810de2b76a2aeeaa27ec821a6ace083219cb70238"
+    }
+  }
+}

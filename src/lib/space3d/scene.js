@@ -1,6 +1,7 @@
 import * as T from 'three'
 import { buildDeskScene } from './geometry.js'
 import { makeMaterials, canvasTexture, disposeMaterials, reflectionCanvas } from './materials.js'
+import { legacyPrintCanvases } from './legacyPrints.js'
 
 function kelvinColor(kelvin) {
   const temperature=T.MathUtils.clamp(kelvin,1000,40000)/100
@@ -31,7 +32,7 @@ export function createSpaceScene(canvas, options) {
   scene.environment=reflectionMap.texture;scene.environmentIntensity=.30
   pmrem.dispose();reflectionSource.dispose()
   const materials = makeMaterials(), objects = buildDeskScene(materials); scene.add(objects.root)
-  const camera = new T.PerspectiveCamera(38, 1, .02, 30)
+  const camera = new T.PerspectiveCamera(50, 1, .02, 30)
   const ambient = new T.AmbientLight('#E5DDCF', .05); scene.add(ambient)
   const sky = new T.HemisphereLight('#ADCBDD', '#69594C', .5); scene.add(sky)
   const sun = new T.DirectionalLight('#FFF3DE', 2); scene.add(sun); scene.add(sun.target)
@@ -40,43 +41,49 @@ export function createSpaceScene(canvas, options) {
   lamp.position.set(.52,1.12,-.16); lamp.target.position.set(-.05,.75,.04)
   lamp.castShadow = false; scene.add(lamp);scene.add(lamp.target)
   for (const light of [sun,lamp]) {
-    light.shadow.mapSize.set(1024,1024); light.shadow.bias=-.0001;light.shadow.normalBias=.002
+    light.shadow.mapSize.set(1024,1024); light.shadow.bias=-.0005;light.shadow.normalBias=.003
   }
   Object.assign(sun.shadow.camera,{ left:-1.5,right:1.5,top:1.5,bottom:-1.5,near:.1,far:12 })
-  sun.shadow.camera.updateProjectionMatrix();sun.shadow.radius=2
-  const cold = new T.PointLight('#9FB5D0', .08, 2, 2);cold.position.set(-.9,1.4,.15);scene.add(cold)
+  sun.shadow.camera.updateProjectionMatrix();sun.shadow.radius=1
+  const cold = new T.PointLight('#9FB5D0', .08, 2, 2);cold.position.set(-.74,1.4,.15);scene.add(cold)
   const haze=new T.Mesh(new T.PlaneGeometry(.98,.98),new T.MeshBasicMaterial({color:'#B8C2C8',transparent:true,opacity:0,depthWrite:false,side:T.DoubleSide}))
-  haze.position.set(-1.02,1.4,.15);haze.rotation.y=Math.PI/2;scene.add(haze)
+  haze.position.set(-.82,1.4,.15);haze.rotation.y=Math.PI/2;scene.add(haze)
   const raycaster = new T.Raycaster(), pointer = new T.Vector2()
   let dirty=true, raf=0, lastFrame=0, transitionUntil=0, disposed=false, reduced=options.reducedMotion
-  let mode='overview', orbitX=0,orbitY=0,zoom=1, drawerAmount=0, drawerGoal=0
+  let mode='overview', orbitX=0,orbitY=0,zoom=1, drawerAmount=0, drawerGoal=0,targetFov=50
   let environment=null, quality=options.quality, previousFrameActive=false
   let lastReport=0, renderedFrames=0, totalFrames=0, sumMs=0
   const targetPosition=new T.Vector3(),targetLook=new T.Vector3(),currentLook=new T.Vector3()
-  const sunGoal=new T.Vector3(-4,4,0), tintGoal=new T.Color('#FFF3DE'), skyGoal=new T.Color('#ADCBDD')
+  const sunGoal=new T.Vector3(-4,4,0), tintGoal=new T.Color('#FFF3DE'), skyGoal=new T.Color('#ADCBDD'),diffuseTintGoal=new T.Color('#EADBC4')
   let directGoal=.5,diffuseGoal=.3,lampGoal=0,flipStart=0,flipDone=null,flipBase=null
-  let photoGeneration=0,playerKey='',flashUntil=0,flashTimer=0
+  let photoGeneration=0,photosPending=0,playerKey='',flashUntil=0,flashTimer=0
   let mapsPending=objects.bakeSurfaces.reduce((sum,mesh)=>sum+(mesh.userData.aoOnly?1:2),0)
   const pageTextures=[],photoTextures=[], ownedTextures=[]
   const baseEmission=new WeakMap()
   let selectedHit=null
   const rainGeometry=new T.BufferGeometry(),snowGeometry=new T.BufferGeometry()
   const rainPositions=new Float32Array(200*3),snowPositions=new Float32Array(100*3)
-  function initParticles(array) {for(let i=0;i<array.length;i+=3){array[i]=-.98;array[i+1]=.91+((i*43)%97)/100;array[i+2]=-.34+((i*17)%97)/100}}
+  function initParticles(array) {for(let i=0;i<array.length;i+=3){array[i]=-.81;array[i+1]=.91+((i*43)%97)/100;array[i+2]=-.34+((i*17)%97)/100}}
   initParticles(rainPositions);initParticles(snowPositions)
   rainGeometry.setAttribute('position',new T.BufferAttribute(rainPositions,3));snowGeometry.setAttribute('position',new T.BufferAttribute(snowPositions,3))
   const rain=new T.Points(rainGeometry,new T.PointsMaterial({color:'#B9CEDB',size:.005,transparent:true,opacity:.6,depthWrite:false}))
   const snow=new T.Points(snowGeometry,new T.PointsMaterial({color:'#F0F5F3',size:.012,transparent:true,opacity:.8,depthWrite:false}))
   scene.add(rain,snow)
   function targets() {
-    const aspect=camera.aspect, overviewDistance=Math.max(2.15,1.78/(2*Math.tan(19*Math.PI/180)*aspect))
+    const aspect=camera.aspect
+    targetFov=mode==='reading'?38:mode==='drawer'?42:50
     if(mode==='reading') {
       // Width of the current 0.30m page at the target distance is 300 CSS px.
       const cssWidth=canvas.clientWidth||390
       const distance=.30/(2*Math.tan(19*Math.PI/180)*aspect*(Math.min(300,cssWidth-32)/cssWidth))
-      targetLook.set(.078,.78,.03);targetPosition.set(.078,.78+distance,.03+distance*.035)
-    } else if(mode==='drawer') {targetLook.set(0,.64,.30);targetPosition.set(.50,1.35,1.45)}
-    else {targetLook.set(-.12,.80,-.02);targetPosition.set(overviewDistance*.10,.80+overviewDistance*.46,overviewDistance*.88)}
+      targetLook.set(.078,.78,.105);targetPosition.set(.078,.78+distance,.105+distance*.035)
+    } else if(mode==='drawer') {targetLook.set(.25,.64,.30);targetPosition.set(.65,1.20,1.10)}
+    else {
+      // Portrait crops the outer desk/legs like the original close composition;
+      // wide screens use the same objects with a wider controlled overview.
+      const distance=aspect<.8?2.05:2.15
+      targetLook.set(-.04,1.12,-.16);targetPosition.set(.36,1.50,distance)
+    }
     const relative=targetPosition.clone().sub(targetLook)
     const spherical=new T.Spherical().setFromVector3(relative)
     spherical.theta+=orbitX;spherical.phi=T.MathUtils.clamp(spherical.phi+orbitY,.06,Math.PI/2-.10)
@@ -109,6 +116,8 @@ export function createSpaceScene(canvas, options) {
     // Continuous warm/cool endpoints, interpolated below; no instant daylight colors.
     tintGoal.copy(kelvinColor(next.colorTemperature))
     skyGoal.set(next.skyColor)
+    // Cream walls and warm wood tint indoor diffuse bounce; window sky stays weather-colored.
+    if(next.isDay)diffuseTintGoal.set('#EADBC4').lerp(skyGoal,.30);else diffuseTintGoal.copy(skyGoal)
     sun.castShadow=quality.shadows&&next.isDay;lamp.castShadow=quality.shadows&&!next.isDay
     clearTimeout(flashTimer)
     if(next.effects.lightning&&!reduced&&quality.particles){
@@ -127,10 +136,11 @@ export function createSpaceScene(canvas, options) {
     if(previousFrameActive&&lastFrame){const ms=now-lastFrame;options.onFrame(ms);sumMs+=ms;renderedFrames++}
     lastFrame=now;previousFrameActive=animated
     const t=reduced||now>=transitionUntil?1:1-Math.exp(-dt*6)
+    if(camera.fov!==targetFov){camera.fov=T.MathUtils.lerp(camera.fov,targetFov,t);camera.updateProjectionMatrix()}
     camera.position.lerp(targetPosition,t);currentLook.lerp(targetLook,t);camera.lookAt(currentLook)
     drawerAmount=T.MathUtils.lerp(drawerAmount,drawerGoal,t);objects.drawer.position.z=drawerAmount*.32
     sun.position.lerp(sunGoal,t);sun.intensity=T.MathUtils.lerp(sun.intensity,directGoal,t);sun.color.lerp(tintGoal,t)
-    sky.intensity=T.MathUtils.lerp(sky.intensity,diffuseGoal,t);sky.color.lerp(skyGoal,t);scene.background.lerp(skyGoal,t)
+    sky.intensity=T.MathUtils.lerp(sky.intensity,diffuseGoal,t);sky.color.lerp(diffuseTintGoal,t);scene.background.lerp(skyGoal,t)
     ambient.intensity=T.MathUtils.lerp(ambient.intensity,environment?.isDay!==false ? .18 : .05,t)
     scene.environmentIntensity=T.MathUtils.lerp(scene.environmentIntensity,environment?.isDay!==false ? .30 : .055,t)
     lamp.intensity=T.MathUtils.lerp(lamp.intensity,lampGoal,t)
@@ -158,7 +168,10 @@ export function createSpaceScene(canvas, options) {
       positions.needsUpdate=true;objects.pages[1].geometry.computeVertexNormals()
       if(progress>=1){positions.array.set(flipBase);positions.needsUpdate=true;objects.pages[1].geometry.computeVertexNormals();flipStart=0;const done=flipDone;flipDone=null;done?.()}
     }
-    if(dirty||animated){renderer.info.reset();renderer.render(scene,camera);dirty=false;totalFrames++}
+    if(dirty||animated){renderer.info.reset();renderer.render(scene,camera);dirty=false;totalFrames++
+      const ready=String(mapsPending===0&&photosPending===0&&pageTextures.length===2)
+      if(canvas.dataset.spaceTexturesReady!==ready)canvas.dataset.spaceTexturesReady=ready
+    }
     if(now-lastReport>1000||!animated){lastReport=now;options.onMetrics({fps:renderedFrames?renderedFrames*1000/sumMs:null,
       calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,dpr:renderer.getPixelRatio(),
       renderedFrames:totalFrames,mode,shadowType:'PCFShadowMap',quality:quality.shadows?'shadow':'no-shadow',
@@ -166,7 +179,7 @@ export function createSpaceScene(canvas, options) {
     if(animated)raf=requestAnimationFrame(frame)
   }
   function projectedPageWidth(){
-    camera.updateMatrixWorld();const center=new T.Vector3(.078,.78,.03)
+    camera.updateMatrixWorld();const center=new T.Vector3(.078,.78,.105)
     const a=center.clone().add(new T.Vector3(-.15,0,0)).project(camera)
     const b=center.clone().add(new T.Vector3(.15,0,0)).project(camera)
     return Math.abs(b.x-a.x)*(canvas.clientWidth||390)/2
@@ -179,12 +192,12 @@ export function createSpaceScene(canvas, options) {
   canvas.addEventListener('webglcontextlost',contextLost)
   // Static maps are repository assets, not versioned network material URLs.
   // ImageBitmapLoader forces colorSpaceConversion:none; PNG gamma must not alter data samples.
-  const loader=new T.ImageBitmapLoader().setOptions({imageOrientation:'flipY',premultiplyAlpha:'none'})
+  const loader=new T.ImageBitmapLoader().setOptions({imageOrientation:'flipY',premultiplyAlpha:'none',colorSpaceConversion:'none'})
   for(const mesh of objects.bakeSurfaces){
     mesh.material=mesh.material.clone()
     for(const [kind,key] of [['ao','aoMap'],['light','lightMap']]){
       if(kind==='light'&&mesh.userData.aoOnly)continue
-      loader.load(`/space3d/baked/${mesh.name}-${kind}.png`,bitmap=>{
+      loader.load(`/space3d/reference-baked/${mesh.name}-${kind}.png`,bitmap=>{
         if(disposed){bitmap.close();return}
         const texture=new T.Texture(bitmap);texture.flipY=false;texture.needsUpdate=true
         texture.colorSpace=T.LinearSRGBColorSpace;texture.channel=1;texture.anisotropy=2
@@ -224,29 +237,65 @@ export function createSpaceScene(canvas, options) {
       objects.letters.forEach((letter,i)=>{letter.visible=i<Math.min(5,data.weeklyCount)})
       objects.stars.count=Math.min(48,data.memoryCount)
       const progress=data.listen.duration?Math.round(data.listen.current/data.listen.duration*100)/100:0
-      const key=`${data.listen.hasTrack}:${data.listen.title}:${progress}`
+      const key=`${data.listen.hasTrack}:${data.listen.title}:${data.listen.playing}:${progress}`
       if(key===playerKey){invalidate();return}playerKey=key
       const c=document.createElement('canvas');c.width=512;c.height=256;const ctx=c.getContext('2d')
-      ctx.fillStyle='#D9DDC9';ctx.fillRect(0,0,512,256);ctx.fillStyle='#465345';ctx.font='28px sans-serif';ctx.fillText(data.listen.hasTrack?data.listen.title:'接音乐',20,55,470)
-      ctx.fillRect(20,200,470*progress,5)
+      ctx.fillStyle='#292A27';ctx.fillRect(0,0,512,256)
+      const album=ctx.createLinearGradient(22,22,144,146);album.addColorStop(0,'#C49A89');album.addColorStop(.5,'#DEA869');album.addColorStop(1,'#656D76')
+      ctx.fillStyle=album;ctx.fillRect(22,22,122,122)
+      ctx.fillStyle='#F1EBDD';ctx.font='24px sans-serif';ctx.fillText(data.listen.hasTrack?data.listen.title:'接音乐',166,58,320)
+      ctx.fillStyle='#B8AD9C';ctx.fillRect(166,124,320,2);ctx.fillStyle='#F1EBDD';ctx.fillRect(166,124,320*progress,2)
+      ctx.strokeStyle='#F1EBDD';ctx.lineWidth=2;ctx.beginPath();ctx.arc(256,201,25,0,Math.PI*2);ctx.stroke()
+      ctx.fillStyle='#F1EBDD'
+      if(data.listen.playing){ctx.fillRect(247,190,5,22);ctx.fillRect(259,190,5,22)}
+      else {ctx.beginPath();ctx.moveTo(249,188);ctx.lineTo(249,214);ctx.lineTo(268,201);ctx.closePath();ctx.fill()}
+      for(const [x,sign] of [[175,-1],[337,1]]){ctx.beginPath();ctx.moveTo(x-sign*7,191);ctx.lineTo(x-sign*7,211);ctx.lineTo(x+sign*8,201);ctx.closePath();ctx.fill();ctx.fillRect(x+sign*10,191,2,20)}
       const previous=objects.screen.material.map;objects.screen.material.map=canvasTexture(c);previous?.dispose();objects.screen.material.needsUpdate=true
       invalidate()
     },
-    photos(urls){const generation=++photoGeneration;photoTextures.forEach(t=>t.dispose());photoTextures.length=0
-      objects.photoPlanes.forEach((mesh,i)=>{mesh.visible=i<urls.length;if(mesh.material===materials.paper)mesh.material=mesh.material.clone();mesh.material.map=null;mesh.material.color.set('#F1EBDD');mesh.material.needsUpdate=true
-        if(!urls[i])return
-        const image=new Image();image.crossOrigin='anonymous';image.onload=()=>{if(disposed||generation!==photoGeneration)return
-          try{
-            const canvas=document.createElement('canvas');canvas.width=512;canvas.height=512;const ctx=canvas.getContext('2d');ctx.fillStyle='#F1EBDD';ctx.fillRect(0,0,512,512)
-            const scale=Math.min(480/image.width,330/image.height);ctx.drawImage(image,(512-image.width*scale)/2,(354-image.height*scale)/2,image.width*scale,image.height*scale)
-            const t=canvasTexture(canvas);photoTextures.push(t);mesh.material.map=t;mesh.material.color.set('#FFFFFF');mesh.material.needsUpdate=true;invalidate()
-          }catch{/* A denied image stays in the original photo archive; never write or discard it. */}
-        };image.src=urls[i]});invalidate()},
+    photos(urls){
+      const generation=++photoGeneration,visibleUrls=urls.slice(0,8)
+      photosPending=1+visibleUrls.filter(Boolean).length;objects.pins.count=8
+      photoTextures.forEach(t=>t.dispose());photoTextures.length=0
+      objects.photoPlanes.forEach(mesh=>{mesh.visible=true;if(mesh.material===materials.paper)mesh.material=mesh.material.clone();mesh.material.map=null;mesh.material.color.set('#F1EBDD');mesh.material.needsUpdate=true})
+      legacyPrintCanvases().then(canvases=>{
+        if(disposed||generation!==photoGeneration)return
+        objects.photoPlanes.forEach((mesh,i)=>{
+          const texture=canvasTexture(canvases[i]);photoTextures.push(texture)
+          mesh.material.map=texture;mesh.material.color.set('#FFFFFF');mesh.material.needsUpdate=true
+        })
+        photosPending--;invalidate()
+        visibleUrls.forEach((url,i)=>{
+          if(!url)return
+          const mesh=objects.photoPlanes[i],image=new Image();image.crossOrigin='anonymous'
+          image.onerror=()=>{if(!disposed&&generation===photoGeneration){photosPending--;invalidate()}}
+          image.onload=()=>{
+            if(disposed||generation!==photoGeneration)return
+            try{
+              const canvas=document.createElement('canvas');canvas.width=canvas.height=512
+              const ctx=canvas.getContext('2d');ctx.fillStyle='#F1EBDD';ctx.fillRect(0,0,512,512)
+              const w=mesh.userData.paperWidth,h=mesh.userData.paperHeight
+              const fit=Math.min(w*456/512/image.width,h*400/512/image.height)
+              const width=image.width*fit/w*512,height=image.height*fit/h*512
+              ctx.drawImage(image,(512-width)/2,20+(400-height)/2,width,height)
+              const previous=mesh.material.map,index=photoTextures.indexOf(previous)
+              if(index>=0){photoTextures.splice(index,1);previous.dispose()}
+              const texture=canvasTexture(canvas);photoTextures.push(texture);mesh.material.map=texture
+              mesh.material.color.set('#FFFFFF');mesh.material.needsUpdate=true
+            }catch{/* Original photo records are never written, discarded or replaced. */}
+            finally{photosPending--;invalidate()}
+          }
+          image.src=url
+        })
+      }).catch(()=>{if(!disposed&&generation===photoGeneration)options.onFailure('reference-prints-unavailable')})
+      invalidate()
+    },
     debug(){return { renderer,scene,camera,objects, projectedPageWidth, totalFrames }},
     stats(){return {dpr:renderer.getPixelRatio(),shadows:renderer.shadowMap.enabled,
       rain:rain.visible,snow:snow.visible,rainCount:rainGeometry.drawRange.count,snowCount:snowGeometry.drawRange.count,
       renderedFrames:totalFrames,mode,pageWidth:projectedPageWidth(),calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,
-      mapsPending,pageTextures:pageTextures.length,source:renderingSource,gpu,
+      mapsPending,photosPending,pageTextures:pageTextures.length,source:renderingSource,gpu,
+      weatherPlaneX:rainPositions[0],windowBackdropX:objects.windowView.position.x,windowGlassX:objects.root.getObjectByName('window-glass').position.x,
       sunShadow:sun.castShadow,lampShadow:lamp.castShadow,direct:sun.intensity,lampIntensity:lamp.intensity,
       lightMapIntensity:objects.bakeSurfaces[0].material.lightMapIntensity,ambient:ambient.intensity,
       selected:selectedHit||'none'}},

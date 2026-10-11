@@ -15,11 +15,15 @@ three 精确锁定 **0.180.0**（r180）：固定 uv1/色彩空间 API 和 WebGL
 | materials.js · reflectionCanvas | 1024×512 | 输入 SRGBColorSpace；PMREM 输出线性渲染目标 | 初始化一次的低频间接反射，无太阳或摆件投影 |
 | bookPages.ts · 当前两页 CanvasTexture | 1024×2048 | SRGBColorSpace | 仅映射 1024×1468 有效区，实体比例 0.30×0.43m |
 | scene.js · 播放器屏幕 CanvasTexture | 512×256 | SRGBColorSpace | 复用现有播放快照；不新建音频 |
-| scene.js · 用户照片重采样 CanvasTexture | 512²，有效区 512×354 | SRGBColorSpace | 原照片只读，UV 保留 .13×.09m 的比例；透明/纸边由 canvas alpha 表达 |
+| scene.js · 用户照片重采样 CanvasTexture | 512²，图像框 456×400 | SRGBColorSpace | 原照片只读，按各纸片的物理比例反向映射，不拉伸；纸边是实体几何 |
+| legacyPrints.js · 原装饰打印照片 CanvasTexture | 8 张独立 512² | SRGBColorSpace | 只读取原素材中的打印照片内部，透视矫正后缓存；不是全景贴片，不新增用户照片记录 |
+| deskDetails.js · vertex / instance colors | 几何属性 | 线性 | 原 sRGB 调色由 Three Color 转换；叶片、花瓣、折纸星星 |
 
 大摆件材质 512–1024，小摆件内容贴图 256–512；透明离线资产采用 PNG，不引入 JPEG 透明件。所有纹理尺寸取二的幂、单边不超过 2048；颜色与数据纹理分开，生成后缓存，不每帧重画。书页等待 fonts.ready，55px 物理字号、mipmap、LinearMipmapLinearFilter、anisotropy 4；复用现有 3.8KB 字体子集并允许系统中文字体回退。
 
 ## 入库烘焙 PNG（每个文件）
+
+原 baked 目录为历史布局，文件保持原样。本批窗墙调整后的 22 张 PNG 使用 reference-baked 目录，逐文件尺寸、线性编码及 SHA 见该目录 manifest.json；完整对照见 [原桌面重建](space3d-reference-desk.md)。ImageBitmap 解码显式使用 colorSpaceConversion:none。
 
 | 文件 | 尺寸 | 色彩空间 / PNG 编码 | UV |
 |---|---|---|---|

@@ -22,7 +22,7 @@ try {
   await browser.waitFor('window.bakeReady === true')
   console.log('Baking fixed geometry with diffuse aperture illumination…')
   const result=await browser.evaluate('window.bakeSpace()')
-  const path='public/space3d/baked';await mkdir(path,{recursive:true})
+  const path='public/space3d/reference-baked';await mkdir(path,{recursive:true})
   const files={}
   for(const mesh of result.results)for(const kind of ['ao','light']){
     if(!mesh[kind])continue

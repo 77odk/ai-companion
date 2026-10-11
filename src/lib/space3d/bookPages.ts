@@ -47,7 +47,7 @@ export async function drawBookPage(page?: BookPage): Promise<HTMLCanvasElement> 
   edge.addColorStop(0,'rgba(106,83,57,.09)');edge.addColorStop(1,'rgba(106,83,57,0)')
   ctx.fillStyle=edge;ctx.fillRect(0,0,100,1468)
   ctx.fillStyle = '#30271D'
-  ctx.font = '55px "LXGW WenKai Subset", "Noto Sans CJK SC", "PingFang SC", sans-serif'
+  ctx.font = '600 55px "LXGW WenKai Subset", "Noto Sans CJK SC", "PingFang SC", sans-serif'
   ctx.textBaseline = 'top'
   const characters = Array.from(page?.text ?? '')
   for (let i = 0; i < characters.length; i++) {

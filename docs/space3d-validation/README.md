@@ -1,5 +1,7 @@
 # 第一批验收记录（不合并、不部署）
 
+本页保留第一批历史结果。当前九张基准图已更新到原桌面重建布局；最新验证见 [原桌面重建](../space3d-reference-desk.md)、reference-budget.json 和 reference-runtime.json。
+
 视觉完善复验见 [本批说明](../space3d-visual-polish.md)；此处截图和 runtime.json 已更新为视觉完善版本。
 
 基线 sandbox `01bd2205afaff7db08c7480bc243062b8c0fe9bd`。A 分支 `feat/space-environment-phase1`，B 分支 `feat/space-3d-phase1` 堆叠于 A。
