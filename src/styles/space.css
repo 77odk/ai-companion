@@ -3368,6 +3368,48 @@ html.eluvin-page-hidden .thought-book-page * {
 }
 @keyframes space-paper-crease { 0%,100% { opacity: 0; } 45% { opacity: 1; } }
 .thought-book-shell { width: min(100%, 430px); }
+.thought-book-paper-plane { position: absolute; inset: 0; transform-style: preserve-3d; }
+.thought-book-page.is-native-object-focus .thought-book-stage {
+  flex: 1; min-height: 0; padding: 0; position: relative; overflow: hidden;
+}
+.thought-book-page.is-native-object-focus .thought-book-shell {
+  position: absolute; bottom: calc(100vw * 322 / 726);
+  width: 100%; aspect-ratio: 726 / 270;
+}
+.thought-book-page.is-native-object-focus .thought-book-paper-plane {
+  width: 100%; height: 100%; transform-origin: 0 0;
+}
+.thought-book-page.is-native-object-focus .thought-book-cover {
+  inset: 0; width: 100%; height: 100%; transform: none; animation: none;
+}
+.thought-book-page.is-native-object-focus .is-open .thought-book-cover { opacity: 0; }
+.thought-book-page.is-native-object-focus .thought-book-pages {
+  inset: 0; transform: none; transition: opacity 160ms ease;
+}
+.thought-book-page.is-native-object-focus .thought-book-page-side,
+.thought-book-page.is-native-object-focus .thought-book-empty { background: transparent; box-shadow: none; border-radius: 0; }
+.thought-book-page.is-native-object-focus .thought-book-page-side::before,
+.thought-book-page.is-native-object-focus .thought-book-page-side::after { content: none; }
+.thought-book-page.is-native-object-focus .thought-paper-content {
+  padding: 12px 18px 24px; overflow-y: auto; overscroll-behavior: contain;
+}
+.thought-book-page.is-native-object-focus .thought-paper-content p { font-size: 22px; line-height: 1.55; margin-top: 8px; }
+.thought-book-page.is-native-object-focus .thought-paper-content time { font-size: 16px; }
+.thought-book-page.is-native-object-focus .thought-book-empty { grid-column: 2; font-size: 22px; padding: 12px; text-align: center; }
+.thought-book-page.is-native-object-focus .thought-book-face {
+  background: linear-gradient(140deg, #f5d9b8, #edc49c 70%, #e7b88d);
+}
+.thought-book-page.is-native-object-focus .thought-book-hint {
+  position: absolute; bottom: 24px; left: 16px; right: 16px; color: #fff9ed;
+  background: rgba(78,48,31,.45); border-radius: 12px; padding: 8px; font-size: 13px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .thought-book-pages { transition: none; }
+}
+@supports (width: 1cqw) {
+  .thought-book-page.is-native-object-focus .thought-book-stage { container-type: inline-size; }
+  .thought-book-page.is-native-object-focus .thought-book-shell { bottom: calc(100cqw * 322 / 726); }
+}
 .listen-player { max-width: 100%; min-width: 0; }
 .listen-device-wrap { width: min(100%, 430px); }
 .listen-tablet-screen { overflow-y: auto; overscroll-behavior: contain; }

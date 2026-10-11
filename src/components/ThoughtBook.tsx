@@ -1,13 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
 import { getActiveSessionId } from '../lib/sessionStore'
 import { loadTaThoughts, settleTaThoughts, type TaThoughtView } from '../lib/taThoughts'
+import SpaceObjectScene, { SpaceObjectPlane } from './SpaceObjectScene'
+import { useSpaceObjectScene } from '../lib/useSpaceObjectScene'
+import { SPACE_BOOK_FRAME, SPACE_BOOK_PAPER } from '../lib/spaceObjectFocus'
 
 interface Props {
   onBack: () => void
 }
 
 type TurnDirection = 'next' | 'prev' | null
+
+function BookPaper({ native, children }: { native: boolean; children: ReactNode }) {
+  return native
+    ? <SpaceObjectPlane className="thought-book-paper-plane" frame={SPACE_BOOK_FRAME} corners={SPACE_BOOK_PAPER}>{children}</SpaceObjectPlane>
+    : <div className="thought-book-paper-plane">{children}</div>
+}
 
 function thoughtDate(ts: number): string {
   const date = new Date(ts)
@@ -32,6 +41,7 @@ function PageContent({ thought, pageNumber }: { thought?: TaThoughtView; pageNum
 }
 
 export default function ThoughtBook({ onBack }: Props) {
+  const artwork = useSpaceObjectScene()
   const sessionId = getActiveSessionId()
   const [opened, setOpened] = useState(false)
   const [thoughts, setThoughts] = useState<TaThoughtView[]>(() => (
@@ -40,6 +50,10 @@ export default function ThoughtBook({ onBack }: Props) {
   const [spread, setSpread] = useState(0)
   const [turn, setTurn] = useState<TurnDirection>(null)
   const timerRef = useRef<number | null>(null)
+
+  useEffect(() => () => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+  }, [])
 
   useEffect(() => {
     if (!sessionId) return
@@ -54,18 +68,24 @@ export default function ThoughtBook({ onBack }: Props) {
 
   const pages = useMemo(() => [...thoughts].sort((a, b) => b.createdAt - a.createdAt), [thoughts])
   const maxSpread = Math.max(0, Math.ceil(pages.length / 2) - 1)
-  const currentIndex = spread * 2
-  const nextIndex = Math.min(maxSpread, spread + 1) * 2
-  const prevIndex = Math.max(0, spread - 1) * 2
+  const visibleSpread = Math.min(spread, maxSpread)
+  const currentIndex = visibleSpread * 2
+  const nextIndex = Math.min(maxSpread, visibleSpread + 1) * 2
+  const prevIndex = Math.max(0, visibleSpread - 1) * 2
 
   const beginTurn = (direction: Exclude<TurnDirection, null>) => {
     if (turn) return
-    if (direction === 'next' && spread >= maxSpread) return
-    if (direction === 'prev' && spread <= 0) return
+    if (direction === 'next' && visibleSpread >= maxSpread) return
+    if (direction === 'prev' && visibleSpread <= 0) return
     if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+    const destination = direction === 'next' ? Math.min(maxSpread, visibleSpread + 1) : Math.max(0, visibleSpread - 1)
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setSpread(destination)
+      return
+    }
     setTurn(direction)
     timerRef.current = window.setTimeout(() => {
-      setSpread((value) => direction === 'next' ? Math.min(maxSpread, value + 1) : Math.max(0, value - 1))
+      setSpread(destination)
       setTurn(null)
       timerRef.current = null
     }, 440)
@@ -78,7 +98,7 @@ export default function ThoughtBook({ onBack }: Props) {
   const baseRight = turn === 'next' ? nextIndex + 1 : currentIndex + 1
 
   return (
-    <div className="page space-object-page thought-book-page">
+    <div className={`page space-object-page thought-book-page${artwork.ready ? ' is-native-object-focus' : ''}`}>
       <header className="space-object-topbar">
         <button type="button" onClick={onBack} className="space-object-back">‹ 返回</button>
         <div>
@@ -90,7 +110,7 @@ export default function ThoughtBook({ onBack }: Props) {
 
       <main className="thought-book-stage" aria-label="TA 的思绪">
         <div className={`thought-book-shell${opened ? ' is-open' : ''}`}>
-          <img
+          {artwork.ready ? <SpaceObjectScene frame={SPACE_BOOK_FRAME} onError={artwork.fail} /> : <img
             className="thought-book-approved-art"
             src="/space/cutouts/thought-book.png"
             onError={(event) => {
@@ -103,7 +123,8 @@ export default function ThoughtBook({ onBack }: Props) {
             alt=""
             aria-hidden="true"
             draggable={false}
-          />
+          />}
+          <BookPaper native={artwork.ready}>
           <button
             type="button"
             className="thought-book-cover"
@@ -156,21 +177,25 @@ export default function ThoughtBook({ onBack }: Props) {
                   type="button"
                   className="thought-turn-hit is-prev"
                   onClick={() => beginTurn('prev')}
-                  disabled={spread <= 0 || Boolean(turn)}
+                  disabled={!opened || visibleSpread <= 0 || Boolean(turn)}
                   aria-label="上一页"
                 />
                 <button
                   type="button"
                   className="thought-turn-hit is-next"
                   onClick={() => beginTurn('next')}
-                  disabled={spread >= maxSpread || Boolean(turn)}
+                  disabled={!opened || visibleSpread >= maxSpread || Boolean(turn)}
                   aria-label="下一页"
                 />
               </>
             )}
           </div>
+          </BookPaper>
         </div>
 
+        {artwork.ready && !opened && (
+          <p className="thought-book-hint">轻点书页查看思绪</p>
+        )}
         {opened && pages.length > 0 && (
           <p className="thought-book-hint">轻点书页边缘翻页</p>
         )}

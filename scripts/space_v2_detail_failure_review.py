@@ -54,7 +54,7 @@ def run(html_path, output):
             page.set_content(html.replace('</script><script>', '</script><script>' + injection + '</script><script>', 1))
             page.wait_for_selector('.space-scene-hotspot.is-player')
             page.wait_for_timeout(1000)
-            for kind, selector in [('jar', 'is-star-jar'), ('player', 'is-player')]:
+            for kind, selector in [('jar', 'is-star-jar'), ('book', 'is-thought-book'), ('player', 'is-player')]:
                 page.locator('.space-scene-hotspot.' + selector).tap()
                 page.wait_for_timeout(1000)
                 native = page.locator('.is-native-object-focus').count()
@@ -62,6 +62,10 @@ def run(html_path, output):
                     assert page.evaluate('window.__nativeDecodeFailures') > 0, 'must actually exercise the native image decode failure'
                 expected_native = name == 'ResizeObserver unavailable'
                 assert bool(native) == expected_native, 'art gate and decode failures must fall back; missing ResizeObserver must remain usable'
+                if kind == 'book':
+                    page.get_by_role('button', name='打开思绪书', exact=True).tap()
+                    page.wait_for_timeout(800)
+                    assert page.locator('.thought-book-empty').is_visible()
                 if kind == 'player':
                     with page.expect_file_chooser():
                         page.get_by_role('button', name='去接音乐', exact=True).tap()

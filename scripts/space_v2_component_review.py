@@ -102,10 +102,10 @@ def run(html_path: Path, output: Path, record_video: bool = False) -> int:
                 broken = page.evaluate('Array.from(document.images).filter(im=>!im.naturalWidth).length')
                 if broken:
                     errors.append(f'{kind}: {broken} broken artwork images')
-                if kind in ('jar', 'player'):
+                if kind in ('jar', 'book', 'player'):
                     page.wait_for_selector('.is-native-object-focus')
                     detail = page.evaluate("""()=>{
-                      const stage=document.querySelector('.star-jar-stage,.listen-stage');
+                      const stage=document.querySelector('.star-jar-stage,.thought-book-stage,.listen-stage');
                       const r=stage.getBoundingClientRect();
                       const native=document.querySelector('.space-object-native-room');
                       return {nativeFocus:true,stageLeft:r.left,stageRight:r.right,
@@ -117,6 +117,14 @@ def run(html_path: Path, output: Path, record_video: bool = False) -> int:
                         errors.append(f'{kind}: focused room must fill the stage without side gutters')
                     if detail['roomSize'] != [941, 1672]:
                         errors.append(f'{kind}: wrong native room resource')
+                    if kind == 'book':
+                        page.screenshot(path=str(output / f'{label}-book-closed.png'))
+                        page.get_by_role('button', name='打开思绪书', exact=True).tap()
+                        page.wait_for_timeout(400)
+                        detail['projectedPaper'] = page.locator('.thought-book-paper-plane.is-native-plane').count() == 1
+                        detail['emptyBookOpened'] = page.locator('.thought-book-empty').is_visible()
+                        if not detail['projectedPaper'] or not detail['emptyBookOpened']:
+                            errors.append('book: native paper plane or real empty state is missing')
                     if kind == 'player':
                         # The real empty-state button opens the existing picker.
                         # No file is selected, and no track/content is invented.
