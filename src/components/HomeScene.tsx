@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import type { HomeWeather } from '../lib/homeWeather'
+import EnvironmentFeedback from './EnvironmentFeedback'
 
 export type HomeSceneId = 'morning' | 'day' | 'night'
 
@@ -114,6 +115,7 @@ export default function HomeScene({
   return (
     <div className={`home-page home-scene-${scene.id}${weatherClass}`} style={style}>
       <div className="home-scene-overlay" aria-hidden="true" />
+      <EnvironmentFeedback weather={weather} />
       {weatherClass ? (
         <div className="home-weather-atmosphere" aria-hidden="true">
           <span className="home-weather-fx-cloud cloud-a" />

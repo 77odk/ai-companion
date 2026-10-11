@@ -15,6 +15,14 @@ export interface HomeWeather {
   visual: WeatherVisual
   label: string
   fetchedAt: number
+  latitude?: number
+  longitude?: number
+  timezone?: string
+  cloudcover?: number
+  windspeed10m?: number
+  sunrise?: string
+  sunset?: string
+  isday?: number
 }
 
 const CACHE_KEY = 'eluvin_home_weather_v1'
@@ -131,7 +139,7 @@ export async function loadHomeWeather(cityInput: string, now = Date.now()): Prom
     const geoRes = await fetch(geoUrl)
     if (!geoRes.ok) throw new Error('geocoding failed')
     const geo = await geoRes.json() as {
-      results?: Array<{ name?: string; latitude?: number; longitude?: number }>
+      results?: Array<{ name?: string; latitude?: number; longitude?: number; timezone?: string }>
     }
     const place = geo.results?.[0]
     if (!place || !Number.isFinite(place.latitude) || !Number.isFinite(place.longitude)) throw new Error('city not found')
@@ -139,11 +147,17 @@ export async function loadHomeWeather(cityInput: string, now = Date.now()): Prom
     const weatherUrl = new URL(FORECAST_URL)
     weatherUrl.searchParams.set('latitude', String(place.latitude))
     weatherUrl.searchParams.set('longitude', String(place.longitude))
-    weatherUrl.searchParams.set('current', 'temperature_2m,weather_code')
+    weatherUrl.searchParams.set('current', 'temperature_2m,weather_code,cloud_cover,wind_speed_10m,is_day')
+    weatherUrl.searchParams.set('daily', 'sunrise,sunset')
+    weatherUrl.searchParams.set('forecast_days', '1')
     weatherUrl.searchParams.set('timezone', 'auto')
     const weatherRes = await fetch(weatherUrl)
     if (!weatherRes.ok) throw new Error('weather failed')
-    const data = await weatherRes.json() as { current?: { temperature_2m?: number; weather_code?: number } }
+    const data = await weatherRes.json() as {
+      timezone?: string
+      current?: { temperature_2m?: number; weather_code?: number; cloud_cover?: number; wind_speed_10m?: number; is_day?: number }
+      daily?: { sunrise?: string[]; sunset?: string[] }
+    }
     const temperature = data.current?.temperature_2m
     const weatherCode = data.current?.weather_code
     if (!Number.isFinite(temperature) || !Number.isFinite(weatherCode)) throw new Error('weather malformed')
@@ -156,6 +170,14 @@ export async function loadHomeWeather(cityInput: string, now = Date.now()): Prom
       weatherCode: Number(weatherCode),
       ...meta,
       fetchedAt: now,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      timezone: data.timezone ?? place.timezone,
+      cloudcover: data.current?.cloud_cover,
+      windspeed10m: data.current?.wind_speed_10m,
+      isday: data.current?.is_day,
+      sunrise: data.daily?.sunrise?.[0],
+      sunset: data.daily?.sunset?.[0],
     }
     writeCache(value)
     return value
