@@ -27,7 +27,7 @@ import {
   type PhotoMeta,
 } from '../lib/photoWall'
 import { getToken } from '../lib/auth'
-import { preloadSpaceLayer, SPACE_LAYER_BASE, SPACE_ART_REVIEW_BUILD } from '../lib/spaceSceneAssets'
+import { preloadSpaceLayer, getPreloadedSpaceLayerReady, SPACE_LAYER_BASE, SPACE_ART_REVIEW_BUILD } from '../lib/spaceSceneAssets'
 import { computeSpaceCover, hasMovedSpacePhoto, projectSpaceDrawerPull, projectSpacePhotoDrag, shouldOpenSpaceDrawer, SPACE_DRAWER_OPEN_PERCENT, type ScenePhotoPlacement } from '../lib/spaceSceneDrag'
 
 interface Props {
@@ -82,7 +82,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   const sid = sessionId || undefined
   const scenePageRef = useRef<HTMLDivElement | null>(null)
   const [sceneCover, setSceneCover] = useState<{ width: number; height: number } | null>(null)
-  const [layeredReady, setLayeredReady] = useState(false)
+  const [layeredReady, setLayeredReady] = useState(getPreloadedSpaceLayerReady)
   useEffect(() => {
     let alive = true
     void preloadSpaceLayer().then((ready) => {

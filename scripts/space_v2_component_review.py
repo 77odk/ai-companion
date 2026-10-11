@@ -35,6 +35,16 @@ def run(html_path: Path, output: Path, record_video: bool = False) -> int:
             page.set_content(html, wait_until='load')
             page.wait_for_selector('.ai-space-page.is-layered')
             page.wait_for_timeout(1500)
+            page.evaluate('''()=>{
+              window.__warmReviewFallbacks=[];
+              const observer=new MutationObserver(()=>{
+                for (const root of document.querySelectorAll('.ai-space-page,.star-jar-page,.thought-book-page,.listen-together-page')) {
+                  const native=root.matches('.ai-space-page') ? root.classList.contains('is-layered') : root.classList.contains('is-native-object-focus');
+                  if (!native) window.__warmReviewFallbacks.push(root.className);
+                }
+              });
+              observer.observe(document.getElementById('root'),{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+            }''')
             label = f'{width}x{height}'
             page.screenshot(path=str(output / f'{label}-room.png'))
             layout = page.evaluate("""()=>({
@@ -144,6 +154,9 @@ def run(html_path: Path, output: Path, record_video: bool = False) -> int:
                 page.wait_for_timeout(750)
             if layout['width'] > width or layout['broken']:
                 errors.append('initial overflow or broken artwork')
+            row['warmFallbackFrames'] = page.evaluate('window.__warmReviewFallbacks')
+            if row['warmFallbackFrames']:
+                errors.append('verified room/detail remount flashed the unrelated fallback')
             report['viewports'].append(row)
             print(json.dumps(row, ensure_ascii=False), flush=True)
             video = page.video

@@ -7,6 +7,13 @@ export const SPACE_LAYER_VERSION = '2026-10-09'
 // Only the dedicated local review builder selects this compile-time mode.
 // Normal production builds cannot enable it with a URL, storage or window flag.
 export const SPACE_ART_REVIEW_BUILD = import.meta.env?.MODE === 'space-art-review'
+// Only a successful gate + decode may warm this in-memory snapshot. It avoids
+// painting the unrelated fallback for one frame when returning to the room.
+// Every mount still revalidates; nothing is persisted or externally selectable.
+let preloadedReady = false
+let loadVersion = 0
+export function getPreloadedSpaceLayerReady(): boolean { return preloadedReady }
+export function invalidateSpaceLayerReady(): void { preloadedReady = false; loadVersion++ }
 export const SPACE_LAYER_REQUIRED = [
   'room-content-clean-v2.webp',
   'room-foliage-restored-v2.webp',
@@ -42,22 +49,27 @@ export function isSpaceLayerManifestReady(value: unknown): boolean {
 }
 
 export async function preloadSpaceLayer(): Promise<boolean> {
+  const version = ++loadVersion
+  const publish = (ready: boolean) => {
+    if (version === loadVersion) preloadedReady = ready
+    return ready
+  }
   try {
     const result = await fetch(`${SPACE_LAYER_BASE}manifest.json`, { cache: 'no-store' })
-    if (!result.ok) return false
+    if (!result.ok) return publish(false)
     const manifest: unknown = await result.json()
     // An explicitly marked, temporary review build renders unapproved artwork
     // for inspection. It does not change either approval field or the normal
     // production readiness function, and it still requires all actual assets.
-    if (SPACE_ART_REVIEW_BUILD ? !hasSpaceLayerResources(manifest) : !isSpaceLayerManifestReady(manifest)) return false
+    if (SPACE_ART_REVIEW_BUILD ? !hasSpaceLayerResources(manifest) : !isSpaceLayerManifestReady(manifest)) return publish(false)
     const loaded = await Promise.all(SPACE_LAYER_REQUIRED.map((filename) => new Promise<boolean>((resolve) => {
       const image = new Image()
       image.onload = () => resolve(image.naturalWidth > 0 && image.naturalHeight > 0)
       image.onerror = () => resolve(false)
       image.src = SPACE_LAYER_BASE + filename
     })))
-    return loaded.every(Boolean)
+    return publish(loaded.every(Boolean))
   } catch {
-    return false
+    return publish(false)
   }
 }

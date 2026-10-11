@@ -60,7 +60,7 @@
         "consented live weather",
         "real mobile GPU"
       ],
-      "idleCanvasDrawCalls1100ms": 720,
+      "idleCanvasDrawCalls1100ms": 648,
       "details": {
         "jar": {
           "nativeFocus": true,
@@ -100,7 +100,8 @@
           "volumeBefore": "0.8",
           "volumeAfterTouch": "0.5"
         }
-      }
+      },
+      "warmFallbackFrames": []
     },
     {
       "viewport": "390x690",
@@ -200,7 +201,8 @@
           "volumeBefore": "0.8",
           "volumeAfterTouch": "0.5"
         }
-      }
+      },
+      "warmFallbackFrames": []
     },
     {
       "viewport": "430x932",
@@ -260,7 +262,7 @@
         "consented live weather",
         "real mobile GPU"
       ],
-      "idleCanvasDrawCalls1100ms": 1656,
+      "idleCanvasDrawCalls1100ms": 1728,
       "details": {
         "jar": {
           "nativeFocus": true,
@@ -300,7 +302,8 @@
           "volumeBefore": "0.8",
           "volumeAfterTouch": "0.5"
         }
-      }
+      },
+      "warmFallbackFrames": []
     }
   ]
 }
