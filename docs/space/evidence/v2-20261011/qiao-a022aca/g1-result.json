@@ -1,0 +1,135 @@
+{
+  "check": "G1_BROWSER_PREFLIGHT_NOT_VISUAL_SIGNOFF",
+  "sourceCommit": "a022acab725d03cc14622e6bc87837555b686b81",
+  "servedBuildVersion": "a022acab725d03cc14622e6bc87837555b686b81",
+  "interactiveLoginNoStateExport": false,
+  "existingLocalBrowserContext": false,
+  "viewportMode": "mobile-touch-context",
+  "manifestArtGateNotBypassed": true,
+  "screenshotsOptIn": true,
+  "results": [
+    {
+      "viewport": "390x844",
+      "status": "UNAPPROVED_LAYERED_REVIEW_SMOKE_ONLY",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "layered": true,
+      "unapprovedReviewBuild": true,
+      "sceneRatio": 0.5627962085308057,
+      "drawerPresent": true,
+      "drawerVisibleArea": 29339.359375,
+      "brokenBackplates": 0,
+      "brokenVisibleImages": 0,
+      "scenePresent": true,
+      "buildMatchesCheckout": true,
+      "errorCount": 0,
+      "details": [
+        {
+          "nativeFocus": true,
+          "brokenVisibleImages": 0,
+          "documentWidth": 390,
+          "viewportWidth": 390,
+          "stageLeft": 0,
+          "stageRight": 390,
+          "projectedScreen": false,
+          "kind": "jar",
+          "returnedToSpace": true
+        },
+        {
+          "nativeFocus": true,
+          "brokenVisibleImages": 0,
+          "documentWidth": 390,
+          "viewportWidth": 390,
+          "stageLeft": 0,
+          "stageRight": 390,
+          "projectedScreen": true,
+          "kind": "player",
+          "filePickerOpened": true,
+          "returnedToSpace": true
+        }
+      ]
+    },
+    {
+      "viewport": "390x690",
+      "status": "UNAPPROVED_LAYERED_REVIEW_SMOKE_ONLY",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "layered": true,
+      "unapprovedReviewBuild": true,
+      "sceneRatio": 0.5628086315362241,
+      "drawerPresent": true,
+      "drawerVisibleArea": 23890.6787109375,
+      "brokenBackplates": 0,
+      "brokenVisibleImages": 0,
+      "scenePresent": true,
+      "buildMatchesCheckout": true,
+      "errorCount": 0,
+      "details": [
+        {
+          "nativeFocus": true,
+          "brokenVisibleImages": 0,
+          "documentWidth": 390,
+          "viewportWidth": 390,
+          "stageLeft": 0,
+          "stageRight": 390,
+          "projectedScreen": false,
+          "kind": "jar",
+          "returnedToSpace": true
+        },
+        {
+          "nativeFocus": true,
+          "brokenVisibleImages": 0,
+          "documentWidth": 390,
+          "viewportWidth": 390,
+          "stageLeft": 0,
+          "stageRight": 390,
+          "projectedScreen": true,
+          "kind": "player",
+          "filePickerOpened": true,
+          "returnedToSpace": true
+        }
+      ]
+    },
+    {
+      "viewport": "430x932",
+      "status": "UNAPPROVED_LAYERED_REVIEW_SMOKE_ONLY",
+      "viewportWidth": 430,
+      "documentWidth": 430,
+      "layered": true,
+      "unapprovedReviewBuild": true,
+      "sceneRatio": 0.5627850053648069,
+      "drawerPresent": true,
+      "drawerVisibleArea": 35726.41845703125,
+      "brokenBackplates": 0,
+      "brokenVisibleImages": 0,
+      "scenePresent": true,
+      "buildMatchesCheckout": true,
+      "errorCount": 0,
+      "details": [
+        {
+          "nativeFocus": true,
+          "brokenVisibleImages": 0,
+          "documentWidth": 430,
+          "viewportWidth": 430,
+          "stageLeft": 0,
+          "stageRight": 430,
+          "projectedScreen": false,
+          "kind": "jar",
+          "returnedToSpace": true
+        },
+        {
+          "nativeFocus": true,
+          "brokenVisibleImages": 0,
+          "documentWidth": 430,
+          "viewportWidth": 430,
+          "stageLeft": 0,
+          "stageRight": 430,
+          "projectedScreen": true,
+          "kind": "player",
+          "filePickerOpened": true,
+          "returnedToSpace": true
+        }
+      ]
+    }
+  ]
+}
