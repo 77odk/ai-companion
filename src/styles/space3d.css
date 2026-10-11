@@ -1,0 +1,21 @@
+.space3d-gate { position: relative; z-index: 3; }
+.space3d-switch { position: absolute; right: 12px; top: 12px; z-index: 5; border: 1px solid #c9bdaa; border-radius: 18px; background: #f1ebdd; color: #514338; padding: 7px 12px; font: inherit; font-size: 12px; }
+.space3d-ready > .space-scene-shell, .space3d-ready > .space-scene-hotspots { display: none; }
+.space3d-stage { position: relative; height: calc(100dvh - 68px); min-height: 540px; width: 100%; overflow: hidden; background: #e5ddcf; }
+.space3d-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.space3d-cameras { position: absolute; top: 14px; left: 12px; right: 90px; display: flex; gap: 4px; flex-wrap: wrap; }
+.space3d-stage button { border: 1px solid #c9bdaa; background: #f1ebdded; color: #514338; border-radius: 12px; padding: 8px 10px; min-height: 36px; font: inherit; font-size: 12px; }
+.space3d-stage button[aria-pressed=true] { background: #b58d68; color: #fff; }
+.space3d-stage button:disabled { opacity: .45; }
+.space3d-stage button:focus-visible { outline: 2px solid #987451; outline-offset: 2px; }
+.space3d-entrances { position: absolute; bottom: 14px; left: 12px; right: 12px; display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; }
+.space3d-page-tools { position: absolute; bottom: 102px; left: 12px; right: 12px; display: flex; justify-content: center; align-items: center; gap: 8px; color: #514338; font-size: 12px; }
+.space3d-selection { position: absolute; left: 16px; top: 65px; color: #514338; font-size: 13px; }
+.space3d-fallback { position: absolute; right: 12px; top: 48px; padding: 6px 10px; border-radius: 12px; background: #f1ebdd; color: #514338; font-size: 12px; }
+.space3d-reader { position: absolute; inset: 0; background: #f1ebdd; display: flex; flex-direction: column; z-index: 8; }
+.space3d-reader-tools { display: flex; gap: 4px; padding: 12px; align-items: center; }
+.space3d-reader-tools input { min-width: 0; width: 100%; padding: 8px; border: 1px solid #c9bdaa; background: transparent; border-radius: 10px; }
+.space3d-reader-content { overflow: auto; padding: 8px 22px 60px; color: #4b4037; line-height: 1.8; user-select: text; }
+.space3d-reader-content article { margin-bottom: 28px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.space3d-metrics { position: absolute; bottom: 150px; left: 12px; right: 12px; font: 10px monospace; overflow-wrap: anywhere; background: #f1ebddaa; }
+@media (prefers-reduced-motion: reduce) { .space3d-stage * { transition: none; animation: none; } }

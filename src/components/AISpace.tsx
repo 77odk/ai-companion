@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
+import Space3DGate from './space3d/Space3DGate'
+import { getMessagesCache } from '../lib/sessionStore'
+import { loadMessages } from '../lib/storage'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
 import { loadMemory, MEMORY_UPDATED_EVENT } from '../lib/memory'
 import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
@@ -418,6 +421,16 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
 
     return (
       <>
+        <Space3DGate data={{ sessionId, messages: sessionId ? getMessagesCache(sessionId) : loadMessages(),
+          memoryCount, weeklyCount, listen: listenSnapshot,
+          photoUrls: scenePhotos.map(photo => photo.dataUrl ?? photoUrl(photo.id, token)) }}
+          onOpen={kind => {
+            if (kind === 'photos') openPhotoWallFromScene()
+            if (kind === 'jar') openDeskObject('jar', onOpenStarJar)
+            if (kind === 'book') openDeskObject('book', onOpenThoughts)
+            if (kind === 'player') openDeskObject('player', onOpenListen)
+            if (kind === 'drawer') openWeeklyFromDrawer()
+          }} />
         <section className="space-scene-shell" aria-label="TA 的空间">
           <img
             className="space-scene-backplate"

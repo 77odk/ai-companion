@@ -2,13 +2,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { calculateEnvironment as environment, weatherEffects } from '../src/lib/environment.ts'
 
-// Independent reference: NOAA solar calculator (geometric elevation, no refraction), rounded.
+// Independent reference: NOAA Julian-century equations (geometric elevation, no refraction).
 const references = [
-  ['2026-06-21T04:00:00Z', 39.9042, 116.4074, 'Asia/Shanghai', 72.3],
-  ['2026-12-21T04:00:00Z', 39.9042, 116.4074, 'Asia/Shanghai', 26.6],
-  ['2026-03-20T12:00:00Z', 51.5074, -0.1278, 'Europe/London', 38.4],
-  ['2026-06-21T16:00:00Z', 40.7128, -74.006, 'America/New_York', 68.9],
-  ['2026-12-21T01:00:00Z', -33.8688, 151.2093, 'Australia/Sydney', 74.4],
+  ['2026-06-21T04:00:00Z', 39.9042, 116.4074, 'Asia/Shanghai', 73.1855274994],
+  ['2026-12-21T04:00:00Z', 39.9042, 116.4074, 'Asia/Shanghai', 26.5951214638],
+  ['2026-03-20T12:00:00Z', 51.5074, -0.1278, 'Europe/London', 38.4219537988],
+  ['2026-06-21T16:00:00Z', 40.7128, -74.006, 'America/New_York', 68.8797641312],
+  ['2026-12-21T01:00:00Z', -33.8688, 151.2093, 'Australia/Sydney', 74.4027021761],
 ]
 for (const [time, latitude, longitude, timezone, reference] of references) {
   test(`solar altitude within one degree: ${timezone} ${time}`, () => {

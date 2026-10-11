@@ -1,0 +1,16 @@
+{
+  "bake": {
+    "runs": 2,
+    "identicalFiles": 21,
+    "comparison": "SHA-256 per file and entire manifest",
+    "command": "node scripts/bake_space3d.mjs"
+  },
+  "screenshots": {
+    "runs": 2,
+    "identicalImages": 9,
+    "command": "node scripts/screenshot_space3d.mjs",
+    "chromium": "154.0.8037.57",
+    "renderer": "SwiftShader",
+    "conditions": "fixed time/weather/camera/DPR1/hardwareConcurrency8; same machine/fonts"
+  }
+}

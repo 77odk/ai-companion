@@ -1,0 +1,22 @@
+{
+  "three": "180",
+  "results": {
+    "soft": {
+      "radius": [
+        1,
+        6
+      ],
+      "differingBytes": 0
+    },
+    "pcf": {
+      "radius": [
+        1,
+        6
+      ],
+      "differingBytes": 3453
+    }
+  },
+  "source": "Chromium SwiftShader",
+  "size": 256,
+  "shadowSize": 512
+}
