@@ -31,7 +31,7 @@ def run(html_path, output):
         })();""",
         'native room decode failed': """(()=>{
           window.__nativeDecodeFailures=0;
-          const fail=element=>element.classList.contains('space-object-native-room');
+          const fail=element=>(element.classList.contains('space-object-native-room')||element.classList.contains('space-book-source'));
           const invalid='data:image/png;base64,AAAA';
           const src=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
           Object.defineProperty(HTMLImageElement.prototype,'src',{...src,set(value){
@@ -75,11 +75,14 @@ def run(html_path, output):
                         with page.expect_file_chooser():
                             page.get_by_role('button', name='去接音乐', exact=True).tap()
                 page.screenshot(path=str(output / f'{name.replace(" ", "-")}-{kind}.png'))
-                page.get_by_role('button', name='返回', exact=False).first.tap()
+                if page.locator('.space-focus-dismiss').count():
+                    page.locator('.space-focus-dismiss').first.click(position={'x':5,'y':30})
+                else:
+                    page.get_by_role('button', name='返回', exact=False).first.tap()
                 page.wait_for_timeout(1000)
                 assert page.evaluate('window.__spaceReview.view') == 'space'
             assert not errors, errors
-            report['cases'].append({'name': name, 'nativeFocus': name == 'ResizeObserver unavailable', 'returns': 'space', 'filePicker': True, 'pageErrors': errors})
+            report['cases'].append({'name': name, 'nativeFocus': expected_native, 'returns': 'space', 'filePicker': True, 'pageErrors': errors})
             page.close()
         browser.close()
     (output / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))

@@ -67,7 +67,10 @@ def review_details(page, screenshots, width, height, layered):
                 result['filePickerOpened'] = None  # Actual library is nonempty.
         if screenshots:
             page.screenshot(path=str(screenshots / f'{kind}_{width}x{height}.png'))
-        root.get_by_role('button', name='返回', exact=False).first.click()
+        if page.locator('.space-focus-dismiss').count():
+            page.locator('.space-focus-dismiss').click(position={'x':5,'y':30})
+        else:
+            root.get_by_role('button', name='返回', exact=False).first.click()
         page.locator('.ai-space-page').wait_for(state='visible', timeout=10000)
         page.wait_for_timeout(500)
         result['returnedToSpace'] = True

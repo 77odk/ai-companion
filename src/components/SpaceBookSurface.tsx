@@ -76,6 +76,7 @@ export default function SpaceBookSurface({ native, left, right, front, back, tur
   useEffect(()=>{
     let alive=true
     const image=new Image()
+    image.className='space-book-source'
     image.onload=()=>{ if(alive){textureRef.current=rectifiedTexture(image,native);setVersion(v=>v+1)} }
     image.onerror=()=>{ if(alive&&native) errorRef.current() }
     image.src=native?'/space/layered/room-content-clean-v2.webp':'/space/layered/open_book.png'
