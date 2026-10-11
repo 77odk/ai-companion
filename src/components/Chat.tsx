@@ -22,7 +22,6 @@ import {findRecoverableReply, registerActiveReplyRun, setReplyLifecycle, unregis
 import {getEffectiveReplyLength} from '../lib/replyLength'
 import {allowsBusyState, resolveIdentityMode} from '../lib/companionPolicy'
 import {cleanAttributionArtifacts} from '../lib/promptAttribution'
-import {ELUVIN_DATA_CHANGE} from '../lib/dataChange'
 
 
 import {clearPendingMemoryCorrection, correctMemoryText, hasMemoryCorrectionMarker, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, stripMemoryCorrectionMarkers} from '../lib/memoryCorrection'
@@ -46,6 +45,7 @@ import {buildChatContextBlocks} from '../lib/chatContextBuild'
 import ChatComposer from './ChatComposer'
 import {useChatContextBlocks} from '../lib/useChatContextBlocks'
 import {useChatEvents} from '../lib/useChatEvents'
+import {useChatComposer} from '../lib/useChatComposer'
 import ChatMemoryCorrection from './ChatMemoryCorrection'
 import ChatNotices from './ChatNotices'
 
@@ -92,9 +92,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
 
   // —— 第 3 组拆分：消息缓存与对账下沉 useChatMessages（本组只搬不改）——
   const { messages, setMessages, persistMessages, uploadMessage } = useChatMessages({ activeSessionId })
-  const [input, setInput] = useState('')
-  const [quoteDraft, setQuoteDraft] = useState<MessageQuote | null>(null)
-  const [actionNarrationEnabled, setActionNarrationEnabledState] = useState(() => isActionNarrationEnabled())
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [failedText, setFailedText] = useState<string | null>(null)
@@ -134,14 +131,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     return () => window.removeEventListener('yiwem:thinking-unsupported', onThinkingUnsupported)
   }, [])
 
-  useEffect(() => {
-    const refreshActionNarration = () => setActionNarrationEnabledState(isActionNarrationEnabled())
-    window.addEventListener(ELUVIN_DATA_CHANGE, refreshActionNarration)
-    return () => window.removeEventListener(ELUVIN_DATA_CHANGE, refreshActionNarration)
-  }, [])
-
-
-  const inputRef = useRef<HTMLTextAreaElement>(null)
   // UI2-03B-1：失败提示状态已上移到 App（Props.jumpNotice / onJumpNotice）——
   // Chat 不再本地持 notice state / timer：dev StrictMode 提前跑 cleanup 曾把 timer 清掉
   // 而 state 还在，导致提示永久驻留。现在提示由 App 持有并自行 2.6s 收尾。
@@ -173,6 +162,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const partialSessionIdRef = useRef<string | null>(null)
   const replyInterruptionReasonRef = useRef<ReplyInterruptionReason | null>(null)
   const streamingRef = useRef(false)
+  // —— 第 7 组拆分：输入区状态与设置读取下沉 useChatComposer（本组只搬不改）——
+  const { input, setInput, quoteDraft, setQuoteDraft, actionNarrationEnabled, inputRef } = useChatComposer()
   // —— 第 2 组拆分：会话装载与切换下沉 useChatSession（本组只搬不改）——
   // 同一提交内「流中断收口」（runId++ / abort / finalize / timer 清理）仍在下方原 effect
   // 中先执行（流式 / engine 域，后续组处理）；hook 只负责会话域的装载。
@@ -240,13 +231,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     setMessages(next)
     setInput('')
   }
-
-  useEffect(() => {
-    const el = inputRef.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
-  }, [input])
 
   useEffect(() => {
     runIdRef.current += 1
