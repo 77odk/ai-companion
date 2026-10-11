@@ -39,13 +39,13 @@ import {getSessionLang} from '../lib/sessionStore'
 import {takeChatMessage} from '../lib/chatInject'
 import {decodePersonaText} from '../lib/customPersona'
 import {filterSessionMessages} from '../lib/aiSpaceDetail'
-import {ensureMilestoneEvent, getMilestoneStatus, latestReachedMilestoneDay, markMilestoneShown} from '../lib/milestone'
 import {recordChatTopic} from '../lib/chatTopics'
 import MilestoneCard from './MilestoneCard'
 import ChatReplyError from './ChatReplyError'
 import {buildChatContextBlocks} from '../lib/chatContextBuild'
 import ChatComposer from './ChatComposer'
 import {useChatContextBlocks} from '../lib/useChatContextBlocks'
+import {useChatEvents} from '../lib/useChatEvents'
 import ChatMemoryCorrection from './ChatMemoryCorrection'
 import ChatNotices from './ChatNotices'
 
@@ -110,8 +110,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [hasKey] = useState(() => Boolean(loadSettings().apiKey))
   // 该模型不支持思考链：请求被服务商拒了以后由 modelChat 降级并通知，这里只负责显示一行灰字
   const [thinkingUnsupported, setThinkingUnsupported] = useState(() => isThinkingUnsupported(loadSettings()))
-  const [milestone, setMilestone] = useState<{ day: number; hit: boolean; shown: boolean } | null>(null)
-  const [showMilestone, setShowMilestone] = useState(false)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
   const [contextDetailOpen, setContextDetailOpen] = useState(false)
   const contextMeterRef = useRef<HTMLDivElement>(null)
@@ -191,6 +189,8 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     setFailedText,
     setQuoteDraft,
   })
+  // —— 第 6 组拆分：里程碑（Milestone）状态与挂载下沉 useChatEvents（本组只搬不改）——
+  const { milestone, showMilestone, closeMilestone } = useChatEvents()
   // —— 第 4 组拆分：忙碌生命周期下沉 useChatBusy（进入 / 恢复 / 补发 return）——
   // 依赖 visibleMessages（enterBusy 默认上下文）、runIdRef（恢复补发 return 的 runId）、
   // mountedRef（commit / onIdle 的挂载判定）、setMessages（commit 落库后刷新消息状态）。
@@ -434,18 +434,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     }
     window.addEventListener('yiwem:ai-reply-committed', onCommitted)
     return () => window.removeEventListener('yiwem:ai-reply-committed', onCommitted)
-  }, [])
-
-  useEffect(() => {
-    const now = Date.now()
-    const sid = getActiveSessionId() || undefined
-    const st = getMilestoneStatus(now, sid)
-    const reached = latestReachedMilestoneDay(st.day)
-    if (reached) ensureMilestoneEvent(reached, now, sid)
-    if (st.hit && !st.shown) {
-      setMilestone(st)
-      setShowMilestone(true)
-    }
   }, [])
 
   const send = useCallback((
@@ -1058,11 +1046,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     // runId++ 已经能阻止 playTick 继续跑
     retriedRef.current = true
     finalizeRef.current()
-  }
-
-  const closeMilestone = () => {
-    if (milestone) markMilestoneShown(milestone.day)
-    setShowMilestone(false)
   }
 
   const confirmPendingMemoryCorrection = async () => {
