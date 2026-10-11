@@ -47,7 +47,7 @@ export function buildFixedScene(materials) {
     ['window-wall-back', [.14, 1, .5], [-1, 1.4, -.60]],
     ['window-wall-front', [.14, 1, .5], [-1, 1.4, .90]],
   ]) bakeSurfaces.push(box(name, size, position, materials.wall, .002))
-  const floor = box('floor', [2.6, .1, 2], [0, -.05, .15], materials.linen, .002, false)
+  const floor = box('floor', [2.6, .1, 2], [0, -.05, .15], materials.floor??materials.linen, .002, false)
   bakeSurfaces.push(floor)
   for (const z of [-.35, .65]) box('window-frame', [.05, 1.06, .045], [-.91, 1.4, z], materials.wood, .002)
   for (const y of [.9, 1.9]) box('window-frame', [.05, .045, 1.06], [-.91, y, .15], materials.wood, .002)
@@ -62,10 +62,11 @@ export function buildFixedScene(materials) {
 export function buildDeskScene(materials) {
   const fixed = buildFixedScene(materials), { root, box } = fixed
   const anchors = new Map()
+  const cloneMaterial=material=>{const clone=material.clone();clone.onBeforeCompile=material.onBeforeCompile;clone.customProgramCacheKey=material.customProgramCacheKey;return clone}
   const tag = (mesh, hit) => {
     mesh.userData.hit = hit
     if (mesh.material) mesh.material = Array.isArray(mesh.material)
-      ? mesh.material.map(material=>material.clone()) : mesh.material.clone()
+      ? mesh.material.map(cloneMaterial) : cloneMaterial(mesh.material)
     return mesh
   }
   const drawer = new T.Group(); root.add(drawer)
@@ -84,6 +85,8 @@ export function buildDeskScene(materials) {
   }
   anchors.set('drawer', new T.Vector3(0, .64, .32))
   const book = new T.Group(); book.position.set(-.08, .767, .03); root.add(book)
+  const spine=tag(box('book-spine',[.014,.018,.44],[-.08,.761,.03],materials.linen,.0015,false),'book')
+  book.attach(spine)
   const bookParts = []
   for (const x of [-.158, .158]) {
     const cover = box('book-cover', [.312, .006, .446], [x - .08, .758, .03], materials.linen, .0015)
@@ -114,6 +117,8 @@ export function buildDeskScene(materials) {
   const profile = [[.065,0],[.07,.006],[.078,.03],[.08,.14],[.067,.17],[.066,.177],[.063,.179],[.059,.176],[.06,.169],[.073,.137],[.071,.03],[.063,.012],[0,.012]]
   const body = new T.Mesh(new T.LatheGeometry(profile.map(p => new T.Vector2(...p)), 28), materials.glass)
   body.receiveShadow = true; jar.add(body); tag(body, 'jar')
+  const jarBase=tag(new T.Mesh(new T.CylinderGeometry(.063,.064,.008,28),materials.ceramicBase),'jar')
+  jarBase.position.y=.007;jarBase.receiveShadow=true;jar.add(jarBase)
   for (const [radius, y, material] of [[.065,.006,materials.ceramicBase],[.063,.175,materials.ceramic]]) {
     const ring = new T.Mesh(new T.TorusGeometry(radius, .003, 6, 28), material)
     ring.rotation.x = Math.PI / 2; ring.position.y = y; ring.castShadow = true; jar.add(ring); tag(ring, 'jar')
@@ -123,6 +128,7 @@ export function buildDeskScene(materials) {
   for (let i=0;i<48;i++) { matrix.makeTranslation(Math.sin(i*7)*.045, .018+(i%9)*.013, Math.cos(i*11)*.045); stars.setMatrixAt(i,matrix) }
   jar.add(stars); tag(stars,'jar'); anchors.set('jar', jar.position.clone().add(new T.Vector3(0,.09,0)))
   const board = tag(box('photo-board', [.46, .34, .025], [.38, 1.24, -.465], materials.linen), 'photos')
+  board.castShadow=false
   const photoPlanes = []
   for (let i=0;i<8;i++) {
     const photo = tag(box('photo-card', [.13,.09,.002], [.225+(i%3)*.15,1.145+Math.floor(i/3)*.102,-.446],materials.paper,.001), 'photos')
@@ -136,6 +142,11 @@ export function buildDeskScene(materials) {
   box('lamp-base',[.12,.014,.10],[.52,.757,-.16],materials.ceramic)
   box('lamp-stem',[.015,.36,.015],[.52,.94,-.16],materials.dark,.001)
   const shade = new T.Mesh(new T.ConeGeometry(.08,.10,24,1,true),materials.ceramic)
+  shade.material=shade.material.clone();shade.material.side=T.DoubleSide
+  shade.material.emissive=new T.Color('#FFC28A');shade.material.emissiveIntensity=0
   shade.position.set(.52,1.13,-.16);shade.castShadow=true;root.add(shade)
-  return { ...fixed, anchors, drawer, pages, letters, screen, photoPlanes, stars }
+  // A single distant backdrop behind the real aperture; never casts an opaque shadow.
+  const windowView=new T.Mesh(new T.PlaneGeometry(1,1),new T.MeshBasicMaterial({color:'#C4D5DF',side:T.DoubleSide}))
+  windowView.position.set(-1.13,1.4,.15);windowView.rotation.y=Math.PI/2;root.add(windowView)
+  return { ...fixed, anchors, drawer, pages, letters, screen, photoPlanes, stars, lampShade:shade, windowView }
 }

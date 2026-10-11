@@ -1,6 +1,6 @@
 import * as T from 'three'
 import { buildDeskScene } from './geometry.js'
-import { makeMaterials, canvasTexture, disposeMaterials } from './materials.js'
+import { makeMaterials, canvasTexture, disposeMaterials, reflectionCanvas } from './materials.js'
 
 function kelvinColor(kelvin) {
   const temperature=T.MathUtils.clamp(kelvin,1000,40000)/100
@@ -20,11 +20,16 @@ export function createSpaceScene(canvas, options) {
   const gpu = debugRenderer ? context.getParameter(debugRenderer.UNMASKED_RENDERER_WEBGL) : 'unavailable'
   const renderingSource = /swiftshader|llvmpipe|software/i.test(gpu) ? 'software-rendering' : gpu === 'unavailable' ? 'unverified-rendering' : 'hardware-rendering'
   renderer.outputColorSpace = T.SRGBColorSpace
-  renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15
+  renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.35
   renderer.shadowMap.enabled = true
   // r180 PCFSoft radius A/B probe is byte-identical; PCF honors radius.
   renderer.shadowMap.type = T.PCFShadowMap
   const scene = new T.Scene(); scene.background = new T.Color('#ADCBDD')
+  const reflectionSource=canvasTexture(reflectionCanvas())
+  reflectionSource.mapping=T.EquirectangularReflectionMapping
+  const pmrem=new T.PMREMGenerator(renderer),reflectionMap=pmrem.fromEquirectangular(reflectionSource)
+  scene.environment=reflectionMap.texture;scene.environmentIntensity=.30
+  pmrem.dispose();reflectionSource.dispose()
   const materials = makeMaterials(), objects = buildDeskScene(materials); scene.add(objects.root)
   const camera = new T.PerspectiveCamera(38, 1, .02, 30)
   const ambient = new T.AmbientLight('#E5DDCF', .05); scene.add(ambient)
@@ -64,14 +69,14 @@ export function createSpaceScene(canvas, options) {
   const snow=new T.Points(snowGeometry,new T.PointsMaterial({color:'#F0F5F3',size:.012,transparent:true,opacity:.8,depthWrite:false}))
   scene.add(rain,snow)
   function targets() {
-    const aspect=camera.aspect, overviewDistance=Math.max(2.15,1.58/(2*Math.tan(19*Math.PI/180)*aspect))
+    const aspect=camera.aspect, overviewDistance=Math.max(2.15,1.78/(2*Math.tan(19*Math.PI/180)*aspect))
     if(mode==='reading') {
       // Width of the current 0.30m page at the target distance is 300 CSS px.
       const cssWidth=canvas.clientWidth||390
       const distance=.30/(2*Math.tan(19*Math.PI/180)*aspect*(Math.min(300,cssWidth-32)/cssWidth))
       targetLook.set(.078,.78,.03);targetPosition.set(.078,.78+distance,.03+distance*.035)
     } else if(mode==='drawer') {targetLook.set(0,.64,.30);targetPosition.set(.50,1.35,1.45)}
-    else {targetLook.set(-.08,.97,-.03);targetPosition.set(overviewDistance*.24,1.0+overviewDistance*.32,overviewDistance*.90)}
+    else {targetLook.set(-.12,.80,-.02);targetPosition.set(overviewDistance*.10,.80+overviewDistance*.46,overviewDistance*.88)}
     const relative=targetPosition.clone().sub(targetLook)
     const spherical=new T.Spherical().setFromVector3(relative)
     spherical.theta+=orbitX;spherical.phi=T.MathUtils.clamp(spherical.phi+orbitY,.06,Math.PI/2-.10)
@@ -127,7 +132,10 @@ export function createSpaceScene(canvas, options) {
     sun.position.lerp(sunGoal,t);sun.intensity=T.MathUtils.lerp(sun.intensity,directGoal,t);sun.color.lerp(tintGoal,t)
     sky.intensity=T.MathUtils.lerp(sky.intensity,diffuseGoal,t);sky.color.lerp(skyGoal,t);scene.background.lerp(skyGoal,t)
     ambient.intensity=T.MathUtils.lerp(ambient.intensity,environment?.isDay!==false ? .18 : .05,t)
+    scene.environmentIntensity=T.MathUtils.lerp(scene.environmentIntensity,environment?.isDay!==false ? .30 : .055,t)
     lamp.intensity=T.MathUtils.lerp(lamp.intensity,lampGoal,t)
+    objects.lampShade.material.emissiveIntensity=T.MathUtils.lerp(objects.lampShade.material.emissiveIntensity,lampGoal>0?.18:0,t)
+    objects.windowView.material.color.lerp(environment?.isDay===false?new T.Color('#31445F'):skyGoal,t)
     objects.bakeSurfaces.forEach(mesh=>{if(mesh.material.lightMap)mesh.material.lightMapIntensity=T.MathUtils.lerp(mesh.material.lightMapIntensity,environment?.isDay !== false ? .65 : .06,t)})
     const flash=!reduced&&quality.particles&&now<flashUntil?(environment?.effects.lightning??0)*.08:0
     haze.material.color.lerp(flash?new T.Color('#FFFFFF'):skyGoal,t)
@@ -225,7 +233,7 @@ export function createSpaceScene(canvas, options) {
       invalidate()
     },
     photos(urls){const generation=++photoGeneration;photoTextures.forEach(t=>t.dispose());photoTextures.length=0
-      objects.photoPlanes.forEach((mesh,i)=>{if(mesh.material===materials.paper)mesh.material=mesh.material.clone();mesh.material.map=null;mesh.material.color.set('#F1EBDD');mesh.material.needsUpdate=true
+      objects.photoPlanes.forEach((mesh,i)=>{mesh.visible=i<urls.length;if(mesh.material===materials.paper)mesh.material=mesh.material.clone();mesh.material.map=null;mesh.material.color.set('#F1EBDD');mesh.material.needsUpdate=true
         if(!urls[i])return
         const image=new Image();image.crossOrigin='anonymous';image.onload=()=>{if(disposed||generation!==photoGeneration)return
           try{
@@ -245,6 +253,6 @@ export function createSpaceScene(canvas, options) {
     resetMetrics(){renderedFrames=sumMs=0;previousFrameActive=false},
     dispose(){disposed=true;clearTimeout(flashTimer);if(raf)cancelAnimationFrame(raf);observer.disconnect();document.removeEventListener('visibilitychange',visibility);canvas.removeEventListener('webglcontextlost',contextLost)
       const geometries=new Set(),mats=new Set();scene.traverse(obj=>{if(obj.geometry)geometries.add(obj.geometry);if(obj.material)(Array.isArray(obj.material)?obj.material:[obj.material]).forEach(m=>mats.add(m))})
-      geometries.forEach(g=>g.dispose());mats.forEach(m=>m.dispose());pageTextures.forEach(t=>t.dispose());photoTextures.forEach(t=>t.dispose());ownedTextures.forEach(t=>{t.dispose();t.image.close?.()});objects.screen.material.map?.dispose();disposeMaterials(materials);renderer.dispose()}
+      geometries.forEach(g=>g.dispose());mats.forEach(m=>m.dispose());pageTextures.forEach(t=>t.dispose());photoTextures.forEach(t=>t.dispose());ownedTextures.forEach(t=>{t.dispose();t.image.close?.()});objects.screen.material.map?.dispose();reflectionMap.dispose();disposeMaterials(materials);renderer.dispose()}
   }
 }

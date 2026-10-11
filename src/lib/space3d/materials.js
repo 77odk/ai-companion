@@ -9,11 +9,11 @@ export function procedural(kind, channel) {
   const size = kind === 'wood' ? 1024 : 512
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = size
   const ctx = canvas.getContext('2d'), data = ctx.createImageData(size, size)
-  const random = randomSeed(kind === 'wood' ? 37 : kind === 'paper' ? 71 : kind === 'wall' ? 19 : 93)
+  const random = randomSeed(kind === 'wood' ? 37 : kind === 'paper' ? 71 : kind === 'wall' ? 19 : kind==='floor'?109:93)
   const phases = Array.from({ length: 8 }, () => random() * Math.PI * 2)
-  const bases = { wood: [181, 141, 104], wall: [229, 221, 207], paper: [241, 235, 221], linen: [201, 189, 170] }
-  const rough = { wood: .58, wall: .94, paper: .93, linen: .90 }
-  const variation = { wood: .05, wall: .015, paper: .012, linen: .03 }
+  const bases = { wood: [181, 141, 104], wall: [229, 221, 207], paper: [241, 235, 221], linen: [201, 189, 170],floor:[182,161,137] }
+  const rough = { wood: .58, wall: .94, paper: .93, linen: .90,floor:.86 }
+  const variation = { wood: .045, wall: .006, paper: .012, linen: .018,floor:.025 }
   function grain(x, y, cellsX, cellsY) {
     const gx=x/size*cellsX,gy=y/size*cellsY,ix=Math.floor(gx),iy=Math.floor(gy)
     const smooth=value=>value*value*(3-2*value),sx=smooth(gx-ix),sy=smooth(gy-iy)
@@ -23,9 +23,14 @@ export function procedural(kind, channel) {
   }
   function field(x, y) {
     const a = x / size * Math.PI * 2, b = y / size * Math.PI * 2
-    if (kind === 'wood') return (Math.sin(a * 23 + Math.sin(b * 3 + phases[0]) * 1.8)
-      + .35 * Math.sin(a * 91 + Math.sin(b * 5 + phases[1]))) / 1.35
+    if (kind === 'wood') {
+      // Long fine fibres; avoid broad, evenly spaced stripes resembling plywood.
+      const warp=Math.sin(a*2+phases[0])*.7+Math.sin(a*5+phases[1])*.2
+      return .42*grain(x,y,12,64)+.34*Math.sin(b*147+warp)
+        +.16*Math.sin(b*311+warp*1.7)+.08*Math.sin(b*47+warp*.5)
+    }
     if (kind === 'linen') return (Math.sin(a * 128) + Math.sin(b * 128)) / 2
+    if(kind==='floor')return .75*grain(x,y,8,48)+.25*Math.sin(b*113+Math.sin(a*3)*.6)
     return kind==='wall'?grain(x,y,96,96):grain(x,y,96,256)
   }
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
@@ -54,9 +59,9 @@ export function makeMaterials() {
     roughnessMap: procedural(kind, 'roughness'), normalMap: procedural(kind, 'normal'),
     normalScale: new T.Vector2(strength, strength), metalness: 0, aoMapIntensity: .55,
   })
-  return {
+  const materials = {
     wood: make('wood', 1, .12), wall: make('wall', 1, .05), paper: make('paper', 1, .035),
-    linen: make('linen', 1, .045),
+    linen: make('linen', 1, .045),floor:make('floor',1,.04),
     ceramic: new T.MeshStandardMaterial({ color: '#E5DED0', roughness: .32, metalness: 0 }),
     ceramicBase: new T.MeshStandardMaterial({ color: '#E5DED0', roughness: .72, metalness: 0 }),
     glass: new T.MeshPhysicalMaterial({ color: '#F0F5F3', roughness: .12, metalness: 0,
@@ -65,6 +70,13 @@ export function makeMaterials() {
     dark: new T.MeshStandardMaterial({ color: '#4E453C', roughness: .9, metalness: 0 }),
     screen: new T.MeshStandardMaterial({ color: '#D9DDC9', roughness: .6, emissive: '#718270', emissiveIntensity: .12, metalness: 0 }),
   }
+  // Clear centre, reflective edges: thickness stays visible without a white glass slab.
+  materials.glass.onBeforeCompile=shader=>{
+    shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',
+      'diffuseColor.a = mix(0.045, 0.42, pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 3.0));\n#include <opaque_fragment>')
+  }
+  materials.glass.customProgramCacheKey=()=> 'space-glass-edge-v1'
+  return materials
 }
 export function canvasTexture(canvas, page = false) {
   const texture = new T.CanvasTexture(canvas)
@@ -73,8 +85,22 @@ export function canvasTexture(canvas, page = false) {
   texture.anisotropy = page ? 4 : 2
   return texture
 }
+/** Cached indirect reflection source: no sun, no direct-light shadow or network asset. */
+export function reflectionCanvas() {
+  if(cache.has('reflection-source'))return cache.get('reflection-source')
+  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=512
+  const ctx=canvas.getContext('2d'),gradient=ctx.createLinearGradient(0,0,0,512)
+  gradient.addColorStop(0,'#B9CCD6');gradient.addColorStop(.42,'#EEE8DC')
+  gradient.addColorStop(.65,'#C9B99F');gradient.addColorStop(1,'#66564B')
+  ctx.fillStyle=gradient;ctx.fillRect(0,0,1024,512)
+  // A soft opening supplies edge reflections to glass and ceramic, not a second light.
+  const opening=ctx.createRadialGradient(235,180,12,235,180,180)
+  opening.addColorStop(0,'rgba(250,248,235,.7)');opening.addColorStop(1,'rgba(250,248,235,0)')
+  ctx.fillStyle=opening;ctx.fillRect(0,0,1024,512)
+  cache.set('reflection-source',canvas);return canvas
+}
 export function disposeMaterials(materials) {
   Object.values(materials).forEach(material => material.dispose())
   // Canvas sources stay cached; GPU objects are re-uploaded only for a new scene.
-  cache.forEach(texture => texture.dispose())
+  cache.forEach(texture => texture.dispose?.())
 }
