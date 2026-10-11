@@ -13,18 +13,14 @@ import {
 } from './storage'
 import {
   getActiveSessionId,
-  getBusyState,
   getMessagesCache,
   getPendingOps,
   markRead,
-  saveBusyState,
   saveMessagesCache,
   saveSessionLang,
 } from './sessionStore'
 import { getSession, type Session } from './sessionApi'
 import { getToken } from './auth'
-import { cancelBusyReturn } from './busyReturn'
-import { allowsBusyState, resolveIdentityMode } from './companionPolicy'
 import { normalizeStaleReplyLifecycle, preserveReplyLifecycle } from './replyLifecycle'
 import { mergeSessionMessages } from './sessionStore'
 import {
@@ -61,12 +57,6 @@ export function useChatSession(options: {
   // 恢复链路依赖（refreshSessionMessages / runSessionRecovery 使用）—— 本组只引用不改
   mountedRef: { current: boolean }
   streamingRef: { current: boolean }
-  // 忙碌恢复补发 return 时需要当前 runId（流中断 effect 已先 +1）—— 本组只引用不改
-  runIdRef: { current: number }
-  // 忙碌域依赖 —— 第 4 组搬走后移除
-  busyTimerRef: { current: number | null }
-  sendBusyReturnRef: { current: (runId: number, sid: string, state: import('./aiBusy').BusyState) => Promise<void> }
-  setIsBusy: (value: boolean) => void
   // 切会话状态重置 setter —— 后续组（3/5/6/7）搬走后移除
   failedReplyRetryRef: { current: (() => void) | null }
   setFailedReplyRetryAvailable: (value: boolean) => void
@@ -81,10 +71,6 @@ export function useChatSession(options: {
     setMessages,
     mountedRef,
     streamingRef,
-    runIdRef,
-    busyTimerRef,
-    sendBusyReturnRef,
-    setIsBusy,
     failedReplyRetryRef,
     setFailedReplyRetryAvailable,
     setRecoveryDismissedTs,
@@ -197,10 +183,10 @@ export function useChatSession(options: {
     setMemoryCorrectionNotice(null)
   }, [activeSessionId, sessionStart, contextBoundary])
 
-  // 切会话 / 刷新上下文：装载新会话消息（缓存读取 → normalize → 落盘 → 状态装载），
-  // 然后恢复忙碌状态（只有沉浸档允许恢复；自然 / AI 遇到旧 busy 立即取消，避免模式切换后继续“闭嘴”）。
+  // 切会话 / 刷新上下文：装载新会话消息（缓存读取 → normalize → 落盘 → 状态装载）。
   // 注意：同一提交内「流中断收口」（runId++ / abort / finalize / timer 清理）仍在 Chat.tsx 的原
-  // effect 中先执行（流式 / engine 域，后续组处理）；本 effect 只负责会话域的装载与忙碌恢复。
+  // effect 中先执行（流式 / engine 域，后续组处理）；本 effect 只负责会话域的装载。
+  // 忙碌恢复已随第 4 组下沉到 useChatBusy（同一提交内装载完成后执行，时序等价）。
   useEffect(() => {
     const cachedMessages = activeSessionId ? getMessagesCache(activeSessionId) : loadMessages()
     const normalizedReply = normalizeStaleReplyLifecycle(cachedMessages, activeSessionId || null)
@@ -212,35 +198,6 @@ export function useChatSession(options: {
     setConversationState(activeSessionId ? loadConversationState(activeSessionId) : null)
     setActiveSession(null)
     if (activeSessionId) markRead(activeSessionId)
-    // 恢复忙碌状态：只有沉浸档允许恢复；自然 / AI 遇到旧 busy 立即取消，避免模式切换后继续“闭嘴”。
-    if (activeSessionId) {
-      const state = getBusyState(activeSessionId)
-      if (!allowsBusyState(resolveIdentityMode(activeSessionId)) && state.status === 'busy') {
-        cancelBusyReturn(activeSessionId, state, { saveState: saveBusyState, onIdle: () => setIsBusy(false) })
-        setIsBusy(false)
-      } else if (state.status === 'busy' && state.busyUntil > 0) {
-        if (Date.now() >= state.busyUntil && !state.returnSent) {
-          // 忙碌已结束但没发回来的消息，补发
-          setIsBusy(false)
-          void sendBusyReturnRef.current(runIdRef.current, activeSessionId, state)
-        } else if (Date.now() < state.busyUntil) {
-          // 还在忙碌中，恢复定时器
-          setIsBusy(true)
-          const remaining = state.busyUntil - Date.now()
-          const triggerRunId = runIdRef.current
-          busyTimerRef.current = window.setTimeout(() => {
-            setIsBusy(false)
-            void sendBusyReturnRef.current(triggerRunId, activeSessionId, state)
-          }, remaining)
-        } else {
-          setIsBusy(false)
-        }
-      } else {
-        setIsBusy(false)
-      }
-    } else {
-      setIsBusy(false)
-    }
   }, [activeSessionId])
 
   // P0-A：会话消息恢复只复用现有 session API + merge；不建第二套同步层。

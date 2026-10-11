@@ -4,21 +4,20 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {buildEstimatedContextState} from '../lib/contextMeterState'
 import {createChatStreamEngineStream} from '../lib/chatStreamEngine'
 import MessageBubble from './MessageBubble'
-import {buildBusyReturnPrompt, buildSystemPrompt, chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError} from '../lib/api'
+import {chatCompletion, computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ApiMessage, type ChatError} from '../lib/api'
 import {cleanMemoryProtocolArtifacts, detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, inferTopic, isMemoryRetort, isSimilarMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult, loadMemory, stripMemoryMarkers, stripThinkBlocks} from '../lib/memory'
-import {getSessionStart, loadMessages, loadPersona, loadSettings, loadChatBg, saveMessages, saveSettings, setContextCompactAt, setContextCompactSummary, setContextBridge, setContextBridgeTurns, clearContextBridge, setContextUsage, clearContextUsage, type ReplyInterruptionReason, type StoredMessage, isActionNarrationEnabled, loadAIProfile} from '../lib/storage'
+import {getSessionStart, loadMessages, loadPersona, loadSettings, loadChatBg, saveMessages, saveSettings, setContextCompactAt, setContextCompactSummary, setContextBridge, setContextBridgeTurns, clearContextBridge, setContextUsage, clearContextUsage, type ReplyInterruptionReason, type StoredMessage, isActionNarrationEnabled} from '../lib/storage'
 import {type ChatJumpTarget} from '../lib/chatJump'
 import {useChatScroll} from '../lib/useChatScroll'
 import {useChatSession} from '../lib/useChatSession'
 import {useChatMessages} from '../lib/useChatMessages'
-import {listMemories, postMemory, postMessage} from '../lib/sessionApi'
-import {addPendingOp, confirmMessageInCache, getActiveSessionId, getBusyState, getMemoriesCache, getMessagesCache, getSessionsCache, markRead, mergeSessionMemories, newPendingOpId, reconcileMemoryCacheId, removePendingOp, saveBusyState, saveMemoriesCache, saveMessagesCache, sessionMemoryToItem, upsertMemoryCache, type PendingOp} from '../lib/sessionStore'
-import {inferBusyReason, randomBusyDurationMs, serializeBusyContext, type BusyState} from '../lib/aiBusy'
-import {busyCycleId, cancelBusyReturn, triggerBusyReturn} from '../lib/busyReturn'
-import {busyReturnFallback, classifyAvailability, isGroundedBusyReturn, type AvailabilityDecision} from '../lib/availability'
+import {useChatBusy} from '../lib/useChatBusy'
+import {listMemories, postMemory} from '../lib/sessionApi'
+import {getActiveSessionId, getBusyState, getMemoriesCache, getMessagesCache, mergeSessionMemories, reconcileMemoryCacheId, saveBusyState, saveMemoriesCache, saveMessagesCache, sessionMemoryToItem, upsertMemoryCache} from '../lib/sessionStore'
+import {cancelBusyReturn} from '../lib/busyReturn'
+import {classifyAvailability} from '../lib/availability'
 import {commitPartialReply} from '../lib/partialReply'
 import {findRecoverableReply, registerActiveReplyRun, setReplyLifecycle, unregisterActiveReplyRun} from '../lib/replyLifecycle'
-import {getSessionPersona} from '../lib/taRuntime'
 
 import {getEffectiveReplyLength} from '../lib/replyLength'
 import {allowsBusyState, resolveIdentityMode} from '../lib/companionPolicy'
@@ -30,7 +29,6 @@ import {buildCompactSource, COMPACT_KEEP_RECENT, BRIDGE_ACTIVE_TURNS, BRIDGE_INP
 import {clearPendingMemoryCorrection, correctMemoryText, hasMemoryCorrectionMarker, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, stripMemoryCorrectionMarkers} from '../lib/memoryCorrection'
 import {formatQuotedMessage, parseQuotedMessage, type MessageQuote, type MessageQuoteSpeaker, messageEvidenceText} from '../lib/messageQuote'
 import {activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState} from '../lib/conversationState'
-import {enqueueSessionMessageCommit} from '../lib/sessionMessageQueue'
 import {appendMemoryAudit} from '../lib/memoryAudit'
 
 /**
@@ -113,7 +111,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const [hasKey] = useState(() => Boolean(loadSettings().apiKey))
   // 该模型不支持思考链：请求被服务商拒了以后由 modelChat 降级并通知，这里只负责显示一行灰字
   const [thinkingUnsupported, setThinkingUnsupported] = useState(() => isThinkingUnsupported(loadSettings()))
-  const [isBusy, setIsBusy] = useState(false)
   const [milestone, setMilestone] = useState<{ day: number; hit: boolean; shown: boolean } | null>(null)
   const [showMilestone, setShowMilestone] = useState(false)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
@@ -179,30 +176,32 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
   const partialSessionIdRef = useRef<string | null>(null)
   const replyInterruptionReasonRef = useRef<ReplyInterruptionReason | null>(null)
   const streamingRef = useRef(false)
-  // 忙碌状态相关 ref
-  const busyTimerRef = useRef<number | null>(null)
-  const busyTriggeredRef = useRef(false)
-  const enterBusyRef = useRef<(sid: string | null, text: string, decision: AvailabilityDecision, contextMessages?: StoredMessage[]) => void>(() => {})
-  const sendBusyReturnRef = useRef<(runId: number, sid: string, state: BusyState) => Promise<void>>(async () => {})
   // —— 第 2 组拆分：会话装载与切换下沉 useChatSession（本组只搬不改）——
   // 同一提交内「流中断收口」（runId++ / abort / finalize / timer 清理）仍在下方原 effect
-  // 中先执行（流式 / engine 域，后续组处理）；hook 只负责会话域的装载与忙碌恢复。
+  // 中先执行（流式 / engine 域，后续组处理）；hook 只负责会话域的装载。
   const { activeSession, conversationState, activeMessages, visibleMessages, displayMessages, persistChatLang, contextMeter, setContextMeter, compactDone, setCompactDone, compactSummary, setCompactSummary, bridgeInfo, setBridgeInfo, contextBusy, setContextBusy, contextNotice, setContextNotice, pendingMemoryCorrection, setPendingMemoryCorrection, memoryCorrectionBusy, setMemoryCorrectionBusy, memoryCorrectionNotice, setMemoryCorrectionNotice } = useChatSession({
     activeSessionId,
     messages,
     setMessages,
     mountedRef,
     streamingRef,
-    runIdRef,
-    busyTimerRef,
-    sendBusyReturnRef,
-    setIsBusy,
     failedReplyRetryRef,
     setFailedReplyRetryAvailable,
     setRecoveryDismissedTs,
     setError,
     setFailedText,
     setQuoteDraft,
+  })
+  // —— 第 4 组拆分：忙碌生命周期下沉 useChatBusy（进入 / 恢复 / 补发 return）——
+  // 依赖 visibleMessages（enterBusy 默认上下文）、runIdRef（恢复补发 return 的 runId）、
+  // mountedRef（commit / onIdle 的挂载判定）、setMessages（commit 落库后刷新消息状态）。
+  // 身份切换收口 Busy 也随本组下沉。
+  const { isBusy, setIsBusy, busyTimerRef, busyTriggeredRef, enterBusyRef } = useChatBusy({
+    activeSessionId,
+    visibleMessages,
+    runIdRef,
+    mountedRef,
+    setMessages,
   })
   const currentConversationBranchId = branchIdForNewMessage(conversationState)
   const persona = decodePersonaText(activeSession?.persona ?? loadPersona())
@@ -227,152 +226,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     onJumpConsumed,
     onJumpNotice,
   })
-
-  // ---- 忙碌状态：进入忙碌 ----
-  const enterBusy = (sid: string | null, triggerText: string, decision: AvailabilityDecision, contextMessages = visibleMessages) => {
-    if (!sid || !allowsBusyState(resolveIdentityMode(sid))) return
-    const duration = randomBusyDurationMs()
-    const busyUntil = Date.now() + duration
-    const reason = inferBusyReason(triggerText)
-    const context = serializeBusyContext(contextMessages.slice(-3))
-    const state: BusyState = {
-      status: 'busy',
-      busyUntil,
-      busyStartedAt: Date.now(),
-      retryCount: 0,
-      busyReason: reason,
-      busyContext: context,
-      returnSent: false,
-      activityOwner: 'SELF',
-      triggerEvidence: decision.evidence,
-    }
-    saveBusyState(sid, state)
-    setIsBusy(true)
-    if (busyTimerRef.current !== null) {
-      clearTimeout(busyTimerRef.current)
-    }
-    const triggerRunId = runIdRef.current
-    busyTimerRef.current = window.setTimeout(() => {
-      setIsBusy(false)
-      void sendBusyReturnRef.current(triggerRunId, sid, state)
-    }, duration)
-  }
-  enterBusyRef.current = enterBusy
-
-  // ---- 忙碌状态：忙完回来自动发消息 ----
-  const sendBusyReturn = async (_triggerRunId: number, sid: string, _snapshot: BusyState) => {
-    if (!sid) return
-    await triggerBusyReturn<string>(sid, {
-      now: Date.now,
-      getState: getBusyState,
-      saveState: saveBusyState,
-      isCurrent: (targetSid, cycleId) => {
-        if (targetSid !== getActiveSessionId()) return false
-        if (!allowsBusyState(resolveIdentityMode(targetSid))) return false
-        if (!getSessionsCache().some((item) => String(item.id) === targetSid)) return false
-        const latest = getBusyState(targetSid)
-        return latest.status === 'busy' && !latest.returnSent && busyCycleId(targetSid, latest) === cycleId
-      },
-      schedule: (callback, delayMs) => {
-        if (busyTimerRef.current !== null) window.clearTimeout(busyTimerRef.current)
-        busyTimerRef.current = window.setTimeout(callback, delayMs)
-        return busyTimerRef.current
-      },
-      generate: async (targetSid, state) => {
-        const settings = loadSettings()
-        if (!settings.apiKey || !settings.baseUrl || !settings.model) throw new Error('Busy Return model settings unavailable')
-        const busyLang = getSessionLang(targetSid)
-        const cachedSession = getSessionsCache().find((item) => String(item.id) === targetSid)
-        if (!cachedSession) throw new Error('Busy Return session no longer exists')
-        const sessionPersona = getSessionPersona(targetSid)
-        const title = (cachedSession.title || '').trim()
-        const nameForPrompt = !title || title === '新会话' || title === '我们的开始'
-          ? loadAIProfile(targetSid).nickname
-          : title
-        const systemPrompt = buildSystemPrompt(sessionPersona, nameForPrompt, undefined, targetSid, busyLang)
-        const cache = getMessagesCache(targetSid)
-        const activeCache = resolveConversationMessages(loadConversationState(targetSid), cache)
-        const tail = activeCache.slice(-3).map((message) => ({
-          role: message.role,
-          content: stripThinkBlocks(stripMemoryMarkers(message.content), busyLang),
-        }))
-        const latestContext = serializeBusyContext(tail) || state.busyContext
-        const selfActivity = state.triggerEvidence || state.busyReason
-        const busyPrompt = buildBusyReturnPrompt(state.busyReason, latestContext, busyLang, selfActivity)
-        const content = await chatCompletion(settings, [
-          { role: 'system', content: systemPrompt },
-          { role: 'system', content: busyPrompt },
-        ], { maxTokens: 150, temperature: 0.9 })
-        const cleaned = stripActionMarkers(stripEmoji(stripThinkBlocks(stripMemoryMarkers(content), busyLang)), busyLang).trim()
-        return isGroundedBusyReturn(cleaned, selfActivity) ? cleaned : busyReturnFallback(busyLang)
-      },
-      commit: async (targetSid, content) => {
-        const latest = getBusyState(targetSid)
-        if (targetSid !== getActiveSessionId() || latest.status !== 'busy') return 'cancelled-before-commit'
-        const busyBranchId = branchIdForNewMessage(loadConversationState(targetSid))
-        const msg: StoredMessage = {
-          role: 'assistant',
-          content,
-          ts: Date.now(),
-          ...(busyBranchId ? { conversationBranchId: busyBranchId } : {}),
-        }
-        const current = getMessagesCache(targetSid)
-        const next = [...current, msg]
-        saveMessagesCache(targetSid, next)
-        const persisted = getMessagesCache(targetSid)
-        if (!persisted.some((item) => item.role === 'assistant' && item.ts === msg.ts && item.content === msg.content)) return 'failed'
-
-        const token = getToken()
-        if (token) {
-          // 最后一次 stale 检查必须发生在不可逆的远端写入之前。
-          if (targetSid !== getActiveSessionId() || getBusyState(targetSid).status !== 'busy') {
-            saveMessagesCache(targetSid, getMessagesCache(targetSid).filter((item) => !(item.ts === msg.ts && item.role === msg.role && item.content === msg.content)))
-            return 'cancelled-before-commit'
-          }
-          const op: PendingOp = {
-            id: newPendingOpId(), type: 'message', sessionId: targetSid,
-            ...(msg.conversationBranchId ? { conversationBranchId: msg.conversationBranchId } : {}),
-            payload: { role: msg.role, content: msg.content, thinking: '' }, ts: msg.ts,
-          }
-          addPendingOp(op)
-          const response = await enqueueSessionMessageCommit(targetSid, async () => {
-            // 等待同 session 前序提交期间状态可能已变化；不可逆 POST 前再做一次 stale check。
-            if (targetSid !== getActiveSessionId() || getBusyState(targetSid).status !== 'busy') return null
-            return postMessage(token, targetSid, { role: msg.role, content: msg.content })
-          })
-          if (!response) {
-            removePendingOp(op.id)
-            saveMessagesCache(targetSid, getMessagesCache(targetSid).filter((item) => !(item.ts === msg.ts && item.role === msg.role && item.content === msg.content)))
-            return 'cancelled-before-commit'
-          }
-          if (!response.ok) {
-            saveMessagesCache(targetSid, getMessagesCache(targetSid).filter((item) => !(item.ts === msg.ts && item.role === msg.role && item.content === msg.content)))
-            return 'failed'
-          }
-          // response.ok=true 是不可逆 commit point：保留 A 的确认消息，不再用 active session/cancel 降级结果。
-          removePendingOp(op.id)
-          confirmMessageInCache(targetSid, op, response.data)
-        }
-        if (targetSid === getActiveSessionId() && mountedRef.current) {
-          markRead(targetSid)
-          setMessages(getMessagesCache(targetSid))
-        }
-        return 'committed'
-      },
-      onIdle: (targetSid) => {
-        if (targetSid !== getActiveSessionId() || !mountedRef.current) return
-        setIsBusy(false)
-        if (busyTimerRef.current !== null) {
-          window.clearTimeout(busyTimerRef.current)
-          busyTimerRef.current = null
-        }
-      },
-      onFailure: (_targetSid, error) => {
-        console.warn('Busy Return attempt failed', error)
-      },
-    })
-  }
-  sendBusyReturnRef.current = sendBusyReturn
 
   // ---- 真人忙碌：沉浸档里消息照常收下，但 TA 暂时不回复；忙完后主动回来接上。 ----
   const handleBusySend = (text: string) => {
@@ -415,26 +268,6 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
       clearTimeout(busyTimerRef.current)
       busyTimerRef.current = null
     }
-  }, [activeSessionId])
-
-  // 身份模式在聊天页内切换时即时收口 Busy：切到自然 / AI 立刻取消旧 cycle，不补发“忙完回来”。
-  useEffect(() => {
-    if (!activeSessionId) return
-    const syncBusyWithIdentity = () => {
-      if (allowsBusyState(resolveIdentityMode(activeSessionId))) return
-      const state = getBusyState(activeSessionId)
-      if (busyTimerRef.current !== null) {
-        window.clearTimeout(busyTimerRef.current)
-        busyTimerRef.current = null
-      }
-      if (state.status === 'busy') {
-        cancelBusyReturn(activeSessionId, state, { saveState: saveBusyState, onIdle: () => setIsBusy(false) })
-      } else {
-        setIsBusy(false)
-      }
-    }
-    window.addEventListener(ELUVIN_DATA_CHANGE, syncBusyWithIdentity)
-    return () => window.removeEventListener(ELUVIN_DATA_CHANGE, syncBusyWithIdentity)
   }, [activeSessionId])
 
   // 记忆沿用原来的“进入当前聊天时拉一次”；P0-A 不扩大 Memory 同步行为。
