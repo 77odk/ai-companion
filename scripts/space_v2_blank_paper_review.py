@@ -21,7 +21,6 @@ def run(html, output):
         page.wait_for_selector('.ai-space-page.is-layered')
         page.locator('.space-scene-hotspot.is-thought-book').click()
         page.wait_for_selector('.thought-book-page.is-native-object-focus')
-        page.get_by_role('button', name='打开思绪书', exact=True).click()
         page.wait_for_timeout(300)
         for direction in ['next', 'prev']:
             for progress in [0, .25, .5, .75, 1]:

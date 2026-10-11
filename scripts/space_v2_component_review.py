@@ -129,12 +129,11 @@ def run(html_path: Path, output: Path, record_video: bool = False) -> int:
                         errors.append(f'{kind}: wrong native room resource')
                     if kind == 'book':
                         page.screenshot(path=str(output / f'{label}-book-closed.png'))
-                        page.get_by_role('button', name='打开思绪书', exact=True).tap()
                         page.wait_for_timeout(400)
-                        detail['projectedPaper'] = page.locator('.thought-book-paper-plane.is-native-plane').count() == 1
+                        detail['frontFacingPaper'] = page.locator('.thought-book-paper-plane').evaluate("el=>getComputedStyle(el).transform==='none'")
                         detail['emptyBookOpened'] = page.locator('.thought-book-empty').is_visible()
-                        if not detail['projectedPaper'] or not detail['emptyBookOpened']:
-                            errors.append('book: native paper plane or real empty state is missing')
+                        if not detail['frontFacingPaper'] or not detail['emptyBookOpened']:
+                            errors.append('book: front-facing readable paper or real empty state is missing')
                     if kind == 'player':
                         # The real empty-state button opens the existing picker.
                         # No file is selected, and no track/content is invented.

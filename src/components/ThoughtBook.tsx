@@ -1,22 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { transitionSpaceScene } from '../lib/spaceSceneTransition'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
 import { getActiveSessionId } from '../lib/sessionStore'
 import { loadTaThoughts, settleTaThoughts, type TaThoughtView } from '../lib/taThoughts'
-import SpaceObjectScene, { SpaceObjectPlane } from './SpaceObjectScene'
 import { useSpaceObjectScene } from '../lib/useSpaceObjectScene'
-import { SPACE_BOOK_FRAME, SPACE_BOOK_PAPER } from '../lib/spaceObjectFocus'
 
 interface Props {
   onBack: () => void
 }
 
 type TurnDirection = 'next' | 'prev' | null
-
-function BookPaper({ native, children }: { native: boolean; children: ReactNode }) {
-  return native
-    ? <SpaceObjectPlane className="thought-book-paper-plane" frame={SPACE_BOOK_FRAME} corners={SPACE_BOOK_PAPER}>{children}</SpaceObjectPlane>
-    : <div className="thought-book-paper-plane">{children}</div>
-}
 
 function thoughtDate(ts: number): string {
   const date = new Date(ts)
@@ -43,7 +36,7 @@ function PageContent({ thought, pageNumber }: { thought?: TaThoughtView; pageNum
 export default function ThoughtBook({ onBack }: Props) {
   const artwork = useSpaceObjectScene()
   const sessionId = getActiveSessionId()
-  const [opened, setOpened] = useState(false)
+  const opened = true
   const [thoughts, setThoughts] = useState<TaThoughtView[]>(() => (
     sessionId ? settleTaThoughts(sessionId) : []
   ))
@@ -100,7 +93,7 @@ export default function ThoughtBook({ onBack }: Props) {
   return (
     <div className={`page space-object-page thought-book-page${artwork.ready ? ' is-native-object-focus' : ''}`}>
       <header className="space-object-topbar">
-        <button type="button" onClick={onBack} className="space-object-back">‹ 返回</button>
+        <button type="button" onClick={() => transitionSpaceScene(onBack)} className="space-object-back">‹ 返回</button>
         <div>
           <strong>思绪</strong>
           <span>THOUGHTS</span>
@@ -109,8 +102,8 @@ export default function ThoughtBook({ onBack }: Props) {
       </header>
 
       <main className="thought-book-stage" aria-label="TA 的思绪">
-        <div className={`thought-book-shell${opened ? ' is-open' : ''}`}>
-          {artwork.ready ? <SpaceObjectScene frame={SPACE_BOOK_FRAME} onError={artwork.fail} /> : <img
+        <div className="thought-book-room" aria-hidden="true">
+          {artwork.ready ? <img className="space-object-native-room thought-book-reading-room" src="/space/layered/room-content-clean-v2.webp" alt="" draggable={false} onError={artwork.fail} /> : <img
             className="thought-book-approved-art"
             src="/space/cutouts/thought-book.png"
             onError={(event) => {
@@ -124,19 +117,9 @@ export default function ThoughtBook({ onBack }: Props) {
             aria-hidden="true"
             draggable={false}
           />}
-          <BookPaper native={artwork.ready}>
-          <button
-            type="button"
-            className="thought-book-cover"
-            onClick={() => setOpened(true)}
-            aria-label={opened ? '思绪书已打开' : '打开思绪书'}
-            disabled={opened}
-          >
-            <span className="thought-book-spine" aria-hidden="true" />
-            <span className="thought-book-cover-title">思绪</span>
-            <span className="thought-book-cover-sub">TA 自己想过的</span>
-          </button>
-
+          </div>
+        <div className="thought-book-shell is-open is-reading">
+          <div className="thought-book-paper-plane">
           <div className="thought-book-pages" aria-hidden={!opened}>
             {pages.length === 0 ? (
               <div className="thought-book-empty">
@@ -190,7 +173,7 @@ export default function ThoughtBook({ onBack }: Props) {
               </>
             )}
           </div>
-          </BookPaper>
+          </div>
         </div>
 
         {artwork.ready && !opened && (

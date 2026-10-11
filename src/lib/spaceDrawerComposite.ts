@@ -1,7 +1,7 @@
 import { paintSpaceDrawerFrontMesh } from './spaceDrawerFaceMesh.ts'
 
 /**
- * E-front / C-interior drawer compositing in the 941 × 1672 Space world.
+ * Original E-front / E-interior drawer compositing in the 941 × 1672 Space world.
  * No external renderer or dependencies. Art is source-derived, not synthesized
  * user content. This does not touch the desk, photos, letters or app state.
  *
@@ -14,7 +14,7 @@ type Quad = readonly [Point, Point, Point, Point]
 export interface SpaceDrawerArt {
   /** Full 481x243 E source crop; the face is sampled only below the envelopes. */
   face: CanvasImageSource
-  /** Full 506x210 C source crop; only its inner depth survives alpha cutout. */
+  /** The same E source crop; the inside is masked above the front face. */
   interior: CanvasImageSource
 }
 
@@ -27,7 +27,7 @@ const clamp = (p: number) => Number.isFinite(p) ? Math.max(0, Math.min(1, p)) : 
  * changing its height independently was stretching the original E material. */
 export function spaceDrawerTravel(progress: number): Point {
   const p = clamp(progress)
-  return [24 - 32 * p, -68 + 96 * p]
+  return [24 * (1 - p), -68 * (1 - p)]
 }
 
 export function spaceDrawerFrontQuad(progress: number): Quad {
@@ -35,11 +35,10 @@ export function spaceDrawerFrontQuad(progress: number): Quad {
   return SOURCE_FACE.map(([x, y]) => [x + dx, y + dy]) as unknown as Quad
 }
 
-/** C's inner lip reaches behind E's front, using exactly the same travel.
- * The 14px right overlap is the source perspective difference, not a stretch. */
+/** The inside and front are samples of one original E drawer, translated as
+ * one rigid object. No differently photographed interior needs an offset. */
 export function spaceDrawerInteriorTravel(progress: number): Point {
-  const [dx, dy] = spaceDrawerTravel(progress)
-  return [dx + 25, dy + 65]
+  return spaceDrawerTravel(progress)
 }
 
 /** Front-apron occlusion: the inner envelopes may emerge only behind the desk
@@ -52,7 +51,7 @@ export function spaceDrawerAperture(progress: number): { leftTop: number; rightT
 
 /** Blend the fixed closed-drawer background into the empty cavity at the
  * same progress as the moving drawer. An instantaneous full cavity on first
- * touch would reveal a black hole before the E/C sprite becomes visible. */
+ * touch would reveal a black hole before the E sprite becomes visible. */
 export function spaceDrawerCavityAlpha(progress: number): number {
   // All exposed materials become opaque before the 25% inspect frame.
   // A long full-room dissolve makes the real wooden drawer look translucent.
@@ -69,13 +68,12 @@ export function spaceDrawerInteriorAlpha(progress: number): number {
   return clamp((clamp(progress) - 0.01) / 0.2)
 }
 
-/** C's source-left plywood must never project outside the E moving face.
- * A 3px overlap keeps the natural wooden rim without a detached pale spike. */
+/** Native E rim and face share their original left edge. */
 export function spaceDrawerInnerLeftEdge(progress: number): number {
   return spaceDrawerFrontQuad(progress)[0][0] - 3
 }
 
-/** C canvas has its own alpha silhouette; do not paint its separate cabinet. */
+/** Paint only source-derived E materials inside the fixed cabinet opening. */
 export function paintSpaceDrawer(
   ctx: CanvasRenderingContext2D,
   art: SpaceDrawerArt,
@@ -91,13 +89,7 @@ export function paintSpaceDrawer(
   ctx.translate(-x, -y)
 
   ctx.save()
-  // A delayed smooth reveal prevents C letters from suddenly popping into
-  // view on the first quarter of a drag. The cavity appears before contents.
   ctx.globalAlpha = spaceDrawerInteriorAlpha(p)
-  // This aperture is anchored to the FIXED E desk in world coordinates.
-  // Clip BEFORE translating the mobile C interior. Translating the clip with
-  // the letters would lower the desk edge by up to 71px and create a dark hole
-  // during the first quarter of the pull.
   const { leftTop, rightTop } = spaceDrawerAperture(p)
   ctx.beginPath()
   ctx.moveTo(435, leftTop)
@@ -106,40 +98,18 @@ export function paintSpaceDrawer(
   ctx.lineTo(435, 1672)
   ctx.closePath()
   ctx.clip()
-  // The C lip and E face travel together. Their source-derived overlap stays
-  // constant at every progress value, independently of the fixed cabinet.
   const [innerX, innerY] = spaceDrawerInteriorTravel(p)
   ctx.translate(innerX, innerY)
-  // The C side wall can be wider than the E front in intermediate states.
-  // Trim only the detached left sliver, leaving the genuine side/rim behind
-  // the moving E face. Coordinates are on the shared 941x1672 world plane.
-  const innerLeft = spaceDrawerInnerLeftEdge(p) - innerX
+  // Native E source: the cabinet's fixed apron is above this contour;
+  // its envelope bed ends at the same sloping edge as the moving front.
   ctx.beginPath()
-  ctx.moveTo(innerLeft, 1309)
-  ctx.lineTo(941, 1309)
-  ctx.lineTo(941, 1672)
-  ctx.lineTo(innerLeft, 1672)
+  ctx.moveTo(466, 1500)
+  ctx.lineTo(514, 1430)
+  ctx.lineTo(940, 1517)
+  ctx.lineTo(940, 1586)
   ctx.closePath()
   ctx.clip()
-  // The previously bundled HQ C bitmap also contains C's stationary desktop
-  // and lower cabinet. Clip to its genuine drawer SIDE + LETTERS silhouette
-  // so it can never repaint the fixed E desk or duplicate its moving front.
-  // Once a clean new-named C asset passes G0-A, this remains an extra guard.
-  ctx.beginPath()
-  ctx.moveTo(441, 1424)
-  ctx.lineTo(492, 1368)
-  ctx.lineTo(515, 1332)
-  ctx.lineTo(538, 1327)
-  ctx.lineTo(648, 1350)
-  ctx.lineTo(821, 1373)
-  ctx.lineTo(940, 1398)
-  ctx.lineTo(940, 1535)
-  ctx.lineTo(441, 1438)
-  ctx.closePath()
-  ctx.clip()
-  // The fixed-desk aperture was already applied *before* mobile transforms.
-  // Clip the genuine C side+letters silhouette here and keep the E body fixed.
-  ctx.drawImage(art.interior, 435, 1325, 506, 210)
+  ctx.drawImage(art.interior, 460, 1429, 481, 243)
   ctx.restore()
 
   // Two native E triangles replace 32 vertical strips. The mapping math is

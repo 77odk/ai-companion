@@ -1,3 +1,4 @@
+import { transitionSpaceScene } from '../lib/spaceSceneTransition'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadMemory, MEMORY_UPDATED_EVENT, type MemoryItem } from '../lib/memory'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
@@ -93,7 +94,7 @@ export default function StarJar({ onBack }: Props) {
   return (
     <div className={`page star-jar-page${artwork.ready ? ' is-native-object-focus' : ''}`}>
       <header className="space-object-topbar star-jar-topbar">
-        <button type="button" onClick={onBack} className="space-object-back">‹ 返回</button>
+        <button type="button" onClick={() => transitionSpaceScene(onBack)} className="space-object-back">‹ 返回</button>
         <div>
           <strong>星星罐</strong>
           <span>REMEMBERED</span>
@@ -130,11 +131,7 @@ export default function StarJar({ onBack }: Props) {
                 } as React.CSSProperties}
                 aria-hidden="true"
               >
-                <i className="fold is-a" />
-                <i className="fold is-b" />
-                <i className="fold is-c" />
-                <i className="fold is-d" />
-                <i className="fold is-e" />
+                {artwork.ready ? <img className="star-jar-origami" src={`/space/layered/${['origami_pink.png', 'origami_blue.png', 'origami_yellow.png', 'origami_purple.png'][index % 4]}`} alt="" draggable={false} /> : <><i className="fold is-a" /><i className="fold is-b" /><i className="fold is-c" /><i className="fold is-d" /><i className="fold is-e" /></>}
               </span>
             ))}
           </span>

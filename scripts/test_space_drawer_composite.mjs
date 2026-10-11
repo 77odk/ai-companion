@@ -54,7 +54,7 @@ for (const t of [-1,0,0.001,.25,.5,.75,1,2,NaN,Infinity]) {
   if (!Number.isFinite(t) || t <= 0) {
     assert.equal(c.calls.filter(x=>x[0]==='image').length,0)
   } else {
-    assert.equal(c.calls.filter(x=>x[0]==='image').length,3, '1 C interior + 2 E face triangles')
+    assert.equal(c.calls.filter(x=>x[0]==='image').length,3, '1 E interior + 2 E face triangles')
     assert.equal(c.calls.filter(x=>x[0]==='matrix').length,2)
   }
 }
@@ -78,7 +78,7 @@ assert.equal(spaceDrawerInteriorAlpha(0),0)
 for(const p of [0,.25,.5,.75,1]) {
   const frontLeft=spaceDrawerFrontQuad(p)[0][0]
   assert.equal(spaceDrawerInnerLeftEdge(p),frontLeft-3,
-    'C side must not stick out beyond a narrow natural rim')
+    'E side must not stick out beyond a narrow natural rim')
 }
 for (const [ms,lo,hi] of [[0,0,0],[100,.3,.4],[380,.87,.88],[760,1,1],[2000,1,1]]) {
   const p=drawerFrameProgress(ms)
@@ -91,10 +91,13 @@ const source=readFileSync('src/lib/spaceDrawerComposite.ts','utf8')
 assert.doesNotMatch(source,/fetch\(|localStorage|sessionStorage|new Image\(/)
 assert.match(source,/paintSpaceDrawerFrontMesh\(ctx, art.face, sourceFace, destination\)/, 'shared two-triangle mapper must be used')
 assert.doesNotMatch(source,/const strips = 32/, 'vertical texture strip seams cannot return')
-assert.match(source,/ctx\.moveTo\(441, 1424\)/)
-assert.match(source,/ctx\.lineTo\(940, 1535\)/)
-assert.match(source,/ctx\.lineTo\(441, 1438\)/)
-const cExtractor=readFileSync('scripts/g0a_extract_c_drawer_depth.py','utf8')
-assert.match(cExtractor,/\(940, 1535\), \(441, 1438\)/)
-assert.doesNotMatch(cExtractor,/\(940, 1671\), \(441, 1606\)/)
-console.log('[Space V2] E face + C inner drawer comp / transform bounds / cubic easing: PASS')
+// Opening must end at the original E face and stay within its world bounds.
+assert.deepEqual(spaceDrawerFrontQuad(1), [[466,1500],[940,1586],[940,1671],[466,1571]])
+for (const p of [0,.25,.5,.75,1]) {
+  const quad = spaceDrawerFrontQuad(p)
+  for (let i=1;i<4;i++) {
+    assert.equal(quad[i][0]-quad[0][0], spaceDrawerFrontQuad(0)[i][0]-spaceDrawerFrontQuad(0)[0][0])
+    assert.equal(quad[i][1]-quad[0][1], spaceDrawerFrontQuad(0)[i][1]-spaceDrawerFrontQuad(0)[0][1])
+  }
+}
+console.log('[Space V2] E face + E inner drawer comp / transform bounds / cubic easing: PASS')

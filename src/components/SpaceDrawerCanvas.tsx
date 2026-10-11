@@ -39,15 +39,15 @@ export default function SpaceDrawerCanvas({ opening, returning, controllerRef, s
 
   useEffect(() => {
     let alive = true
-    const filenames = ['e_drawer_hq_v2.webp', 'c_drawer_inner_hq_v3.webp']
+    const filenames = ['e_drawer_hq_v2.webp']
     void Promise.all(filenames.map((filename) => new Promise<HTMLImageElement>((resolve, reject) => {
       const image = new Image()
       image.onload = () => image.naturalWidth > 0 ? resolve(image) : reject(new Error('Invalid sprite'))
       image.onerror = () => reject(new Error('Missing sprite'))
       image.src = SPACE_LAYER_BASE + filename
-    }))).then(([face, interior]) => {
+    }))).then(([face]) => {
       if (!alive) return
-      artRef.current = { face, interior }
+      artRef.current = { face, interior: face }
       setReady(true)
     }).catch(() => {
       // Fail closed: the clickable weekly-letter entry stays available.

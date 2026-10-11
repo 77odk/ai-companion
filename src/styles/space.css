@@ -3139,7 +3139,7 @@ html.eluvin-page-hidden .thought-book-page * {
   border: 0;
 }
 .ai-space-page.is-layered .space-live-star {
-  width: clamp(5px, 2vw, 11px);
+  width: clamp(12px, 4vw, 19px);
   background: transparent;
   clip-path: none;
   filter: none;
@@ -3369,47 +3369,42 @@ html.eluvin-page-hidden .thought-book-page * {
 @keyframes space-paper-crease { 0%,100% { opacity: 0; } 45% { opacity: 1; } }
 .thought-book-shell { width: min(100%, 430px); }
 .thought-book-paper-plane { position: absolute; inset: 0; transform-style: preserve-3d; }
+/* Reading is a front-facing book, not typography stretched over the room's curved pages. */
+.thought-book-stage { position: relative; overflow: hidden; }
+.thought-book-room { position: absolute; inset: 0; pointer-events: none; }
+.thought-book-room .thought-book-approved-art { display: none; }
 .thought-book-page.is-native-object-focus .thought-book-stage {
-  flex: 1; min-height: 0; padding: 0; position: relative; overflow: hidden;
+  flex: 1; min-height: 0; padding: 24px 12px; display: grid; place-items: center;
 }
-.thought-book-page.is-native-object-focus .thought-book-shell {
-  position: absolute; bottom: calc(100vw * 322 / 726);
-  width: 100%; aspect-ratio: 726 / 270;
+.thought-book-page.is-native-object-focus .thought-book-room {
+  inset: 0;
 }
-.thought-book-page.is-native-object-focus .thought-book-paper-plane {
-  width: 100%; height: 100%; transform-origin: 0 0;
+.thought-book-shell.is-reading,
+.thought-book-page.is-native-object-focus .thought-book-shell.is-reading {
+  position: relative; bottom: auto; width: min(100%, 520px);
+  height: min(330px, calc(100dvh - 180px)); min-height: 260px;
+  aspect-ratio: auto; border-radius: 4px 12px 12px 4px;
+  background: #9c6848; padding: 5px;
+  box-shadow: 0 24px 35px -8px rgba(59,32,16,.36), 0 3px 5px rgba(59,32,16,.28);
+  perspective: 1400px; animation: space-book-present 560ms cubic-bezier(.22,.7,.2,1) both;
 }
-.thought-book-page.is-native-object-focus .thought-book-cover {
-  inset: 0; width: 100%; height: 100%; transform: none; animation: none;
+.thought-book-shell.is-reading .thought-book-paper-plane { inset: 5px; transform: none; }
+.thought-book-shell.is-reading .thought-book-pages { inset: 0; transform: none; opacity: 1; }
+.thought-book-shell.is-reading .thought-book-page-side,
+.thought-book-shell.is-reading .thought-book-face {
+  background: linear-gradient(90deg, #f7e5c8, #fff4df 20%, #fae9ce 90%, #e7d1b0);
+  box-shadow: none; border-radius: 7px 2px 2px 7px;
 }
-.thought-book-page.is-native-object-focus .is-open .thought-book-cover { opacity: 0; }
-.thought-book-page.is-native-object-focus .thought-book-pages {
-  inset: 0; transform: none; transition: opacity 160ms ease;
+.thought-book-shell.is-reading .is-right { background: linear-gradient(90deg, #dec4a1, #fff1d8 12%, #fae9ce 90%, #efdbbd); border-radius: 2px 7px 7px 2px; }
+.thought-book-shell.is-reading .thought-paper-content {
+  padding: 24px 16px 30px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
 }
-.thought-book-page.is-native-object-focus .thought-book-page-side,
-.thought-book-page.is-native-object-focus .thought-book-empty { background: transparent; box-shadow: none; border-radius: 0; }
-.thought-book-page.is-native-object-focus .thought-book-page-side::before,
-.thought-book-page.is-native-object-focus .thought-book-page-side::after { content: none; }
-.thought-book-page.is-native-object-focus .thought-paper-content {
-  padding: 12px 18px 24px; overflow-y: auto; overscroll-behavior: contain;
-}
-.thought-book-page.is-native-object-focus .thought-paper-content p { font-size: 22px; line-height: 1.55; margin-top: 8px; }
-.thought-book-page.is-native-object-focus .thought-paper-content time { font-size: 16px; }
-.thought-book-page.is-native-object-focus .thought-book-empty { grid-column: 2; font-size: 22px; padding: 12px; text-align: center; }
-.thought-book-page.is-native-object-focus .thought-book-face {
-  background: linear-gradient(140deg, #f5d9b8, #edc49c 70%, #e7b88d);
-}
-.thought-book-page.is-native-object-focus .thought-book-hint {
-  position: absolute; bottom: 24px; left: 16px; right: 16px; color: #fff9ed;
-  background: rgba(78,48,31,.45); border-radius: 12px; padding: 8px; font-size: 13px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .thought-book-pages { transition: none; }
-}
-@supports (width: 1cqw) {
-  .thought-book-page.is-native-object-focus .thought-book-stage { container-type: inline-size; }
-  .thought-book-page.is-native-object-focus .thought-book-shell { bottom: calc(100cqw * 322 / 726); }
-}
+.thought-book-shell.is-reading .thought-paper-content p { font-size: 14px; line-height: 1.9; margin-top: 14px; overflow-wrap: anywhere; }
+.thought-book-shell.is-reading .thought-paper-content time { font-size: 11px; }
+.thought-book-shell.is-reading .thought-book-empty { grid-column: 1 / -1; background: #faecd6; font-size: 14px; }
+.thought-book-page .thought-book-hint { position: absolute; bottom: 16px; left: 16px; right: 16px; color: #fff4df; text-shadow: 0 1px 3px #593822; font-size: 12px; }
+@keyframes space-book-present { from { opacity: 0; transform: translateY(18px) rotateX(18deg) scale(.94); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .thought-book-shell.is-reading { animation: none; } }
 .listen-player { max-width: 100%; min-width: 0; }
 .listen-device-wrap { width: min(100%, 430px); }
 .listen-tablet-screen { overflow-y: auto; overscroll-behavior: contain; }
@@ -3498,3 +3493,56 @@ html.eluvin-page-hidden .thought-book-page * {
   .thought-book-turning-page { filter: none; }
   .thought-book-turning-page .thought-book-face::after { animation: none; }
 }
+
+/* Keep traditional controls legible on the physical player's screen. */
+.listen-transport button, .listen-actions button, .listen-connect button {
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.listen-transport svg, .listen-actions svg, .listen-connect svg { width: 26px; height: 26px; flex-shrink: 0; }
+.listen-volume-row svg { width: 18px; height: 18px; flex-shrink: 0; }
+.is-native-plane .listen-meta span { font-size: 12px; opacity: .55; }
+.is-native-plane .listen-play { border-radius: 50%; width: 60px; padding: 0; }
+.star-jar-star:has(.star-jar-origami) { width: clamp(28px, 8vw, 38px); height: auto; aspect-ratio: 1; background: none; filter: drop-shadow(1px 2px 1px rgba(64,36,18,.25)); }
+.star-jar-origami { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ai-space-page.is-content-clean .space-live-photo::before {
+  width: 8%; height: 17%; top: -9%; border-radius: 1px;
+  background: linear-gradient(90deg, #b6854f, #e4c28b 40%, #b98450 48%, #e3bf84 58%, #c49158);
+  box-shadow: 1px 2px 2px rgba(64,37,24,.3); rotate: -4deg;
+}
+.ai-space-page.is-content-clean .space-live-photo::after {
+  content: ''; position: absolute; left: 46%; top: -2%; width: 8%; height: 1px;
+  background: #7e725e; box-shadow: 0 1px 0 #e8d7b7; pointer-events: none;
+}
+
+/* A shared native image gives the camera a continuous route into each object. */
+.ai-space-page.is-layered .space-scene-backplate:not(.is-drawer-cavity):not(.is-foliage-restored),
+.space-object-native-room { view-transition-name: space-room-camera; }
+::view-transition-group(space-room-camera) { animation-duration: 620ms; animation-timing-function: cubic-bezier(.22,.65,.25,1); }
+::view-transition-old(space-room-camera), ::view-transition-new(space-room-camera) { mix-blend-mode: normal; }
+::view-transition-old(root) { animation-duration: 180ms; }
+::view-transition-new(root) { animation-duration: 360ms; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*) { animation-duration: 0s; }
+}
+
+.thought-book-room .thought-book-reading-room {
+  width: auto; height: 160%; left: 50%; top: -60%; transform: translateX(-50%);
+}
+
+.space-photo-fixings { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; filter: drop-shadow(1px 2px 1px rgba(77,44,23,.18)); }
+.thought-book-shell.is-reading .thought-book-face {
+  animation: space-reading-paper-curl 440ms ease-in-out both;
+}
+@keyframes space-reading-paper-curl {
+  0%, 100% { border-radius: 2px 8px 8px 2px; }
+  35%, 65% { border-radius: 2px 26px 38px 2px; }
+}
+@media (prefers-reduced-motion: reduce) { .thought-book-shell.is-reading .thought-book-face { animation: none; } }
+
+.ai-space-page.is-camera-moving .space-scene-shell,
+.ai-space-page.is-camera-moving .space-scene-hotspots {
+  transform-origin: var(--space-camera-origin);
+  animation: space-camera-approach 460ms cubic-bezier(.22,.65,.25,1) both;
+  pointer-events: none;
+}
+@keyframes space-camera-approach { to { transform: scale(1.42); } }

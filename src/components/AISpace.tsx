@@ -1,3 +1,4 @@
+import { transitionSpaceScene } from '../lib/spaceSceneTransition'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
 import SpaceDrawerCanvas, { type SpaceDrawerController } from './SpaceDrawerCanvas'
@@ -223,12 +224,22 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     setOpeningObject(kind)
     if (objectTimerRef.current !== null) window.clearTimeout(objectTimerRef.current)
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const fallbackCamera = !reduce && !document.startViewTransition
+    if (fallbackCamera) {
+      const page = scenePageRef.current
+      const selector = { photos: 'is-photo-wall', jar: 'is-star-jar', book: 'is-thought-book', player: 'is-player' }[kind]
+      const target = page?.querySelector('.space-scene-hotspot.' + selector)
+      if (page && target) {
+        const bounds = page.getBoundingClientRect(), object = target.getBoundingClientRect()
+        page.style.setProperty('--space-camera-origin', `${object.x + object.width / 2 - bounds.x}px ${object.y + object.height / 2 - bounds.y}px`)
+        page.classList.add('is-camera-moving')
+      }
+    }
     objectTimerRef.current = window.setTimeout(() => {
       objectTimerRef.current = null
       if (kind !== 'photos') carriedDeskObject = kind
-      open()
-      setOpeningObject(null)
-    }, reduce ? 1 : 310)
+      transitionSpaceScene(() => { open(); setOpeningObject(null); scenePageRef.current?.classList.remove('is-camera-moving') })
+    }, reduce ? 1 : fallbackCamera ? 460 : 60)
   }
 
   const openWeeklyFromDrawer = () => {
@@ -538,6 +549,13 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                 separate wood-and-string board. Both preload states render only
                 the real session photos at identical world-space positions. */}
             <span className="space-live-photo-board" aria-label="空间页照片摆放区">
+              <svg className="space-photo-fixings" viewBox="0 0 300 360" aria-hidden="true">
+                <path d="M12 36Q145 58 287 39M12 167Q152 192 287 164" fill="none" stroke="#96704f" strokeWidth="1" opacity=".55" />
+                {[[36,39], [146,46], [258,42], [64,174], [188,178], [272,166]].map(([x,y], i) => <g key={i} transform={`translate(${x} ${y}) rotate(${i % 2 ? 5 : -4})`}>
+                  <rect x="-3" y="-6" width="6" height="17" rx="1" fill="#c59b64" />
+                  <path d="M0-5V10M-3 1H3" stroke="#846948" strokeWidth=".6" />
+                </g>)}
+              </svg>
               {scenePhotos.map((photo, index) => {
                 const placement = photo.scenePlacement ?? defaultScenePlacement(index)
                 return (

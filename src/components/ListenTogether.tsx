@@ -1,3 +1,4 @@
+import { transitionSpaceScene } from '../lib/spaceSceneTransition'
 import { useEffect, useRef, useState } from 'react'
 import { getActiveSessionId } from '../lib/sessionStore'
 import SpaceObjectScene, { SpacePlayerScreen } from './SpaceObjectScene'
@@ -16,6 +17,18 @@ import {
 
 interface Props {
   onBack: () => void
+}
+
+function PlayerIcon({ name }: { name: 'play' | 'pause' | 'prev' | 'next' | 'volume' | 'add' | 'sequence' | 'shuffle' }) {
+  const paths = {
+    play: 'M9 5l11 7-11 7Z', pause: 'M8 5v14M16 5v14',
+    prev: 'M5 5v14M19 5 8 12l11 7Z', next: 'M19 5v14M5 5l11 7-11 7Z',
+    volume: 'M3 9h4l5-4v14l-5-4H3ZM16 8a6 6 0 0 1 0 8M19 5a10 10 0 0 1 0 14',
+    add: 'M4 6h6l2 2h8v12H4ZM12 11v6M9 14h6',
+    sequence: 'M4 8h14l-3-3M20 16H6l3 3M18 8l-3 3M6 16l3-3',
+    shuffle: 'M3 6h3c5 0 7 12 12 12h3M18 15l3 3-3 3M3 18h3c2 0 4-3 6-6s4-6 6-6h3M18 3l3 3-3 3',
+  }
+  return <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>
 }
 
 function fmt(seconds: number): string {
@@ -44,7 +57,7 @@ export default function ListenTogether({ onBack }: Props) {
   return (
     <div className={`page space-object-page listen-together-page${artwork.ready ? ' is-native-object-focus' : ''}`}>
       <header className="space-object-topbar">
-        <button type="button" onClick={onBack} className="space-object-back">‹ 返回</button>
+        <button type="button" onClick={() => transitionSpaceScene(onBack)} className="space-object-back">‹ 返回</button>
         <div>
           <strong>一起听歌</strong>
           <span>LISTEN TOGETHER</span>
@@ -72,11 +85,11 @@ export default function ListenTogether({ onBack }: Props) {
             <PlayerPlane className="listen-tablet">
               <div className="listen-tablet-screen">
                 <div className="listen-meta">
-                  <strong>{snapshot.hasTrack ? snapshot.title : '还没有接音乐'}</strong>
+                  <strong>{snapshot.hasTrack ? snapshot.title : '选择音乐'}</strong>
                   <span>
                     {snapshot.hasTrack
                       ? `${snapshot.currentIndex + 1} / ${snapshot.trackCount}`
-                      : '先把音乐接进来，播放器会留在这里'}
+                      : '本地音乐'}
                   </span>
                 </div>
 
@@ -97,8 +110,8 @@ export default function ListenTogether({ onBack }: Props) {
 
                 {!snapshot.hasTrack && (
                   <div className="listen-connect">
-                    <button type="button" onClick={() => inputRef.current?.click()}>
-                      去接音乐
+                    <button type="button" aria-label="去接音乐" onClick={() => inputRef.current?.click()}>
+                      <PlayerIcon name="add" />
                     </button>
                   </div>
                 )}
@@ -107,29 +120,32 @@ export default function ListenTogether({ onBack }: Props) {
                   <button
                     type="button"
                     disabled={!snapshot.hasTrack}
+                    aria-label="上一首"
                     onClick={() => void stepListenTogether(sessionId, -1)}
                   >
-                    上一首
+                    <PlayerIcon name="prev" />
                   </button>
                   <button
                     type="button"
                     className="listen-play"
+                    aria-label={snapshot.playing ? '暂停' : '播放'}
                     disabled={!snapshot.hasTrack}
                     onClick={() => void toggle()}
                   >
-                    {snapshot.playing ? '暂停' : '播放'}
+                    <PlayerIcon name={snapshot.playing ? 'pause' : 'play'} />
                   </button>
                   <button
                     type="button"
                     disabled={!snapshot.hasTrack}
+                    aria-label="下一首"
                     onClick={() => void stepListenTogether(sessionId, 1)}
                   >
-                    下一首
+                    <PlayerIcon name="next" />
                   </button>
                 </div>
 
                 <label className="listen-volume-row">
-                  <span>音量</span>
+                  <PlayerIcon name="volume" />
                   <input
                     type="range"
                     min="0"
@@ -145,15 +161,16 @@ export default function ListenTogether({ onBack }: Props) {
                   <div className="listen-actions">
                     <button
                       type="button"
+                      aria-label={snapshot.mode === 'sequence' ? '顺序播放' : '随机播放'}
                       onClick={() => setListenTogetherMode(
                         sessionId,
                         snapshot.mode === 'sequence' ? 'shuffle' : 'sequence',
                       )}
                     >
-                      {snapshot.mode === 'sequence' ? '顺序播放' : '随机播放'}
+                      <PlayerIcon name={snapshot.mode} />
                     </button>
-                    <button type="button" onClick={() => inputRef.current?.click()}>
-                      换一组音乐
+                    <button type="button" aria-label="换一组音乐" onClick={() => inputRef.current?.click()}>
+                      <PlayerIcon name="add" />
                     </button>
                   </div>
                 )}

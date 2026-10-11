@@ -19,6 +19,7 @@ def run(html_path, output):
     report = {'kind': 'ISOLATED_EMPTY_ACCOUNT_DETAIL_FAILURE_REVIEW', 'realAppAuthenticated': False, 'cases': []}
     injections = {
         'ResizeObserver unavailable': 'window.ResizeObserver=undefined;',
+        'ViewTransition unavailable': 'document.startViewTransition=undefined;',
         'artwork gate closed': """(()=>{
           const fetchResource=window.fetch;
           window.fetch=async url=>{
@@ -60,10 +61,9 @@ def run(html_path, output):
                 native = page.locator('.is-native-object-focus').count()
                 if name == 'native room decode failed':
                     assert page.evaluate('window.__nativeDecodeFailures') > 0, 'must actually exercise the native image decode failure'
-                expected_native = name == 'ResizeObserver unavailable'
+                expected_native = name in ('ResizeObserver unavailable', 'ViewTransition unavailable')
                 assert bool(native) == expected_native, 'art gate and decode failures must fall back; missing ResizeObserver must remain usable'
                 if kind == 'book':
-                    page.get_by_role('button', name='打开思绪书', exact=True).tap()
                     page.wait_for_timeout(800)
                     assert page.locator('.thought-book-empty').is_visible()
                 if kind == 'player':

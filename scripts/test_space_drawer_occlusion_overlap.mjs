@@ -18,8 +18,8 @@ for (let frame = 0; frame <= 100; frame++) {
       'wood front must retain every edge vector throughout the slide'))
   }
   const [, y] = spaceDrawerInteriorTravel(p)
-  assert.equal(1438 + y - front[0][1], 3, 'left rim overlaps the front, never leaves a crack')
-  assert.equal(1535 + y - front[1][1], 14, 'right source rim overlap remains constant')
+  assert.equal(1500 + y - front[0][1], 0, 'native E inside shares the left front seam')
+  assert.equal(1586 + y - front[1][1], 0, 'native E inside shares the right front seam')
   assert.deepEqual(spaceDrawerAperture(p), spaceDrawerAperture(0), 'fixed cabinet does not travel')
 }
 assert.deepEqual(spaceDrawerFrontQuad(NaN), closed)
