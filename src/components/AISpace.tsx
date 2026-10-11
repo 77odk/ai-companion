@@ -1,3 +1,9 @@
+import SpaceFocusLayer from './SpaceFocusLayer'
+import SpaceSceneDecor from './SpaceSceneDecor'
+import StarJar from './StarJar'
+import ThoughtBook from './ThoughtBook'
+import ListenTogether from './ListenTogether'
+import WeeklyPage from './WeeklyPage'
 import { transitionSpaceScene } from '../lib/spaceSceneTransition'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import PhotoWallArchive from './PhotoWallArchive'
@@ -35,8 +41,9 @@ interface Props {
   onOpenStarJar: () => void
   onOpenThoughts: () => void
   onOpenListen: () => void
-  /** 一周情书由 App 顶层 view 承载，不在 Space 内嵌子页。 */
+  /** 旧 App 入口保留用于门禁/素材降级；候选在房间内显示情书。 */
   onOpenWeekly: () => void
+  onGoSettings?: () => void
 }
 
 function normalizePhotoCreatedAt(value: unknown): number {
@@ -78,10 +85,13 @@ function sceneMemoryCount(sessionId: string): number {
   return global.length + session.length
 }
 
-export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, onOpenWeekly }: Props) {
+export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, onOpenWeekly, onGoSettings }: Props) {
   const sessionId = getActiveSessionId()
   const sid = sessionId || undefined
+  const [focus, setFocus] = useState<'jar' | 'book' | 'player' | 'weekly' | null>(null)
+  const [photosFocused, setPhotosFocused] = useState(false)
   const scenePageRef = useRef<HTMLDivElement | null>(null)
+  const [viewportWidth, setViewportWidth] = useState(390)
   const [sceneCover, setSceneCover] = useState<{ width: number; height: number } | null>(null)
   const [layeredReady, setLayeredReady] = useState(getPreloadedSpaceLayerReady)
   useEffect(() => {
@@ -97,6 +107,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     if (!page) return
     const updateCover = () => {
       const { width, height } = page.getBoundingClientRect()
+      setViewportWidth(width)
       const next = computeSpaceCover(width, height)
       if (next) setSceneCover((prev) => (
         prev && Math.abs(prev.width - next.width) < .5 && Math.abs(prev.height - next.height) < .5
@@ -216,6 +227,18 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     scenePhotoDragRef.current = null
   }, [])
 
+  const showFocus = (kind: 'jar' | 'book' | 'player' | 'weekly', fallback: () => void) => {
+    if (!layeredReady) { fallback(); return }
+    carriedDeskObject = null
+    drawerNeedsReturn = false
+    setFocus(kind)
+  }
+  const closeFocus = () => {
+    if (focus === 'weekly') setDrawerReturning(true)
+    else if (focus) beginPlaceBack(focus)
+    setFocus(null)
+  }
+
   const openDeskObject = (
     kind: DeskObjectKind,
     open: () => void,
@@ -250,7 +273,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     drawerTimerRef.current = window.setTimeout(() => {
       drawerTimerRef.current = null
       drawerNeedsReturn = true
-      onOpenWeekly()
+      showFocus('weekly', onOpenWeekly)
       setDrawerOpening(false)
     }, delay)
   }
@@ -397,6 +420,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     return (
       <>
         <PhotoWallArchive
+          spaceMode={layeredReady}
           photos={visiblePhotos}
           uploading={photoUploading}
           error={photoError}
@@ -414,6 +438,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           onAdd={() => fileInputRef.current?.click()}
           onDelete={handleDeletePhoto}
           onOpenChange={(open) => {
+            setPhotosFocused(open)
             if (!open) beginPlaceBack('photos')
           }}
         />
@@ -530,6 +555,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             />
           ) : null}
           {layeredReady ? <SpaceFoliageCanvas scenePageRef={scenePageRef} /> : null}
+          {layeredReady && <SpaceSceneDecor />}
           <span className="space-scene-ambient" aria-hidden="true" />
         </section>
 
@@ -654,7 +680,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             type="button"
             className={`space-scene-hotspot is-star-jar${openingObject === 'jar' ? ' is-lifting' : ''}`}
             aria-label={memoryCount > 0 ? `打开记忆星星罐，共 ${memoryCount} 颗星` : '打开空的记忆星星罐'}
-            onClick={() => openDeskObject('jar', onOpenStarJar)}
+            onClick={() => openDeskObject('jar', () => showFocus('jar', onOpenStarJar))}
           >
             <img
               className="space-object-cutout is-jar-cutout"
@@ -671,8 +697,8 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
                     key={index}
                     className="space-live-star"
                     style={{
-                      '--live-star-x': `${8 + ((index * 41) % 84)}%`,
-                      '--live-star-y': `${18 + ((index * 29) % 69)}%`,
+                      '--live-star-x': `${50 + (index % 6 - (Math.min(memoryCount, 6) - 1) / 2) * 11 + ((index * 7) % 3 - 1)}%`,
+                      '--live-star-y': `${87 - Math.floor(index / 6) * Math.min(9, 50 / Math.max(1, Math.ceil(memoryCount / 6) - 1)) + (index % 3) * .8}%`,
                       '--live-star-r': `${-24 + ((index * 31) % 49)}deg`,
                       '--live-star-d': `${-((index * 0.37) % 6.7)}s`,
                       '--live-star-t': `${5.8 + ((index * 17) % 28) / 10}s`,
@@ -690,7 +716,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             type="button"
             className={`space-scene-hotspot is-thought-book${openingObject === 'book' ? ' is-lifting' : ''}`}
             aria-label="打开 TA 的思绪"
-            onClick={() => openDeskObject('book', onOpenThoughts)}
+            onClick={() => openDeskObject('book', () => showFocus('book', onOpenThoughts))}
           >
             <img
               className="space-object-cutout is-book-cutout"
@@ -715,7 +741,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             type="button"
             className={`space-scene-hotspot is-player${listenSnapshot.playing ? ' is-playing' : ''}${openingObject === 'player' ? ' is-lifting' : ''}`}
             aria-label={listenSnapshot.hasTrack ? `打开一起听歌，正在听 ${listenSnapshot.title}` : '打开一起听歌，去接音乐'}
-            onClick={() => openDeskObject('player', onOpenListen)}
+            onClick={() => openDeskObject('player', () => showFocus('player', onOpenListen))}
           >
             <img
               className="space-object-cutout is-player-cutout"
@@ -748,7 +774,7 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
           {/* The content-clean plate retains the original wired earphones in
               their exact tabletop position. Never add a second cable. */}
           {layeredReady ? (
-            <SpaceDrawerCanvas opening={drawerOpening} returning={drawerReturning} controllerRef={drawerVisualRef} scenePageRef={scenePageRef} />
+            <SpaceDrawerCanvas opening={drawerOpening} returning={drawerReturning} heldOpen={focus === 'weekly'} controllerRef={drawerVisualRef} scenePageRef={scenePageRef} />
           ) : null}
           <button
             type="button"
@@ -830,17 +856,30 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
     )
   }
 
+  const worldScale = sceneCover ? sceneCover.width / 941 : 1
+  const target = focus === 'jar' ? [320,945,Math.min(viewportWidth * .65,280) / 260 / worldScale] : focus === 'player' ? [679.5,997,Math.min(viewportWidth * .84,430) / 315 / worldScale] : focus === 'book' ? [578,1080,1.85] : focus === 'weekly' ? [678,1270,2.35] : [625,620,1.35]
+  const focused = Boolean(focus || photosFocused)
+  const cameraStyle = sceneCover ? {
+    '--space-scene-width': `${sceneCover.width}px`, '--space-scene-height': `${sceneCover.height}px`,
+    '--space-focus-scale': focused ? target[2] : 1,
+    '--space-focus-x': `${focused ? -(target[0] / 941 - .5) * sceneCover.width * target[2] : 0}px`,
+    '--space-focus-y': `${focused ? -(target[1] / 1672 - .5) * sceneCover.height * target[2] : 0}px`,
+  } as React.CSSProperties : undefined
   return (
     <div
       ref={scenePageRef}
       data-space-art-review={SPACE_ART_REVIEW_BUILD ? 'unapproved' : undefined}
-      className={`page ai-space-page${layeredReady ? ' is-layered is-content-clean' : ''}${placingObject ? ` is-placing-${placingObject}` : ''}`}
-      style={sceneCover ? {
-        '--space-scene-width': `${sceneCover.width}px`,
-        '--space-scene-height': `${sceneCover.height}px`,
-      } as React.CSSProperties : undefined}
+      data-space-focus={focus ?? (photosFocused ? 'photos' : 'space')}
+      className={`page ai-space-page${focus || photosFocused ? ' is-room-focused' : ''}${layeredReady ? ' is-layered is-content-clean' : ''}${placingObject ? ` is-placing-${placingObject}` : ''}`}
+      style={cameraStyle}
     >
       {renderHomePage()}
+      {focus && <SpaceFocusLayer onClose={closeFocus}>
+        {focus === 'jar' && <StarJar onBack={closeFocus} />}
+        {focus === 'book' && <ThoughtBook onBack={closeFocus} />}
+        {focus === 'player' && <ListenTogether onBack={closeFocus} />}
+        {focus === 'weekly' && <WeeklyPage onBack={closeFocus} onGoSettings={() => { closeFocus(); (onGoSettings ?? onOpenWeekly)() }} />}
+      </SpaceFocusLayer>}
     </div>
   )
 }

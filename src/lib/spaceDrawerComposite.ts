@@ -19,7 +19,7 @@ export interface SpaceDrawerArt {
 }
 
 const SOURCE_FACE: Quad = [
-  [466, 1500], [940, 1586], [940, 1671], [466, 1571],
+  [468, 1462], [940, 1582], [940, 1671], [468, 1582],
 ]
 const clamp = (p: number) => Number.isFinite(p) ? Math.max(0, Math.min(1, p)) : 0
 
@@ -103,10 +103,10 @@ export function paintSpaceDrawer(
   // Native E source: the cabinet's fixed apron is above this contour;
   // its envelope bed ends at the same sloping edge as the moving front.
   ctx.beginPath()
-  ctx.moveTo(466, 1500)
+  ctx.moveTo(468, 1462)
   ctx.lineTo(514, 1430)
   ctx.lineTo(940, 1517)
-  ctx.lineTo(940, 1586)
+  ctx.lineTo(940, 1582)
   ctx.closePath()
   ctx.clip()
   ctx.drawImage(art.interior, 460, 1429, 481, 243)
@@ -117,8 +117,17 @@ export function paintSpaceDrawer(
   const destination = spaceDrawerFrontQuad(p)
   ctx.save()
   ctx.globalAlpha = spaceDrawerFrontAlpha(p)
+  // The full-height rigid face emerges beneath the fixed cabinet apron.
+  // Occlusion clips the object, never stretches or trims its source artwork.
+  ctx.beginPath()
+  ctx.moveTo(435, leftTop)
+  ctx.lineTo(941, rightTop)
+  ctx.lineTo(941, 1672)
+  ctx.lineTo(435, 1672)
+  ctx.closePath()
+  ctx.clip()
   const sourceFace: Quad = [
-    [6, 71], [480, 157], [480, 242], [6, 142],
+    [8, 33], [480, 153], [480, 242], [8, 153],
   ]
   paintSpaceDrawerFrontMesh(ctx, art.face, sourceFace, destination)
   ctx.restore()

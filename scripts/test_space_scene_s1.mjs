@@ -45,7 +45,7 @@ assert.doesNotMatch(css.slice(css.lastIndexOf('Mobile visual baseline')), /objec
 assert.match(css, /space-scene-service-host/)
 assert.match(css, /Mobile object pixels: crop the approved scene/)
 assert.doesNotMatch(aiSpace, /space-photo-slot-mask/, 'fallback must not manufacture blank-photo cards')
-assert.match(css, /backdrop-filter: blur\(7px\)/)
+assert.doesNotMatch(css, /(?:backdrop-)?filter: blur\(/, 'The room and its objects must stay sharp')
 assert.match(css, /space-scene-hotspot\.is-photo-wall/)
 assert.match(ui2, /\.app:has\(\.ai-space-page\) \.app-main \{\s*padding-bottom: 0;/)
 assert.match(css, /prefers-reduced-motion: reduce/)

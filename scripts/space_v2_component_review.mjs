@@ -27,7 +27,7 @@ window.__spaceReview = {kind:'ISOLATED_EMPTY_ACCOUNT_COMPONENT_REVIEW',events:[]
 function Review() {
  const [view,setView]=useState('space');
  const open=kind=>{window.__spaceReview.events.push(kind);setView(kind)};
- window.__spaceReview.view=view;
+ Object.defineProperty(window.__spaceReview,'view',{configurable:true,get:()=>document.querySelector('.ai-space-page')?.dataset.spaceFocus||view});
  const back=()=>setView('space');
  return view==='jar'?<StarJar onBack={back}/>:view==='book'?<ThoughtBook onBack={back}/>:
  view==='player'?<ListenTogether onBack={back}/>:view==='weekly'?<WeeklyPage onBack={back} onGoSettings={()=>{}}/>:

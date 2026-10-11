@@ -13,9 +13,9 @@ for (const klass of ['is-star-jar', 'is-thought-book', 'is-player', 'is-weekly-l
   assert.match(aiSpace, new RegExp(`space-scene-hotspot ${klass}`))
 }
 assert.match(aiSpace, /const openDeskObject/)
-assert.match(aiSpace, /openDeskObject\('jar', onOpenStarJar\)/)
-assert.match(aiSpace, /openDeskObject\('book', onOpenThoughts\)/)
-assert.match(aiSpace, /openDeskObject\('player', onOpenListen\)/)
+assert.match(aiSpace, /openDeskObject\('jar', \(\) => showFocus\('jar', onOpenStarJar\)\)/)
+assert.match(aiSpace, /openDeskObject\('book', \(\) => showFocus\('book', onOpenThoughts\)\)/)
+assert.match(aiSpace, /openDeskObject\('player', \(\) => showFocus\('player', onOpenListen\)\)/)
 assert.match(aiSpace, /is-lifting/)
 assert.match(css, /@keyframes space-object-lift/)
 assert.match(css, /@keyframes space-object-place-back/)
@@ -27,7 +27,7 @@ const drawerMarkup = aiSpace.slice(
 assert.match(drawerMarkup, /onClick=\{\(\) => \{[\s\S]*?openWeeklyFromDrawer\(\)/)
 assert.match(drawerMarkup, /projectSpaceDrawerPull\(/)
 assert.match(drawerMarkup, /shouldOpenSpaceDrawer\(/)
-assert.match(aiSpace, /onOpenWeekly\(\)/)
+assert.match(aiSpace, /showFocus\('weekly', onOpenWeekly\)/)
 
 console.log('[Space S2] photo archive compatibility entry remains reachable; S3 moves shared experiences to Chaomu')
 assert.match(aiSpace, /space-scene-hotspot is-photo-wall/)

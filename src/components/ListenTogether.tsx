@@ -1,3 +1,4 @@
+import { useSpaceDismiss } from './SpaceFocusLayer'
 import { transitionSpaceScene } from '../lib/spaceSceneTransition'
 import { useEffect, useRef, useState } from 'react'
 import { getActiveSessionId } from '../lib/sessionStore'
@@ -38,6 +39,7 @@ function fmt(seconds: number): string {
 }
 
 export default function ListenTogether({ onBack }: Props) {
+  const inRoom = useSpaceDismiss(onBack)
   const artwork = useSpaceObjectScene()
   const PlayerPlane = artwork.ready ? SpacePlayerScreen : 'div'
   const sessionId = getActiveSessionId()
@@ -56,14 +58,14 @@ export default function ListenTogether({ onBack }: Props) {
 
   return (
     <div className={`page space-object-page listen-together-page${artwork.ready ? ' is-native-object-focus' : ''}`}>
-      <header className="space-object-topbar">
+      {!inRoom && <header className="space-object-topbar">
         <button type="button" onClick={() => transitionSpaceScene(onBack)} className="space-object-back">‹ 返回</button>
         <div>
           <strong>一起听歌</strong>
           <span>LISTEN TOGETHER</span>
         </div>
         <span aria-hidden="true" />
-      </header>
+      </header>}
 
       <main className="listen-stage">
         <section className="listen-player" aria-label="一起听歌播放器">

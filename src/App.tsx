@@ -1670,6 +1670,7 @@ export default function App() {
             {view === 'aispace' && (
               <AISpace
                 key={spaceRootKey}
+                onGoSettings={() => openSettings('provider')}
                 onOpenStarJar={() => navigate('starjar')}
                 onOpenThoughts={() => navigate('thoughts')}
                 onOpenListen={() => navigate('listen')}

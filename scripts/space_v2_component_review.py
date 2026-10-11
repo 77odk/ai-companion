@@ -95,7 +95,10 @@ def run(html_path: Path, output: Path, record_video: bool = False) -> int:
             page.mouse.up()
             page.wait_for_timeout(850)
             row['interactions'].append({'kind': 'drawer release', 'actualView': page.evaluate('window.__spaceReview.view')})
-            page.get_by_role('button', name='返回', exact=False).first.click()
+            if page.locator('.space-focus-dismiss').count():
+                page.locator('.space-focus-dismiss').first.click(position={'x':5,'y':30})
+            else:
+                page.get_by_role('button', name='返回', exact=False).first.click()
             page.wait_for_timeout(750)
             page.screenshot(path=str(output / f'{label}-drawer-returned.png'))
             for kind, selector in [('photos', 'is-photo-wall'), ('jar', 'is-star-jar'), ('book', 'is-thought-book'), ('player', 'is-player')]:
@@ -117,7 +120,7 @@ def run(html_path: Path, output: Path, record_video: bool = False) -> int:
                     detail = page.evaluate("""()=>{
                       const stage=document.querySelector('.star-jar-stage,.thought-book-stage,.listen-stage');
                       const r=stage.getBoundingClientRect();
-                      const native=document.querySelector('.space-object-native-room');
+                      const native=document.querySelector('.space-object-native-room,.space-scene-backplate');
                       return {nativeFocus:true,stageLeft:r.left,stageRight:r.right,
                         viewport:innerWidth,roomSize:[native.naturalWidth,native.naturalHeight],
                         errorImages:[...document.images].filter(im=>!im.naturalWidth).length};
@@ -130,7 +133,7 @@ def run(html_path: Path, output: Path, record_video: bool = False) -> int:
                     if kind == 'book':
                         page.screenshot(path=str(output / f'{label}-book-closed.png'))
                         page.wait_for_timeout(400)
-                        detail['frontFacingPaper'] = page.locator('.thought-book-paper-plane').evaluate("el=>getComputedStyle(el).transform==='none'")
+                        detail['frontFacingPaper'] = page.locator('.space-book-paper-canvas').get_attribute('data-paper-source') == 'original-E'
                         detail['emptyBookOpened'] = page.locator('.thought-book-empty').is_visible()
                         if not detail['frontFacingPaper'] or not detail['emptyBookOpened']:
                             errors.append('book: front-facing readable paper or real empty state is missing')
@@ -149,7 +152,10 @@ def run(html_path: Path, output: Path, record_video: bool = False) -> int:
                         if detail['volumeAfterTouch'] == before:
                             errors.append('player: transformed volume touch did not change the real control')
                 page.screenshot(path=str(output / f'{label}-{kind}.png'))
-                page.get_by_role('button', name='返回', exact=False).first.click()
+                if page.locator('.space-focus-dismiss').count():
+                    page.locator('.space-focus-dismiss').first.click(position={'x':5,'y':30})
+                else:
+                    page.get_by_role('button', name='返回', exact=False).first.click()
                 page.wait_for_timeout(750)
             if layout['width'] > width or layout['broken']:
                 errors.append('initial overflow or broken artwork')

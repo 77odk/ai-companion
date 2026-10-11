@@ -92,7 +92,7 @@ assert.doesNotMatch(source,/fetch\(|localStorage|sessionStorage|new Image\(/)
 assert.match(source,/paintSpaceDrawerFrontMesh\(ctx, art.face, sourceFace, destination\)/, 'shared two-triangle mapper must be used')
 assert.doesNotMatch(source,/const strips = 32/, 'vertical texture strip seams cannot return')
 // Opening must end at the original E face and stay within its world bounds.
-assert.deepEqual(spaceDrawerFrontQuad(1), [[466,1500],[940,1586],[940,1671],[466,1571]])
+assert.deepEqual(spaceDrawerFrontQuad(1), [[468,1462],[940,1582],[940,1671],[468,1582]])
 for (const p of [0,.25,.5,.75,1]) {
   const quad = spaceDrawerFrontQuad(p)
   for (let i=1;i<4;i++) {

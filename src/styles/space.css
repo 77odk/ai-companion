@@ -122,8 +122,8 @@
   margin-bottom: 0;
   border-bottom-color: var(--el-border-soft, var(--color-border));
   background: color-mix(in srgb, var(--el-surface-page, var(--color-bg)) 94%, transparent);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .ai-space-back {
@@ -919,8 +919,8 @@
   padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
   background: rgba(255, 248, 237, .91);
   border-bottom: 1px solid rgba(121, 83, 58, .1);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .space-object-topbar > div {
@@ -1656,8 +1656,8 @@
     inset 10px 0 18px rgba(255,255,255,.05),
     inset -8px -10px 24px rgba(75,40,29,.16),
     0 18px 44px rgba(44,25,19,.28);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .star-jar-glass::before {
@@ -2711,8 +2711,8 @@ html.eluvin-page-hidden .thought-book-page * {
   border-radius: 22% 22% 27% 27% / 10% 10% 18% 18%;
   background: rgba(244, 222, 190, .74);
   box-shadow: inset 7px 0 12px rgba(255,255,255,.20);
-  backdrop-filter: blur(7px) saturate(.72);
-  -webkit-backdrop-filter: blur(7px) saturate(.72);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* Page interiors may change because they contain real TA thoughts; the book
@@ -2870,8 +2870,8 @@ html.eluvin-page-hidden .thought-book-page * {
   border-radius: 22% 22% 27% 27% / 10% 10% 18% 18%;
   background: rgba(244, 222, 190, .74);
   box-shadow: inset 7px 0 12px rgba(255,255,255,.20);
-  -webkit-backdrop-filter: blur(7px) saturate(.72);
-  backdrop-filter: blur(7px) saturate(.72);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .star-jar-glass::before {
@@ -3546,3 +3546,116 @@ html.eluvin-page-hidden .thought-book-page * {
   pointer-events: none;
 }
 @keyframes space-camera-approach { to { transform: scale(1.42); } }
+
+/* One persistent room: inspection is a camera state, never a replacement page. */
+.ai-space-page .space-scene-shell,
+.ai-space-page .space-scene-hotspots {
+  transition: transform 720ms cubic-bezier(.2,.7,.2,1);
+  transform: translate(calc(-50% + var(--space-focus-x, 0px)), calc(-50% + var(--space-focus-y, 0px))) scale(var(--space-focus-scale, 1));
+}
+.ai-space-page.is-room-focused .space-scene-shell,
+.ai-space-page.is-room-focused .space-scene-hotspots { filter: none; }
+.ai-space-page.is-room-focused .space-scene-hotspots { pointer-events: none; }
+.ai-space-page.is-room-focused .space-scene-backplate,
+.space-focus-layer .space-object-native-room { view-transition-name: none; }
+.space-focus-layer { position: absolute; z-index: 60; inset: 0; display: grid; place-items: center; isolation: isolate; }
+.space-focus-dismiss { position: absolute; z-index: 0; inset: 0; border: 0; width: 100%; height: 100%; padding: 0; background: rgba(65,37,20,.06); -webkit-tap-highlight-color: transparent; }
+.space-focus-dismiss:focus-visible { outline: 2px solid #c69b6d; outline-offset: -5px; }
+.space-focus-layer > .page { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; padding: 0; margin: 0; background: transparent; pointer-events: none; overflow: hidden; }
+.space-focus-layer .star-jar-stage,
+.space-focus-layer .listen-stage,
+.space-focus-layer .thought-book-stage { position: absolute; inset: 0; min-height: 0; height: 100%; padding: 0 24px; display: grid; place-items: center; overflow: visible; }
+.space-focus-layer .star-jar-vessel,
+.space-focus-layer .listen-device-wrap,
+.space-focus-layer .thought-book-shell,
+.space-focus-layer .star-memory-paper { pointer-events: auto; }
+.space-focus-layer .star-jar-vessel { width: min(65vw,280px); clip-path: polygon(13% 6%,87% 6%,87% 19%,96% 32%,95% 81%,86% 97%,14% 97%,4% 81%,5% 32%,13% 19%); }
+.space-focus-layer .star-jar-empty,
+.space-focus-layer .star-jar-hint { position: absolute; bottom: 15%; left: 32px; right: 32px; text-align: center; pointer-events: none; }
+.space-focus-layer .star-memory-paper { left: 50%; top: 50%; width: min(82vw,440px); max-height: 70%; overflow-y: auto; transform: translate(-50%,-50%); }
+.space-focus-layer .star-memory-fold-back { display: none; }
+.space-focus-layer .listen-player { width: min(84vw,430px); }
+.space-focus-layer .listen-device-wrap { width: 100%; }
+.space-focus-layer .listen-device-wrap { clip-path: polygon(9% 0,100% 10%,100% 83%,91% 96%,0% 100%,0% 64%); }
+.space-focus-instruction { position: absolute; z-index: 3; bottom: 6%; left: 24px; right: 24px; color: #fff4de; font-size: 12px; text-align: center; text-shadow: 0 1px 5px #51321f; pointer-events: none; }
+.space-focus-layer > .weekly-page {
+  position: relative; inset: auto; width: min(calc(100% - 64px),460px); height: auto; max-height: 76%;
+  padding: 20px 16px; pointer-events: auto; overflow-y: auto; background: #f4e6cb;
+  border-radius: 3px 7px 5px 3px; box-shadow: 0 18px 45px rgba(55,30,15,.25);
+}
+.space-focus-layer .weekly-letter-header { margin: 0 0 16px; padding: 0; background: transparent; }
+.space-focus-layer .weekly-letter-sheet { margin: 0; padding: 22px 16px; box-shadow: none; }
+.space-focus-layer .weekly-letter-title { font-size: 26px; }
+.space-focus-layer .weekly-letter-body { font-size: 15px; }
+.space-focus-layer .weekly-letter-header .detail-title { margin: auto; }
+.photo-archive-page.is-room-focus { position: absolute; z-index: 65; inset: 0; width: 100%; max-width: none; height: 100%; margin: 0; transform: none; display: grid; align-content: center; justify-items: center; background: transparent; pointer-events: none; }
+.photo-archive-page.is-room-focus .space-focus-dismiss { pointer-events: auto; }
+.photo-archive-page.is-room-focus .photo-archive-topbar,
+.photo-archive-page.is-room-focus .photo-archive-scroll { position: relative; z-index: 1; width: min(calc(100% - 56px),460px); pointer-events: auto; }
+.photo-archive-page.is-room-focus .photo-archive-topbar { border: none; background: #ecdbc1; border-radius: 6px 6px 0 0; }
+.photo-archive-page.is-room-focus .photo-archive-scroll { flex: none; max-height: 66vh; overflow-y: auto; padding: 28px 26px; background: #ecd5b3; border-radius: 0 0 6px 6px; box-shadow: 0 18px 40px rgba(60,32,16,.25); }
+.space-photo-board-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; opacity: .8; }
+.photo-archive-page.is-room-focus .photo-archive-month,
+.photo-archive-page.is-room-focus .photo-archive-empty { position: relative; z-index: 1; }
+.space-scene-decor { position: absolute; z-index: 4; inset: 0; pointer-events: none; }
+.space-decor-item { position: absolute; display: block; border: 0; padding: 0; background: transparent; }
+.space-decor-item img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.space-decor-item.is-desk { filter: drop-shadow(2px 5px 2px rgba(72,39,19,.25)); }
+.space-decor-item.is-wall { filter: drop-shadow(1px 3px 2px rgba(72,39,19,.15)); }
+.space-lamp { pointer-events: auto; cursor: pointer; filter: drop-shadow(2px 4px 2px rgba(72,39,19,.24)); }
+.space-lamp-light { position: absolute; left: 32%; top: 40%; width: 32%; height: 31%; background: radial-gradient(ellipse,rgba(255,224,142,.22),transparent 68%); opacity: 0; transition: opacity 450ms ease; mix-blend-mode: screen; }
+.is-lamp-lit .space-lamp-light { opacity: 1; }
+.is-lamp-lit .space-lamp img { filter: brightness(1.13); }
+.ai-space-page.is-room-focused .space-lamp { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-space-page .space-scene-shell, .ai-space-page .space-scene-hotspots, .space-lamp-light { transition: none; }
+}
+
+/* The overhead surface is sampled from the E book itself, including its edges.
+   It supplies both paper texture and ink; DOM text remains available to readers. */
+.thought-book-shell.is-original-paper,
+.thought-book-page.is-native-object-focus .thought-book-shell.is-original-paper {
+  width: min(calc(100vw - 64px),520px); aspect-ratio: 640 / 480; height: auto; min-height: 0;
+  padding: 0; background: transparent; box-shadow: none; border-radius: 0; animation: none;
+}
+.thought-book-shell.is-original-paper::before,
+.thought-book-shell.is-original-paper::after { content: none; }
+.space-book-paper-canvas { display: block; width: 100%; height: 100%; filter: drop-shadow(5px 16px 9px rgba(65,34,16,.24)); }
+.space-book-accessibility { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); pointer-events: none; }
+.is-original-paper .thought-turn-hit { top: 4%; bottom: 4%; width: 16%; }
+.space-book-sound { position: absolute; z-index: 8; right: 14px; bottom: 13px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; color: #7b5a3c; background: rgba(248,229,192,.45); pointer-events: auto; }
+.space-focus-layer .is-original-paper { animation: space-original-book-overhead 700ms cubic-bezier(.2,.7,.2,1) both; transform-origin: 50% 50%; }
+@keyframes space-original-book-overhead { from { opacity: .35; transform: perspective(900px) rotateX(42deg) rotateZ(9deg) scale(.9); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .space-focus-layer .is-original-paper { animation: none; } }
+/* The closed room shows the physical book; readable ink belongs to its paper
+   surface once the overhead camera arrives, not a skewed caption on top. */
+.ai-space-page.is-content-clean .space-live-book { opacity: 0; }
+.space-focus-layer .thought-book-shell { pointer-events: auto; }
+.space-decor-item img.space-frame-botanical { position: absolute; left: 22%; top: 21%; width: 57%; height: 58%; object-fit: contain; }
+.space-decor-item img.space-tray-fold { position: absolute; width: 24%; height: 52%; top: 24%; object-fit: contain; }
+.space-tray-fold.is-coral { left: 25%; rotate: -12deg; }
+.space-tray-fold.is-pattern { left: 48%; rotate: 16deg; }
+.space-book-desk-camera { position: absolute; z-index: 0; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); pointer-events: none; }
+.is-original-paper { z-index: 1; }
+
+/* The camera must never scroll its clipped world when focusing a hotspot. */
+.ai-space-page { overflow: clip; }
+.space-focus-layer .thought-book-page.is-native-object-focus .thought-book-stage { padding: 0; }
+.ai-space-page .space-live-star { animation: none; }
+.star-jar-glass { overflow: hidden; }
+.star-jar-glass::after { content: ''; position: absolute; z-index: 2; inset: 0; pointer-events: none; border-radius: inherit; background: linear-gradient(100deg,rgba(255,245,219,.18),transparent 16% 82%,rgba(255,239,207,.12)),linear-gradient(0deg,rgba(129,86,43,.12),transparent 12%); }
+.space-live-jar-glint { z-index: 2; pointer-events: none; }
+.space-focus-layer .listen-device-wrap { clip-path: none; }
+.space-focus-layer .listen-device-wrap .space-object-native-room { clip-path: polygon(59.72% 52.63%,89.05% 54.25%,86.4% 65.01%,55.79% 63.4%); }
+.is-native-plane .listen-transport button,
+.is-native-plane .listen-actions button,
+.is-native-plane .listen-connect button { background: transparent; border: 0; box-shadow: none; color: #f3e8d8; }
+.is-native-plane .listen-transport .listen-play { border: 1px solid rgba(243,232,216,.65); border-radius: 50%; width: 60px; padding: 0; }
+.is-native-plane .listen-transport svg,
+.is-native-plane .listen-actions svg { width: 23px; height: 23px; }
+.is-native-plane .listen-meta { text-align: left; }
+.is-native-plane .listen-meta strong { font-weight: 500; letter-spacing: .02em; }
+.is-native-plane .listen-meta span { color: #c7baaa; font-size: 12px; }
+
+.space-focus-layer .star-jar-label { display: none; }
+.space-focus-layer .space-book-paper-canvas { filter: none; }

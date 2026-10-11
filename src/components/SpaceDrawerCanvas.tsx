@@ -9,6 +9,7 @@ export interface SpaceDrawerController {
 }
 
 interface Props {
+  heldOpen?: boolean
   opening: boolean
   returning: boolean
   controllerRef: MutableRefObject<SpaceDrawerController | null>
@@ -16,7 +17,7 @@ interface Props {
 }
 
 /** Motion is restricted to the drawer's 514×363 ROI, never the fixed desktop. */
-export default function SpaceDrawerCanvas({ opening, returning, controllerRef, scenePageRef }: Props) {
+export default function SpaceDrawerCanvas({ opening, returning, heldOpen = false, controllerRef, scenePageRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const artRef = useRef<SpaceDrawerArt | null>(null)
   const paintedRef = useRef(0)
@@ -97,6 +98,7 @@ export default function SpaceDrawerCanvas({ opening, returning, controllerRef, s
     window.cancelAnimationFrame(settleFrameRef.current)
     settleFrameRef.current = 0
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    if (heldOpen && !opening && !returning) { paint(1); return }
     if (!opening && !returning) {
       paint(0)
       return
@@ -131,7 +133,7 @@ export default function SpaceDrawerCanvas({ opening, returning, controllerRef, s
     }
     frame = window.requestAnimationFrame(update)
     return () => { if (frame) window.cancelAnimationFrame(frame) }
-  }, [ready, opening, returning, paint])
+  }, [ready, opening, returning, heldOpen, paint])
 
   return (
     <canvas

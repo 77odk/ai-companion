@@ -44,7 +44,7 @@ login()
 
 console.log('[S3] 星星罐从空间页独立进入，不再把物件直接送进朝暮')
 assert.match(aiSpace, /onOpenStarJar/)
-assert.match(aiSpace, /openDeskObject\('jar', onOpenStarJar\)/)
+assert.match(aiSpace, /openDeskObject\('jar', \(\) => showFocus\('jar', onOpenStarJar\)\)/)
 assert.match(aiSpace, /carriedDeskObject = kind/)
 assert.match(aiSpace, /is-placing-\$\{placingObject\}/)
 assert.match(spaceCss, /is-placing-jar/)

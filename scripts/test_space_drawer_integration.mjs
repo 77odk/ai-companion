@@ -7,7 +7,7 @@ const css=readFileSync('src/styles/space.css','utf8')
 const manifest=JSON.parse(readFileSync('public/space/layered/manifest.json','utf8'))
 
 // The same real weekly-letter route still handles tapping and pointer release.
-assert.match(scene, /onOpenWeekly\(\)/)
+assert.match(scene, /showFocus\('weekly', onOpenWeekly\)/)
 assert.match(scene, /onClick=\{\(\) => \{[\s\S]*?openWeeklyFromDrawer\(\)/)
 assert.match(scene, /if \(shouldOpenSpaceDrawer\(pull\)\) openWeeklyFromDrawer\(\)/)
 assert.match(scene, /else drawerVisualRef\.current\?\.reset\(\)/)
@@ -18,7 +18,7 @@ assert.match(css, /opacity: var\(--space-drawer-cavity-opacity, 0\)/)
 assert.match(scene, /onPointerCancel=\{\(event\)/)
 assert.match(scene, /onLostPointerCapture=\{\(event\)/)
 assert.match(scene, /setDrawerReturning\(false\), reduce \? 1 : 620/)
-assert.match(scene, /onOpenWeekly\(\)/)
+assert.match(scene, /showFocus\('weekly', onOpenWeekly\)/)
 assert.match(scene, /photos\.filter\(\(photo\) => photo\.sessionId === sid\)/)
 assert.match(scene, /saveLocalPhotoMetadata/)
 

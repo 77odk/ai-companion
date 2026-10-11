@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { paintSpaceDrawerFrontMesh } from '../src/lib/spaceDrawerFaceMesh.ts'
-const source=[[6,71],[480,157],[480,242],[6,142]]
+const source=[[8,33],[480,153],[480,242],[8,153]]
 const destination=[[0,0],[498,98],[498,229],[0,172]]
 const transforms=[]
 let depth=0,drawn=0
