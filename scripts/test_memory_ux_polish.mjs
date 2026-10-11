@@ -19,7 +19,7 @@ const rec = (n, ok, extra = '') => { RES.push([n, ok]); console.log((ok ? 'PASS 
 
 const app = read('src/App.tsx')
 const memSrc = read('src/components/Memory.tsx')
-const chat = read('src/components/Chat.tsx') + '\n' + read('src/lib/useChatScroll.ts')
+const chat = read('src/components/Chat.tsx') + '\n' + read('src/lib/useChatScroll.ts') + '\n' + read('src/lib/useChatSession.ts') + '\n' + read('src/lib/useChatMessages.ts') + '\n' + read('src/lib/useChatBusy.ts') + '\n' + read('src/lib/useChatContextBlocks.ts') + '\n' + read('src/lib/useChatEvents.ts') + '\n' + read('src/lib/useChatComposer.ts') + '\n' + read('src/lib/chatMemoryCandidates.ts') + '\n' + read('src/lib/chatPayload.ts') + '\n' + read('src/lib/useChatSendFlow.ts')
 const bubble = read('src/components/MessageBubble.tsx')
 const jumpLib = read('src/lib/chatJump.ts')
 const memoryLib = read('src/lib/memory.ts')

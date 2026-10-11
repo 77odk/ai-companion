@@ -1,31 +1,27 @@
 import {getToken} from '../lib/auth'
 import {getAccount} from '../lib/sync'
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
-import {buildEstimatedContextState} from '../lib/contextMeterState'
-import {createChatStreamEngineStream} from '../lib/chatStreamEngine'
+import {useEffect, useMemo, useRef, useState} from 'react'
 import MessageBubble from './MessageBubble'
-import {computeThinkDelayMs, flattenActionMarkersForGuard, looksEmbodiedSelfClaim, isThinkingUnsupported, stripActionMarkers, stripEmoji, stripTimeLabels, type ChatError} from '../lib/api'
-import {cleanMemoryProtocolArtifacts, detectMemoryInstruction, detectPreferenceFact, detectScheduleFact, extractMemories, inferTopic, isMemoryRetort, isSimilarMemory, notifyMemoryUpdated, planMemoryWrites, stripMemoryKeyword, upsertMemoryItem, type ExplicitCandidate, type MemoryWriteResult, loadMemory, stripMemoryMarkers, stripThinkBlocks} from '../lib/memory'
-import {getSessionStart, loadMessages, loadPersona, loadSettings, loadChatBg, saveMessages, saveSettings, setContextBridgeTurns, setContextUsage, type ReplyInterruptionReason, type StoredMessage, isActionNarrationEnabled} from '../lib/storage'
+import {looksEmbodiedSelfClaim, isThinkingUnsupported, type ChatError} from '../lib/api'
+import {inferTopic, isSimilarMemory, notifyMemoryUpdated} from '../lib/memory'
+import {getSessionStart, loadMessages, loadPersona, loadSettings, loadChatBg, saveMessages, saveSettings, type ReplyInterruptionReason, type StoredMessage, isActionNarrationEnabled} from '../lib/storage'
 import {type ChatJumpTarget} from '../lib/chatJump'
 import {useChatScroll} from '../lib/useChatScroll'
 import {useChatSession} from '../lib/useChatSession'
 import {useChatMessages} from '../lib/useChatMessages'
 import {useChatBusy} from '../lib/useChatBusy'
 import {listMemories, postMemory} from '../lib/sessionApi'
-import {getActiveSessionId, getBusyState, getMemoriesCache, getMessagesCache, mergeSessionMemories, reconcileMemoryCacheId, saveBusyState, saveMemoriesCache, saveMessagesCache, sessionMemoryToItem, upsertMemoryCache} from '../lib/sessionStore'
-import {cancelBusyReturn} from '../lib/busyReturn'
+import {getActiveSessionId, getMemoriesCache, getMessagesCache, mergeSessionMemories, saveMemoriesCache, saveMessagesCache, sessionMemoryToItem} from '../lib/sessionStore'
 import {classifyAvailability} from '../lib/availability'
 import {commitPartialReply} from '../lib/partialReply'
-import {findRecoverableReply, registerActiveReplyRun, setReplyLifecycle, unregisterActiveReplyRun} from '../lib/replyLifecycle'
+import {findRecoverableReply, setReplyLifecycle, unregisterActiveReplyRun} from '../lib/replyLifecycle'
 
 import {getEffectiveReplyLength} from '../lib/replyLength'
 import {allowsBusyState, resolveIdentityMode} from '../lib/companionPolicy'
-import {cleanAttributionArtifacts} from '../lib/promptAttribution'
 
 
-import {clearPendingMemoryCorrection, correctMemoryText, hasMemoryCorrectionMarker, looksLikeMemoryCorrectionIntent, refreshMemoryCorrectionTarget, stripMemoryCorrectionMarkers} from '../lib/memoryCorrection'
-import {formatQuotedMessage, parseQuotedMessage, type MessageQuote, type MessageQuoteSpeaker, messageEvidenceText} from '../lib/messageQuote'
+import {clearPendingMemoryCorrection, correctMemoryText, refreshMemoryCorrectionTarget} from '../lib/memoryCorrection'
+import {formatQuotedMessage, parseQuotedMessage, type MessageQuoteSpeaker, messageEvidenceText} from '../lib/messageQuote'
 import {activateConversationBranch, branchIdForNewMessage, forkConversation, getActiveConversationBranchCreatedAt, loadConversationState, resolveConversationMessages, saveConversationState, type ConversationState} from '../lib/conversationState'
 import {appendMemoryAudit} from '../lib/memoryAudit'
 
@@ -33,44 +29,20 @@ import {appendMemoryAudit} from '../lib/memoryAudit'
  * 历史时间锚必须稳定：同一条历史消息无论过几分钟再次发送，前缀都完全一致，
  * 让 provider 能复用「核心 system + 历史」这一大段前缀。当前时间另走动态 ContextBlock。
  */
-import {type Lang} from '../lib/langDetect'
 import {getSessionLang} from '../lib/sessionStore'
 import {takeChatMessage} from '../lib/chatInject'
 import {decodePersonaText} from '../lib/customPersona'
 import {filterSessionMessages} from '../lib/aiSpaceDetail'
-import {recordChatTopic} from '../lib/chatTopics'
 import MilestoneCard from './MilestoneCard'
 import ChatReplyError from './ChatReplyError'
-import {buildChatContextBlocks} from '../lib/chatContextBuild'
 import ChatComposer from './ChatComposer'
 import {useChatContextBlocks} from '../lib/useChatContextBlocks'
+import {useChatSendFlow} from '../lib/useChatSendFlow'
+import {cleanAssistantReplyBody, guardAssistantReplyBody} from '../lib/chatPayload'
 import {useChatEvents} from '../lib/useChatEvents'
 import {useChatComposer} from '../lib/useChatComposer'
 import ChatMemoryCorrection from './ChatMemoryCorrection'
 import ChatNotices from './ChatNotices'
-
-/**
- * PR #99 Session Bridge：只承接“同一 session 刷新前”的历史。
- * sessionStart 是当前角色的上下文分界线，因此天然满足角色隔离；
- * 禁止再用可编辑 title/persona 去猜“是不是同一个 TA”。
- */
-function cleanAssistantReplyBody(raw: string, lang: Lang, preserveActions: boolean): string {
-  const base = stripEmoji(
-    stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(raw)), lang),
-  )
-  return preserveActions
-    ? cleanAttributionArtifacts(stripTimeLabels(base), lang).replace(/\s{2,}/g, ' ').trim()
-    : stripActionMarkers(base, lang)
-}
-
-function guardAssistantReplyBody(raw: string, lang: Lang, preserveActions: boolean): string {
-  const base = stripEmoji(
-    stripThinkBlocks(stripMemoryCorrectionMarkers(stripMemoryMarkers(raw)), lang),
-  )
-  return preserveActions
-    ? flattenActionMarkersForGuard(base, lang)
-    : stripActionMarkers(base, lang)
-}
 
 interface Props {
   onGoSettings: () => void
@@ -420,341 +392,67 @@ export default function Chat({ onGoSettings, onGoGuide, onOpenProfile, pendingJu
     return () => window.removeEventListener('yiwem:ai-reply-committed', onCommitted)
   }, [])
 
-  const send = useCallback((
-    raw: string,
-    quote: MessageQuote | null = null,
-    existingRound?: {
-      userMessage: StoredMessage
-      visibleHistory: StoredMessage[]
-      branchId: string
-    },
-  ) => {
-    // UI2-03B-1：用户自己发了消息 → 立刻解除「看原对话」的跳转保护，恢复正常滚到底。
-    // 必须在这里显式释放：不能靠 auto-scroll 里猜「最后一条是不是 user」——
-    // 历史最后一条本来就常是 user，那样会在挂载瞬间误解除保护，把列表拉到底。
-    releaseJumpHold()
-    const text = raw.trim()
-    if (!text || streaming) return
-    const messageText = quote ? formatQuotedMessage(quote, text) : text
-    const replayExistingUser = Boolean(existingRound)
-    const roundVisibleMessages = existingRound?.visibleHistory ?? visibleMessages
-    const roundBranchId = existingRound?.branchId ?? currentConversationBranchId
-    // 轮次 owner 在发送瞬间固定；之后 UI 切会话/卸载都不能改变数据写入目标。
-    const roundSessionId = activeSessionId || null
-    // 新消息开始即废弃上一轮的失败重试；重试永远不能跨轮次存活。
-    failedReplyRetryRef.current = null
-    setFailedReplyRetryAvailable(false)
 
-    // busy 已到期且 Return 尚未落地时，用户主动回来优先：取消旧 cycle，避免紧跟一条自动“回来”。
-    if (activeSessionId && !isBusy) {
-      const pendingBusy = getBusyState(activeSessionId)
-      if (pendingBusy.status === 'busy' && !pendingBusy.returnSent) {
-        cancelBusyReturn(activeSessionId, pendingBusy, { saveState: saveBusyState, onIdle: () => setIsBusy(false) })
-      }
-    }
 
-    // 真人忙碌只属于沉浸档。自然 / AI 即使残留 isBusy，也立即回正常聊天路径。
-    if (!replayExistingUser && isBusy && activeSessionId && allowsBusyState(resolveIdentityMode(activeSessionId))) {
-      handleBusySend(messageText)
-      setQuoteDraft(null)
-      return
-    }
-    if (!replayExistingUser && isBusy) setIsBusy(false)
-
-    let runId = ++runIdRef.current
-    retriedRef.current = false
-    // Regenerate reuses an existing user turn: never create a second Space pair for the same user evidence.
-    spacePairEligibleRef.current = !replayExistingUser
-    busyTriggeredRef.current = false
-
-    const userMsg: StoredMessage = existingRound
-      ? { ...existingRound.userMessage, replyState: 'pending', replyInterruptedReason: undefined }
-      : {
-          role: 'user',
-          content: messageText,
-          ts: Date.now(),
-          replyState: 'pending',
-          ...(roundBranchId ? { conversationBranchId: roundBranchId } : {}),
-        }
-    const rawWithUser = replayExistingUser
-      ? setReplyLifecycle(messages, userMsg.ts, null, 'pending')
-      : [...messages, userMsg]
-    let replyBaseMessages = rawWithUser
-    let lifecycleUserTs = userMsg.ts
-    const initialConfirmedAssistantIds = new Set(
-      rawWithUser
-        .filter((message) => message.role === 'assistant' && typeof message.id === 'number')
-        .map((message) => message.id as number),
-    )
-    const tagCurrentBranch = (message: StoredMessage): StoredMessage =>
-      roundBranchId
-        ? { ...message, conversationBranchId: roundBranchId }
-        : message
-
-    // TASK-ENGLISH-MODE：计算会话语言（人设优先，人设空看包含当前消息的最近5条用户消息），存 sessionStore
-    const lang = persistChatLang({ persona, replayExistingUser, visibleMessages: roundVisibleMessages, text })
-
-    const settings = loadSettings()
-    if (!settings.apiKey || !settings.baseUrl || !settings.model) {
-      setError('还没接上 TA，去「我的」页填一下 API Key 就能聊了')
-      return
-    }
-
-    const writeMemory = (content: string, opts: { source?: string; topic?: string; explicit?: boolean; taReply?: string } = {}): MemoryWriteResult => {
-      const trimmed = cleanMemoryProtocolArtifacts(content)
-      if (!trimmed) return { ok: false, created: false }
-      // PATCH-01：source 保存完整真实用户原话——不再做 20 字截断，不摘要、不改写。
-      // 空/纯空白时保持 undefined（旧数据兼容：无 source 不显示）。
-      const snippet = opts.source?.trim() || undefined
-      if (activeSessionId) {
-        // 命中已有（含相似）→ 链路成功但不算新增：不提示「新记下」
-        if (isSimilarMemory(getMemoriesCache(activeSessionId), trimmed)) return { ok: true, created: false }
-        const token = getToken()
-        const item = upsertMemoryCache(activeSessionId, trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
-        // 本地写失败（回读不一致）→ upsertMemoryCache 返回 null：不写云端、也不当作成功
-        if (!item) return { ok: false, created: false }
-        if (token) {
-          postMemory(token, activeSessionId, {
-            content: trimmed,
-            ...(snippet ? { source: snippet } : {}),
-            ...(opts.taReply?.trim() ? { taReply: opts.taReply.trim() } : {}),
-          }).then((res) => {
-            if (res.ok) reconcileMemoryCacheId(activeSessionId, item.id, res.data.id)
-          })
-        }
-        notifyMemoryUpdated()
-        return { ok: true, created: true }
-      }
-      if (isSimilarMemory(loadMemory(), trimmed)) return { ok: true, created: false }
-      const beforeGlobal = loadMemory().length
-      const afterGlobal = upsertMemoryItem(trimmed, snippet, opts.topic, opts.explicit, opts.taReply)
-      notifyMemoryUpdated()
-      // global 侧同样要确认真多了一条，而不是只看函数返回（写失败时返回的是未变更列表）
-      return afterGlobal.length > beforeGlobal ? { ok: true, created: true } : { ok: false, created: false }
-    }
-
-    // TASK-MEM-DISTILL：本轮候选 + 模型 marker 统一归并写入。
-    // 唯一写入出口：send 里不再抢先写；finalize / busy 截断 / 失败路径都从这里落库。
-    // 同一轮绝不产生「原话 + 提炼」两条同义记忆（planMemoryWrites 内部归并 + 落库判重双保险）。
-    const flushMemoryWrites = (rawText: string) => {
-      if (replayExistingUser) return false
-      // 纠正申请必须先经过用户确认；只要本轮存在可纠正目标，就禁止 fallback 新写一条矛盾 Memory。
-      if ((correctionIntent && correctionTargets.size > 0) || hasMemoryCorrectionMarker(rawText)) return false
-      if (explicitCandidates.length === 0 && !rawText) return
-      const plans = planMemoryWrites(explicitCandidates, rawText ? extractMemories(rawText) : [], text)
-      // 当轮 TA 回应短快照（仅追溯展示；去系统标记/思考链后截断，不整段复制聊天历史）
-      const replySnapshot = rawText
-        ? cleanAttributionArtifacts(
-            stripMemoryCorrectionMarkers(stripMemoryMarkers(stripThinkBlocks(rawText, lang))),
-            lang,
-          ).trim().slice(0, 160) || undefined
-        : undefined
-      let created = false
-      for (const p of plans) {
-        const res = writeMemory(p.text, { source: p.source || text, topic: p.topic, explicit: p.explicit, taReply: replySnapshot })
-        // 只要这一轮真实新增过 ≥1 条就给一次轻量成功反馈（不再要求必须 explicit）；去重命中 / 写失败都不算
-        if (res.created) created = true
-      }
-      if (created) userMsg.memorySaved = true
-      return created
-    }
-
-    if (!replayExistingUser) {
-      recordChatTopic(
-        text,
-        activeSessionId || undefined,
-        userMsg.ts,
-        roundBranchId ?? conversationState?.activeBranchId ?? 'root',
-      )
-    }
-    // TASK-MEM-DISTILL：本地显式检测先收集候选、不抢先写——等模型回复的【记忆】marker 到达后统一归并
-    // （有 marker 对应 → 只写一条提炼版 explicit；无对应 marker → fallback 写本地候选；只有 marker → 保持 inferred）
-    // 候选的 explicit 身份来自用户证据（用户明确说过），text 若被 marker 匹配则采用模型提炼 wording。
-    const correctionIntent = !replayExistingUser && !pendingMemoryCorrection && looksLikeMemoryCorrectionIntent(text)
-    const explicitCandidates: ExplicitCandidate[] = []
-    const memInstr = detectMemoryInstruction(text)
-    const isRetort = !replayExistingUser && !memInstr.isInstruction && isMemoryRetort(text)
-    if (!replayExistingUser && memInstr.isInstruction) {
-      const content = (memInstr.fact ?? stripMemoryKeyword(text)).trim()
-      if (content.length >= 4) {
-        explicitCandidates.push({ text: content, source: text, topic: inferTopic(content) })
-      }
-    }
-    if (!replayExistingUser && explicitCandidates.length === 0) {
-      const pref = detectPreferenceFact(text)
-      if (pref) {
-        explicitCandidates.push({ text: pref, source: text, topic: inferTopic(pref) })
-      } else {
-        // 作息自动记（2026-09-09 七七拍板）：稳定作息类（上晚班/几点上下班/几点睡）保底提取，补偏好正则的漏网
-        const sched = detectScheduleFact(text)
-        if (sched) {
-          explicitCandidates.push({ text: sched, source: text, topic: '工作' })
-        } else if (text.trim().length >= 1 && text.trim().length <= 8) {
-        const prevAi = roundVisibleMessages.filter((m) => m.role === 'assistant').slice(-1)[0]
-        const askText = prevAi ? stripMemoryMarkers(prevAi.content) : ''
-        if (askText) {
-          const askAsk = /(爱|喜欢|爱吃|爱喝|口味|喜欢什么|想要什么|想要|想去|想做什么|是什么|叫什么)[，,。.！!？?]|(告诉我|说说|讲讲).{0,10}(喜欢|想要|想去|想)/.test(askText)
-          const short = text.trim()
-          if (askAsk && short.length >= 1) {
-            const fact = short.length <= 4 ? `喜欢${short}` : short
-            // source 用户实际回答在前：writeMemory 的 20 字截断优先保住用户原话（TASK-MEM-DISTILL）
-            explicitCandidates.push({
-              text: fact,
-              source: `我答：${text}${askText ? `\nTA问：${askText.slice(0, 30)}` : ''}`,
-              topic: inferTopic(fact),
-            })
-          }
-        }
-      }
-      }
-    }
-    const base = replayExistingUser ? roundVisibleMessages : [...roundVisibleMessages, userMsg]
-    let assistantTs = Date.now()
-    assistantText.current = ''
-    reasoningRef.current = ''
-    setMessages([...rawWithUser, tagCurrentBranch({ role: 'assistant', content: '', ts: assistantTs })])
-    setInput('')
-    setQuoteDraft(null)
-    setError(null)
-    setStreaming(true)
-    setRecoveryDismissedTs(null)
-    partialTsRef.current = assistantTs
-    partialUserTsRef.current = lifecycleUserTs
-    partialSessionIdRef.current = roundSessionId
-    replyInterruptionReasonRef.current = null
-    streamingRef.current = true
-    registerActiveReplyRun(roundSessionId, lifecycleUserTs)
-
-    if (roundSessionId) {
-      // retry / reload recovery 只更新本地生命周期，不重复上传 user。
-      persistMessages(roundSessionId, rawWithUser)
-      if (!replayExistingUser) {
-        void uploadMessage(roundSessionId, userMsg, (confirmed) => {
-          const previousTs = lifecycleUserTs
-          lifecycleUserTs = confirmed.ts
-          // user POST 的 server createdAt 是后续 lifecycle 的稳定身份；只更新本轮闭包与缓存镜像，
-          // 不改 sessionStore / merge / dedupe 链。
-          replyBaseMessages = replyBaseMessages.map((message) =>
-            message.role === 'user' && message.ts === previousTs && message.content === userMsg.content
-              ? { ...message, id: confirmed.id, ts: confirmed.ts }
-              : message
-          )
-          if (partialUserTsRef.current === previousTs) partialUserTsRef.current = confirmed.ts
-          unregisterActiveReplyRun(roundSessionId, previousTs)
-          if (!finishedRef.current) registerActiveReplyRun(roundSessionId, confirmed.ts)
-        })
-      }
-    }
-
-    const {
-      replyLength, allowActionNarration, apiMessages, correctionTargets, composed,
-    } = buildChatContextBlocks({
-      activeSession, activeSessionId, base, bridgeInfo, compactDone, compactSummary, contextBoundary,
-      persona, lang, text, userMsg, roundVisibleMessages, replayExistingUser, correctionIntent, memInstr, isRetort,
-    })
-    // 上下文总量 = 刷新之后这一段（sessionStart 起）所有内容的 provider 口径估算；
-    // 「本轮输入」仍是本轮 payload 的估算，两者分开显示。
-    const estimatedContextState = buildEstimatedContextState({
-      roundVisibleMessages,
-      userMsg,
-      sessionStart,
-      hardBudget: composed.hardBudget,
-      inputTokens: composed.totalTokens,
-      now: Date.now(),
-    })
-    setContextMeter(estimatedContextState)
-    if (activeSessionId) setContextUsage(estimatedContextState, activeSessionId)
-    if (composed.overBudget) {
-      // 当前用户消息 / 核心 system 本身已经放不进 64k：不静默裁用户原话，也不把超限请求发给 provider。
-      // 用户消息已经正常落历史；这里只撤掉空 assistant 占位并结束本轮流式状态。
-      replyInterruptionReasonRef.current = 'context-limit'
-      const interrupted = setReplyLifecycle(replyBaseMessages, lifecycleUserTs, assistantTs, 'interrupted', 'context-limit')
-      persistMessages(roundSessionId, interrupted)
-      setMessages(interrupted)
-      setStreaming(false)
-      streamingRef.current = false
-      unregisterActiveReplyRun(roundSessionId, lifecycleUserTs)
-      partialTsRef.current = null
-      partialUserTsRef.current = null
-      partialSessionIdRef.current = null
-      setError(lang === 'en' ? 'This message is too long for the current context. Please shorten it and send again.' : '这条消息加上当前上下文超过 64k，请缩短后再发。')
-      return
-    }
-    // bridge 只临时参与：本轮真正纳入 payload 后递减轮次，归零后退出（记录保留，不再注入）。
-    if (activeSessionId && bridgeInfo && bridgeInfo.turnsLeft > 0 && composed.includedBlockIds.includes('bridge')) {
-      const nextTurns = bridgeInfo.turnsLeft - 1
-      setContextBridgeTurns(activeSessionId, nextTurns)
-      setBridgeInfo({ ...bridgeInfo, turnsLeft: nextTurns })
-    }
-    apiMessages.splice(0, apiMessages.length, ...composed.messages)
-
-    const engine = createChatStreamEngineStream({
-      activeSessionId,
-      allowActionNarration,
-      apiMessages,
-      assistantText,
-      assistantTs,
-      busyTriggeredRef,
-      cleanAssistantReplyBody,
-      composed,
-      controllerRef,
-      correctionIntent,
-      correctionTargets,
-      displayCleanRef,
-      enterBusyRef,
-      failedReplyRetryRef,
-      finalizeRef,
-      finishedRef,
-      flushMemoryWrites,
-      guardAssistantReplyBody,
-      initialConfirmedAssistantIds,
-      lang,
-      lifecycleUserTs,
-      mountedRef,
-      partialSessionIdRef,
-      partialTsRef,
-      partialUserTsRef,
-      pauseLeftRef,
-      persistMessages,
-      quote,
-      reasoningRef,
-      replayExistingUser,
-      replyBaseMessages,
-      replyInterruptionReasonRef,
-      replyLength,
-      retriedRef,
-      roundBranchId,
-      roundSessionId,
-      roundVisibleMessages,
-      runId,
-      runIdRef,
-      sessionStart,
-      setContextMeter,
-      setError,
-      setFailedReplyRetryAvailable,
-      setFailedText,
-      setMemoryCorrectionNotice,
-      setMessages,
-      setPendingMemoryCorrection,
-      setQuoteDraft,
-      setRecoveryDismissedTs,
-      setStreaming,
-      settings,
-      showLenRef,
-      spacePairEligibleRef,
-      streamEndedRef,
-      streamErrorRef,
-      streamingRef,
-      tagCurrentBranch,
-      text,
-      thinkTimerRef,
-      tickPlayRef,
-      uploadMessage,
-      userMsg,
-    })
-    const thinkMs = computeThinkDelayMs(text.length)
-    thinkTimerRef.current = window.setTimeout(engine.startStream, thinkMs)
-  }, [messages, activeMessages, visibleMessages, streaming, persona, activeSession, activeSessionId, isBusy, persistMessages, uploadMessage, bridgeInfo, compactDone, compactSummary, pendingMemoryCorrection, currentConversationBranchId])
+  const { send } = useChatSendFlow({
+    messages,
+    setMessages,
+    visibleMessages,
+    streaming,
+    persona,
+    activeSession,
+    activeSessionId,
+    isBusy,
+    setIsBusy,
+    bridgeInfo,
+    setBridgeInfo,
+    compactDone,
+    compactSummary,
+    pendingMemoryCorrection,
+    currentConversationBranchId,
+    conversationState,
+    sessionStart,
+    contextBoundary,
+    setInput,
+    setQuoteDraft,
+    setError,
+    setStreaming,
+    setFailedReplyRetryAvailable,
+    setFailedText,
+    setContextMeter,
+    setRecoveryDismissedTs,
+    setPendingMemoryCorrection,
+    setMemoryCorrectionNotice,
+    failedReplyRetryRef,
+    runIdRef,
+    retriedRef,
+    spacePairEligibleRef,
+    busyTriggeredRef,
+    assistantText,
+    reasoningRef,
+    partialTsRef,
+    partialUserTsRef,
+    partialSessionIdRef,
+    replyInterruptionReasonRef,
+    streamingRef,
+    enterBusyRef,
+    displayCleanRef,
+    finalizeRef,
+    finishedRef,
+    showLenRef,
+    tickPlayRef,
+    thinkTimerRef,
+    controllerRef,
+    streamEndedRef,
+    streamErrorRef,
+    pauseLeftRef,
+    mountedRef,
+    releaseJumpHold,
+    persistChatLang,
+    persistMessages,
+    uploadMessage,
+    handleBusySend,
+  })
 
   useEffect(() => {
     const injected = takeChatMessage()
