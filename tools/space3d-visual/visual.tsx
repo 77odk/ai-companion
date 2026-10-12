@@ -22,7 +22,7 @@ if (params.get('integrated') === '1') {
   createRoot(document.getElementById('root')!).render(<AISpace onOpenStarJar={()=>events.push('jar')}
     onOpenThoughts={()=>events.push('book')} onOpenListen={()=>events.push('player')} onOpenWeekly={()=>events.push('drawer')} />)
 } else createRoot(document.getElementById('root')!).render(<Space3DCanvas data={{ sessionId:'visual-only',messages,
-  memoryCount:24,weeklyCount:4,photoUrls:[],listen:getListenTogetherSnapshot(),weather }}
+  memoryCount:24,weeklyCount:4,photoUrls:params.get('photos')==='8'?Array(8).fill('/home-scenes/day.webp'):[],listen:getListenTogetherSnapshot(),weather }}
   onOpen={hit=>events.push(String(hit))} onReady={()=>Object.assign(window,{visualReady:true})}
   onFailure={reason=>Object.assign(window,{visualFailure:reason})} />)
 

@@ -10,6 +10,9 @@ three 精确锁定 **0.180.0**（r180）：固定 uv1/色彩空间 API 和 WebGL
 | materials.js · wood roughness / normal | 1024²，可重复 | NoColorSpace | 独立粗糙度/法线 |
 | materials.js · wall / paper / linen color | 512²，可重复 | SRGBColorSpace | 墙、纸、亚麻；各自独立种子 |
 | materials.js · wall / paper / linen roughness / normal | 512²，可重复 | NoColorSpace | 各自独立纹理与强度 |
+| materials.js · floor color | 512²，可重复 | SRGBColorSpace | 独立暖色地板，种子 109 |
+| materials.js · floor roughness / normal | 512²，可重复 | NoColorSpace | 独立粗糙度 .86、法线 .04 |
+| materials.js · reflectionCanvas | 1024×512 | 输入 SRGBColorSpace；PMREM 输出线性渲染目标 | 初始化一次的低频间接反射，无太阳或摆件投影 |
 | bookPages.ts · 当前两页 CanvasTexture | 1024×2048 | SRGBColorSpace | 仅映射 1024×1468 有效区，实体比例 0.30×0.43m |
 | scene.js · 播放器屏幕 CanvasTexture | 512×256 | SRGBColorSpace | 复用现有播放快照；不新建音频 |
 | scene.js · 用户照片重采样 CanvasTexture | 512²，有效区 512×354 | SRGBColorSpace | 原照片只读，UV 保留 .13×.09m 的比例；透明/纸边由 canvas alpha 表达 |

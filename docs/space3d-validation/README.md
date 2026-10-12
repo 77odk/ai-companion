@@ -1,5 +1,7 @@
 # 第一批验收记录（不合并、不部署）
 
+视觉完善复验见 [本批说明](../space3d-visual-polish.md)；此处截图和 runtime.json 已更新为视觉完善版本。
+
 基线 sandbox `01bd2205afaff7db08c7480bc243062b8c0fe9bd`。A 分支 `feat/space-environment-phase1`，B 分支 `feat/space-3d-phase1` 堆叠于 A。
 
 ## 自动检查
@@ -25,9 +27,9 @@ Node 24.19.0、Chromium 154.0.8037.57、ANGLE SwiftShader。本机被运行时�
 
 | 样本 | 场景 fps | 整页 fps | 帧数 / 时长 |
 |---|---:|---:|---|
-| phone / 390×844 | 1.26 | 1.26 | 16 / 12.71s |
-| desktop / 1280×800 | 0.87 | 0.87 | 12 / 13.79s |
-| integrated-phone / 390×844 | 3.00 | 3.00 | 37 / 12.34s |
+| phone / 390×844 | 1.81 | 1.81 | 22 / 12.17s |
+| desktop / 1280×800 | 0.66 | 0.66 | 12 / 18.06s |
+| integrated-phone / 390×844 | 2.03 | 2.03 | 26 / 12.81s |
 
 phone/desktop 为 Space3DCanvas 合成内容 fixture；integrated-phone 为实际 AISpace + 原照片档案服务。软件帧率受云机负载影响，显著低于 25，不能作为手机性能通过证明。
 
@@ -43,7 +45,7 @@ phone/desktop 为 Space3DCanvas 合成内容 fixture；integrated-phone 为实�
 
 完整阶梯以连续 60×50ms（3 秒平均 20fps）逐档验证：关阴影 → DPR1.5 降至1 → 正在运行的雨粒子关闭 → 整块退回原2D。每档等待渲染生效再取值，独立于原始帧率采样。
 
-所有预算使用 renderer.info.autoReset=false 并逐帧 reset，包含主绘制及阴影 pass；最大 48 颗星 / 5 封信 + 雨实测 97 calls / 27312 triangles。抽屉把手和导轨不投影，给天气与最大内容留余量。
+所有预算使用 renderer.info.autoReset=false 并逐帧 reset，包含主绘制及阴影 pass；最大 48 颗星 / 5 封信 + 雨实测 91 calls / 25026 triangles（无照片；满照片另见 polish-budget.json）。抽屉把手和导轨不投影，给天气与最大内容留余量。
 
 另外验证：reduced-motion 变化后停止装饰与空闲 RAF；夜间直射0、仅台灯投影、ambient .05、lightMap .06；背向太阳窗口直射0；DOM 搜索、字号、消息 ID+偏移保存；布置进入/退出/选中无内容写入。长按500ms、灰区、命中锁定、双指、cancel/后台在原生事件单测中覆盖。本批不拖动、不保存摆放。
 

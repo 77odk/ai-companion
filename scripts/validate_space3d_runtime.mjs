@@ -72,6 +72,10 @@ try {
     await browser.cdp('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]})
     await browser.evaluate('window.__space3dTest.mode("reading")')
     await browser.evaluate('new Promise(resolve=>setTimeout(resolve,1200))')
+    // SwiftShader can spend longer than 1200 ms rendering one frame. Drain the
+    // camera update and React's subsequent page-texture effect before sampling
+    // idleness; elapsed timers alone do not establish that those frames ran.
+    await browser.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
     const count=await browser.evaluate('window.__space3dTest.stats().renderedFrames')
     await browser.evaluate('new Promise(resolve=>setTimeout(resolve,1200))')
     assert.equal(await browser.evaluate('window.__space3dTest.stats().renderedFrames'),count)

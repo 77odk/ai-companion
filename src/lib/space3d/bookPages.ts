@@ -42,12 +42,16 @@ export async function drawBookPage(page?: BookPage): Promise<HTMLCanvasElement> 
   canvas.width = 1024; canvas.height = 2048
   const ctx = canvas.getContext('2d')!
   ctx.fillStyle = '#F1EBDD'; ctx.fillRect(0, 0, 1024, 2048)
-  ctx.fillStyle = '#4B4037'
+  // A restrained inset and gutter shadow make the page read as paper, not a screen.
+  const edge=ctx.createLinearGradient(0,0,100,0)
+  edge.addColorStop(0,'rgba(106,83,57,.09)');edge.addColorStop(1,'rgba(106,83,57,0)')
+  ctx.fillStyle=edge;ctx.fillRect(0,0,100,1468)
+  ctx.fillStyle = '#30271D'
   ctx.font = '55px "LXGW WenKai Subset", "Noto Sans CJK SC", "PingFang SC", sans-serif'
   ctx.textBaseline = 'top'
   const characters = Array.from(page?.text ?? '')
   for (let i = 0; i < characters.length; i++) {
-    ctx.fillText(characters[i], 46 + (i % 16) * 58, 50 + Math.floor(i / 16) * 68)
+    ctx.fillText(characters[i], 70 + (i % 16) * 55, 64 + Math.floor(i / 16) * 66)
   }
   return canvas
 }
