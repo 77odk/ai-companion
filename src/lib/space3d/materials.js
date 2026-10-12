@@ -11,9 +11,9 @@ export function procedural(kind, channel) {
   const ctx = canvas.getContext('2d'), data = ctx.createImageData(size, size)
   const random = randomSeed(kind === 'wood' ? 37 : kind === 'paper' ? 71 : kind === 'wall' ? 19 : kind==='floor'?109:93)
   const phases = Array.from({ length: 8 }, () => random() * Math.PI * 2)
-  const bases = { wood: [181, 141, 104], wall: [229, 221, 207], paper: [241, 235, 221], linen: [201, 189, 170],floor:[182,161,137] }
+  const bases = { wood: [169, 116, 79], wall: [242, 234, 220], paper: [245, 240, 228], linen: [182, 155, 116],floor:[150,111,76] }
   const rough = { wood: .58, wall: .94, paper: .93, linen: .90,floor:.86 }
-  const variation = { wood: .045, wall: .006, paper: .012, linen: .018,floor:.025 }
+  const variation = { wood: .20, wall: .055, paper: .040, linen: .045,floor:.06 }
   function grain(x, y, cellsX, cellsY) {
     const gx=x/size*cellsX,gy=y/size*cellsY,ix=Math.floor(gx),iy=Math.floor(gy)
     const smooth=value=>value*value*(3-2*value),sx=smooth(gx-ix),sy=smooth(gy-iy)
@@ -25,9 +25,9 @@ export function procedural(kind, channel) {
     const a = x / size * Math.PI * 2, b = y / size * Math.PI * 2
     if (kind === 'wood') {
       // Long fine fibres; avoid broad, evenly spaced stripes resembling plywood.
-      const warp=Math.sin(a*2+phases[0])*.7+Math.sin(a*5+phases[1])*.2
-      return .42*grain(x,y,12,64)+.34*Math.sin(b*147+warp)
-        +.16*Math.sin(b*311+warp*1.7)+.08*Math.sin(b*47+warp*.5)
+      const warp=Math.sin(a*2+phases[0])*.7+Math.sin(a*5+phases[1])*.2+grain(x,y,4,7)*2.1
+      return .36*grain(x,y,6,32)+.34*Math.sin(b*41+warp*2)
+        +.20*Math.sin(b*147+warp*1.7)+.10*Math.sin(b*311+warp*.5)
     }
     if (kind === 'linen') return (Math.sin(a * 128) + Math.sin(b * 128)) / 2
     if(kind==='floor')return .75*grain(x,y,8,48)+.25*Math.sin(b*113+Math.sin(a*3)*.6)
@@ -60,7 +60,7 @@ export function makeMaterials() {
     normalScale: new T.Vector2(strength, strength), metalness: 0, aoMapIntensity: .55,
   })
   const materials = {
-    wood: make('wood', 1, .12), wall: make('wall', 1, .05), paper: make('paper', 1, .035),
+    wood: make('wood', 1, .16), wall: make('wall', 1, .065), paper: make('paper', 1, .045),
     linen: make('linen', 1, .045),floor:make('floor',1,.04),
     ceramic: new T.MeshStandardMaterial({ color: '#E5DED0', roughness: .32, metalness: 0 }),
     ceramicBase: new T.MeshStandardMaterial({ color: '#E5DED0', roughness: .72, metalness: 0 }),
@@ -90,8 +90,8 @@ export function reflectionCanvas() {
   if(cache.has('reflection-source'))return cache.get('reflection-source')
   const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=512
   const ctx=canvas.getContext('2d'),gradient=ctx.createLinearGradient(0,0,0,512)
-  gradient.addColorStop(0,'#B9CCD6');gradient.addColorStop(.42,'#EEE8DC')
-  gradient.addColorStop(.65,'#C9B99F');gradient.addColorStop(1,'#66564B')
+  gradient.addColorStop(0,'#D8C5A4');gradient.addColorStop(.42,'#F2DCC0')
+  gradient.addColorStop(.65,'#C29868');gradient.addColorStop(1,'#634B36')
   ctx.fillStyle=gradient;ctx.fillRect(0,0,1024,512)
   // A soft opening supplies edge reflections to glass and ceramic, not a second light.
   const opening=ctx.createRadialGradient(235,180,12,235,180,180)

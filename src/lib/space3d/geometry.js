@@ -103,11 +103,21 @@ export function buildDeskScene(materials) {
     const cover = box('book-cover', [.312, .006, .446], [x - .08, .758, .03], materials.linen, .0015)
     book.attach(cover); tag(cover, 'book'); bookParts.push(cover)
     const paper = box('book-paper-edge', [.302, .012, .432], [x - .08, .767, .03], materials.paper, .001)
-    book.attach(paper); tag(paper, 'book'); bookParts.push(paper)
+    book.attach(paper); tag(paper, 'book');paper.material.envMapIntensity=.55;bookParts.push(paper)
   }
   const pages = []
   for (const x of [-.158, .158]) {
-    const geometry=new T.BoxGeometry(.30,.43,.0015,16,1,1)
+    const geometry=new T.BoxGeometry(.30,.43,.0015,16,2,1)
+    // Half-millimetre rounded paper edges, retaining full 1.5mm thickness
+    // and the sixteen horizontal segments used by the existing turn.
+    const radius=.0005,position=geometry.attributes.position,inner=new T.Vector3(.15-radius,.215-radius,.00075-radius)
+    const original=new T.Vector3(),nearest=new T.Vector3()
+    for(let i=0;i<position.count;i++){
+      original.fromBufferAttribute(position,i);nearest.copy(original).clamp(inner.clone().negate(),inner)
+      original.sub(nearest).normalize().multiplyScalar(radius).add(nearest)
+      position.setXYZ(i,original.x,original.y,original.z)
+    }
+    geometry.computeVertexNormals()
     const front={...geometry.groups[4]},back={...geometry.groups[5]}
     geometry.clearGroups();geometry.addGroup(0,front.start,0)
     geometry.addGroup(front.start,front.count,1);geometry.addGroup(back.start,back.count,0)
@@ -117,16 +127,18 @@ export function buildDeskScene(materials) {
     const uv = page.geometry.getAttribute('uv')
     for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - (1 - uv.getY(i)) * 1468 / 2048)
     tag(page, 'book');page.userData.pageMaterial=page.material[1]
+    page.userData.pageMaterial.envMapIntensity=.70
     page.receiveShadow = true; book.add(page); pages.push(page)
   }
   book.position.z=.105
+  book.position.y-=.005
   anchors.set('book', new T.Vector3(-.08, .78, .105))
-  const player = tag(box('player', [.29, .18, .018], [.30, .85, -.20], materials.dark), 'player')
+  const player = tag(box('player', [.29, .18, .018], [.24, .84, -.20], materials.dark), 'player')
   player.rotation.x=-.18
-  const screen = tag(box('player-screen', [.257, .145, .003], [.30, .85, -.189], materials.screen), 'player')
+  const screen = tag(box('player-screen', [.257, .145, .003], [.24, .84, -.189], materials.screen), 'player')
   screen.rotation.x=-.18;screen.castShadow=false
   anchors.set('player', player.position.clone())
-  const jar = new T.Group(); jar.position.set(-.37, .75, -.22); root.add(jar)
+  const jar = new T.Group(); jar.position.set(-.30, .75, -.22); root.add(jar)
   // Thick lathed ceramic rim and bottom, transparent double-wall glass body.
   const profile = [[.065,0],[.07,.006],[.078,.03],[.08,.14],[.067,.17],[.066,.177],[.063,.179],[.059,.176],[.06,.169],[.073,.137],[.071,.03],[.063,.012],[0,.012]]
   const body = new T.Mesh(new T.LatheGeometry(profile.map(p => new T.Vector2(...p)), 28), materials.glass)
@@ -145,7 +157,7 @@ export function buildDeskScene(materials) {
   const lid=tag(new T.Mesh(new T.CylinderGeometry(.067,.067,.012,28),materials.wood),'jar')
   lid.position.y=.187;lid.castShadow=true;lid.receiveShadow=true;jar.add(lid)
   stars.geometry.dispose();stars.geometry=foldedStarGeometry(.020)
-  const starColors=['#DFA28C','#E6BD6A','#A7BFBB','#AEB7CC','#D5AAC1','#E3D9B9']
+  const starColors=['#D87352','#E4AD3D','#5FA897','#768ABD','#C1799B','#DAB875']
   const starTransform=new T.Object3D()
   for(let i=0;i<48;i++){
     const layer=Math.floor(i/9),angle=i*2.3999632297

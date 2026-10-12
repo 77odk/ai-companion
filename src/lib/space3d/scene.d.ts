@@ -21,6 +21,7 @@ export interface SpaceScene {
   snapshot: (data: unknown) => void
   photos: (urls: string[]) => void
   stats: () => Record<string, number | boolean | string>
+  debug: () => unknown
   resetMetrics: () => void
   dispose: () => void
 }

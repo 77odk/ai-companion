@@ -1,0 +1,52 @@
+{
+  "initial": [
+    [
+      -0.238,
+      0.105,
+      0.156,
+      0.223
+    ],
+    [
+      0.078,
+      0.105,
+      0.156,
+      0.223
+    ]
+  ],
+  "source": "Chromium SwiftShader; synthetic fixture",
+  "contactMove": {
+    "moved": [
+      [
+        0.512,
+        0.105,
+        0.156,
+        0.223
+      ],
+      [
+        0.8280000000000001,
+        0.105,
+        0.156,
+        0.223
+      ]
+    ],
+    "oldFootprintSamples": 18,
+    "oldFootprintChangedPixels": 0
+  },
+  "liftedContact": [
+    0,
+    0
+  ],
+  "withFinish": {
+    "calls": 93,
+    "triangles": 51240
+  },
+  "withoutFinish": {
+    "calls": 93,
+    "triangles": 51240
+  },
+  "wall": {
+    "visibleBareWallPercent": 26.637258789320644,
+    "definition": "visible actual wall solids; photographs and props excluded; canvas pixels"
+  },
+  "errors": []
+}
