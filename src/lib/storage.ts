@@ -352,6 +352,9 @@ export function saveSettings(settings: ModelSettings): void {
   }
   const actionNarrationEnabled = isActionNarrationEnabled()
   const systemNotificationEnabled = isSystemNotificationEnabled()
+  // Preserve the approved scene/view preferences in the existing settings record.
+  let spaceEnvironment: unknown
+  try { spaceEnvironment = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}').spaceEnvironment } catch { /* optional */ }
   let initiativeByAccount: unknown
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
@@ -363,6 +366,7 @@ export function saveSettings(settings: ModelSettings): void {
   localStorage.setItem(
     SETTINGS_KEY,
     JSON.stringify({
+      spaceEnvironment,
       provider: settings.provider,
       providers,
       ...(actionNarrationEnabled ? { actionNarrationEnabled: true } : {}),
