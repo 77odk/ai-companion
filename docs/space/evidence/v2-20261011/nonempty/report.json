@@ -1,0 +1,70 @@
+{
+  "status": "AUTHORIZED_LABELLED_NONEMPTY_APP_REVIEW",
+  "normalLogin": true,
+  "contentSeeded": {
+    "dedicatedAccountGuardPassed": true,
+    "memories": 2,
+    "testThoughts": 5,
+    "testLetter": true,
+    "source": "AUTHORIZED_LABELLED_TEST_CONTENT"
+  },
+  "sourceCommit": "146ceafe634d59e1d60eb1a64510a25ad6e467c7",
+  "servedVersion": {
+    "version": "146ceafe634d59e1d60eb1a64510a25ad6e467c7"
+  },
+  "pageErrors": [],
+  "consoleErrors": [],
+  "realPersonalContentVerified": false,
+  "realDeviceTest": false,
+  "results": [
+    {
+      "viewport": "390x844",
+      "memoryMatchesTestInput": true,
+      "thoughtPageOrderAndBounds": true,
+      "actualAudioPlayback": {
+        "paused": false,
+        "time": 1.097894,
+        "duration": 18
+      },
+      "seekTime": 9.219059,
+      "trackSwitch": true,
+      "playbackMode": true,
+      "testLetterBody": true,
+      "returnedToLayeredSpace": true,
+      "overflow": false
+    },
+    {
+      "viewport": "390x690",
+      "memoryMatchesTestInput": true,
+      "thoughtPageOrderAndBounds": true,
+      "actualAudioPlayback": {
+        "paused": false,
+        "time": 1.918223,
+        "duration": 18
+      },
+      "seekTime": 9.218448,
+      "trackSwitch": true,
+      "playbackMode": true,
+      "testLetterBody": true,
+      "returnedToLayeredSpace": true,
+      "overflow": false
+    },
+    {
+      "viewport": "430x932",
+      "memoryMatchesTestInput": true,
+      "thoughtPageOrderAndBounds": true,
+      "actualAudioPlayback": {
+        "paused": false,
+        "time": 1.809661,
+        "duration": 18
+      },
+      "seekTime": 9.229339,
+      "trackSwitch": true,
+      "playbackMode": true,
+      "testLetterBody": true,
+      "returnedToLayeredSpace": true,
+      "overflow": false
+    }
+  ],
+  "buildMatchesCheckout": true
+}

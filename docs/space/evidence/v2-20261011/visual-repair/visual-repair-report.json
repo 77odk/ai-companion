@@ -1,0 +1,36 @@
+{
+  "kind": "PRIVATE_COMPONENT_PREVIEW_QA",
+  "pageErrors": [],
+  "results": [
+    {
+      "viewport": "390x844",
+      "isolated": true,
+      "accountConnected": false,
+      "jarDraw": true,
+      "bookPage": true,
+      "letterRead": true,
+      "realTestAudioPlayed": true,
+      "overflow": false
+    },
+    {
+      "viewport": "390x690",
+      "isolated": true,
+      "accountConnected": false,
+      "jarDraw": true,
+      "bookPage": true,
+      "letterRead": true,
+      "realTestAudioPlayed": true,
+      "overflow": false
+    },
+    {
+      "viewport": "430x932",
+      "isolated": true,
+      "accountConnected": false,
+      "jarDraw": true,
+      "bookPage": true,
+      "letterRead": true,
+      "realTestAudioPlayed": true,
+      "overflow": false
+    }
+  ]
+}
