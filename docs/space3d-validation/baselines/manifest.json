@@ -1,0 +1,196 @@
+{
+  "time": "2026-06-21T04:00:00Z",
+  "city": "北京",
+  "timezone": "Asia/Shanghai",
+  "cloudcover": 15,
+  "weatherCode": 0,
+  "dpr": 1,
+  "shadowSize": 1024,
+  "hardwareConcurrency": 8,
+  "reducedMotion": true,
+  "syntheticContent": true,
+  "source": "Chromium SwiftShader",
+  "chromium": "Chrome/154.0.8037.57",
+  "files": [
+    {
+      "file": "phone-overview.png",
+      "name": "phone",
+      "width": 390,
+      "height": 844,
+      "mode": "overview",
+      "sha256": "b774f86e2c826d00526eacc1bdc2a99f3a78a2c1259d1bed9f713b3a3768383a",
+      "metrics": {
+        "fps": null,
+        "calls": 95,
+        "triangles": 26820,
+        "dpr": 1,
+        "renderedFrames": 3,
+        "mode": "overview",
+        "shadowType": "PCFShadowMap",
+        "quality": "shadow",
+        "pageWidth": 72.52475215417988,
+        "source": "software-rendering"
+      }
+    },
+    {
+      "file": "phone-reading.png",
+      "name": "phone",
+      "width": 390,
+      "height": 844,
+      "mode": "reading",
+      "sha256": "17545bd71ec915ff95053f61e1f70a695e8bc83a6a5bca9eee0a35cdb64fe080",
+      "metrics": {
+        "fps": null,
+        "calls": 66,
+        "triangles": 18060,
+        "dpr": 1,
+        "renderedFrames": 4,
+        "mode": "reading",
+        "shadowType": "PCFShadowMap",
+        "quality": "shadow",
+        "pageWidth": 299.8164186481595,
+        "source": "software-rendering"
+      }
+    },
+    {
+      "file": "phone-drawer.png",
+      "name": "phone",
+      "width": 390,
+      "height": 844,
+      "mode": "drawer",
+      "sha256": "273366407a6f8cffe52914f7b24d306ff17591f4b1a9f2bac8afb074d76ce8ec",
+      "metrics": {
+        "fps": null,
+        "calls": 75,
+        "triangles": 21096,
+        "dpr": 1,
+        "renderedFrames": 5,
+        "mode": "drawer",
+        "shadowType": "PCFShadowMap",
+        "quality": "shadow",
+        "pageWidth": 207.53036411583128,
+        "source": "software-rendering"
+      }
+    },
+    {
+      "file": "small-phone-overview.png",
+      "name": "small-phone",
+      "width": 360,
+      "height": 800,
+      "mode": "overview",
+      "sha256": "3d3b0d76f9d94f697139362ee410dbbbf79b475579620529eb4715d42412372e",
+      "metrics": {
+        "fps": null,
+        "calls": 95,
+        "triangles": 26820,
+        "dpr": 1,
+        "renderedFrames": 4,
+        "mode": "overview",
+        "shadowType": "PCFShadowMap",
+        "quality": "shadow",
+        "pageWidth": 66.94762322521424,
+        "source": "software-rendering"
+      }
+    },
+    {
+      "file": "small-phone-reading.png",
+      "name": "small-phone",
+      "width": 360,
+      "height": 800,
+      "mode": "reading",
+      "sha256": "5f0b91fdc7ac692ac411f4890ae609f8323bf149e728767920ce446cdbe9f094",
+      "metrics": {
+        "fps": null,
+        "calls": 65,
+        "triangles": 17760,
+        "dpr": 1,
+        "renderedFrames": 5,
+        "mode": "reading",
+        "shadowType": "PCFShadowMap",
+        "quality": "shadow",
+        "pageWidth": 299.81641864815947,
+        "source": "software-rendering"
+      }
+    },
+    {
+      "file": "small-phone-drawer.png",
+      "name": "small-phone",
+      "width": 360,
+      "height": 800,
+      "mode": "drawer",
+      "sha256": "eb5d0948f3d448fc16ff634bf29f9761e0b9aee65634b52740eeaccf7f146d20",
+      "metrics": {
+        "fps": null,
+        "calls": 74,
+        "triangles": 20796,
+        "dpr": 1,
+        "renderedFrames": 6,
+        "mode": "drawer",
+        "shadowType": "PCFShadowMap",
+        "quality": "shadow",
+        "pageWidth": 195.7631785216346,
+        "source": "software-rendering"
+      }
+    },
+    {
+      "file": "desktop-overview.png",
+      "name": "desktop",
+      "width": 1280,
+      "height": 800,
+      "mode": "overview",
+      "sha256": "b02782a9147927fe4e0e481fa94e8031368679f6bb3fe5915444034b06862021",
+      "metrics": {
+        "fps": null,
+        "calls": 95,
+        "triangles": 26820,
+        "dpr": 1,
+        "renderedFrames": 4,
+        "mode": "overview",
+        "shadowType": "PCFShadowMap",
+        "quality": "shadow",
+        "pageWidth": 145.16471746375188,
+        "source": "software-rendering"
+      }
+    },
+    {
+      "file": "desktop-reading.png",
+      "name": "desktop",
+      "width": 1280,
+      "height": 800,
+      "mode": "reading",
+      "sha256": "0b7dea681c3226228dd941e76b2c6cbb072fb39750b289130149dadfa11cb19f",
+      "metrics": {
+        "fps": null,
+        "calls": 78,
+        "triangles": 21720,
+        "dpr": 1,
+        "renderedFrames": 5,
+        "mode": "reading",
+        "shadowType": "PCFShadowMap",
+        "quality": "shadow",
+        "pageWidth": 299.81641864815947,
+        "source": "software-rendering"
+      }
+    },
+    {
+      "file": "desktop-drawer.png",
+      "name": "desktop",
+      "width": 1280,
+      "height": 800,
+      "mode": "drawer",
+      "sha256": "25e97d4025378d13da8ba0ab88fe4d34ee27eef498c00b50535576d2e829738b",
+      "metrics": {
+        "fps": null,
+        "calls": 85,
+        "triangles": 23820,
+        "dpr": 1,
+        "renderedFrames": 6,
+        "mode": "drawer",
+        "shadowType": "PCFShadowMap",
+        "quality": "shadow",
+        "pageWidth": 195.76317852163467,
+        "source": "software-rendering"
+      }
+    }
+  ]
+}

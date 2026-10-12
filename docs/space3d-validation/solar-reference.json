@@ -1,0 +1,37 @@
+[
+  {
+    "utc": "2026-06-21T04:00:00Z",
+    "latitude": 39.9042,
+    "longitude": 116.4074,
+    "timezone": "Asia/Shanghai",
+    "altitude": 73.18552749935844
+  },
+  {
+    "utc": "2026-12-21T04:00:00Z",
+    "latitude": 39.9042,
+    "longitude": 116.4074,
+    "timezone": "Asia/Shanghai",
+    "altitude": 26.595121463771928
+  },
+  {
+    "utc": "2026-03-20T12:00:00Z",
+    "latitude": 51.5074,
+    "longitude": -0.1278,
+    "timezone": "Europe/London",
+    "altitude": 38.42195379876705
+  },
+  {
+    "utc": "2026-06-21T16:00:00Z",
+    "latitude": 40.7128,
+    "longitude": -74.006,
+    "timezone": "America/New_York",
+    "altitude": 68.87976413115615
+  },
+  {
+    "utc": "2026-12-21T01:00:00Z",
+    "latitude": -33.8688,
+    "longitude": 151.2093,
+    "timezone": "Australia/Sydney",
+    "altitude": 74.40270217611696
+  }
+]

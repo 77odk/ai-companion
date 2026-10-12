@@ -1,0 +1,18 @@
+{
+  "width": 390,
+  "height": 844,
+  "overlap": false,
+  "clickable": true,
+  "toggle": {
+    "left": 233.984375,
+    "right": 322
+  },
+  "inbox": {
+    "left": 330,
+    "right": 370
+  },
+  "toggleOnOff": true,
+  "originalInboxCallback": true,
+  "invalidTimezoneDoesNotCrash": true,
+  "errors": []
+}
