@@ -1,0 +1,492 @@
+{
+  "source": "Chromium SwiftShader",
+  "realDevice": "待七七真机验收",
+  "cpu6xSimulation": "由项目方执行",
+  "fallbacks": [
+    {
+      "failure": "webgl2-unavailable",
+      "reason": "initialization-failed",
+      "sceneVisible": true,
+      "entrances": [
+        {
+          "label": "打开照片墙",
+          "disabled": false
+        },
+        {
+          "label": "打开空的记忆星星罐",
+          "disabled": false
+        },
+        {
+          "label": "打开 TA 的思绪",
+          "disabled": false
+        },
+        {
+          "label": "打开一起听歌，去接音乐",
+          "disabled": false
+        },
+        {
+          "label": "拉开抽屉，打开一周情书",
+          "disabled": false
+        }
+      ],
+      "originalNavigationCallbacks": [
+        "jar",
+        "book",
+        "player",
+        "drawer"
+      ],
+      "photoButtonAvailable": true
+    },
+    {
+      "failure": "initialization-failed",
+      "reason": "initialization-failed",
+      "sceneVisible": true,
+      "entrances": [
+        {
+          "label": "打开照片墙",
+          "disabled": false
+        },
+        {
+          "label": "打开空的记忆星星罐",
+          "disabled": false
+        },
+        {
+          "label": "打开 TA 的思绪",
+          "disabled": false
+        },
+        {
+          "label": "打开一起听歌，去接音乐",
+          "disabled": false
+        },
+        {
+          "label": "拉开抽屉，打开一周情书",
+          "disabled": false
+        }
+      ],
+      "originalNavigationCallbacks": [
+        "jar",
+        "book",
+        "player",
+        "drawer"
+      ],
+      "photoButtonAvailable": true
+    },
+    {
+      "failure": "context-lost",
+      "reason": "context-lost",
+      "sceneVisible": true,
+      "entrances": [
+        {
+          "label": "打开照片墙",
+          "disabled": false
+        },
+        {
+          "label": "打开空的记忆星星罐",
+          "disabled": false
+        },
+        {
+          "label": "打开 TA 的思绪",
+          "disabled": false
+        },
+        {
+          "label": "打开一起听歌，去接音乐",
+          "disabled": false
+        },
+        {
+          "label": "拉开抽屉，打开一周情书",
+          "disabled": false
+        }
+      ],
+      "originalNavigationCallbacks": [
+        "jar",
+        "book",
+        "player",
+        "drawer"
+      ],
+      "photoButtonAvailable": true
+    }
+  ],
+  "performance": [
+    {
+      "name": "phone",
+      "width": 390,
+      "height": 844,
+      "dpr": 1,
+      "activity": "rain + controlled camera; quality tier 0 held for raw FPS; complete ladder verified separately",
+      "mounted": "Space3DCanvas synthetic content fixture",
+      "wholePageFps": 0.561984554791133,
+      "sceneFps": 1.123969109582266,
+      "durationMs": 21352.900000000744,
+      "frames": 12,
+      "scene": {
+        "fps": 1.0909527290182515,
+        "calls": 97,
+        "triangles": 51728,
+        "dpr": 1,
+        "renderedFrames": 27,
+        "mode": "overview",
+        "shadowType": "PCFShadowMap",
+        "quality": "shadow",
+        "pageWidth": 120.1618442041647,
+        "source": "software-rendering"
+      },
+      "stats": {
+        "dpr": 1,
+        "shadows": true,
+        "rain": true,
+        "snow": false,
+        "rainCount": 60,
+        "snowCount": 30,
+        "renderedFrames": 30,
+        "mode": "overview",
+        "pageWidth": 120.1618442041647,
+        "calls": 97,
+        "triangles": 51728,
+        "mapsPending": 0,
+        "photosPending": 0,
+        "pageTextures": 2,
+        "source": "software-rendering",
+        "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "weatherPlaneX": -0.8100000023841858,
+        "windowBackdropX": -0.93,
+        "windowGlassX": -0.775,
+        "sunShadow": true,
+        "lampShadow": false,
+        "direct": 1.1339976844691158,
+        "lampIntensity": 0,
+        "lightMapIntensity": 0.65,
+        "ambient": 0.18,
+        "selected": "none"
+      },
+      "step": 0
+    },
+    {
+      "name": "desktop",
+      "width": 1280,
+      "height": 800,
+      "dpr": 1,
+      "activity": "rain + controlled camera; quality tier 0 held for raw FPS; complete ladder verified separately",
+      "mounted": "Space3DCanvas synthetic content fixture",
+      "wholePageFps": 0.5049888692036429,
+      "sceneFps": 0.5049888692036429,
+      "durationMs": 23762.900000001493,
+      "frames": 12,
+      "scene": {
+        "fps": 0.5008539559949715,
+        "calls": 98,
+        "triangles": 52028,
+        "dpr": 1,
+        "renderedFrames": 16,
+        "mode": "overview",
+        "shadowType": "PCFShadowMap",
+        "quality": "shadow",
+        "pageWidth": 108.44934657494503,
+        "source": "software-rendering"
+      },
+      "stats": {
+        "dpr": 1,
+        "shadows": true,
+        "rain": true,
+        "snow": false,
+        "rainCount": 60,
+        "snowCount": 30,
+        "renderedFrames": 17,
+        "mode": "overview",
+        "pageWidth": 108.44934657494503,
+        "calls": 98,
+        "triangles": 52028,
+        "mapsPending": 0,
+        "photosPending": 0,
+        "pageTextures": 2,
+        "source": "software-rendering",
+        "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "weatherPlaneX": -0.8100000023841858,
+        "windowBackdropX": -0.93,
+        "windowGlassX": -0.775,
+        "sunShadow": true,
+        "lampShadow": false,
+        "direct": 1.1339976844691158,
+        "lampIntensity": 0,
+        "lightMapIntensity": 0.65,
+        "ambient": 0.18,
+        "selected": "none"
+      },
+      "step": 0
+    },
+    {
+      "name": "integrated-phone",
+      "width": 390,
+      "height": 844,
+      "dpr": 1,
+      "activity": "rain + controlled camera; quality tier 0 held for raw FPS; complete ladder verified separately",
+      "mounted": "AISpace + existing photo archive service",
+      "wholePageFps": 0.6034547786074829,
+      "sceneFps": 1.2069095572149657,
+      "durationMs": 19885.50000000149,
+      "frames": 12,
+      "scene": {
+        "fps": 1.1342626725497091,
+        "calls": 92,
+        "triangles": 50048,
+        "dpr": 1,
+        "renderedFrames": 25,
+        "mode": "overview",
+        "shadowType": "PCFShadowMap",
+        "quality": "shadow",
+        "pageWidth": 120.1618442041647,
+        "source": "software-rendering"
+      },
+      "stats": {
+        "dpr": 1,
+        "shadows": true,
+        "rain": true,
+        "snow": false,
+        "rainCount": 60,
+        "snowCount": 30,
+        "renderedFrames": 28,
+        "mode": "overview",
+        "pageWidth": 120.1618442041647,
+        "calls": 92,
+        "triangles": 50048,
+        "mapsPending": 0,
+        "photosPending": 0,
+        "pageTextures": 2,
+        "source": "software-rendering",
+        "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "weatherPlaneX": -0.8100000023841858,
+        "windowBackdropX": -0.93,
+        "windowGlassX": -0.775,
+        "sunShadow": true,
+        "lampShadow": false,
+        "direct": 1.1339976844691158,
+        "lampIntensity": 0,
+        "lightMapIntensity": 0.65,
+        "ambient": 0.18,
+        "selected": "none"
+      },
+      "step": 0
+    }
+  ],
+  "checks": [
+    {
+      "name": "full-degradation-ladder",
+      "steps": [
+        {
+          "step": 1,
+          "dpr": 1.5,
+          "shadows": false,
+          "rain": true,
+          "snow": false,
+          "rainCount": 200,
+          "snowCount": 100,
+          "renderedFrames": 8,
+          "mode": "overview",
+          "pageWidth": 120.1618442041647,
+          "calls": 62,
+          "triangles": 31252,
+          "mapsPending": 0,
+          "photosPending": 0,
+          "pageTextures": 2,
+          "source": "software-rendering",
+          "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "weatherPlaneX": -0.8100000023841858,
+          "windowBackdropX": -0.93,
+          "windowGlassX": -0.775,
+          "sunShadow": false,
+          "lampShadow": false,
+          "direct": 1.1339976844691158,
+          "lampIntensity": 0,
+          "lightMapIntensity": 0.65,
+          "ambient": 0.18,
+          "selected": "none"
+        },
+        {
+          "step": 2,
+          "dpr": 1,
+          "shadows": false,
+          "rain": true,
+          "snow": false,
+          "rainCount": 200,
+          "snowCount": 100,
+          "renderedFrames": 11,
+          "mode": "overview",
+          "pageWidth": 120.1618442041647,
+          "calls": 62,
+          "triangles": 31252,
+          "mapsPending": 0,
+          "photosPending": 0,
+          "pageTextures": 2,
+          "source": "software-rendering",
+          "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "weatherPlaneX": -0.8100000023841858,
+          "windowBackdropX": -0.93,
+          "windowGlassX": -0.775,
+          "sunShadow": false,
+          "lampShadow": false,
+          "direct": 1.1339976844691158,
+          "lampIntensity": 0,
+          "lightMapIntensity": 0.65,
+          "ambient": 0.18,
+          "selected": "none"
+        },
+        {
+          "step": 3,
+          "dpr": 1,
+          "shadows": false,
+          "rain": false,
+          "snow": false,
+          "rainCount": 200,
+          "snowCount": 100,
+          "renderedFrames": 12,
+          "mode": "overview",
+          "pageWidth": 120.1618442041647,
+          "calls": 61,
+          "triangles": 31252,
+          "mapsPending": 0,
+          "photosPending": 0,
+          "pageTextures": 2,
+          "source": "software-rendering",
+          "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+          "weatherPlaneX": -0.8100000023841858,
+          "windowBackdropX": -0.93,
+          "windowGlassX": -0.775,
+          "sunShadow": false,
+          "lampShadow": false,
+          "direct": 1.1339976844691158,
+          "lampIntensity": 0,
+          "lightMapIntensity": 0.65,
+          "ambient": 0.18,
+          "selected": "none"
+        }
+      ],
+      "final": "original 2D"
+    },
+    {
+      "name": "phone-idle-stops",
+      "frames": 31
+    },
+    {
+      "name": "phone-dom-reading",
+      "search": true,
+      "fontSize": true,
+      "position": {
+        "messageId": "id:2",
+        "offset": 34
+      }
+    },
+    {
+      "name": "desktop-idle-stops",
+      "frames": 18
+    },
+    {
+      "name": "desktop-dom-reading",
+      "search": true,
+      "fontSize": true,
+      "position": {
+        "messageId": "id:2",
+        "offset": 0
+      }
+    },
+    {
+      "name": "integrated-phone-idle-stops",
+      "frames": 29
+    },
+    {
+      "name": "night-and-back-facing-window",
+      "night": {
+        "dpr": 1,
+        "shadows": true,
+        "rain": false,
+        "snow": false,
+        "rainCount": 60,
+        "snowCount": 30,
+        "renderedFrames": 4,
+        "mode": "overview",
+        "pageWidth": 120.1618442041647,
+        "calls": 87,
+        "triangles": 49304,
+        "mapsPending": 0,
+        "photosPending": 0,
+        "pageTextures": 2,
+        "source": "software-rendering",
+        "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "weatherPlaneX": -0.8100000023841858,
+        "windowBackdropX": -0.93,
+        "windowGlassX": -0.775,
+        "sunShadow": false,
+        "lampShadow": true,
+        "direct": 0,
+        "lampIntensity": 3,
+        "lightMapIntensity": 0.06,
+        "ambient": 0.05,
+        "selected": "none"
+      },
+      "backFacing": {
+        "dpr": 1,
+        "shadows": true,
+        "rain": false,
+        "snow": false,
+        "rainCount": 60,
+        "snowCount": 30,
+        "renderedFrames": 5,
+        "mode": "overview",
+        "pageWidth": 120.1618442041647,
+        "calls": 96,
+        "triangles": 51728,
+        "mapsPending": 0,
+        "photosPending": 0,
+        "pageTextures": 2,
+        "source": "software-rendering",
+        "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "weatherPlaneX": -0.8100000023841858,
+        "windowBackdropX": -0.93,
+        "windowGlassX": -0.775,
+        "sunShadow": true,
+        "lampShadow": false,
+        "direct": 0,
+        "lampIntensity": 0,
+        "lightMapIntensity": 0.65,
+        "ambient": 0.18,
+        "selected": "none"
+      }
+    },
+    {
+      "name": "maximum-content-shadow-budget",
+      "memoryStars": 48,
+      "letters": 5,
+      "dpr": 1,
+      "shadows": true,
+      "rain": true,
+      "snow": false,
+      "rainCount": 60,
+      "snowCount": 30,
+      "renderedFrames": 7,
+      "mode": "overview",
+      "pageWidth": 120.1618442041647,
+      "calls": 98,
+      "triangles": 52508,
+      "mapsPending": 0,
+      "photosPending": 0,
+      "pageTextures": 2,
+      "source": "software-rendering",
+      "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "weatherPlaneX": -0.8100000023841858,
+      "windowBackdropX": -0.93,
+      "windowGlassX": -0.775,
+      "sunShadow": true,
+      "lampShadow": false,
+      "direct": 0.5706458041382696,
+      "lampIntensity": 0,
+      "lightMapIntensity": 0.65,
+      "ambient": 0.18,
+      "selected": "none"
+    },
+    {
+      "name": "arrangement-skeleton",
+      "enter": true,
+      "exit": true,
+      "selection": true,
+      "contentWrites": 0
+    }
+  ]
+}

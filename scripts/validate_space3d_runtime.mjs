@@ -134,6 +134,6 @@ try {
   report.checks.push({name:'arrangement-skeleton',enter:true,exit:true,selection:true,contentWrites:0})
   assert.equal(errors.length,0,errors.join('\n'))
   await mkdir('docs/space3d-validation',{recursive:true})
-  await writeFile('docs/space3d-validation/runtime.json',JSON.stringify(report,null,2)+'\n')
+  await writeFile('docs/space3d-validation/reference-runtime.json',JSON.stringify(report,null,2)+'\n')
   console.log(JSON.stringify(report))
 } finally {server.close();await browser.close()}

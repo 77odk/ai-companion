@@ -25,7 +25,7 @@ try {
     await browser.cdp('Page.navigate',{url:`${server.origin}/tools/space3d-visual/?space3dMetrics=1&space3dTest=1`})
     await browser.waitFor('window.visualReady === true && !!document.querySelector("canvas")')
     await browser.waitFor('document.fonts.status === "loaded"')
-    await browser.waitFor('window.__space3dTest?.stats().mapsPending === 0 && window.__space3dTest.stats().pageTextures === 2')
+    await browser.waitFor('window.__space3dTest?.stats().mapsPending === 0 && window.__space3dTest.stats().pageTextures === 2 && window.__space3dTest.stats().photosPending === 0')
     for(const mode of modes){
       await browser.evaluate(`[...document.querySelectorAll('button')].find(b=>b.textContent===${JSON.stringify(mode.label)}).click()`)
       await browser.waitFor(`JSON.parse(document.querySelector('.space3d-metrics').textContent).mode === ${JSON.stringify(mode.name)}`)

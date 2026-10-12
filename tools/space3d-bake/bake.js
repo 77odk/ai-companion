@@ -56,7 +56,7 @@ function bake(mesh) {
         let irradiance=0
         // Uniform diffuse aperture integration: no solar direction or hard sun patch.
         for(let sample=0;sample<9;sample++){
-          vector.set(-.99,.98+Math.floor(sample/3)*.40,-.27+(sample%3)*.40).sub(origin)
+          vector.set(-.79,.98+Math.floor(sample/3)*.40,-.27+(sample%3)*.40).sub(origin)
           const distance=vector.length(),cosine=Math.max(0,normal.dot(vector.clone().normalize()))
           ray.set(origin,vector.normalize());ray.far=distance-.02
           if(!ray.intersectObjects(occluders,false).length)irradiance+=cosine/(1+distance*distance)
