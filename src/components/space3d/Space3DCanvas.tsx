@@ -68,7 +68,7 @@ export default function Space3DCanvas({ data, onOpen, onReady, onFailure }: {
     } catch { callbacks.current.onFailure('initialization-failed'); return }
     sceneRef.current = scene
     if (import.meta.env.DEV && new URLSearchParams(location.search).get('space3dTest') === '1') {
-      Object.assign(window, { __space3dTest: { sampleFrame, stats: () => scene.stats(),
+      Object.assign(window, { __space3dTest: { sampleFrame, stats: () => scene.stats(), debug: () => scene.debug(),
         maximumDensity: () => scene.snapshot({ ...callbacks.current.data, memoryCount: 48, weeklyCount: 5 }),
         beginMetrics: () => { scene.resetMetrics(); monitor.current.resetWindow() },
         environment: (value: Parameters<typeof calculateEnvironment>[0]) => scene.setEnvironment(calculateEnvironment(value)),

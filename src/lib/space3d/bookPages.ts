@@ -36,12 +36,42 @@ export function pageForPosition(pages: BookPage[], position?: ReadingPosition): 
   return Math.max(0, index)
 }
 /** 1024×2048 backing; only 1024×1468 is mapped, preserving 0.30m×0.43m page ratio. */
+let paperBackground: HTMLCanvasElement | undefined
+function paperCanvas(): HTMLCanvasElement {
+  if (paperBackground) return paperBackground
+  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=2048
+  const ctx=canvas.getContext('2d')!,pixels=ctx.createImageData(1024,2048)
+  let seed=751
+  const random=()=>{seed=Math.imul(seed,1664525)+1013904223|0;return (seed>>>0)/4294967296}
+  for(let y=0;y<2048;y+=8)for(let x=0;x<1024;x+=8){
+    const tone=(random()-.5)*10
+    for(let dy=0;dy<8;dy++)for(let dx=0;dx<8;dx++){
+      const i=((y+dy)*1024+x+dx)*4,fiber=(random()-.5)*3
+      pixels.data[i]=245+tone+fiber;pixels.data[i+1]=240+tone+fiber;pixels.data[i+2]=228+tone+fiber;pixels.data[i+3]=255
+    }
+  }
+  ctx.putImageData(pixels,0,0)
+  ctx.strokeStyle='rgba(134,105,65,.10)';ctx.lineWidth=1
+  ctx.beginPath()
+  for(let i=0;i<14000;i++){
+    const x=random()*1024,y=random()*2048;ctx.moveTo(x,y);ctx.lineTo(x+4+random()*14,y+(random()-.5)*5)
+  }
+  ctx.stroke()
+  // Paper ageing is a local pigment detail, not baked directional lighting.
+  for(const [x0,y0,x1,y1,x,y,w,h] of [[0,0,42,0,0,0,42,1468],[1024,0,980,0,980,0,44,1468],
+    [0,0,0,32,0,0,1024,32],[0,1468,0,1428,0,1428,1024,40]]){
+    const edge=ctx.createLinearGradient(x0,y0,x1,y1)
+    edge.addColorStop(0,'rgba(174,126,54,.22)');edge.addColorStop(1,'rgba(174,126,54,0)')
+    ctx.fillStyle=edge;ctx.fillRect(x,y,w,h)
+  }
+  paperBackground=canvas;return canvas
+}
 export async function drawBookPage(page?: BookPage): Promise<HTMLCanvasElement> {
   await document.fonts.ready
   const canvas = document.createElement('canvas')
   canvas.width = 1024; canvas.height = 2048
   const ctx = canvas.getContext('2d')!
-  ctx.fillStyle = '#F1EBDD'; ctx.fillRect(0, 0, 1024, 2048)
+  ctx.drawImage(paperCanvas(),0,0)
   // A restrained inset and gutter shadow make the page read as paper, not a screen.
   const edge=ctx.createLinearGradient(0,0,100,0)
   edge.addColorStop(0,'rgba(106,83,57,.09)');edge.addColorStop(1,'rgba(106,83,57,0)')

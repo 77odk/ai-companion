@@ -8,14 +8,15 @@ import '../../src/styles/space3d.css'
 import '../../src/styles/space.css'
 import '../../src/styles/ui2.css'
 
+const params = new URLSearchParams(location.search)
 const fixedTime = Date.parse('2026-06-21T04:00:00Z')
 Date.now = () => fixedTime
 const synthetic = '这是一段用于截图验收的合成文字，不来自任何用户聊天。窗边的书桌安静地摆着一本书，翻到下一页，仍能清楚地看见每一个字。今天的天气和光线只用于固定测试条件。'
 const messages = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, role: i % 2 ? 'assistant' as const : 'user' as const,
   ts: fixedTime + i * 1000, content: synthetic.repeat(4) }))
-const weather = { city:'北京',temperature:26,weatherCode:0,visual:'clear' as const,label:'晴',fetchedAt:fixedTime,
-  latitude:39.9042,longitude:116.4074,timezone:'Asia/Shanghai',cloudcover:15,windspeed10m:5,isday:1 }
-const params = new URLSearchParams(location.search)
+const rainy=params.get('weather')==='63'
+const weather = { city:'北京',temperature:26,weatherCode:rainy?63:0,visual:rainy?'rain' as const:'clear' as const,label:rainy?'雨':'晴',fetchedAt:fixedTime,
+  latitude:39.9042,longitude:116.4074,timezone:'Asia/Shanghai',cloudcover:Number(params.get('cloud')??15),windspeed10m:5,isday:1 }
 const events: string[] = []
 Object.assign(window, { visualFixture: { time:fixedTime,weather,dpr:1,synthetic:true }, visualEvents:events })
 if (params.get('integrated') === '1') {

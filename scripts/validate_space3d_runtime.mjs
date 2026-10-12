@@ -56,18 +56,23 @@ try {
     await browser.cdp('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<500})
     console.log(`Sampling ${name}`)
     const integrated=name==='integrated-phone'
-    await browser.cdp('Page.navigate',{url:`${server.origin}/tools/space3d-visual/?space3dTest=1&space3dMetrics=1${integrated?'&integrated=1&space3d=1':''}`})
+    await browser.cdp('Page.bringToFront')
+    await browser.cdp('Page.navigate',{url:`${server.origin}/tools/space3d-visual/?space3dTest=1&space3dMetrics=1&weather=63&cloud=75${integrated?'&integrated=1&space3d=1':''}`})
     await browser.waitFor(integrated?'!!document.querySelector(".space3d-ready") && !!window.__space3dTest':'window.visualReady === true && !!window.__space3dTest')
+    // Suspend the software-only raw-FPS fixture before waiting for uploads;
+    // the real app's degradation is verified above and remains enabled.
+    await browser.evaluate('window.__space3dTest.beginFrameInjection()')
     await browser.waitFor('window.__space3dTest.stats().mapsPending === 0 && window.__space3dTest.stats().pageTextures === 2')
     await browser.evaluate(`window.__space3dTest.beginFrameInjection();window.__space3dTest.environment({utcTimestamp:Date.parse('2026-06-21T04:00:00Z'),latitude:39.9042,longitude:116.4074,timezone:'Asia/Shanghai',cloudcover:75,weatherCode:63});window.__space3dTest.beginMetrics()`)
-    const result=await browser.evaluate(`new Promise(resolve=>{
+    const result=await browser.evaluate(`new Promise((resolve,reject)=>{
       let frames=0,last=performance.now(),start=last,initialSceneFrames=window.__space3dTest.stats().renderedFrames,intervals=[];
-      const tick=now=>{intervals.push(now-last);last=now;frames++;window.__space3dTest.mode(frames%60<30?'overview':'drawer');
+      const tick=now=>{try {if(!document.querySelector('.space3d-metrics'))throw Error('Performance fixture lost 3D: '+document.querySelector('[data-fallback]')?.dataset.fallback);
+        intervals.push(now-last);last=now;frames++;window.__space3dTest.mode(frames%60<30?'overview':'drawer');
         if(now-start<12000 || frames<12)requestAnimationFrame(tick);else resolve({wholePageFps:frames*1000/(now-start),sceneFps:(window.__space3dTest.stats().renderedFrames-initialSceneFrames)*1000/(now-start),durationMs:now-start,
-          frames,scene:JSON.parse(document.querySelector('.space3d-metrics').textContent),stats:window.__space3dTest.stats(),step:window.__space3dTest.step()})};requestAnimationFrame(tick)
+          frames,scene:JSON.parse(document.querySelector('.space3d-metrics').textContent),stats:window.__space3dTest.stats(),step:window.__space3dTest.step()})}catch(error){reject(error)}};requestAnimationFrame(tick)
     })`)
     assert.ok(result.stats.triangles<=100000,JSON.stringify(result));assert.ok(result.stats.calls<=100,JSON.stringify(result))
-    assert.ok(Number.isFinite(result.sceneFps));assert.ok(result.frames>=12);console.log(`${name}: scene=${result.sceneFps.toFixed(2)}fps / page=${result.wholePageFps.toFixed(2)}fps`)
+    assert.ok(Number.isFinite(result.sceneFps));assert.ok(result.frames>=12);assert.equal(result.stats.rain,true,'rain must remain active throughout the fixed-weather performance fixture');console.log(`${name}: scene=${result.sceneFps.toFixed(2)}fps / page=${result.wholePageFps.toFixed(2)}fps`)
     report.performance.push({name,width,height,dpr:1,activity:'rain + controlled camera; quality tier 0 held for raw FPS; complete ladder verified separately',mounted:integrated?'AISpace + existing photo archive service':'Space3DCanvas synthetic content fixture',...result})
     await browser.cdp('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]})
     await browser.evaluate('window.__space3dTest.mode("reading")')

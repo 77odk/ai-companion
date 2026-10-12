@@ -2,6 +2,8 @@ import * as T from 'three'
 import { buildDeskScene } from './geometry.js'
 import { makeMaterials, canvasTexture, disposeMaterials, reflectionCanvas } from './materials.js'
 import { legacyPrintCanvases } from './legacyPrints.js'
+import { installSurfaceFinish } from './surfaceFinish.js'
+import { installContactShading } from './contactShading.js'
 
 function kelvinColor(kelvin) {
   const temperature=T.MathUtils.clamp(kelvin,1000,40000)/100
@@ -21,7 +23,7 @@ export function createSpaceScene(canvas, options) {
   const gpu = debugRenderer ? context.getParameter(debugRenderer.UNMASKED_RENDERER_WEBGL) : 'unavailable'
   const renderingSource = /swiftshader|llvmpipe|software/i.test(gpu) ? 'software-rendering' : gpu === 'unavailable' ? 'unverified-rendering' : 'hardware-rendering'
   renderer.outputColorSpace = T.SRGBColorSpace
-  renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.35
+  renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = .95
   renderer.shadowMap.enabled = true
   // r180 PCFSoft radius A/B probe is byte-identical; PCF honors radius.
   renderer.shadowMap.type = T.PCFShadowMap
@@ -60,6 +62,10 @@ export function createSpaceScene(canvas, options) {
   let mapsPending=objects.bakeSurfaces.reduce((sum,mesh)=>sum+(mesh.userData.aoOnly?1:2),0)
   const pageTextures=[],photoTextures=[], ownedTextures=[]
   const baseEmission=new WeakMap()
+  const finishViewport = new T.Vector2(390, 776)
+  const finishSettings = new T.Vector2(.075, .024)
+  const contactDiagnostics=[]
+  let updateContacts=()=>{}
   let selectedHit=null
   const rainGeometry=new T.BufferGeometry(),snowGeometry=new T.BufferGeometry()
   const rainPositions=new Float32Array(200*3),snowPositions=new Float32Array(100*3)
@@ -81,8 +87,8 @@ export function createSpaceScene(canvas, options) {
     else {
       // Portrait crops the outer desk/legs like the original close composition;
       // wide screens use the same objects with a wider controlled overview.
-      const distance=aspect<.8?2.05:2.15
-      targetLook.set(-.04,1.12,-.16);targetPosition.set(.36,1.50,distance)
+      const distance=aspect<.8?1.50:1.85
+      targetLook.set(-.05,1.13,-.08);targetPosition.set(.28,1.55,distance)
     }
     const relative=targetPosition.clone().sub(targetLook)
     const spherical=new T.Spherical().setFromVector3(relative)
@@ -98,6 +104,7 @@ export function createSpaceScene(canvas, options) {
     const rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return
     renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,quality.dprLimit))
     renderer.setSize(rect.width,rect.height,false);camera.aspect=rect.width/rect.height;camera.updateProjectionMatrix()
+    finishViewport.set(canvas.width,canvas.height)
     targets();if(!lastFrame){camera.position.copy(targetPosition);currentLook.copy(targetLook)}invalidate(700)
   }
   function applyQuality(next) {
@@ -117,7 +124,7 @@ export function createSpaceScene(canvas, options) {
     tintGoal.copy(kelvinColor(next.colorTemperature))
     skyGoal.set(next.skyColor)
     // Cream walls and warm wood tint indoor diffuse bounce; window sky stays weather-colored.
-    if(next.isDay)diffuseTintGoal.set('#EADBC4').lerp(skyGoal,.30);else diffuseTintGoal.copy(skyGoal)
+    if(next.isDay)diffuseTintGoal.set('#E7CFA5').lerp(skyGoal,.18);else diffuseTintGoal.copy(skyGoal)
     sun.castShadow=quality.shadows&&next.isDay;lamp.castShadow=quality.shadows&&!next.isDay
     clearTimeout(flashTimer)
     if(next.effects.lightning&&!reduced&&quality.particles){
@@ -142,7 +149,8 @@ export function createSpaceScene(canvas, options) {
     sun.position.lerp(sunGoal,t);sun.intensity=T.MathUtils.lerp(sun.intensity,directGoal,t);sun.color.lerp(tintGoal,t)
     sky.intensity=T.MathUtils.lerp(sky.intensity,diffuseGoal,t);sky.color.lerp(diffuseTintGoal,t);scene.background.lerp(skyGoal,t)
     ambient.intensity=T.MathUtils.lerp(ambient.intensity,environment?.isDay!==false ? .18 : .05,t)
-    scene.environmentIntensity=T.MathUtils.lerp(scene.environmentIntensity,environment?.isDay!==false ? .30 : .055,t)
+    scene.environmentIntensity=T.MathUtils.lerp(scene.environmentIntensity,environment?.isDay!==false ? .30 : .035,t)
+    renderer.toneMappingExposure=T.MathUtils.lerp(renderer.toneMappingExposure,environment?.isDay!==false ? (mode==='reading'?.85:.95) : 1.02,t)
     lamp.intensity=T.MathUtils.lerp(lamp.intensity,lampGoal,t)
     objects.lampShade.material.emissiveIntensity=T.MathUtils.lerp(objects.lampShade.material.emissiveIntensity,lampGoal>0?.18:0,t)
     objects.windowView.material.color.lerp(environment?.isDay===false?new T.Color('#31445F'):skyGoal,t)
@@ -168,7 +176,7 @@ export function createSpaceScene(canvas, options) {
       positions.needsUpdate=true;objects.pages[1].geometry.computeVertexNormals()
       if(progress>=1){positions.array.set(flipBase);positions.needsUpdate=true;objects.pages[1].geometry.computeVertexNormals();flipStart=0;const done=flipDone;flipDone=null;done?.()}
     }
-    if(dirty||animated){renderer.info.reset();renderer.render(scene,camera);dirty=false;totalFrames++
+    if(dirty||animated){objects.root.updateMatrixWorld(true);updateContacts();renderer.info.reset();renderer.render(scene,camera);dirty=false;totalFrames++
       const ready=String(mapsPending===0&&photosPending===0&&pageTextures.length===2)
       if(canvas.dataset.spaceTexturesReady!==ready)canvas.dataset.spaceTexturesReady=ready
     }
@@ -206,6 +214,22 @@ export function createSpaceScene(canvas, options) {
       },undefined,()=>{if(!disposed)options.onFailure('baked-map-unavailable')})
     }
   }
+  const contactEntries=[]
+  objects.root.traverse(mesh=>{if(mesh.name==='book-cover')contactEntries.push({mesh,halfSize:[.156,.223],baseOffset:.003})})
+  contactEntries.push({mesh:objects.stars.parent,halfSize:[.085,.080],round:.080},
+    {mesh:objects.root.getObjectByName('player'),halfSize:[.14,.012],baseOffset:.09})
+  const ceramic=objects.root.getObjectByName('desk-detail-ceramic')
+  for(const [x,z,r] of [[-.46,-.05,.05],[-.48,-.19,.065],[.48,.08,.055]])
+    contactEntries.push({mesh:ceramic,local:new T.Vector3(x,.752,z),halfSize:[r,r],round:r})
+  const tableContact=installContactShading(objects.root.getObjectByName('desktop').material,contactEntries,'table',.75)
+  const wallContact=installContactShading(objects.root.getObjectByName('back-wall').material,
+    objects.photoPlanes.map(mesh=>({mesh,halfSize:[mesh.userData.paperWidth/2,mesh.userData.paperHeight/2],baseOffset:.001})),'wall',-.35)
+  updateContacts=()=>{tableContact();wallContact()}
+  contactDiagnostics.push(tableContact.uniforms,wallContact.uniforms)
+  const finished=new Set()
+  scene.traverse(object=>{for(const material of object.material?(Array.isArray(object.material)?object.material:[object.material]):[]){
+    if(!finished.has(material)){installSurfaceFinish(material,finishViewport,finishSettings);finished.add(material)}
+  }})
   applyQuality(quality);resize()
   return {
     setEnvironment,
@@ -290,7 +314,7 @@ export function createSpaceScene(canvas, options) {
       }).catch(()=>{if(!disposed&&generation===photoGeneration)options.onFailure('reference-prints-unavailable')})
       invalidate()
     },
-    debug(){return { renderer,scene,camera,objects, projectedPageWidth, totalFrames }},
+    debug(){return { renderer,scene,camera,objects, projectedPageWidth, totalFrames, finishSettings, contactDiagnostics }},
     stats(){return {dpr:renderer.getPixelRatio(),shadows:renderer.shadowMap.enabled,
       rain:rain.visible,snow:snow.visible,rainCount:rainGeometry.drawRange.count,snowCount:snowGeometry.drawRange.count,
       renderedFrames:totalFrames,mode,pageWidth:projectedPageWidth(),calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,

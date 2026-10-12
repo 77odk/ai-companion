@@ -35,6 +35,9 @@ try {
       if(await browser.evaluate('window.visualFailure'))throw new Error('Scene fell back during screenshot')
       // Diagnostics remain in JSON; baseline imagery excludes the debug output.
       await browser.evaluate('document.querySelector(".space3d-metrics").style.visibility="hidden"')
+      // Visibility changes invalidate a compositor layer too. Drain that paint
+      // before copying its surface; the scene-ready wait precedes this change.
+      await browser.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
       const shot=await browser.cdp('Page.captureScreenshot',{format:'png',captureBeyondViewport:false})
       const file=`${size.name}-${mode.name}.png`,data=Buffer.from(shot.data,'base64');await writeFile(`${path}/${file}`,data)
       const metrics=await browser.evaluate('JSON.parse(document.querySelector(".space3d-metrics").textContent)')

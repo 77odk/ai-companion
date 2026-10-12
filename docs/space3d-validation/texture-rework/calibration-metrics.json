@@ -1,0 +1,73 @@
+{
+  "definition": {
+    "brightness": "0.299R+0.587G+0.114B; native uint8 RGB",
+    "saturation": "(max-min)/max; black=0",
+    "detail": "centered luminance gradient magnitude >8; one-sided boundary differences",
+    "flat": "3x3 population std <1.2; reflect padding",
+    "scope": "whole native image, including existing UI; no resizing or crop",
+    "quantization": "RGB >>5; full pixels and auxiliary regular 5x5 samples. Project sampling step is unconfirmed; color counts are not claimed identical."
+  },
+  "decoder": "Chrome/154.0.8037.57",
+  "images": [
+    {
+      "file": "public/space/space-desk.webp",
+      "width": 480,
+      "height": 853,
+      "brightness": 135.19858386819914,
+      "saturation": 0.6184266672853795,
+      "detailPercent": 30.069118796404847,
+      "flatPercent": 34.61142047674873,
+      "top40FlatPercent": 33.25513196480939,
+      "quantizedColorsFull": 130,
+      "quantizedColorsSample5": 97
+    },
+    {
+      "file": "docs/space3d-validation/texture-rework/before/phone-overview.png",
+      "width": 390,
+      "height": 844,
+      "brightness": 162.08323686957016,
+      "saturation": 0.2610082636110712,
+      "detailPercent": 16.21399927087131,
+      "flatPercent": 68.91511726819783,
+      "top40FlatPercent": 70.27619265007989,
+      "quantizedColorsFull": 86,
+      "quantizedColorsSample5": 70
+    },
+    {
+      "file": "docs/space3d-validation/texture-rework/before/phone-reading.png",
+      "width": 390,
+      "height": 844,
+      "brightness": 205.14893834276288,
+      "saturation": 0.1166381229914335,
+      "detailPercent": 22.687143030744927,
+      "flatPercent": 65.96366508688783,
+      "top40FlatPercent": 64.89385984934947,
+      "quantizedColorsFull": 35,
+      "quantizedColorsSample5": 28
+    },
+    {
+      "file": "docs/space3d-validation/baselines/phone-overview.png",
+      "width": 390,
+      "height": 844,
+      "brightness": 135.31952377262675,
+      "saturation": 0.3989540820376255,
+      "detailPercent": 24.360189573459714,
+      "flatPercent": 14.52910438692429,
+      "top40FlatPercent": 7.896979380658905,
+      "quantizedColorsFull": 103,
+      "quantizedColorsSample5": 73
+    },
+    {
+      "file": "docs/space3d-validation/baselines/phone-reading.png",
+      "width": 390,
+      "height": 844,
+      "brightness": 169.83740527385456,
+      "saturation": 0.257343115816643,
+      "detailPercent": 26.67578077530684,
+      "flatPercent": 15.469680398590352,
+      "top40FlatPercent": 5.54972228562733,
+      "quantizedColorsFull": 45,
+      "quantizedColorsSample5": 42
+    }
+  ]
+}
