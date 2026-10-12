@@ -1,0 +1,8 @@
+{
+  "cleanNewBrowserContext": true,
+  "seedCalled": false,
+  "normalLogin": true,
+  "cloudThoughtContentRetained": true,
+  "cloudTestLetterRetained": true,
+  "storageStateImportedOrExported": false
+}

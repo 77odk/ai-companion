@@ -1,0 +1,48 @@
+{
+  "normalLogin": true,
+  "seedCalled": false,
+  "results": [
+    {
+      "viewport": "390x844",
+      "longThoughtScroll": {
+        "scrollTop": 400,
+        "scrollHeight": 989,
+        "clientHeight": 145
+      },
+      "screenshotWaitedForOpacity": true,
+      "longLetterScroll": {
+        "scrollTop": 967,
+        "scrollHeight": 1811,
+        "clientHeight": 844
+      }
+    },
+    {
+      "viewport": "390x690",
+      "longThoughtScroll": {
+        "scrollTop": 400,
+        "scrollHeight": 989,
+        "clientHeight": 145
+      },
+      "screenshotWaitedForOpacity": true,
+      "longLetterScroll": {
+        "scrollTop": 1000,
+        "scrollHeight": 1811,
+        "clientHeight": 690
+      }
+    },
+    {
+      "viewport": "430x932",
+      "longThoughtScroll": {
+        "scrollTop": 400,
+        "scrollHeight": 852,
+        "clientHeight": 160
+      },
+      "screenshotWaitedForOpacity": true,
+      "longLetterScroll": {
+        "scrollTop": 953,
+        "scrollHeight": 1885,
+        "clientHeight": 932
+      }
+    }
+  ]
+}

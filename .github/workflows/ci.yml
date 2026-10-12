@@ -44,3 +44,31 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # G0-A only: generate true-source E/C screenshots on the Draft PR.
+      # This is a preview artifact, NOT production deployment or art signoff.
+      - name: Space G0-A true-art preview
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/space-mobile-visual-baseline'
+        run: python3 scripts/g0a_full_layer_preview.py --engine chrome-cli --out _space_art_review
+
+      - name: Upload G0-A review frames
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'fix/space-mobile-visual-baseline'
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-g0a-native-art-qa
+          path: _space_art_review/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Space G0-A whole-desk visual preflight
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/space-mobile-visual-baseline'
+        run: python3 scripts/g0a_full_scene_preview.py --out _space_full_scene_review
+
+      - name: Upload G0-A whole-desk review
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'fix/space-mobile-visual-baseline'
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-g0a-whole-desk-qa
+          path: _space_full_scene_review/
+          if-no-files-found: warn
+          retention-days: 7

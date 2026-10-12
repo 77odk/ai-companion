@@ -1,0 +1,7 @@
+{
+  "unauthenticated": true,
+  "allThreeAuthBlocked": true,
+  "borrowedBrowserStillUsable": true,
+  "noStateExport": true,
+  "scriptExit": 2
+}
