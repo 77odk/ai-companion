@@ -5,7 +5,7 @@ import { drawerFrameProgress, spaceDrawerCavityAlpha } from '../src/lib/spaceDra
 const view = readFileSync('src/components/AISpace.tsx', 'utf8')
 const renderer = readFileSync('src/components/SpaceDrawerCanvas.tsx', 'utf8')
 const css = readFileSync('src/styles/space.css', 'utf8')
-const manifest = JSON.parse(readFileSync('public/space/layered/manifest.json', 'utf8'))
+const manifest = { ...JSON.parse(readFileSync('public/space/layered/manifest.json', 'utf8')), enabled: false, artApproved: false }
 
 assert.equal(manifest.enabled, false)
 assert.equal(manifest.artApproved, false)

@@ -3659,3 +3659,101 @@ html.eluvin-page-hidden .thought-book-page * {
 
 .space-focus-layer .star-jar-label { display: none; }
 .space-focus-layer .space-book-paper-canvas { filter: none; }
+
+/* #261 alignment repair: one visible body per object; content is independent.
+   Landmark bounds measured on the immutable 941×1672 content-clean plate.
+   The fallback has no baked bodies and renders only its aligned CSS shells. */
+.ai-space-page .space-scene-hotspot.is-photo-wall {
+  --object-x: 30.92455%; --object-y: 8.97129%; --object-w: 65.03613%; --object-h: 43.06220%;
+}
+.ai-space-page .space-scene-hotspot.is-star-jar {
+  --object-x: 21.998%; --object-y: 47.84689%; --object-w: 25.50478%; --object-h: 17.70335%;
+}
+.ai-space-page .space-scene-hotspot.is-thought-book {
+  --object-x: 23.16684%; --object-y: 65.43062%; --object-w: 75.982996%; --object-h: 18.18182%;
+}
+.ai-space-page .space-scene-hotspot.is-player {
+  --object-x: 56.11052%; --object-y: 53.22967%; --object-w: 32.30606%; --object-h: 12.67943%;
+}
+.ai-space-page .space-scene-hotspot.is-weekly-letter {
+  --object-x: 52.07226%; --object-y: 85.52632%; --object-w: 47.92774%; --object-h: 10.16746%;
+}
+.ai-space-page:is(.is-layered,:not(.is-layered)) .space-scene-hotspot:is(.is-photo-wall,.is-star-jar,.is-thought-book,.is-player,.is-weekly-letter) {
+  left: var(--object-x); top: var(--object-y); width: var(--object-w); height: var(--object-h);
+  padding: 0; border: 0; background: transparent; box-shadow: none; clip-path: none;
+}
+.ai-space-page .space-scene-hotspot .space-object-cutout { inset: 0; transform: none; object-fit: fill; }
+.ai-space-page:is(.is-layered,:not(.is-layered)) .space-scene-hotspot:is(.is-photo-wall,.is-star-jar,.is-thought-book,.is-player) > :is(.space-live-photo-board,.space-live-jar,.space-live-book,.space-live-player) {
+  inset: 0; display: none; background: transparent; border: 0; box-shadow: none;
+  transform: none; padding: 0; animation: none; filter: none;
+}
+.ai-space-page .space-live-photo-board::before,
+.ai-space-page .space-live-photo-board::after,
+.ai-space-page .space-live-jar::before,
+.ai-space-page .space-live-book::after { content: none; display: none; }
+/* Closed gates or failed art loading use one CSS body; never mix cutouts. */
+.ai-space-page:not(.is-layered) .space-object-cutout { display: none; }
+.ai-space-page:not(.is-layered) .space-scene-hotspot:is(.is-star-jar,.is-thought-book,.is-player) > :is(.space-live-jar,.space-live-book,.space-live-player) {
+  position: absolute; display: block; inset: 0; transform: none; clip-path: none; pointer-events: none;
+}
+.ai-space-page:not(.is-layered) .space-scene-hotspot.is-star-jar > .space-live-jar {
+  border-radius: 20% 20% 25% 25%; border: 1px solid rgba(255,246,229,.48);
+  background: linear-gradient(105deg,rgba(255,255,255,.15),rgba(122,76,54,.13));
+}
+.ai-space-page:not(.is-layered) .space-scene-hotspot.is-thought-book > .space-live-book {
+  border-radius: 3px; background: linear-gradient(90deg,#f5e7cd 49%,#b99064 50%,#f5e7cd 51%);
+}
+.ai-space-page:not(.is-layered) .space-scene-hotspot.is-player > .space-live-player {
+  border-radius: 6px; background: #262421;
+}
+.space-photo-content { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: visible; }
+.space-jar-content { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
+.space-jar-content .space-live-star-field { inset: 27% 10% 8%; }
+.space-jar-content .space-live-jar-glint { left: 11%; top: 12%; width: 8%; height: 56%; }
+.space-book-content {
+  position: absolute; inset: 22% 13% 20% 52%; z-index: 3; padding: 5%;
+  transform: skew(-22deg,10deg); overflow: hidden; pointer-events: none;
+  color: #6f4e34; font-size: clamp(5px,1.5vw,8px); line-height: 1.5;
+}
+.space-player-content {
+  position: absolute; inset: 15% 10% 18% 12%; z-index: 3; padding: 8% 9%;
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 5%;
+  transform: skew(-9deg,4deg); overflow: hidden; pointer-events: none;
+}
+.space-player-content strong { overflow: hidden; color: rgba(255,245,231,.88); font-size: clamp(5px,1.5vw,8px); font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
+/* The invisible drawer gesture element must still have its original full ROI. */
+.ai-space-page .space-scene-hotspot.is-weekly-letter .space-drawer-peek { inset: 0; width: 100%; height: 100%; }
+/* Sparse photo walls: hit bounds follow photos, while drag coordinates stay
+   relative to the original full placement frame and metadata is unchanged. */
+.ai-space-page:is(.is-layered,:not(.is-layered)) .space-scene-hotspot.is-photo-wall {
+  left: calc(var(--object-x) + var(--photo-hit-x, 0px));
+  top: calc(var(--object-y) + var(--photo-hit-y, 0px));
+  width: var(--photo-hit-w, var(--object-w)); height: var(--photo-hit-h, var(--object-h));
+}
+.space-photo-content {
+  left: calc(0px - var(--photo-hit-x, 0px)); top: calc(0px - var(--photo-hit-y, 0px));
+  right: auto; bottom: auto;
+  width: var(--photo-frame-width, 100%); height: var(--photo-frame-height, 100%);
+}
+/* The actual photo pins remain; a second board/string silhouette does not. */
+.ai-space-page .space-photo-fixings { display: none; }
+.ai-space-page .space-jar-content .space-live-star {
+  animation: space-live-star-float var(--live-star-t) ease-in-out var(--live-star-d) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-space-page .space-jar-content .space-live-star,
+  .ai-space-page .space-jar-content .space-live-jar-glint { animation: none; }
+}
+/* Fallback bodies retain the desk's perspective rather than floating rectangles. */
+.ai-space-page:not(.is-layered) .space-scene-hotspot.is-thought-book > .space-live-book {
+  clip-path: polygon(0 53%,51% 0,100% 26%,100% 88%,79% 100%,0 61%);
+  background: linear-gradient(110deg,#e9d4b3 0%,#f6e7cc 42%,#b99064 49.5%,#f7e9d0 51%,#e9d3af 100%);
+}
+.ai-space-page:not(.is-layered) .space-scene-hotspot.is-player > .space-live-player {
+  clip-path: polygon(13% 0,100% 8%,96% 100%,0 90%);
+  background: linear-gradient(105deg,#564b3e 0 6%,#282521 7% 92%,#6c5947 95%);
+}
+.ai-space-page:not(.is-layered) .space-scene-hotspot.is-star-jar > .space-live-jar::before {
+  content: ''; display: block; position: absolute; left: 16%; right: 16%; top: 0; height: 9%;
+  border-radius: 5px; background: linear-gradient(#c19764,#956f46); box-shadow: none;
+}

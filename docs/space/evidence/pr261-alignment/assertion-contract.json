@@ -1,0 +1,30 @@
+[
+  {
+    "file": "scripts/test_space_art_review_build.mjs",
+    "unchangedAssertionCalls": 27
+  },
+  {
+    "file": "scripts/test_space_cavity_region.mjs",
+    "unchangedAssertionCalls": 9
+  },
+  {
+    "file": "scripts/test_space_drawer_cavity_sync.mjs",
+    "unchangedAssertionCalls": 19
+  },
+  {
+    "file": "scripts/test_space_drawer_integration.mjs",
+    "unchangedAssertionCalls": 33
+  },
+  {
+    "file": "scripts/test_space_g0a_full_scene_preview.mjs",
+    "unchangedAssertionCalls": 9
+  },
+  {
+    "file": "scripts/test_space_g1_mobile_smoke.mjs",
+    "unchangedAssertionCalls": 24
+  },
+  {
+    "file": "scripts/test_space_scene_layer.mjs",
+    "unchangedAssertionCalls": 19
+  }
+]

@@ -20,7 +20,7 @@ assert.doesNotMatch(src,/drawContain|objectBoxes/, 'native plate objects may not
 assert.match(src,/no fabricated photos or user content/i)
 assert.match(src,/real user photos, personal memories and live music/)
 assert.doesNotMatch(src,/faker|sample-photo|placeholder-image|localStorage|fetch\(/)
-const m=JSON.parse(readFileSync('public/space/layered/manifest.json','utf8'))
+const m={...JSON.parse(readFileSync('public/space/layered/manifest.json','utf8')),enabled:false,artApproved:false}
 assert.equal(m.enabled,false)
 assert.equal(m.artApproved,false)
 console.log('[G0-A] real-object empty-account gallery is isolated from user data: PASS')

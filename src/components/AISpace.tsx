@@ -160,6 +160,47 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
   // Keep role transitions private even before the new session's effect runs.
   // This is display-only: never remove or rewrite photos from another session.
   const visiblePhotos = useMemo(() => photos.filter((photo) => photo.sessionId === sid), [photos, sid])
+  // Keep the persisted photo placement frame unchanged. Only the button's hit
+  // bounds follow the actually visible photos (including sparse photo walls).
+  useEffect(() => {
+    if (focus || photosFocused) return
+    const page = scenePageRef.current
+    const hit = page?.querySelector<HTMLElement>('.space-scene-hotspot.is-photo-wall')
+    const frame = hit?.querySelector<HTMLElement>('.space-photo-content')
+    const plane = page?.querySelector<HTMLElement>('.space-scene-shell')
+    if (!hit || !frame || !plane) return
+    const measure = () => {
+      const placement = getComputedStyle(hit)
+      const width = plane.offsetWidth * parseFloat(placement.getPropertyValue('--object-w')) / 100
+      const height = plane.offsetHeight * parseFloat(placement.getPropertyValue('--object-h')) / 100
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return
+      hit.style.setProperty('--photo-frame-width', `${width}px`)
+      hit.style.setProperty('--photo-frame-height', `${height}px`)
+      const origin = frame.getBoundingClientRect()
+      const rects = [...frame.querySelectorAll('.space-live-photo')].map(photo => photo.getBoundingClientRect())
+      if (!rects.length || !origin.width || !width) {
+        for (const name of ['x', 'y', 'w', 'h']) hit.style.removeProperty(`--photo-hit-${name}`)
+        return
+      }
+      const scale = origin.width / width
+      const left = Math.min(...rects.map(rect => rect.left))
+      const top = Math.min(...rects.map(rect => rect.top))
+      const right = Math.max(...rects.map(rect => rect.right))
+      const bottom = Math.max(...rects.map(rect => rect.bottom))
+      hit.style.setProperty('--photo-hit-x', `${(left - origin.left) / scale}px`)
+      hit.style.setProperty('--photo-hit-y', `${(top - origin.top) / scale}px`)
+      hit.style.setProperty('--photo-hit-w', `${(right - left) / scale}px`)
+      hit.style.setProperty('--photo-hit-h', `${(bottom - top) / scale}px`)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure)
+      return () => window.removeEventListener('resize', measure)
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(plane)
+    return () => observer.disconnect()
+  }, [visiblePhotos, sceneCover, focus, photosFocused])
   const [photoUploading, setPhotoUploading] = useState(0)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -574,7 +615,8 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
             {/* The approved artwork pins photos directly to the wall, not to a
                 separate wood-and-string board. Both preload states render only
                 the real session photos at identical world-space positions. */}
-            <span className="space-live-photo-board" aria-label="空间页照片摆放区">
+            <span className="space-live-photo-board" aria-hidden="true" />
+            <span className="space-photo-content" aria-label="空间页照片摆放区">
               <svg className="space-photo-fixings" viewBox="0 0 300 360" aria-hidden="true">
                 <path d="M12 36Q145 58 287 39M12 167Q152 192 287 164" fill="none" stroke="#96704f" strokeWidth="1" opacity=".55" />
                 {[[36,39], [146,46], [258,42], [64,174], [188,178], [272,166]].map(([x,y], i) => <g key={i} transform={`translate(${x} ${y}) rotate(${i % 2 ? 5 : -4})`}>
@@ -689,7 +731,8 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
               aria-hidden="true"
               draggable={false}
             />
-            <span className="space-live-jar" aria-hidden="true">
+            <span className="space-live-jar" aria-hidden="true" />
+            <span className="space-jar-content" aria-hidden="true">
               <span className="space-live-jar-glint" />
               <span className="space-live-star-field">
                 {Array.from({ length: memoryCount }, (_, index) => (
@@ -732,7 +775,8 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
               aria-hidden="true"
               draggable={false}
             />
-            <span className="space-live-book" aria-hidden="true">
+            <span className="space-live-book" aria-hidden="true" />
+            <span className="space-book-content" aria-hidden="true">
               {latestThought ? <span>{latestThought.text}</span> : null}
             </span>
           </button>
@@ -757,7 +801,8 @@ export default function AISpace({ onOpenStarJar, onOpenThoughts, onOpenListen, o
               aria-hidden="true"
               draggable={false}
             />
-            <span className="space-live-player" aria-hidden="true">
+            <span className="space-live-player" aria-hidden="true" />
+            <span className="space-player-content" aria-hidden="true">
               {listenSnapshot.hasTrack ? (
                 <>
                   <strong>{listenSnapshot.title}</strong>

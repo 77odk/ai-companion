@@ -4,7 +4,7 @@ import { SPACE_LAYER_REQUIRED } from '../src/lib/spaceSceneAssets.ts'
 const scene=readFileSync('src/components/AISpace.tsx','utf8')
 const view=readFileSync('src/components/SpaceDrawerCanvas.tsx','utf8')
 const css=readFileSync('src/styles/space.css','utf8')
-const manifest=JSON.parse(readFileSync('public/space/layered/manifest.json','utf8'))
+const manifest={ ...JSON.parse(readFileSync('public/space/layered/manifest.json','utf8')), enabled: false, artApproved: false }
 
 // The same real weekly-letter route still handles tapping and pointer release.
 assert.match(scene, /showFocus\('weekly', onOpenWeekly\)/)

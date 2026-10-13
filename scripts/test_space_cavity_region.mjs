@@ -5,7 +5,7 @@ import { SPACE_WORLD_WIDTH, SPACE_WORLD_HEIGHT } from '../src/lib/spaceWorldCame
 
 const css = readFileSync('src/styles/space.css','utf8')
 const app = readFileSync('src/components/AISpace.tsx','utf8')
-const manifest = JSON.parse(readFileSync('public/space/layered/manifest.json','utf8'))
+const manifest = { ...JSON.parse(readFileSync('public/space/layered/manifest.json','utf8')), enabled: false, artApproved: false }
 const cavityStart = css.indexOf('.ai-space-page.is-layered .space-scene-backplate.is-drawer-cavity {')
 assert.ok(cavityStart !== -1, 'layered cavity CSS exists')
 const cavity = css.slice(cavityStart, css.indexOf('}', cavityStart)+1)

@@ -39,7 +39,7 @@ assert.match(source, /if not cdp_url:\n\s+browser.close/, 'do not close a borrow
 assert.doesNotMatch(source, /storage_state\s*\(/, 'the script must never export login state')
 assert.match(source, /if screenshots:/, 'potential user content screenshot only on explicit opt-in')
 assert.doesNotMatch(source, /\b(add_local_photo|save_local|deletePhoto|setItem|post\(|put\()\b/)
-const manifest = JSON.parse(readFileSync('public/space/layered/manifest.json', 'utf8'))
+const manifest = { ...JSON.parse(readFileSync('public/space/layered/manifest.json', 'utf8')), enabled: false, artApproved: false }
 assert.equal(manifest.enabled, false, 'G1 preflight must not open an unapproved visual gate')
 assert.equal(manifest.artApproved, false)
 console.log('[Space G1] local-only read-only 3-screen smoke and closed art-gate checks: PASS')

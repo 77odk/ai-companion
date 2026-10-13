@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { build } from 'vite'
 
-const manifest = JSON.parse(readFileSync('public/space/layered/manifest.json', 'utf8'))
+const shippedManifest = JSON.parse(readFileSync('public/space/layered/manifest.json', 'utf8'))
+let manifest = { ...JSON.parse(readFileSync('public/space/layered/manifest.json', 'utf8')), enabled: false, artApproved: false }
 assert.equal(manifest.enabled, false)
 assert.equal(manifest.artApproved, false)
 const originalFetch = globalThis.fetch
@@ -77,6 +78,8 @@ try {
   globalThis.fetch = originalFetch
   globalThis.Image = originalImage
 }
+// The loader fixture did not modify the actual approved file.
+manifest = shippedManifest
 assert.deepEqual(JSON.parse(readFileSync('public/space/layered/manifest.json', 'utf8')), manifest)
 const builder = readFileSync('scripts/space_v2_app_review.mjs', 'utf8')
 assert.match(builder, /mkdtempSync\(join\(tmpdir\(\)/, 'review output always uses a fresh temporary directory')

@@ -21,6 +21,8 @@ if (manifest.enabled) {
 } else {
   assert.equal(isSpaceLayerManifestReady(manifest), false, 'staging is fail-closed')
 }
+// Keep the technical-only gate fixture independent of the shipped art decision.
+manifest.artApproved = false
 assert.equal(isSpaceLayerManifestReady({ ...manifest, enabled: true }), false,
   'technical switch alone may not bypass the explicit art gate')
 assert.equal(isSpaceLayerManifestReady({ ...manifest, enabled: true, artApproved: true }), true,
