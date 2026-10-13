@@ -1,7 +1,13 @@
+import SpaceBookDeskCamera from './SpaceBookDeskCamera'
+import SpaceBookSurface from './SpaceBookSurface'
+import { useSpaceDismiss } from './SpaceFocusLayer'
+import { paginateSpaceThoughts, playSpacePaperSound, type SpaceBookLeaf } from '../lib/spaceBookPaper'
+import { transitionSpaceScene } from '../lib/spaceSceneTransition'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ELUVIN_DATA_CHANGE } from '../lib/dataChange'
 import { getActiveSessionId } from '../lib/sessionStore'
 import { loadTaThoughts, settleTaThoughts, type TaThoughtView } from '../lib/taThoughts'
+import { useSpaceObjectScene } from '../lib/useSpaceObjectScene'
 
 interface Props {
   onBack: () => void
@@ -15,13 +21,13 @@ function thoughtDate(ts: number): string {
   return `${date.getMonth() + 1}月${date.getDate()}日`
 }
 
-function PageContent({ thought, pageNumber }: { thought?: TaThoughtView; pageNumber: number }) {
+function PageContent({ thought, pageNumber }: { thought?: SpaceBookLeaf; pageNumber: number }) {
   return (
     <div className="thought-paper-content">
       <span className="thought-page-num">{pageNumber}</span>
       {thought ? (
         <>
-          <time>{thoughtDate(thought.createdAt)}</time>
+          <time>{thoughtDate(thought.date)}</time>
           <p>{thought.text}</p>
         </>
       ) : (
@@ -32,14 +38,20 @@ function PageContent({ thought, pageNumber }: { thought?: TaThoughtView; pageNum
 }
 
 export default function ThoughtBook({ onBack }: Props) {
+  const artwork = useSpaceObjectScene()
   const sessionId = getActiveSessionId()
-  const [opened, setOpened] = useState(false)
+  const inRoom = useSpaceDismiss(onBack)
+  const [sound, setSound] = useState(true)
   const [thoughts, setThoughts] = useState<TaThoughtView[]>(() => (
     sessionId ? settleTaThoughts(sessionId) : []
   ))
   const [spread, setSpread] = useState(0)
   const [turn, setTurn] = useState<TurnDirection>(null)
   const timerRef = useRef<number | null>(null)
+
+  useEffect(() => () => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+  }, [])
 
   useEffect(() => {
     if (!sessionId) return
@@ -52,23 +64,30 @@ export default function ThoughtBook({ onBack }: Props) {
     }
   }, [sessionId])
 
-  const pages = useMemo(() => [...thoughts].sort((a, b) => b.createdAt - a.createdAt), [thoughts])
+  const pages = useMemo(() => paginateSpaceThoughts([...thoughts].sort((a,b)=>b.createdAt-a.createdAt)), [thoughts])
   const maxSpread = Math.max(0, Math.ceil(pages.length / 2) - 1)
-  const currentIndex = spread * 2
-  const nextIndex = Math.min(maxSpread, spread + 1) * 2
-  const prevIndex = Math.max(0, spread - 1) * 2
+  const visibleSpread = Math.min(spread, maxSpread)
+  const currentIndex = visibleSpread * 2
+  const nextIndex = Math.min(maxSpread, visibleSpread + 1) * 2
+  const prevIndex = Math.max(0, visibleSpread - 1) * 2
 
   const beginTurn = (direction: Exclude<TurnDirection, null>) => {
     if (turn) return
-    if (direction === 'next' && spread >= maxSpread) return
-    if (direction === 'prev' && spread <= 0) return
+    if (direction === 'next' && visibleSpread >= maxSpread) return
+    if (direction === 'prev' && visibleSpread <= 0) return
     if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+    const destination = direction === 'next' ? Math.min(maxSpread, visibleSpread + 1) : Math.max(0, visibleSpread - 1)
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setSpread(destination)
+      return
+    }
+    if (sound) playSpacePaperSound()
     setTurn(direction)
     timerRef.current = window.setTimeout(() => {
-      setSpread((value) => direction === 'next' ? Math.min(maxSpread, value + 1) : Math.max(0, value - 1))
+      setSpread(destination)
       setTurn(null)
       timerRef.current = null
-    }, 440)
+    }, 650)
   }
 
   // 翻页时底层不能整幅提前跳到下一 spread：
@@ -78,31 +97,24 @@ export default function ThoughtBook({ onBack }: Props) {
   const baseRight = turn === 'next' ? nextIndex + 1 : currentIndex + 1
 
   return (
-    <div className="page space-object-page thought-book-page">
-      <header className="space-object-topbar">
-        <button type="button" onClick={onBack} className="space-object-back">‹ 返回</button>
+    <div className={`page space-object-page thought-book-page${artwork.ready ? ' is-native-object-focus' : ''}`}>
+      {!inRoom && <header className="space-object-topbar">
+        <button type="button" onClick={() => transitionSpaceScene(onBack)} className="space-object-back">‹ 返回</button>
         <div>
           <strong>思绪</strong>
           <span>THOUGHTS</span>
         </div>
         <span aria-hidden="true" />
-      </header>
+      </header>}
 
       <main className="thought-book-stage" aria-label="TA 的思绪">
-        <div className={`thought-book-shell${opened ? ' is-open' : ''}`}>
-          <button
-            type="button"
-            className="thought-book-cover"
-            onClick={() => setOpened(true)}
-            aria-label={opened ? '思绪书已打开' : '打开思绪书'}
-            disabled={opened}
-          >
-            <span className="thought-book-spine" aria-hidden="true" />
-            <span className="thought-book-cover-title">思绪</span>
-            <span className="thought-book-cover-sub">TA 自己想过的</span>
-          </button>
-
-          <div className="thought-book-pages" aria-hidden={!opened}>
+        {inRoom && <SpaceBookDeskCamera native={artwork.ready} />}
+        <div className="thought-book-shell is-open is-reading is-original-paper">
+          <SpaceBookSurface native={artwork.ready} left={pages[baseLeft]} right={pages[baseRight]}
+            front={turn === 'next' ? pages[currentIndex+1] : pages[currentIndex]}
+            back={turn === 'next' ? pages[nextIndex] : pages[prevIndex+1]} turn={turn} onArtworkError={artwork.fail} />
+          <div className="thought-book-paper-plane">
+          <div className="thought-book-pages space-book-accessibility" aria-live="polite">
             {pages.length === 0 ? (
               <div className="thought-book-empty">
                 <p>这里还没有长出新的思绪。</p>
@@ -116,48 +128,30 @@ export default function ThoughtBook({ onBack }: Props) {
                   <PageContent thought={pages[baseRight]} pageNumber={baseRight + 1} />
                 </div>
 
-                {turn === 'next' && (
-                  <div className="thought-book-turning-page is-next" aria-hidden="true">
-                    <div className="thought-book-face is-front">
-                      <PageContent thought={pages[currentIndex + 1]} pageNumber={currentIndex + 2} />
-                    </div>
-                    <div className="thought-book-face is-back">
-                      <PageContent thought={pages[nextIndex]} pageNumber={nextIndex + 1} />
-                    </div>
-                  </div>
-                )}
-
-                {turn === 'prev' && (
-                  <div className="thought-book-turning-page is-prev" aria-hidden="true">
-                    <div className="thought-book-face is-front">
-                      <PageContent thought={pages[currentIndex]} pageNumber={currentIndex + 1} />
-                    </div>
-                    <div className="thought-book-face is-back">
-                      <PageContent thought={pages[prevIndex + 1]} pageNumber={prevIndex + 2} />
-                    </div>
-                  </div>
-                )}
-
+              </>
+            )}
+          </div>
+          </div>
                 <button
                   type="button"
                   className="thought-turn-hit is-prev"
                   onClick={() => beginTurn('prev')}
-                  disabled={spread <= 0 || Boolean(turn)}
+                  disabled={ visibleSpread <= 0 || Boolean(turn)}
                   aria-label="上一页"
                 />
                 <button
                   type="button"
                   className="thought-turn-hit is-next"
                   onClick={() => beginTurn('next')}
-                  disabled={spread >= maxSpread || Boolean(turn)}
+                  disabled={ visibleSpread >= maxSpread || Boolean(turn)}
                   aria-label="下一页"
                 />
-              </>
-            )}
-          </div>
+          <button type="button" className="space-book-sound" aria-label={sound ? '关闭翻页声音' : '开启翻页声音'} aria-pressed={sound} onClick={() => setSound(!sound)}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3Z" />{sound ? <path d="M16 8a6 6 0 0 1 0 8" /> : <path d="m16 9 5 6m0-6-5 6" />}</svg>
+          </button>
         </div>
 
-        {opened && pages.length > 0 && (
+        {!inRoom && pages.length > 0 && (
           <p className="thought-book-hint">轻点书页边缘翻页</p>
         )}
       </main>

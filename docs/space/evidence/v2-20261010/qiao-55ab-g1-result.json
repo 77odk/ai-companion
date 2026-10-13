@@ -1,0 +1,60 @@
+{
+  "check": "G1_BROWSER_PREFLIGHT_NOT_VISUAL_SIGNOFF",
+  "sourceCommit": "55ab4d4c64a37cfc69ac1775d7f97cd538225439",
+  "servedBuildVersion": "55ab4d4c64a37cfc69ac1775d7f97cd538225439",
+  "interactiveLoginNoStateExport": false,
+  "existingLocalBrowserContext": false,
+  "viewportMode": "mobile-touch-context",
+  "manifestArtGateNotBypassed": true,
+  "screenshotsOptIn": true,
+  "results": [
+    {
+      "viewport": "390x844",
+      "status": "UNAPPROVED_LAYERED_REVIEW_SMOKE_ONLY",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "layered": true,
+      "unapprovedReviewBuild": true,
+      "sceneRatio": 0.5627962085308057,
+      "drawerPresent": true,
+      "drawerVisibleArea": 29339.359375,
+      "brokenBackplates": 0,
+      "brokenVisibleImages": 0,
+      "scenePresent": true,
+      "buildMatchesCheckout": true,
+      "errorCount": 0
+    },
+    {
+      "viewport": "390x690",
+      "status": "UNAPPROVED_LAYERED_REVIEW_SMOKE_ONLY",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "layered": true,
+      "unapprovedReviewBuild": true,
+      "sceneRatio": 0.5628086315362241,
+      "drawerPresent": true,
+      "drawerVisibleArea": 23890.6787109375,
+      "brokenBackplates": 0,
+      "brokenVisibleImages": 0,
+      "scenePresent": true,
+      "buildMatchesCheckout": true,
+      "errorCount": 0
+    },
+    {
+      "viewport": "430x932",
+      "status": "UNAPPROVED_LAYERED_REVIEW_SMOKE_ONLY",
+      "viewportWidth": 430,
+      "documentWidth": 430,
+      "layered": true,
+      "unapprovedReviewBuild": true,
+      "sceneRatio": 0.5627850053648069,
+      "drawerPresent": true,
+      "drawerVisibleArea": 35726.41845703125,
+      "brokenBackplates": 0,
+      "brokenVisibleImages": 0,
+      "scenePresent": true,
+      "buildMatchesCheckout": true,
+      "errorCount": 0
+    }
+  ]
+}

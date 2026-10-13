@@ -122,8 +122,8 @@
   margin-bottom: 0;
   border-bottom-color: var(--el-border-soft, var(--color-border));
   background: color-mix(in srgb, var(--el-surface-page, var(--color-bg)) 94%, transparent);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .ai-space-back {
@@ -873,7 +873,7 @@
 }
 
 .space-scene-hotspot.is-weekly-letter.is-opening .space-drawer-peek {
-  transform: translate3d(0, 48%, 0);
+  transform: translate3d(0, 42%, 0);
 }
 
 .space-scene-hotspot.is-weekly-letter.is-returning .space-drawer-peek {
@@ -881,7 +881,7 @@
 }
 
 @keyframes space-drawer-return {
-  from { transform: translate3d(0, 48%, 0); }
+  from { transform: translate3d(0, 42%, 0); }
   to { transform: translate3d(0, 0, 0); }
 }
 
@@ -919,8 +919,8 @@
   padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
   background: rgba(255, 248, 237, .91);
   border-bottom: 1px solid rgba(121, 83, 58, .1);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .space-object-topbar > div {
@@ -1656,8 +1656,8 @@
     inset 10px 0 18px rgba(255,255,255,.05),
     inset -8px -10px 24px rgba(75,40,29,.16),
     0 18px 44px rgba(44,25,19,.28);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .star-jar-glass::before {
@@ -2322,7 +2322,7 @@ html.eluvin-page-hidden .thought-book-page * {
 }
 
 .space-scene-hotspot.is-weekly-letter.is-opening .space-drawer-peek {
-  transform: translate3d(0, 48%, 0);
+  transform: translate3d(0, 42%, 0);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2345,7 +2345,7 @@ html.eluvin-page-hidden .thought-book-page * {
   }
 
   .space-scene-hotspot.is-weekly-letter.is-opening .space-drawer-peek {
-    transform: translate3d(0, 48%, 0);
+    transform: translate3d(0, 42%, 0);
   }
 }
 
@@ -2488,4 +2488,1272 @@ html.eluvin-page-hidden .thought-book-page * {
     animation: none !important;
     transform: none !important;
   }
+}
+
+
+/* ---- Mobile visual baseline · approved artwork is the coordinate plane --- */
+
+/* 941×1672 is the approved mobile composition. The scene and every hotspot
+   share this exact plane; no layer is allowed to stretch against the page. */
+.space-scene-shell,
+.space-scene-hotspots {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  width: min(100%, calc(100dvh * 941 / 1672));
+  height: auto;
+  aspect-ratio: 941 / 1672;
+  margin: 0;
+  transform: translateX(-50%);
+}
+
+.space-scene-shell {
+  overflow: hidden;
+}
+
+.space-scene-backplate {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  object-position: 50% 50%;
+}
+
+.space-scene-hotspots {
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Physical materials come from the approved artwork / cutout assets.
+   Live layers may show real data, but must not repaint another book/tablet/
+   headphone/drawer body on top of them. */
+.space-live-book {
+  background: transparent;
+  box-shadow: none;
+}
+
+.space-live-player {
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+
+.space-live-earphone-wire {
+  display: none;
+}
+
+.space-drawer-peek {
+  background: transparent;
+  box-shadow: none;
+}
+
+.space-drawer-interior {
+  display: none;
+}
+
+/* The old synthetic leaf tips were deliberately removed from AISpace.
+   Keep the approved photographed/illustrated plants untouched. */
+.space-plant-motion {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-scene-shell,
+  .space-scene-hotspots {
+    transform: translateX(-50%);
+  }
+}
+
+
+/* ---- Approved-art crops for physical objects --------------------------- */
+.space-scene-art-crop {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.space-scene-art-crop > img {
+  position: absolute;
+  display: block;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+/* Player hotspot = 54% / 52% / 37% / 15% of the approved scene.
+   Re-project that exact slice of the approved artwork instead of drawing a
+   second tablet shell. */
+.space-scene-art-crop.is-player-art > img {
+  width: 270.2703%;
+  height: 666.6667%;
+  left: -145.9459%;
+  top: -346.6667%;
+}
+
+/* Only the tablet SCREEN is replaced, because its song/progress are live user
+   data. The bezel, stand and cable remain the approved artwork. */
+.space-scene-hotspot.is-player .space-live-player {
+  z-index: 3;
+  left: 9%;
+  right: 8%;
+  top: 18%;
+  bottom: 17%;
+  background: rgba(28, 25, 24, .96);
+  border: 0;
+  box-shadow: none;
+}
+
+/* The drawer body comes from the same approved artwork. Its wrapper is the
+   moving part; CSS no longer paints a second wooden drawer. */
+.space-scene-hotspot.is-weekly-letter .space-drawer-peek {
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+}
+
+.space-scene-art-crop.is-drawer-art > img {
+  width: 200%;
+  height: 625%;
+  left: -98%;
+  top: -525%;
+}
+
+.space-scene-hotspot.is-lifting .space-scene-art-crop {
+  animation: space-object-lift .31s cubic-bezier(.2,.78,.2,1) both;
+}
+
+.ai-space-page.is-placing-player .space-scene-hotspot.is-player .space-scene-art-crop {
+  animation: space-object-place-back .42s cubic-bezier(.16,1,.3,1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-scene-hotspot.is-lifting .space-scene-art-crop,
+  .ai-space-page.is-placing-player .space-scene-hotspot.is-player .space-scene-art-crop {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+
+/* ---- Mobile object pixels: crop the approved scene, replace content only - */
+.space-scene-art-crop.is-photo-wall-art > img {
+  width: 153.8462%;
+  height: 232.5581%;
+  left: -47.6923%;
+  top: -20.9302%;
+}
+
+.space-scene-art-crop.is-jar-art > img {
+  width: 312.5%;
+  height: 500%;
+  left: -56.25%;
+  top: -235%;
+}
+
+.space-scene-art-crop.is-book-art > img {
+  width: 136.9863%;
+  height: 555.5556%;
+  left: -26.0274%;
+  top: -366.6667%;
+}
+
+/* No separate cork-board redraw. The approved wall/pins stay visible; these
+   eight neutral inner masks only erase baked demo-photo pixels so missing
+   user photos never masquerade as real content. */
+.space-scene-hotspot.is-photo-wall .space-live-photo-board {
+  z-index: 3;
+  inset: 0;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.space-photo-slot-mask {
+  position: absolute;
+  z-index: 0;
+  display: block;
+  border-radius: 1px;
+  background:
+    linear-gradient(145deg, rgba(255,248,236,.98), rgba(239,219,190,.98));
+  box-shadow: 0 2px 5px rgba(74,43,27,.08);
+  pointer-events: none;
+}
+
+.space-photo-slot-mask.is-slot-1 { left: 8%; top: 13%; width: 23%; height: 25%; transform: rotate(-5deg); }
+.space-photo-slot-mask.is-slot-2 { left: 37%; top: 14%; width: 23%; height: 26%; transform: rotate(3deg); }
+.space-photo-slot-mask.is-slot-3 { left: 68%; top: 1%; width: 24%; height: 30%; transform: rotate(-2deg); }
+.space-photo-slot-mask.is-slot-4 { left: 4%; top: 43%; width: 22%; height: 23%; transform: rotate(4deg); }
+.space-photo-slot-mask.is-slot-5 { left: 31%; top: 43%; width: 31%; height: 27%; transform: rotate(-4deg); }
+.space-photo-slot-mask.is-slot-6 { left: 62%; top: 53%; width: 27%; height: 27%; transform: rotate(5deg); }
+.space-photo-slot-mask.is-slot-7 { left: 5%; top: 66%; width: 23%; height: 23%; transform: rotate(-2deg); }
+.space-photo-slot-mask.is-slot-8 { left: 75%; top: 70%; width: 22%; height: 27%; transform: rotate(2deg); }
+
+.space-live-photo {
+  z-index: 2;
+}
+
+/* Keep the exact jar body from the artwork. This frosted inner pane erases the
+   baked demo stars; the live star field above it remains 1:1 with real memory. */
+.space-scene-hotspot.is-star-jar .space-live-jar {
+  z-index: 3;
+  inset: 20% 20% 12%;
+  border: 0;
+  border-radius: 22% 22% 27% 27% / 10% 10% 18% 18%;
+  background: rgba(244, 222, 190, .74);
+  box-shadow: inset 7px 0 12px rgba(255,255,255,.20);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Page interiors may change because they contain real TA thoughts; the book
+   cover/pages silhouette itself remains the approved artwork crop. */
+.space-scene-hotspot.is-thought-book .space-live-book {
+  z-index: 3;
+  inset: 24% 11% 12%;
+  background:
+    linear-gradient(90deg,
+      rgba(248,234,209,.97) 0 48.6%,
+      rgba(207,179,139,.91) 49.2% 50.8%,
+      rgba(248,234,209,.97) 51.4% 100%);
+  box-shadow: none;
+  clip-path: polygon(2% 17%, 43% 3%, 50% 12%, 97% 7%, 97% 86%, 55% 98%, 49% 87%, 2% 95%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-live-photo,
+  .space-live-jar,
+  .space-live-book {
+    animation: none !important;
+  }
+}
+
+
+/* ---- Mobile object continuity · expanded objects keep approved pixels ----- */
+/* The scene object itself is never redrawn on entry. The approved artwork is
+   enlarged as the physical shell; only the live content area is replaced. */
+.listen-device-wrap {
+  position: relative;
+  width: min(90vw, 430px);
+  aspect-ratio: 1.386 / 1;
+  margin: 0 auto;
+  padding-bottom: 0;
+}
+
+.listen-approved-device-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  clip-path: polygon(7% 10%, 91% 7%, 98% 18%, 94% 89%, 8% 93%, 2% 79%);
+  pointer-events: none;
+}
+
+.listen-approved-device-art > img {
+  position: absolute;
+  display: block;
+  width: 270.2703%;
+  height: 666.6667%;
+  left: -145.9459%;
+  top: -346.6667%;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.listen-tablet {
+  position: absolute;
+  z-index: 3;
+  left: 9%;
+  right: 8%;
+  top: 18%;
+  bottom: 17%;
+  padding: 0;
+  border-radius: 8%;
+  background: transparent;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.listen-tablet-screen {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: clamp(10px, 3.4vw, 18px) clamp(10px, 3.1vw, 17px);
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 22% 4%, rgba(236,166,100,.12), transparent 34%),
+    rgba(24, 21, 20, .965);
+}
+
+.listen-meta {
+  gap: 2px;
+}
+
+.listen-meta strong {
+  font-size: clamp(12px, 3.3vw, 15px);
+}
+
+.listen-progress-row {
+  margin-top: clamp(8px, 2.8vw, 14px);
+}
+
+.listen-transport {
+  margin-top: clamp(8px, 2.8vw, 14px);
+}
+
+.listen-volume-row {
+  margin-top: clamp(8px, 2.8vw, 13px);
+}
+
+.listen-actions {
+  margin-top: clamp(7px, 2.4vw, 12px);
+}
+
+.listen-connect {
+  margin-top: clamp(10px, 3vw, 16px);
+}
+
+.listen-tablet-port,
+.listen-stand,
+.listen-earphones,
+.listen-cover {
+  display: none !important;
+}
+
+.star-jar-vessel {
+  width: min(62vw, 276px);
+  aspect-ratio: .9;
+}
+
+.star-jar-approved-art {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  overflow: hidden;
+  clip-path: polygon(24% 0, 76% 0, 88% 13%, 94% 78%, 82% 100%, 18% 100%, 6% 78%, 12% 13%);
+  pointer-events: none;
+}
+
+.star-jar-approved-art > img {
+  position: absolute;
+  display: block;
+  width: 312.5%;
+  height: 500%;
+  left: -56.25%;
+  top: -235%;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.star-jar-lid {
+  display: none !important;
+}
+
+.star-jar-glass {
+  z-index: 3;
+  inset: 20% 20% 12%;
+  border: 0;
+  border-radius: 22% 22% 27% 27% / 10% 10% 18% 18%;
+  background: rgba(244, 222, 190, .74);
+  box-shadow: inset 7px 0 12px rgba(255,255,255,.20);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.star-jar-glass::before {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listen-approved-device-art,
+  .star-jar-approved-art {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+
+/* ---- True transparent cutouts · mobile scene ---------------------------- */
+.space-object-cutout {
+  position: absolute;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.space-scene-hotspot.is-thought-book .is-book-cutout {
+  transform: scale(1.015);
+}
+
+.space-scene-hotspot.is-player .is-player-cutout {
+  transform: scale(1.01);
+}
+
+.space-scene-hotspot.is-lifting > .space-object-cutout {
+  animation: space-object-lift .31s cubic-bezier(.2,.78,.2,1) both;
+}
+
+.ai-space-page.is-placing-book .space-scene-hotspot.is-thought-book > .space-object-cutout,
+.ai-space-page.is-placing-player .space-scene-hotspot.is-player > .space-object-cutout {
+  animation: space-object-place-back .42s cubic-bezier(.16,1,.3,1) both;
+}
+
+/* Expanded player is the exact same transparent physical asset. */
+.listen-approved-device-art {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  clip-path: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.listen-approved-device-art > img {
+  display: none;
+}
+
+/* The live screen sits inside the cutout; no second bezel/stand/cable is drawn. */
+.listen-tablet {
+  z-index: 3;
+  left: 9%;
+  right: 8%;
+  top: 18%;
+  bottom: 17%;
+}
+
+/* Expanded thought book keeps the approved paper/leather silhouette underneath
+   the existing real-thought pagination layer. */
+.thought-book-approved-art {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.thought-book-cover {
+  background: transparent;
+  box-shadow: none;
+}
+
+.thought-book-spine,
+.thought-book-cover-title,
+.thought-book-cover-sub {
+  opacity: 0;
+}
+
+.thought-book-pages {
+  z-index: 3;
+  inset: 13% 7% 12%;
+}
+
+.thought-book-page-side,
+.thought-book-face,
+.thought-book-empty {
+  background: rgba(255, 253, 246, .90);
+}
+
+.thought-book-shell::before,
+.thought-book-shell::after,
+.thought-book-pages::after {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-scene-hotspot.is-lifting > .space-object-cutout,
+  .ai-space-page.is-placing-book .space-scene-hotspot.is-thought-book > .space-object-cutout,
+  .ai-space-page.is-placing-player .space-scene-hotspot.is-player > .space-object-cutout {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+
+/* Real transparent jar asset: shape/material/light come from the approved cutout. */
+.space-scene-hotspot.is-star-jar .is-jar-cutout {
+  transform: scale(1.015);
+}
+
+.star-jar-approved-art {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  clip-path: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.star-jar-approved-art > img {
+  display: none;
+}
+
+/* ---- Mobile scene game feel: one composited object at a time ------------- */
+/* A held photo stops its ambient sway so it stays exactly under the finger.
+   Position updates bypass React until the pointer is released. */
+.space-live-photo.is-dragging,
+.space-live-photo.is-dragging:active {
+  z-index: 20;
+  animation: none !important;
+  cursor: grabbing;
+  will-change: left, top;
+  filter: drop-shadow(0 7px 8px rgba(53, 30, 18, .23));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-live-photo.is-dragging {
+    animation: none !important;
+    filter: none;
+  }
+}
+
+/* The physical drawer follows the finger directly, then eases to open/closed. */
+.space-scene-hotspot.is-weekly-letter {
+  touch-action: none;
+}
+.space-scene-hotspot.is-weekly-letter .space-drawer-peek.is-dragging {
+  transition: none !important;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-scene-hotspot.is-weekly-letter .space-drawer-peek.is-dragging {
+    transition: none !important;
+  }
+}
+
+/* Only the first 12 real memory stars float. The rest still render one-to-one
+   with saved memories, but do not create hundreds of simultaneous animations. */
+.space-live-star:nth-child(n + 13) {
+  animation: none;
+}
+
+/* ---- Game viewport cover: never stretch the 941×1672 approved plane ------- */
+/* Layout is calculated once per container resize; the art, live content and
+   hit areas always share the same cover dimensions and cropping. */
+.space-scene-shell,
+.space-scene-hotspots {
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  width: var(--space-scene-width, min(100%, calc(100dvh * 941 / 1672)));
+  height: var(--space-scene-height, auto);
+  aspect-ratio: 941 / 1672;
+  transform: translate(-50%, -50%);
+}
+.space-live-photo.is-dragging {
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .space-scene-shell,
+  .space-scene-hotspots {
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* ---- Optional 2D sprite scene: enabled only after ALL assets preload ----- */
+/* All positions are percentages of the same 941×1672 covered scene plane.
+   The old scene remains the exact fail-closed fallback. */
+.ai-space-page.is-layered .space-scene-hotspot.is-photo-wall {
+  /* Match the preloaded/fallback wall area: photos must not jump on load. */
+  left: 31%; top: 9%; width: 65%; height: 43%; z-index: 3;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-star-jar {
+  left: 19%; top: 47%; width: 27%; height: 19%; z-index: 5;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-thought-book {
+  left: 14%; top: 66%; width: 73%; height: 19%; z-index: 4;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-player {
+  left: 54%; top: 51.5%; width: 40%; height: 15%; z-index: 6;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter {
+  left: 48%; top: 82%; width: 55%; height: 17%; z-index: 7;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-photo-wall,
+.ai-space-page.is-layered .space-scene-hotspot.is-star-jar,
+.ai-space-page.is-layered .space-scene-hotspot.is-thought-book,
+.ai-space-page.is-layered .space-scene-hotspot.is-player {
+  clip-path: none;
+}
+.ai-space-page.is-layered .space-scene-hotspot .space-object-cutout {
+  transform: none;
+  object-fit: contain;
+  width: 100%;
+  height: 100%;
+}
+.ai-space-page.is-layered .space-live-photo-board {
+  inset: 0;
+  z-index: 3;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  pointer-events: none;
+}
+.ai-space-page.is-layered .space-live-photo {
+  width: 28%;
+}
+.ai-space-page.is-layered .space-live-jar {
+  inset: 19% 20% 12%;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  border: 0;
+}
+.ai-space-page.is-layered .space-live-star {
+  width: clamp(12px, 4vw, 19px);
+  background: transparent;
+  clip-path: none;
+  filter: none;
+  transform: translate(-50%, -50%) rotate(var(--live-star-r));
+}
+.ai-space-page.is-layered .space-live-star::before,
+.ai-space-page.is-layered .space-live-star::after { display: none; }
+.space-layer-origami {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.ai-space-page.is-layered .space-live-book {
+  inset: 23% 13% 12%;
+  background: transparent;
+  clip-path: none;
+  box-shadow: none;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-player .space-live-player {
+  left: 9%;
+  right: 8%;
+  top: 18%;
+  bottom: 17%;
+  border: 0;
+  box-shadow: none;
+  border-radius: 5%;
+  background: rgba(26, 24, 23, .97);
+}
+.space-layer-earphones {
+  position: absolute;
+  z-index: 7;
+  left: 69%;
+  top: 60%;
+  width: 24%;
+  height: 10%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter {
+  clip-path: none;
+}
+.ai-space-page.is-layered .space-drawer-peek {
+  inset: 0;
+  height: 100%;
+  background: transparent;
+}
+.space-layer-drawer-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter.is-opening .space-drawer-peek {
+  transform: translate3d(0, 42%, 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-space-page.is-layered .space-live-star {
+    animation: none !important;
+  }
+}
+
+/* Drawer is not present twice: the closed repaired cabinet is the only idle
+   layer. The movable letter-filled cutout emerges when opened / pulled. */
+.ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter .space-drawer-peek {
+  opacity: 0;
+  transform: translate3d(0, -12%, 0) scale(.94);
+  transition:
+    opacity 180ms ease,
+    transform 620ms cubic-bezier(.16, 1, .3, 1);
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter.is-opening .space-drawer-peek {
+  opacity: 1;
+  transform: translate3d(0, 42%, 0) scale(1);
+}
+.ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter.is-returning .space-drawer-peek {
+  animation: space-layer-drawer-return 620ms cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes space-layer-drawer-return {
+  from { opacity: 1; transform: translate3d(0, 42%, 0) scale(1); }
+  to { opacity: 0; transform: translate3d(0, -12%, 0) scale(.94); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-space-page.is-layered .space-scene-hotspot.is-weekly-letter .space-drawer-peek {
+    transition: none !important;
+  }
+}
+
+/* A distinct cavity state prevents the original wood drawer face from
+   remaining visible underneath the moving transparent PNG. The background
+   and movable sprite change together; idle keeps the clean closed scene. */
+.ai-space-page.is-layered .space-scene-backplate.is-drawer-cavity {
+  z-index: 1;
+  opacity: 0;
+  /* Only the lower-right physical drawer may change. The wall, sunlight,
+     plants, tabletop and the rest of the desk must remain the exact same
+     image pixels while opening; never crossfade an entire second room. */
+  clip-path: polygon(44% 77%, 100% 77%, 100% 100%, 44% 100%);
+  transition: none;
+}
+.ai-space-page.is-layered .space-scene-backplate.is-drawer-cavity.is-visible,
+.ai-space-page.is-layered.is-drawer-pulling .space-scene-backplate.is-drawer-cavity {
+  /* No separate 160ms cavity animation: both drag and automatic open/return
+     must use the same pixel progress as the active E/C canvas sprite. */
+  opacity: var(--space-drawer-cavity-opacity, 0);
+  transition: none;
+}
+.ai-space-page.is-layered .space-scene-ambient {
+  z-index: 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-space-page.is-layered .space-scene-backplate.is-drawer-cavity {
+    transition: none;
+  }
+}
+
+/* Photo thumbnails must not inherit the old board-shaped clip polygon:
+   this is especially important for edge photos in non-layered fallback. */
+.space-scene-hotspot.is-photo-wall {
+  clip-path: none;
+}
+
+/* G0-A wall-photo fidelity: the approved design uses individual pinned photos,
+   not the historic generated board strings. Leave all photo data/drag untouched. */
+.space-scene-hotspot.is-photo-wall .space-live-photo-board::before,
+.space-scene-hotspot.is-photo-wall .space-live-photo-board::after {
+  content: none;
+}
+
+
+/* G0-B: only the E/C drawer sprite is animated; the desk backplates do not
+   translate. ROI = (427,1309,514,363) on the 941x1672 shared world plane. */
+.ai-space-page.is-layered .space-v2-drawer-canvas {
+  position: absolute;
+  left: 45.3773%;
+  top: 78.2895%;
+  width: 54.6227%;
+  height: 21.7105%;
+  z-index: 3;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.ai-space-page.is-layered .space-drawer-peek {
+  /* Keep the original hit/gesture element, but avoid rendering an old
+     round-knob dresser underneath the E/C composition. */
+  visibility: hidden;
+}
+
+/* V2 candidate: original object silhouettes and contact shadows live in one
+   content-clean plate. Only real content and local material motion overlay it. */
+.ai-space-page.is-content-clean .space-object-cutout,
+.ai-space-page.is-content-clean .space-layer-earphones { display: none; }
+.space-foliage-canvas {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  user-select: none;
+}
+.space-scene-backplate.is-foliage-restored {
+  z-index: 0;
+  opacity: 0;
+}
+[data-space-foliage-ready="true"] .space-scene-backplate.is-foliage-restored {
+  opacity: 1;
+}
+.ai-space-page.is-content-clean .space-scene-hotspot.is-star-jar {
+  left: 20.5%; top: 47.5%; width: 27%; height: 18%;
+}
+.ai-space-page.is-content-clean .space-live-jar {
+  inset: 29% 10% 8%;
+  overflow: hidden;
+}
+.ai-space-page.is-content-clean .space-scene-hotspot.is-player {
+  left: 56%; top: 52.9%; width: 33%; height: 13.1%;
+}
+.ai-space-page.is-content-clean .space-scene-hotspot.is-player .space-live-player {
+  left: 12%; right: 10%; top: 15%; bottom: 18%;
+  transform: skew(-9deg, 4deg);
+  background: transparent;
+}
+.ai-space-page.is-content-clean .space-scene-hotspot.is-thought-book {
+  left: 23%; top: 65%; width: 77%; height: 16%;
+  clip-path: polygon(0 53%, 51% 0, 100% 26%, 100% 88%, 79% 100%, 0 59%);
+}
+.ai-space-page.is-content-clean .space-live-book {
+  inset: 22% 13% 20% 52%;
+  transform: skew(-22deg, 10deg);
+  padding: 5%;
+}
+.ai-space-page.is-content-clean .space-live-book::after { content: none; }
+.ai-space-page.is-content-clean .space-scene-backplate.is-drawer-cavity {
+  /* Cabinet opening only: never erase the book or the fixed desk apron. */
+  /* The painter remains the clock during an aborted drag's spring-back, too,
+     after the pointer's is-drawer-pulling class has already been removed. */
+  opacity: var(--space-drawer-cavity-opacity, 0);
+  clip-path: polygon(52.0723% 85.6459%, 100% 90.7919%, 100% 95.8732%, 52.0723% 89.8923%);
+}
+.ai-space-page.is-content-clean .space-live-photo:not(.is-dragging) {
+  rotate: var(--space-paper-wind, 0deg);
+  border-radius: 1px 1px 5% 2%;
+  box-shadow: 0 1px 2px rgba(55,34,23,.17), 1px 5px 8px rgba(55,34,23,.17);
+}
+.ai-space-page[data-space-environment="rain"] .space-scene-ambient {
+  opacity: .05;
+}
+.ai-space-page[data-space-motion="off"] *,
+.ai-space-page[data-space-motion="off"] *::before,
+.ai-space-page[data-space-motion="off"] *::after { animation-play-state: paused !important; }
+
+/* The existing real-content page turn keeps its two faces and page ordering.
+   Add a travelling crease/shadow rather than replacing any stored text. */
+.thought-book-turning-page { filter: drop-shadow(0 3px 5px rgba(91,62,38,.17)); }
+.thought-book-turning-page .thought-book-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent 5%, rgba(99,67,42,.04) 35%, rgba(255,255,255,.35) 52%, rgba(99,67,42,.12) 65%, transparent 94%);
+  opacity: 0;
+  animation: space-paper-crease 440ms ease-in-out both;
+}
+@keyframes space-paper-crease { 0%,100% { opacity: 0; } 45% { opacity: 1; } }
+.thought-book-shell { width: min(100%, 430px); }
+.thought-book-paper-plane { position: absolute; inset: 0; transform-style: preserve-3d; }
+/* Reading is a front-facing book, not typography stretched over the room's curved pages. */
+.thought-book-stage { position: relative; overflow: hidden; }
+.thought-book-room { position: absolute; inset: 0; pointer-events: none; }
+.thought-book-room .thought-book-approved-art { display: none; }
+.thought-book-page.is-native-object-focus .thought-book-stage {
+  flex: 1; min-height: 0; padding: 24px 12px; display: grid; place-items: center;
+}
+.thought-book-page.is-native-object-focus .thought-book-room {
+  inset: 0;
+}
+.thought-book-shell.is-reading,
+.thought-book-page.is-native-object-focus .thought-book-shell.is-reading {
+  position: relative; bottom: auto; width: min(100%, 520px);
+  height: min(330px, calc(100dvh - 180px)); min-height: 260px;
+  aspect-ratio: auto; border-radius: 4px 12px 12px 4px;
+  background: #9c6848; padding: 5px;
+  box-shadow: 0 24px 35px -8px rgba(59,32,16,.36), 0 3px 5px rgba(59,32,16,.28);
+  perspective: 1400px; animation: space-book-present 560ms cubic-bezier(.22,.7,.2,1) both;
+}
+.thought-book-shell.is-reading .thought-book-paper-plane { inset: 5px; transform: none; }
+.thought-book-shell.is-reading .thought-book-pages { inset: 0; transform: none; opacity: 1; }
+.thought-book-shell.is-reading .thought-book-page-side,
+.thought-book-shell.is-reading .thought-book-face {
+  background: linear-gradient(90deg, #f7e5c8, #fff4df 20%, #fae9ce 90%, #e7d1b0);
+  box-shadow: none; border-radius: 7px 2px 2px 7px;
+}
+.thought-book-shell.is-reading .is-right { background: linear-gradient(90deg, #dec4a1, #fff1d8 12%, #fae9ce 90%, #efdbbd); border-radius: 2px 7px 7px 2px; }
+.thought-book-shell.is-reading .thought-paper-content {
+  padding: 24px 16px 30px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+}
+.thought-book-shell.is-reading .thought-paper-content p { font-size: 14px; line-height: 1.9; margin-top: 14px; overflow-wrap: anywhere; }
+.thought-book-shell.is-reading .thought-paper-content time { font-size: 11px; }
+.thought-book-shell.is-reading .thought-book-empty { grid-column: 1 / -1; background: #faecd6; font-size: 14px; }
+.thought-book-page .thought-book-hint { position: absolute; bottom: 16px; left: 16px; right: 16px; color: #fff4df; text-shadow: 0 1px 3px #593822; font-size: 12px; }
+@keyframes space-book-present { from { opacity: 0; transform: translateY(18px) rotateX(18deg) scale(.94); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .thought-book-shell.is-reading { animation: none; } }
+.listen-player { max-width: 100%; min-width: 0; }
+.listen-device-wrap { width: min(100%, 430px); }
+.listen-tablet-screen { overflow-y: auto; overscroll-behavior: contain; }
+
+/* Candidate detail views keep native room pixels around the enlarged object.
+   These share the layered resource gate; ordinary builds stay on the existing
+   detail fallback until the complete artwork is approved. */
+.space-object-native-room {
+  position: absolute;
+  z-index: 0;
+  max-width: none;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+}
+.page.is-native-object-focus { padding: 0; gap: 0; overflow: hidden; }
+.is-native-object-focus .space-object-topbar { position: relative; z-index: 10; flex-shrink: 0; }
+.is-native-object-focus .star-jar-stage { padding: 0; flex: 1; height: auto; min-height: 0; }
+.is-native-object-focus .star-jar-vessel {
+  width: min(67vw, 276px);
+  aspect-ratio: 260 / 310;
+  opacity: 1;
+}
+.is-native-object-focus .star-jar-glass {
+  inset: 24% 8% 10%;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.is-native-object-focus .star-jar-empty,
+.is-native-object-focus .star-jar-hint {
+  z-index: 2;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(59, 34, 21, .55);
+  color: #fff5e9;
+}
+.is-native-object-focus .listen-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding-left: 12px;
+  padding-right: 12px;
+  grid-template-columns: minmax(0, 1fr);
+}
+.is-native-object-focus .listen-player {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+}
+.is-native-object-focus .listen-device-wrap {
+  width: min(100%, 430px);
+  aspect-ratio: 315 / 234;
+}
+.listen-tablet.is-native-plane {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  transform-origin: 0 0;
+}
+.is-native-plane .listen-tablet-screen {
+  padding: 12px 16px;
+  background: transparent;
+  border-radius: inherit;
+  scrollbar-width: thin;
+}
+.is-native-plane .listen-progress-row,
+.is-native-plane .listen-transport,
+.is-native-plane .listen-volume-row,
+.is-native-plane .listen-actions,
+.is-native-plane .listen-connect { margin-top: 10px; }
+.is-native-plane .listen-meta strong { font-size: 18px; }
+.is-native-plane .listen-meta span,
+.is-native-plane .listen-progress-row span,
+.is-native-plane .listen-volume-row span { font-size: 14px; }
+/* Projection shrinks this DOM plane: grow its controls before projecting so
+   the resulting touch targets stay usable on the real tilted screen. */
+.is-native-plane .listen-connect button { min-height: 64px; font-size: 20px; }
+.is-native-plane .listen-transport button,
+.is-native-plane .listen-actions button { min-height: 60px; font-size: 16px; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-space-page.is-content-clean .space-live-photo { rotate: 0deg; }
+  .thought-book-turning-page { filter: none; }
+  .thought-book-turning-page .thought-book-face::after { animation: none; }
+}
+
+/* Keep traditional controls legible on the physical player's screen. */
+.listen-transport button, .listen-actions button, .listen-connect button {
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.listen-transport svg, .listen-actions svg, .listen-connect svg { width: 26px; height: 26px; flex-shrink: 0; }
+.listen-volume-row svg { width: 18px; height: 18px; flex-shrink: 0; }
+.is-native-plane .listen-meta span { font-size: 12px; opacity: .55; }
+.is-native-plane .listen-play { border-radius: 50%; width: 60px; padding: 0; }
+.star-jar-star:has(.star-jar-origami) { width: clamp(28px, 8vw, 38px); height: auto; aspect-ratio: 1; background: none; filter: drop-shadow(1px 2px 1px rgba(64,36,18,.25)); }
+.star-jar-origami { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ai-space-page.is-content-clean .space-live-photo::before {
+  width: 8%; height: 17%; top: -9%; border-radius: 1px;
+  background: linear-gradient(90deg, #b6854f, #e4c28b 40%, #b98450 48%, #e3bf84 58%, #c49158);
+  box-shadow: 1px 2px 2px rgba(64,37,24,.3); rotate: -4deg;
+}
+.ai-space-page.is-content-clean .space-live-photo::after {
+  content: ''; position: absolute; left: 46%; top: -2%; width: 8%; height: 1px;
+  background: #7e725e; box-shadow: 0 1px 0 #e8d7b7; pointer-events: none;
+}
+
+/* A shared native image gives the camera a continuous route into each object. */
+.ai-space-page.is-layered .space-scene-backplate:not(.is-drawer-cavity):not(.is-foliage-restored),
+.space-object-native-room { view-transition-name: space-room-camera; }
+::view-transition-group(space-room-camera) { animation-duration: 620ms; animation-timing-function: cubic-bezier(.22,.65,.25,1); }
+::view-transition-old(space-room-camera), ::view-transition-new(space-room-camera) { mix-blend-mode: normal; }
+::view-transition-old(root) { animation-duration: 180ms; }
+::view-transition-new(root) { animation-duration: 360ms; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*) { animation-duration: 0s; }
+}
+
+.thought-book-room .thought-book-reading-room {
+  width: auto; height: 160%; left: 50%; top: -60%; transform: translateX(-50%);
+}
+
+.space-photo-fixings { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; filter: drop-shadow(1px 2px 1px rgba(77,44,23,.18)); }
+.thought-book-shell.is-reading .thought-book-face {
+  animation: space-reading-paper-curl 440ms ease-in-out both;
+}
+@keyframes space-reading-paper-curl {
+  0%, 100% { border-radius: 2px 8px 8px 2px; }
+  35%, 65% { border-radius: 2px 26px 38px 2px; }
+}
+@media (prefers-reduced-motion: reduce) { .thought-book-shell.is-reading .thought-book-face { animation: none; } }
+
+.ai-space-page.is-camera-moving .space-scene-shell,
+.ai-space-page.is-camera-moving .space-scene-hotspots {
+  transform-origin: var(--space-camera-origin);
+  animation: space-camera-approach 460ms cubic-bezier(.22,.65,.25,1) both;
+  pointer-events: none;
+}
+@keyframes space-camera-approach { to { transform: scale(1.42); } }
+
+/* One persistent room: inspection is a camera state, never a replacement page. */
+.ai-space-page .space-scene-shell,
+.ai-space-page .space-scene-hotspots {
+  transition: transform 720ms cubic-bezier(.2,.7,.2,1);
+  transform: translate(calc(-50% + var(--space-focus-x, 0px)), calc(-50% + var(--space-focus-y, 0px))) scale(var(--space-focus-scale, 1));
+}
+.ai-space-page.is-room-focused .space-scene-shell,
+.ai-space-page.is-room-focused .space-scene-hotspots { filter: none; }
+.ai-space-page.is-room-focused .space-scene-hotspots { pointer-events: none; }
+.ai-space-page.is-room-focused .space-scene-backplate,
+.space-focus-layer .space-object-native-room { view-transition-name: none; }
+.space-focus-layer { position: absolute; z-index: 60; inset: 0; display: grid; place-items: center; isolation: isolate; }
+.space-focus-dismiss { position: absolute; z-index: 0; inset: 0; border: 0; width: 100%; height: 100%; padding: 0; background: rgba(65,37,20,.06); -webkit-tap-highlight-color: transparent; }
+.space-focus-dismiss:focus-visible { outline: 2px solid #c69b6d; outline-offset: -5px; }
+.space-focus-layer > .page { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; padding: 0; margin: 0; background: transparent; pointer-events: none; overflow: hidden; }
+.space-focus-layer .star-jar-stage,
+.space-focus-layer .listen-stage,
+.space-focus-layer .thought-book-stage { position: absolute; inset: 0; min-height: 0; height: 100%; padding: 0 24px; display: grid; place-items: center; overflow: visible; }
+.space-focus-layer .star-jar-vessel,
+.space-focus-layer .listen-device-wrap,
+.space-focus-layer .thought-book-shell,
+.space-focus-layer .star-memory-paper { pointer-events: auto; }
+.space-focus-layer .star-jar-vessel { width: min(65vw,280px); clip-path: polygon(13% 6%,87% 6%,87% 19%,96% 32%,95% 81%,86% 97%,14% 97%,4% 81%,5% 32%,13% 19%); }
+.space-focus-layer .star-jar-empty,
+.space-focus-layer .star-jar-hint { position: absolute; bottom: 15%; left: 32px; right: 32px; text-align: center; pointer-events: none; }
+.space-focus-layer .star-memory-paper { left: 50%; top: 50%; width: min(82vw,440px); max-height: 70%; overflow-y: auto; transform: translate(-50%,-50%); }
+.space-focus-layer .star-memory-fold-back { display: none; }
+.space-focus-layer .listen-player { width: min(84vw,430px); }
+.space-focus-layer .listen-device-wrap { width: 100%; }
+.space-focus-layer .listen-device-wrap { clip-path: polygon(9% 0,100% 10%,100% 83%,91% 96%,0% 100%,0% 64%); }
+.space-focus-instruction { position: absolute; z-index: 3; bottom: 6%; left: 24px; right: 24px; color: #fff4de; font-size: 12px; text-align: center; text-shadow: 0 1px 5px #51321f; pointer-events: none; }
+.space-focus-layer > .weekly-page {
+  position: relative; inset: auto; width: min(calc(100% - 64px),460px); height: auto; max-height: 76%;
+  padding: 20px 16px; pointer-events: auto; overflow-y: auto; background: #f4e6cb;
+  border-radius: 3px 7px 5px 3px; box-shadow: 0 18px 45px rgba(55,30,15,.25);
+}
+.space-focus-layer .weekly-letter-header { margin: 0 0 16px; padding: 0; background: transparent; }
+.space-focus-layer .weekly-letter-sheet { margin: 0; padding: 22px 16px; box-shadow: none; }
+.space-focus-layer .weekly-letter-title { font-size: 26px; }
+.space-focus-layer .weekly-letter-body { font-size: 15px; }
+.space-focus-layer .weekly-letter-header .detail-title { margin: auto; }
+.photo-archive-page.is-room-focus { position: absolute; z-index: 65; inset: 0; width: 100%; max-width: none; height: 100%; margin: 0; transform: none; display: grid; align-content: center; justify-items: center; background: transparent; pointer-events: none; }
+.photo-archive-page.is-room-focus .space-focus-dismiss { pointer-events: auto; }
+.photo-archive-page.is-room-focus .photo-archive-topbar,
+.photo-archive-page.is-room-focus .photo-archive-scroll { position: relative; z-index: 1; width: min(calc(100% - 56px),460px); pointer-events: auto; }
+.photo-archive-page.is-room-focus .photo-archive-topbar { border: none; background: #ecdbc1; border-radius: 6px 6px 0 0; }
+.photo-archive-page.is-room-focus .photo-archive-scroll { flex: none; max-height: 66vh; overflow-y: auto; padding: 28px 26px; background: #ecd5b3; border-radius: 0 0 6px 6px; box-shadow: 0 18px 40px rgba(60,32,16,.25); }
+.space-photo-board-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; opacity: .8; }
+.photo-archive-page.is-room-focus .photo-archive-month,
+.photo-archive-page.is-room-focus .photo-archive-empty { position: relative; z-index: 1; }
+.space-scene-decor { position: absolute; z-index: 4; inset: 0; pointer-events: none; }
+.space-decor-item { position: absolute; display: block; border: 0; padding: 0; background: transparent; }
+.space-decor-item img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.space-decor-item.is-desk { filter: drop-shadow(2px 5px 2px rgba(72,39,19,.25)); }
+.space-decor-item.is-wall { filter: drop-shadow(1px 3px 2px rgba(72,39,19,.15)); }
+.space-lamp { pointer-events: auto; cursor: pointer; filter: drop-shadow(2px 4px 2px rgba(72,39,19,.24)); }
+.space-lamp-light { position: absolute; left: 32%; top: 40%; width: 32%; height: 31%; background: radial-gradient(ellipse,rgba(255,224,142,.22),transparent 68%); opacity: 0; transition: opacity 450ms ease; mix-blend-mode: screen; }
+.is-lamp-lit .space-lamp-light { opacity: 1; }
+.is-lamp-lit .space-lamp img { filter: brightness(1.13); }
+.ai-space-page.is-room-focused .space-lamp { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-space-page .space-scene-shell, .ai-space-page .space-scene-hotspots, .space-lamp-light { transition: none; }
+}
+
+/* The overhead surface is sampled from the E book itself, including its edges.
+   It supplies both paper texture and ink; DOM text remains available to readers. */
+.thought-book-shell.is-original-paper,
+.thought-book-page.is-native-object-focus .thought-book-shell.is-original-paper {
+  width: min(calc(100vw - 64px),520px); aspect-ratio: 640 / 480; height: auto; min-height: 0;
+  padding: 0; background: transparent; box-shadow: none; border-radius: 0; animation: none;
+}
+.thought-book-shell.is-original-paper::before,
+.thought-book-shell.is-original-paper::after { content: none; }
+.space-book-paper-canvas { display: block; width: 100%; height: 100%; filter: drop-shadow(5px 16px 9px rgba(65,34,16,.24)); }
+.space-book-accessibility { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); pointer-events: none; }
+.is-original-paper .thought-turn-hit { top: 4%; bottom: 4%; width: 16%; }
+.space-book-sound { position: absolute; z-index: 8; right: 14px; bottom: 13px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; color: #7b5a3c; background: rgba(248,229,192,.45); pointer-events: auto; }
+.space-focus-layer .is-original-paper { animation: space-original-book-overhead 700ms cubic-bezier(.2,.7,.2,1) both; transform-origin: 50% 50%; }
+@keyframes space-original-book-overhead { from { opacity: .35; transform: perspective(900px) rotateX(42deg) rotateZ(9deg) scale(.9); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .space-focus-layer .is-original-paper { animation: none; } }
+/* The closed room shows the physical book; readable ink belongs to its paper
+   surface once the overhead camera arrives, not a skewed caption on top. */
+.ai-space-page.is-content-clean .space-live-book { opacity: 0; }
+.space-focus-layer .thought-book-shell { pointer-events: auto; }
+.space-decor-item img.space-frame-botanical { position: absolute; left: 22%; top: 21%; width: 57%; height: 58%; object-fit: contain; }
+.space-decor-item img.space-tray-fold { position: absolute; width: 24%; height: 52%; top: 24%; object-fit: contain; }
+.space-tray-fold.is-coral { left: 25%; rotate: -12deg; }
+.space-tray-fold.is-pattern { left: 48%; rotate: 16deg; }
+.space-book-desk-camera { position: absolute; z-index: 0; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); pointer-events: none; }
+.is-original-paper { z-index: 1; }
+
+/* The camera must never scroll its clipped world when focusing a hotspot. */
+.ai-space-page { overflow: clip; }
+.space-focus-layer .thought-book-page.is-native-object-focus .thought-book-stage { padding: 0; }
+.ai-space-page .space-live-star { animation: none; }
+.star-jar-glass { overflow: hidden; }
+.star-jar-glass::after { content: ''; position: absolute; z-index: 2; inset: 0; pointer-events: none; border-radius: inherit; background: linear-gradient(100deg,rgba(255,245,219,.18),transparent 16% 82%,rgba(255,239,207,.12)),linear-gradient(0deg,rgba(129,86,43,.12),transparent 12%); }
+.space-live-jar-glint { z-index: 2; pointer-events: none; }
+.space-focus-layer .listen-device-wrap { clip-path: none; }
+.space-focus-layer .listen-device-wrap .space-object-native-room { clip-path: polygon(59.72% 52.63%,89.05% 54.25%,86.4% 65.01%,55.79% 63.4%); }
+.is-native-plane .listen-transport button,
+.is-native-plane .listen-actions button,
+.is-native-plane .listen-connect button { background: transparent; border: 0; box-shadow: none; color: #f3e8d8; }
+.is-native-plane .listen-transport .listen-play { border: 1px solid rgba(243,232,216,.65); border-radius: 50%; width: 60px; padding: 0; }
+.is-native-plane .listen-transport svg,
+.is-native-plane .listen-actions svg { width: 23px; height: 23px; }
+.is-native-plane .listen-meta { text-align: left; }
+.is-native-plane .listen-meta strong { font-weight: 500; letter-spacing: .02em; }
+.is-native-plane .listen-meta span { color: #c7baaa; font-size: 12px; }
+
+.space-focus-layer .star-jar-label { display: none; }
+.space-focus-layer .space-book-paper-canvas { filter: none; }
+
+/* #261 alignment repair: one visible body per object; content is independent.
+   Landmark bounds measured on the immutable 941×1672 content-clean plate.
+   The fallback has no baked bodies and renders only its aligned CSS shells. */
+.ai-space-page .space-scene-hotspot.is-photo-wall {
+  --object-x: 30.92455%; --object-y: 8.97129%; --object-w: 65.03613%; --object-h: 43.06220%;
+}
+.ai-space-page .space-scene-hotspot.is-star-jar {
+  --object-x: 21.998%; --object-y: 47.84689%; --object-w: 25.50478%; --object-h: 17.70335%;
+}
+.ai-space-page .space-scene-hotspot.is-thought-book {
+  --object-x: 23.16684%; --object-y: 65.43062%; --object-w: 75.982996%; --object-h: 18.18182%;
+}
+.ai-space-page .space-scene-hotspot.is-player {
+  --object-x: 56.11052%; --object-y: 53.22967%; --object-w: 32.30606%; --object-h: 12.67943%;
+}
+.ai-space-page .space-scene-hotspot.is-weekly-letter {
+  --object-x: 52.07226%; --object-y: 85.52632%; --object-w: 47.92774%; --object-h: 10.16746%;
+}
+.ai-space-page:is(.is-layered,:not(.is-layered)) .space-scene-hotspot:is(.is-photo-wall,.is-star-jar,.is-thought-book,.is-player,.is-weekly-letter) {
+  left: var(--object-x); top: var(--object-y); width: var(--object-w); height: var(--object-h);
+  padding: 0; border: 0; background: transparent; box-shadow: none; clip-path: none;
+}
+.ai-space-page .space-scene-hotspot .space-object-cutout { inset: 0; transform: none; object-fit: fill; }
+.ai-space-page:is(.is-layered,:not(.is-layered)) .space-scene-hotspot:is(.is-photo-wall,.is-star-jar,.is-thought-book,.is-player) > :is(.space-live-photo-board,.space-live-jar,.space-live-book,.space-live-player) {
+  inset: 0; display: none; background: transparent; border: 0; box-shadow: none;
+  transform: none; padding: 0; animation: none; filter: none;
+}
+.ai-space-page .space-live-photo-board::before,
+.ai-space-page .space-live-photo-board::after,
+.ai-space-page .space-live-jar::before,
+.ai-space-page .space-live-book::after { content: none; display: none; }
+/* Closed gates or failed art loading use one CSS body; never mix cutouts. */
+.ai-space-page:not(.is-layered) .space-object-cutout { display: none; }
+.ai-space-page:not(.is-layered) .space-scene-hotspot:is(.is-star-jar,.is-thought-book,.is-player) > :is(.space-live-jar,.space-live-book,.space-live-player) {
+  position: absolute; display: block; inset: 0; transform: none; clip-path: none; pointer-events: none;
+}
+.ai-space-page:not(.is-layered) .space-scene-hotspot.is-star-jar > .space-live-jar {
+  border-radius: 20% 20% 25% 25%; border: 1px solid rgba(255,246,229,.48);
+  background: linear-gradient(105deg,rgba(255,255,255,.15),rgba(122,76,54,.13));
+}
+.ai-space-page:not(.is-layered) .space-scene-hotspot.is-thought-book > .space-live-book {
+  border-radius: 3px; background: linear-gradient(90deg,#f5e7cd 49%,#b99064 50%,#f5e7cd 51%);
+}
+.ai-space-page:not(.is-layered) .space-scene-hotspot.is-player > .space-live-player {
+  border-radius: 6px; background: #262421;
+}
+.space-photo-content { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: visible; }
+.space-jar-content { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
+.space-jar-content .space-live-star-field { inset: 27% 10% 8%; }
+.space-jar-content .space-live-jar-glint { left: 11%; top: 12%; width: 8%; height: 56%; }
+.space-book-content {
+  position: absolute; inset: 22% 13% 20% 52%; z-index: 3; padding: 5%;
+  transform: skew(-22deg,10deg); overflow: hidden; pointer-events: none;
+  color: #6f4e34; font-size: clamp(5px,1.5vw,8px); line-height: 1.5;
+}
+.space-player-content {
+  position: absolute; inset: 15% 10% 18% 12%; z-index: 3; padding: 8% 9%;
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 5%;
+  transform: skew(-9deg,4deg); overflow: hidden; pointer-events: none;
+}
+.space-player-content strong { overflow: hidden; color: rgba(255,245,231,.88); font-size: clamp(5px,1.5vw,8px); font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
+/* The invisible drawer gesture element must still have its original full ROI. */
+.ai-space-page .space-scene-hotspot.is-weekly-letter .space-drawer-peek { inset: 0; width: 100%; height: 100%; }
+/* Sparse photo walls: hit bounds follow photos, while drag coordinates stay
+   relative to the original full placement frame and metadata is unchanged. */
+.ai-space-page:is(.is-layered,:not(.is-layered)) .space-scene-hotspot.is-photo-wall {
+  left: calc(var(--object-x) + var(--photo-hit-x, 0px));
+  top: calc(var(--object-y) + var(--photo-hit-y, 0px));
+  width: var(--photo-hit-w, var(--object-w)); height: var(--photo-hit-h, var(--object-h));
+}
+.space-photo-content {
+  left: calc(0px - var(--photo-hit-x, 0px)); top: calc(0px - var(--photo-hit-y, 0px));
+  right: auto; bottom: auto;
+  width: var(--photo-frame-width, 100%); height: var(--photo-frame-height, 100%);
+}
+/* The actual photo pins remain; a second board/string silhouette does not. */
+.ai-space-page .space-photo-fixings { display: none; }
+.ai-space-page .space-jar-content .space-live-star {
+  animation: space-live-star-float var(--live-star-t) ease-in-out var(--live-star-d) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-space-page .space-jar-content .space-live-star,
+  .ai-space-page .space-jar-content .space-live-jar-glint { animation: none; }
+}
+/* Fallback bodies retain the desk's perspective rather than floating rectangles. */
+.ai-space-page:not(.is-layered) .space-scene-hotspot.is-thought-book > .space-live-book {
+  clip-path: polygon(0 53%,51% 0,100% 26%,100% 88%,79% 100%,0 61%);
+  background: linear-gradient(110deg,#e9d4b3 0%,#f6e7cc 42%,#b99064 49.5%,#f7e9d0 51%,#e9d3af 100%);
+}
+.ai-space-page:not(.is-layered) .space-scene-hotspot.is-player > .space-live-player {
+  clip-path: polygon(13% 0,100% 8%,96% 100%,0 90%);
+  background: linear-gradient(105deg,#564b3e 0 6%,#282521 7% 92%,#6c5947 95%);
+}
+.ai-space-page:not(.is-layered) .space-scene-hotspot.is-star-jar > .space-live-jar::before {
+  content: ''; display: block; position: absolute; left: 16%; right: 16%; top: 0; height: 9%;
+  border-radius: 5px; background: linear-gradient(#c19764,#956f46); box-shadow: none;
 }

@@ -1,0 +1,431 @@
+[
+  {
+    "path": "public/space/layered/amber_flowers.png",
+    "dimensions": [
+      138,
+      207
+    ],
+    "bytes": 53871,
+    "sha256": "01a8ecac79dee851f4c2729c9a314750839a63886319ef1680fffac56ecee90c",
+    "use": "琥珀花瓶不在原稿；不改构图添物。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/c_drawer_depth_hq_v2.webp",
+    "dimensions": [
+      506,
+      210
+    ],
+    "bytes": 30262,
+    "sha256": "a06e8d13417c7e4abe23f673fd3e3aee9fc4c2a97a28bfe142ed4b2d46935cc2",
+    "use": "历史包含多余柜体的 C 层，由纯内层 v3 取代。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/c_drawer_inner_hq_v3.webp",
+    "dimensions": [
+      506,
+      210
+    ],
+    "bytes": 30406,
+    "sha256": "ffc1aefc2feefeca797bc656c08fd05fcfe78430ab55de51d0676f7fb2aac5d3",
+    "use": "沿用既有纯 C 内层；仅装饰信封，实际书信入口/内容仍来自现有业务。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/c_drawer_inner_trial_v1.webp",
+    "dimensions": [
+      506,
+      210
+    ],
+    "bytes": 4234,
+    "sha256": "70b0e35dc3971123d2c675d30bfc1cccbbf7dfdcbb4687e47f5e69cae73d67b5",
+    "use": "历史低质量试验，不启用。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/cat_ornament.png",
+    "dimensions": [
+      247,
+      154
+    ],
+    "bytes": 62698,
+    "sha256": "ba0eef9077b66195f4bd1185d7f8754b22501cc67b86d7e1356ae0110cabc192",
+    "use": "不在原稿，避免堆满桌面。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/ceramic_mug.png",
+    "dimensions": [
+      169,
+      156
+    ],
+    "bytes": 44631,
+    "sha256": "3b0e6b349a17d01f899721b34d2d716cc0cba3422f4c005a397c20ce1919e2f3",
+    "use": "带把手杯与原笔筒不同；原位杯/笔筒保留。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/ceramic_tray.png",
+    "dimensions": [
+      261,
+      137
+    ],
+    "bytes": 60876,
+    "sha256": "40e47ef6f5ce4bdd51e73bf189e80ae46e33a75b36a2b00a7a7b8cdf4615625a",
+    "use": "不在原稿，避免堆满桌面。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/drinking_glass.png",
+    "dimensions": [
+      135,
+      216
+    ],
+    "bytes": 62400,
+    "sha256": "02d6b7852136df49e2183708a0e5f48d3b7e01e8ccee6b0071f7fce84941c1b7",
+    "use": "不在原稿，避免堆满桌面。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/e_drawer_hq_v2.webp",
+    "dimensions": [
+      481,
+      243
+    ],
+    "bytes": 16790,
+    "sha256": "2f29b37f7e276f5abd79ba8715a905a66801d2716a19f4d7701ac2b93e721ecd",
+    "use": "沿用既有 E 原木前脸；刚性滑动，不伸长木板。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/e_drawer_pixel_trial_v1.webp",
+    "dimensions": [
+      481,
+      243
+    ],
+    "bytes": 3378,
+    "sha256": "235114f00bdb7879f72c49615c89915b979fabcbd2fac3c1b7155bcf47a85a25",
+    "use": "历史低质量试验，不启用。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/foliage-alpha-v2.webp",
+    "dimensions": [
+      941,
+      1672
+    ],
+    "bytes": 126364,
+    "sha256": "31cc434c1e54560a017b24e5d7999dafa9a31bbc049c920128f24a49cb63f518",
+    "use": "只使用 alpha；叶片 RGB 仍采样自本轮完整候选。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/glass_memory_jar.png",
+    "dimensions": [
+      212,
+      305
+    ],
+    "bytes": 119255,
+    "sha256": "44ae843f68dc5693039b94e7e2ce7217e1eb2e72c4977e3c1fc014cdec26e722",
+    "use": "有吊牌，与参考不符；主场景使用清理后的原位空罐。仍保留历史兼容清单，不显示此候选。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/hanging_plant.png",
+    "dimensions": [
+      224,
+      488
+    ],
+    "bytes": 207451,
+    "sha256": "5837650ab4933ee107967ca686c0c2e87eb44a740b066f287c37d2f6840993a5",
+    "use": "独立造型/边界与原位不一致；改用原位 RGB 和新 alpha。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/knit_blanket.png",
+    "dimensions": [
+      272,
+      191
+    ],
+    "bytes": 110881,
+    "sha256": "6eae73a1715afc5b561bff39de31de38ef3d6138adee5d1128d5bc442dc04d31",
+    "use": "原位毯子已在底图，重复叠加会重影。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/leafy_vine.png",
+    "dimensions": [
+      107,
+      207
+    ],
+    "bytes": 42850,
+    "sha256": "3ea4c039f089d41014dc322340792d451ec192e9826aed36492cc060c76a94fb",
+    "use": "额外藤蔓会改变原稿构图。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/open_book.png",
+    "dimensions": [
+      480,
+      223
+    ],
+    "bytes": 159696,
+    "sha256": "4653a957864b50fcf6e493b052aa41e3a1ab8891e5a9f3869f16f9aaf55dcfc3",
+    "use": "旧 cutout 解码失败时的安全降级；未叠加到本轮已带书的主底图。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/open_drawer.png",
+    "dimensions": [
+      359,
+      249
+    ],
+    "bytes": 140609,
+    "sha256": "b87d71e8d0882542981c17e2a9e38d78eb374e9b361eabf02022f0b85b9a3619",
+    "use": "圆形把手及额外柜壳不符，禁止显示；文件未覆盖/删除。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/origami_blue.png",
+    "dimensions": [
+      113,
+      112
+    ],
+    "bytes": 21105,
+    "sha256": "944df9eb9ec99ff755dd7806e418656d2843e02635fbc09cbe418728ece23d11",
+    "use": "仅有真实记忆时展示。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/origami_coral.png",
+    "dimensions": [
+      81,
+      105
+    ],
+    "bytes": 15300,
+    "sha256": "7abfb0dae22389ab4f0864f14f50792c1b947424c3a767add3069fca6c8e6ed3",
+    "use": "保留历史色彩候选，本轮继续既有四种真实记忆配色。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/origami_pink.png",
+    "dimensions": [
+      112,
+      111
+    ],
+    "bytes": 19630,
+    "sha256": "69404ffef391394be0a5dabfe487e78cbb5f196e18ef6cce01f94bd9ba44d674",
+    "use": "仅有真实记忆时展示。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/origami_purple.png",
+    "dimensions": [
+      114,
+      112
+    ],
+    "bytes": 20356,
+    "sha256": "03449b43f9ff32e95b31628bbf65fa79885dc632f208882f5ab245679ef39f15",
+    "use": "仅有真实记忆时展示。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/origami_red_pattern.png",
+    "dimensions": [
+      90,
+      109
+    ],
+    "bytes": 18813,
+    "sha256": "6f3384b78034660f69a4f3352a6a947d34cdbd8cebbaf064f92d87f893c3f2c1",
+    "use": "图案与参考的素色纸星不同。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/origami_yellow.png",
+    "dimensions": [
+      116,
+      112
+    ],
+    "bytes": 20826,
+    "sha256": "26a41fe0270cf52843b96d99ec28f32cb63d1b3507aca508834f8dbe893da7de",
+    "use": "仅有真实记忆时展示。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/photo_wall_board.png",
+    "dimensions": [
+      373,
+      358
+    ],
+    "bytes": 266820,
+    "sha256": "66df7f7abadc51cbea7400929f545d42615e084bbc4bb561896384fd2b8f1a96",
+    "use": "木框/绳夹设计与直接钉墙的参考不符；真实照片仍由原照片墙数据及 DOM 单独展示。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/right_potted_plant.png",
+    "dimensions": [
+      299,
+      371
+    ],
+    "bytes": 198605,
+    "sha256": "df4944a253029efc910d7c137dad51ef9c7e2a61f008b87637203dbfae0ba738",
+    "use": "造型与原位不一致，重复叠加会形成双盆栽。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/room-cavity.webp",
+    "dimensions": [
+      1170,
+      2080
+    ],
+    "bytes": 138552,
+    "sha256": "eb4426d4d032ab811837576d117564cb98c14b19b80e85ef79005a4decf4d74e",
+    "use": "历史空桌修复，不适用于本轮保留书/罐/播放器的全场景。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/room-closed.webp",
+    "dimensions": [
+      1170,
+      2080
+    ],
+    "bytes": 153958,
+    "sha256": "c6e70f258f37b10933cfc36b2f69cc8f0c27a1ccd492254044449460053eeb3d",
+    "use": "保持现有门禁关闭时的兼容主底图。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/room-content-cavity-v2.webp",
+    "dimensions": [
+      941,
+      1672
+    ],
+    "bytes": 193856,
+    "sha256": "d1a023eddf14826f55074dbed28d9cff35738eccb8ce465ba1b19c02a65b1a8a",
+    "use": "仅抽屉空腔多边形参与合成，不交叉淡入全房间。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/room-content-clean-v2.webp",
+    "dimensions": [
+      941,
+      1672
+    ],
+    "bytes": 180024,
+    "sha256": "3506166ecad192b0fc15e67dfc8317cd66fcd5b97fbe147c05c0f9b6c74ef814",
+    "use": "本轮完整静态候选；罐/书/播放器/耳机/杯具/花瓶/椅子/毯子与原位接触阴影均留在同一画面；无示例内容。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/room-foliage-restored-v2.webp",
+    "dimensions": [
+      941,
+      1672
+    ],
+    "bytes": 153446,
+    "sha256": "7e17a728ab10bcf608876bda19a29b9f88d10fb94220ebe0b8b9bee393ba1802",
+    "use": "两处局部植物 Canvas 的无遮挡墙面；其余画面不采用。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/stacked_books.png",
+    "dimensions": [
+      221,
+      224
+    ],
+    "bytes": 75432,
+    "sha256": "dfcde8d3c3566732e85ff798731543b16eb92e91c4f643a9b77ffe4b1a4b8e70",
+    "use": "直立书籍候选与原稿左侧平放书不同。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/stationery_holder.png",
+    "dimensions": [
+      135,
+      227
+    ],
+    "bytes": 62988,
+    "sha256": "606b02cb9446c0c9f0bbde88079ef04879583899c22b76f91a17f8b83a32d0c3",
+    "use": "玻璃笔筒与原稿白色容器不同。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/table_lamp.png",
+    "dimensions": [
+      173,
+      200
+    ],
+    "bytes": 43674,
+    "sha256": "8d5c74c2e24e38e70c1a6e1e423d0326ac6832e39f5ae11c521513474d5440d1",
+    "use": "原稿无台灯，不自行新增。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/tablet_player.png",
+    "dimensions": [
+      337,
+      222
+    ],
+    "bytes": 82979,
+    "sha256": "392e2d5faec4433579bf06240d1d882a147f6b375996c376c882ded8f3d06d27",
+    "use": "旧 cutout 解码失败时的安全降级；未叠加到本轮已带播放器的主底图。",
+    "adopted": true
+  },
+  {
+    "path": "public/space/layered/tied_letters.png",
+    "dimensions": [
+      262,
+      160
+    ],
+    "bytes": 84871,
+    "sha256": "5f9468077afc529a712fd6637d014453fee16e2fcd8967ab9026bf5a225d1967",
+    "use": "现有 E/C 抽屉已带装饰信封，不另外叠一捆信。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/white_flowers.png",
+    "dimensions": [
+      146,
+      204
+    ],
+    "bytes": 55980,
+    "sha256": "a31f267ecc0edd4086933c6ac2f8056e69561ceef1f9feab9e12ba327203b3bf",
+    "use": "原位白花/花瓶已保留；独立候选摆位不同。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/wired_earphones.png",
+    "dimensions": [
+      294,
+      192
+    ],
+    "bytes": 96352,
+    "sha256": "74c6ff6497cae00ba0619f212c0702ed21dbc616c8c36247a162558071476a9f",
+    "use": "源画已有正确连线和耳机；避免第二套线材。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/wood_picture_frame.png",
+    "dimensions": [
+      194,
+      223
+    ],
+    "bytes": 60317,
+    "sha256": "94a47ab038c6ab2f1d8a410ffa703927e33b0ff967b2f88d79a5427b140c7665",
+    "use": "桌上画框不在原稿。",
+    "adopted": false
+  },
+  {
+    "path": "public/space/layered/woven_chair.png",
+    "dimensions": [
+      224,
+      237
+    ],
+    "bytes": 99074,
+    "sha256": "4b267b87b1f3241de5eab163f6d0902726aa8d49fc25d43c2a8633c1211182be",
+    "use": "原位椅子已在底图，重复叠加会重影。",
+    "adopted": false
+  }
+]

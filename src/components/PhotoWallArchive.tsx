@@ -4,6 +4,7 @@ import { assignDayRows, boardHeightForPhotos, groupPhotosByMonth, layoutForPhoto
 import '../styles/photoWallArchive.css'
 
 interface Props {
+  spaceMode?: boolean
   photos: PhotoMeta[]
   uploading: number
   error: string | null
@@ -78,7 +79,7 @@ function fmtMD(ts: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
-export default function PhotoWallArchive({ photos, uploading, error, photoSrc, onPhotoLoadError, onPhotoLoadSuccess, onAdd, onDelete, onOpenChange }: Props) {
+export default function PhotoWallArchive({ spaceMode = false, photos, uploading, error, photoSrc, onPhotoLoadError, onPhotoLoadSuccess, onAdd, onDelete, onOpenChange }: Props) {
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -202,11 +203,12 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
       </section>
 
       {open && (
-        <div className="photo-archive-page" role="dialog" aria-label="照片墙">
+        <div className={`photo-archive-page${spaceMode ? ' is-room-focus' : ''}`} role="dialog" aria-label="照片墙">
+          {spaceMode && <button type="button" className="space-focus-dismiss" aria-label="返回上一层" onClick={() => setArchiveOpen(false)} />}
           <div className="photo-archive-topbar">
-            <button type="button" className="photo-archive-back" onClick={() => setArchiveOpen(false)}>
+            {!spaceMode && <button type="button" className="photo-archive-back" onClick={() => setArchiveOpen(false)}>
               ‹ 返回
-            </button>
+            </button>}
             <div>
               <strong>照片墙</strong>
               <span>PHOTO WALL</span>
@@ -217,6 +219,7 @@ export default function PhotoWallArchive({ photos, uploading, error, photoSrc, o
           </div>
 
           <div className="photo-archive-scroll">
+            {spaceMode && <img className="space-photo-board-art" src="/space/layered/photo_wall_board.png" alt="" draggable={false} />}
             {groups.length === 0 ? (
               <button type="button" className="photo-archive-empty is-page" onClick={onAdd}>
                 <span className="photo-archive-empty-plus" aria-hidden="true">＋</span>

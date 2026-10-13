@@ -348,6 +348,7 @@ if (process.env.CI === 'true') {
         patterns: [
           { urlPattern: 'https://api.eluvin.space/*', requestStage: 'Request' },
           { urlPattern: 'http://127.0.0.1:' + vitePort + '/version.json', requestStage: 'Request' },
+          { urlPattern: 'http://127.0.0.1:' + vitePort + '/space/layered/manifest.json', requestStage: 'Request' },
         ],
       }),
       cdp.send('Emulation.setDeviceMetricsOverride', {
@@ -505,6 +506,14 @@ if (process.env.CI === 'true') {
       if (url.origin === 'http://127.0.0.1:' + vitePort && url.pathname === '/version.json') {
         const currentSha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).stdout.trim()
         await fulfillJson(requestId, { version: currentSha })
+        return
+      }
+      // This legacy main-path fixture checks the fallback archive's back button.
+      // Keep that input explicit now that Space V2 art is owner-approved.
+      // Approved art/navigation is exercised by space_v2_alignment_review.
+      if (url.origin === 'http://127.0.0.1:' + vitePort && url.pathname === '/space/layered/manifest.json') {
+        const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'public/space/layered/manifest.json'), 'utf8'))
+        await fulfillJson(requestId, { ...manifest, enabled: false, artApproved: false })
         return
       }
       if (url.origin !== 'https://api.eluvin.space') {

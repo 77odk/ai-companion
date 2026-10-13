@@ -1,0 +1,24 @@
+{
+  "version": "2026-10-09",
+  "enabled": true,
+  "description": "Project-approved content-clean V2 artwork. Both gates require successful asset preload; resource failures retain the original fallback.",
+  "assets": [
+    "room-content-clean-v2.webp",
+    "room-foliage-restored-v2.webp",
+    "foliage-alpha-v2.webp",
+    "room-content-cavity-v2.webp",
+    "room-closed.webp",
+    "room-cavity.webp",
+    "glass_memory_jar.png",
+    "open_book.png",
+    "tablet_player.png",
+    "wired_earphones.png",
+    "origami_pink.png",
+    "origami_blue.png",
+    "origami_yellow.png",
+    "origami_purple.png",
+    "e_drawer_hq_v2.webp",
+    "c_drawer_inner_hq_v3.webp"
+  ],
+  "artApproved": true
+}

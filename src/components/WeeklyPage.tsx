@@ -1,3 +1,4 @@
+import { useSpaceDismiss } from './SpaceFocusLayer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   SLOW_LETTER_REPLY_SYSTEM_PROMPT,
@@ -158,6 +159,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const [reviews, setReviews] = useState<LetterReview[]>(() => getWeeklyReviews(sid) as LetterReview[])
   const [view, setView] = useState<'list' | 'detail'>('list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const inRoom = useSpaceDismiss(() => { if (view === 'detail') { setView('list'); setSelectedId(null) } else onBack() })
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
@@ -514,10 +516,10 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
   const renderList = () => (
     <div className="page weekly-page weekly-letter-page">
       <div className="detail-header weekly-letter-header">
-        <button type="button" className="detail-back detail-back-text" onClick={onBack} aria-label="返回">
+        {!inRoom && <button type="button" className="detail-back detail-back-text" onClick={onBack} aria-label="返回">
           <BackIcon />
           返回
-        </button>
+        </button>}
         <h2 className="detail-title">一周情书</h2>
         <button
           type="button"
@@ -610,7 +612,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
     return (
       <div className="page weekly-page weekly-letter-page">
         <div className="detail-header weekly-letter-header">
-          <button
+          {!inRoom && <button
             type="button"
             className="detail-back detail-back-text"
             onClick={() => {
@@ -621,7 +623,7 @@ export default function WeeklyPage({ onBack, onGoSettings }: Props) {
           >
             <BackIcon />
             返回
-          </button>
+          </button>}
           <h2 className="detail-title">一周情书</h2>
           <span className="detail-spacer" aria-hidden="true" />
         </div>

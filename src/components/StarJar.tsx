@@ -1,6 +1,11 @@
+import { useSpaceDismiss } from './SpaceFocusLayer'
+import { transitionSpaceScene } from '../lib/spaceSceneTransition'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadMemory, MEMORY_UPDATED_EVENT, type MemoryItem } from '../lib/memory'
 import { getActiveSessionId, getMemoriesCache } from '../lib/sessionStore'
+import SpaceObjectScene from './SpaceObjectScene'
+import { useSpaceObjectScene } from '../lib/useSpaceObjectScene'
+import { SPACE_JAR_FRAME } from '../lib/spaceObjectFocus'
 
 interface Props {
   onBack: () => void
@@ -36,6 +41,7 @@ function memoryPool(sessionId: string): MemoryItem[] {
 }
 
 export default function StarJar({ onBack }: Props) {
+  const artwork = useSpaceObjectScene()
   const sessionId = getActiveSessionId()
   const [version, setVersion] = useState(0)
   const memories = useMemo(() => memoryPool(sessionId), [sessionId, version])
@@ -77,7 +83,7 @@ export default function StarJar({ onBack }: Props) {
   }
 
   const foldBack = () => {
-    if (phase !== 'detail') return
+    if (phase === 'jar') return
     clearTimers()
     setPhase('folding')
     timers.current.push(window.setTimeout(() => {
@@ -86,16 +92,18 @@ export default function StarJar({ onBack }: Props) {
     }, 460))
   }
 
+  const inRoom = useSpaceDismiss(phase === 'jar' ? onBack : foldBack)
+
   return (
-    <div className="page star-jar-page">
-      <header className="space-object-topbar star-jar-topbar">
-        <button type="button" onClick={onBack} className="space-object-back">‹ 返回</button>
+    <div className={`page star-jar-page${artwork.ready ? ' is-native-object-focus' : ''}`}>
+      {!inRoom && <header className="space-object-topbar star-jar-topbar">
+        <button type="button" onClick={() => transitionSpaceScene(onBack)} className="space-object-back">‹ 返回</button>
         <div>
           <strong>星星罐</strong>
           <span>REMEMBERED</span>
         </div>
         <span aria-hidden="true" />
-      </header>
+      </header>}
 
       <main className={`star-jar-stage is-${phase}`}>
         <button
@@ -105,26 +113,28 @@ export default function StarJar({ onBack }: Props) {
           disabled={numberedMemories.length === 0 || phase !== 'jar'}
           aria-label={numberedMemories.length > 0 ? '随机抽一颗记忆星星' : '还没有可以抽取的记忆'}
         >
-          <span className="star-jar-lid" aria-hidden="true" />
+          {artwork.ready ? <SpaceObjectScene frame={SPACE_JAR_FRAME} onError={artwork.fail} /> : <img
+            className="star-jar-approved-art"
+            src="/space/cutouts/memory-jar.png"
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />}
           <span className="star-jar-glass" aria-hidden="true">
             {Array.from({ length: visibleStarCount }, (_, index) => (
               <span
                 key={numberedMemories[index]?.item.id ?? index}
-                className={`star-jar-star${index < Math.min(9, visibleStarCount) ? ' is-moving' : ''}`}
+                className="star-jar-star"
                 style={{
-                  '--star-x': `${8 + ((index * 37) % 83)}%`,
-                  '--star-y': `${12 + ((index * 53) % 76)}%`,
+                  '--star-x': `${50 + (index % 6 - (Math.min(visibleStarCount, 6) - 1) / 2) * 11 + ((index * 7) % 3 - 1)}%`,
+                  '--star-y': `${87 - Math.floor(index / 6) * Math.min(9, 50 / Math.max(1, Math.ceil(visibleStarCount / 6) - 1)) + (index % 3) * .8}%`,
                   '--star-r': `${-18 + ((index * 29) % 37)}deg`,
                   '--star-d': `${(index % 7) * 0.17}s`,
                   '--star-hue': `${(index * 47) % 360}`,
                 } as React.CSSProperties}
                 aria-hidden="true"
               >
-                <i className="fold is-a" />
-                <i className="fold is-b" />
-                <i className="fold is-c" />
-                <i className="fold is-d" />
-                <i className="fold is-e" />
+                {artwork.ready ? <img className="star-jar-origami" src={`/space/layered/${['origami_pink.png', 'origami_blue.png', 'origami_yellow.png', 'origami_purple.png'][index % 4]}`} alt="" draggable={false} /> : <><i className="fold is-a" /><i className="fold is-b" /><i className="fold is-c" /><i className="fold is-d" /><i className="fold is-e" /></>}
               </span>
             ))}
           </span>
