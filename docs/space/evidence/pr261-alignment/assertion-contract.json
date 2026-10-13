@@ -1,5 +1,9 @@
 [
   {
+    "file": "scripts/test_p5f_chat_visual.mjs",
+    "unchangedAssertionCalls": 62
+  },
+  {
     "file": "scripts/test_space_art_review_build.mjs",
     "unchangedAssertionCalls": 27
   },

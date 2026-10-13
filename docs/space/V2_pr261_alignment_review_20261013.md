@@ -13,7 +13,7 @@
 - `AISpace.tsx`：四个替身外壳与原内容层分开；照片热点跟随实际照片范围，原摆放坐标系、事件回调与持久化逻辑不变。
 - `space.css`：校准底图中物件边界；美术开启时外壳 `display:none` 且背景透明、边框/阴影为零；兜底只画 CSS 外壳，抠图隐藏，避免第二套外形。保留透视轮廓。
 - `manifest.json`：`enabled=true`、`artApproved=true`，仍须全部必需资产成功预加载才启用。
-- 7 个既有测试：将历史未批准美术的输入改成显式关闭夹具，原 140 个 assert 调用逐字未变（见 assertion-contract.json）；`test_space_scene_layer` 仍先核对已启用的实际资源，再切换技术开关夹具。新增已批准 manifest 测试。
+- 8 个既有测试：将历史未批准美术的输入改成显式关闭夹具，原 202 个 assert 调用逐字未变（见 assertion-contract.json）；`test_space_scene_layer` 仍先核对已启用的实际资源，再切换技术开关夹具。新增已批准 manifest 测试。
 - 新增 `.mjs` 构建 + `.py` 浏览器验收脚本，不进入生产包，不新增依赖。
 
 ## 活内容与行为（单独验收）
@@ -98,11 +98,13 @@ npm run lint
 
 截图脚本占用本地 5173；需现有 QA Python Playwright 和系统 Chromium，不向 npm 添加依赖。生成合成照片、12 条合成记忆、30 秒静音 WAV，只存在一次性浏览器上下文，不访问生产账号。
 
-基线 npm test：278 通过 / 0 失败；修复后：279 通过 / 0 失败。tsc / build / lint 均退出 0；既有 lint warning 保留，未扩改其他模块。git diff --check 通过。
+基线 npm test：278 通过 / 0 失败；修复后：279 通过 / 0 失败。另使用 `CI=true npm test` 覆盖只在 CI 中运行的现有真实 App 主路径（隔离模拟接口，非生产账号）。tsc / build / lint 均退出 0；既有 lint warning 保留，未扩改其他模块。git diff --check 通过。
 
 ## 顺手修
 
-无任务外顺手修。照片稀疏情况下点击框缩紧、旧候选素材与 CSS 外壳互斥，均属于本任务的对齐 / 两套叠画修复。
+1. `test_p5f_chat_visual.mjs` 的 CI 浏览器夹具原本默认美术未批准，固定寻找旧照片墙返回按钮。启用后该选择器缺失。仅为本地 manifest 请求补显式关闭开关的夹具与请求拦截，保持原 62 个 assert 调用逐字不变；新美术由四状态脚本另行覆盖。未修改生产聊天模块或行为。
+
+照片稀疏情况下点击框缩紧、兜底外壳互斥均属于本任务。
 
 ## 任务外发现
 
